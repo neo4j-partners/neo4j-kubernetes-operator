@@ -637,6 +637,17 @@ inspect_resources() {
 clean_dev_env() {
     log_header "Cleaning Development Environment"
 
+    # First stop all running processes
+    log_info "Stopping all development processes..."
+
+    # Kill any running operator processes
+    pkill -f "go run.*cmd/main.go" || true
+    pkill -f "main.*--zap-devel" || true
+    pkill -f "neo4j-operator" || true
+
+    # Kill other development processes
+    pkill -f "air\|dlv\|tilt" || true
+
     # Stop port forwards
     for pid_file in tmp/pf-*.pid; do
         if [[ -f "$pid_file" ]]; then
@@ -646,14 +657,35 @@ clean_dev_env() {
         fi
     done
 
+    # Wait for processes to terminate
+    sleep 2
+
+    # Force kill processes using development ports
+    load_config
+    local ports=("${METRICS_PORT:-8082}" "${HEALTH_PORT:-8083}" "${WEBHOOK_PORT:-9443}" "${PPROF_PORT:-6060}")
+
+    for port in "${ports[@]}"; do
+        local pids=$(lsof -ti :$port 2>/dev/null || true)
+        if [[ -n "$pids" ]]; then
+            log_warning "Force killing processes on port $port: $pids"
+            echo "$pids" | xargs kill -9 2>/dev/null || true
+        fi
+    done
+
     # Clean temporary files
     rm -rf tmp/* logs/*.log coverage/*
 
-    # Clean Docker images
-    docker image prune -f
+    # Clean Docker images (optional - only if requested)
+    if [[ "${1:-}" == "--docker" ]]; then
+        log_info "Cleaning Docker images..."
+        docker image prune -f
+    fi
 
-    # Clean Go cache
-    go clean -cache -modcache
+    # Clean Go cache (optional - only if requested)
+    if [[ "${1:-}" == "--go-cache" ]] || [[ "${1:-}" == "--all" ]]; then
+        log_info "Cleaning Go cache..."
+        go clean -cache -modcache
+    fi
 
     log_success "Development environment cleaned"
 }
@@ -728,7 +760,15 @@ configure_dev_env() {
 stop_dev_env() {
     log_header "Stopping Development Environment"
 
-    # Stop any running processes
+    # Kill any running operator processes
+    log_info "Stopping operator processes..."
+
+    # Find and kill operator processes by command line patterns
+    pkill -f "go run.*cmd/main.go" || true
+    pkill -f "main.*--zap-devel" || true
+    pkill -f "neo4j-operator" || true
+
+    # Kill other development processes
     pkill -f "air\|dlv\|tilt" || true
 
     # Stop port forwards
@@ -737,6 +777,21 @@ stop_dev_env() {
             local pid=$(cat "$pid_file")
             kill "$pid" 2>/dev/null || true
             rm "$pid_file"
+        fi
+    done
+
+    # Wait a moment for processes to terminate
+    sleep 2
+
+    # Check if ports are still in use and force kill if necessary
+    load_config
+    local ports=("${METRICS_PORT:-8082}" "${HEALTH_PORT:-8083}" "${WEBHOOK_PORT:-9443}")
+
+    for port in "${ports[@]}"; do
+        local pids=$(lsof -ti :$port 2>/dev/null || true)
+        if [[ -n "$pids" ]]; then
+            log_warning "Force killing processes on port $port: $pids"
+            echo "$pids" | xargs kill -9 2>/dev/null || true
         fi
     done
 
