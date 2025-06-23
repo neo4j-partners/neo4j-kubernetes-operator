@@ -57,6 +57,7 @@ func main() {
 		enableLeaderElection = flag.Bool("leader-elect", false, "Enable leader election for controller manager.")
 		secureMetrics        = flag.Bool("metrics-secure", false, "If set the metrics endpoint is served securely")
 		enableHTTP2          = flag.Bool("enable-http2", false, "If set, HTTP/2 will be enabled for the metrics and webhook servers")
+		enableWebhooks       = flag.Bool("enable-webhooks", true, "Enable admission webhooks")
 	)
 
 	opts := zap.Options{Development: true}
@@ -75,9 +76,12 @@ func main() {
 		tlsOpts = append(tlsOpts, disableHTTP2)
 	}
 
-	webhookServer := webhook.NewServer(webhook.Options{
-		TLSOpts: tlsOpts,
-	})
+	var webhookServer webhook.Server
+	if *enableWebhooks {
+		webhookServer = webhook.NewServer(webhook.Options{
+			TLSOpts: tlsOpts,
+		})
+	}
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme: scheme,
@@ -178,12 +182,16 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Setup admission webhooks
-	if err = (&webhooks.Neo4jEnterpriseClusterWebhook{
-		Client: mgr.GetClient(),
-	}).SetupWebhookWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create webhook", "webhook", "Neo4jEnterpriseCluster")
-		os.Exit(1)
+	// Setup admission webhooks only if enabled
+	if *enableWebhooks {
+		if err = (&webhooks.Neo4jEnterpriseClusterWebhook{
+			Client: mgr.GetClient(),
+		}).SetupWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "Neo4jEnterpriseCluster")
+			os.Exit(1)
+		}
+	} else {
+		setupLog.Info("webhooks disabled for development")
 	}
 	// +kubebuilder:scaffold:builder
 
