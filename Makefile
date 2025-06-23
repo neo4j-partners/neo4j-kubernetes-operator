@@ -676,6 +676,14 @@ dev-debug: ## Start interactive debug session.
 dev-config: ## Configure development settings.
 	@scripts/dev-environment.sh config
 
+.PHONY: dev-clean
+dev-clean: ## Clean development environment (processes, files, ports).
+	@scripts/dev-environment.sh clean
+
+.PHONY: dev-clean-all
+dev-clean-all: ## Clean everything (processes, files, ports, Docker, Go cache).
+	@scripts/dev-environment.sh clean --all
+
 .PHONY: dev-services
 dev-services: ## Start development services (Neo4j, Prometheus, etc.).
 	@echo "Starting development services..."
