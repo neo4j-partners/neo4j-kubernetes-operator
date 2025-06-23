@@ -107,39 +107,39 @@ spec:
   # Query monitoring configuration
   queryMonitoring:
     enabled: true
-    
+
     # Collection settings
     collection:
       samplingRate: 1.0  # Collect all queries (0.0-1.0)
       slowQueryThreshold: "1s"
       longRunningQueryThreshold: "30s"
-      
+
       # Query categorization
       categories:
         - name: "read-queries"
           pattern: "MATCH.*RETURN"
-        - name: "write-queries" 
+        - name: "write-queries"
           pattern: "(CREATE|MERGE|SET|DELETE)"
         - name: "admin-queries"
           pattern: "(SHOW|CALL)"
-    
+
     # Storage configuration
     storage:
       retention: "30d"
       maxSize: "10Gi"
-      
+
     # Export settings
     export:
       prometheus:
         enabled: true
         interval: "30s"
         endpoint: "prometheus-operated:9090"
-      
+
       elasticsearch:
         enabled: false
         endpoint: "elasticsearch:9200"
         index: "neo4j-queries"
-    
+
     # Performance profiling
     profiling:
       enabled: true
@@ -196,7 +196,7 @@ metadata:
 spec:
   queryMonitoring:
     enabled: true
-    
+
     # Advanced collection settings
     collection:
       samplingRate: 0.1  # Sample 10% of queries for performance
@@ -205,7 +205,7 @@ spec:
         baseRate: 0.05
         slowQueryRate: 1.0  # Always collect slow queries
         errorRate: 1.0      # Always collect failed queries
-      
+
       # Query filtering
       filters:
         - type: "exclude"
@@ -214,13 +214,13 @@ spec:
           pattern: "SHOW DATABASES"
         - type: "include"
           pattern: ".*"  # Include all other queries
-      
+
       # Detailed tracking
       trackParameters: true
       trackUserInfo: true
       trackConnectionInfo: true
       trackQuerySource: true
-    
+
     # Performance thresholds
     thresholds:
       slow:
@@ -232,7 +232,7 @@ spec:
       memory:
         peak: "1Gi"
         severity: "warning"
-      
+
     # Query analysis
     analysis:
       enabled: true
@@ -241,35 +241,35 @@ spec:
         enabled: true
         baselineWindow: "7d"
         sensitivityLevel: "medium"
-      
+
       # Query recommendations
       recommendations:
         enabled: true
         indexSuggestions: true
         queryRewriting: true
         planOptimizations: true
-    
+
     # Advanced profiling
     profiling:
       enabled: true
       modes:
         - "PROFILE"
         - "EXPLAIN"
-      
+
       # Execution plan analysis
       planAnalysis:
         enabled: true
         trackOperators: true
         trackCardinalities: true
         trackCacheHits: true
-      
+
       # Resource tracking
       resourceTracking:
         trackCPU: true
         trackMemory: true
         trackIO: true
         trackNetworking: true
-      
+
     # Multi-dimensional metrics
     metrics:
       dimensions:
@@ -278,7 +278,7 @@ spec:
         - "query_type"
         - "execution_mode"
         - "query_source"
-      
+
       # Custom metrics
       custom:
         - name: "business_queries"
@@ -287,7 +287,7 @@ spec:
         - name: "analytical_queries"
           description: "Analytical workload queries"
           query: ".*(aggregat|group|order).*"
-    
+
     # Real-time streaming
     streaming:
       enabled: true
@@ -295,7 +295,7 @@ spec:
         enabled: true
         brokers: ["kafka:9092"]
         topic: "neo4j-query-events"
-      
+
       websocket:
         enabled: true
         port: 8080
@@ -313,7 +313,7 @@ metadata:
 spec:
   queryMonitoring:
     enabled: true
-    
+
     # Per-database configuration
     databases:
       - name: "production"
@@ -323,7 +323,7 @@ spec:
           - type: "slow_query"
             threshold: "1s"
             severity: "warning"
-      
+
       - name: "analytics"
         samplingRate: 0.1
         slowQueryThreshold: "5s"
@@ -331,7 +331,7 @@ spec:
           - type: "slow_query"
             threshold: "30s"
             severity: "warning"
-      
+
       - name: "development"
         samplingRate: 1.0
         slowQueryThreshold: "100ms"
@@ -339,7 +339,7 @@ spec:
           - type: "slow_query"
             threshold: "500ms"
             severity: "info"
-    
+
     # Cross-database analysis
     crossDatabaseAnalysis:
       enabled: true
@@ -368,11 +368,11 @@ data:
     dbms.logs.query.time_logging_enabled=true
     dbms.logs.query.allocation_logging_enabled=true
     dbms.logs.query.page_logging_enabled=true
-    
+
     # Runtime statistics
     dbms.logs.query.runtime_logging_enabled=true
     dbms.logs.query.max_parameter_length=1000
-    
+
     # Query log rotation
     dbms.logs.query.rotation.keep_number=10
     dbms.logs.query.rotation.size=100M
@@ -428,67 +428,67 @@ from matplotlib.patches import Rectangle
 
 def visualize_execution_plan(plan_json):
     """Visualize Neo4j execution plan as a tree diagram"""
-    
+
     plan = json.loads(plan_json)
     G = nx.DiGraph()
-    
+
     def add_operator_nodes(operator, parent=None):
         node_id = id(operator)
         operator_type = operator.get('operatorType', 'Unknown')
         rows = operator.get('rows', 0)
         estimated_rows = operator.get('estimatedRows', 0)
         db_hits = operator.get('dbHits', 0)
-        
+
         # Add node with attributes
-        G.add_node(node_id, 
+        G.add_node(node_id,
                    type=operator_type,
                    rows=rows,
                    estimated_rows=estimated_rows,
                    db_hits=db_hits)
-        
+
         if parent:
             G.add_edge(parent, node_id)
-        
+
         # Process children
         for child in operator.get('children', []):
             add_operator_nodes(child, node_id)
-        
+
         return node_id
-    
+
     # Build graph from execution plan
     root = plan['plan']['root']
     add_operator_nodes(root)
-    
+
     # Create visualization
     plt.figure(figsize=(16, 12))
     pos = nx.spring_layout(G, k=3, iterations=50)
-    
+
     # Draw nodes
     for node, data in G.nodes(data=True):
         x, y = pos[node]
-        
+
         # Color based on operator type
         colors = {
             'NodeByLabelScan': 'lightblue',
-            'Filter': 'lightgreen', 
+            'Filter': 'lightgreen',
             'Expand': 'lightyellow',
             'ProduceResults': 'lightcoral',
             'AllNodesScan': 'lightgray'
         }
         color = colors.get(data['type'], 'white')
-        
+
         # Draw operator box
-        rect = Rectangle((x-0.1, y-0.05), 0.2, 0.1, 
+        rect = Rectangle((x-0.1, y-0.05), 0.2, 0.1,
                         facecolor=color, edgecolor='black')
         plt.gca().add_patch(rect)
-        
+
         # Add operator text
         plt.text(x, y, f"{data['type']}\n{data['rows']} rows\n{data['db_hits']} hits",
                 ha='center', va='center', fontsize=8)
-    
+
     # Draw edges
     nx.draw_networkx_edges(G, pos, alpha=0.6, arrows=True)
-    
+
     plt.title("Neo4j Query Execution Plan")
     plt.axis('off')
     plt.tight_layout()
@@ -500,10 +500,10 @@ if __name__ == "__main__":
     if len(sys.argv) != 2:
         print("Usage: python visualize-query-plans.py <plan.json>")
         sys.exit(1)
-    
+
     with open(sys.argv[1], 'r') as f:
         plan_json = f.read()
-    
+
     visualize_execution_plan(plan_json)
 ```
 
@@ -526,38 +526,38 @@ spec:
     # Query throughput metrics
     - record: neo4j:query_rate_5m
       expr: rate(neo4j_cypher_queries_total[5m])
-    
+
     - record: neo4j:query_error_rate_5m
       expr: rate(neo4j_cypher_queries_total{status="error"}[5m]) / rate(neo4j_cypher_queries_total[5m])
-    
+
     # Response time metrics
     - record: neo4j:query_duration_p50
       expr: histogram_quantile(0.50, rate(neo4j_cypher_query_duration_seconds_bucket[5m]))
-    
+
     - record: neo4j:query_duration_p95
       expr: histogram_quantile(0.95, rate(neo4j_cypher_query_duration_seconds_bucket[5m]))
-    
+
     - record: neo4j:query_duration_p99
       expr: histogram_quantile(0.99, rate(neo4j_cypher_query_duration_seconds_bucket[5m]))
-    
+
     # Resource utilization
     - record: neo4j:query_memory_peak_p95
       expr: histogram_quantile(0.95, rate(neo4j_cypher_query_memory_peak_bytes_bucket[5m]))
-    
+
     - record: neo4j:query_cpu_usage_rate
       expr: rate(neo4j_cypher_query_cpu_seconds_total[5m])
-    
+
     # Query complexity metrics
     - record: neo4j:query_dbhits_rate
       expr: rate(neo4j_cypher_query_dbhits_total[5m])
-    
+
     - record: neo4j:query_page_faults_rate
       expr: rate(neo4j_cypher_query_page_faults_total[5m])
-    
+
     # Business metrics
     - record: neo4j:slow_queries_rate
       expr: rate(neo4j_cypher_queries_total{duration_bucket=~".*_slow"}[5m])
-    
+
     - record: neo4j:long_running_queries_count
       expr: neo4j_cypher_queries_running{duration=">30s"}
 ```
@@ -592,7 +592,7 @@ spec:
             "legendFormat": "P50"
           },
           {
-            "expr": "neo4j:query_duration_p95", 
+            "expr": "neo4j:query_duration_p95",
             "legendFormat": "P95"
           },
           {
@@ -686,7 +686,7 @@ spec:
         summary: "High query error rate detected"
         description: "Query error rate is {{ $value | humanizePercentage }} for cluster {{ $labels.cluster }}"
         runbook_url: "https://docs.company.com/runbooks/neo4j-high-error-rate"
-    
+
     # Slow query performance
     - alert: Neo4jSlowQueryPerformance
       expr: neo4j:query_duration_p95 > 5
@@ -699,7 +699,7 @@ spec:
         summary: "Slow query performance detected"
         description: "P95 query response time is {{ $value }}s for cluster {{ $labels.cluster }}"
         runbook_url: "https://docs.company.com/runbooks/neo4j-slow-queries"
-    
+
     # Long running queries
     - alert: Neo4jLongRunningQueries
       expr: neo4j:long_running_queries_count > 10
@@ -712,7 +712,7 @@ spec:
         summary: "Multiple long-running queries detected"
         description: "{{ $value }} queries have been running for more than 30 seconds"
         runbook_url: "https://docs.company.com/runbooks/neo4j-long-running-queries"
-    
+
     # High memory usage
     - alert: Neo4jHighQueryMemoryUsage
       expr: neo4j:query_memory_peak_p95 > 2*1024*1024*1024  # 2GB
@@ -725,7 +725,7 @@ spec:
         summary: "High query memory usage detected"
         description: "P95 query memory usage is {{ $value | humanizeBytes }}"
         runbook_url: "https://docs.company.com/runbooks/neo4j-high-memory"
-    
+
     # Query throughput drop
     - alert: Neo4jQueryThroughputDrop
       expr: (neo4j:query_rate_5m offset 1h) - neo4j:query_rate_5m > 100
@@ -806,30 +806,30 @@ class IndexRecommendationEngine:
         self.query_patterns = []
         self.property_usage = defaultdict(list)
         self.label_usage = Counter()
-        
+
     def analyze_query_log(self, log_file):
         """Analyze query log and extract patterns"""
         with open(log_file, 'r') as f:
             for line in f:
                 if 'MATCH' in line:
                     self._extract_patterns(line)
-    
+
     def _extract_patterns(self, query):
         """Extract indexable patterns from queries"""
         # Find label usage
         label_matches = re.findall(r':\s*(\w+)', query)
         for label in label_matches:
             self.label_usage[label] += 1
-        
+
         # Find property usage in WHERE clauses
         where_matches = re.findall(r'WHERE.*?(\w+)\.(\w+)\s*[=<>]', query, re.IGNORECASE)
         for label_prop in where_matches:
             self.property_usage[label_prop[1]].append(label_prop[0])
-    
+
     def generate_recommendations(self):
         """Generate index recommendations"""
         recommendations = []
-        
+
         # Single property indexes
         for prop, labels in self.property_usage.items():
             if len(labels) > 5:  # Property used frequently
@@ -840,7 +840,7 @@ class IndexRecommendationEngine:
                     'reason': f'Property {prop} used {len(labels)} times with label {most_common_label}',
                     'priority': 'high' if len(labels) > 20 else 'medium'
                 })
-        
+
         # Composite indexes (for multi-property WHERE clauses)
         composite_patterns = self._find_composite_patterns()
         for pattern in composite_patterns:
@@ -850,9 +850,9 @@ class IndexRecommendationEngine:
                 'reason': pattern['reason'],
                 'priority': pattern['priority']
             })
-        
+
         return recommendations
-    
+
     def _find_composite_patterns(self):
         """Find patterns that would benefit from composite indexes"""
         # Implementation for composite index detection
@@ -862,9 +862,9 @@ class IndexRecommendationEngine:
 if __name__ == "__main__":
     engine = IndexRecommendationEngine()
     engine.analyze_query_log('query.log')
-    
+
     recommendations = engine.generate_recommendations()
-    
+
     print("Index Recommendations:")
     print("=" * 50)
     for rec in recommendations:
@@ -891,40 +891,40 @@ class QueryOptimizer:
             self._optimize_filtering,
             self._optimize_aggregations
         ]
-    
+
     def optimize_query(self, query):
         """Apply optimization rules to a query"""
         optimized = query
         suggestions = []
-        
+
         for rule in self.optimization_rules:
             result = rule(optimized)
             if result['optimized'] != optimized:
                 suggestions.append(result['suggestion'])
                 optimized = result['optimized']
-        
+
         return {
             'original': query,
             'optimized': optimized,
             'suggestions': suggestions,
             'improvement_potential': self._estimate_improvement(query, optimized)
         }
-    
+
     def _optimize_multiple_matches(self, query):
         """Combine multiple MATCH clauses where possible"""
         # Look for consecutive MATCH statements
         pattern = r'MATCH\s+([^;]+?)\s+MATCH\s+([^;]+?)(?=\s+WHERE|\s+RETURN|\s+WITH|$)'
-        
+
         def combine_matches(match):
             return f"MATCH {match.group(1)}, {match.group(2)}"
-        
+
         optimized = re.sub(pattern, combine_matches, query, flags=re.IGNORECASE | re.DOTALL)
-        
+
         return {
             'optimized': optimized,
             'suggestion': 'Combined multiple MATCH clauses for better performance' if optimized != query else None
         }
-    
+
     def _optimize_cartesian_products(self, query):
         """Detect and suggest fixes for cartesian products"""
         # Detect patterns that might create cartesian products
@@ -932,12 +932,12 @@ class QueryOptimizer:
             suggestion = "Potential cartesian product detected. Consider using relationship patterns instead of comma-separated nodes."
         else:
             suggestion = None
-        
+
         return {
             'optimized': query,  # Don't auto-fix this one
             'suggestion': suggestion
         }
-    
+
     def _optimize_node_scans(self, query):
         """Optimize full node scans"""
         # Replace MATCH (n) with more specific patterns where possible
@@ -946,42 +946,42 @@ class QueryOptimizer:
                 'optimized': query,
                 'suggestion': "Consider adding node labels to MATCH patterns to avoid full node scans"
             }
-        
+
         return {'optimized': query, 'suggestion': None}
-    
+
     def _optimize_filtering(self, query):
         """Optimize WHERE clause positioning"""
         # Move simple filters closer to MATCH clauses
         return {'optimized': query, 'suggestion': None}
-    
+
     def _optimize_aggregations(self, query):
         """Optimize aggregation patterns"""
         return {'optimized': query, 'suggestion': None}
-    
+
     def _estimate_improvement(self, original, optimized):
         """Estimate potential performance improvement"""
         if original == optimized:
             return 0
-        
+
         # Simple heuristic based on complexity reduction
         original_complexity = len(re.findall(r'MATCH|WHERE|RETURN|WITH', original, re.IGNORECASE))
         optimized_complexity = len(re.findall(r'MATCH|WHERE|RETURN|WITH', optimized, re.IGNORECASE))
-        
+
         return max(0, (original_complexity - optimized_complexity) / original_complexity * 100)
 
 # Usage example
 if __name__ == "__main__":
     optimizer = QueryOptimizer()
-    
+
     test_query = """
     MATCH (u:User)
     MATCH (p:Product)
     WHERE u.id = $userId AND p.category = 'electronics'
     RETURN u.name, p.name
     """
-    
+
     result = optimizer.optimize_query(test_query)
-    
+
     print("Original Query:")
     print(result['original'])
     print("\nOptimized Query:")
@@ -1000,6 +1000,7 @@ if __name__ == "__main__":
 #### High Query Latency
 
 **Diagnosis**:
+
 ```bash
 # Check for slow queries
 kubectl exec neo4j-0 -n neo4j-system -- cypher-shell -u neo4j -p $NEO4J_PASSWORD "
@@ -1018,6 +1019,7 @@ ORDER BY elapsedTimeMillis DESC"
 ```
 
 **Solutions**:
+
 ```bash
 # Kill long-running queries
 kubectl exec neo4j-0 -n neo4j-system -- cypher-shell -u neo4j -p $NEO4J_PASSWORD "
@@ -1031,6 +1033,7 @@ CREATE INDEX user_id_index FOR (u:User) ON (u.id)"
 #### Memory Issues
 
 **Diagnosis**:
+
 ```bash
 # Check memory usage by queries
 kubectl exec neo4j-0 -n neo4j-system -- cypher-shell -u neo4j -p $NEO4J_PASSWORD "
@@ -1042,6 +1045,7 @@ kubectl exec neo4j-0 -n neo4j-system -- grep -E "(heap|memory)" /logs/debug.log 
 ```
 
 **Solutions**:
+
 ```bash
 # Increase JVM heap size
 kubectl patch neo4jenterprisecluster neo4j-monitored -n neo4j-system --type='merge' -p='
@@ -1053,7 +1057,7 @@ kubectl patch neo4jenterprisecluster neo4j-monitored -n neo4j-system --type='mer
         "value": "4G"
       },
       {
-        "name": "NEO4J_dbms_memory_heap_max__size", 
+        "name": "NEO4J_dbms_memory_heap_max__size",
         "value": "8G"
       }
     ]
@@ -1178,19 +1182,19 @@ from neo4j import GraphDatabase
 class Neo4jQueryMetricsExporter:
     def __init__(self, neo4j_uri, username, password):
         self.driver = GraphDatabase.driver(neo4j_uri, auth=(username, password))
-        
+
         # Prometheus metrics
-        self.query_count = Counter('neo4j_custom_queries_total', 
-                                 'Total number of queries', 
+        self.query_count = Counter('neo4j_custom_queries_total',
+                                 'Total number of queries',
                                  ['database', 'query_type'])
-        
+
         self.query_duration = Histogram('neo4j_custom_query_duration_seconds',
                                       'Query duration in seconds',
                                       ['database', 'query_type'])
-        
+
         self.active_connections = Gauge('neo4j_custom_active_connections',
                                       'Active connections count')
-        
+
     def collect_metrics(self):
         """Collect metrics from Neo4j"""
         with self.driver.session() as session:
@@ -1199,15 +1203,15 @@ class Neo4jQueryMetricsExporter:
                 CALL db.stats.retrieve('QUERY') YIELD section, data
                 RETURN section, data
             """)
-            
+
             for record in result:
                 self._process_query_stats(record['section'], record['data'])
-            
+
             # Collect connection statistics
             result = session.run("CALL dbms.listConnections()")
             connection_count = len(list(result))
             self.active_connections.set(connection_count)
-    
+
     def _process_query_stats(self, section, data):
         """Process query statistics and update metrics"""
         if section == 'query_summary':
@@ -1216,13 +1220,13 @@ class Neo4jQueryMetricsExporter:
                     database=stats.get('database', 'unknown'),
                     query_type=query_type
                 )._value._value = stats.get('count', 0)
-                
+
                 if 'avg_duration' in stats:
                     self.query_duration.labels(
                         database=stats.get('database', 'unknown'),
                         query_type=query_type
                     ).observe(stats['avg_duration'])
-    
+
     def start_collection(self, interval=30):
         """Start metrics collection in background"""
         def collect_loop():
@@ -1232,7 +1236,7 @@ class Neo4jQueryMetricsExporter:
                 except Exception as e:
                     print(f"Error collecting metrics: {e}")
                 time.sleep(interval)
-        
+
         thread = threading.Thread(target=collect_loop, daemon=True)
         thread.start()
 
@@ -1242,13 +1246,13 @@ if __name__ == "__main__":
         "neo4j",
         "password"
     )
-    
+
     # Start metrics collection
     exporter.start_collection()
-    
+
     # Start Prometheus metrics server
     start_http_server(8000)
-    
+
     # Keep running
     while True:
         time.sleep(1)
@@ -1257,11 +1261,11 @@ if __name__ == "__main__":
 ## Related Documentation
 
 - [Auto-Scaling Guide](./auto-scaling-guide.md)
-- [Blue-Green Deployment Guide](./blue-green-deployment-guide.md)
+
 - [Disaster Recovery Guide](./disaster-recovery-guide.md)
 - [Plugin Management Guide](./plugin-management-guide.md)
 - [Backup and Restore Guide](../backup-restore-guide.md)
 
 ---
 
-*For additional support and advanced configurations, please refer to the [Neo4j Operator Documentation](../README.md) or contact the platform engineering team.* 
+*For additional support and advanced configurations, please refer to the [Neo4j Operator Documentation](../README.md) or contact the platform engineering team.*

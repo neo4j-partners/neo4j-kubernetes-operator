@@ -14,6 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package main is the entry point for the Neo4j Kubernetes Operator.
+// It sets up and starts the controller manager with all necessary controllers and webhooks.
 package main
 
 import (
@@ -31,9 +33,9 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-operator/api/v1alpha1"
-	"github.com/neo4j-labs/neo4j-operator/internal/controller"
-	"github.com/neo4j-labs/neo4j-operator/internal/webhooks"
+	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1"
+	"github.com/neo4j-labs/neo4j-kubernetes-operator/internal/controller"
+	"github.com/neo4j-labs/neo4j-kubernetes-operator/internal/webhooks"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -167,16 +169,6 @@ func main() {
 	}
 
 	// Setup new feature controllers
-	if err = (&controller.Neo4jDisasterRecoveryReconciler{
-		Client:       mgr.GetClient(),
-		Scheme:       mgr.GetScheme(),
-		Recorder:     mgr.GetEventRecorderFor("neo4j-disaster-recovery-controller"),
-		RequeueAfter: 5 * time.Minute,
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "Neo4jDisasterRecovery")
-		os.Exit(1)
-	}
-
 	if err = (&controller.Neo4jPluginReconciler{
 		Client:       mgr.GetClient(),
 		Scheme:       mgr.GetScheme(),

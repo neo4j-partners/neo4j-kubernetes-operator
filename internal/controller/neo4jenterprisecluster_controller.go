@@ -34,9 +34,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-operator/api/v1alpha1"
-	neo4jclient "github.com/neo4j-labs/neo4j-operator/internal/neo4j"
-	"github.com/neo4j-labs/neo4j-operator/internal/resources"
+	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1"
+	neo4jclient "github.com/neo4j-labs/neo4j-kubernetes-operator/internal/neo4j"
+	"github.com/neo4j-labs/neo4j-kubernetes-operator/internal/resources"
 )
 
 // Neo4jEnterpriseClusterReconciler reconciles a Neo4jEnterpriseCluster object
@@ -48,7 +48,12 @@ type Neo4jEnterpriseClusterReconciler struct {
 	TopologyScheduler *TopologyScheduler
 }
 
-const ClusterFinalizer = "neo4j.neo4j.com/cluster-finalizer"
+const (
+	// ClusterFinalizer is the finalizer for Neo4j enterprise clusters
+	ClusterFinalizer = "neo4j.neo4j.com/cluster-finalizer"
+	// DefaultAdminSecretName is the default name for admin credentials
+	DefaultAdminSecretName = "neo4j-admin-secret"
+)
 
 //+kubebuilder:rbac:groups=neo4j.neo4j.com,resources=neo4jenterpriseclusters,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=neo4j.neo4j.com,resources=neo4jenterpriseclusters/status,verbs=get;update;patch
@@ -214,7 +219,7 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 		}
 	}
 
-	// Handle Auto-scaling for read replicas
+	// Handle Auto-scaling for primaries and secondaries
 	if cluster.Spec.AutoScaling != nil && cluster.Spec.AutoScaling.Enabled {
 		autoScaler := NewAutoScaler(r.Client)
 		if err := autoScaler.ReconcileAutoScaling(ctx, cluster); err != nil {
@@ -224,12 +229,12 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 		}
 	}
 
-	// Handle Blue-Green deployments
-	if cluster.Spec.BlueGreen != nil && cluster.Spec.BlueGreen.Enabled {
-		blueGreenManager := NewBlueGreenDeploymentManager(r.Client)
-		if err := blueGreenManager.ReconcileBlueGreenDeployment(ctx, cluster); err != nil {
-			logger.Error(err, "Failed to reconcile blue-green deployment")
-			r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Blue-green deployment failed: %v", err))
+	// Handle Multi-cluster deployment
+	if cluster.Spec.MultiCluster != nil && cluster.Spec.MultiCluster.Enabled {
+		multiClusterController := NewMultiClusterController(r.Client, r.Scheme)
+		if err := multiClusterController.ReconcileMultiCluster(ctx, cluster); err != nil {
+			logger.Error(err, "Failed to reconcile multi-cluster deployment")
+			r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Multi-cluster deployment failed: %v", err))
 			return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 		}
 	}
@@ -241,26 +246,6 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 			logger.Error(err, "Failed to reconcile query monitoring")
 			// Don't fail the entire reconciliation for monitoring issues
 			logger.Info("Query monitoring setup failed, continuing with cluster reconciliation")
-		}
-	}
-
-	// Handle Point-in-Time Recovery
-	if cluster.Spec.PointInTimeRecovery != nil && cluster.Spec.PointInTimeRecovery.Enabled {
-		pitrManager := NewPointInTimeRecoveryManager(r.Client)
-		if err := pitrManager.ReconcilePointInTimeRecovery(ctx, cluster); err != nil {
-			logger.Error(err, "Failed to reconcile point-in-time recovery")
-			r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Point-in-time recovery failed: %v", err))
-			return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
-		}
-	}
-
-	// Handle Multi-tenant setup
-	if cluster.Spec.MultiTenant != nil && cluster.Spec.MultiTenant.Enabled {
-		multiTenantManager := NewMultiTenantManager(r.Client)
-		if err := multiTenantManager.ReconcileMultiTenant(ctx, cluster); err != nil {
-			logger.Error(err, "Failed to reconcile multi-tenant setup")
-			r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Multi-tenant setup failed: %v", err))
-			return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 		}
 	}
 
@@ -345,7 +330,9 @@ func (r *Neo4jEnterpriseClusterReconciler) updateClusterStatus(ctx context.Conte
 	}
 
 	// Update status
-	r.Status().Update(ctx, cluster)
+	if err := r.Status().Update(ctx, cluster); err != nil {
+		log.FromContext(ctx).Error(err, "Failed to update cluster status")
+	}
 }
 
 // createExternalSecretForTLS creates an ExternalSecret resource for TLS certificates
@@ -451,7 +438,11 @@ func (r *Neo4jEnterpriseClusterReconciler) handleRollingUpgrade(ctx context.Cont
 		r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Failed to create Neo4j client: %v", err))
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 	}
-	defer neo4jClient.Close()
+	defer func() {
+		if err := neo4jClient.Close(); err != nil {
+			logger.Error(err, "Failed to close Neo4j client")
+		}
+	}()
 
 	// Create rolling upgrade orchestrator
 	upgrader := NewRollingUpgradeOrchestrator(r.Client, cluster.Name, cluster.Namespace)
@@ -474,7 +465,9 @@ func (r *Neo4jEnterpriseClusterReconciler) handleRollingUpgrade(ctx context.Cont
 	// Update cluster status and version
 	r.updateClusterStatus(ctx, cluster, "Ready", "Rolling upgrade completed successfully")
 	cluster.Status.Version = cluster.Spec.Image.Tag
-	r.Status().Update(ctx, cluster)
+	if err := r.Status().Update(ctx, cluster); err != nil {
+		logger.Error(err, "Failed to update cluster status")
+	}
 
 	r.Recorder.Event(cluster, "Normal", "UpgradeCompleted", "Rolling upgrade completed successfully")
 	logger.Info("Rolling upgrade completed successfully")
@@ -483,9 +476,9 @@ func (r *Neo4jEnterpriseClusterReconciler) handleRollingUpgrade(ctx context.Cont
 }
 
 // createNeo4jClient creates a Neo4j client for cluster operations
-func (r *Neo4jEnterpriseClusterReconciler) createNeo4jClient(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) (*neo4jclient.Client, error) {
+func (r *Neo4jEnterpriseClusterReconciler) createNeo4jClient(_ context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) (*neo4jclient.Client, error) {
 	// Get admin credentials
-	adminSecretName := "neo4j-admin-secret"
+	adminSecretName := DefaultAdminSecretName
 	if cluster.Spec.Auth != nil && cluster.Spec.Auth.AdminSecret != "" {
 		adminSecretName = cluster.Spec.Auth.AdminSecret
 	}
@@ -499,7 +492,6 @@ func (r *Neo4jEnterpriseClusterReconciler) createNeo4jClient(ctx context.Context
 	return neo4jClient, nil
 }
 
-// SetupWithManager sets up the controller with the Manager.
 // reconcilePlugins handles plugin management for the cluster
 func (r *Neo4jEnterpriseClusterReconciler) reconcilePlugins(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) error {
 	logger := log.FromContext(ctx)
@@ -546,6 +538,7 @@ func (r *Neo4jEnterpriseClusterReconciler) reconcilePlugins(ctx context.Context,
 	return nil
 }
 
+// SetupWithManager configures the controller with the manager
 func (r *Neo4jEnterpriseClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&neo4jv1alpha1.Neo4jEnterpriseCluster{}).
@@ -586,103 +579,91 @@ func (qm *QueryMonitor) ReconcileQueryMonitoring(ctx context.Context, cluster *n
 }
 
 func (qm *QueryMonitor) setupQueryLogging(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) error {
-	// Implementation would configure Neo4j to log slow queries and export metrics
+	logger := log.FromContext(ctx)
+
+	if cluster.Spec.QueryMonitoring == nil || !cluster.Spec.QueryMonitoring.Enabled {
+		return nil
+	}
+
+	// Configure Neo4j for query logging
+	config := map[string]string{
+		"dbms.logs.query.enabled":                    "true",
+		"dbms.logs.query.threshold":                  cluster.Spec.QueryMonitoring.SlowQueryThreshold,
+		"dbms.logs.query.parameter_logging_enabled":  "true",
+		"dbms.logs.query.time_logging_enabled":       "true",
+		"dbms.logs.query.allocation_logging_enabled": "true",
+		"dbms.logs.query.page_logging_enabled":       "true",
+		"dbms.track_query_cpu_time":                  "true",
+		"dbms.track_query_allocation":                "true",
+	}
+
+	// Enable sampling if configured
+	if cluster.Spec.QueryMonitoring.Sampling != nil {
+		config["dbms.logs.query.sample_rate"] = cluster.Spec.QueryMonitoring.Sampling.Rate
+	}
+
+	// Create ConfigMap with query monitoring configuration
+	configMap := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cluster.Name + "-query-monitoring",
+			Namespace: cluster.Namespace,
+			Labels: map[string]string{
+				"app.kubernetes.io/name":      "neo4j",
+				"app.kubernetes.io/instance":  cluster.Name,
+				"app.kubernetes.io/component": "query-monitoring",
+			},
+		},
+		Data: config,
+	}
+
+	if err := qm.Create(ctx, configMap); err != nil && !errors.IsAlreadyExists(err) {
+		return fmt.Errorf("failed to create query monitoring ConfigMap: %w", err)
+	}
+
+	logger.Info("Query logging configured", "threshold", cluster.Spec.QueryMonitoring.SlowQueryThreshold)
 	return nil
 }
 
 func (qm *QueryMonitor) createServiceMonitor(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) error {
-	// Implementation would create a ServiceMonitor resource for Prometheus
-	return nil
-}
+	logger := log.FromContext(ctx)
 
-// PointInTimeRecoveryManager manages point-in-time recovery
-type PointInTimeRecoveryManager struct {
-	client.Client
-}
-
-// NewPointInTimeRecoveryManager creates a new PITR manager
-func NewPointInTimeRecoveryManager(client client.Client) *PointInTimeRecoveryManager {
-	return &PointInTimeRecoveryManager{Client: client}
-}
-
-// ReconcilePointInTimeRecovery sets up point-in-time recovery
-func (pitr *PointInTimeRecoveryManager) ReconcilePointInTimeRecovery(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) error {
-	logger := log.FromContext(ctx).WithName("pitr-manager")
-
-	// Configure transaction log retention
-	if err := pitr.configureTransactionLogRetention(ctx, cluster); err != nil {
-		return fmt.Errorf("failed to configure transaction log retention: %w", err)
+	// Create ServiceMonitor for Prometheus scraping
+	serviceMonitor := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "monitoring.coreos.com/v1",
+			"kind":       "ServiceMonitor",
+			"metadata": map[string]interface{}{
+				"name":      cluster.Name + "-query-metrics",
+				"namespace": cluster.Namespace,
+				"labels": map[string]interface{}{
+					"app.kubernetes.io/name":      "neo4j",
+					"app.kubernetes.io/instance":  cluster.Name,
+					"app.kubernetes.io/component": "monitoring",
+				},
+			},
+			"spec": map[string]interface{}{
+				"selector": map[string]interface{}{
+					"matchLabels": map[string]interface{}{
+						"app.kubernetes.io/name":     "neo4j",
+						"app.kubernetes.io/instance": cluster.Name,
+					},
+				},
+				"endpoints": []interface{}{
+					map[string]interface{}{
+						"port":          "metrics",
+						"interval":      cluster.Spec.QueryMonitoring.MetricsExport.Interval,
+						"path":          "/metrics",
+						"scrapeTimeout": "10s",
+					},
+				},
+			},
+		},
 	}
 
-	// Set up log shipping if enabled
-	if cluster.Spec.PointInTimeRecovery.LogShipping != nil && cluster.Spec.PointInTimeRecovery.LogShipping.Enabled {
-		if err := pitr.setupLogShipping(ctx, cluster); err != nil {
-			return fmt.Errorf("failed to setup log shipping: %w", err)
-		}
+	if err := qm.Create(ctx, serviceMonitor); err != nil && !errors.IsAlreadyExists(err) {
+		return fmt.Errorf("failed to create ServiceMonitor: %w", err)
 	}
 
-	logger.Info("Point-in-time recovery configured successfully")
-	return nil
-}
-
-func (pitr *PointInTimeRecoveryManager) configureTransactionLogRetention(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) error {
-	// Implementation would configure Neo4j transaction log retention settings
-	return nil
-}
-
-func (pitr *PointInTimeRecoveryManager) setupLogShipping(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) error {
-	// Implementation would create CronJob for shipping transaction logs to backup storage
-	return nil
-}
-
-// MultiTenantManager manages multi-tenant setup
-type MultiTenantManager struct {
-	client.Client
-}
-
-// NewMultiTenantManager creates a new multi-tenant manager
-func NewMultiTenantManager(client client.Client) *MultiTenantManager {
-	return &MultiTenantManager{Client: client}
-}
-
-// ReconcileMultiTenant sets up multi-tenant configuration
-func (mt *MultiTenantManager) ReconcileMultiTenant(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) error {
-	logger := log.FromContext(ctx).WithName("multi-tenant-manager")
-
-	// Create tenant namespaces if using namespace isolation
-	if cluster.Spec.MultiTenant.Isolation == "namespace" {
-		if err := mt.createTenantNamespaces(ctx, cluster); err != nil {
-			return fmt.Errorf("failed to create tenant namespaces: %w", err)
-		}
-	}
-
-	// Configure tenant databases
-	if err := mt.configureTenantDatabases(ctx, cluster); err != nil {
-		return fmt.Errorf("failed to configure tenant databases: %w", err)
-	}
-
-	// Set up resource quotas
-	if cluster.Spec.MultiTenant.ResourceQuotas != nil {
-		if err := mt.setupResourceQuotas(ctx, cluster); err != nil {
-			return fmt.Errorf("failed to setup resource quotas: %w", err)
-		}
-	}
-
-	logger.Info("Multi-tenant setup configured successfully")
-	return nil
-}
-
-func (mt *MultiTenantManager) createTenantNamespaces(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) error {
-	// Implementation would create separate namespaces for each tenant
-	return nil
-}
-
-func (mt *MultiTenantManager) configureTenantDatabases(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) error {
-	// Implementation would create separate databases for each tenant in Neo4j
-	return nil
-}
-
-func (mt *MultiTenantManager) setupResourceQuotas(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) error {
-	// Implementation would create ResourceQuota objects for each tenant
+	logger.Info("ServiceMonitor created for query metrics")
 	return nil
 }

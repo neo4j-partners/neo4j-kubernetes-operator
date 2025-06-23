@@ -49,7 +49,7 @@ type Neo4jRestoreSpec struct {
 
 // RestoreSource defines the source of the backup to restore
 type RestoreSource struct {
-	// +kubebuilder:validation:Enum=backup;storage
+	// +kubebuilder:validation:Enum=backup;storage;pitr
 	// +kubebuilder:validation:Required
 	// Type of restore source
 	Type string `json:"type"`
@@ -63,8 +63,89 @@ type RestoreSource struct {
 	// Specific backup path within storage
 	BackupPath string `json:"backupPath,omitempty"`
 
-	// Point in time for restore (if supported)
+	// Point in time for restore (when type=pitr or for PITR with backup/storage types)
 	PointInTime *metav1.Time `json:"pointInTime,omitempty"`
+
+	// Point-in-time recovery configuration (when type=pitr)
+	PITR *PITRConfig `json:"pitr,omitempty"`
+}
+
+// PITRConfig defines point-in-time recovery configuration
+type PITRConfig struct {
+	// Transaction log storage location
+	LogStorage *StorageLocation `json:"logStorage,omitempty"`
+
+	// Transaction log retention period
+	// +kubebuilder:default="7d"
+	LogRetention string `json:"logRetention,omitempty"`
+
+	// Recovery point objective
+	// +kubebuilder:default="1m"
+	RecoveryPointObjective string `json:"recoveryPointObjective,omitempty"`
+
+	// Base backup to restore from before applying transaction logs
+	BaseBackup *BaseBackupSource `json:"baseBackup,omitempty"`
+
+	// Validate transaction log integrity before restore
+	// +kubebuilder:default=true
+	ValidateLogIntegrity bool `json:"validateLogIntegrity,omitempty"`
+
+	// Compression settings for transaction logs
+	Compression *CompressionConfig `json:"compression,omitempty"`
+
+	// Encryption settings for transaction logs
+	Encryption *EncryptionConfig `json:"encryption,omitempty"`
+}
+
+// BaseBackupSource defines a backup source without PITR config to avoid circular references
+type BaseBackupSource struct {
+	// +kubebuilder:validation:Enum=backup;storage
+	// +kubebuilder:validation:Required
+	// Type of backup source (backup or storage, PITR not allowed to avoid circular reference)
+	Type string `json:"type"`
+
+	// Reference to Neo4jBackup resource (when type=backup)
+	BackupRef string `json:"backupRef,omitempty"`
+
+	// Direct storage location (when type=storage)
+	Storage *StorageLocation `json:"storage,omitempty"`
+
+	// Specific backup path within storage
+	BackupPath string `json:"backupPath,omitempty"`
+}
+
+// CompressionConfig defines compression settings
+type CompressionConfig struct {
+	// Enable compression
+	// +kubebuilder:default=true
+	Enabled bool `json:"enabled,omitempty"`
+
+	// Compression algorithm (gzip, lz4, zstd)
+	// +kubebuilder:validation:Enum=gzip;lz4;zstd
+	// +kubebuilder:default=gzip
+	Algorithm string `json:"algorithm,omitempty"`
+
+	// Compression level (1-9 for gzip, 1-12 for lz4, 1-22 for zstd)
+	Level int32 `json:"level,omitempty"`
+}
+
+// EncryptionConfig defines encryption settings
+type EncryptionConfig struct {
+	// Enable encryption
+	// +kubebuilder:default=false
+	Enabled bool `json:"enabled,omitempty"`
+
+	// Encryption algorithm (AES256, ChaCha20Poly1305)
+	// +kubebuilder:validation:Enum=AES256;ChaCha20Poly1305
+	// +kubebuilder:default=AES256
+	Algorithm string `json:"algorithm,omitempty"`
+
+	// Secret containing encryption key
+	KeySecret string `json:"keySecret,omitempty"`
+
+	// Key within the secret
+	// +kubebuilder:default=key
+	KeySecretKey string `json:"keySecretKey,omitempty"`
 }
 
 // RestoreOptionsSpec defines restore-specific options

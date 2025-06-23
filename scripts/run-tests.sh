@@ -61,42 +61,43 @@ EOF
 
 setup_test_environment() {
     print_status "Setting up test environment..."
-    
+
     # Ensure the cluster is available
     if ! kubectl cluster-info &> /dev/null; then
         print_error "Kubernetes cluster is not available. Please ensure kubectl is configured."
         return 1
     fi
-    
+
     # Create test namespace if it doesn't exist
     if ! kubectl get namespace "$OPERATOR_NAMESPACE" &> /dev/null; then
         print_status "Creating operator namespace..."
         kubectl create namespace "$OPERATOR_NAMESPACE"
     fi
-    
-    # Install CRDs if not present
+
+    # Check if CRDs exist and install if needed
+    echo "🔍 Checking CRDs..."
     if ! kubectl get crd neo4jenterpriseclusters.neo4j.neo4j.com &> /dev/null; then
-        print_status "Installing CRDs..."
+        echo "Installing CRDs..."
         make install
     fi
-    
+
     print_success "Test environment ready."
 }
 
 run_unit_tests() {
     print_status "Running unit tests..."
-    
+
     local args=()
     if [[ "$VERBOSE" == "true" ]]; then
         args+=("-v")
     fi
-    
+
     if [ ${#args[@]} -eq 0 ]; then
         go test -timeout="$TEST_TIMEOUT" ./internal/... ./api/...
     else
         go test "${args[@]}" -timeout="$TEST_TIMEOUT" ./internal/... ./api/...
     fi
-    
+
     if [ $? -eq 0 ]; then
         print_success "Unit tests passed."
         return 0
@@ -108,18 +109,18 @@ run_unit_tests() {
 
 run_integration_tests() {
     print_status "Running integration tests..."
-    
+
     local args=()
     if [[ "$VERBOSE" == "true" ]]; then
         args+=("-ginkgo.v")
     fi
-    
+
     if [ ${#args[@]} -eq 0 ]; then
         go test -timeout="$TEST_TIMEOUT" ./test/integration/...
     else
         go test "${args[@]}" -timeout="$TEST_TIMEOUT" ./test/integration/...
     fi
-    
+
     if [ $? -eq 0 ]; then
         print_success "Integration tests passed."
         return 0
@@ -129,31 +130,29 @@ run_integration_tests() {
     fi
 }
 
-
-
 run_e2e_tests() {
     print_status "Running end-to-end tests..."
-    
+
     # Ensure operator is deployed
     if ! kubectl get deployment neo4j-operator-controller-manager -n "$OPERATOR_NAMESPACE" &> /dev/null; then
         print_status "Deploying operator for e2e tests..."
         make deploy IMG=neo4j-operator:dev
-        
+
         # Wait for operator to be ready
         kubectl wait --for=condition=available deployment/neo4j-operator-controller-manager -n "$OPERATOR_NAMESPACE" --timeout=300s
     fi
-    
+
     local args=()
     if [[ "$VERBOSE" == "true" ]]; then
         args+=("-ginkgo.v")
     fi
-    
+
     if [ ${#args[@]} -eq 0 ]; then
         go test -timeout="$TEST_TIMEOUT" ./test/e2e/...
     else
         go test "${args[@]}" -timeout="$TEST_TIMEOUT" ./test/e2e/...
     fi
-    
+
     if [ $? -eq 0 ]; then
         print_success "E2E tests passed."
         return 0
@@ -165,25 +164,25 @@ run_e2e_tests() {
 
 run_enterprise_tests() {
     print_status "Running enterprise feature tests..."
-    
+
     # Check if we have enterprise features enabled
     if ! kubectl get crd neo4jdisasterrecoveries.neo4j.neo4j.com &> /dev/null; then
         print_warning "Enterprise CRDs not found. Installing..."
         make install
     fi
-    
+
     local args=()
     if [[ "$VERBOSE" == "true" ]]; then
         args+=("-ginkgo.v")
     fi
-    
+
     # Run enterprise-specific tests
     if [ ${#args[@]} -eq 0 ]; then
         go test -timeout="$TEST_TIMEOUT" ./test/integration/enterprise_features_test.go
     else
         go test "${args[@]}" -timeout="$TEST_TIMEOUT" ./test/integration/enterprise_features_test.go
     fi
-    
+
     if [ $? -eq 0 ]; then
         print_success "Enterprise feature tests passed."
         return 0
@@ -195,15 +194,21 @@ run_enterprise_tests() {
 
 cleanup_test_resources() {
     print_status "Cleaning up test resources..."
-    
+
     # Delete test namespaces
     kubectl delete namespace --selector=test-type=neo4j-operator --wait=false || true
-    
-    # Clean up test clusters
+
+    # Clean up test resources
+    echo "🧹 Cleaning up test resources..."
     kubectl delete neo4jenterprisecluster --all --all-namespaces --wait=false || true
+    kubectl delete neo4jdatabase --all --all-namespaces --wait=false || true
+    kubectl delete neo4jbackup --all --all-namespaces --wait=false || true
+    kubectl delete neo4jrestore --all --all-namespaces --wait=false || true
+    kubectl delete neo4juser --all --all-namespaces --wait=false || true
+    kubectl delete neo4jrole --all --all-namespaces --wait=false || true
+    kubectl delete neo4jgrant --all --all-namespaces --wait=false || true
     kubectl delete neo4jplugin --all --all-namespaces --wait=false || true
-    kubectl delete neo4jdisasterrecovery --all --all-namespaces --wait=false || true
-    
+
     print_success "Test cleanup completed."
 }
 
@@ -286,14 +291,14 @@ main() {
     print_status "Test type: $TEST_TYPE"
     print_status "Timeout: $TEST_TIMEOUT"
     print_status "Namespace: $OPERATOR_NAMESPACE"
-    
+
     if [[ "$SETUP_ENV" == "true" ]]; then
         setup_test_environment
     fi
-    
+
     local failed_tests=()
     local exit_code=0
-    
+
     case "$TEST_TYPE" in
         unit)
             run_unit_tests || { failed_tests+=("unit"); exit_code=1; }
@@ -320,11 +325,11 @@ main() {
             fi
             ;;
     esac
-    
+
     if [[ "$CLEANUP" == "true" ]]; then
         cleanup_test_resources
     fi
-    
+
     # Report results
     echo ""
     if [[ $exit_code -eq 0 ]]; then
@@ -335,8 +340,8 @@ main() {
             print_error "Failed test suites: ${failed_tests[*]}"
         fi
     fi
-    
+
     exit $exit_code
 }
 
-main "$@" 
+main "$@"

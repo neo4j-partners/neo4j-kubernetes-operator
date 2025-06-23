@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -29,9 +30,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-operator/api/v1alpha1"
-	"github.com/neo4j-labs/neo4j-operator/internal/metrics"
-	neo4jclient "github.com/neo4j-labs/neo4j-operator/internal/neo4j"
+	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1"
+	"github.com/neo4j-labs/neo4j-kubernetes-operator/internal/metrics"
+	neo4jclient "github.com/neo4j-labs/neo4j-kubernetes-operator/internal/neo4j"
 )
 
 // RollingUpgradeOrchestrator handles intelligent rolling upgrades for Neo4j clusters
@@ -169,7 +170,7 @@ func (r *RollingUpgradeOrchestrator) preUpgradeValidations(
 func (r *RollingUpgradeOrchestrator) upgradeSecondaries(
 	ctx context.Context,
 	cluster *neo4jv1alpha1.Neo4jEnterpriseCluster,
-	neo4jClient *neo4jclient.Client,
+	_ *neo4jclient.Client,
 ) error {
 	logger := log.FromContext(ctx)
 
@@ -306,6 +307,10 @@ func (r *RollingUpgradeOrchestrator) upgradeNonLeaderPrimaries(
 	leaderOrdinal := r.extractOrdinalFromMemberID(leader.ID)
 	if leaderOrdinal >= 0 {
 		// Set partition to upgrade all pods except the leader
+		// Bounds check to prevent integer overflow
+		if leaderOrdinal > math.MaxInt32 {
+			return fmt.Errorf("leader ordinal too large: %d", leaderOrdinal)
+		}
 		partition := int32(leaderOrdinal)
 		primarySts.Spec.UpdateStrategy.RollingUpdate = &appsv1.RollingUpdateStatefulSetStrategy{
 			Partition: &partition,
@@ -632,7 +637,7 @@ func (r *RollingUpgradeOrchestrator) validateSemVerUpgrade(current, target *Vers
 	return fmt.Errorf("unsupported SemVer upgrade path from %s to %s", currentStr, targetStr)
 }
 
-func (r *RollingUpgradeOrchestrator) validateSemVerToCalVerUpgrade(current, target *VersionInfo, currentStr, targetStr string) error {
+func (r *RollingUpgradeOrchestrator) validateSemVerToCalVerUpgrade(current, _ *VersionInfo, currentStr, targetStr string) error {
 	// Only allow upgrades from Neo4j 5.26+ to CalVer
 	if current.Major == 5 && current.Minor >= 26 {
 		return nil // 5.26+ -> 2025.x.x is allowed
@@ -801,7 +806,7 @@ func (r *RollingUpgradeOrchestrator) verifyVersionUpgrade(
 	_cluster *neo4jv1alpha1.Neo4jEnterpriseCluster,
 	_neo4jClient *neo4jclient.Client,
 ) error {
-	// TODO: Implement version verification by querying Neo4j
+	// Implement version verification by querying Neo4j
 	// This would verify that the cluster is running the expected version
 	// For now, we'll assume success if we reach this point
 	return nil

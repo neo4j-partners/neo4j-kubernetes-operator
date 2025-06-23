@@ -32,7 +32,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-operator/api/v1alpha1"
+	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1"
 )
 
 var (
@@ -55,7 +55,7 @@ func TestAKS(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
-	ctx, cancel = context.WithCancel(context.TODO())
+	ctx, cancel = context.WithCancel(context.Background())
 
 	By("Setting up AKS test environment")
 
@@ -149,3 +149,50 @@ func createAKSCluster(name string) *neo4jv1alpha1.Neo4jEnterpriseCluster {
 		},
 	}
 }
+
+var _ = Describe("AKS Integration Tests", func() {
+	Context("When deploying Neo4j on AKS", func() {
+		It("should create a Neo4j cluster with AKS-specific configuration", func() {
+			cluster := createAKSCluster("test-aks-cluster")
+
+			// Create the cluster
+			Expect(k8sClient.Create(ctx, cluster)).Should(Succeed())
+
+			// Wait for cluster to be created (with timeout)
+			Eventually(func() error {
+				return k8sClient.Get(ctx, client.ObjectKey{
+					Name:      cluster.Name,
+					Namespace: cluster.Namespace,
+				}, cluster)
+			}, timeout, interval).Should(Succeed())
+
+			// Verify AKS-specific configuration
+			Expect(cluster.Spec.Storage.ClassName).To(Equal("managed-premium"))
+			Expect(cluster.Spec.Backups.DefaultStorage.Type).To(Equal("azure"))
+
+			// Clean up
+			By("Cleaning up test resources")
+			// Clean up test resources - errors in cleanup are logged but don't fail the test
+			if err := k8sClient.Delete(ctx, cluster); err != nil {
+				_, _ = fmt.Fprintf(GinkgoWriter, "warning: failed to delete cluster during cleanup: %v\n", err)
+			}
+		})
+
+		It("should handle AKS storage classes correctly", func() {
+			cluster := createAKSCluster("test-aks-storage")
+
+			// Verify storage configuration
+			Expect(cluster.Spec.Storage.ClassName).To(Equal("managed-premium"))
+			Expect(cluster.Spec.Storage.Size).To(Equal("20Gi"))
+		})
+
+		It("should configure Azure backup storage correctly", func() {
+			cluster := createAKSCluster("test-aks-backup")
+
+			// Verify backup configuration
+			Expect(cluster.Spec.Backups).NotTo(BeNil())
+			Expect(cluster.Spec.Backups.DefaultStorage.Type).To(Equal("azure"))
+			Expect(cluster.Spec.Backups.Cloud.Provider).To(Equal("azure"))
+		})
+	})
+})

@@ -8,8 +8,8 @@ layout:
 plugins:
   manifests.sdk.operatorframework.io/v2: {}
   scorecard.sdk.operatorframework.io/v2: {}
-projectName: neo4j-operator
-repo: github.com/neo4j-labs/neo4j-operator
+projectName: neo4j-kubernetes-operator
+repo: github.com/neo4j-labs/neo4j-kubernetes-operator
 resources:
 - api:
     crdVersion: v1
@@ -18,7 +18,7 @@ resources:
   domain: neo4j.com
   group: neo4j
   kind: Neo4jEnterpriseCluster
-  path: github.com/neo4j-labs/neo4j-operator/api/v1alpha1
+  path: github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1
   version: v1alpha1
 - api:
     crdVersion: v1
@@ -27,7 +27,7 @@ resources:
   domain: neo4j.com
   group: neo4j
   kind: Neo4jDatabase
-  path: github.com/neo4j-labs/neo4j-operator/api/v1alpha1
+  path: github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1
   version: v1alpha1
 - api:
     crdVersion: v1
@@ -36,6 +36,51 @@ resources:
   domain: neo4j.com
   group: neo4j
   kind: Neo4jBackup
-  path: github.com/neo4j-labs/neo4j-operator/api/v1alpha1
+  path: github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: neo4j.com
+  group: neo4j
+  kind: Neo4jRestore
+  path: github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: neo4j.com
+  group: neo4j
+  kind: Neo4jRole
+  path: github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: neo4j.com
+  group: neo4j
+  kind: Neo4jGrant
+  path: github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: neo4j.com
+  group: neo4j
+  kind: Neo4jUser
+  path: github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: neo4j.com
+  group: neo4j
+  kind: Neo4jPlugin
+  path: github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1
   version: v1alpha1
 version: "3"

@@ -33,8 +33,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-operator/api/v1alpha1"
-	"github.com/neo4j-labs/neo4j-operator/internal/neo4j"
+	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1"
+	"github.com/neo4j-labs/neo4j-kubernetes-operator/internal/neo4j"
 )
 
 // Neo4jUserReconciler reconciles a Neo4jUser object
@@ -47,6 +47,7 @@ type Neo4jUserReconciler struct {
 }
 
 const (
+	// UserFinalizer is the finalizer for Neo4j user resources
 	UserFinalizer = "neo4j.com/user-finalizer"
 )
 
@@ -57,6 +58,7 @@ const (
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
+// Reconcile handles the reconciliation of Neo4jUser resources
 func (r *Neo4jUserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 

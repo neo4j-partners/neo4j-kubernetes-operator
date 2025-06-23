@@ -1,0 +1,17 @@
+version: "2"
+
+run:
+  timeout: 2m
+  allow-parallel-runners: true
+
+linters:
+  enable:
+    # Only fast, essential linters for pre-commit
+    - errcheck      # Check for unchecked errors (fast)
+    - govet         # Vet examines Go source code (fast)
+    - ineffassign   # Detect ineffectual assignments (fast)
+    - staticcheck   # Go static analysis (medium speed but essential)
+    - unused        # Check for unused constants, variables, functions (fast)
+    - misspell      # Find misspelled words (fast)
+    - gosec         # Security checks (fast)
+    - revive        # Style checks (fast)

@@ -1,0 +1,102 @@
+# Build the manager binary - Neo4j Enterprise Operator
+FROM registry.access.redhat.com/ubi9/go-toolset:latest AS builder
+ARG TARGETOS
+ARG TARGETARCH
+ARG VERSION=dev
+ARG BUILD_DATE
+ARG VCS_REF
+
+# Switch to root for package installation
+USER root
+
+# Install additional build dependencies if needed
+RUN dnf update -y && dnf clean all
+
+# Switch back to non-root user for build
+USER 1001
+
+WORKDIR /opt/app-root/src
+
+# Copy the Go Modules manifests
+COPY go.mod go.mod
+COPY go.sum go.sum
+
+# Download dependencies
+RUN go mod download
+
+# Copy the go source
+COPY cmd/main.go cmd/main.go
+COPY api/ api/
+COPY internal/ internal/
+
+# Build with enterprise-only support
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build \
+    -a -installsuffix cgo \
+    -ldflags="-w -s -X main.version=${VERSION} -X main.buildDate=${BUILD_DATE} -X main.vcsRef=${VCS_REF}" \
+    -o manager cmd/main.go
+
+# Use UBI minimal as base image for OpenShift certification
+FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
+
+# Switch to root for package installation
+USER root
+
+# Install minimal required packages
+RUN microdnf update -y && \
+    microdnf install -y ca-certificates && \
+    microdnf clean all && \
+    rm -rf /var/cache/yum
+
+# Create non-root user with specific UID for OpenShift compatibility
+RUN useradd -r -u 1001 -g 0 neo4j-operator && \
+    mkdir -p /home/neo4j-operator && \
+    chown -R 1001:0 /home/neo4j-operator && \
+    chmod -R g=u /home/neo4j-operator
+
+# Add OpenShift-compatible labels
+LABEL name="neo4j-operator" \
+      vendor="Neo4j Labs" \
+      version="${VERSION}" \
+      release="1" \
+      summary="Neo4j Enterprise Operator for OpenShift" \
+      description="Kubernetes operator for managing Neo4j Enterprise clusters on OpenShift" \
+      io.k8s.description="Kubernetes operator for managing Neo4j Enterprise clusters on OpenShift" \
+      io.k8s.display-name="Neo4j Enterprise Operator" \
+      io.openshift.tags="database,neo4j,graph,operator" \
+      io.openshift.wants="openshift" \
+      com.redhat.component="neo4j-operator-container" \
+      com.redhat.license_terms="https://www.redhat.com/en/about/red-hat-end-user-license-agreements#UBI"
+
+# Standard OCI labels
+LABEL org.opencontainers.image.title="Neo4j Enterprise Operator"
+LABEL org.opencontainers.image.description="Kubernetes operator for Neo4j Enterprise clusters (5.26+) - OpenShift certified"
+LABEL org.opencontainers.image.vendor="Neo4j Labs"
+LABEL org.opencontainers.image.licenses="Apache-2.0"
+LABEL org.opencontainers.image.version="${VERSION}"
+LABEL org.opencontainers.image.created="${BUILD_DATE}"
+LABEL org.opencontainers.image.source="https://github.com/neo4j-labs/neo4j-kubernetes-operator"
+LABEL org.opencontainers.image.revision="${VCS_REF}"
+LABEL org.opencontainers.image.documentation="https://github.com/neo4j-labs/neo4j-kubernetes-operator/blob/main/README.md"
+LABEL org.opencontainers.image.url="https://github.com/neo4j-labs/neo4j-kubernetes-operator"
+
+# Enterprise-only metadata
+LABEL neo4j.edition="enterprise-only"
+LABEL neo4j.min-version="5.26"
+LABEL neo4j.community-edition="unsupported"
+LABEL neo4j.description="This operator only supports Neo4j Enterprise Edition 5.26 and above"
+
+# OpenShift certification metadata
+LABEL com.redhat.openshift.versions="v4.10,v4.11,v4.12,v4.13,v4.14,v4.15,v4.16"
+LABEL com.redhat.delivery.appregistry="true"
+LABEL com.redhat.delivery.operator.bundle="true"
+
+WORKDIR /
+COPY --from=builder /opt/app-root/src/manager .
+
+# Ensure the binary is executable and owned by the correct user
+RUN chmod +x /manager && chown 1001:0 /manager
+
+# Switch to non-root user
+USER 1001
+
+ENTRYPOINT ["/manager"]

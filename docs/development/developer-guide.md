@@ -2,6 +2,33 @@
 
 This comprehensive guide covers all aspects of developing the Neo4j Enterprise Operator for Kubernetes, from initial setup to advanced development workflows.
 
+## 🏗️ Core Features for Development
+
+### Topology-Aware Placement
+
+The operator supports automatic distribution of Neo4j primaries across availability zones:
+
+- **Automatic zone discovery** - Discovers available zones in the cluster
+- **Smart constraint generation** - Creates appropriate Kubernetes constraints
+- **Validation and monitoring** - Ensures proper distribution
+- **Flexible configuration** - Supports both hard and soft constraints
+
+**Development workflow:**
+
+```bash
+# Test topology features locally
+make dev-start-multizone     # Start multi-zone kind cluster
+kubectl apply -f config/samples/topology-aware-cluster.yaml
+./scripts/validate-topology.sh my-cluster
+```
+
+**Key files for topology development:**
+
+- `api/v1alpha1/neo4jenterprisecluster_types.go` - API definitions
+- `internal/controller/topology_scheduler.go` - Core scheduling logic
+- `internal/controller/neo4jenterprisecluster_controller.go` - Controller integration
+- `docs/topology-aware-placement.md` - Complete feature documentation
+
 ## 🚀 Quick Start
 
 ### Prerequisites
@@ -20,11 +47,12 @@ make dev-init
 ```
 
 This command will:
-- Install all development tools
-- Create a kind cluster
-- Setup git hooks
-- Install monitoring stack
-- Configure IDE settings
+
+- ✅ Install all development tools
+- ✅ Create a kind Kubernetes cluster
+- ✅ Setup git hooks and pre-commit checks
+- ✅ Configure IDE settings
+- ✅ Start monitoring stack
 
 ### Development Dashboard
 
@@ -33,21 +61,30 @@ This command will:
 make dev-dashboard
 ```
 
+This provides:
+
+- Real-time status of cluster, services, and tools
+- Quick access to common development tasks
+- Environment health checks
+
 ## 🏗️ Development Environment
 
 ### Development Modes
 
 #### 1. Normal Development Mode
+
 ```bash
 make dev-start
 ```
 
 #### 2. Debug Mode
+
 ```bash
 make dev-debug
 ```
 
 #### 3. Hot Reload Mode
+
 ```bash
 # Terminal 1: Start services
 make dev-services
@@ -57,6 +94,7 @@ HOT_RELOAD=true make dev-start
 ```
 
 #### 4. Tilt Development Mode
+
 ```bash
 tilt up
 ```
@@ -64,6 +102,7 @@ tilt up
 ### Development Services
 
 #### Start Core Services
+
 ```bash
 # Start Neo4j, Prometheus, Grafana
 make dev-services
@@ -75,6 +114,7 @@ make dev-services
 ```
 
 #### Start Neo4j Cluster
+
 ```bash
 # Start 3-node Neo4j Enterprise cluster
 make dev-services-cluster
@@ -86,6 +126,7 @@ make dev-services-cluster
 ```
 
 #### Start Monitoring Stack
+
 ```bash
 make dev-services-monitoring
 ```
@@ -160,6 +201,7 @@ make quality-format
 ```
 
 This runs:
+
 - `go fmt` - Standard Go formatting
 - `gofumpt` - Enhanced formatting
 - `gci` - Import organization
@@ -172,6 +214,7 @@ make quality-security
 ```
 
 This runs:
+
 - `gosec` - Go security checker
 - `govulncheck` - Vulnerability scanning
 - `gitleaks` - Secret detection
@@ -184,114 +227,131 @@ This runs:
 make quality-report
 ```
 
-## 🛠️ Development Tools
+## 🎯 Development Tools & Features
 
-### Tool Installation
+### 🔧 Comprehensive Testing Framework
 
-```bash
-# Install all development tools
-make tools-install
-
-# Update tools to latest versions
-make tools-update
-```
-
-### Available Tools
-
-- **golangci-lint** - Comprehensive linting
-- **staticcheck** - Advanced static analysis
-- **delve (dlv)** - Go debugger
-- **air** - Hot reload for Go
-- **ginkgo** - BDD testing framework
-- **mockery** - Mock generation
-- **setup-envtest** - Kubernetes test environment
-
-### Mock Generation
+- **Unit Tests** - Fast, isolated tests
+- **Integration Tests** - Controller integration testing
+- **E2E Tests** - End-to-end workflow testing
+- **Ginkgo BDD Tests** - Behavior-driven development
+- **Topology Testing** - Validate placement across zones
 
 ```bash
-# Generate mocks for all interfaces
-make mock-generate
+make test-all-comprehensive  # Run all tests
+make test-quick-comprehensive # Quick test suite
+make test-report            # Generate HTML test report
+make test-topology          # Test topology-aware placement
 ```
 
-## 📊 Performance & Profiling
+### 🔍 Code Quality Analysis
 
-### CPU Profiling
+- **Advanced Linting** - golangci-lint, staticcheck, errcheck
+- **Security Scanning** - gosec, govulncheck, gitleaks
+- **Code Formatting** - gofmt, gofumpt, goimports, golines
+- **Dependency Analysis** - License checking, vulnerability scanning
+- **Code Metrics** - Complexity, coverage, performance
 
 ```bash
-make profile-cpu
+make quality                # Complete quality analysis
+make quality-quick          # Quick quality checks
+make quality-report         # Generate HTML quality report
 ```
 
-### Memory Profiling
+### 🐳 Development Services
+
+- **Neo4j Enterprise** - Single instance and cluster modes
+- **Prometheus** - Metrics collection and monitoring
+- **Grafana** - Dashboards and visualization
+- **Redis** - Caching for development
+- **MinIO** - S3-compatible storage testing
+- **LocalStack** - AWS services simulation
+- **Jaeger** - Distributed tracing
 
 ```bash
-make profile-mem
+make dev-services           # Start core services
+make dev-services-cluster   # Start Neo4j cluster
+make dev-services-monitoring # Start monitoring stack
 ```
 
-### Execution Tracing
+### 🔥 Hot Reload & Debug
+
+- **Air** - Hot reload for Go applications
+- **Delve** - Go debugger integration
+- **Tilt** - Kubernetes development environment
+- **VS Code** - Complete IDE integration
 
 ```bash
-make profile-trace
+make dev-start              # Normal development mode
+make dev-debug              # Debug mode with delve
+HOT_RELOAD=true make dev-start # Hot reload mode
+tilt up                     # Tilt development mode
 ```
 
-### Custom Profiling
+### 📊 Performance Profiling
+
+- **CPU Profiling** - Identify performance bottlenecks
+- **Memory Profiling** - Track memory usage and leaks
+- **Execution Tracing** - Detailed execution analysis
+- **Blocking Profiling** - Find blocking operations
+- **Mutex Profiling** - Analyze lock contention
 
 ```bash
-# Run with custom profiling flags
-go test -cpuprofile=custom.prof -bench=BenchmarkSpecific ./internal/controller/...
-go tool pprof custom.prof
+make profile-trace          # Execution tracing
 ```
 
-## 🐳 Container Development
+### 🔐 Security & Compliance
 
-### Development Container
+- **Pre-commit hooks** - Automated security checks
+- **Secret detection** - Prevent credential leaks
+- **Vulnerability scanning** - Dependency security
+- **License compliance** - Legal compliance checking
+- **RBAC validation** - Kubernetes security
+
+### 📝 VS Code Integration
+
+- **Code snippets** - Neo4j operator-specific snippets
+- **Debug configurations** - Pre-configured debugging
+- **Task definitions** - Integrated build and test tasks
+- **Extension recommendations** - Curated extension list
+- **IntelliSense** - Enhanced code completion
+
+### 🎯 Git Workflow Enhancement
+
+- **Conventional commits** - Standardized commit messages
+- **Pre-commit hooks** - Automated quality checks
+- **Commit linting** - Enforce commit standards
+- **Changelog generation** - Automated release notes
+
+### Development Modes
+
+#### 1. Normal Development Mode
 
 ```bash
-# Build development container
-make container-dev
-
-# Interactive development shell
-make container-shell
-
-# Run tests in container
-make container-test
+make dev-start
 ```
 
-### Debug Container
+#### 2. Debug Mode
 
 ```bash
-# Build container with delve debugger
-make container-debug
+make dev-debug
 ```
 
-## 📋 VS Code Integration
-
-### Setup
+#### 3. Hot Reload Mode
 
 ```bash
-# Setup VS Code configuration
-make vscode-setup
+# Terminal 1: Start services
+make dev-services
 
-# Install recommended extensions
-make vscode-extensions
+# Terminal 2: Start operator with hot reload
+HOT_RELOAD=true make dev-start
 ```
 
-### Features
+#### 4. Tilt Development Mode
 
-- **Code Snippets** - Neo4j operator-specific snippets
-- **Debug Configurations** - Pre-configured debug sessions
-- **Tasks** - Integrated build and test tasks
-- **Extensions** - Recommended extensions for Go and Kubernetes development
-
-### Snippets Usage
-
-In VS Code, type these prefixes and press Tab:
-
-- `neo4j-controller` - Complete controller reconcile function
-- `neo4j-crd-spec` - CRD specification structure
-- `k8s-resource` - Kubernetes resource creator
-- `neo4j-test` - Table-driven test function
-- `ginkgo-test` - Ginkgo BDD test structure
-- `cypher-exec` - Cypher query execution
+```bash
+tilt up
+```
 
 ## 🔄 Git Workflow
 
@@ -369,11 +429,13 @@ docs/
 ### Local Debugging
 
 #### With VS Code
+
 1. Set breakpoints in your code
 2. Press F5 or go to Run and Debug
 3. Select "Launch Neo4j Operator"
 
 #### With Delve CLI
+
 ```bash
 # Build with debug symbols
 go build -gcflags="all=-N -l" -o bin/manager cmd/main.go
@@ -385,6 +447,7 @@ dlv exec bin/manager -- --zap-devel=true --leader-elect=false
 ### Remote Debugging
 
 #### Port Forward to Running Pod
+
 ```bash
 # Forward debug port
 kubectl port-forward deployment/neo4j-operator-controller-manager 2345:2345
@@ -396,16 +459,19 @@ dlv connect localhost:2345
 ### Debug Information
 
 #### View Operator Logs
+
 ```bash
 make logs-follow
 ```
 
 #### Check Health
+
 ```bash
 make health-check
 ```
 
 #### Scrape Metrics
+
 ```bash
 make metrics-scrape
 ```
@@ -417,25 +483,29 @@ make metrics-scrape
 When adding new controllers:
 
 1. **Generate CRD Types**
+
    ```bash
    kubebuilder create api --group neo4j --version v1alpha1 --kind MyResource
    ```
 
 2. **Update RBAC**
+
    ```bash
    make manifests
    ```
 
 3. **Add Tests**
+
    ```bash
    # Unit tests
    touch internal/controller/myresource_controller_test.go
-   
+
    # Integration tests
    touch test/integration/myresource_test.go
    ```
 
 4. **Add Webhooks** (if needed)
+
    ```bash
    kubebuilder create webhook --group neo4j --version v1alpha1 --kind MyResource
    ```
@@ -461,12 +531,14 @@ var (
 ### Performance Optimization
 
 #### Controller Optimization
+
 - Use field selectors in watches
 - Implement proper resource caching
 - Use exponential backoff for retries
 - Batch operations when possible
 
 #### Memory Management
+
 ```bash
 # Monitor memory usage
 make profile-mem
@@ -480,6 +552,7 @@ go test -tags=goleak ./...
 ### Common Issues
 
 #### 1. Build Failures
+
 ```bash
 # Clean and rebuild
 make clean
@@ -489,6 +562,7 @@ make build
 ```
 
 #### 2. Test Failures
+
 ```bash
 # Clean test cache
 go clean -testcache
@@ -498,6 +572,7 @@ go test -v ./internal/controller/... -run TestSpecificFunction
 ```
 
 #### 3. Kind Cluster Issues
+
 ```bash
 # Reset cluster
 make dev-cluster-delete
@@ -505,6 +580,7 @@ make dev-cluster
 ```
 
 #### 4. Docker Issues
+
 ```bash
 # Clean Docker system
 make dev-services-clean
@@ -516,7 +592,7 @@ docker system prune -af
 1. **Check the logs**: `make dev-logs`
 2. **Review the dashboard**: `make dev-dashboard`
 3. **Run diagnostics**: `make health-check`
-4. **Check issues**: [GitHub Issues](https://github.com/neo4j-labs/neo4j-operator/issues)
+4. **Check issues**: [GitHub Issues](https://github.com/neo4j-labs/neo4j-kubernetes-operator/issues)
 
 ## 🎯 Best Practices
 
@@ -580,4 +656,4 @@ internal/
 
 ---
 
-For more detailed information, see the specific guides in the `docs/` directory or run `make help-dev` for a quick reference. 
+For more detailed information, see the specific guides in the `docs/` directory or run `make help-dev` for a quick reference.

@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-operator/api/v1alpha1"
+	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -174,7 +174,7 @@ func TestTopologyScheduler_CalculateTopologyPlacement(t *testing.T) {
 			client := fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(objs...).Build()
 
 			ts := NewTopologyScheduler(client)
-			got, err := ts.CalculateTopologyPlacement(context.TODO(), tt.cluster)
+			got, err := ts.CalculateTopologyPlacement(context.Background(), tt.cluster)
 
 			if (err != nil) != tt.wantErr {
 				t.Errorf("CalculateTopologyPlacement() error = %v, wantErr %v", err, tt.wantErr)
@@ -248,7 +248,7 @@ func TestTopologyScheduler_ApplyTopologyConstraints(t *testing.T) {
 	client := fake.NewClientBuilder().WithScheme(scheme).Build()
 	ts := NewTopologyScheduler(client)
 
-	err := ts.ApplyTopologyConstraints(context.TODO(), sts, cluster, placement)
+	err := ts.ApplyTopologyConstraints(context.Background(), sts, cluster, placement)
 	if err != nil {
 		t.Errorf("ApplyTopologyConstraints() error = %v", err)
 		return

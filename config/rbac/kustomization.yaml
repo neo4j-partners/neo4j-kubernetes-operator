@@ -28,4 +28,3 @@ resources:
 - neo4jdatabase_viewer_role.yaml
 - neo4jenterprisecluster_editor_role.yaml
 - neo4jenterprisecluster_viewer_role.yaml
-

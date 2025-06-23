@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sort"
 
-	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-operator/api/v1alpha1"
+	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -116,7 +116,7 @@ func (ts *TopologyScheduler) ApplyTopologyConstraints(ctx context.Context, sts *
 }
 
 // buildTopologySpreadConstraints creates topology spread constraints for the cluster
-func (ts *TopologyScheduler) buildTopologySpreadConstraints(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, placement *TopologyPlacement) []corev1.TopologySpreadConstraint {
+func (ts *TopologyScheduler) buildTopologySpreadConstraints(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, _ *TopologyPlacement) []corev1.TopologySpreadConstraint {
 	config := cluster.Spec.Topology.Placement.TopologySpread
 	constraints := []corev1.TopologySpreadConstraint{}
 
@@ -402,7 +402,7 @@ func isDistributionBalanced(counts []int32, maxSkew int32) bool {
 		return true
 	}
 
-	var min, max int32 = counts[0], counts[0]
+	var min, max = counts[0], counts[0]
 	for _, count := range counts[1:] {
 		if count < min {
 			min = count

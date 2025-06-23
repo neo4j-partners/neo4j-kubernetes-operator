@@ -33,9 +33,9 @@ CLEANUP=${CLEANUP:-true}
 # Sample configurations
 create_samples() {
     log_info "Creating sample configurations..."
-    
+
     mkdir -p samples/
-    
+
     # Basic Neo4j cluster
     cat > samples/basic-cluster.yaml << 'EOF'
 apiVersion: neo4j.neo4j.com/v1alpha1
@@ -154,29 +154,29 @@ wait_for_resource() {
     local resource_type=$1
     local resource_name=$2
     local condition=${3:-"Ready"}
-    
+
     log_info "Waiting for ${resource_type}/${resource_name} to be ${condition}..."
-    
+
     local start_time=$(date +%s)
     while true; do
         local current_time=$(date +%s)
         local elapsed=$((current_time - start_time))
-        
+
         if [[ $elapsed -gt $TIMEOUT ]]; then
             log_error "Timeout waiting for ${resource_type}/${resource_name}"
             return 1
         fi
-        
+
         if kubectl get "${resource_type}" "${resource_name}" -n "${NAMESPACE}" >/dev/null 2>&1; then
             local status
             status=$(kubectl get "${resource_type}" "${resource_name}" -n "${NAMESPACE}" -o jsonpath="{.status.conditions[?(@.type=='${condition}')].status}" 2>/dev/null || echo "")
-            
+
             if [[ "${status}" == "True" ]]; then
                 log_success "${resource_type}/${resource_name} is ${condition}"
                 return 0
             fi
         fi
-        
+
         sleep 5
     done
 }
@@ -184,17 +184,17 @@ wait_for_resource() {
 # Test basic cluster
 test_basic_cluster() {
     log_info "Testing basic Neo4j cluster..."
-    
+
     # Apply secrets first
     kubectl apply -f samples/secrets.yaml
-    
+
     # Apply basic cluster
     kubectl apply -f samples/basic-cluster.yaml
-    
+
     # Wait for cluster to be ready
     if wait_for_resource "neo4jenterprisecluster" "basic-neo4j" "Ready"; then
         log_success "Basic cluster test passed"
-        
+
         # Test connectivity
         test_connectivity "basic-neo4j"
     else
@@ -207,23 +207,23 @@ test_basic_cluster() {
 # Test HA cluster
 test_ha_cluster() {
     log_info "Testing HA Neo4j cluster..."
-    
+
     # Create self-signed issuer first
     create_selfsigned_issuer
-    
+
     # Apply HA cluster
     kubectl apply -f samples/ha-cluster.yaml
-    
+
     # Wait for cluster to be ready (longer timeout for HA)
     local original_timeout=$TIMEOUT
     TIMEOUT=600
-    
+
     if wait_for_resource "neo4jenterprisecluster" "ha-neo4j" "Ready"; then
         log_success "HA cluster test passed"
-        
+
         # Test connectivity
         test_connectivity "ha-neo4j"
-        
+
         # Test HA functionality
         test_ha_functionality "ha-neo4j"
     else
@@ -232,16 +232,16 @@ test_ha_cluster() {
         TIMEOUT=$original_timeout
         return 1
     fi
-    
+
     TIMEOUT=$original_timeout
 }
 
 # Test database creation
 test_database() {
     log_info "Testing database creation..."
-    
+
     kubectl apply -f samples/database.yaml
-    
+
     if wait_for_resource "neo4jdatabase" "movies-db" "Ready"; then
         log_success "Database test passed"
     else
@@ -253,9 +253,9 @@ test_database() {
 # Test user creation
 test_user() {
     log_info "Testing user creation..."
-    
+
     kubectl apply -f samples/user.yaml
-    
+
     if wait_for_resource "neo4juser" "app-user" "Ready"; then
         log_success "User test passed"
     else
@@ -268,17 +268,17 @@ test_user() {
 test_connectivity() {
     local cluster_name=$1
     log_info "Testing connectivity to ${cluster_name}..."
-    
+
     # Get service name and port
     local service_name="${cluster_name}-client"
     local port="7687"
-    
+
     # Port forward to test connectivity
     kubectl port-forward "service/${service_name}" 7687:7687 -n "${NAMESPACE}" &
     local pf_pid=$!
-    
+
     sleep 5
-    
+
     # Test with cypher-shell (if available)
     if command -v cypher-shell >/dev/null 2>&1; then
         if echo "RETURN 1;" | cypher-shell -a bolt://localhost:7687 -u neo4j -p neo4jpassword; then
@@ -289,7 +289,7 @@ test_connectivity() {
     else
         log_info "cypher-shell not available, skipping connectivity test"
     fi
-    
+
     # Kill port-forward
     kill $pf_pid 2>/dev/null || true
 }
@@ -298,15 +298,15 @@ test_connectivity() {
 test_ha_functionality() {
     local cluster_name=$1
     log_info "Testing HA functionality for ${cluster_name}..."
-    
+
     # Check if we have the expected number of pods
     local expected_primaries=3
     local expected_secondaries=2
     local total_expected=$((expected_primaries + expected_secondaries))
-    
+
     local actual_pods
     actual_pods=$(kubectl get pods -l "app.kubernetes.io/name=${cluster_name}" -n "${NAMESPACE}" --no-headers | wc -l)
-    
+
     if [[ $actual_pods -eq $total_expected ]]; then
         log_success "HA pod count test passed (${actual_pods}/${total_expected})"
     else
@@ -318,7 +318,7 @@ test_ha_functionality() {
 # Create self-signed issuer for TLS testing
 create_selfsigned_issuer() {
     log_info "Creating self-signed certificate issuer..."
-    
+
     cat << 'EOF' | kubectl apply -f -
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
@@ -333,16 +333,16 @@ EOF
 show_debug_info() {
     local cluster_name=$1
     log_info "Debug information for ${cluster_name}:"
-    
+
     echo "=== Cluster Status ==="
     kubectl get neo4jenterprisecluster "${cluster_name}" -n "${NAMESPACE}" -o yaml || true
-    
+
     echo "=== Pods ==="
     kubectl get pods -l "app.kubernetes.io/name=${cluster_name}" -n "${NAMESPACE}" || true
-    
+
     echo "=== Events ==="
     kubectl get events -n "${NAMESPACE}" --sort-by='.lastTimestamp' | grep "${cluster_name}" || true
-    
+
     echo "=== Pod Logs ==="
     local pods
     pods=$(kubectl get pods -l "app.kubernetes.io/name=${cluster_name}" -n "${NAMESPACE}" -o jsonpath='{.items[*].metadata.name}' || echo "")
@@ -356,13 +356,13 @@ show_debug_info() {
 cleanup_resources() {
     if [[ "${CLEANUP}" == "true" ]]; then
         log_info "Cleaning up test resources..."
-        
+
         kubectl delete -f samples/ --ignore-not-found=true || true
         kubectl delete clusterissuer selfsigned-issuer --ignore-not-found=true || true
-        
+
         # Wait for resources to be deleted
         sleep 10
-        
+
         log_success "Test resources cleaned up"
     fi
 }
@@ -375,38 +375,38 @@ main() {
     log_info "  Namespace: ${NAMESPACE}"
     log_info "  Cleanup: ${CLEANUP}"
     echo
-    
+
     # Check prerequisites
     if ! kubectl cluster-info >/dev/null 2>&1; then
         log_error "Kubernetes cluster not accessible"
         exit 1
     fi
-    
+
     if ! kubectl get crd neo4jenterpriseclusters.neo4j.neo4j.com >/dev/null 2>&1; then
         log_error "Neo4j CRDs not installed. Run 'make install' first."
         exit 1
     fi
-    
+
     # Create samples
     create_samples
-    
+
     # Run tests
     local failed_tests=0
-    
+
     log_info "Starting tests..."
-    
+
     if ! test_basic_cluster; then
         ((failed_tests++))
     fi
-    
+
     if ! test_database; then
         ((failed_tests++))
     fi
-    
+
     if ! test_user; then
         ((failed_tests++))
     fi
-    
+
     # HA test is more resource intensive, skip in CI or if requested
     if [[ "${SKIP_HA_TEST:-false}" != "true" ]]; then
         if ! test_ha_cluster; then
@@ -415,10 +415,10 @@ main() {
     else
         log_info "Skipping HA cluster test"
     fi
-    
+
     # Cleanup
     cleanup_resources
-    
+
     # Report results
     echo
     if [[ $failed_tests -eq 0 ]]; then
@@ -466,4 +466,4 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-main "$@" 
+main "$@"

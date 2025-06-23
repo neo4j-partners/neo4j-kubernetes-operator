@@ -340,7 +340,6 @@ spec:
                                     pod labels will be ignored. The default value is empty.
                                     The same key is forbidden to exist in both matchLabelKeys and labelSelector.
                                     Also, matchLabelKeys cannot be set when labelSelector isn't set.
-                                    This is a beta field and requires enabling MatchLabelKeysInPodAffinity feature gate (enabled by default).
                                   items:
                                     type: string
                                   type: array
@@ -355,7 +354,6 @@ spec:
                                     pod labels will be ignored. The default value is empty.
                                     The same key is forbidden to exist in both mismatchLabelKeys and labelSelector.
                                     Also, mismatchLabelKeys cannot be set when labelSelector isn't set.
-                                    This is a beta field and requires enabling MatchLabelKeysInPodAffinity feature gate (enabled by default).
                                   items:
                                     type: string
                                   type: array
@@ -521,7 +519,6 @@ spec:
                                 pod labels will be ignored. The default value is empty.
                                 The same key is forbidden to exist in both matchLabelKeys and labelSelector.
                                 Also, matchLabelKeys cannot be set when labelSelector isn't set.
-                                This is a beta field and requires enabling MatchLabelKeysInPodAffinity feature gate (enabled by default).
                               items:
                                 type: string
                               type: array
@@ -536,7 +533,6 @@ spec:
                                 pod labels will be ignored. The default value is empty.
                                 The same key is forbidden to exist in both mismatchLabelKeys and labelSelector.
                                 Also, mismatchLabelKeys cannot be set when labelSelector isn't set.
-                                This is a beta field and requires enabling MatchLabelKeysInPodAffinity feature gate (enabled by default).
                               items:
                                 type: string
                               type: array
@@ -699,7 +695,6 @@ spec:
                                     pod labels will be ignored. The default value is empty.
                                     The same key is forbidden to exist in both matchLabelKeys and labelSelector.
                                     Also, matchLabelKeys cannot be set when labelSelector isn't set.
-                                    This is a beta field and requires enabling MatchLabelKeysInPodAffinity feature gate (enabled by default).
                                   items:
                                     type: string
                                   type: array
@@ -714,7 +709,6 @@ spec:
                                     pod labels will be ignored. The default value is empty.
                                     The same key is forbidden to exist in both mismatchLabelKeys and labelSelector.
                                     Also, mismatchLabelKeys cannot be set when labelSelector isn't set.
-                                    This is a beta field and requires enabling MatchLabelKeysInPodAffinity feature gate (enabled by default).
                                   items:
                                     type: string
                                   type: array
@@ -880,7 +874,6 @@ spec:
                                 pod labels will be ignored. The default value is empty.
                                 The same key is forbidden to exist in both matchLabelKeys and labelSelector.
                                 Also, matchLabelKeys cannot be set when labelSelector isn't set.
-                                This is a beta field and requires enabling MatchLabelKeysInPodAffinity feature gate (enabled by default).
                               items:
                                 type: string
                               type: array
@@ -895,7 +888,6 @@ spec:
                                 pod labels will be ignored. The default value is empty.
                                 The same key is forbidden to exist in both mismatchLabelKeys and labelSelector.
                                 Also, mismatchLabelKeys cannot be set when labelSelector isn't set.
-                                This is a beta field and requires enabling MatchLabelKeysInPodAffinity feature gate (enabled by default).
                               items:
                                 type: string
                               type: array
@@ -1176,114 +1168,506 @@ spec:
                     type: string
                 type: object
               autoScaling:
-                description: AutoScaling configuration for read replicas
+                description: Auto-scaling configuration for both primaries and secondaries
                 properties:
-                  behavior:
-                    description: Scaling behavior
+                  advanced:
+                    description: Advanced scaling features
                     properties:
-                      scaleDown:
-                        description: Scale down policy
-                        properties:
-                          policies:
-                            description: Policies
-                            items:
-                              description: HPAScalingRule defines HPA scaling rules
+                      customAlgorithms:
+                        description: Custom scaling algorithms
+                        items:
+                          description: CustomScalingAlgorithm defines a custom scaling
+                            algorithm
+                          properties:
+                            config:
+                              additionalProperties:
+                                type: string
+                              description: Algorithm configuration
+                              type: object
+                            name:
+                              description: Algorithm name
+                              type: string
+                            type:
+                              description: Algorithm type
+                              enum:
+                              - webhook
+                              - lua
+                              - wasm
+                              type: string
+                            webhook:
+                              description: Webhook configuration (if type=webhook)
                               properties:
-                                periodSeconds:
-                                  description: Period for the scaling rule
-                                  format: int32
-                                  type: integer
-                                type:
-                                  description: Type of scaling rule
+                                headers:
+                                  additionalProperties:
+                                    type: string
+                                  description: Headers
+                                  type: object
+                                method:
+                                  default: POST
+                                  description: HTTP method
+                                  enum:
+                                  - GET
+                                  - POST
                                   type: string
-                                value:
-                                  description: Value for the scaling rule
-                                  format: int32
-                                  type: integer
+                                timeout:
+                                  default: 30s
+                                  description: Timeout
+                                  type: string
+                                url:
+                                  description: Webhook URL
+                                  type: string
                               required:
-                              - periodSeconds
+                              - url
+                              type: object
+                          required:
+                          - name
+                          - type
+                          type: object
+                        type: array
+                      machineLearning:
+                        description: Machine learning-based scaling
+                        properties:
+                          enabled:
+                            default: false
+                            description: Enable ML scaling
+                            type: boolean
+                          features:
+                            description: Feature engineering
+                            items:
+                              description: MLFeatureConfig defines ML feature configuration
+                              properties:
+                                name:
+                                  description: Feature name
+                                  type: string
+                                source:
+                                  description: Feature source
+                                  type: string
+                                transformation:
+                                  description: Transformation
+                                  type: string
+                                type:
+                                  description: Feature type
+                                  enum:
+                                  - metric
+                                  - time
+                                  - categorical
+                                  type: string
+                              required:
+                              - name
+                              - source
                               - type
-                              - value
                               type: object
                             type: array
-                          stabilizationWindowSeconds:
-                            description: Stabilization window
+                          model:
+                            description: ML model configuration
+                            properties:
+                              parameters:
+                                additionalProperties:
+                                  type: string
+                                description: Model parameters
+                                type: object
+                              trainingDataSource:
+                                description: Training data source
+                                type: string
+                              type:
+                                default: linear_regression
+                                description: Model type
+                                enum:
+                                - linear_regression
+                                - random_forest
+                                - neural_network
+                                type: string
+                            type: object
+                        type: object
+                      predictive:
+                        description: Predictive scaling
+                        properties:
+                          confidenceThreshold:
+                            default: "0.8"
+                            description: Confidence threshold as string (e.g., "0.8",
+                              "0.95")
+                            type: string
+                          enabled:
+                            default: false
+                            description: Enable predictive scaling
+                            type: boolean
+                          historicalWindow:
+                            default: 7d
+                            description: Historical data window
+                            type: string
+                          predictionHorizon:
+                            default: 1h
+                            description: Prediction horizon
+                            type: string
+                        type: object
+                    type: object
+                  behavior:
+                    description: Global scaling behavior configuration
+                    properties:
+                      coordination:
+                        description: Coordination between primary and secondary scaling
+                        properties:
+                          enabled:
+                            default: true
+                            description: Enable coordination
+                            type: boolean
+                          primaryPriority:
+                            default: 5
+                            description: Primary scaling priority
                             format: int32
+                            maximum: 10
+                            minimum: 1
+                            type: integer
+                          scalingDelay:
+                            default: 30s
+                            description: Delay between primary and secondary scaling
+                            type: string
+                          secondaryPriority:
+                            default: 3
+                            description: Secondary scaling priority
+                            format: int32
+                            maximum: 10
+                            minimum: 1
                             type: integer
                         type: object
-                      scaleUp:
-                        description: Scale up policy
+                      scaleDown:
+                        description: Scale down behavior
                         properties:
                           policies:
-                            description: Policies
+                            description: Scaling policies
                             items:
-                              description: HPAScalingRule defines HPA scaling rules
+                              description: ScalingPolicy defines a scaling policy
                               properties:
-                                periodSeconds:
-                                  description: Period for the scaling rule
-                                  format: int32
-                                  type: integer
+                                period:
+                                  default: 60s
+                                  description: Period for the policy
+                                  type: string
                                 type:
-                                  description: Type of scaling rule
+                                  description: Policy type
+                                  enum:
+                                  - Pods
+                                  - Percent
                                   type: string
                                 value:
-                                  description: Value for the scaling rule
+                                  description: Policy value
                                   format: int32
                                   type: integer
                               required:
-                              - periodSeconds
                               - type
                               - value
                               type: object
                             type: array
-                          stabilizationWindowSeconds:
+                          selectPolicy:
+                            default: Max
+                            description: Policy selection mode
+                            enum:
+                            - Min
+                            - Max
+                            - Disabled
+                            type: string
+                          stabilizationWindow:
+                            default: 60s
                             description: Stabilization window
-                            format: int32
-                            type: integer
+                            type: string
+                        type: object
+                      scaleUp:
+                        description: Scale up behavior
+                        properties:
+                          policies:
+                            description: Scaling policies
+                            items:
+                              description: ScalingPolicy defines a scaling policy
+                              properties:
+                                period:
+                                  default: 60s
+                                  description: Period for the policy
+                                  type: string
+                                type:
+                                  description: Policy type
+                                  enum:
+                                  - Pods
+                                  - Percent
+                                  type: string
+                                value:
+                                  description: Policy value
+                                  format: int32
+                                  type: integer
+                              required:
+                              - type
+                              - value
+                              type: object
+                            type: array
+                          selectPolicy:
+                            default: Max
+                            description: Policy selection mode
+                            enum:
+                            - Min
+                            - Max
+                            - Disabled
+                            type: string
+                          stabilizationWindow:
+                            default: 60s
+                            description: Stabilization window
+                            type: string
                         type: object
                     type: object
                   enabled:
                     default: true
                     description: Enable auto-scaling
                     type: boolean
-                  maxReplicas:
-                    default: 10
-                    description: Maximum number of read replicas
-                    format: int32
-                    minimum: 1
-                    type: integer
-                  metrics:
-                    description: Scaling metrics
-                    items:
-                      description: AutoScalingMetric defines a metric for auto-scaling
-                      properties:
-                        query:
-                          description: Custom metric query
-                          type: string
-                        target:
-                          description: Target value
-                          type: string
-                        type:
-                          description: Metric type
-                          enum:
-                          - cpu
-                          - memory
-                          - custom
-                          - query_latency
-                          - connection_count
-                          - throughput
-                          type: string
-                      required:
-                      - target
-                      - type
-                      type: object
-                    type: array
-                  minReplicas:
-                    default: 0
-                    description: Minimum number of read replicas
-                    format: int32
-                    minimum: 0
-                    type: integer
+                  primaries:
+                    description: Primary node auto-scaling configuration
+                    properties:
+                      allowQuorumBreak:
+                        default: false
+                        description: Allow breaking quorum requirements (emergency
+                          use only)
+                        type: boolean
+                      enabled:
+                        default: true
+                        description: Enable primary auto-scaling
+                        type: boolean
+                      maxReplicas:
+                        default: 7
+                        description: Maximum number of primary replicas (must be odd
+                          for quorum)
+                        format: int32
+                        minimum: 1
+                        type: integer
+                      metrics:
+                        description: Scaling metrics for primary nodes
+                        items:
+                          description: AutoScalingMetric defines a metric for auto-scaling
+                            decisions
+                          properties:
+                            customQuery:
+                              description: Custom metric query (for Prometheus)
+                              type: string
+                            source:
+                              description: Metric source configuration
+                              properties:
+                                neo4j:
+                                  description: Neo4j metrics configuration
+                                  properties:
+                                    cypherQuery:
+                                      description: Cypher query to get metric value
+                                      type: string
+                                    jmxBean:
+                                      description: JMX bean path
+                                      type: string
+                                    metricName:
+                                      description: Metric name
+                                      type: string
+                                  required:
+                                  - metricName
+                                  type: object
+                                prometheus:
+                                  description: Prometheus configuration
+                                  properties:
+                                    interval:
+                                      default: 30s
+                                      description: Query interval
+                                      type: string
+                                    query:
+                                      description: Metric query
+                                      type: string
+                                    serverUrl:
+                                      description: Prometheus server URL
+                                      type: string
+                                  required:
+                                  - query
+                                  type: object
+                                type:
+                                  default: kubernetes
+                                  enum:
+                                  - kubernetes
+                                  - prometheus
+                                  - neo4j
+                                  type: string
+                              type: object
+                            target:
+                              description: Target value for the metric
+                              type: string
+                            type:
+                              description: Metric type
+                              enum:
+                              - cpu
+                              - memory
+                              - query_latency
+                              - connection_count
+                              - throughput
+                              - custom
+                              type: string
+                            weight:
+                              default: "1.0"
+                              description: Weight of this metric in scaling decisions
+                                as string (e.g., "1.0", "2.5")
+                              type: string
+                          required:
+                          - target
+                          - type
+                          type: object
+                        type: array
+                      minReplicas:
+                        default: 3
+                        description: Minimum number of primary replicas (must be odd
+                          for quorum)
+                        format: int32
+                        minimum: 1
+                        type: integer
+                      quorumProtection:
+                        description: Quorum-aware scaling behavior
+                        properties:
+                          enabled:
+                            default: true
+                            description: Enable quorum protection
+                            type: boolean
+                          healthCheck:
+                            description: Health check configuration
+                            properties:
+                              failureThreshold:
+                                default: 3
+                                description: Failure threshold
+                                format: int32
+                                minimum: 1
+                                type: integer
+                              interval:
+                                default: 30s
+                                description: Health check interval
+                                type: string
+                              timeout:
+                                default: 10s
+                                description: Health check timeout
+                                type: string
+                            type: object
+                          minHealthyPrimaries:
+                            default: 2
+                            description: Minimum healthy primaries before blocking
+                              scale-down
+                            format: int32
+                            minimum: 1
+                            type: integer
+                        type: object
+                    type: object
+                  secondaries:
+                    description: Secondary node auto-scaling configuration
+                    properties:
+                      enabled:
+                        default: true
+                        description: Enable secondary auto-scaling
+                        type: boolean
+                      maxReplicas:
+                        default: 20
+                        description: Maximum number of secondary replicas
+                        format: int32
+                        minimum: 0
+                        type: integer
+                      metrics:
+                        description: Scaling metrics for secondary nodes
+                        items:
+                          description: AutoScalingMetric defines a metric for auto-scaling
+                            decisions
+                          properties:
+                            customQuery:
+                              description: Custom metric query (for Prometheus)
+                              type: string
+                            source:
+                              description: Metric source configuration
+                              properties:
+                                neo4j:
+                                  description: Neo4j metrics configuration
+                                  properties:
+                                    cypherQuery:
+                                      description: Cypher query to get metric value
+                                      type: string
+                                    jmxBean:
+                                      description: JMX bean path
+                                      type: string
+                                    metricName:
+                                      description: Metric name
+                                      type: string
+                                  required:
+                                  - metricName
+                                  type: object
+                                prometheus:
+                                  description: Prometheus configuration
+                                  properties:
+                                    interval:
+                                      default: 30s
+                                      description: Query interval
+                                      type: string
+                                    query:
+                                      description: Metric query
+                                      type: string
+                                    serverUrl:
+                                      description: Prometheus server URL
+                                      type: string
+                                  required:
+                                  - query
+                                  type: object
+                                type:
+                                  default: kubernetes
+                                  enum:
+                                  - kubernetes
+                                  - prometheus
+                                  - neo4j
+                                  type: string
+                              type: object
+                            target:
+                              description: Target value for the metric
+                              type: string
+                            type:
+                              description: Metric type
+                              enum:
+                              - cpu
+                              - memory
+                              - query_latency
+                              - connection_count
+                              - throughput
+                              - custom
+                              type: string
+                            weight:
+                              default: "1.0"
+                              description: Weight of this metric in scaling decisions
+                                as string (e.g., "1.0", "2.5")
+                              type: string
+                          required:
+                          - target
+                          - type
+                          type: object
+                        type: array
+                      minReplicas:
+                        default: 1
+                        description: Minimum number of secondary replicas
+                        format: int32
+                        minimum: 0
+                        type: integer
+                      zoneAware:
+                        description: Zone-aware scaling
+                        properties:
+                          enabled:
+                            default: false
+                            description: Enable zone-aware scaling
+                            type: boolean
+                          maxZoneSkew:
+                            default: 2
+                            description: Maximum zone skew
+                            format: int32
+                            minimum: 1
+                            type: integer
+                          minReplicasPerZone:
+                            default: 1
+                            description: Minimum replicas per zone
+                            format: int32
+                            minimum: 0
+                            type: integer
+                          zonePreference:
+                            description: Zone preference for scaling
+                            items:
+                              type: string
+                            type: array
+                        type: object
+                    type: object
                 type: object
               backups:
                 description: BackupsSpec defines default backup configuration
@@ -1388,164 +1772,6 @@ spec:
                         type: string
                     required:
                     - type
-                    type: object
-                type: object
-              blueGreen:
-                description: BlueGreen deployment configuration
-                properties:
-                  enabled:
-                    default: false
-                    description: Enable blue-green deployments
-                    type: boolean
-                  rollback:
-                    description: Rollback configuration
-                    properties:
-                      autoRollback:
-                        default: true
-                        description: Enable automatic rollback on failure
-                        type: boolean
-                      timeout:
-                        description: Rollback timeout
-                        type: string
-                    type: object
-                  traffic:
-                    description: Traffic switching configuration
-                    properties:
-                      canaryPercentage:
-                        description: Canary traffic percentage before full switch
-                        format: int32
-                        type: integer
-                      mode:
-                        default: automatic
-                        description: Switch mode
-                        enum:
-                        - automatic
-                        - manual
-                        type: string
-                      waitDuration:
-                        description: Duration to wait before switching
-                        type: string
-                    type: object
-                  validation:
-                    description: Validation configuration
-                    properties:
-                      customValidation:
-                        description: Custom validation hooks
-                        items:
-                          description: BlueGreenCustomValidation defines custom validation
-                          properties:
-                            jobTemplate:
-                              description: Job template for validation
-                              properties:
-                                backoffLimit:
-                                  description: Job-level configuration
-                                  format: int32
-                                  type: integer
-                                container:
-                                  description: Container specification
-                                  properties:
-                                    args:
-                                      description: Arguments to pass to command
-                                      items:
-                                        type: string
-                                      type: array
-                                    command:
-                                      description: Command to execute
-                                      items:
-                                        type: string
-                                      type: array
-                                    env:
-                                      description: Environment variables
-                                      items:
-                                        description: EnvVar represents an environment
-                                          variable
-                                        properties:
-                                          name:
-                                            description: Name of the environment variable
-                                            type: string
-                                          value:
-                                            description: Value of the environment
-                                              variable
-                                            type: string
-                                          valueFrom:
-                                            description: ValueFrom specifies a source
-                                              for the value
-                                            properties:
-                                              configMapKeyRef:
-                                                description: ConfigMap key reference
-                                                properties:
-                                                  key:
-                                                    description: Key within the ConfigMap
-                                                    type: string
-                                                  name:
-                                                    description: Name of the ConfigMap
-                                                    type: string
-                                                required:
-                                                - key
-                                                - name
-                                                type: object
-                                              secretKeyRef:
-                                                description: Secret key reference
-                                                properties:
-                                                  key:
-                                                    description: Key within the secret
-                                                    type: string
-                                                  name:
-                                                    description: Name of the secret
-                                                    type: string
-                                                required:
-                                                - key
-                                                - name
-                                                type: object
-                                            type: object
-                                        required:
-                                        - name
-                                        type: object
-                                      type: array
-                                    image:
-                                      description: Container image
-                                      type: string
-                                  required:
-                                  - image
-                                  type: object
-                              required:
-                              - container
-                              type: object
-                            name:
-                              description: Validation name
-                              type: string
-                            timeout:
-                              description: Timeout for validation
-                              type: string
-                          required:
-                          - jobTemplate
-                          - name
-                          type: object
-                        type: array
-                      healthChecks:
-                        description: Health checks to perform
-                        items:
-                          description: BlueGreenHealthCheck defines a health check
-                          properties:
-                            cypherQuery:
-                              description: Cypher query to execute
-                              type: string
-                            expectedResult:
-                              description: Expected result
-                              type: string
-                            httpEndpoint:
-                              description: HTTP endpoint to check
-                              type: string
-                            name:
-                              description: Check name
-                              type: string
-                            timeout:
-                              description: Timeout for the check
-                              type: string
-                          required:
-                          - name
-                          type: object
-                        type: array
                     type: object
                 type: object
               config:
@@ -1694,163 +1920,1014 @@ spec:
                 - repo
                 - tag
                 type: object
-              multiTenant:
-                description: Multi-tenant configuration
+              multiCluster:
+                description: Multi-cluster deployment configuration
                 properties:
-                  defaultTenant:
-                    description: Default tenant configuration
+                  coordination:
+                    description: Cross-cluster coordination
                     properties:
-                      backup:
-                        description: Backup configuration
+                      failoverCoordination:
+                        description: Failover coordination
                         properties:
                           enabled:
-                            description: Enable backups for tenant
+                            default: true
+                            description: Enable failover coordination
                             type: boolean
-                          retention:
-                            description: Retention policy
-                            type: string
-                          schedule:
-                            description: Backup schedule
+                          healthCheck:
+                            description: Health check configuration
+                            properties:
+                              failureThreshold:
+                                default: 3
+                                description: Failure threshold
+                                format: int32
+                                minimum: 1
+                                type: integer
+                              interval:
+                                default: 30s
+                                description: Health check interval
+                                type: string
+                              successThreshold:
+                                default: 1
+                                description: Success threshold
+                                format: int32
+                                minimum: 1
+                                type: integer
+                              timeout:
+                                default: 10s
+                                description: Health check timeout
+                                type: string
+                            type: object
+                          timeout:
+                            default: 5m
+                            description: Failover timeout
                             type: string
                         type: object
-                      databases:
-                        description: Tenant databases
-                        items:
-                          type: string
-                        type: array
-                      name:
-                        description: Tenant name
-                        type: string
-                      resources:
-                        description: Resource allocation
+                      leaderElection:
+                        description: Leader election
                         properties:
-                          cpu:
-                            description: CPU allocation
+                          enabled:
+                            default: true
+                            description: Enable leader election
+                            type: boolean
+                          leaseDuration:
+                            default: 15s
+                            description: Lease duration
                             type: string
-                          maxConnections:
-                            description: Connection limits
-                            format: int32
-                            type: integer
-                          memory:
-                            description: Memory allocation
+                          namespace:
+                            description: Leader election namespace
                             type: string
-                          storage:
-                            description: Storage allocation
+                          renewDeadline:
+                            default: 10s
+                            description: Renew deadline
+                            type: string
+                          retryPeriod:
+                            default: 2s
+                            description: Retry period
                             type: string
                         type: object
-                      security:
-                        description: Security settings
+                      stateSynchronization:
+                        description: State synchronization
                         properties:
-                          authProvider:
-                            description: Authentication provider
+                          conflictResolution:
+                            default: last_writer_wins
+                            description: Conflict resolution strategy
+                            enum:
+                            - last_writer_wins
+                            - manual
+                            - custom
                             type: string
-                          networkPolicies:
-                            description: Network policies
-                            items:
-                              type: string
-                            type: array
-                          roles:
-                            description: Roles
-                            items:
-                              type: string
-                            type: array
+                          enabled:
+                            default: true
+                            description: Enable state synchronization
+                            type: boolean
+                          interval:
+                            default: 30s
+                            description: Synchronization interval
+                            type: string
                         type: object
-                    required:
-                    - name
                     type: object
                   enabled:
                     default: false
-                    description: Enable multi-tenancy
+                    description: Enable multi-cluster deployment
                     type: boolean
-                  isolation:
-                    default: database
-                    description: Isolation strategy
-                    enum:
-                    - namespace
-                    - database
-                    - hybrid
-                    type: string
-                  resourceQuotas:
-                    description: Resource quotas
+                  networking:
+                    description: Networking configuration
                     properties:
-                      defaultCpuQuota:
-                        description: Default CPU quota per tenant
-                        type: string
-                      defaultMemoryQuota:
-                        description: Default memory quota per tenant
-                        type: string
-                      defaultStorageQuota:
-                        description: Default storage quota per tenant
-                        type: string
-                      maxTenantsPerCluster:
-                        description: Maximum tenants per cluster
-                        format: int32
-                        type: integer
-                    type: object
-                  tenants:
-                    description: Tenant configurations
-                    items:
-                      description: TenantConfig defines a tenant configuration
-                      properties:
-                        backup:
-                          description: Backup configuration
-                          properties:
-                            enabled:
-                              description: Enable backups for tenant
-                              type: boolean
-                            retention:
-                              description: Retention policy
-                              type: string
-                            schedule:
-                              description: Backup schedule
-                              type: string
-                          type: object
-                        databases:
-                          description: Tenant databases
-                          items:
+                      cilium:
+                        description: Cilium multi-cluster configuration
+                        properties:
+                          clusterMesh:
+                            description: Cluster mesh configuration
+                            properties:
+                              apiServer:
+                                description: Cluster mesh API server configuration
+                                properties:
+                                  externalAccess:
+                                    description: External access configuration
+                                    properties:
+                                      loadBalancer:
+                                        description: Load balancer configuration
+                                        properties:
+                                          annotations:
+                                            additionalProperties:
+                                              type: string
+                                            description: Service annotations
+                                            type: object
+                                          ip:
+                                            description: Load balancer IP
+                                            type: string
+                                        type: object
+                                      nodePort:
+                                        description: NodePort configuration
+                                        properties:
+                                          nodeSelector:
+                                            additionalProperties:
+                                              type: string
+                                            description: Node selector
+                                            type: object
+                                          port:
+                                            description: NodePort port
+                                            format: int32
+                                            type: integer
+                                        type: object
+                                      type:
+                                        default: LoadBalancer
+                                        description: Access type
+                                        enum:
+                                        - LoadBalancer
+                                        - NodePort
+                                        - Ingress
+                                        type: string
+                                    type: object
+                                  tls:
+                                    description: TLS configuration
+                                    properties:
+                                      caSecret:
+                                        description: CA certificate secret
+                                        type: string
+                                      clientSecret:
+                                        description: Client certificate secret
+                                        type: string
+                                      serverSecret:
+                                        description: Server certificate secret
+                                        type: string
+                                    type: object
+                                type: object
+                              clusterId:
+                                description: Cluster ID
+                                format: int32
+                                type: integer
+                              enabled:
+                                default: true
+                                description: Enable cluster mesh
+                                type: boolean
+                              serviceDiscovery:
+                                description: Service discovery
+                                properties:
+                                  enabled:
+                                    default: true
+                                    description: Enable service discovery
+                                    type: boolean
+                                  serviceTypes:
+                                    description: Service types to synchronize
+                                    items:
+                                      type: string
+                                    type: array
+                                type: object
+                            type: object
+                          encryption:
+                            description: Network encryption
+                            properties:
+                              enabled:
+                                default: true
+                                description: Enable encryption
+                                type: boolean
+                              keySecret:
+                                description: Encryption key secret
+                                type: string
+                              type:
+                                default: wireguard
+                                description: Encryption type
+                                enum:
+                                - ipsec
+                                - wireguard
+                                type: string
+                            type: object
+                          externalWorkloads:
+                            description: External workload configuration
+                            properties:
+                              cidrs:
+                                description: External workload CIDRs
+                                items:
+                                  type: string
+                                type: array
+                              enabled:
+                                default: false
+                                description: Enable external workloads
+                                type: boolean
+                            type: object
+                        type: object
+                      dns:
+                        description: Cross-cluster DNS
+                        properties:
+                          enabled:
+                            default: true
+                            description: Enable cross-cluster DNS
+                            type: boolean
+                          externalDNS:
+                            description: External DNS configuration
+                            properties:
+                              domainFilters:
+                                description: Domain filters
+                                items:
+                                  type: string
+                                type: array
+                              enabled:
+                                default: false
+                                description: Enable external DNS
+                                type: boolean
+                              provider:
+                                description: DNS provider
+                                enum:
+                                - aws
+                                - gcp
+                                - azure
+                                - cloudflare
+                                type: string
+                            type: object
+                          zone:
+                            description: DNS zone
                             type: string
-                          type: array
-                        name:
-                          description: Tenant name
-                          type: string
-                        resources:
-                          description: Resource allocation
+                        type: object
+                      networkPolicies:
+                        description: Network policies
+                        items:
+                          description: CrossClusterNetworkPolicy defines cross-cluster
+                            network policies
                           properties:
-                            cpu:
-                              description: CPU allocation
+                            destinationClusters:
+                              description: Destination clusters
+                              items:
+                                type: string
+                              type: array
+                            name:
+                              description: Policy name
                               type: string
-                            maxConnections:
-                              description: Connection limits
+                            ports:
+                              description: Allowed ports
+                              items:
+                                description: CrossClusterNetworkPolicyPort defines
+                                  allowed ports in cross-cluster network policy
+                                properties:
+                                  port:
+                                    description: Port number
+                                    format: int32
+                                    type: integer
+                                  protocol:
+                                    default: TCP
+                                    description: Protocol
+                                    enum:
+                                    - TCP
+                                    - UDP
+                                    type: string
+                                required:
+                                - port
+                                type: object
+                              type: array
+                            sourceClusters:
+                              description: Source clusters
+                              items:
+                                type: string
+                              type: array
+                          required:
+                          - name
+                          type: object
+                        type: array
+                      type:
+                        description: Networking type
+                        enum:
+                        - cilium
+                        - istio
+                        - custom
+                        type: string
+                    required:
+                    - type
+                    type: object
+                  serviceMesh:
+                    description: Service mesh configuration
+                    properties:
+                      istio:
+                        description: Istio configuration
+                        properties:
+                          destinationRules:
+                            description: Destination rules
+                            items:
+                              description: IstioDestinationRuleConfig defines Istio
+                                destination rule configuration
+                              properties:
+                                host:
+                                  description: Host
+                                  type: string
+                                name:
+                                  description: Destination rule name
+                                  type: string
+                                subsets:
+                                  description: Subsets
+                                  items:
+                                    description: IstioSubset defines Istio subset
+                                    properties:
+                                      labels:
+                                        additionalProperties:
+                                          type: string
+                                        description: Labels
+                                        type: object
+                                      name:
+                                        description: Subset name
+                                        type: string
+                                      trafficPolicy:
+                                        description: Traffic policy
+                                        properties:
+                                          connectionPool:
+                                            description: Connection pool
+                                            properties:
+                                              http:
+                                                description: HTTP settings
+                                                properties:
+                                                  http1MaxPendingRequests:
+                                                    description: HTTP1 max pending
+                                                      requests
+                                                    format: int32
+                                                    type: integer
+                                                  maxRequestsPerConnection:
+                                                    description: Max requests per
+                                                      connection
+                                                    format: int32
+                                                    type: integer
+                                                type: object
+                                              tcp:
+                                                description: TCP settings
+                                                properties:
+                                                  connectTimeout:
+                                                    description: Connect timeout
+                                                    type: string
+                                                  maxConnections:
+                                                    description: Max connections
+                                                    format: int32
+                                                    type: integer
+                                                type: object
+                                            type: object
+                                          loadBalancer:
+                                            description: Load balancer
+                                            properties:
+                                              simple:
+                                                description: Simple load balancer
+                                                  type
+                                                enum:
+                                                - ROUND_ROBIN
+                                                - LEAST_CONN
+                                                - RANDOM
+                                                - PASSTHROUGH
+                                                type: string
+                                            type: object
+                                        type: object
+                                    required:
+                                    - name
+                                    type: object
+                                  type: array
+                                trafficPolicy:
+                                  description: Traffic policy
+                                  properties:
+                                    connectionPool:
+                                      description: Connection pool
+                                      properties:
+                                        http:
+                                          description: HTTP settings
+                                          properties:
+                                            http1MaxPendingRequests:
+                                              description: HTTP1 max pending requests
+                                              format: int32
+                                              type: integer
+                                            maxRequestsPerConnection:
+                                              description: Max requests per connection
+                                              format: int32
+                                              type: integer
+                                          type: object
+                                        tcp:
+                                          description: TCP settings
+                                          properties:
+                                            connectTimeout:
+                                              description: Connect timeout
+                                              type: string
+                                            maxConnections:
+                                              description: Max connections
+                                              format: int32
+                                              type: integer
+                                          type: object
+                                      type: object
+                                    loadBalancer:
+                                      description: Load balancer
+                                      properties:
+                                        simple:
+                                          description: Simple load balancer type
+                                          enum:
+                                          - ROUND_ROBIN
+                                          - LEAST_CONN
+                                          - RANDOM
+                                          - PASSTHROUGH
+                                          type: string
+                                      type: object
+                                  type: object
+                              required:
+                              - host
+                              - name
+                              type: object
+                            type: array
+                          gateways:
+                            description: Gateway configuration
+                            items:
+                              description: IstioGatewayConfig defines Istio gateway
+                                configuration
+                              properties:
+                                name:
+                                  description: Gateway name
+                                  type: string
+                                servers:
+                                  description: Servers
+                                  items:
+                                    description: IstioServerConfig defines Istio server
+                                      configuration
+                                    properties:
+                                      hosts:
+                                        description: Hosts
+                                        items:
+                                          type: string
+                                        type: array
+                                      port:
+                                        description: Port
+                                        properties:
+                                          name:
+                                            description: Port name
+                                            type: string
+                                          number:
+                                            description: Port number
+                                            format: int32
+                                            type: integer
+                                          protocol:
+                                            description: Protocol
+                                            type: string
+                                        required:
+                                        - name
+                                        - number
+                                        - protocol
+                                        type: object
+                                      tls:
+                                        description: TLS configuration
+                                        properties:
+                                          credentialName:
+                                            description: Credential name
+                                            type: string
+                                          mode:
+                                            description: TLS mode
+                                            enum:
+                                            - PASSTHROUGH
+                                            - SIMPLE
+                                            - MUTUAL
+                                            - AUTO_PASSTHROUGH
+                                            type: string
+                                        type: object
+                                    required:
+                                    - port
+                                    type: object
+                                  type: array
+                              required:
+                              - name
+                              type: object
+                            type: array
+                          multiCluster:
+                            description: Multi-cluster configuration
+                            properties:
+                              networks:
+                                additionalProperties:
+                                  description: IstioNetworkConfig defines Istio network
+                                    configuration
+                                  properties:
+                                    endpoints:
+                                      description: Network endpoints
+                                      items:
+                                        description: IstioNetworkEndpoint defines
+                                          Istio network endpoint
+                                        properties:
+                                          fromRegistry:
+                                            description: From registry
+                                            type: string
+                                          service:
+                                            description: Service name
+                                            type: string
+                                        type: object
+                                      type: array
+                                    gateways:
+                                      description: Gateways
+                                      items:
+                                        type: string
+                                      type: array
+                                  type: object
+                                description: Network configuration
+                                type: object
+                              secrets:
+                                description: Multi-cluster secrets
+                                items:
+                                  description: IstioMultiClusterSecret defines Istio
+                                    multi-cluster secret
+                                  properties:
+                                    cluster:
+                                      description: Cluster name
+                                      type: string
+                                    name:
+                                      description: Secret name
+                                      type: string
+                                    server:
+                                      description: Server
+                                      type: string
+                                  required:
+                                  - cluster
+                                  - name
+                                  type: object
+                                type: array
+                              serviceDiscovery:
+                                description: Cross-cluster service discovery
+                                properties:
+                                  discoverySelectors:
+                                    description: Discovery selectors
+                                    items:
+                                      description: IstioDiscoverySelector defines
+                                        Istio discovery selector
+                                      properties:
+                                        matchLabels:
+                                          additionalProperties:
+                                            type: string
+                                          description: Match labels
+                                          type: object
+                                      type: object
+                                    type: array
+                                  enabled:
+                                    default: true
+                                    description: Enable service discovery
+                                    type: boolean
+                                type: object
+                            type: object
+                          virtualServices:
+                            description: Virtual services
+                            items:
+                              description: IstioVirtualServiceConfig defines Istio
+                                virtual service configuration
+                              properties:
+                                gateways:
+                                  description: Gateways
+                                  items:
+                                    type: string
+                                  type: array
+                                hosts:
+                                  description: Hosts
+                                  items:
+                                    type: string
+                                  type: array
+                                http:
+                                  description: HTTP routes
+                                  items:
+                                    description: IstioHTTPRouteConfig defines Istio
+                                      HTTP route configuration
+                                    properties:
+                                      match:
+                                        description: Match conditions
+                                        items:
+                                          description: IstioHTTPMatchRequest defines
+                                            Istio HTTP match request
+                                          properties:
+                                            headers:
+                                              additionalProperties:
+                                                description: IstioStringMatch defines
+                                                  Istio string match
+                                                properties:
+                                                  exact:
+                                                    description: Exact match
+                                                    type: string
+                                                  prefix:
+                                                    description: Prefix match
+                                                    type: string
+                                                  regex:
+                                                    description: Regex match
+                                                    type: string
+                                                type: object
+                                              description: Headers match
+                                              type: object
+                                            uri:
+                                              description: URI match
+                                              properties:
+                                                exact:
+                                                  description: Exact match
+                                                  type: string
+                                                prefix:
+                                                  description: Prefix match
+                                                  type: string
+                                                regex:
+                                                  description: Regex match
+                                                  type: string
+                                              type: object
+                                          type: object
+                                        type: array
+                                      route:
+                                        description: Route destinations
+                                        items:
+                                          description: IstioHTTPRouteDestination defines
+                                            Istio HTTP route destination
+                                          properties:
+                                            destination:
+                                              description: Destination
+                                              properties:
+                                                host:
+                                                  description: Host
+                                                  type: string
+                                                port:
+                                                  description: Port
+                                                  properties:
+                                                    number:
+                                                      description: Port number
+                                                      format: int32
+                                                      type: integer
+                                                  type: object
+                                                subset:
+                                                  description: Subset
+                                                  type: string
+                                              required:
+                                              - host
+                                              type: object
+                                            weight:
+                                              description: Weight
+                                              format: int32
+                                              type: integer
+                                          required:
+                                          - destination
+                                          type: object
+                                        type: array
+                                    type: object
+                                  type: array
+                                name:
+                                  description: Virtual service name
+                                  type: string
+                              required:
+                              - name
+                              type: object
+                            type: array
+                        type: object
+                      security:
+                        description: Security configuration
+                        properties:
+                          authorization:
+                            description: Authorization policies
+                            items:
+                              description: AuthorizationPolicy defines authorization
+                                policy
+                              properties:
+                                name:
+                                  description: Policy name
+                                  type: string
+                                rules:
+                                  description: Rules
+                                  items:
+                                    description: AuthorizationRule defines authorization
+                                      rule
+                                    properties:
+                                      from:
+                                        description: From sources
+                                        items:
+                                          description: AuthorizationSource defines
+                                            authorization source
+                                          properties:
+                                            namespaces:
+                                              description: Namespaces
+                                              items:
+                                                type: string
+                                              type: array
+                                            principals:
+                                              description: Principals
+                                              items:
+                                                type: string
+                                              type: array
+                                          type: object
+                                        type: array
+                                      to:
+                                        description: To operations
+                                        items:
+                                          description: AuthorizationOperation defines
+                                            authorization operation
+                                          properties:
+                                            methods:
+                                              description: Methods
+                                              items:
+                                                type: string
+                                              type: array
+                                            paths:
+                                              description: Paths
+                                              items:
+                                                type: string
+                                              type: array
+                                          type: object
+                                        type: array
+                                      when:
+                                        description: When conditions
+                                        items:
+                                          description: AuthorizationCondition defines
+                                            authorization condition
+                                          properties:
+                                            key:
+                                              description: Key
+                                              type: string
+                                            values:
+                                              description: Values
+                                              items:
+                                                type: string
+                                              type: array
+                                          required:
+                                          - key
+                                          type: object
+                                        type: array
+                                    type: object
+                                  type: array
+                                selector:
+                                  additionalProperties:
+                                    type: string
+                                  description: Selector
+                                  type: object
+                              required:
+                              - name
+                              type: object
+                            type: array
+                          mtls:
+                            description: mTLS configuration
+                            properties:
+                              certificates:
+                                description: Certificate configuration
+                                properties:
+                                  caSecret:
+                                    description: CA certificate secret
+                                    type: string
+                                  rotation:
+                                    description: Certificate rotation
+                                    properties:
+                                      enabled:
+                                        default: true
+                                        description: Enable automatic rotation
+                                        type: boolean
+                                      interval:
+                                        default: 24h
+                                        description: Rotation interval
+                                        type: string
+                                    type: object
+                                type: object
+                              mode:
+                                default: STRICT
+                                description: mTLS mode
+                                enum:
+                                - STRICT
+                                - PERMISSIVE
+                                - DISABLE
+                                type: string
+                            type: object
+                          securityPolicies:
+                            description: Security policies
+                            items:
+                              description: SecurityPolicy defines security policy
+                              properties:
+                                name:
+                                  description: Policy name
+                                  type: string
+                                spec:
+                                  description: Policy specification as JSON string
+                                  type: string
+                                type:
+                                  description: Policy type
+                                  enum:
+                                  - network
+                                  - pod
+                                  - service
+                                  type: string
+                              required:
+                              - name
+                              - type
+                              type: object
+                            type: array
+                        type: object
+                      trafficManagement:
+                        description: Traffic management
+                        properties:
+                          circuitBreaker:
+                            description: Circuit breaker
+                            properties:
+                              enabled:
+                                default: false
+                                description: Enable circuit breaker
+                                type: boolean
+                              errorThreshold:
+                                description: Error threshold as string (e.g., "0.5",
+                                  "0.8")
+                                type: string
+                              requestVolumeThreshold:
+                                description: Request volume threshold
+                                format: int32
+                                type: integer
+                              sleepWindow:
+                                description: Sleep window
+                                type: string
+                            type: object
+                          faultInjection:
+                            description: Fault injection
+                            properties:
+                              abort:
+                                description: Abort injection
+                                properties:
+                                  httpStatus:
+                                    description: HTTP status code
+                                    format: int32
+                                    type: integer
+                                  percentage:
+                                    description: Percentage of requests to abort as
+                                      string (e.g., "5.0", "10.0")
+                                    type: string
+                                type: object
+                              delay:
+                                description: Delay injection
+                                properties:
+                                  fixedDelay:
+                                    description: Fixed delay
+                                    type: string
+                                  percentage:
+                                    description: Percentage of requests to delay as
+                                      string (e.g., "10.5", "25.0")
+                                    type: string
+                                type: object
+                              enabled:
+                                default: false
+                                description: Enable fault injection
+                                type: boolean
+                            type: object
+                          loadBalancing:
+                            default: round_robin
+                            description: Load balancing strategy
+                            enum:
+                            - round_robin
+                            - least_conn
+                            - random
+                            - consistent_hash
+                            type: string
+                          retryPolicy:
+                            description: Retry policy
+                            properties:
+                              attempts:
+                                description: Number of retries
+                                format: int32
+                                type: integer
+                              perTryTimeout:
+                                description: Retry timeout
+                                type: string
+                              retryOn:
+                                description: Retry conditions
+                                items:
+                                  type: string
+                                type: array
+                            type: object
+                        type: object
+                      type:
+                        description: Service mesh type
+                        enum:
+                        - istio
+                        - linkerd
+                        - consul
+                        type: string
+                    required:
+                    - type
+                    type: object
+                  topology:
+                    description: Multi-cluster topology
+                    properties:
+                      clusters:
+                        description: Cluster configurations
+                        items:
+                          description: ClusterConfig defines configuration for a cluster
+                            in multi-cluster setup
+                          properties:
+                            config:
+                              additionalProperties:
+                                type: string
+                              description: Cluster-specific configuration
+                              type: object
+                            endpoint:
+                              description: Cluster endpoint
+                              type: string
+                            name:
+                              description: Cluster name
+                              type: string
+                            nodeAllocation:
+                              description: Node allocation
+                              properties:
+                                nodeSelector:
+                                  additionalProperties:
+                                    type: string
+                                  description: Node selectors
+                                  type: object
+                                primaries:
+                                  description: Number of primary nodes in this cluster
+                                  format: int32
+                                  type: integer
+                                secondaries:
+                                  description: Number of secondary nodes in this cluster
+                                  format: int32
+                                  type: integer
+                                tolerations:
+                                  description: Tolerations
+                                  items:
+                                    description: |-
+                                      The pod this Toleration is attached to tolerates any taint that matches
+                                      the triple <key,value,effect> using the matching operator <operator>.
+                                    properties:
+                                      effect:
+                                        description: |-
+                                          Effect indicates the taint effect to match. Empty means match all taint effects.
+                                          When specified, allowed values are NoSchedule, PreferNoSchedule and NoExecute.
+                                        type: string
+                                      key:
+                                        description: |-
+                                          Key is the taint key that the toleration applies to. Empty means match all taint keys.
+                                          If the key is empty, operator must be Exists; this combination means to match all values and all keys.
+                                        type: string
+                                      operator:
+                                        description: |-
+                                          Operator represents a key's relationship to the value.
+                                          Valid operators are Exists and Equal. Defaults to Equal.
+                                          Exists is equivalent to wildcard for value, so that a pod can
+                                          tolerate all taints of a particular category.
+                                        type: string
+                                      tolerationSeconds:
+                                        description: |-
+                                          TolerationSeconds represents the period of time the toleration (which must be
+                                          of effect NoExecute, otherwise this field is ignored) tolerates the taint. By default,
+                                          it is not set, which means tolerate the taint forever (do not evict). Zero and
+                                          negative values will be treated as 0 (evict immediately) by the system.
+                                        format: int64
+                                        type: integer
+                                      value:
+                                        description: |-
+                                          Value is the taint value the toleration matches to.
+                                          If the operator is Exists, the value should be empty, otherwise just a regular string.
+                                        type: string
+                                    type: object
+                                  type: array
+                              type: object
+                            region:
+                              description: Region
+                              type: string
+                            zone:
+                              description: Zone
+                              type: string
+                          required:
+                          - name
+                          type: object
+                        type: array
+                      primaryCluster:
+                        description: Primary cluster name
+                        type: string
+                      strategy:
+                        default: active-active
+                        description: Deployment strategy
+                        enum:
+                        - active-active
+                        - active-passive
+                        - distributed
+                        type: string
+                      zoneDistribution:
+                        description: Zone distribution
+                        properties:
+                          enabled:
+                            default: true
+                            description: Enable zone distribution
+                            type: boolean
+                          strategy:
+                            default: even
+                            description: Zone balancing strategy
+                            enum:
+                            - even
+                            - weighted
+                            - custom
+                            type: string
+                          zoneWeights:
+                            additionalProperties:
                               format: int32
                               type: integer
-                            memory:
-                              description: Memory allocation
-                              type: string
-                            storage:
-                              description: Storage allocation
-                              type: string
-                          type: object
-                        security:
-                          description: Security settings
-                          properties:
-                            authProvider:
-                              description: Authentication provider
-                              type: string
-                            networkPolicies:
-                              description: Network policies
-                              items:
-                                type: string
-                              type: array
-                            roles:
-                              description: Roles
-                              items:
-                                type: string
-                              type: array
-                          type: object
-                      required:
-                      - name
-                      type: object
-                    type: array
+                            description: Zone weights (for weighted strategy)
+                            type: object
+                        type: object
+                    required:
+                    - clusters
+                    type: object
                 type: object
               nodeSelector:
                 additionalProperties:
@@ -1927,135 +3004,6 @@ spec:
                   - version
                   type: object
                 type: array
-              pointInTimeRecovery:
-                description: Point-in-time recovery configuration
-                properties:
-                  enabled:
-                    default: true
-                    description: Enable point-in-time recovery
-                    type: boolean
-                  logShipping:
-                    description: Log shipping configuration
-                    properties:
-                      compression:
-                        description: Compression settings
-                        properties:
-                          algorithm:
-                            default: lz4
-                            description: Compression algorithm
-                            enum:
-                            - gzip
-                            - lz4
-                            - zstd
-                            type: string
-                          enabled:
-                            default: true
-                            description: Enable compression
-                            type: boolean
-                          level:
-                            description: Compression level (1-9)
-                            format: int32
-                            type: integer
-                        type: object
-                      destination:
-                        description: Destination storage
-                        properties:
-                          bucket:
-                            type: string
-                          cloud:
-                            description: Cloud provider configuration
-                            properties:
-                              identity:
-                                description: CloudIdentity defines cloud identity
-                                  configuration
-                                properties:
-                                  autoCreate:
-                                    description: AutoCreateSpec defines auto-creation
-                                      of service accounts
-                                    properties:
-                                      annotations:
-                                        additionalProperties:
-                                          type: string
-                                        type: object
-                                      enabled:
-                                        default: true
-                                        type: boolean
-                                    type: object
-                                  provider:
-                                    enum:
-                                    - aws
-                                    - gcp
-                                    - azure
-                                    type: string
-                                  serviceAccount:
-                                    type: string
-                                required:
-                                - provider
-                                type: object
-                              provider:
-                                enum:
-                                - aws
-                                - gcp
-                                - azure
-                                type: string
-                            type: object
-                          path:
-                            type: string
-                          pvc:
-                            description: PVC configuration
-                            properties:
-                              name:
-                                description: Name of the PVC to use (for referencing
-                                  existing PVCs)
-                                type: string
-                              size:
-                                type: string
-                              storageClassName:
-                                type: string
-                            type: object
-                          type:
-                            enum:
-                            - s3
-                            - gcs
-                            - azure
-                            - pvc
-                            type: string
-                        required:
-                        - type
-                        type: object
-                      enabled:
-                        default: true
-                        description: Enable log shipping
-                        type: boolean
-                      encryption:
-                        description: Encryption settings
-                        properties:
-                          algorithm:
-                            default: AES256
-                            description: Encryption algorithm
-                            enum:
-                            - AES256
-                            - ChaCha20
-                            type: string
-                          enabled:
-                            default: true
-                            description: Enable encryption
-                            type: boolean
-                          keySecret:
-                            description: Encryption key secret reference
-                            type: string
-                        type: object
-                      interval:
-                        description: Shipping interval
-                        type: string
-                    type: object
-                  recoveryPointObjective:
-                    description: Recovery point objectives
-                    type: string
-                  transactionLogRetention:
-                    description: Transaction log retention
-                    type: string
-                type: object
               queryMonitoring:
                 description: Query performance monitoring
                 properties:

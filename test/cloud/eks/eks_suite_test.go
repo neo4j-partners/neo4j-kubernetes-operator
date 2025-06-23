@@ -33,7 +33,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-operator/api/v1alpha1"
+	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1"
 )
 
 var (
@@ -56,7 +56,7 @@ func TestEKS(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
-	ctx, cancel = context.WithCancel(context.TODO())
+	ctx, cancel = context.WithCancel(context.Background())
 
 	By("Setting up EKS test environment")
 
@@ -100,7 +100,10 @@ var _ = AfterSuite(func() {
 				Name: testNamespace,
 			},
 		}
-		k8sClient.Delete(ctx, ns)
+		// Clean up test namespace - errors in cleanup are logged but don't fail the test
+		if err := k8sClient.Delete(ctx, ns); err != nil {
+			_, _ = fmt.Fprintf(GinkgoWriter, "warning: failed to delete test namespace during cleanup: %v\n", err)
+		}
 	}
 
 	cancel()

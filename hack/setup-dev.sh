@@ -131,16 +131,16 @@ check_go() {
         log_info "Visit: https://golang.org/doc/install"
         return 1
     fi
-    
+
     local go_version
     go_version=$(go version | grep -oE 'go[0-9]+\.[0-9]+' | grep -oE '[0-9]+\.[0-9]+')
     local required_version="1.21"
-    
+
     if ! printf '%s\n%s\n' "${required_version}" "${go_version}" | sort -V -C; then
         log_error "Go version ${go_version} is installed, but version ${required_version} or higher is required"
         return 1
     fi
-    
+
     log_success "Go version ${go_version} is installed"
 }
 
@@ -151,75 +151,75 @@ check_docker() {
         log_info "Visit: https://docs.docker.com/get-docker/"
         return 1
     fi
-    
+
     if ! docker info >/dev/null 2>&1; then
         log_error "Docker is installed but not running. Please start Docker."
         return 1
     fi
-    
+
     log_success "Docker is installed and running"
 }
 
 # Install Go tools
 install_go_tools() {
     log_info "Installing Go development tools..."
-    
+
     # Install goimports
     if ! command_exists goimports; then
         go install golang.org/x/tools/cmd/goimports@latest
         log_success "goimports installed"
     fi
-    
+
     # Install delve debugger
     if ! command_exists dlv; then
         go install github.com/go-delve/delve/cmd/dlv@latest
         log_success "delve debugger installed"
     fi
-    
+
     # Install air for hot reloading
     if ! command_exists air; then
-        go install github.com/cosmtrek/air@latest
+        go install github.com/air-verse/air@latest
         log_success "air hot reload tool installed"
     fi
-    
+
     log_success "Go development tools installed"
 }
 
 # Setup development environment
 setup_dev_env() {
     log_info "Setting up development environment..."
-    
+
     # Create necessary directories
     mkdir -p bin/
     mkdir -p logs/
     mkdir -p tmp/
-    
+
     # Download Go dependencies
     log_info "Downloading Go dependencies..."
     go mod download
     go mod tidy
-    
+
     log_success "Development environment setup complete"
 }
 
 # Main setup function
 main() {
     log_info "Starting Neo4j Operator development environment setup..."
-    
+
     # Check prerequisites
     check_go
     check_docker
-    
+
     # Install tools
     install_kind
     install_kubectl
     install_helm
     install_precommit
     install_go_tools
-    
+
     # Setup environment
     setup_dev_env
-    
+
     log_success "Development environment setup complete!"
     log_info "Next steps:"
     log_info "  1. Run 'make install-hooks' to install pre-commit hooks"
@@ -228,4 +228,4 @@ main() {
     log_info "  4. Open the project in VS Code for optimal development experience"
 }
 
-main "$@" 
+main "$@"

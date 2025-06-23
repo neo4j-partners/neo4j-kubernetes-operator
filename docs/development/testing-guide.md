@@ -82,7 +82,7 @@ var _ = Describe("Neo4jDatabase Controller", func() {
     Context("When creating a Neo4jDatabase", func() {
         It("Should create the database successfully", func() {
             ctx := context.Background()
-            
+
             database := &v1alpha1.Neo4jDatabase{
                 ObjectMeta: metav1.ObjectMeta{
                     Name:      "test-database",
@@ -92,9 +92,9 @@ var _ = Describe("Neo4jDatabase Controller", func() {
                     // ... spec
                 },
             }
-            
+
             Expect(k8sClient.Create(ctx, database)).To(Succeed())
-            
+
             Eventually(func() bool {
                 err := k8sClient.Get(ctx, client.ObjectKey{
                     Name:      "test-database",
@@ -163,13 +163,13 @@ func TestControllerFunction(t *testing.T) {
     // Arrange
     ctrl := gomock.NewController(t)
     defer ctrl.Finish()
-    
+
     mockClient := mocks.NewMockClient(ctrl)
     // ... setup mocks
-    
+
     // Act
     result, err := functionUnderTest(mockClient, input)
-    
+
     // Assert
     assert.NoError(t, err)
     assert.Equal(t, expected, result)

@@ -32,18 +32,30 @@ const (
 	subsystem = "neo4j_operator"
 
 	// Common labels
+	// LabelClusterName is the label key for cluster name
 	LabelClusterName = "cluster_name"
-	LabelNamespace   = "namespace"
-	LabelOperation   = "operation"
-	LabelResult      = "result"
-	LabelPhase       = "phase"
-	LabelRole        = "role"
+	// LabelNamespace is the label key for namespace
+	LabelNamespace = "namespace"
+	// LabelOperation is the label key for operation type
+	LabelOperation = "operation"
+	// LabelResult is the label key for operation result
+	LabelResult = "result"
+	// LabelPhase is the label key for operation phase
+	LabelPhase = "phase"
+	// LabelRole is the label key for node role
+	LabelRole = "role"
+
+	// LabelCluster is the label key for cluster name
+	LabelCluster = "cluster"
+	// LabelNodeType is the label key for node type (primary/secondary)
+	LabelNodeType = "node_type"
+	// LabelStatus is the label key for operation status
+	LabelStatus = "status"
 )
 
 var (
 	// Tracer for OTEL tracing
 	tracer = otel.Tracer("neo4j-operator")
-	meter  = otel.Meter("neo4j-operator")
 
 	// Prometheus metrics
 
@@ -185,9 +197,11 @@ func init() {
 		disasterRecoveryStatus,
 		failoverTotal,
 		replicationLag,
-		autoScalerEnabled,
+		manualScalerEnabled,
 		scaleEventsTotal,
-		readReplicaCount,
+		primaryCount,
+		secondaryCount,
+		scalingValidationTotal,
 	)
 }
 
@@ -491,12 +505,12 @@ var (
 		[]string{LabelClusterName, LabelNamespace, "primary_region", "secondary_region"},
 	)
 
-	// Auto-scaling metrics
-	autoScalerEnabled = prometheus.NewGaugeVec(
+	// Manual scaling metrics
+	manualScalerEnabled = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Subsystem: subsystem,
-			Name:      "autoscaler_enabled",
-			Help:      "Status of auto-scaler (1=enabled, 0=disabled)",
+			Name:      "manual_scaler_enabled",
+			Help:      "Status of manual scaling (1=enabled, 0=disabled)",
 		},
 		[]string{LabelClusterName, LabelNamespace},
 	)
@@ -505,18 +519,36 @@ var (
 		prometheus.CounterOpts{
 			Subsystem: subsystem,
 			Name:      "scale_events_total",
-			Help:      "Total number of scale events",
+			Help:      "Total number of manual scale events",
 		},
-		[]string{LabelClusterName, LabelNamespace, "direction"},
+		[]string{LabelClusterName, LabelNamespace, "node_type", "direction"},
 	)
 
-	readReplicaCount = prometheus.NewGaugeVec(
+	primaryCount = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Subsystem: subsystem,
-			Name:      "read_replica_count",
-			Help:      "Current number of read replicas",
+			Name:      "primary_count",
+			Help:      "Current number of primary nodes",
 		},
 		[]string{LabelClusterName, LabelNamespace},
+	)
+
+	secondaryCount = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Subsystem: subsystem,
+			Name:      "secondary_count",
+			Help:      "Current number of secondary nodes",
+		},
+		[]string{LabelClusterName, LabelNamespace},
+	)
+
+	scalingValidationTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Subsystem: subsystem,
+			Name:      "scaling_validation_total",
+			Help:      "Total number of scaling validation attempts",
+		},
+		[]string{LabelClusterName, LabelNamespace, "validation_type", LabelResult},
 	)
 )
 
@@ -543,32 +575,56 @@ func (m *DisasterRecoveryMetrics) RecordFailover(ctx context.Context, success bo
 	failoverTotal.WithLabelValues(m.clusterName, m.namespace, result).Inc()
 }
 
-// AutoScalingMetrics provides methods for recording auto-scaling metrics
-type AutoScalingMetrics struct {
+// ManualScalingMetrics provides methods for recording manual scaling metrics
+type ManualScalingMetrics struct {
 	clusterName string
 	namespace   string
 }
 
-// NewAutoScalingMetrics creates a new AutoScalingMetrics instance
-func NewAutoScalingMetrics(clusterName, namespace string) *AutoScalingMetrics {
-	return &AutoScalingMetrics{
+// NewManualScalingMetrics creates a new ManualScalingMetrics instance
+func NewManualScalingMetrics(clusterName, namespace string) *ManualScalingMetrics {
+	return &ManualScalingMetrics{
 		clusterName: clusterName,
 		namespace:   namespace,
 	}
 }
 
-// RecordScalingEvent records a scaling event
-func (m *AutoScalingMetrics) RecordScalingEvent(ctx context.Context, currentReplicas, desiredReplicas int32) {
-	readReplicaCount.WithLabelValues(m.clusterName, m.namespace).Set(float64(currentReplicas))
+// RecordPrimaryScaling records a primary node scaling event
+func (m *ManualScalingMetrics) RecordPrimaryScaling(ctx context.Context, currentReplicas, desiredReplicas int32) {
+	primaryCount.WithLabelValues(m.clusterName, m.namespace).Set(float64(desiredReplicas))
 
 	if desiredReplicas > currentReplicas {
-		scaleEventsTotal.WithLabelValues(m.clusterName, m.namespace, "up").Inc()
+		scaleEventsTotal.WithLabelValues(m.clusterName, m.namespace, "primary", "up").Inc()
 	} else if desiredReplicas < currentReplicas {
-		scaleEventsTotal.WithLabelValues(m.clusterName, m.namespace, "down").Inc()
+		scaleEventsTotal.WithLabelValues(m.clusterName, m.namespace, "primary", "down").Inc()
 	}
 }
 
-// RecordManualScale records a manual scaling operation
-func (m *AutoScalingMetrics) RecordManualScale(ctx context.Context, replicas int32) {
-	readReplicaCount.WithLabelValues(m.clusterName, m.namespace).Set(float64(replicas))
+// RecordSecondaryScaling records a secondary node scaling event
+func (m *ManualScalingMetrics) RecordSecondaryScaling(ctx context.Context, currentReplicas, desiredReplicas int32) {
+	secondaryCount.WithLabelValues(m.clusterName, m.namespace).Set(float64(desiredReplicas))
+
+	if desiredReplicas > currentReplicas {
+		scaleEventsTotal.WithLabelValues(m.clusterName, m.namespace, "secondary", "up").Inc()
+	} else if desiredReplicas < currentReplicas {
+		scaleEventsTotal.WithLabelValues(m.clusterName, m.namespace, "secondary", "down").Inc()
+	}
+}
+
+// RecordValidation records a scaling validation attempt
+func (m *ManualScalingMetrics) RecordValidation(ctx context.Context, validationType string, success bool) {
+	result := "failure"
+	if success {
+		result = "success"
+	}
+	scalingValidationTotal.WithLabelValues(m.clusterName, m.namespace, validationType, result).Inc()
+}
+
+// SetManualScalingEnabled sets the manual scaling enabled status
+func (m *ManualScalingMetrics) SetManualScalingEnabled(enabled bool) {
+	value := float64(0)
+	if enabled {
+		value = 1
+	}
+	manualScalerEnabled.WithLabelValues(m.clusterName, m.namespace).Set(value)
 }

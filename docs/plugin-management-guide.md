@@ -37,15 +37,15 @@ spec:
   name: apoc
   version: "5.26.0"
   enabled: true
-  
+
   source:
     type: official
-    
+
   config:
     apoc.export.file.enabled: "true"
     apoc.import.file.enabled: "true"
     apoc.import.file.use_neo4j_config: "true"
-    
+
   security:
     sandbox: restricted
     allowedProcedures:
@@ -67,13 +67,13 @@ spec:
   name: graph-data-science
   version: "2.6.0"
   enabled: true
-  
+
   source:
     type: official
-    
+
   config:
     gds.enterprise.license_file: "/licenses/gds.license"
-    
+
   resources:
     requests:
       memory: "2Gi"
@@ -81,7 +81,7 @@ spec:
     limits:
       memory: "8Gi"
       cpu: "2000m"
-      
+
   licensing:
     type: enterprise
     licenseSecret: gds-license-secret
@@ -100,19 +100,19 @@ spec:
   name: my-custom-plugin
   version: "1.0.0"
   enabled: true
-  
+
   source:
     type: custom
     url: "https://my-repo.com/plugins/my-plugin-1.0.0.jar"
     checksum: sha256:abcdef123456...
-    
+
   dependencies:
   - name: apoc
     version: ">=5.26.0"
-    
+
   config:
     my.plugin.property: "value"
-    
+
   security:
     sandbox: strict
     signatureVerification: true
@@ -133,21 +133,21 @@ spec:
   image:
     repo: neo4j
     tag: 5.26-enterprise
-    
+
   plugins:
     enabled: true
     autoUpdate: false
-    
+
     # Global plugin configuration
     global:
       security:
         sandbox: restricted
         allowUnsigned: false
-      
+
       resources:
         pluginDirectory: /var/lib/neo4j/plugins
         maxPluginSize: "100Mi"
-        
+
     # Plugin specifications
     plugins:
     - name: apoc
@@ -156,20 +156,20 @@ spec:
         type: official
       config:
         apoc.export.file.enabled: "true"
-        
+
     - name: graph-data-science
       version: "2.6.0"
       source:
         type: official
       licensing:
         licenseSecret: gds-license-secret
-        
+
     - name: custom-analytics
       version: "1.2.0"
       source:
         type: custom
         url: "s3://my-plugins/analytics-1.2.0.jar"
-        
+
   auth:
     adminSecret: neo4j-admin-secret
 ```
@@ -188,11 +188,11 @@ data:
     - name: official
       url: "https://dist.neo4j.org/plugins"
       type: official
-      
+
     - name: community
       url: "https://plugins.neo4j.com/community"
       type: community
-      
+
     - name: private
       url: "https://private-repo.company.com/neo4j-plugins"
       type: private
@@ -207,7 +207,7 @@ spec:
   clusterRef: my-cluster
   name: community-awesome-plugin
   version: "1.0.0"
-  
+
   source:
     type: repository
     repository: community
@@ -237,11 +237,11 @@ spec:
   clusterRef: my-neo4j-cluster
   name: apoc
   version: "5.27.0"  # Updated version
-  
+
   updatePolicy:
     strategy: rolling  # or 'recreate'
     maxUnavailable: 1
-    
+
   rollback:
     enabled: true
     timeout: "10m"
@@ -270,27 +270,27 @@ spec:
   clusterRef: my-cluster
   name: apoc
   version: "5.26.0"
-  
+
   security:
     # Sandbox levels: none, restricted, strict
     sandbox: strict
-    
+
     # Allowed procedures and functions
     allowedProcedures:
     - "apoc.create.node"
     - "apoc.create.relationship"
-    
+
     allowedFunctions:
     - "apoc.date.*"
     - "apoc.text.*"
-    
+
     # Restrict file system access
     fileSystemAccess:
       allowedPaths:
       - "/import"
       - "/export"
       readOnly: true
-      
+
     # Network access restrictions
     networkAccess:
       allowedHosts:
@@ -298,7 +298,7 @@ spec:
       allowedPorts:
       - 80
       - 443
-      
+
     # Signature verification
     signatureVerification: true
     trustedSigners:
@@ -327,12 +327,12 @@ metadata:
 spec:
   clusterRef: my-cluster
   name: graph-data-science
-  
+
   licensing:
     type: enterprise
     licenseSecret: plugin-licenses
     licenseKey: gds.license
-    
+
     # License validation
     validation:
       strict: true
@@ -366,7 +366,7 @@ metadata:
 spec:
   clusterRef: my-cluster
   name: apoc
-  
+
   monitoring:
     enabled: true
     metrics:
@@ -375,7 +375,7 @@ spec:
         enabled: true
         path: "/metrics"
         port: 7474
-        
+
     # Plugin-specific health checks
     healthChecks:
     - name: apoc-procedures
@@ -415,20 +415,20 @@ spec:
   clusterRef: dev-cluster
   name: my-dev-plugin
   version: "dev-SNAPSHOT"
-  
+
   source:
     type: custom
     # Use local development build
     url: "file:///dev/plugins/my-plugin-dev.jar"
-    
+
   # Development settings
   development:
     hotReload: true
     debugMode: true
-    
+
   security:
     sandbox: none  # Relaxed for development
-    
+
   config:
     my.plugin.debug: "true"
     my.plugin.log.level: "DEBUG"
@@ -448,12 +448,12 @@ spec:
     image: maven:3.8
     script: |
       mvn clean package -DskipTests
-      
+
   - name: test-plugin
     image: neo4j:5.26-enterprise
     script: |
       # Run plugin tests
-      
+
   - name: deploy-plugin
     image: bitnami/kubectl
     script: |
@@ -497,7 +497,7 @@ spec:
   config:
     apoc.export.file.enabled: "false"  # Disabled in production
     apoc.import.file.enabled: "false"
-    
+
   security:
     sandbox: strict  # Stricter in production
 ```
@@ -511,17 +511,21 @@ spec:
 **Symptoms**: Plugin shows as "Failed" status
 
 **Solutions**:
+
 1. Check plugin compatibility:
+
    ```bash
    kubectl describe neo4jplugin <plugin-name>
    ```
 
 2. Verify network connectivity:
+
    ```bash
    kubectl exec -it neo4j-cluster-0 -- curl -I <plugin-url>
    ```
 
 3. Check resource constraints:
+
    ```bash
    kubectl describe pod neo4j-cluster-0
    ```
@@ -531,17 +535,21 @@ spec:
 **Symptoms**: Plugin installed but procedures unavailable
 
 **Solutions**:
+
 1. Check plugin directory:
+
    ```bash
    kubectl exec -it neo4j-cluster-0 -- ls -la /var/lib/neo4j/plugins
    ```
 
 2. Verify plugin configuration:
+
    ```bash
    kubectl exec -it neo4j-cluster-0 -- grep -i plugin /var/lib/neo4j/conf/neo4j.conf
    ```
 
 3. Check Neo4j logs:
+
    ```bash
    kubectl logs neo4j-cluster-0 | grep -i plugin
    ```
@@ -551,12 +559,15 @@ spec:
 **Symptoms**: Plugin dependencies cannot be resolved
 
 **Solutions**:
+
 1. Check dependency tree:
+
    ```bash
    kubectl get neo4jplugin -o yaml | grep -A 10 dependencies
    ```
 
 2. Update plugin versions:
+
    ```yaml
    dependencies:
    - name: apoc
@@ -589,7 +600,7 @@ kubectl exec -it neo4j-cluster-0 -- cypher-shell -u neo4j -p password \
 spec:
   name: apoc
   version: "5.26.0"  # Not "latest"
-  
+
   updatePolicy:
     autoUpdate: false  # Manual updates for stability
 ```
@@ -601,7 +612,7 @@ spec:
 security:
   sandbox: restricted  # Default for most plugins
   signatureVerification: true
-  
+
   # Principle of least privilege
   allowedProcedures:
   - "apoc.load.json"  # Only what's needed
@@ -663,13 +674,13 @@ spec:
 # values.yaml
 plugins:
   enabled: true
-  
+
   apoc:
     enabled: true
     version: "5.26.0"
     config:
       apoc.export.file.enabled: true
-      
+
   gds:
     enabled: true
     version: "2.6.0"
@@ -694,7 +705,7 @@ spec:
   config:
     # Lazy loading for better startup time
     dbms.jvm.additional: "-XX:+UnlockExperimentalVMOptions"
-    
+
   # Resource allocation
   resources:
     requests:
@@ -704,6 +715,6 @@ spec:
 ## Next Steps
 
 - [Query Monitoring Guide](./query-monitoring-guide.md)
-- [Multi-Tenant Setup Guide](./multi-tenant-guide.md)
+
 - [Performance Tuning Guide](./performance-tuning-guide.md)
-- [Backup and Restore Guide](../backup-restore-guide.md) 
+- [Backup and Restore Guide](../backup-restore-guide.md)

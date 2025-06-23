@@ -32,8 +32,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-operator/api/v1alpha1"
-	"github.com/neo4j-labs/neo4j-operator/internal/neo4j"
+	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1"
+	"github.com/neo4j-labs/neo4j-kubernetes-operator/internal/neo4j"
 )
 
 // Neo4jDatabaseReconciler reconciles a Neo4jDatabase object
@@ -46,6 +46,7 @@ type Neo4jDatabaseReconciler struct {
 }
 
 const (
+	// DatabaseFinalizer is the finalizer for Neo4j database resources
 	DatabaseFinalizer = "neo4j.com/database-finalizer"
 )
 
@@ -55,6 +56,7 @@ const (
 // +kubebuilder:rbac:groups=neo4j.neo4j.com,resources=neo4jenterpriseclusters,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
+// Reconcile handles the reconciliation of Neo4jDatabase resources
 func (r *Neo4jDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
@@ -117,7 +119,11 @@ func (r *Neo4jDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			"Failed to connect to Neo4j cluster")
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 	}
-	defer neo4jClient.Close()
+	defer func() {
+		if err := neo4jClient.Close(); err != nil {
+			logger.Error(err, "Failed to close Neo4j client")
+		}
+	}()
 
 	// Ensure database exists
 	if err := r.ensureDatabase(ctx, neo4jClient, database); err != nil {
@@ -190,7 +196,11 @@ func (r *Neo4jDatabaseReconciler) handleDeletion(ctx context.Context, database *
 		controllerutil.RemoveFinalizer(database, DatabaseFinalizer)
 		return ctrl.Result{}, r.Update(ctx, database)
 	}
-	defer neo4jClient.Close()
+	defer func() {
+		if err := neo4jClient.Close(); err != nil {
+			logger.Error(err, "Failed to close Neo4j client")
+		}
+	}()
 
 	// Drop database
 	if err := neo4jClient.DropDatabase(ctx, database.Spec.Name); err != nil {
@@ -272,7 +282,9 @@ func (r *Neo4jDatabaseReconciler) updateDatabaseStatus(ctx context.Context, data
 	}
 
 	database.Status.ObservedGeneration = database.Generation
-	r.Status().Update(ctx, database)
+	if err := r.Status().Update(ctx, database); err != nil {
+		log.FromContext(ctx).Error(err, "Failed to update database status")
+	}
 }
 
 // SetupWithManager sets up the controller with the Manager.

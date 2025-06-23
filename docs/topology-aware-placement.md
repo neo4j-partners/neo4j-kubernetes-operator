@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Neo4j Enterprise Operator now supports **topology-aware placement**, a powerful feature that automatically distributes Neo4j database primaries and secondaries across availability zones (AZs) or other topology domains to ensure high availability and fault tolerance.
+The Neo4j Enterprise Operator supports **topology-aware placement**, a powerful feature that automatically distributes Neo4j database primaries and secondaries across availability zones (AZs) or other topology domains to ensure high availability and fault tolerance.
 
 ## 🎯 Problem Statement
 
@@ -24,7 +24,7 @@ With topology awareness enabled:
 ```
 ✅ GOOD: Fault Tolerant Distribution
 AZ-A: [Primary-1, Secondary-1]
-AZ-B: [Primary-2, Secondary-2]  
+AZ-B: [Primary-2, Secondary-2]
 AZ-C: [Primary-3, Secondary-3]
 ```
 
@@ -50,23 +50,23 @@ spec:
   topology:
     primaries: 3
     secondaries: 3
-    
+
     # Enable automatic distribution
     enforceDistribution: true
-    
+
     # Optional: specify availability zones
     availabilityZones:
       - "us-west-2a"
       - "us-west-2b"
       - "us-west-2c"
-    
+
     # Placement configuration
     placement:
       topologySpread:
         enabled: true
         topologyKey: "topology.kubernetes.io/zone"
         maxSkew: 1
-      
+
       antiAffinity:
         enabled: true
         type: "required"
@@ -80,7 +80,7 @@ spec:
     primaries: 3
     secondaries: 3
     enforceDistribution: true
-    
+
     placement:
       # Topology spread constraints
       topologySpread:
@@ -89,18 +89,18 @@ spec:
         maxSkew: 1                    # Max difference between zones
         whenUnsatisfiable: "DoNotSchedule"  # Hard constraint
         minDomains: 3                 # Minimum required zones
-      
+
       # Pod anti-affinity
       antiAffinity:
         enabled: true
         topologyKey: "topology.kubernetes.io/zone"
         type: "required"              # Hard anti-affinity
-      
+
       # Additional node selection
       nodeSelector:
         node-type: "database"
-        instance-type: "m5.xlarge" 
-      
+        instance-type: "m5.xlarge"
+
       # Hard vs soft constraints
       requiredDuringScheduling: true
 ```
@@ -172,20 +172,20 @@ spec:
     primaries: 3
     secondaries: 3
     enforceDistribution: true  # Hard requirement
-    
+
     placement:
       topologySpread:
         enabled: true
         maxSkew: 1
         whenUnsatisfiable: "DoNotSchedule"  # Fail if can't distribute
         minDomains: 3
-      
+
       antiAffinity:
         enabled: true
         type: "required"  # Hard anti-affinity
-      
+
       requiredDuringScheduling: true
-  
+
   # ... rest of configuration
 ```
 
@@ -203,19 +203,19 @@ spec:
     primaries: 3
     secondaries: 2
     enforceDistribution: false  # Allow flexibility
-    
+
     placement:
       topologySpread:
         enabled: true
         maxSkew: 2  # Allow more skew
         whenUnsatisfiable: "ScheduleAnyway"  # Best effort
-      
+
       antiAffinity:
         enabled: true
         type: "preferred"  # Soft anti-affinity
-      
+
       requiredDuringScheduling: false
-  
+
   # ... rest of configuration
 ```
 
@@ -228,7 +228,7 @@ spec:
   topology:
     primaries: 3
     secondaries: 6
-    
+
     availabilityZones:
       - "us-west-2a"
       - "us-west-2b"
@@ -236,17 +236,105 @@ spec:
       - "eu-west-1a"
       - "eu-west-1b"
       - "eu-west-1c"
-    
+
     placement:
       topologySpread:
         enabled: true
         topologyKey: "topology.kubernetes.io/region"
         maxSkew: 1
-      
+
       antiAffinity:
         enabled: true
         topologyKey: "topology.kubernetes.io/zone"
 ```
+
+### Example 4: Multi-Cluster with Topology Awareness
+
+**The Ultimate Resilience Setup** - Combining topology awareness with multi-cluster deployments:
+
+```yaml
+# This example shows how topology awareness enhances multi-cluster deployments
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: neo4j-resilient-global
+  namespace: neo4j
+spec:
+  # 🌐 Multi-cluster configuration
+  multiCluster:
+    enabled: true
+    clusterName: "global-primary"
+    region: "us-east-1"
+    role: "primary"
+
+    # Define cross-cluster topology
+    topology:
+      clusters:
+      - name: "global-primary"
+        region: "us-east-1"
+        primaries: 3
+        secondaries: 3
+      - name: "global-dr"
+        region: "us-west-2"
+        primaries: 3
+        secondaries: 2
+
+  # ⚡ Topology-aware configuration WITHIN each cluster
+  topology:
+    primaries: 3
+    secondaries: 3
+    enforceDistribution: true
+
+    # Zone distribution within the region
+    availabilityZones:
+      - "us-east-1a"
+      - "us-east-1b"
+      - "us-east-1c"
+
+    placement:
+      # Ensure even distribution across zones
+      topologySpread:
+        enabled: true
+        topologyKey: "topology.kubernetes.io/zone"
+        maxSkew: 1
+        whenUnsatisfiable: "DoNotSchedule"
+        minDomains: 3
+
+      # Prevent co-location within zones
+      antiAffinity:
+        enabled: true
+        type: "required"
+        topologyKey: "topology.kubernetes.io/zone"
+
+      # Additional host-level anti-affinity
+      additionalAntiAffinity:
+      - topologyKey: "kubernetes.io/hostname"
+        type: "preferred"
+        weight: 100
+
+  # Storage and other configurations...
+  storage:
+    className: "gp3"
+    size: "200Gi"
+```
+
+**Why This Configuration is Powerful:**
+
+1. **Zone-Level Protection**: Each cluster is distributed across 3 zones
+2. **Region-Level Protection**: Multiple clusters across different regions
+3. **Automatic Failover**: Both within zones and across regions
+4. **Quorum Maintenance**: Odd number of primaries in each cluster
+5. **Resource Isolation**: Anti-affinity prevents single points of failure
+
+**Failure Tolerance Matrix:**
+
+| Scenario | Impact | Recovery |
+|----------|---------|----------|
+| Single pod failure | None - automatic leader election | < 30 seconds |
+| Single zone failure | None - continues on other zones | < 30 seconds |
+| Two zones fail | None - third zone maintains quorum | < 30 seconds |
+| Entire region fails | Brief interruption - failover to DR | 1-3 minutes |
+| Network partition | Graceful degradation | Automatic when resolved |
 
 ## 🔍 Monitoring and Validation
 
@@ -292,11 +380,13 @@ RETURN id, role, addresses, database;
 **Symptom**: Pods remain in `Pending` status
 
 **Possible Causes**:
+
 - Not enough availability zones
 - Resource constraints in specific zones
 - Hard constraints too restrictive
 
 **Solutions**:
+
 ```bash
 # Check pod events
 kubectl describe pod <pod-name>
@@ -319,11 +409,13 @@ spec:
 **Symptom**: Pods not evenly distributed across zones
 
 **Possible Causes**:
+
 - `maxSkew` too high
 - Soft constraints only
 - Zone capacity differences
 
 **Solutions**:
+
 ```yaml
 # Tighten constraints
 spec:
@@ -340,7 +432,8 @@ spec:
 
 **Error**: `cannot enforce distribution: 3 primaries require at least 3 availability zones, but only 2 are available`
 
-**Solution**: 
+**Solution**:
+
 - Add more zones to your cluster
 - Reduce number of primaries
 - Disable `enforceDistribution`
@@ -363,6 +456,7 @@ kubectl get nodes --show-labels | grep topology
 ### Production Deployment
 
 1. **Always use hard constraints** for production:
+
    ```yaml
    enforceDistribution: true
    requiredDuringScheduling: true
@@ -374,13 +468,14 @@ kubectl get nodes --show-labels | grep topology
 
 3. **Monitor resource capacity** in each zone
 
-4. **Use appropriate maxSkew**: 
+4. **Use appropriate maxSkew**:
    - `maxSkew: 1` for strict even distribution
    - `maxSkew: 2` for some flexibility
 
 ### Development/Testing
 
 1. **Use soft constraints** for flexibility:
+
    ```yaml
    enforceDistribution: false
    whenUnsatisfiable: "ScheduleAnyway"
@@ -439,8 +534,8 @@ For issues with topology-aware placement:
 
 1. Check the [troubleshooting section](#-troubleshooting) above
 2. Review operator logs: `kubectl logs -l app.kubernetes.io/name=neo4j-operator`
-3. Open an issue in the [GitHub repository](https://github.com/neo4j-labs/neo4j-operator)
+3. Open an issue in the [GitHub repository](https://github.com/neo4j-labs/neo4j-kubernetes-operator)
 
 ---
 
-**Set it and forget it!** Once configured, the Neo4j Operator automatically ensures your cluster maintains optimal distribution across your infrastructure. 🚀 
+**Set it and forget it!** Once configured, the Neo4j Operator automatically ensures your cluster maintains optimal distribution across your infrastructure. 🚀

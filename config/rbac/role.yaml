@@ -142,7 +142,6 @@ rules:
   - neo4j.neo4j.com
   resources:
   - neo4jbackups
-  - neo4jdisasterrecoveries
   - neo4jenterpriseclusters
   - neo4jplugins
   - neo4jrestores
@@ -158,7 +157,6 @@ rules:
   - neo4j.neo4j.com
   resources:
   - neo4jbackups/finalizers
-  - neo4jdisasterrecoveries/finalizers
   - neo4jenterpriseclusters/finalizers
   - neo4jplugins/finalizers
   - neo4jrestores/finalizers
@@ -168,7 +166,6 @@ rules:
   - neo4j.neo4j.com
   resources:
   - neo4jbackups/status
-  - neo4jdisasterrecoveries/status
   - neo4jenterpriseclusters/status
   - neo4jplugins/status
   - neo4jrestores/status

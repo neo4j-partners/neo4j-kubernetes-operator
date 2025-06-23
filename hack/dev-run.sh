@@ -37,43 +37,43 @@ WEBHOOK_PORT=${WEBHOOK_PORT:-9443}
 # Check prerequisites
 check_prerequisites() {
     log_info "Checking prerequisites..."
-    
+
     # Check if kubectl is available and cluster is accessible
     if ! kubectl cluster-info >/dev/null 2>&1; then
         log_error "Kubernetes cluster not accessible. Please ensure kubectl is configured and cluster is running."
         log_info "Run 'make dev-cluster' to create a development cluster."
         exit 1
     fi
-    
+
     # Check if CRDs are installed
     if ! kubectl get crd neo4jenterpriseclusters.neo4j.neo4j.com >/dev/null 2>&1; then
         log_warning "Neo4j CRDs not found. Installing CRDs..."
         make install
     fi
-    
+
     log_success "Prerequisites check passed"
 }
 
 # Setup environment
 setup_environment() {
     log_info "Setting up development environment..."
-    
+
     # Create logs directory
     mkdir -p logs/
-    
+
     # Set environment variables
     export KUBECONFIG=${KUBECONFIG:-~/.kube/config}
     export ENABLE_WEBHOOKS=${WEBHOOK_ENABLE}
     export METRICS_BIND_ADDRESS=":${METRICS_PORT}"
     export HEALTH_PROBE_BIND_ADDRESS=":${HEALTH_PORT}"
     export WEBHOOK_PORT=${WEBHOOK_PORT}
-    
+
     # Development specific settings
     export WATCH_NAMESPACE=${WATCH_NAMESPACE:-""}
     export LEADER_ELECT=false
     export LOG_LEVEL=${LOG_LEVEL}
     export PPROF_BIND_ADDRESS=${PPROF_BIND_ADDRESS:-":6060"}
-    
+
     log_success "Environment setup complete"
 }
 
@@ -81,17 +81,17 @@ setup_environment() {
 setup_webhooks() {
     if [[ "${WEBHOOK_ENABLE}" == "true" ]]; then
         log_info "Setting up webhook certificates..."
-        
+
         # Create certificates directory
         mkdir -p tmp/k8s-webhook-server/serving-certs/
-        
+
         # Generate self-signed certificates for local development
         openssl req -new -newkey rsa:4096 -x509 -sha256 -days 365 -nodes \
             -out tmp/k8s-webhook-server/serving-certs/tls.crt \
             -keyout tmp/k8s-webhook-server/serving-certs/tls.key \
             -subj "/C=US/ST=CA/L=San Francisco/O=Neo4j/OU=Engineering/CN=webhook-service.default.svc" \
             -addext "subjectAltName=DNS:webhook-service.default.svc,DNS:webhook-service.default.svc.cluster.local,DNS:localhost,IP:127.0.0.1"
-        
+
         log_success "Webhook certificates generated"
     fi
 }
@@ -99,7 +99,7 @@ setup_webhooks() {
 # Run with hot reload
 run_with_hot_reload() {
     log_info "Starting operator with hot reload..."
-    
+
     # Create air configuration if not exists
     if [[ ! -f .air.toml ]]; then
         cat > .air.toml << EOF
@@ -139,17 +139,17 @@ tmp_dir = "tmp"
   clean_on_exit = false
 EOF
     fi
-    
+
     air
 }
 
 # Run with debugger
 run_with_debugger() {
     log_info "Starting operator with debugger..."
-    
+
     # Build with debug symbols
     go build -gcflags="all=-N -l" -o tmp/main cmd/main.go
-    
+
     # Start delve
     dlv exec tmp/main -- \
         --zap-devel=true \
@@ -160,7 +160,7 @@ run_with_debugger() {
 # Run normally
 run_normal() {
     log_info "Starting operator..."
-    
+
     go run cmd/main.go \
         --zap-devel=true \
         --zap-log-level=${LOG_LEVEL} \
@@ -179,11 +179,11 @@ main() {
     log_info "  Log Level: ${LOG_LEVEL}"
     log_info "  Metrics Port: ${METRICS_PORT}"
     log_info "  Health Port: ${HEALTH_PORT}"
-    
+
     check_prerequisites
     setup_environment
     setup_webhooks
-    
+
     # Choose run mode
     if [[ "${DEBUG_MODE}" == "true" ]]; then
         run_with_debugger
@@ -230,4 +230,4 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-main "$@" 
+main "$@"

@@ -98,7 +98,7 @@ command_exists() {
 # Development dashboard
 show_dashboard() {
     load_config
-    
+
     echo -e "${CYAN}"
     echo "╔══════════════════════════════════════════════════════════════════════════════╗"
     echo "║                     Neo4j Operator Development Dashboard                     ║"
@@ -108,20 +108,20 @@ show_dashboard() {
     echo -e "║ ${NC}Cluster: ${CLUSTER_NAME:-neo4j-operator-dev}${CYAN}                                            ║"
     echo "╚══════════════════════════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
-    
+
     echo -e "${BLUE}📊 Current Status:${NC}"
-    
+
     # Check cluster status
     if kubectl cluster-info --context="${CLUSTER_CONTEXT:-kind-neo4j-operator-dev}" >/dev/null 2>&1; then
         echo -e "  ${GREEN}✓${NC} Kubernetes cluster is accessible"
-        
+
         # Check if CRDs are installed
         if kubectl get crd neo4jenterpriseclusters.neo4j.neo4j.com >/dev/null 2>&1; then
             echo -e "  ${GREEN}✓${NC} Neo4j CRDs are installed"
         else
             echo -e "  ${YELLOW}⚠${NC} Neo4j CRDs not installed"
         fi
-        
+
         # Check if operator is running
         if kubectl get deployment neo4j-operator-controller-manager -n neo4j-operator-system >/dev/null 2>&1; then
             echo -e "  ${GREEN}✓${NC} Operator is deployed"
@@ -131,10 +131,10 @@ show_dashboard() {
     else
         echo -e "  ${RED}✗${NC} Kubernetes cluster not accessible"
     fi
-    
+
     # Check development tools
     echo -e "${BLUE}🔧 Development Tools:${NC}"
-    
+
     local tools=("go" "docker" "kubectl" "kind" "helm" "tilt" "air" "dlv" "golangci-lint")
     for tool in "${tools[@]}"; do
         if command_exists "$tool"; then
@@ -143,7 +143,7 @@ show_dashboard() {
             echo -e "  ${RED}✗${NC} $tool"
         fi
     done
-    
+
     echo -e "${BLUE}🚀 Quick Actions:${NC}"
     echo "  $0 init       - Initialize development environment"
     echo "  $0 start      - Start development environment"
@@ -160,25 +160,25 @@ show_dashboard() {
 # Initialize development environment
 init_dev_env() {
     log_header "Initializing Development Environment"
-    
+
     # Create development directories
     mkdir -p "${PROJECT_ROOT}/"{logs,tmp,coverage,reports,docs/dev}
-    
+
     # Initialize configuration
     save_config
-    
+
     # Install development tools
     install_dev_tools
-    
+
     # Setup git hooks
     setup_git_hooks
-    
+
     # Create development cluster
     create_dev_cluster
-    
+
     # Install CRDs
     install_crds
-    
+
     log_success "Development environment initialized successfully!"
     log_info "Run '$0 dashboard' to see the current status"
 }
@@ -186,12 +186,12 @@ init_dev_env() {
 # Install development tools
 install_dev_tools() {
     log_header "Installing Development Tools"
-    
+
     # Install Go tools
     local go_tools=(
         "golang.org/x/tools/cmd/goimports@latest"
         "github.com/go-delve/delve/cmd/dlv@latest"
-        "github.com/cosmtrek/air@latest"
+        "github.com/air-verse/air@latest"
         "github.com/golangci/golangci-lint/cmd/golangci-lint@latest"
         "github.com/onsi/ginkgo/v2/ginkgo@latest"
         "github.com/securecodewarrior/sast-scan/cmd/sast-scan@latest"
@@ -199,12 +199,12 @@ install_dev_tools() {
         "honnef.co/go/tools/cmd/staticcheck@latest"
         "github.com/kisielk/errcheck@latest"
     )
-    
+
     for tool in "${go_tools[@]}"; do
         log_info "Installing $tool..."
         go install "$tool" || log_warning "Failed to install $tool"
     done
-    
+
     # Install other tools based on OS
     case "$(uname -s)" in
         Darwin)
@@ -220,21 +220,21 @@ install_dev_tools() {
                 chmod +x ./kind
                 sudo mv ./kind /usr/local/bin/kind
             fi
-            
+
             # Install helm
             if ! command_exists helm; then
                 curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
             fi
             ;;
     esac
-    
+
     log_success "Development tools installation completed"
 }
 
 # Setup git hooks
 setup_git_hooks() {
     log_header "Setting up Git Hooks"
-    
+
     if command_exists pre-commit; then
         pre-commit install
         pre-commit install --hook-type commit-msg
@@ -247,39 +247,39 @@ setup_git_hooks() {
 # Create development cluster
 create_dev_cluster() {
     log_header "Creating Development Cluster"
-    
+
     if kind get clusters | grep -q "${CLUSTER_NAME}"; then
         log_info "Development cluster already exists"
         return
     fi
-    
+
     # Create cluster with custom configuration
     kind create cluster --name "${CLUSTER_NAME}" --config "${PROJECT_ROOT}/hack/kind-config.yaml"
-    
+
     # Wait for cluster to be ready
     kubectl wait --for=condition=ready node --all --timeout=300s
-    
+
     # Install cert-manager
     log_info "Installing cert-manager..."
     kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.13.0/cert-manager.yaml
     kubectl wait --for=condition=ready pod -l app.kubernetes.io/instance=cert-manager -n cert-manager --timeout=300s
-    
+
     # Install Prometheus if observability is enabled
     if [[ "${OBSERVABILITY_ENABLED:-true}" == "true" ]]; then
         install_monitoring_stack
     fi
-    
+
     log_success "Development cluster created successfully"
 }
 
 # Install monitoring stack
 install_monitoring_stack() {
     log_info "Installing monitoring stack..."
-    
+
     # Add Prometheus Helm repository
     helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
     helm repo update
-    
+
     # Install kube-prometheus-stack
     helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
         --namespace monitoring \
@@ -287,32 +287,32 @@ install_monitoring_stack() {
         --set prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false \
         --set prometheus.prometheusSpec.podMonitorSelectorNilUsesHelmValues=false \
         --wait || log_warning "Failed to install monitoring stack"
-    
+
     log_success "Monitoring stack installed"
 }
 
 # Install CRDs
 install_crds() {
     log_header "Installing CRDs"
-    
+
     cd "${PROJECT_ROOT}"
     make install
-    
+
     log_success "CRDs installed successfully"
 }
 
 # Start development environment
 start_dev_env() {
     log_header "Starting Development Environment"
-    
+
     load_config
-    
+
     # Ensure cluster is running
     if ! kubectl cluster-info --context="${CLUSTER_CONTEXT}" >/dev/null 2>&1; then
         log_error "Cluster not accessible. Run '$0 init' first."
         exit 1
     fi
-    
+
     # Start based on mode
     case "${DEV_MODE:-development}" in
         "debug")
@@ -333,9 +333,9 @@ start_dev_env() {
 # Start normal development mode
 start_normal_mode() {
     log_info "Starting in normal development mode..."
-    
+
     cd "${PROJECT_ROOT}"
-    
+
     # Build and run the operator
     go run cmd/main.go \
         --zap-devel=true \
@@ -349,12 +349,12 @@ start_normal_mode() {
 # Start debug mode
 start_debug_mode() {
     log_info "Starting in debug mode..."
-    
+
     cd "${PROJECT_ROOT}"
-    
+
     # Build with debug symbols
     go build -gcflags="all=-N -l" -o tmp/manager cmd/main.go
-    
+
     # Start with delve
     dlv exec tmp/manager --listen=:2345 --headless=true --api-version=2 -- \
         --zap-devel=true \
@@ -366,23 +366,23 @@ start_debug_mode() {
 # Start hot reload mode
 start_hot_reload_mode() {
     log_info "Starting in hot reload mode..."
-    
+
     cd "${PROJECT_ROOT}"
-    
+
     # Create air config if not exists
     if [[ ! -f .air.toml ]]; then
         create_air_config
     fi
-    
+
     air
 }
 
 # Start Tilt mode
 start_tilt_mode() {
     log_info "Starting Tilt development environment..."
-    
+
     cd "${PROJECT_ROOT}"
-    
+
     # Start Tilt
     tilt up
 }
@@ -436,9 +436,9 @@ EOF
 # View logs
 view_logs() {
     load_config
-    
+
     log_header "Viewing Operator Logs"
-    
+
     # If running in cluster, show pod logs
     if kubectl get deployment neo4j-operator-controller-manager -n neo4j-operator-system >/dev/null 2>&1; then
         kubectl logs -f deployment/neo4j-operator-controller-manager -n neo4j-operator-system
@@ -456,9 +456,9 @@ view_logs() {
 # Run tests
 run_tests() {
     log_header "Running Tests"
-    
+
     cd "${PROJECT_ROOT}"
-    
+
     case "${1:-unit}" in
         "unit")
             make test-unit
@@ -486,16 +486,16 @@ run_tests() {
 # Debug session
 debug_session() {
     log_header "Starting Debug Session"
-    
+
     echo -e "${CYAN}Debug Session Options:${NC}"
     echo "1. Debug operator locally"
     echo "2. Debug running pod"
     echo "3. Port forward to services"
     echo "4. Open monitoring dashboards"
     echo "5. Inspect CRDs and resources"
-    
+
     read -p "Choose option (1-5): " choice
-    
+
     case $choice in
         1)
             start_debug_mode
@@ -521,7 +521,7 @@ debug_session() {
 # Debug running pod
 debug_running_pod() {
     local pod=$(kubectl get pods -l app.kubernetes.io/name=neo4j-operator -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
-    
+
     if [[ -n "$pod" ]]; then
         log_info "Debugging pod: $pod"
         kubectl exec -it "$pod" -- /bin/sh
@@ -533,27 +533,27 @@ debug_running_pod() {
 # Setup port forwards
 setup_port_forwards() {
     log_info "Setting up port forwards..."
-    
+
     # Port forward to metrics
     kubectl port-forward deployment/neo4j-operator-controller-manager 8080:8080 &
     echo $! > tmp/pf-metrics.pid
-    
+
     # Port forward to health
     kubectl port-forward deployment/neo4j-operator-controller-manager 8081:8081 &
     echo $! > tmp/pf-health.pid
-    
+
     # Port forward to Prometheus
     if kubectl get service prometheus-kube-prometheus-prometheus -n monitoring >/dev/null 2>&1; then
         kubectl port-forward service/prometheus-kube-prometheus-prometheus 9090:9090 -n monitoring &
         echo $! > tmp/pf-prometheus.pid
     fi
-    
+
     # Port forward to Grafana
     if kubectl get service prometheus-grafana -n monitoring >/dev/null 2>&1; then
         kubectl port-forward service/prometheus-grafana 3000:80 -n monitoring &
         echo $! > tmp/pf-grafana.pid
     fi
-    
+
     log_success "Port forwards established"
     log_info "Metrics: http://localhost:8080/metrics"
     log_info "Health: http://localhost:8081/healthz"
@@ -564,36 +564,36 @@ setup_port_forwards() {
 # Open monitoring dashboards
 open_monitoring_dashboards() {
     log_info "Opening monitoring dashboards..."
-    
+
     setup_port_forwards
-    
+
     sleep 3
-    
+
     if command_exists "${BROWSER}"; then
         "${BROWSER}" "http://localhost:8080/metrics" >/dev/null 2>&1 &
         "${BROWSER}" "http://localhost:9090" >/dev/null 2>&1 &
         "${BROWSER}" "http://localhost:3000" >/dev/null 2>&1 &
     fi
-    
+
     log_success "Dashboards opened in browser"
 }
 
 # Inspect resources
 inspect_resources() {
     log_header "Inspecting Resources"
-    
+
     echo -e "${BLUE}CRDs:${NC}"
     kubectl get crd | grep neo4j
-    
+
     echo -e "\n${BLUE}Neo4j Clusters:${NC}"
     kubectl get neo4jenterpriseclusters --all-namespaces
-    
+
     echo -e "\n${BLUE}Neo4j Databases:${NC}"
     kubectl get neo4jdatabases --all-namespaces
-    
+
     echo -e "\n${BLUE}Neo4j Backups:${NC}"
     kubectl get neo4jbackups --all-namespaces
-    
+
     echo -e "\n${BLUE}Operator Pods:${NC}"
     kubectl get pods -l app.kubernetes.io/name=neo4j-operator --all-namespaces
 }
@@ -601,7 +601,7 @@ inspect_resources() {
 # Clean development environment
 clean_dev_env() {
     log_header "Cleaning Development Environment"
-    
+
     # Stop port forwards
     for pid_file in tmp/pf-*.pid; do
         if [[ -f "$pid_file" ]]; then
@@ -610,25 +610,25 @@ clean_dev_env() {
             rm "$pid_file"
         fi
     done
-    
+
     # Clean temporary files
     rm -rf tmp/* logs/*.log coverage/*
-    
+
     # Clean Docker images
     docker image prune -f
-    
+
     # Clean Go cache
     go clean -cache -modcache
-    
+
     log_success "Development environment cleaned"
 }
 
 # Configuration menu
 configure_dev_env() {
     log_header "Development Environment Configuration"
-    
+
     load_config
-    
+
     echo -e "${CYAN}Current Configuration:${NC}"
     echo "  Dev Mode: ${DEV_MODE:-development}"
     echo "  Debug Enabled: ${DEBUG_ENABLED:-false}"
@@ -636,7 +636,7 @@ configure_dev_env() {
     echo "  Webhooks: ${WEBHOOKS_ENABLED:-false}"
     echo "  Cluster: ${CLUSTER_NAME:-neo4j-operator-dev}"
     echo "  Namespace: ${CLUSTER_NAMESPACE:-default}"
-    
+
     echo -e "\n${BLUE}Configuration Options:${NC}"
     echo "1. Change development mode"
     echo "2. Toggle debug mode"
@@ -645,9 +645,9 @@ configure_dev_env() {
     echo "5. Change cluster settings"
     echo "6. Reset to defaults"
     echo "7. Save and exit"
-    
+
     read -p "Choose option (1-7): " choice
-    
+
     case $choice in
         1)
             echo "Development modes: development, debug, hot-reload, tilt"
@@ -684,7 +684,7 @@ configure_dev_env() {
             log_error "Invalid choice"
             ;;
     esac
-    
+
     save_config
     configure_dev_env
 }
@@ -692,10 +692,10 @@ configure_dev_env() {
 # Stop development environment
 stop_dev_env() {
     log_header "Stopping Development Environment"
-    
+
     # Stop any running processes
     pkill -f "air\|dlv\|tilt" || true
-    
+
     # Stop port forwards
     for pid_file in tmp/pf-*.pid; do
         if [[ -f "$pid_file" ]]; then
@@ -704,7 +704,7 @@ stop_dev_env() {
             rm "$pid_file"
         fi
     done
-    
+
     log_success "Development environment stopped"
 }
 
@@ -791,4 +791,4 @@ show_help() {
 }
 
 # Run main function
-main "$@" 
+main "$@"

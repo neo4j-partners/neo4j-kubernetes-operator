@@ -33,7 +33,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-operator/api/v1alpha1"
+	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1"
 )
 
 var (
@@ -56,7 +56,7 @@ func TestGKE(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
-	ctx, cancel = context.WithCancel(context.TODO())
+	ctx, cancel = context.WithCancel(context.Background())
 
 	By("Setting up GKE test environment")
 
@@ -190,3 +190,41 @@ func verifyGKESpecificFeatures(clusterName string) {
 	By("Verifying GKE networking features")
 	// Check if cluster uses GKE-specific networking
 }
+
+var _ = Describe("GKE Integration Tests", func() {
+	Context("When deploying Neo4j on GKE", func() {
+		It("should create a Neo4j cluster with GKE-specific configuration", func() {
+			cluster := createGKECluster("test-gke-cluster")
+
+			// Create the cluster
+			Expect(k8sClient.Create(ctx, cluster)).Should(Succeed())
+
+			// Wait for cluster to be created (with timeout)
+			Eventually(func() error {
+				return k8sClient.Get(ctx, client.ObjectKey{
+					Name:      cluster.Name,
+					Namespace: cluster.Namespace,
+				}, cluster)
+			}, timeout, interval).Should(Succeed())
+
+			// Verify GKE-specific configuration
+			Expect(cluster.Spec.Storage.ClassName).To(Equal("standard-rwo"))
+			Expect(cluster.Spec.Backups.DefaultStorage.Type).To(Equal("gcs"))
+
+			// Clean up
+			Expect(k8sClient.Delete(ctx, cluster)).Should(Succeed())
+		})
+
+		It("should wait for GKE node readiness", func() {
+			waitForGKENodeReadiness()
+			// This should succeed or timeout gracefully
+		})
+
+		It("should verify GKE-specific features", func() {
+			cluster := createGKECluster("test-gke-features")
+
+			verifyGKESpecificFeatures(cluster.Name)
+			// This should succeed or skip if features not available
+		})
+	})
+})
