@@ -205,6 +205,37 @@ func main() {
 	}
 
 	setupLog.Info("starting manager")
+
+	// Add a goroutine to provide startup feedback
+	go func() {
+		// Wait a bit for initial startup
+		time.Sleep(5 * time.Second)
+		setupLog.Info("manager is starting - waiting for informer caches to sync (this may take 30-60 seconds)")
+
+		// Check periodically if we can reach the health endpoint
+		ticker := time.NewTicker(15 * time.Second)
+		defer ticker.Stop()
+
+		attempts := 0
+		for {
+			select {
+			case <-ticker.C:
+				attempts++
+				setupLog.Info("still waiting for startup to complete", "attempts", attempts, "tip", "this is normal for first startup")
+
+				// After a reasonable time, provide more context
+				if attempts >= 4 {
+					metricsURL := "http://localhost" + *metricsAddr + "/metrics"
+					healthURL := "http://localhost" + *probeAddr + "/healthz"
+					setupLog.Info("startup is taking longer than usual",
+						"note", "this can happen with slow cluster connections or many CRDs",
+						"metrics_endpoint", metricsURL,
+						"health_endpoint", healthURL)
+				}
+			}
+		}
+	}()
+
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)

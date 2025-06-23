@@ -366,15 +366,44 @@ start_normal_mode() {
 
     cd "${PROJECT_ROOT}"
 
+    # Create logs directory if it doesn't exist
+    mkdir -p logs
+
+    local log_file="logs/operator-$(date +%Y%m%d-%H%M%S).log"
+
+    log_info "Operator will start shortly..."
+    log_info "📊 Metrics will be available at: http://localhost:${METRICS_PORT}/metrics"
+    log_info "🏥 Health probe will be available at: http://localhost:${HEALTH_PORT}/healthz"
+    log_info "📝 Logs are being written to: ${log_file}"
+    echo
+    log_warning "⏳ Initial startup may take 30-60 seconds while informer caches sync"
+    log_info "💡 This is normal behavior - the operator is connecting to Kubernetes and loading CRDs"
+    echo
+
+    # Start a background process to monitor startup
+    (
+        sleep 10
+        while true; do
+            if curl -s "http://localhost:${HEALTH_PORT}/healthz" >/dev/null 2>&1; then
+                echo
+                log_success "🚀 Operator is ready and healthy!"
+                log_info "✅ You can now create Neo4j resources"
+                log_info "📈 Monitor metrics at: http://localhost:${METRICS_PORT}/metrics"
+                break
+            fi
+            sleep 5
+        done
+    ) &
+
     # Build and run the operator
     go run cmd/main.go \
         --zap-devel=true \
-        --zap-log-level=debug \
+        --zap-log-level=info \
         --leader-elect=false \
         --enable-webhooks=false \
         --metrics-bind-address=":${METRICS_PORT}" \
         --health-probe-bind-address=":${HEALTH_PORT}" \
-        2>&1 | tee "logs/operator-$(date +%Y%m%d-%H%M%S).log"
+        2>&1 | tee "${log_file}"
 }
 
 # Start debug mode
