@@ -94,14 +94,14 @@ spec:
   # Core cluster configuration
   coreServers: 3                    # Number of core servers (required)
   readReplicas: 2                   # Number of read replicas (optional)
-  
+
   # Neo4j configuration
   image:
     repository: "neo4j"             # Container image repository
     tag: "5.26-enterprise"          # Image tag
     pullPolicy: "IfNotPresent"      # Image pull policy
     pullSecrets: []                 # Image pull secrets
-  
+
   # Resource allocation
   resources:
     requests:
@@ -110,14 +110,14 @@ spec:
     limits:
       memory: "4Gi"
       cpu: "2"
-  
+
   # Storage configuration
   storage:
     dataVolumeSize: "10Gi"          # Data volume size
     logsVolumeSize: "1Gi"           # Logs volume size
     storageClassName: "fast-ssd"     # Storage class
     accessModes: ["ReadWriteOnce"]   # Volume access modes
-  
+
   # Network configuration
   networking:
     discovery:
@@ -129,14 +129,14 @@ spec:
       cluster: 5000                 # Cluster communication port
       raft: 7000                    # Raft port
       transaction: 6000             # Transaction port
-  
+
   # Security configuration
   security:
     authEnabled: true               # Enable authentication
     tlsEnabled: true                # Enable TLS
     certificateSecretName: "neo4j-certs"  # TLS certificate secret
     adminPasswordSecretName: "neo4j-admin"  # Admin password secret
-  
+
   # Backup configuration
   backup:
     enabled: true                   # Enable backups
@@ -148,7 +148,7 @@ spec:
       config:
         bucket: "neo4j-backups"
         region: "us-west-2"
-  
+
   # Monitoring configuration
   monitoring:
     enabled: true                   # Enable monitoring
@@ -167,7 +167,7 @@ status:
     status: "True"
     reason: "ClusterReady"
     message: "All cluster nodes are ready"
-  
+
   # Cluster topology
   coreMembers:
   - name: "cluster-core-0"
@@ -178,18 +178,18 @@ status:
     role: "FOLLOWER"
     address: "10.0.0.2:5000"
     status: "ONLINE"
-  
+
   readReplicas:
   - name: "cluster-replica-0"
     address: "10.0.0.3:5000"
     status: "ONLINE"
-  
+
   # Service endpoints
   endpoints:
     bolt: "neo4j://cluster.neo4j-system.svc.cluster.local:7687"
     http: "http://cluster.neo4j-system.svc.cluster.local:7474"
     https: "https://cluster.neo4j-system.svc.cluster.local:7473"
-  
+
   # Resource status
   observedGeneration: 1
   currentReplicas: 5
@@ -219,21 +219,21 @@ spec:
   clusterRef:
     name: "neo4j-cluster"           # Neo4jEnterpriseCluster name
     namespace: "neo4j-system"       # Optional, defaults to current namespace
-  
+
   # Database configuration
   name: "analytics"                 # Database name in Neo4j
   type: "standard"                  # Database type
-  
+
   # Initial data
   initialData:
     cypherScript: |
       CREATE (n:Person {name: 'Alice'});
       CREATE (m:Person {name: 'Bob'});
       CREATE (n)-[:KNOWS]->(m);
-    
+
   # Access control
   defaultAccess: "read"             # Default access level
-  
+
   # Configuration options
   options:
     txLogRetention: "7 days"
@@ -251,15 +251,15 @@ status:
     status: "True"
     reason: "DatabaseReady"
     message: "Database is ready for use"
-  
+
   # Database information
   name: "analytics"
   status: "online"
   role: "primary"
-  
+
   # Access information
   address: "neo4j://cluster.neo4j-system.svc.cluster.local:7687/analytics"
-  
+
   observedGeneration: 1
 ```
 
@@ -288,11 +288,11 @@ spec:
       name: "neo4j-cluster"
       namespace: "neo4j-system"
     name: "analytics"               # Database name, optional for full backup
-  
+
   # Backup configuration
   schedule: "0 2 * * *"            # Cron schedule
   type: "full"                     # full|incremental
-  
+
   # Storage configuration
   storage:
     type: "s3"                     # s3|gcs|azure|pvc
@@ -301,14 +301,14 @@ spec:
       bucket: "neo4j-backups"
       path: "/cluster-backups"
       region: "us-west-2"
-  
+
   # Retention policy
   retention:
     keepLast: 7                    # Keep last N backups
     keepDaily: 30                  # Keep daily backups for N days
     keepWeekly: 12                 # Keep weekly backups for N weeks
     keepMonthly: 6                 # Keep monthly backups for N months
-  
+
   # Backup options
   options:
     compression: true              # Enable compression
@@ -326,7 +326,7 @@ status:
     status: "True"
     reason: "BackupReady"
     message: "Backup configuration is ready"
-  
+
   # Last backup information
   lastBackup:
     startTime: "2024-01-15T02:00:00Z"
@@ -334,10 +334,10 @@ status:
     size: "1.2GB"
     location: "s3://neo4j-backups/cluster-backups/2024-01-15_02-00-00.backup"
     status: "Completed"
-  
+
   # Next scheduled backup
   nextBackup: "2024-01-16T02:00:00Z"
-  
+
   observedGeneration: 1
 ```
 
@@ -366,14 +366,14 @@ spec:
       name: "neo4j-cluster"
       namespace: "neo4j-system"
     name: "analytics"               # Target database name
-  
+
   # Source backup
   source:
     backupRef:
       name: "daily-backup"          # Reference to Neo4jBackup
     # OR direct backup location
     location: "s3://neo4j-backups/cluster-backups/2024-01-15_02-00-00.backup"
-    
+
   # Restore options
   options:
     replaceExisting: true           # Replace existing database
@@ -391,15 +391,15 @@ status:
     status: "True"
     reason: "RestoreCompleted"
     message: "Database restored successfully"
-  
+
   # Restore progress
   startTime: "2024-01-15T10:00:00Z"
   completionTime: "2024-01-15T10:30:00Z"
-  
+
   # Restore information
   sourceBackup: "s3://neo4j-backups/cluster-backups/2024-01-15_02-00-00.backup"
   targetDatabase: "analytics"
-  
+
   observedGeneration: 1
 ```
 
@@ -473,7 +473,7 @@ spec:
     tag: "5.26-enterprise"
   coreServers: 5
   readReplicas: 3
-  
+
   resources:
     requests:
       memory: "4Gi"
@@ -481,18 +481,18 @@ spec:
     limits:
       memory: "8Gi"
       cpu: "4"
-  
+
   storage:
     dataVolumeSize: "100Gi"
     logsVolumeSize: "10Gi"
     storageClassName: "fast-ssd"
-  
+
   security:
     authEnabled: true
     tlsEnabled: true
     certificateSecretName: "neo4j-tls"
     adminPasswordSecretName: "neo4j-admin"
-  
+
   backup:
     enabled: true
     schedule: "0 2 * * *"
@@ -503,7 +503,7 @@ spec:
       config:
         bucket: "neo4j-prod-backups"
         region: "us-west-2"
-  
+
   monitoring:
     enabled: true
     prometheusEnabled: true
@@ -522,23 +522,23 @@ spec:
     name: "production-cluster"
   name: "analytics"
   type: "standard"
-  
+
   initialData:
     cypherScript: |
       // Create indexes
       CREATE INDEX person_name IF NOT EXISTS FOR (p:Person) ON (p.name);
       CREATE INDEX company_name IF NOT EXISTS FOR (c:Company) ON (c.name);
-      
+
       // Create initial data
       CREATE (alice:Person {name: 'Alice', role: 'Data Scientist'});
       CREATE (bob:Person {name: 'Bob', role: 'Engineer'});
       CREATE (neo4j:Company {name: 'Neo4j', industry: 'Graph Technology'});
-      
+
       // Create relationships
       CREATE (alice)-[:WORKS_FOR]->(neo4j);
       CREATE (bob)-[:WORKS_FOR]->(neo4j);
       CREATE (alice)-[:COLLABORATES_WITH]->(bob);
-  
+
   options:
     txLogRetention: "7 days"
     dbms.memory.heap.initial_size: "1g"
@@ -558,10 +558,10 @@ spec:
     clusterRef:
       name: "production-cluster"
     # Omit name for full cluster backup
-  
+
   schedule: "0 2 * * *"  # Daily at 2 AM
   type: "full"
-  
+
   storage:
     type: "s3"
     secretName: "backup-credentials"
@@ -569,13 +569,13 @@ spec:
       bucket: "neo4j-prod-backups"
       path: "/daily-full"
       region: "us-west-2"
-  
+
   retention:
     keepLast: 7
     keepDaily: 30
     keepWeekly: 12
     keepMonthly: 6
-  
+
   options:
     compression: true
     encryption: true

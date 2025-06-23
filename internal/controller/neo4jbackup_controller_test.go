@@ -31,7 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-operator/api/v1alpha1"
+	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1"
 )
 
 var _ = Describe("Neo4jBackup Controller", func() {
@@ -131,7 +131,7 @@ var _ = Describe("Neo4jBackup Controller", func() {
 				},
 			})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result.Requeue).To(BeFalse())
+			Expect(result.RequeueAfter).To(BeZero())
 
 			By("Checking that backup Job is created")
 			job := &batchv1.Job{}

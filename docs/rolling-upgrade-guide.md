@@ -37,29 +37,29 @@ spec:
   image:
     repo: neo4j
     tag: "5.26-enterprise"
-  
+
   upgradeStrategy:
     # Strategy type: RollingUpgrade (default) or Recreate
     strategy: RollingUpgrade
-    
+
     # Enable cluster health validation before starting upgrade
     preUpgradeHealthCheck: true
-    
-    # Enable health validation after upgrade completion  
+
+    # Enable health validation after upgrade completion
     postUpgradeHealthCheck: true
-    
+
     # Maximum unavailable replicas during upgrade (default: 1)
     maxUnavailableDuringUpgrade: 1
-    
+
     # Timeout for entire upgrade process (default: 30m)
     upgradeTimeout: "30m"
-    
+
     # Timeout for health checks (default: 5m)
     healthCheckTimeout: "5m"
-    
+
     # Cluster stabilization timeout (default: 3m)
     stabilizationTimeout: "3m"
-    
+
     # Pause upgrade on failure for manual intervention (default: true)
     autoPauseOnFailure: true
 ```
@@ -115,7 +115,7 @@ status:
   phase: Ready
   version: "5.27-enterprise"
   lastUpgradeTime: "2024-01-15T10:30:00Z"
-  
+
   upgradeStatus:
     phase: Completed
     startTime: "2024-01-15T10:00:00Z"
@@ -123,19 +123,19 @@ status:
     currentStep: "Rolling upgrade completed successfully"
     previousVersion: "5.26-enterprise"
     targetVersion: "5.27-enterprise"
-    
+
     progress:
       total: 5
       upgraded: 5
       inProgress: 0
       pending: 0
-      
+
       primaries:
         total: 3
         upgraded: 3
         pending: 0
         currentLeader: "my-cluster-primary-2"
-        
+
       secondaries:
         total: 2
         upgraded: 2
@@ -162,7 +162,7 @@ kubectl get events --field-selector involvedObject.name=my-cluster
 
 # Example events:
 # Normal   UpgradeStarted     Rolling upgrade started from 5.26-enterprise to 5.27-enterprise
-# Normal   SecondariesUpgraded Secondary nodes upgraded successfully  
+# Normal   SecondariesUpgraded Secondary nodes upgraded successfully
 # Normal   PrimariesUpgraded   Primary nodes upgraded successfully
 # Normal   UpgradeCompleted    Rolling upgrade completed successfully
 # Warning  UpgradePaused      Upgrade paused due to health check failure
@@ -249,7 +249,7 @@ The operator automatically validates upgrade paths and supports both versioning 
 kubectl patch neo4jenterprisecluster my-cluster \
   --patch='{"spec":{"image":{"tag":"5.26.2-enterprise"}}}'
 
-# SemVer minor upgrade  
+# SemVer minor upgrade
 kubectl patch neo4jenterprisecluster my-cluster \
   --patch='{"spec":{"image":{"tag":"5.27.0-enterprise"}}}'
 
@@ -327,7 +327,7 @@ The operator exposes upgrade-specific metrics:
 # Total upgrade attempts
 neo4j_operator_upgrade_total{cluster="my-cluster", result="success"}
 
-# Upgrade duration by phase  
+# Upgrade duration by phase
 neo4j_operator_upgrade_duration_seconds{cluster="my-cluster", phase="primaries"}
 
 # Current upgrade status
@@ -411,4 +411,4 @@ The intelligent rolling upgrade feature provides:
 - **Detailed monitoring** and observability
 - **Flexible configuration** for different environments
 
-This ensures production Neo4j clusters can be kept up-to-date safely and efficiently. 
+This ensures production Neo4j clusters can be kept up-to-date safely and efficiently.

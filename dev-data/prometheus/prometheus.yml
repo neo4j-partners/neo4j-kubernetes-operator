@@ -24,7 +24,7 @@ scrape_configs:
   # Neo4j Cluster Core Nodes
   - job_name: 'neo4j-cluster-core'
     static_configs:
-      - targets: 
+      - targets:
         - 'neo4j-core-1:2004'
         - 'neo4j-core-2:2004'
         - 'neo4j-core-3:2004'

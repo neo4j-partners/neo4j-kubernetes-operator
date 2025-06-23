@@ -14,4 +14,4 @@ ignore: |
   /config/
   /hack/
   *.yaml.tmpl
-  *.yml.tmpl 
+  *.yml.tmpl

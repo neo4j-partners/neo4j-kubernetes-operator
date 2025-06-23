@@ -73,23 +73,17 @@ type Neo4jEnterpriseClusterSpec struct {
 	// UpgradeStrategy specifies how to handle rolling upgrades
 	UpgradeStrategy *UpgradeStrategySpec `json:"upgradeStrategy,omitempty"`
 
-	// AutoScaling configuration for read replicas
+	// Auto-scaling configuration for both primaries and secondaries
 	AutoScaling *AutoScalingSpec `json:"autoScaling,omitempty"`
 
-	// BlueGreen deployment configuration
-	BlueGreen *BlueGreenDeploymentSpec `json:"blueGreen,omitempty"`
+	// Multi-cluster deployment configuration
+	MultiCluster *MultiClusterSpec `json:"multiCluster,omitempty"`
 
 	// Plugin management configuration
 	Plugins []PluginSpec `json:"plugins,omitempty"`
 
 	// Query performance monitoring
 	QueryMonitoring *QueryMonitoringSpec `json:"queryMonitoring,omitempty"`
-
-	// Point-in-time recovery configuration
-	PointInTimeRecovery *PointInTimeRecoverySpec `json:"pointInTimeRecovery,omitempty"`
-
-	// Multi-tenant configuration
-	MultiTenant *MultiTenantSpec `json:"multiTenant,omitempty"`
 }
 
 // ImageSpec defines the Neo4j image configuration
@@ -739,149 +733,373 @@ type Neo4jEnterpriseClusterList struct {
 	Items           []Neo4jEnterpriseCluster `json:"items"`
 }
 
-// AutoScalingSpec defines auto-scaling configuration for read replicas
+// AutoScalingSpec defines auto-scaling configuration for both primaries and secondaries
 type AutoScalingSpec struct {
-	// +kubebuilder:default=true
 	// Enable auto-scaling
+	// +kubebuilder:default=true
 	Enabled bool `json:"enabled,omitempty"`
 
-	// +kubebuilder:validation:Minimum=0
-	// +kubebuilder:default=0
-	// Minimum number of read replicas
-	MinReplicas int32 `json:"minReplicas,omitempty"`
+	// Primary node auto-scaling configuration
+	Primaries *PrimaryAutoScalingConfig `json:"primaries,omitempty"`
 
-	// +kubebuilder:validation:Minimum=1
-	// +kubebuilder:default=10
-	// Maximum number of read replicas
-	MaxReplicas int32 `json:"maxReplicas,omitempty"`
+	// Secondary node auto-scaling configuration
+	Secondaries *SecondaryAutoScalingConfig `json:"secondaries,omitempty"`
 
-	// Scaling metrics
-	Metrics []AutoScalingMetric `json:"metrics,omitempty"`
+	// Global scaling behavior configuration
+	Behavior *GlobalScalingBehavior `json:"behavior,omitempty"`
 
-	// Scaling behavior
-	Behavior *AutoScalingBehavior `json:"behavior,omitempty"`
+	// Advanced scaling features
+	Advanced *AdvancedScalingConfig `json:"advanced,omitempty"`
 }
 
-// AutoScalingMetric defines a metric for auto-scaling
+// PrimaryAutoScalingConfig defines auto-scaling for primary nodes
+type PrimaryAutoScalingConfig struct {
+	// Enable primary auto-scaling
+	// +kubebuilder:default=true
+	Enabled bool `json:"enabled,omitempty"`
+
+	// Minimum number of primary replicas (must be odd for quorum)
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:default=3
+	MinReplicas int32 `json:"minReplicas,omitempty"`
+
+	// Maximum number of primary replicas (must be odd for quorum)
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:default=7
+	MaxReplicas int32 `json:"maxReplicas,omitempty"`
+
+	// Scaling metrics for primary nodes
+	Metrics []AutoScalingMetric `json:"metrics,omitempty"`
+
+	// Allow breaking quorum requirements (emergency use only)
+	// +kubebuilder:default=false
+	AllowQuorumBreak bool `json:"allowQuorumBreak,omitempty"`
+
+	// Quorum-aware scaling behavior
+	QuorumProtection *QuorumProtectionConfig `json:"quorumProtection,omitempty"`
+}
+
+// SecondaryAutoScalingConfig defines auto-scaling for secondary nodes
+type SecondaryAutoScalingConfig struct {
+	// Enable secondary auto-scaling
+	// +kubebuilder:default=true
+	Enabled bool `json:"enabled,omitempty"`
+
+	// Minimum number of secondary replicas
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:default=1
+	MinReplicas int32 `json:"minReplicas,omitempty"`
+
+	// Maximum number of secondary replicas
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:default=20
+	MaxReplicas int32 `json:"maxReplicas,omitempty"`
+
+	// Scaling metrics for secondary nodes
+	Metrics []AutoScalingMetric `json:"metrics,omitempty"`
+
+	// Zone-aware scaling
+	ZoneAware *ZoneAwareScalingConfig `json:"zoneAware,omitempty"`
+}
+
+// AutoScalingMetric defines a metric for auto-scaling decisions
 type AutoScalingMetric struct {
-	// +kubebuilder:validation:Enum=cpu;memory;custom;query_latency;connection_count;throughput
+	// +kubebuilder:validation:Enum=cpu;memory;query_latency;connection_count;throughput;custom
 	// Metric type
 	Type string `json:"type"`
 
-	// Target value
+	// Target value for the metric
 	Target string `json:"target"`
 
-	// Custom metric query
-	Query string `json:"query,omitempty"`
+	// Weight of this metric in scaling decisions as string (e.g., "1.0", "2.5")
+	// +kubebuilder:default="1.0"
+	Weight string `json:"weight,omitempty"`
+
+	// Custom metric query (for Prometheus)
+	CustomQuery string `json:"customQuery,omitempty"`
+
+	// Metric source configuration
+	Source *MetricSourceConfig `json:"source,omitempty"`
 }
 
-// AutoScalingBehavior defines scaling behavior
-type AutoScalingBehavior struct {
-	// Scale up policy
-	ScaleUp *ScalingPolicy `json:"scaleUp,omitempty"`
+// MetricSourceConfig defines the source of a metric
+type MetricSourceConfig struct {
+	// +kubebuilder:validation:Enum=kubernetes;prometheus;neo4j
+	// +kubebuilder:default=kubernetes
+	Type string `json:"type,omitempty"`
 
-	// Scale down policy
-	ScaleDown *ScalingPolicy `json:"scaleDown,omitempty"`
+	// Prometheus configuration
+	Prometheus *PrometheusMetricConfig `json:"prometheus,omitempty"`
+
+	// Neo4j metrics configuration
+	Neo4j *Neo4jMetricConfig `json:"neo4j,omitempty"`
 }
 
-// ScalingPolicy defines scaling policy
-type ScalingPolicy struct {
-	// Stabilization window
-	StabilizationWindowSeconds int32 `json:"stabilizationWindowSeconds,omitempty"`
+// PrometheusMetricConfig defines Prometheus metric source
+type PrometheusMetricConfig struct {
+	// Prometheus server URL
+	ServerURL string `json:"serverUrl,omitempty"`
 
-	// Policies
-	Policies []HPAScalingRule `json:"policies,omitempty"`
+	// Metric query
+	Query string `json:"query"`
+
+	// Query interval
+	// +kubebuilder:default="30s"
+	Interval string `json:"interval,omitempty"`
 }
 
-// HPAScalingRule defines HPA scaling rules
-type HPAScalingRule struct {
-	// Type of scaling rule
-	Type string `json:"type"`
-
-	// Value for the scaling rule
-	Value int32 `json:"value"`
-
-	// Period for the scaling rule
-	PeriodSeconds int32 `json:"periodSeconds"`
-}
-
-// BlueGreenDeploymentSpec defines blue-green deployment configuration
-type BlueGreenDeploymentSpec struct {
-	// +kubebuilder:default=false
-	// Enable blue-green deployments
-	Enabled bool `json:"enabled,omitempty"`
-
-	// Traffic switching configuration
-	Traffic *TrafficSwitchingConfig `json:"traffic,omitempty"`
-
-	// Validation configuration
-	Validation *BlueGreenValidationConfig `json:"validation,omitempty"`
-
-	// Rollback configuration
-	Rollback *BlueGreenRollbackConfig `json:"rollback,omitempty"`
-}
-
-// TrafficSwitchingConfig defines traffic switching behavior
-type TrafficSwitchingConfig struct {
-	// +kubebuilder:validation:Enum=automatic;manual
-	// +kubebuilder:default=automatic
-	// Switch mode
-	Mode string `json:"mode,omitempty"`
-
-	// Canary traffic percentage before full switch
-	CanaryPercentage int32 `json:"canaryPercentage,omitempty"`
-
-	// Duration to wait before switching
-	WaitDuration string `json:"waitDuration,omitempty"`
-}
-
-// BlueGreenValidationConfig defines validation checks
-type BlueGreenValidationConfig struct {
-	// Health checks to perform
-	HealthChecks []BlueGreenHealthCheck `json:"healthChecks,omitempty"`
-
-	// Custom validation hooks
-	CustomValidation []BlueGreenCustomValidation `json:"customValidation,omitempty"`
-}
-
-// BlueGreenHealthCheck defines a health check
-type BlueGreenHealthCheck struct {
-	// Check name
-	Name string `json:"name"`
-
-	// HTTP endpoint to check
-	HTTPEndpoint string `json:"httpEndpoint,omitempty"`
-
-	// Cypher query to execute
+// Neo4jMetricConfig defines Neo4j-specific metrics
+type Neo4jMetricConfig struct {
+	// Cypher query to get metric value
 	CypherQuery string `json:"cypherQuery,omitempty"`
 
-	// Expected result
-	ExpectedResult string `json:"expectedResult,omitempty"`
+	// JMX bean path
+	JMXBean string `json:"jmxBean,omitempty"`
 
-	// Timeout for the check
-	Timeout string `json:"timeout,omitempty"`
+	// Metric name
+	MetricName string `json:"metricName"`
 }
 
-// BlueGreenCustomValidation defines custom validation
-type BlueGreenCustomValidation struct {
-	// Validation name
+// QuorumProtectionConfig defines quorum protection settings
+type QuorumProtectionConfig struct {
+	// Enable quorum protection
+	// +kubebuilder:default=true
+	Enabled bool `json:"enabled,omitempty"`
+
+	// Minimum healthy primaries before blocking scale-down
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:default=2
+	MinHealthyPrimaries int32 `json:"minHealthyPrimaries,omitempty"`
+
+	// Health check configuration
+	HealthCheck *QuorumHealthCheckConfig `json:"healthCheck,omitempty"`
+}
+
+// QuorumHealthCheckConfig defines health checks for quorum protection
+type QuorumHealthCheckConfig struct {
+	// Health check interval
+	// +kubebuilder:default="30s"
+	Interval string `json:"interval,omitempty"`
+
+	// Health check timeout
+	// +kubebuilder:default="10s"
+	Timeout string `json:"timeout,omitempty"`
+
+	// Failure threshold
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:default=3
+	FailureThreshold int32 `json:"failureThreshold,omitempty"`
+}
+
+// ZoneAwareScalingConfig defines zone-aware scaling for secondaries
+type ZoneAwareScalingConfig struct {
+	// Enable zone-aware scaling
+	// +kubebuilder:default=false
+	Enabled bool `json:"enabled,omitempty"`
+
+	// Minimum replicas per zone
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:default=1
+	MinReplicasPerZone int32 `json:"minReplicasPerZone,omitempty"`
+
+	// Maximum zone skew
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:default=2
+	MaxZoneSkew int32 `json:"maxZoneSkew,omitempty"`
+
+	// Zone preference for scaling
+	ZonePreference []string `json:"zonePreference,omitempty"`
+}
+
+// GlobalScalingBehavior defines global scaling behavior
+type GlobalScalingBehavior struct {
+	// Scale up behavior
+	ScaleUp *ScalingBehaviorConfig `json:"scaleUp,omitempty"`
+
+	// Scale down behavior
+	ScaleDown *ScalingBehaviorConfig `json:"scaleDown,omitempty"`
+
+	// Coordination between primary and secondary scaling
+	Coordination *ScalingCoordinationConfig `json:"coordination,omitempty"`
+}
+
+// ScalingBehaviorConfig defines scaling behavior
+type ScalingBehaviorConfig struct {
+	// Stabilization window
+	// +kubebuilder:default="60s"
+	StabilizationWindow string `json:"stabilizationWindow,omitempty"`
+
+	// Scaling policies
+	Policies []ScalingPolicy `json:"policies,omitempty"`
+
+	// Policy selection mode
+	// +kubebuilder:validation:Enum=Min;Max;Disabled
+	// +kubebuilder:default="Max"
+	SelectPolicy string `json:"selectPolicy,omitempty"`
+}
+
+// ScalingPolicy defines a scaling policy
+type ScalingPolicy struct {
+	// +kubebuilder:validation:Enum=Pods;Percent
+	// Policy type
+	Type string `json:"type"`
+
+	// Policy value
+	Value int32 `json:"value"`
+
+	// Period for the policy
+	// +kubebuilder:default="60s"
+	Period string `json:"period,omitempty"`
+}
+
+// ScalingCoordinationConfig defines coordination between primary and secondary scaling
+type ScalingCoordinationConfig struct {
+	// Enable coordination
+	// +kubebuilder:default=true
+	Enabled bool `json:"enabled,omitempty"`
+
+	// Primary scaling priority
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=10
+	// +kubebuilder:default=5
+	PrimaryPriority int32 `json:"primaryPriority,omitempty"`
+
+	// Secondary scaling priority
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=10
+	// +kubebuilder:default=3
+	SecondaryPriority int32 `json:"secondaryPriority,omitempty"`
+
+	// Delay between primary and secondary scaling
+	// +kubebuilder:default="30s"
+	ScalingDelay string `json:"scalingDelay,omitempty"`
+}
+
+// AdvancedScalingConfig defines advanced scaling features
+type AdvancedScalingConfig struct {
+	// Predictive scaling
+	Predictive *PredictiveScalingConfig `json:"predictive,omitempty"`
+
+	// Custom scaling algorithms
+	CustomAlgorithms []CustomScalingAlgorithm `json:"customAlgorithms,omitempty"`
+
+	// Machine learning-based scaling
+	MachineLearning *MLScalingConfig `json:"machineLearning,omitempty"`
+}
+
+// PredictiveScalingConfig defines predictive scaling
+type PredictiveScalingConfig struct {
+	// Enable predictive scaling
+	// +kubebuilder:default=false
+	Enabled bool `json:"enabled,omitempty"`
+
+	// Historical data window
+	// +kubebuilder:default="7d"
+	HistoricalWindow string `json:"historicalWindow,omitempty"`
+
+	// Prediction horizon
+	// +kubebuilder:default="1h"
+	PredictionHorizon string `json:"predictionHorizon,omitempty"`
+
+	// Confidence threshold as string (e.g., "0.8", "0.95")
+	// +kubebuilder:default="0.8"
+	ConfidenceThreshold string `json:"confidenceThreshold,omitempty"`
+}
+
+// CustomScalingAlgorithm defines a custom scaling algorithm
+type CustomScalingAlgorithm struct {
+	// Algorithm name
 	Name string `json:"name"`
 
-	// Job template for validation
-	JobTemplate JobTemplateSpec `json:"jobTemplate"`
+	// Algorithm type
+	// +kubebuilder:validation:Enum=webhook;lua;wasm
+	Type string `json:"type"`
 
-	// Timeout for validation
+	// Algorithm configuration
+	Config map[string]string `json:"config,omitempty"`
+
+	// Webhook configuration (if type=webhook)
+	Webhook *WebhookScalingConfig `json:"webhook,omitempty"`
+}
+
+// WebhookScalingConfig defines webhook-based scaling
+type WebhookScalingConfig struct {
+	// Webhook URL
+	URL string `json:"url"`
+
+	// HTTP method
+	// +kubebuilder:validation:Enum=GET;POST
+	// +kubebuilder:default="POST"
+	Method string `json:"method,omitempty"`
+
+	// Headers
+	Headers map[string]string `json:"headers,omitempty"`
+
+	// Timeout
+	// +kubebuilder:default="30s"
 	Timeout string `json:"timeout,omitempty"`
 }
 
-// BlueGreenRollbackConfig defines rollback behavior
-type BlueGreenRollbackConfig struct {
-	// +kubebuilder:default=true
-	// Enable automatic rollback on failure
-	AutoRollback bool `json:"autoRollback,omitempty"`
+// MLScalingConfig defines machine learning-based scaling
+type MLScalingConfig struct {
+	// Enable ML scaling
+	// +kubebuilder:default=false
+	Enabled bool `json:"enabled,omitempty"`
 
-	// Rollback timeout
-	Timeout string `json:"timeout,omitempty"`
+	// ML model configuration
+	Model *MLModelConfig `json:"model,omitempty"`
+
+	// Feature engineering
+	Features []MLFeatureConfig `json:"features,omitempty"`
+}
+
+// MLModelConfig defines ML model configuration
+type MLModelConfig struct {
+	// Model type
+	// +kubebuilder:validation:Enum=linear_regression;random_forest;neural_network
+	// +kubebuilder:default="linear_regression"
+	Type string `json:"type,omitempty"`
+
+	// Model parameters
+	Parameters map[string]string `json:"parameters,omitempty"`
+
+	// Training data source
+	TrainingDataSource string `json:"trainingDataSource,omitempty"`
+}
+
+// MLFeatureConfig defines ML feature configuration
+type MLFeatureConfig struct {
+	// Feature name
+	Name string `json:"name"`
+
+	// Feature type
+	// +kubebuilder:validation:Enum=metric;time;categorical
+	Type string `json:"type"`
+
+	// Feature source
+	Source string `json:"source"`
+
+	// Transformation
+	Transformation string `json:"transformation,omitempty"`
+}
+
+// MultiClusterSpec defines multi-cluster deployment configuration
+type MultiClusterSpec struct {
+	// Enable multi-cluster deployment
+	// +kubebuilder:default=false
+	Enabled bool `json:"enabled,omitempty"`
+
+	// Multi-cluster topology
+	Topology *MultiClusterTopology `json:"topology,omitempty"`
+
+	// Networking configuration
+	Networking *MultiClusterNetworking `json:"networking,omitempty"`
+
+	// Service mesh configuration
+	ServiceMesh *ServiceMeshConfig `json:"serviceMesh,omitempty"`
+
+	// Cross-cluster coordination
+	Coordination *CrossClusterCoordination `json:"coordination,omitempty"`
 }
 
 // PluginSpec defines a plugin configuration
@@ -951,133 +1169,801 @@ type QueryMetricsExportConfig struct {
 	Interval string `json:"interval,omitempty"`
 }
 
-// PointInTimeRecoverySpec defines point-in-time recovery configuration
-type PointInTimeRecoverySpec struct {
-	// +kubebuilder:default=true
-	// Enable point-in-time recovery
-	Enabled bool `json:"enabled,omitempty"`
+// MultiClusterTopology defines the topology across clusters
+type MultiClusterTopology struct {
+	// Cluster configurations
+	Clusters []ClusterConfig `json:"clusters"`
 
-	// Transaction log retention
-	TransactionLogRetention string `json:"transactionLogRetention,omitempty"`
+	// Primary cluster name
+	PrimaryCluster string `json:"primaryCluster,omitempty"`
 
-	// Log shipping configuration
-	LogShipping *LogShippingConfig `json:"logShipping,omitempty"`
+	// Deployment strategy
+	// +kubebuilder:validation:Enum=active-active;active-passive;distributed
+	// +kubebuilder:default="active-active"
+	Strategy string `json:"strategy,omitempty"`
 
-	// Recovery point objectives
-	RecoveryPointObjective string `json:"recoveryPointObjective,omitempty"`
+	// Zone distribution
+	ZoneDistribution *ZoneDistributionConfig `json:"zoneDistribution,omitempty"`
 }
 
-// LogShippingConfig defines transaction log shipping
-type LogShippingConfig struct {
-	// +kubebuilder:default=true
-	// Enable log shipping
-	Enabled bool `json:"enabled,omitempty"`
-
-	// Shipping interval
-	Interval string `json:"interval,omitempty"`
-
-	// Destination storage
-	Destination *StorageLocation `json:"destination,omitempty"`
-
-	// Compression settings
-	Compression *ReplicationCompressionConfig `json:"compression,omitempty"`
-
-	// Encryption settings
-	Encryption *ReplicationEncryptionConfig `json:"encryption,omitempty"`
-}
-
-// MultiTenantSpec defines multi-tenant configuration
-type MultiTenantSpec struct {
-	// +kubebuilder:default=false
-	// Enable multi-tenancy
-	Enabled bool `json:"enabled,omitempty"`
-
-	// +kubebuilder:validation:Enum=namespace;database;hybrid
-	// +kubebuilder:default=database
-	// Isolation strategy
-	Isolation string `json:"isolation,omitempty"`
-
-	// Tenant configurations
-	Tenants []TenantConfig `json:"tenants,omitempty"`
-
-	// Default tenant configuration
-	DefaultTenant *TenantConfig `json:"defaultTenant,omitempty"`
-
-	// Resource quotas
-	ResourceQuotas *MultiTenantResourceQuotas `json:"resourceQuotas,omitempty"`
-}
-
-// TenantConfig defines a tenant configuration
-type TenantConfig struct {
-	// +kubebuilder:validation:Required
-	// Tenant name
+// ClusterConfig defines configuration for a cluster in multi-cluster setup
+type ClusterConfig struct {
+	// Cluster name
 	Name string `json:"name"`
 
-	// Tenant databases
-	Databases []string `json:"databases,omitempty"`
+	// Cluster endpoint
+	Endpoint string `json:"endpoint,omitempty"`
 
-	// Resource allocation
-	Resources *TenantResourceConfig `json:"resources,omitempty"`
+	// Region
+	Region string `json:"region,omitempty"`
 
-	// Security settings
-	Security *TenantSecurityConfig `json:"security,omitempty"`
+	// Zone
+	Zone string `json:"zone,omitempty"`
 
-	// Backup configuration
-	Backup *TenantBackupConfig `json:"backup,omitempty"`
+	// Node allocation
+	NodeAllocation *NodeAllocationConfig `json:"nodeAllocation,omitempty"`
+
+	// Cluster-specific configuration
+	Config map[string]string `json:"config,omitempty"`
 }
 
-// TenantResourceConfig defines tenant resource allocation
-type TenantResourceConfig struct {
-	// CPU allocation
-	CPU string `json:"cpu,omitempty"`
+// NodeAllocationConfig defines how nodes are allocated in a cluster
+type NodeAllocationConfig struct {
+	// Number of primary nodes in this cluster
+	Primaries int32 `json:"primaries,omitempty"`
 
-	// Memory allocation
-	Memory string `json:"memory,omitempty"`
+	// Number of secondary nodes in this cluster
+	Secondaries int32 `json:"secondaries,omitempty"`
 
-	// Storage allocation
-	Storage string `json:"storage,omitempty"`
+	// Node selectors
+	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
 
-	// Connection limits
-	MaxConnections int32 `json:"maxConnections,omitempty"`
+	// Tolerations
+	Tolerations []corev1.Toleration `json:"tolerations,omitempty"`
 }
 
-// TenantSecurityConfig defines tenant security settings
-type TenantSecurityConfig struct {
-	// Authentication provider
-	AuthProvider string `json:"authProvider,omitempty"`
-
-	// Roles
-	Roles []string `json:"roles,omitempty"`
-
-	// Network policies
-	NetworkPolicies []string `json:"networkPolicies,omitempty"`
-}
-
-// TenantBackupConfig defines tenant backup configuration
-type TenantBackupConfig struct {
-	// Enable backups for tenant
+// ZoneDistributionConfig defines zone distribution strategy
+type ZoneDistributionConfig struct {
+	// Enable zone distribution
+	// +kubebuilder:default=true
 	Enabled bool `json:"enabled,omitempty"`
 
-	// Backup schedule
-	Schedule string `json:"schedule,omitempty"`
+	// Zone balancing strategy
+	// +kubebuilder:validation:Enum=even;weighted;custom
+	// +kubebuilder:default="even"
+	Strategy string `json:"strategy,omitempty"`
 
-	// Retention policy
-	Retention string `json:"retention,omitempty"`
+	// Zone weights (for weighted strategy)
+	ZoneWeights map[string]int32 `json:"zoneWeights,omitempty"`
 }
 
-// MultiTenantResourceQuotas defines resource quotas for multi-tenancy
-type MultiTenantResourceQuotas struct {
-	// Default CPU quota per tenant
-	DefaultCPUQuota string `json:"defaultCpuQuota,omitempty"`
+// MultiClusterNetworking defines networking configuration for multi-cluster
+type MultiClusterNetworking struct {
+	// Networking type
+	// +kubebuilder:validation:Enum=cilium;istio;custom
+	// +kubebuilder:validation:Required
+	Type string `json:"type"`
 
-	// Default memory quota per tenant
-	DefaultMemoryQuota string `json:"defaultMemoryQuota,omitempty"`
+	// Cilium multi-cluster configuration
+	Cilium *CiliumMultiClusterConfig `json:"cilium,omitempty"`
 
-	// Default storage quota per tenant
-	DefaultStorageQuota string `json:"defaultStorageQuota,omitempty"`
+	// Cross-cluster DNS
+	DNS *CrossClusterDNSConfig `json:"dns,omitempty"`
 
-	// Maximum tenants per cluster
-	MaxTenantsPerCluster int32 `json:"maxTenantsPerCluster,omitempty"`
+	// Network policies
+	NetworkPolicies []CrossClusterNetworkPolicy `json:"networkPolicies,omitempty"`
+}
+
+// CiliumMultiClusterConfig defines Cilium multi-cluster networking
+type CiliumMultiClusterConfig struct {
+	// Cluster mesh configuration
+	ClusterMesh *CiliumClusterMeshConfig `json:"clusterMesh,omitempty"`
+
+	// External workload configuration
+	ExternalWorkloads *CiliumExternalWorkloadConfig `json:"externalWorkloads,omitempty"`
+
+	// Network encryption
+	Encryption *CiliumEncryptionConfig `json:"encryption,omitempty"`
+}
+
+// CiliumClusterMeshConfig defines Cilium cluster mesh configuration
+type CiliumClusterMeshConfig struct {
+	// Enable cluster mesh
+	// +kubebuilder:default=true
+	Enabled bool `json:"enabled,omitempty"`
+
+	// Cluster mesh API server configuration
+	APIServer *CiliumAPIServerConfig `json:"apiServer,omitempty"`
+
+	// Cluster ID
+	ClusterID int32 `json:"clusterId,omitempty"`
+
+	// Service discovery
+	ServiceDiscovery *CiliumServiceDiscoveryConfig `json:"serviceDiscovery,omitempty"`
+}
+
+// CiliumAPIServerConfig defines Cilium API server configuration
+type CiliumAPIServerConfig struct {
+	// External access configuration
+	ExternalAccess *CiliumExternalAccessConfig `json:"externalAccess,omitempty"`
+
+	// TLS configuration
+	TLS *CiliumTLSConfig `json:"tls,omitempty"`
+}
+
+// CiliumExternalAccessConfig defines external access for Cilium API server
+type CiliumExternalAccessConfig struct {
+	// Access type
+	// +kubebuilder:validation:Enum=LoadBalancer;NodePort;Ingress
+	// +kubebuilder:default="LoadBalancer"
+	Type string `json:"type,omitempty"`
+
+	// Load balancer configuration
+	LoadBalancer *CiliumLoadBalancerConfig `json:"loadBalancer,omitempty"`
+
+	// NodePort configuration
+	NodePort *CiliumNodePortConfig `json:"nodePort,omitempty"`
+}
+
+// CiliumLoadBalancerConfig defines load balancer configuration for Cilium
+type CiliumLoadBalancerConfig struct {
+	// Service annotations
+	Annotations map[string]string `json:"annotations,omitempty"`
+
+	// Load balancer IP
+	IP string `json:"ip,omitempty"`
+}
+
+// CiliumNodePortConfig defines NodePort configuration for Cilium
+type CiliumNodePortConfig struct {
+	// NodePort port
+	Port int32 `json:"port,omitempty"`
+
+	// Node selector
+	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
+}
+
+// CiliumTLSConfig defines TLS configuration for Cilium
+type CiliumTLSConfig struct {
+	// CA certificate secret
+	CASecret string `json:"caSecret,omitempty"`
+
+	// Server certificate secret
+	ServerSecret string `json:"serverSecret,omitempty"`
+
+	// Client certificate secret
+	ClientSecret string `json:"clientSecret,omitempty"`
+}
+
+// CiliumServiceDiscoveryConfig defines service discovery for Cilium
+type CiliumServiceDiscoveryConfig struct {
+	// Enable service discovery
+	// +kubebuilder:default=true
+	Enabled bool `json:"enabled,omitempty"`
+
+	// Service types to synchronize
+	ServiceTypes []string `json:"serviceTypes,omitempty"`
+}
+
+// CiliumExternalWorkloadConfig defines external workload configuration
+type CiliumExternalWorkloadConfig struct {
+	// Enable external workloads
+	// +kubebuilder:default=false
+	Enabled bool `json:"enabled,omitempty"`
+
+	// External workload CIDRs
+	CIDRs []string `json:"cidrs,omitempty"`
+}
+
+// CiliumEncryptionConfig defines encryption configuration for Cilium
+type CiliumEncryptionConfig struct {
+	// Enable encryption
+	// +kubebuilder:default=true
+	Enabled bool `json:"enabled,omitempty"`
+
+	// Encryption type
+	// +kubebuilder:validation:Enum=ipsec;wireguard
+	// +kubebuilder:default="wireguard"
+	Type string `json:"type,omitempty"`
+
+	// Encryption key secret
+	KeySecret string `json:"keySecret,omitempty"`
+}
+
+// CrossClusterDNSConfig defines cross-cluster DNS configuration
+type CrossClusterDNSConfig struct {
+	// Enable cross-cluster DNS
+	// +kubebuilder:default=true
+	Enabled bool `json:"enabled,omitempty"`
+
+	// DNS zone
+	Zone string `json:"zone,omitempty"`
+
+	// External DNS configuration
+	ExternalDNS *ExternalDNSConfig `json:"externalDNS,omitempty"`
+}
+
+// ExternalDNSConfig defines external DNS configuration
+type ExternalDNSConfig struct {
+	// Enable external DNS
+	// +kubebuilder:default=false
+	Enabled bool `json:"enabled,omitempty"`
+
+	// DNS provider
+	// +kubebuilder:validation:Enum=aws;gcp;azure;cloudflare
+	Provider string `json:"provider,omitempty"`
+
+	// Domain filters
+	DomainFilters []string `json:"domainFilters,omitempty"`
+}
+
+// CrossClusterNetworkPolicy defines cross-cluster network policies
+type CrossClusterNetworkPolicy struct {
+	// Policy name
+	Name string `json:"name"`
+
+	// Source clusters
+	SourceClusters []string `json:"sourceClusters,omitempty"`
+
+	// Destination clusters
+	DestinationClusters []string `json:"destinationClusters,omitempty"`
+
+	// Allowed ports
+	Ports []CrossClusterNetworkPolicyPort `json:"ports,omitempty"`
+}
+
+// CrossClusterNetworkPolicyPort defines allowed ports in cross-cluster network policy
+type CrossClusterNetworkPolicyPort struct {
+	// Port number
+	Port int32 `json:"port"`
+
+	// Protocol
+	// +kubebuilder:validation:Enum=TCP;UDP
+	// +kubebuilder:default="TCP"
+	Protocol string `json:"protocol,omitempty"`
+}
+
+// ServiceMeshConfig defines service mesh configuration
+type ServiceMeshConfig struct {
+	// Service mesh type
+	// +kubebuilder:validation:Enum=istio;linkerd;consul
+	// +kubebuilder:validation:Required
+	Type string `json:"type"`
+
+	// Istio configuration
+	Istio *IstioConfig `json:"istio,omitempty"`
+
+	// Traffic management
+	TrafficManagement *TrafficManagementConfig `json:"trafficManagement,omitempty"`
+
+	// Security configuration
+	Security *ServiceMeshSecurityConfig `json:"security,omitempty"`
+}
+
+// IstioConfig defines Istio service mesh configuration
+type IstioConfig struct {
+	// Multi-cluster configuration
+	MultiCluster *IstioMultiClusterConfig `json:"multiCluster,omitempty"`
+
+	// Gateway configuration
+	Gateways []IstioGatewayConfig `json:"gateways,omitempty"`
+
+	// Virtual services
+	VirtualServices []IstioVirtualServiceConfig `json:"virtualServices,omitempty"`
+
+	// Destination rules
+	DestinationRules []IstioDestinationRuleConfig `json:"destinationRules,omitempty"`
+}
+
+// IstioMultiClusterConfig defines Istio multi-cluster configuration
+type IstioMultiClusterConfig struct {
+	// Network configuration
+	Networks map[string]IstioNetworkConfig `json:"networks,omitempty"`
+
+	// Cross-cluster service discovery
+	ServiceDiscovery *IstioServiceDiscoveryConfig `json:"serviceDiscovery,omitempty"`
+
+	// Multi-cluster secrets
+	Secrets []IstioMultiClusterSecret `json:"secrets,omitempty"`
+}
+
+// IstioNetworkConfig defines Istio network configuration
+type IstioNetworkConfig struct {
+	// Network endpoints
+	Endpoints []IstioNetworkEndpoint `json:"endpoints,omitempty"`
+
+	// Gateways
+	Gateways []string `json:"gateways,omitempty"`
+}
+
+// IstioNetworkEndpoint defines Istio network endpoint
+type IstioNetworkEndpoint struct {
+	// From registry
+	FromRegistry string `json:"fromRegistry,omitempty"`
+
+	// Service name
+	Service string `json:"service,omitempty"`
+}
+
+// IstioServiceDiscoveryConfig defines Istio service discovery
+type IstioServiceDiscoveryConfig struct {
+	// Enable service discovery
+	// +kubebuilder:default=true
+	Enabled bool `json:"enabled,omitempty"`
+
+	// Discovery selectors
+	DiscoverySelectors []IstioDiscoverySelector `json:"discoverySelectors,omitempty"`
+}
+
+// IstioDiscoverySelector defines Istio discovery selector
+type IstioDiscoverySelector struct {
+	// Match labels
+	MatchLabels map[string]string `json:"matchLabels,omitempty"`
+}
+
+// IstioMultiClusterSecret defines Istio multi-cluster secret
+type IstioMultiClusterSecret struct {
+	// Secret name
+	Name string `json:"name"`
+
+	// Cluster name
+	Cluster string `json:"cluster"`
+
+	// Server
+	Server string `json:"server,omitempty"`
+}
+
+// IstioGatewayConfig defines Istio gateway configuration
+type IstioGatewayConfig struct {
+	// Gateway name
+	Name string `json:"name"`
+
+	// Servers
+	Servers []IstioServerConfig `json:"servers,omitempty"`
+}
+
+// IstioServerConfig defines Istio server configuration
+type IstioServerConfig struct {
+	// Port
+	Port IstioPortConfig `json:"port"`
+
+	// Hosts
+	Hosts []string `json:"hosts,omitempty"`
+
+	// TLS configuration
+	TLS *IstioTLSConfig `json:"tls,omitempty"`
+}
+
+// IstioPortConfig defines Istio port configuration
+type IstioPortConfig struct {
+	// Port number
+	Number int32 `json:"number"`
+
+	// Port name
+	Name string `json:"name"`
+
+	// Protocol
+	Protocol string `json:"protocol"`
+}
+
+// IstioTLSConfig defines Istio TLS configuration
+type IstioTLSConfig struct {
+	// TLS mode
+	// +kubebuilder:validation:Enum=PASSTHROUGH;SIMPLE;MUTUAL;AUTO_PASSTHROUGH
+	Mode string `json:"mode,omitempty"`
+
+	// Credential name
+	CredentialName string `json:"credentialName,omitempty"`
+}
+
+// IstioVirtualServiceConfig defines Istio virtual service configuration
+type IstioVirtualServiceConfig struct {
+	// Virtual service name
+	Name string `json:"name"`
+
+	// Hosts
+	Hosts []string `json:"hosts,omitempty"`
+
+	// Gateways
+	Gateways []string `json:"gateways,omitempty"`
+
+	// HTTP routes
+	HTTP []IstioHTTPRouteConfig `json:"http,omitempty"`
+}
+
+// IstioHTTPRouteConfig defines Istio HTTP route configuration
+type IstioHTTPRouteConfig struct {
+	// Route destinations
+	Route []IstioHTTPRouteDestination `json:"route,omitempty"`
+
+	// Match conditions
+	Match []IstioHTTPMatchRequest `json:"match,omitempty"`
+}
+
+// IstioHTTPRouteDestination defines Istio HTTP route destination
+type IstioHTTPRouteDestination struct {
+	// Destination
+	Destination IstioDestination `json:"destination"`
+
+	// Weight
+	Weight int32 `json:"weight,omitempty"`
+}
+
+// IstioDestination defines Istio destination
+type IstioDestination struct {
+	// Host
+	Host string `json:"host"`
+
+	// Subset
+	Subset string `json:"subset,omitempty"`
+
+	// Port
+	Port *IstioPortSelector `json:"port,omitempty"`
+}
+
+// IstioPortSelector defines Istio port selector
+type IstioPortSelector struct {
+	// Port number
+	Number int32 `json:"number,omitempty"`
+}
+
+// IstioHTTPMatchRequest defines Istio HTTP match request
+type IstioHTTPMatchRequest struct {
+	// URI match
+	URI *IstioStringMatch `json:"uri,omitempty"`
+
+	// Headers match
+	Headers map[string]IstioStringMatch `json:"headers,omitempty"`
+}
+
+// IstioStringMatch defines Istio string match
+type IstioStringMatch struct {
+	// Exact match
+	Exact string `json:"exact,omitempty"`
+
+	// Prefix match
+	Prefix string `json:"prefix,omitempty"`
+
+	// Regex match
+	Regex string `json:"regex,omitempty"`
+}
+
+// IstioDestinationRuleConfig defines Istio destination rule configuration
+type IstioDestinationRuleConfig struct {
+	// Destination rule name
+	Name string `json:"name"`
+
+	// Host
+	Host string `json:"host"`
+
+	// Traffic policy
+	TrafficPolicy *IstioTrafficPolicy `json:"trafficPolicy,omitempty"`
+
+	// Subsets
+	Subsets []IstioSubset `json:"subsets,omitempty"`
+}
+
+// IstioTrafficPolicy defines Istio traffic policy
+type IstioTrafficPolicy struct {
+	// Load balancer
+	LoadBalancer *IstioLoadBalancer `json:"loadBalancer,omitempty"`
+
+	// Connection pool
+	ConnectionPool *IstioConnectionPoolSettings `json:"connectionPool,omitempty"`
+}
+
+// IstioLoadBalancer defines Istio load balancer
+type IstioLoadBalancer struct {
+	// Simple load balancer type
+	// +kubebuilder:validation:Enum=ROUND_ROBIN;LEAST_CONN;RANDOM;PASSTHROUGH
+	Simple string `json:"simple,omitempty"`
+}
+
+// IstioConnectionPoolSettings defines Istio connection pool settings
+type IstioConnectionPoolSettings struct {
+	// TCP settings
+	TCP *IstioTCPSettings `json:"tcp,omitempty"`
+
+	// HTTP settings
+	HTTP *IstioHTTPSettings `json:"http,omitempty"`
+}
+
+// IstioTCPSettings defines Istio TCP settings
+type IstioTCPSettings struct {
+	// Max connections
+	MaxConnections int32 `json:"maxConnections,omitempty"`
+
+	// Connect timeout
+	ConnectTimeout string `json:"connectTimeout,omitempty"`
+}
+
+// IstioHTTPSettings defines Istio HTTP settings
+type IstioHTTPSettings struct {
+	// HTTP1 max pending requests
+	HTTP1MaxPendingRequests int32 `json:"http1MaxPendingRequests,omitempty"`
+
+	// Max requests per connection
+	MaxRequestsPerConnection int32 `json:"maxRequestsPerConnection,omitempty"`
+}
+
+// IstioSubset defines Istio subset
+type IstioSubset struct {
+	// Subset name
+	Name string `json:"name"`
+
+	// Labels
+	Labels map[string]string `json:"labels,omitempty"`
+
+	// Traffic policy
+	TrafficPolicy *IstioTrafficPolicy `json:"trafficPolicy,omitempty"`
+}
+
+// TrafficManagementConfig defines traffic management configuration
+type TrafficManagementConfig struct {
+	// Load balancing strategy
+	// +kubebuilder:validation:Enum=round_robin;least_conn;random;consistent_hash
+	// +kubebuilder:default="round_robin"
+	LoadBalancing string `json:"loadBalancing,omitempty"`
+
+	// Fault injection
+	FaultInjection *FaultInjectionConfig `json:"faultInjection,omitempty"`
+
+	// Circuit breaker
+	CircuitBreaker *CircuitBreakerConfig `json:"circuitBreaker,omitempty"`
+
+	// Retry policy
+	RetryPolicy *RetryPolicyConfig `json:"retryPolicy,omitempty"`
+}
+
+// FaultInjectionConfig defines fault injection configuration
+type FaultInjectionConfig struct {
+	// Enable fault injection
+	// +kubebuilder:default=false
+	Enabled bool `json:"enabled,omitempty"`
+
+	// Delay injection
+	Delay *DelayInjectionConfig `json:"delay,omitempty"`
+
+	// Abort injection
+	Abort *AbortInjectionConfig `json:"abort,omitempty"`
+}
+
+// DelayInjectionConfig defines delay injection configuration
+type DelayInjectionConfig struct {
+	// Percentage of requests to delay as string (e.g., "10.5", "25.0")
+	Percentage string `json:"percentage,omitempty"`
+
+	// Fixed delay
+	FixedDelay string `json:"fixedDelay,omitempty"`
+}
+
+// AbortInjectionConfig defines abort injection configuration
+type AbortInjectionConfig struct {
+	// Percentage of requests to abort as string (e.g., "5.0", "10.0")
+	Percentage string `json:"percentage,omitempty"`
+
+	// HTTP status code
+	HTTPStatus int32 `json:"httpStatus,omitempty"`
+}
+
+// CircuitBreakerConfig defines circuit breaker configuration
+type CircuitBreakerConfig struct {
+	// Enable circuit breaker
+	// +kubebuilder:default=false
+	Enabled bool `json:"enabled,omitempty"`
+
+	// Error threshold as string (e.g., "0.5", "0.8")
+	ErrorThreshold string `json:"errorThreshold,omitempty"`
+
+	// Request volume threshold
+	RequestVolumeThreshold int32 `json:"requestVolumeThreshold,omitempty"`
+
+	// Sleep window
+	SleepWindow string `json:"sleepWindow,omitempty"`
+}
+
+// RetryPolicyConfig defines retry policy configuration
+type RetryPolicyConfig struct {
+	// Number of retries
+	Attempts int32 `json:"attempts,omitempty"`
+
+	// Retry timeout
+	PerTryTimeout string `json:"perTryTimeout,omitempty"`
+
+	// Retry conditions
+	RetryOn []string `json:"retryOn,omitempty"`
+}
+
+// ServiceMeshSecurityConfig defines service mesh security configuration
+type ServiceMeshSecurityConfig struct {
+	// mTLS configuration
+	MTLS *MTLSConfig `json:"mtls,omitempty"`
+
+	// Authorization policies
+	Authorization []AuthorizationPolicy `json:"authorization,omitempty"`
+
+	// Security policies
+	SecurityPolicies []SecurityPolicy `json:"securityPolicies,omitempty"`
+}
+
+// MTLSConfig defines mTLS configuration
+type MTLSConfig struct {
+	// mTLS mode
+	// +kubebuilder:validation:Enum=STRICT;PERMISSIVE;DISABLE
+	// +kubebuilder:default="STRICT"
+	Mode string `json:"mode,omitempty"`
+
+	// Certificate configuration
+	Certificates *CertificateConfig `json:"certificates,omitempty"`
+}
+
+// CertificateConfig defines certificate configuration
+type CertificateConfig struct {
+	// CA certificate secret
+	CASecret string `json:"caSecret,omitempty"`
+
+	// Certificate rotation
+	Rotation *CertificateRotationConfig `json:"rotation,omitempty"`
+}
+
+// CertificateRotationConfig defines certificate rotation configuration
+type CertificateRotationConfig struct {
+	// Enable automatic rotation
+	// +kubebuilder:default=true
+	Enabled bool `json:"enabled,omitempty"`
+
+	// Rotation interval
+	// +kubebuilder:default="24h"
+	Interval string `json:"interval,omitempty"`
+}
+
+// AuthorizationPolicy defines authorization policy
+type AuthorizationPolicy struct {
+	// Policy name
+	Name string `json:"name"`
+
+	// Selector
+	Selector map[string]string `json:"selector,omitempty"`
+
+	// Rules
+	Rules []AuthorizationRule `json:"rules,omitempty"`
+}
+
+// AuthorizationRule defines authorization rule
+type AuthorizationRule struct {
+	// From sources
+	From []AuthorizationSource `json:"from,omitempty"`
+
+	// To operations
+	To []AuthorizationOperation `json:"to,omitempty"`
+
+	// When conditions
+	When []AuthorizationCondition `json:"when,omitempty"`
+}
+
+// AuthorizationSource defines authorization source
+type AuthorizationSource struct {
+	// Principals
+	Principals []string `json:"principals,omitempty"`
+
+	// Namespaces
+	Namespaces []string `json:"namespaces,omitempty"`
+}
+
+// AuthorizationOperation defines authorization operation
+type AuthorizationOperation struct {
+	// Methods
+	Methods []string `json:"methods,omitempty"`
+
+	// Paths
+	Paths []string `json:"paths,omitempty"`
+}
+
+// AuthorizationCondition defines authorization condition
+type AuthorizationCondition struct {
+	// Key
+	Key string `json:"key"`
+
+	// Values
+	Values []string `json:"values,omitempty"`
+}
+
+// SecurityPolicy defines security policy
+type SecurityPolicy struct {
+	// Policy name
+	Name string `json:"name"`
+
+	// Policy type
+	// +kubebuilder:validation:Enum=network;pod;service
+	Type string `json:"type"`
+
+	// Policy specification as JSON string
+	Spec string `json:"spec,omitempty"`
+}
+
+// CrossClusterCoordination defines cross-cluster coordination
+type CrossClusterCoordination struct {
+	// Leader election
+	LeaderElection *CrossClusterLeaderElection `json:"leaderElection,omitempty"`
+
+	// State synchronization
+	StateSynchronization *StateSynchronizationConfig `json:"stateSynchronization,omitempty"`
+
+	// Failover coordination
+	FailoverCoordination *FailoverCoordinationConfig `json:"failoverCoordination,omitempty"`
+}
+
+// CrossClusterLeaderElection defines cross-cluster leader election
+type CrossClusterLeaderElection struct {
+	// Enable leader election
+	// +kubebuilder:default=true
+	Enabled bool `json:"enabled,omitempty"`
+
+	// Leader election namespace
+	Namespace string `json:"namespace,omitempty"`
+
+	// Lease duration
+	// +kubebuilder:default="15s"
+	LeaseDuration string `json:"leaseDuration,omitempty"`
+
+	// Renew deadline
+	// +kubebuilder:default="10s"
+	RenewDeadline string `json:"renewDeadline,omitempty"`
+
+	// Retry period
+	// +kubebuilder:default="2s"
+	RetryPeriod string `json:"retryPeriod,omitempty"`
+}
+
+// StateSynchronizationConfig defines state synchronization configuration
+type StateSynchronizationConfig struct {
+	// Enable state synchronization
+	// +kubebuilder:default=true
+	Enabled bool `json:"enabled,omitempty"`
+
+	// Synchronization interval
+	// +kubebuilder:default="30s"
+	Interval string `json:"interval,omitempty"`
+
+	// Conflict resolution strategy
+	// +kubebuilder:validation:Enum=last_writer_wins;manual;custom
+	// +kubebuilder:default="last_writer_wins"
+	ConflictResolution string `json:"conflictResolution,omitempty"`
+}
+
+// FailoverCoordinationConfig defines failover coordination configuration
+type FailoverCoordinationConfig struct {
+	// Enable failover coordination
+	// +kubebuilder:default=true
+	Enabled bool `json:"enabled,omitempty"`
+
+	// Failover timeout
+	// +kubebuilder:default="5m"
+	Timeout string `json:"timeout,omitempty"`
+
+	// Health check configuration
+	HealthCheck *CrossClusterHealthCheckConfig `json:"healthCheck,omitempty"`
+}
+
+// CrossClusterHealthCheckConfig defines cross-cluster health check configuration
+type CrossClusterHealthCheckConfig struct {
+	// Health check interval
+	// +kubebuilder:default="30s"
+	Interval string `json:"interval,omitempty"`
+
+	// Health check timeout
+	// +kubebuilder:default="10s"
+	Timeout string `json:"timeout,omitempty"`
+
+	// Failure threshold
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:default=3
+	FailureThreshold int32 `json:"failureThreshold,omitempty"`
+
+	// Success threshold
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:default=1
+	SuccessThreshold int32 `json:"successThreshold,omitempty"`
 }
 
 func init() {

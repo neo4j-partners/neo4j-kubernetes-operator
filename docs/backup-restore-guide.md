@@ -55,6 +55,7 @@ spec:
 ### Storage Options
 
 #### Local Storage (PVC)
+
 ```yaml
 storage:
   type: pvc
@@ -64,6 +65,7 @@ storage:
 ```
 
 #### AWS S3
+
 ```yaml
 storage:
   type: s3
@@ -77,6 +79,7 @@ storage:
 ```
 
 #### Google Cloud Storage
+
 ```yaml
 storage:
   type: gcs
@@ -90,6 +93,7 @@ storage:
 ```
 
 #### Azure Blob Storage
+
 ```yaml
 storage:
   type: azure
@@ -141,6 +145,7 @@ options:
 ### Restore Sources
 
 #### From Backup Resource
+
 ```yaml
 source:
   type: backup
@@ -148,6 +153,7 @@ source:
 ```
 
 #### From Direct Storage
+
 ```yaml
 source:
   type: storage
@@ -160,6 +166,7 @@ source:
 ### Advanced Restore Options
 
 #### Pre/Post Restore Hooks
+
 ```yaml
 options:
   preRestore:
@@ -177,13 +184,105 @@ options:
           args: ["/scripts/post-restore.py"]
 ```
 
-#### Point-in-Time Restore
+#### Point-in-Time Restore (PITR)
+
+Point-in-Time Recovery allows you to restore your database to a specific moment in time using a combination of base backups and transaction logs.
+
+##### Basic PITR Configuration
+
 ```yaml
 source:
-  type: storage
-  backupPath: /backups/continuous/cluster-backup
+  type: pitr
   pointInTime: "2024-06-20T14:30:00Z"
+  pitr:
+    logStorage:
+      type: s3
+      bucket: neo4j-transaction-logs
+      path: /logs/cluster-name
+    logRetention: "7d"
+    recoveryPointObjective: "1m"
+    baseBackup:
+      type: backup
+      backupRef: latest-base-backup
+    validateLogIntegrity: true
+    compression:
+      enabled: true
+      algorithm: gzip
+      level: 6
+    encryption:
+      enabled: true
+      algorithm: AES256
+      keySecret: pitr-encryption-key
+      keySecretKey: key
 ```
+
+##### Advanced PITR with Multiple Base Backups
+
+```yaml
+source:
+  type: pitr
+  pointInTime: "2024-06-20T14:30:00Z"
+  pitr:
+    logStorage:
+      type: s3
+      bucket: neo4j-logs
+      path: /transaction-logs
+      cloud:
+        provider: aws
+        identity:
+          provider: aws
+          serviceAccount: neo4j-pitr-sa
+    logRetention: "30d"
+    recoveryPointObjective: "30s"
+    baseBackup:
+      type: storage
+      storage:
+        type: s3
+        bucket: neo4j-base-backups
+        path: /base-backups/cluster-20240620-020000
+    validateLogIntegrity: true
+    compression:
+      enabled: true
+      algorithm: zstd
+      level: 3
+    encryption:
+      enabled: true
+      algorithm: ChaCha20Poly1305
+      keySecret: advanced-encryption-key
+```
+
+##### PITR with Local Storage
+
+```yaml
+source:
+  type: pitr
+  pointInTime: "2024-06-20T14:30:00Z"
+  pitr:
+    logStorage:
+      type: pvc
+      pvc:
+        name: neo4j-transaction-logs
+        size: 100Gi
+        storageClassName: fast-ssd
+    logRetention: "14d"
+    recoveryPointObjective: "5m"
+    baseBackup:
+      type: backup
+      backupRef: weekly-base-backup
+    validateLogIntegrity: true
+```
+
+##### PITR Configuration Options
+
+| Option | Description | Default | Example |
+|--------|-------------|---------|---------|
+| `logStorage` | Location for transaction logs | Required | S3, GCS, Azure, PVC |
+| `logRetention` | How long to keep transaction logs | `7d` | `30d`, `168h`, `1w` |
+| `recoveryPointObjective` | Maximum data loss tolerance | `1m` | `30s`, `5m`, `1h` |
+| `baseBackup` | Reference to base backup | Required | Backup ref or storage location |
+| `validateLogIntegrity` | Verify log files before restore | `true` | `true`, `false` |
+| `compression.algorithm` | Compression method for logs | `gzip` | `gzip`, `lz4`, `zstd` |
+| `encryption.algorithm` | Encryption method for logs | `AES256` | `AES256`, `ChaCha20Poly1305` |
 
 ## Best Practices
 
@@ -205,6 +304,7 @@ source:
 ### Performance Optimization
 
 #### Fast Backups
+
 ```yaml
 options:
   compress: false  # Skip compression for speed
@@ -215,6 +315,7 @@ options:
 ```
 
 #### Efficient Storage
+
 ```yaml
 options:
   compress: true   # Enable compression for storage efficiency
@@ -288,6 +389,7 @@ kubectl get events -n neo4j --sort-by='.lastTimestamp'
 ### IAM/RBAC Configuration
 
 #### AWS IAM Policy Example
+
 ```json
 {
   "Version": "2012-10-17",
@@ -310,6 +412,7 @@ kubectl get events -n neo4j --sort-by='.lastTimestamp'
 ```
 
 #### Kubernetes RBAC
+
 ```yaml
 apiVersion: v1
 kind: ServiceAccount
@@ -361,4 +464,4 @@ For issues related to backup and restore operations:
 1. Check the [troubleshooting section](#monitoring-and-troubleshooting) above
 2. Review operator logs: `kubectl logs -l app.kubernetes.io/name=neo4j-operator -n neo4j-system`
 3. Verify Neo4j cluster health before backup/restore operations
-4. Ensure proper storage access and network connectivity 
+4. Ensure proper storage access and network connectivity

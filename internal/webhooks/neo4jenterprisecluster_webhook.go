@@ -30,7 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
-	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-operator/api/v1alpha1"
+	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1"
 )
 
 // Neo4jEnterpriseClusterWebhook implements admission webhook for Neo4jEnterpriseCluster
@@ -40,6 +40,7 @@ type Neo4jEnterpriseClusterWebhook struct {
 
 // +kubebuilder:webhook:path=/mutate-neo4j-neo4j-com-v1alpha1-neo4jenterprisecluster,mutating=true,failurePolicy=fail,sideEffects=None,groups=neo4j.neo4j.com,resources=neo4jenterpriseclusters,verbs=create;update,versions=v1alpha1,name=mneo4jenterprisecluster.kb.io,admissionReviewVersions=v1
 
+// Default implements the defaulting webhook for Neo4jEnterpriseCluster
 func (w *Neo4jEnterpriseClusterWebhook) Default(ctx context.Context, obj runtime.Object) error {
 	cluster, ok := obj.(*neo4jv1alpha1.Neo4jEnterpriseCluster)
 	if !ok {
@@ -113,6 +114,7 @@ func (w *Neo4jEnterpriseClusterWebhook) Default(ctx context.Context, obj runtime
 
 // +kubebuilder:webhook:path=/validate-neo4j-neo4j-com-v1alpha1-neo4jenterprisecluster,mutating=false,failurePolicy=fail,sideEffects=None,groups=neo4j.neo4j.com,resources=neo4jenterpriseclusters,verbs=create;update,versions=v1alpha1,name=vneo4jenterprisecluster.kb.io,admissionReviewVersions=v1
 
+// ValidateCreate implements the validation webhook for Neo4jEnterpriseCluster creation
 func (w *Neo4jEnterpriseClusterWebhook) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
 	cluster, ok := obj.(*neo4jv1alpha1.Neo4jEnterpriseCluster)
 	if !ok {
@@ -130,6 +132,7 @@ func (w *Neo4jEnterpriseClusterWebhook) ValidateCreate(ctx context.Context, obj 
 	return nil, nil
 }
 
+// ValidateUpdate implements the validation webhook for Neo4jEnterpriseCluster updates
 func (w *Neo4jEnterpriseClusterWebhook) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
 	newCluster, ok := newObj.(*neo4jv1alpha1.Neo4jEnterpriseCluster)
 	if !ok {
@@ -154,6 +157,7 @@ func (w *Neo4jEnterpriseClusterWebhook) ValidateUpdate(ctx context.Context, oldO
 	return nil, nil
 }
 
+// ValidateDelete implements the validation webhook for Neo4jEnterpriseCluster deletion
 func (w *Neo4jEnterpriseClusterWebhook) ValidateDelete(_ context.Context, _ runtime.Object) (admission.Warnings, error) {
 	// Allow all deletions
 	return nil, nil
@@ -786,7 +790,7 @@ func (w *Neo4jEnterpriseClusterWebhook) validateSemVerUpgrade(current, target *V
 }
 
 // validateSemVerToCalVerUpgrade validates upgrades from SemVer to CalVer
-func (w *Neo4jEnterpriseClusterWebhook) validateSemVerToCalVerUpgrade(current, target *VersionInfo, currentStr, targetStr string) error {
+func (w *Neo4jEnterpriseClusterWebhook) validateSemVerToCalVerUpgrade(current, _ *VersionInfo, currentStr, targetStr string) error {
 	// Only allow upgrades from Neo4j 5.26+ to CalVer
 	if current.Major == 5 && current.Minor >= 26 {
 		return nil // 5.26+ -> 2025.x.x is allowed
@@ -940,6 +944,7 @@ func (w *Neo4jEnterpriseClusterWebhook) validateUpgradeStrategy(cluster *neo4jv1
 	return allErrs
 }
 
+// SetupWebhookWithManager configures the webhook with the manager
 func (w *Neo4jEnterpriseClusterWebhook) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(&neo4jv1alpha1.Neo4jEnterpriseCluster{}).

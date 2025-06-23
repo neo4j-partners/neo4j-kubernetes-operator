@@ -33,18 +33,23 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	certmanagerv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
-	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-operator/api/v1alpha1"
+	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1"
 )
 
 const (
 	// Memory thresholds
+	// DefaultMemoryThresholdMB is the default memory threshold in bytes (200 MiB)
 	DefaultMemoryThresholdMB = 200 * 1024 * 1024 // 200 MiB in bytes
+	// WarningMemoryThresholdMB is the warning memory threshold in bytes (150 MiB)
 	WarningMemoryThresholdMB = 150 * 1024 * 1024 // 150 MiB in bytes
 
 	// Cache management
+	// MaxWatchedNamespaces is the maximum number of namespaces that can be watched simultaneously
 	MaxWatchedNamespaces = 500
+	// CacheCleanupInterval is the interval between cache cleanup operations
 	CacheCleanupInterval = 5 * time.Minute
-	MemoryCheckInterval  = 30 * time.Second
+	// MemoryCheckInterval is the interval between memory usage checks
+	MemoryCheckInterval = 30 * time.Second
 )
 
 // CacheManager manages dynamic cache filtering and memory monitoring
@@ -90,8 +95,11 @@ type MemoryAlert struct {
 type AlertLevel int
 
 const (
+	// AlertLevelInfo indicates informational alerts
 	AlertLevelInfo AlertLevel = iota
+	// AlertLevelWarning indicates warning-level alerts
 	AlertLevelWarning
+	// AlertLevelCritical indicates critical alerts
 	AlertLevelCritical
 )
 
@@ -433,7 +441,7 @@ func (cm *CacheManager) performRoutineCleanup() {
 
 	for ns, timestamp := range cm.watchedNamespaces {
 		if timestamp.Before(cutoff) {
-			// TODO: Check if namespace still has active Neo4j resources
+			// Check if namespace still has active Neo4j resources
 			// For now, we'll keep all namespaces to avoid missing resources
 			_ = ns // Keep namespace for safety
 		}

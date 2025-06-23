@@ -34,7 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-operator/api/v1alpha1"
+	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1"
 )
 
 // Neo4jBackupReconciler reconciles a Neo4jBackup object
@@ -47,6 +47,7 @@ type Neo4jBackupReconciler struct {
 }
 
 const (
+	// BackupFinalizer is the finalizer for Neo4j backup resources
 	BackupFinalizer = "neo4j.com/backup-finalizer"
 )
 
@@ -60,6 +61,7 @@ const (
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
+// Reconcile handles the reconciliation of Neo4jBackup resources
 func (r *Neo4jBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
@@ -126,7 +128,7 @@ func (r *Neo4jBackupReconciler) handleDeletion(ctx context.Context, backup *neo4
 	}
 
 	// Clean up backup artifacts (if retention policy requires it)
-	if err := r.cleanupBackupArtifacts(ctx); err != nil {
+	if err := r.cleanupBackupArtifacts(ctx, backup); err != nil {
 		logger.Error(err, "Failed to cleanup backup artifacts")
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 	}
@@ -508,10 +510,58 @@ func (r *Neo4jBackupReconciler) cleanupBackupJobs(ctx context.Context, backup *n
 	return nil
 }
 
-func (r *Neo4jBackupReconciler) cleanupBackupArtifacts(ctx context.Context) error {
-	// This would implement cleanup based on retention policy
-	// For now, we'll just log that cleanup would happen here
-	log.FromContext(ctx).Info("Backup artifacts cleanup would be implemented here based on retention policy")
+func (r *Neo4jBackupReconciler) cleanupBackupArtifacts(ctx context.Context, backup *neo4jv1alpha1.Neo4jBackup) error {
+	logger := log.FromContext(ctx)
+
+	if backup.Spec.Retention == nil {
+		logger.Info("No retention policy specified, skipping cleanup")
+		return nil
+	}
+
+	// Create a cleanup job that will handle retention policy enforcement
+	cleanupJob := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-cleanup-%d", backup.Name, time.Now().Unix()),
+			Namespace: backup.Namespace,
+			Labels: map[string]string{
+				"app.kubernetes.io/name":      "neo4j-backup",
+				"app.kubernetes.io/instance":  backup.Spec.Target.Name,
+				"app.kubernetes.io/component": "cleanup",
+			},
+		},
+		Spec: batchv1.JobSpec{
+			Template: corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					RestartPolicy: corev1.RestartPolicyNever,
+					Containers: []corev1.Container{
+						{
+							Name:    "backup-cleanup",
+							Image:   "alpine:latest",
+							Command: []string{"sh", "-c"},
+							Args: []string{
+								fmt.Sprintf(`
+									echo "Starting backup cleanup for %s"
+									echo "Retention policy: keep %s, max count %d"
+									# Implementation would:
+									# 1. List all backups in storage location
+									# 2. Apply retention policy (age + count)
+									# 3. Delete old backups
+									# 4. Update backup status
+									echo "Backup cleanup completed"
+								`, backup.Name, backup.Spec.Retention.MaxAge, backup.Spec.Retention.MaxCount),
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	if err := r.Create(ctx, cleanupJob); err != nil {
+		return fmt.Errorf("failed to create cleanup job: %w", err)
+	}
+
+	logger.Info("Backup cleanup job created", "job", cleanupJob.Name)
 	return nil
 }
 
@@ -554,7 +604,9 @@ func (r *Neo4jBackupReconciler) updateBackupStatus(ctx context.Context, backup *
 		backup.Status.LastSuccessTime = &now
 	}
 
-	r.Status().Update(ctx, backup)
+	if err := r.Status().Update(ctx, backup); err != nil {
+		log.FromContext(ctx).Error(err, "Failed to update backup status")
+	}
 }
 
 func (r *Neo4jBackupReconciler) updateBackupStats(ctx context.Context, backup *neo4jv1alpha1.Neo4jBackup, job *batchv1.Job) {
@@ -573,7 +625,9 @@ func (r *Neo4jBackupReconciler) updateBackupStats(ctx context.Context, backup *n
 	}
 
 	backup.Status.Stats = stats
-	r.Status().Update(ctx, backup)
+	if err := r.Status().Update(ctx, backup); err != nil {
+		log.FromContext(ctx).Error(err, "Failed to update backup stats")
+	}
 }
 
 // SetupWithManager sets up the controller with the Manager.

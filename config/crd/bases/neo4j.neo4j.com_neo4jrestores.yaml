@@ -273,8 +273,220 @@ spec:
                   backupRef:
                     description: Reference to Neo4jBackup resource (when type=backup)
                     type: string
+                  pitr:
+                    description: Point-in-time recovery configuration (when type=pitr)
+                    properties:
+                      baseBackup:
+                        description: Base backup to restore from before applying transaction
+                          logs
+                        properties:
+                          backupPath:
+                            description: Specific backup path within storage
+                            type: string
+                          backupRef:
+                            description: Reference to Neo4jBackup resource (when type=backup)
+                            type: string
+                          storage:
+                            description: Direct storage location (when type=storage)
+                            properties:
+                              bucket:
+                                type: string
+                              cloud:
+                                description: Cloud provider configuration
+                                properties:
+                                  identity:
+                                    description: CloudIdentity defines cloud identity
+                                      configuration
+                                    properties:
+                                      autoCreate:
+                                        description: AutoCreateSpec defines auto-creation
+                                          of service accounts
+                                        properties:
+                                          annotations:
+                                            additionalProperties:
+                                              type: string
+                                            type: object
+                                          enabled:
+                                            default: true
+                                            type: boolean
+                                        type: object
+                                      provider:
+                                        enum:
+                                        - aws
+                                        - gcp
+                                        - azure
+                                        type: string
+                                      serviceAccount:
+                                        type: string
+                                    required:
+                                    - provider
+                                    type: object
+                                  provider:
+                                    enum:
+                                    - aws
+                                    - gcp
+                                    - azure
+                                    type: string
+                                type: object
+                              path:
+                                type: string
+                              pvc:
+                                description: PVC configuration
+                                properties:
+                                  name:
+                                    description: Name of the PVC to use (for referencing
+                                      existing PVCs)
+                                    type: string
+                                  size:
+                                    type: string
+                                  storageClassName:
+                                    type: string
+                                type: object
+                              type:
+                                enum:
+                                - s3
+                                - gcs
+                                - azure
+                                - pvc
+                                type: string
+                            required:
+                            - type
+                            type: object
+                          type:
+                            description: Type of backup source (backup or storage,
+                              PITR not allowed to avoid circular reference)
+                            enum:
+                            - backup
+                            - storage
+                            type: string
+                        required:
+                        - type
+                        type: object
+                      compression:
+                        description: Compression settings for transaction logs
+                        properties:
+                          algorithm:
+                            default: gzip
+                            description: Compression algorithm (gzip, lz4, zstd)
+                            enum:
+                            - gzip
+                            - lz4
+                            - zstd
+                            type: string
+                          enabled:
+                            default: true
+                            description: Enable compression
+                            type: boolean
+                          level:
+                            description: Compression level (1-9 for gzip, 1-12 for
+                              lz4, 1-22 for zstd)
+                            format: int32
+                            type: integer
+                        type: object
+                      encryption:
+                        description: Encryption settings for transaction logs
+                        properties:
+                          algorithm:
+                            default: AES256
+                            description: Encryption algorithm (AES256, ChaCha20Poly1305)
+                            enum:
+                            - AES256
+                            - ChaCha20Poly1305
+                            type: string
+                          enabled:
+                            default: false
+                            description: Enable encryption
+                            type: boolean
+                          keySecret:
+                            description: Secret containing encryption key
+                            type: string
+                          keySecretKey:
+                            default: key
+                            description: Key within the secret
+                            type: string
+                        type: object
+                      logRetention:
+                        default: 7d
+                        description: Transaction log retention period
+                        type: string
+                      logStorage:
+                        description: Transaction log storage location
+                        properties:
+                          bucket:
+                            type: string
+                          cloud:
+                            description: Cloud provider configuration
+                            properties:
+                              identity:
+                                description: CloudIdentity defines cloud identity
+                                  configuration
+                                properties:
+                                  autoCreate:
+                                    description: AutoCreateSpec defines auto-creation
+                                      of service accounts
+                                    properties:
+                                      annotations:
+                                        additionalProperties:
+                                          type: string
+                                        type: object
+                                      enabled:
+                                        default: true
+                                        type: boolean
+                                    type: object
+                                  provider:
+                                    enum:
+                                    - aws
+                                    - gcp
+                                    - azure
+                                    type: string
+                                  serviceAccount:
+                                    type: string
+                                required:
+                                - provider
+                                type: object
+                              provider:
+                                enum:
+                                - aws
+                                - gcp
+                                - azure
+                                type: string
+                            type: object
+                          path:
+                            type: string
+                          pvc:
+                            description: PVC configuration
+                            properties:
+                              name:
+                                description: Name of the PVC to use (for referencing
+                                  existing PVCs)
+                                type: string
+                              size:
+                                type: string
+                              storageClassName:
+                                type: string
+                            type: object
+                          type:
+                            enum:
+                            - s3
+                            - gcs
+                            - azure
+                            - pvc
+                            type: string
+                        required:
+                        - type
+                        type: object
+                      recoveryPointObjective:
+                        default: 1m
+                        description: Recovery point objective
+                        type: string
+                      validateLogIntegrity:
+                        default: true
+                        description: Validate transaction log integrity before restore
+                        type: boolean
+                    type: object
                   pointInTime:
-                    description: Point in time for restore (if supported)
+                    description: Point in time for restore (when type=pitr or for
+                      PITR with backup/storage types)
                     format: date-time
                     type: string
                   storage:
@@ -347,6 +559,7 @@ spec:
                     enum:
                     - backup
                     - storage
+                    - pitr
                     type: string
                 required:
                 - type

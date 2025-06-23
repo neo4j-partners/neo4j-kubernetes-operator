@@ -30,38 +30,62 @@ import (
 
 	certv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	cmmeta "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
-	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-operator/api/v1alpha1"
+	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1"
 )
 
 const (
 	// Neo4j ports
-	BoltPort      = 7687
-	HTTPPort      = 7474
-	HTTPSPort     = 7473
-	ClusterPort   = 5000
+	// BoltPort is the default port for Neo4j Bolt protocol
+	BoltPort = 7687
+	// HTTPPort is the default port for Neo4j HTTP API
+	HTTPPort = 7474
+	// HTTPSPort is the default port for Neo4j HTTPS API
+	HTTPSPort = 7473
+	// ClusterPort is the default port for Neo4j cluster communication
+	ClusterPort = 5000
+	// DiscoveryPort is the default port for Neo4j cluster discovery
 	DiscoveryPort = 6000
-	RaftPort      = 7000
+	// RaftPort is the default port for Neo4j Raft consensus
+	RaftPort = 7000
+	// BackupPort is the default port for Neo4j backup operations
+	BackupPort = 6362
 
 	// Container names
-	Neo4jContainer   = "neo4j"
+	// Neo4jContainer is the name of the main Neo4j container
+	Neo4jContainer = "neo4j"
+	// SidecarContainer is the name of the sidecar container
 	SidecarContainer = "prometheus-exporter"
+	// InitContainer is the name of the init container
+	InitContainer = "init"
 
 	// Volume names
-	DataVolume   = "data"
+	// DataVolume is the name of the data volume
+	DataVolume = "data"
+	// LogsVolume is the name of the logs volume
+	LogsVolume = "logs"
+	// ConfigVolume is the name of the config volume
 	ConfigVolume = "config"
-	CertsVolume  = "certs"
-	LogsVolume   = "logs"
+	// CertsVolume is the name of the certificates volume
+	CertsVolume = "certs"
 
 	// Default resource limits
-	DefaultCPULimit      = "1000m"
-	DefaultMemoryLimit   = "2Gi"
-	DefaultCPURequest    = "500m"
+	// DefaultCPULimit is the default CPU limit for Neo4j containers
+	DefaultCPULimit = "1000m"
+	// DefaultMemoryLimit is the default memory limit for Neo4j containers
+	DefaultMemoryLimit = "2Gi"
+	// DefaultCPURequest is the default CPU request for Neo4j containers
+	DefaultCPURequest = "500m"
+	// DefaultMemoryRequest is the default memory request for Neo4j containers
 	DefaultMemoryRequest = "1Gi"
+
+	// Admin secret names
+	// DefaultAdminSecret is the default name for admin credentials secret
+	DefaultAdminSecret = "neo4j-admin-secret"
 )
 
 // BuildPrimaryStatefulSetForEnterprise creates a StatefulSet for Neo4j primary nodes
 func BuildPrimaryStatefulSetForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) *appsv1.StatefulSet {
-	adminSecret := "neo4j-admin-secret"
+	adminSecret := DefaultAdminSecret
 
 	// Configure rolling update strategy
 	updateStrategy := appsv1.StatefulSetUpdateStrategy{
@@ -110,7 +134,7 @@ func BuildPrimaryStatefulSetForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterprise
 
 // BuildSecondaryStatefulSetForEnterprise creates a StatefulSet for Neo4j secondary nodes
 func BuildSecondaryStatefulSetForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) *appsv1.StatefulSet {
-	adminSecret := "neo4j-admin-secret"
+	adminSecret := DefaultAdminSecret
 
 	// Configure rolling update strategy for secondaries
 	updateStrategy := appsv1.StatefulSetUpdateStrategy{
@@ -518,11 +542,12 @@ func BuildServiceAccountForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseClus
 
 	annotations := make(map[string]string)
 	// Add cloud-specific annotations based on provider
-	if cluster.Spec.Backups.Cloud.Provider == "gcp" {
+	switch cluster.Spec.Backups.Cloud.Provider {
+	case "gcp":
 		annotations["iam.gke.io/gcp-service-account"] = fmt.Sprintf("%s-backup@PROJECT.iam.gserviceaccount.com", cluster.Name)
-	} else if cluster.Spec.Backups.Cloud.Provider == "aws" {
+	case "aws":
 		annotations["eks.amazonaws.com/role-arn"] = fmt.Sprintf("arn:aws:iam::ACCOUNT:role/%s-backup-role", cluster.Name)
-	} else if cluster.Spec.Backups.Cloud.Provider == "azure" {
+	case "azure":
 		annotations["azure.workload.identity/client-id"] = fmt.Sprintf("%s-backup-identity", cluster.Name)
 	}
 

@@ -30,7 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-operator/api/v1alpha1"
+	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1"
 )
 
 var _ = Describe("EKS Neo4j Cluster Tests", func() {
@@ -287,7 +287,11 @@ var _ = Describe("EKS Neo4j Cluster Tests", func() {
 
 	AfterEach(func() {
 		if cluster != nil {
-			k8sClient.Delete(ctx, cluster)
+			By("Cleaning up test resources")
+			// Clean up test resources - errors in cleanup are logged but don't fail the test
+			if err := k8sClient.Delete(ctx, cluster); err != nil {
+				_, _ = fmt.Fprintf(GinkgoWriter, "warning: failed to delete cluster during cleanup: %v\n", err)
+			}
 		}
 	})
 })

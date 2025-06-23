@@ -32,8 +32,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-operator/api/v1alpha1"
-	"github.com/neo4j-labs/neo4j-operator/internal/neo4j"
+	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1"
+	"github.com/neo4j-labs/neo4j-kubernetes-operator/internal/neo4j"
 )
 
 // Neo4jGrantReconciler reconciles a Neo4jGrant object
@@ -46,6 +46,7 @@ type Neo4jGrantReconciler struct {
 }
 
 const (
+	// GrantFinalizer is the finalizer for Neo4j grant resources
 	GrantFinalizer = "neo4j.com/grant-finalizer"
 )
 
@@ -55,6 +56,7 @@ const (
 // +kubebuilder:rbac:groups=neo4j.neo4j.com,resources=neo4jenterpriseclusters,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
+// Reconcile handles the reconciliation of Neo4jGrant resources
 func (r *Neo4jGrantReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
@@ -117,7 +119,11 @@ func (r *Neo4jGrantReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			"Failed to connect to Neo4j cluster")
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 	}
-	defer neo4jClient.Close()
+	defer func() {
+		if err := neo4jClient.Close(); err != nil {
+			logger.Error(err, "Failed to close Neo4j client")
+		}
+	}()
 
 	// Apply grants
 	if err := r.applyGrants(ctx, neo4jClient, grant); err != nil {
@@ -169,7 +175,11 @@ func (r *Neo4jGrantReconciler) handleDeletion(ctx context.Context, grant *neo4jv
 		controllerutil.RemoveFinalizer(grant, GrantFinalizer)
 		return ctrl.Result{}, r.Update(ctx, grant)
 	}
-	defer neo4jClient.Close()
+	defer func() {
+		if err := neo4jClient.Close(); err != nil {
+			logger.Error(err, "Failed to close Neo4j client")
+		}
+	}()
 
 	// Revoke grants
 	if err := r.revokeGrants(ctx, neo4jClient, grant); err != nil {
@@ -198,11 +208,11 @@ func (r *Neo4jGrantReconciler) applyGrants(ctx context.Context, client *neo4j.Cl
 	return nil
 }
 
-func (r *Neo4jGrantReconciler) revokeGrants(ctx context.Context, client *neo4j.Client, grant *neo4jv1alpha1.Neo4jGrant) error {
+func (r *Neo4jGrantReconciler) revokeGrants(_ context.Context, client *neo4j.Client, grant *neo4jv1alpha1.Neo4jGrant) error {
 	// Revoke each privilege rule
 	for _, rule := range grant.Spec.PrivilegeRules {
 		statement := r.buildRevokeStatement(rule)
-		if err := client.ExecutePrivilegeStatement(ctx, statement); err != nil {
+		if err := client.ExecutePrivilegeStatement(context.Background(), statement); err != nil {
 			// Log error but continue with other revocations
 			fmt.Printf("Failed to revoke privilege: %v", err)
 		}
@@ -298,7 +308,9 @@ func (r *Neo4jGrantReconciler) updateGrantStatus(ctx context.Context, grant *neo
 	}
 
 	grant.Status.ObservedGeneration = grant.Generation
-	r.Status().Update(ctx, grant)
+	if err := r.Status().Update(ctx, grant); err != nil {
+		log.FromContext(ctx).Error(err, "Failed to update grant status")
+	}
 }
 
 // SetupWithManager sets up the controller with the Manager.

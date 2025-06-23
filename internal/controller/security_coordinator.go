@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -27,7 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-operator/api/v1alpha1"
+	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1"
 )
 
 // SecurityCoordinator manages the ordering of security resource reconciliation
@@ -224,44 +225,50 @@ func (sc *SecurityCoordinator) OnUserReconcileComplete(req types.NamespacedName,
 	}
 }
 
-// processRoles processes role reconciliation requests
+// processRoles processes roles in dependency order
 func (sc *SecurityCoordinator) processRoles(ctx context.Context) {
-	log := log.FromContext(ctx).WithName("security-coordinator").WithValues("component", "role-processor")
+	logger := log.FromContext(ctx)
+	logger.Info("Starting role processing goroutine")
 
 	for {
 		select {
 		case <-sc.stopChan:
+			logger.Info("Stopping role processing")
 			return
-		case req := <-sc.roleQueue:
+		case roleKey := <-sc.roleQueue:
+			logger.Info("Processing role", "role", roleKey)
+
 			if sc.roleReconciler != nil {
-				log.Info("Processing role reconciliation", "role", req)
-
-				// Create a context with timeout for reconciliation
-				reconcileCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
-
-				result, err := sc.roleReconciler.Reconcile(reconcileCtx, ctrl.Request{NamespacedName: req})
-				cancel()
+				// Reconcile the role
+				req := ctrl.Request{NamespacedName: roleKey}
+				result, err := sc.roleReconciler.Reconcile(ctx, req)
 
 				if err != nil {
-					log.Error(err, "Role reconciliation failed", "role", req)
-					// Requeue after delay
+					logger.Error(err, "Failed to reconcile role", "role", roleKey)
+					// Retry after delay
 					go func() {
 						time.Sleep(30 * time.Second)
 						select {
-						case sc.roleQueue <- req:
+						case sc.roleQueue <- roleKey:
 						case <-sc.stopChan:
 						}
 					}()
-				} else if result.RequeueAfter > 0 || result.Requeue {
-					// Handle requeue
+					continue
+				}
+
+				// Mark as completed
+				sc.rolesMutex.Lock()
+				sc.completedRoles[roleKey] = time.Now()
+				sc.rolesMutex.Unlock()
+
+				// Trigger dependent grants
+				sc.triggerDependentGrants(ctx, roleKey)
+
+				if result.RequeueAfter > 0 {
 					go func() {
-						delay := result.RequeueAfter
-						if delay == 0 {
-							delay = 30 * time.Second
-						}
-						time.Sleep(delay)
+						time.Sleep(result.RequeueAfter)
 						select {
-						case sc.roleQueue <- req:
+						case sc.roleQueue <- roleKey:
 						case <-sc.stopChan:
 						}
 					}()
@@ -271,40 +278,63 @@ func (sc *SecurityCoordinator) processRoles(ctx context.Context) {
 	}
 }
 
-// processGrants processes grant reconciliation requests
+// processGrants processes grants after their role dependencies are ready
 func (sc *SecurityCoordinator) processGrants(ctx context.Context) {
-	log := log.FromContext(ctx).WithName("security-coordinator").WithValues("component", "grant-processor")
+	logger := log.FromContext(ctx)
+	logger.Info("Starting grant processing goroutine")
 
 	for {
 		select {
 		case <-sc.stopChan:
+			logger.Info("Stopping grant processing")
 			return
-		case req := <-sc.grantQueue:
+		case grantKey := <-sc.grantQueue:
+			logger.Info("Processing grant", "grant", grantKey)
+
+			// Check if role dependencies are satisfied
+			if !sc.areRoleDependenciesSatisfied(ctx, grantKey) {
+				logger.Info("Role dependencies not satisfied, requeueing grant", "grant", grantKey)
+				go func() {
+					time.Sleep(10 * time.Second)
+					select {
+					case sc.grantQueue <- grantKey:
+					case <-sc.stopChan:
+					}
+				}()
+				continue
+			}
+
 			if sc.grantReconciler != nil {
-				log.Info("Processing grant reconciliation", "grant", req)
-
-				reconcileCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
-				result, err := sc.grantReconciler.Reconcile(reconcileCtx, ctrl.Request{NamespacedName: req})
-				cancel()
+				// Reconcile the grant
+				req := ctrl.Request{NamespacedName: grantKey}
+				result, err := sc.grantReconciler.Reconcile(ctx, req)
 
 				if err != nil {
-					log.Error(err, "Grant reconciliation failed", "grant", req)
+					logger.Error(err, "Failed to reconcile grant", "grant", grantKey)
+					// Retry after delay
 					go func() {
 						time.Sleep(30 * time.Second)
 						select {
-						case sc.grantQueue <- req:
+						case sc.grantQueue <- grantKey:
 						case <-sc.stopChan:
 						}
 					}()
-				} else if result.RequeueAfter > 0 || result.Requeue {
+					continue
+				}
+
+				// Mark as completed
+				sc.grantsMutex.Lock()
+				sc.completedGrants[grantKey] = time.Now()
+				sc.grantsMutex.Unlock()
+
+				// Trigger dependent users
+				sc.triggerDependentUsers(ctx, grantKey)
+
+				if result.RequeueAfter > 0 {
 					go func() {
-						delay := result.RequeueAfter
-						if delay == 0 {
-							delay = 30 * time.Second
-						}
-						time.Sleep(delay)
+						time.Sleep(result.RequeueAfter)
 						select {
-						case sc.grantQueue <- req:
+						case sc.grantQueue <- grantKey:
 						case <-sc.stopChan:
 						}
 					}()
@@ -314,40 +344,55 @@ func (sc *SecurityCoordinator) processGrants(ctx context.Context) {
 	}
 }
 
-// processUsers processes user reconciliation requests
+// processUsers processes users after their role and grant dependencies are ready
 func (sc *SecurityCoordinator) processUsers(ctx context.Context) {
-	log := log.FromContext(ctx).WithName("security-coordinator").WithValues("component", "user-processor")
+	logger := log.FromContext(ctx)
+	logger.Info("Starting user processing goroutine")
 
 	for {
 		select {
 		case <-sc.stopChan:
+			logger.Info("Stopping user processing")
 			return
-		case req := <-sc.userQueue:
-			if sc.userReconciler != nil {
-				log.Info("Processing user reconciliation", "user", req)
+		case userKey := <-sc.userQueue:
+			logger.Info("Processing user", "user", userKey)
 
-				reconcileCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
-				result, err := sc.userReconciler.Reconcile(reconcileCtx, ctrl.Request{NamespacedName: req})
-				cancel()
+			// Check if grant dependencies are satisfied
+			if !sc.areGrantDependenciesSatisfied(ctx, userKey) {
+				logger.Info("Grant dependencies not satisfied, requeueing user", "user", userKey)
+				go func() {
+					time.Sleep(10 * time.Second)
+					select {
+					case sc.userQueue <- userKey:
+					case <-sc.stopChan:
+					}
+				}()
+				continue
+			}
+
+			if sc.userReconciler != nil {
+				// Reconcile the user
+				req := ctrl.Request{NamespacedName: userKey}
+				result, err := sc.userReconciler.Reconcile(ctx, req)
 
 				if err != nil {
-					log.Error(err, "User reconciliation failed", "user", req)
+					logger.Error(err, "Failed to reconcile user", "user", userKey)
+					// Retry after delay
 					go func() {
 						time.Sleep(30 * time.Second)
 						select {
-						case sc.userQueue <- req:
+						case sc.userQueue <- userKey:
 						case <-sc.stopChan:
 						}
 					}()
-				} else if result.RequeueAfter > 0 || result.Requeue {
+					continue
+				}
+
+				if result.RequeueAfter > 0 {
 					go func() {
-						delay := result.RequeueAfter
-						if delay == 0 {
-							delay = 30 * time.Second
-						}
-						time.Sleep(delay)
+						time.Sleep(result.RequeueAfter)
 						select {
-						case sc.userQueue <- req:
+						case sc.userQueue <- userKey:
 						case <-sc.stopChan:
 						}
 					}()
@@ -357,9 +402,9 @@ func (sc *SecurityCoordinator) processUsers(ctx context.Context) {
 	}
 }
 
-// cleanupCompleted removes old completed entries
+// cleanupCompleted periodically cleans up old completion records
 func (sc *SecurityCoordinator) cleanupCompleted() {
-	ticker := time.NewTicker(10 * time.Minute)
+	ticker := time.NewTicker(1 * time.Hour)
 	defer ticker.Stop()
 
 	for {
@@ -367,9 +412,145 @@ func (sc *SecurityCoordinator) cleanupCompleted() {
 		case <-sc.stopChan:
 			return
 		case <-ticker.C:
-			sc.cleanupOldEntries()
+			cutoff := time.Now().Add(-24 * time.Hour)
+
+			sc.rolesMutex.Lock()
+			for key, completedAt := range sc.completedRoles {
+				if completedAt.Before(cutoff) {
+					delete(sc.completedRoles, key)
+				}
+			}
+			sc.rolesMutex.Unlock()
+
+			sc.grantsMutex.Lock()
+			for key, completedAt := range sc.completedGrants {
+				if completedAt.Before(cutoff) {
+					delete(sc.completedGrants, key)
+				}
+			}
+			sc.grantsMutex.Unlock()
 		}
 	}
+}
+
+// Helper functions
+
+func (sc *SecurityCoordinator) triggerDependentGrants(ctx context.Context, roleKey types.NamespacedName) {
+	logger := log.FromContext(ctx)
+
+	// Find grants that depend on this role
+	sc.grantsMutex.RLock()
+	clusterName := sc.extractClusterName(roleKey.Name)
+	pendingGrants := sc.pendingGrants[clusterName]
+	sc.grantsMutex.RUnlock()
+
+	for _, grantKey := range pendingGrants {
+		logger.Info("Triggering dependent grant", "grant", grantKey, "role", roleKey)
+		select {
+		case sc.grantQueue <- grantKey:
+		case <-sc.stopChan:
+			return
+		default:
+			// Queue is full, skip
+		}
+	}
+}
+
+func (sc *SecurityCoordinator) triggerDependentUsers(ctx context.Context, grantKey types.NamespacedName) {
+	logger := log.FromContext(ctx)
+
+	// Find users that depend on this grant
+	sc.usersMutex.RLock()
+	clusterName := sc.extractClusterName(grantKey.Name)
+	pendingUsers := sc.pendingUsers[clusterName]
+	sc.usersMutex.RUnlock()
+
+	for _, userKey := range pendingUsers {
+		logger.Info("Triggering dependent user", "user", userKey, "grant", grantKey)
+		select {
+		case sc.userQueue <- userKey:
+		case <-sc.stopChan:
+			return
+		default:
+			// Queue is full, skip
+		}
+	}
+}
+
+func (sc *SecurityCoordinator) areRoleDependenciesSatisfied(ctx context.Context, grantKey types.NamespacedName) bool {
+	// Get the grant resource to check its role dependencies
+	grant := &neo4jv1alpha1.Neo4jGrant{}
+	if err := sc.Get(ctx, grantKey, grant); err != nil {
+		return false
+	}
+
+	// Check if the target is a role and if it exists
+	sc.rolesMutex.RLock()
+	defer sc.rolesMutex.RUnlock()
+
+	if grant.Spec.Target.Kind == "Role" {
+		roleKey := types.NamespacedName{
+			Name:      grant.Spec.Target.Name,
+			Namespace: grantKey.Namespace,
+		}
+		if _, completed := sc.completedRoles[roleKey]; !completed {
+			return false
+		}
+	}
+
+	// Check privilege rules for role dependencies
+	for _, rule := range grant.Spec.PrivilegeRules {
+		if rule.RoleName != "" {
+			roleKey := types.NamespacedName{
+				Name:      rule.RoleName,
+				Namespace: grantKey.Namespace,
+			}
+			if _, completed := sc.completedRoles[roleKey]; !completed {
+				return false
+			}
+		}
+	}
+
+	return true
+}
+
+func (sc *SecurityCoordinator) areGrantDependenciesSatisfied(ctx context.Context, userKey types.NamespacedName) bool {
+	// Get the user resource to check its role dependencies
+	user := &neo4jv1alpha1.Neo4jUser{}
+	if err := sc.Get(ctx, userKey, user); err != nil {
+		return false
+	}
+
+	// Check if all required roles are completed
+	sc.rolesMutex.RLock()
+	defer sc.rolesMutex.RUnlock()
+
+	for _, roleRef := range user.Spec.Roles {
+		roleKey := types.NamespacedName{
+			Name:      roleRef,
+			Namespace: userKey.Namespace,
+		}
+		if _, completed := sc.completedRoles[roleKey]; !completed {
+			return false
+		}
+	}
+
+	// Check if all grants targeting this user are completed
+	sc.grantsMutex.RLock()
+	defer sc.grantsMutex.RUnlock()
+
+	// In a real implementation, we would list all grants and check which ones target this user
+	// For now, we assume grants are satisfied if roles are satisfied
+	return true
+}
+
+func (sc *SecurityCoordinator) extractClusterName(resourceName string) string {
+	// Extract cluster name from resource name (assuming format: cluster-name-role-name)
+	parts := strings.Split(resourceName, "-")
+	if len(parts) >= 2 {
+		return strings.Join(parts[:len(parts)-1], "-")
+	}
+	return resourceName
 }
 
 // Helper methods
@@ -457,26 +638,6 @@ func (sc *SecurityCoordinator) removePendingUser(clusterName string, req types.N
 	if len(sc.pendingUsers[clusterName]) == 0 {
 		delete(sc.pendingUsers, clusterName)
 	}
-}
-
-func (sc *SecurityCoordinator) cleanupOldEntries() {
-	cutoff := time.Now().Add(-1 * time.Hour)
-
-	sc.rolesMutex.Lock()
-	for req, timestamp := range sc.completedRoles {
-		if timestamp.Before(cutoff) {
-			delete(sc.completedRoles, req)
-		}
-	}
-	sc.rolesMutex.Unlock()
-
-	sc.grantsMutex.Lock()
-	for req, timestamp := range sc.completedGrants {
-		if timestamp.Before(cutoff) {
-			delete(sc.completedGrants, req)
-		}
-	}
-	sc.grantsMutex.Unlock()
 }
 
 // GetClusterNameFromRole extracts cluster name from role spec

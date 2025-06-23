@@ -24,7 +24,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/neo4j-labs/neo4j-operator/test/utils"
+	"github.com/neo4j-labs/neo4j-kubernetes-operator/test/utils"
 )
 
 const namespace = "neo4j-operator-system"

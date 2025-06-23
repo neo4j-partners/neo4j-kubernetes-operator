@@ -32,8 +32,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-operator/api/v1alpha1"
-	"github.com/neo4j-labs/neo4j-operator/internal/neo4j"
+	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1"
+	"github.com/neo4j-labs/neo4j-kubernetes-operator/internal/neo4j"
 )
 
 // Neo4jRoleReconciler reconciles a Neo4jRole object
@@ -46,6 +46,7 @@ type Neo4jRoleReconciler struct {
 }
 
 const (
+	// RoleFinalizer is the finalizer for Neo4j role resources
 	RoleFinalizer = "neo4j.com/role-finalizer"
 )
 
@@ -55,6 +56,7 @@ const (
 // +kubebuilder:rbac:groups=neo4j.neo4j.com,resources=neo4jenterpriseclusters,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
+// Reconcile handles the reconciliation of Neo4jRole resources
 func (r *Neo4jRoleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
@@ -117,7 +119,11 @@ func (r *Neo4jRoleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			"Failed to connect to Neo4j cluster")
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 	}
-	defer neo4jClient.Close()
+	defer func() {
+		if err := neo4jClient.Close(); err != nil {
+			log.FromContext(ctx).Error(err, "Failed to close Neo4j client")
+		}
+	}()
 
 	// Ensure role exists
 	if err := r.ensureRole(ctx, neo4jClient, role); err != nil {
@@ -143,6 +149,11 @@ func (r *Neo4jRoleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	r.updateRoleStatus(ctx, role, metav1.ConditionTrue, "RoleReady",
 		"Role is created and configured successfully")
 	r.Recorder.Event(role, "Normal", "RoleReady", "Role is ready and available")
+
+	// Update status
+	if err := r.Status().Update(ctx, role); err != nil {
+		log.FromContext(ctx).Error(err, "Failed to update role status")
+	}
 
 	logger.Info("Successfully reconciled Neo4jRole")
 	return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
@@ -179,7 +190,11 @@ func (r *Neo4jRoleReconciler) handleDeletion(ctx context.Context, role *neo4jv1a
 		controllerutil.RemoveFinalizer(role, RoleFinalizer)
 		return ctrl.Result{}, r.Update(ctx, role)
 	}
-	defer neo4jClient.Close()
+	defer func() {
+		if err := neo4jClient.Close(); err != nil {
+			log.FromContext(ctx).Error(err, "Failed to close Neo4j client")
+		}
+	}()
 
 	// Drop role
 	if err := neo4jClient.DropRole(ctx, role.Name); err != nil {
@@ -282,7 +297,9 @@ func (r *Neo4jRoleReconciler) updateRoleStatus(ctx context.Context, role *neo4jv
 	}
 
 	role.Status.ObservedGeneration = role.Generation
-	r.Status().Update(ctx, role)
+	if err := r.Status().Update(ctx, role); err != nil {
+		log.FromContext(ctx).Error(err, "Failed to update role status")
+	}
 }
 
 // SetupWithManager sets up the controller with the Manager.

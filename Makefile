@@ -126,6 +126,12 @@ lint: golangci-lint ## Run golangci-lint linter
 lint-fix: golangci-lint ## Run golangci-lint linter and perform fixes
 	$(GOLANGCI_LINT) run --fix
 
+format: golangci-lint ## Format Go code using golangci-lint formatters
+	$(GOLANGCI_LINT) fmt
+
+lint-fast: golangci-lint ## Run fast golangci-lint for pre-commit hooks
+	$(GOLANGCI_LINT) run --config .golangci-precommit.yml --fix --timeout=2m
+
 ##@ Development
 
 .PHONY: setup-dev
@@ -419,6 +425,7 @@ tidy: ## Tidy go modules.
 .PHONY: clean
 clean: ## Clean build artifacts and temporary files.
 	@echo "Cleaning build artifacts..."
+	@chmod -R +w bin/ 2>/dev/null || true
 	@rm -rf bin/
 	@rm -rf tmp/
 	@rm -rf dist/
@@ -433,6 +440,14 @@ clean: ## Clean build artifacts and temporary files.
 .PHONY: build
 build: manifests generate fmt vet ## Build manager binary.
 	go build -o bin/manager cmd/main.go
+
+.PHONY: build-plugin
+build-plugin: ## Build kubectl plugin
+	cd cmd/kubectl-neo4j && make build
+
+.PHONY: install-plugin
+install-plugin: build-plugin ## Install kubectl plugin locally
+	cd cmd/kubectl-neo4j && make install
 
 .PHONY: build-debug
 build-debug: manifests generate ## Build manager binary with debug symbols.
@@ -517,7 +532,7 @@ GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
 KUSTOMIZE_VERSION ?= v5.4.3
 CONTROLLER_TOOLS_VERSION ?= v0.16.1
 ENVTEST_VERSION ?= release-0.19
-GOLANGCI_LINT_VERSION ?= v1.59.1
+GOLANGCI_LINT_VERSION ?= v2.1.6
 
 .PHONY: kustomize
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
@@ -537,7 +552,7 @@ $(ENVTEST): $(LOCALBIN)
 .PHONY: golangci-lint
 golangci-lint: $(GOLANGCI_LINT) ## Download golangci-lint locally if necessary.
 $(GOLANGCI_LINT): $(LOCALBIN)
-	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint,$(GOLANGCI_LINT_VERSION))
+	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/v2/cmd/golangci-lint,$(GOLANGCI_LINT_VERSION))
 
 # go-install-tool will 'go install' any package with custom target and name of binary, if it doesn't exist
 # $1 - target path with name of binary
@@ -831,8 +846,8 @@ tools-install: ## Install all development tools.
 	@echo "Installing development tools..."
 	@go install golang.org/x/tools/cmd/goimports@latest
 	@go install github.com/go-delve/delve/cmd/dlv@latest
-	@go install github.com/cosmtrek/air@latest
-	@go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	@go install github.com/air-verse/air@latest
+	@go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
 	@go install github.com/onsi/ginkgo/v2/ginkgo@latest
 	@go install honnef.co/go/tools/cmd/staticcheck@latest
 	@go install github.com/vektra/mockery/v2@latest
@@ -844,8 +859,8 @@ tools-update: ## Update all development tools.
 	@echo "Updating development tools..."
 	@go install golang.org/x/tools/cmd/goimports@latest
 	@go install github.com/go-delve/delve/cmd/dlv@latest
-	@go install github.com/cosmtrek/air@latest
-	@go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	@go install github.com/air-verse/air@latest
+	@go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
 	@go install github.com/onsi/ginkgo/v2/ginkgo@latest
 	@go install honnef.co/go/tools/cmd/staticcheck@latest
 	@go install github.com/vektra/mockery/v2@latest

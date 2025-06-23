@@ -44,7 +44,7 @@ metadata:
   name: neo4j-cluster
 spec:
   # ... other configuration ...
-  
+
   tls:
     mode: cert-manager
     issuerRef:
@@ -61,11 +61,11 @@ tls:
     name: ca-issuer
     kind: ClusterIssuer
     group: cert-manager.io  # Optional, defaults to cert-manager.io
-  
+
   # Certificate lifecycle management
   duration: "8760h"      # 1 year (default: cert-manager default)
   renewBefore: "720h"    # 30 days before expiry (default: cert-manager default)
-  
+
   # Certificate subject fields
   subject:
     organizations:
@@ -78,7 +78,7 @@ tls:
       - "San Francisco"
     provinces:
       - "California"
-  
+
   # Certificate usage (defaults to standard Neo4j usages)
   usages:
     - "digital signature"
@@ -107,7 +107,7 @@ tls:
   issuerRef:
     name: ca-issuer
     kind: ClusterIssuer
-  
+
   # External Secrets configuration for TLS certificates
   externalSecrets:
     enabled: true
@@ -135,7 +135,7 @@ tls:
 ```yaml
 auth:
   provider: native
-  
+
   # External Secrets configuration for auth secrets
   externalSecrets:
     enabled: true
@@ -183,15 +183,15 @@ spec:
   image:
     repo: neo4j
     tag: "5.26-enterprise"
-  
+
   topology:
     primaries: 3
     secondaries: 2
-  
+
   storage:
     className: standard
     size: 10Gi
-  
+
   tls:
     mode: cert-manager
     issuerRef:
@@ -199,7 +199,7 @@ spec:
       kind: ClusterIssuer
     duration: "2160h"  # 90 days
     renewBefore: "360h"  # 15 days before expiry
-  
+
   service:
     type: ClusterIP
     ingress:
@@ -223,15 +223,15 @@ spec:
   image:
     repo: neo4j
     tag: "5.26-enterprise"
-  
+
   topology:
     primaries: 3
     secondaries: 2
-  
+
   storage:
     className: standard
     size: 10Gi
-  
+
   tls:
     mode: cert-manager
     issuerRef:
@@ -252,7 +252,7 @@ spec:
           remoteRef:
             key: neo4j/tls
             property: private-key
-  
+
   auth:
     provider: native
     passwordPolicy:
@@ -316,7 +316,7 @@ metadata:
   name: neo4j-aws
 spec:
   # ... basic configuration ...
-  
+
   auth:
     provider: native
     externalSecrets:
@@ -448,4 +448,90 @@ Set up alerts for:
 - TLS connection failures
 - Authentication failures
 
-This integration provides enterprise-grade security for your Neo4j clusters with automated certificate management and secure secret handling. 
+This integration provides enterprise-grade security for your Neo4j clusters with automated certificate management and secure secret handling.
+
+## Enterprise License Management
+
+### Storing Enterprise License with External Secrets
+
+For production deployments, store your Neo4j Enterprise license using External Secrets Operator:
+
+```yaml
+# License stored in external secret store
+apiVersion: external-secrets.io/v1beta1
+kind: SecretStore
+metadata:
+  name: vault-backend
+  namespace: neo4j
+spec:
+  provider:
+    vault:
+      server: "https://vault.company.com:8200"
+      path: "secret"
+      version: "v2"
+      auth:
+        kubernetes:
+          mountPath: "kubernetes"
+          role: "neo4j-operator"
+---
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: neo4j-enterprise-license
+  namespace: neo4j
+spec:
+  refreshInterval: 24h
+  secretStoreRef:
+    name: vault-backend
+    kind: SecretStore
+  target:
+    name: neo4j-enterprise-license
+    creationPolicy: Owner
+  data:
+  - secretKey: license
+    remoteRef:
+      key: neo4j/enterprise
+      property: license
+```
+
+### License Monitoring and Alerts
+
+Set up monitoring for license expiration:
+
+```yaml
+# Prometheus alert for license expiration
+- alert: Neo4jLicenseExpiring
+  expr: neo4j_enterprise_license_days_remaining < 30
+  for: 1h
+  labels:
+    severity: warning
+  annotations:
+    summary: "Neo4j Enterprise license expiring in {{ $value }} days"
+    description: "The Neo4j Enterprise license will expire soon. Renew before expiration to avoid service disruption."
+```
+
+### License Validation Script
+
+Create a script to validate license status:
+
+```bash
+#!/bin/bash
+# validate-license.sh - Check Neo4j Enterprise license status
+
+NEO4J_POD=$(kubectl get pods -l app.kubernetes.io/name=neo4j -o jsonpath='{.items[0].metadata.name}')
+NEO4J_PASSWORD=$(kubectl get secret neo4j-auth -o jsonpath='{.data.password}' | base64 -d)
+
+# Check license status
+kubectl exec $NEO4J_POD -- cypher-shell -u neo4j -p "$NEO4J_PASSWORD" \
+  "CALL dbms.components() YIELD name, versions, edition RETURN name, versions, edition" | \
+  grep -i enterprise || {
+    echo "ERROR: Neo4j Enterprise license not found or invalid"
+    exit 1
+  }
+
+echo "✅ Neo4j Enterprise license is valid"
+```
+
+## Conclusion
+
+This integration provides enterprise-grade security for your Neo4j clusters with automated certificate management, secure secret handling, and comprehensive license management for production environments.

@@ -18,8 +18,10 @@ Before contributing, ensure you have the following tools installed:
 1. **Fork and Clone the Repository**
 
    ```bash
-   git clone https://github.com/your-username/neo4j-operator.git
-   cd neo4j-operator
+   git clone https://github.com/your-username/neo4j-kubernetes-operator.git
+
+cd neo4j-kubernetes-operator
+
    ```
 
 2. **Set Up Development Environment**
@@ -198,9 +200,9 @@ We follow [Conventional Commits](https://www.conventionalcommits.org/):
 ## Getting Help
 
 - **Slack**: Join our [Neo4j Community Slack](https://neo4j.com/slack/)
-- **Issues**: Check existing [GitHub Issues](https://github.com/neo4j-labs/neo4j-operator/issues)
-- **Discussions**: Start a [GitHub Discussion](https://github.com/neo4j-labs/neo4j-operator/discussions)
+- **Issues**: Check existing [GitHub Issues](https://github.com/neo4j-labs/neo4j-kubernetes-operator/issues)
+- **Discussions**: Start a [GitHub Discussion](https://github.com/neo4j-labs/neo4j-kubernetes-operator/discussions)
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the Apache License 2.0. 
+By contributing, you agree that your contributions will be licensed under the Apache License 2.0.

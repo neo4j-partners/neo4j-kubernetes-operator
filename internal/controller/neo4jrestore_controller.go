@@ -19,8 +19,10 @@ package controller
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"time"
 
+	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -28,14 +30,30 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-operator/api/v1alpha1"
-	"github.com/neo4j-labs/neo4j-operator/internal/neo4j"
+	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1"
+	"github.com/neo4j-labs/neo4j-kubernetes-operator/internal/neo4j"
+)
+
+// Status constants
+const (
+	StatusCompleted = "Completed"
+	StatusFailed    = "Failed"
+	StatusRunning   = "Running"
+	StatusPending   = "Pending"
+)
+
+// Restore source type constants
+const (
+	SourceTypeBackup = "backup"
+	SourceTypeS3     = "s3"
+	SourceTypeGCS    = "gcs"
 )
 
 // Neo4jRestoreReconciler reconciles a Neo4jRestore object
@@ -48,6 +66,7 @@ type Neo4jRestoreReconciler struct {
 }
 
 const (
+	// RestoreFinalizer is the finalizer for Neo4j restore resources
 	RestoreFinalizer = "neo4j.com/restore-finalizer"
 )
 
@@ -62,6 +81,7 @@ const (
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 // +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;update;patch
 
+// Reconcile handles the reconciliation of Neo4jRestore resources
 func (r *Neo4jRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
@@ -100,7 +120,7 @@ func (r *Neo4jRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	}
 
 	// Check if restore is already completed
-	if restore.Status.Phase == "Completed" {
+	if restore.Status.Phase == StatusCompleted {
 		logger.Info("Restore already completed")
 		return ctrl.Result{}, nil
 	}
@@ -264,7 +284,7 @@ func (r *Neo4jRestoreReconciler) handleRestoreSuccess(ctx context.Context, resto
 func (r *Neo4jRestoreReconciler) validateRestore(ctx context.Context, restore *neo4jv1alpha1.Neo4jRestore) error {
 	// Validate source
 	switch restore.Spec.Source.Type {
-	case "backup":
+	case SourceTypeBackup:
 		if restore.Spec.Source.BackupRef == "" {
 			return fmt.Errorf("backup reference is required when source type is 'backup'")
 		}
@@ -299,7 +319,11 @@ func (r *Neo4jRestoreReconciler) checkDatabaseExists(ctx context.Context, restor
 	if err != nil {
 		return fmt.Errorf("failed to create Neo4j client: %w", err)
 	}
-	defer neo4jClient.Close()
+	defer func() {
+		if err := neo4jClient.Close(); err != nil {
+			log.FromContext(ctx).Error(err, "Failed to close Neo4j client")
+		}
+	}()
 
 	// Check if database exists
 	exists, err := neo4jClient.DatabaseExists(ctx, restore.Spec.DatabaseName)
@@ -488,27 +512,167 @@ func (r *Neo4jRestoreReconciler) buildRestoreVolumes(restore *neo4jv1alpha1.Neo4
 }
 
 func (r *Neo4jRestoreReconciler) stopCluster(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) error {
-	// Implementation would scale down the cluster StatefulSet
-	// For now, this is a placeholder
-	log.FromContext(ctx).Info("Stopping cluster for restore", "cluster", cluster.Name)
-	return nil
+	logger := log.FromContext(ctx)
+	logger.Info("Stopping cluster for restore", "cluster", cluster.Name)
+
+	// Get the StatefulSet for the cluster
+	sts := &appsv1.StatefulSet{}
+	stsKey := types.NamespacedName{
+		Name:      cluster.Name,
+		Namespace: cluster.Namespace,
+	}
+
+	if err := r.Get(ctx, stsKey, sts); err != nil {
+		return fmt.Errorf("failed to get StatefulSet: %w", err)
+	}
+
+	// Scale down to 0 replicas
+	originalReplicas := *sts.Spec.Replicas
+	sts.Spec.Replicas = ptr.To(int32(0))
+
+	// Store original replica count in annotation for later restoration
+	if sts.Annotations == nil {
+		sts.Annotations = make(map[string]string)
+	}
+	sts.Annotations["neo4j.neo4j.com/original-replicas"] = fmt.Sprintf("%d", originalReplicas)
+
+	if err := r.Update(ctx, sts); err != nil {
+		return fmt.Errorf("failed to scale down StatefulSet: %w", err)
+	}
+
+	// Wait for all pods to be deleted
+	timeout := time.After(5 * time.Minute)
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-timeout:
+			return fmt.Errorf("timeout waiting for cluster to stop")
+		case <-ticker.C:
+			pods := &corev1.PodList{}
+			if err := r.List(ctx, pods, client.InNamespace(cluster.Namespace), client.MatchingLabels{
+				"app.kubernetes.io/name":     "neo4j",
+				"app.kubernetes.io/instance": cluster.Name,
+			}); err != nil {
+				logger.Error(err, "Failed to list pods")
+				continue
+			}
+
+			if len(pods.Items) == 0 {
+				logger.Info("Cluster stopped successfully")
+				return nil
+			}
+
+			logger.Info("Waiting for pods to terminate", "remaining", len(pods.Items))
+		}
+	}
 }
 
 func (r *Neo4jRestoreReconciler) startCluster(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) error {
-	// Implementation would scale up the cluster StatefulSet
-	// For now, this is a placeholder
-	log.FromContext(ctx).Info("Starting cluster after restore", "cluster", cluster.Name)
+	logger := log.FromContext(ctx)
+	logger.Info("Starting cluster after restore", "cluster", cluster.Name)
+
+	// Get the StatefulSet for the cluster
+	sts := &appsv1.StatefulSet{}
+	stsKey := types.NamespacedName{
+		Name:      cluster.Name,
+		Namespace: cluster.Namespace,
+	}
+
+	if err := r.Get(ctx, stsKey, sts); err != nil {
+		return fmt.Errorf("failed to get StatefulSet: %w", err)
+	}
+
+	// Restore original replica count from annotation
+	originalReplicasStr, exists := sts.Annotations["neo4j.neo4j.com/original-replicas"]
+	if !exists {
+		return fmt.Errorf("original replica count not found in annotations")
+	}
+
+	originalReplicas, err := strconv.ParseInt(originalReplicasStr, 10, 32)
+	if err != nil {
+		return fmt.Errorf("failed to parse original replica count: %w", err)
+	}
+
+	// Scale back up to original replicas
+	sts.Spec.Replicas = ptr.To(int32(originalReplicas))
+
+	// Remove the annotation
+	delete(sts.Annotations, "neo4j.neo4j.com/original-replicas")
+
+	if err := r.Update(ctx, sts); err != nil {
+		return fmt.Errorf("failed to scale up StatefulSet: %w", err)
+	}
+
+	logger.Info("Cluster start initiated", "replicas", originalReplicas)
 	return nil
 }
 
 func (r *Neo4jRestoreReconciler) waitForClusterReady(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) error {
-	// Implementation would wait for cluster to be ready
-	// For now, this is a placeholder
-	log.FromContext(ctx).Info("Waiting for cluster to be ready", "cluster", cluster.Name)
-	return nil
+	logger := log.FromContext(ctx)
+	logger.Info("Waiting for cluster to be ready", "cluster", cluster.Name)
+
+	timeout := time.After(10 * time.Minute)
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-timeout:
+			return fmt.Errorf("timeout waiting for cluster to be ready")
+		case <-ticker.C:
+			// Check if all pods are ready
+			pods := &corev1.PodList{}
+			if err := r.List(ctx, pods, client.InNamespace(cluster.Namespace), client.MatchingLabels{
+				"app.kubernetes.io/name":     "neo4j",
+				"app.kubernetes.io/instance": cluster.Name,
+			}); err != nil {
+				logger.Error(err, "Failed to list pods")
+				continue
+			}
+
+			expectedReplicas := int(cluster.Spec.Topology.Primaries + cluster.Spec.Topology.Secondaries)
+			if len(pods.Items) != expectedReplicas {
+				logger.Info("Waiting for all pods to be created", "current", len(pods.Items), "expected", expectedReplicas)
+				continue
+			}
+
+			allReady := true
+			for _, pod := range pods.Items {
+				if !isPodReady(&pod) {
+					allReady = false
+					break
+				}
+			}
+
+			if allReady {
+				// Verify Neo4j connectivity
+				neo4jClient, err := r.createNeo4jClient(ctx, cluster)
+				if err != nil {
+					logger.Info("Failed to create Neo4j client, retrying...")
+					continue
+				}
+				defer neo4jClient.Close()
+
+				if err := neo4jClient.VerifyConnectivity(ctx); err != nil {
+					logger.Info("Neo4j not ready yet, retrying...")
+					continue
+				}
+
+				logger.Info("Cluster is ready")
+				return nil
+			}
+
+			logger.Info("Waiting for pods to be ready")
+		}
+	}
 }
 
 func (r *Neo4jRestoreReconciler) runRestoreHooks(ctx context.Context, restore *neo4jv1alpha1.Neo4jRestore, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, hooks *neo4jv1alpha1.RestoreHooks, phase string) error {
+	logger := log.FromContext(ctx)
+	logger.Info("Running restore hooks", "restore", restore.Name, "phase", phase)
+
 	// Execute Cypher statements if any
 	if len(hooks.CypherStatements) > 0 {
 		neo4jClient, err := r.createNeo4jClient(ctx, cluster)
@@ -535,10 +699,124 @@ func (r *Neo4jRestoreReconciler) runRestoreHooks(ctx context.Context, restore *n
 }
 
 func (r *Neo4jRestoreReconciler) runHookJob(ctx context.Context, restore *neo4jv1alpha1.Neo4jRestore, phase string) error {
-	// Implementation would create and wait for a hook job to complete
-	// For now, this is a placeholder
-	log.FromContext(ctx).Info("Running hook job", "restore", restore.Name, "phase", phase)
-	return nil
+	logger := log.FromContext(ctx)
+	logger.Info("Running hook job", "restore", restore.Name, "phase", phase)
+
+	// Get hook configuration based on phase
+	var hookSpec *neo4jv1alpha1.RestoreHookJob
+	if phase == "pre" && restore.Spec.Options != nil && restore.Spec.Options.PreRestore != nil {
+		hookSpec = restore.Spec.Options.PreRestore.Job
+	} else if phase == "post" && restore.Spec.Options != nil && restore.Spec.Options.PostRestore != nil {
+		hookSpec = restore.Spec.Options.PostRestore.Job
+	}
+
+	if hookSpec == nil {
+		return nil // No hook job configured
+	}
+
+	// Create the job
+	job := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-%s-hook", restore.Name, phase),
+			Namespace: restore.Namespace,
+			Labels: map[string]string{
+				"app.kubernetes.io/name":      "neo4j-restore",
+				"app.kubernetes.io/instance":  restore.Name,
+				"app.kubernetes.io/component": fmt.Sprintf("%s-hook", phase),
+			},
+		},
+		Spec: batchv1.JobSpec{
+			Template: corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					RestartPolicy: corev1.RestartPolicyNever,
+					Containers: []corev1.Container{
+						{
+							Name:    "hook",
+							Image:   hookSpec.Template.Container.Image,
+							Command: hookSpec.Template.Container.Command,
+							Args:    hookSpec.Template.Container.Args,
+							Env:     convertEnvVars(hookSpec.Template.Container.Env),
+						},
+					},
+				},
+			},
+			BackoffLimit: hookSpec.Template.BackoffLimit,
+		},
+	}
+
+	if job.Spec.BackoffLimit == nil {
+		job.Spec.BackoffLimit = ptr.To(int32(3))
+	}
+
+	if err := r.Create(ctx, job); err != nil {
+		return fmt.Errorf("failed to create hook job: %w", err)
+	}
+
+	// Determine timeout
+	timeout := 30 * time.Minute // Default timeout
+	if hookSpec.Timeout != "" {
+		if duration, err := time.ParseDuration(hookSpec.Timeout); err == nil {
+			timeout = duration
+		}
+	}
+
+	// Wait for job completion
+	timeoutChan := time.After(timeout)
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-timeoutChan:
+			return fmt.Errorf("hook job timed out")
+		case <-ticker.C:
+			if err := r.Get(ctx, client.ObjectKeyFromObject(job), job); err != nil {
+				return fmt.Errorf("failed to get hook job status: %w", err)
+			}
+
+			if job.Status.Succeeded > 0 {
+				logger.Info("Hook job completed successfully")
+				return nil
+			}
+
+			if job.Status.Failed > 0 {
+				return fmt.Errorf("hook job failed")
+			}
+
+			// Still running, continue waiting
+		}
+	}
+}
+
+// convertEnvVars converts custom EnvVar to corev1.EnvVar
+func convertEnvVars(envVars []neo4jv1alpha1.EnvVar) []corev1.EnvVar {
+	result := make([]corev1.EnvVar, len(envVars))
+	for i, env := range envVars {
+		result[i] = corev1.EnvVar{
+			Name:  env.Name,
+			Value: env.Value,
+		}
+		if env.ValueFrom != nil {
+			result[i].ValueFrom = &corev1.EnvVarSource{}
+			if env.ValueFrom.SecretKeyRef != nil {
+				result[i].ValueFrom.SecretKeyRef = &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: env.ValueFrom.SecretKeyRef.Name,
+					},
+					Key: env.ValueFrom.SecretKeyRef.Key,
+				}
+			}
+			if env.ValueFrom.ConfigMapKeyRef != nil {
+				result[i].ValueFrom.ConfigMapKeyRef = &corev1.ConfigMapKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: env.ValueFrom.ConfigMapKeyRef.Name,
+					},
+					Key: env.ValueFrom.ConfigMapKeyRef.Key,
+				}
+			}
+		}
+	}
+	return result
 }
 
 func (r *Neo4jRestoreReconciler) getTargetCluster(ctx context.Context, restore *neo4jv1alpha1.Neo4jRestore) (*neo4jv1alpha1.Neo4jEnterpriseCluster, error) {
@@ -582,52 +860,26 @@ func (r *Neo4jRestoreReconciler) updateRestoreStatus(ctx context.Context, restor
 	restore.Status.Phase = phase
 	restore.Status.Message = message
 
-	// Update condition
-	condition := metav1.Condition{
-		Type:               "Ready",
-		Status:             metav1.ConditionTrue,
-		Reason:             phase,
-		Message:            message,
-		LastTransitionTime: metav1.Now(),
+	if err := r.Status().Update(ctx, restore); err != nil {
+		log.FromContext(ctx).Error(err, "Failed to update restore status")
 	}
-
-	if phase == "Failed" {
-		condition.Status = metav1.ConditionFalse
-	}
-
-	// Update or add condition
-	updated := false
-	for i, existingCondition := range restore.Status.Conditions {
-		if existingCondition.Type == condition.Type {
-			restore.Status.Conditions[i] = condition
-			updated = true
-			break
-		}
-	}
-	if !updated {
-		restore.Status.Conditions = append(restore.Status.Conditions, condition)
-	}
-
-	restore.Status.ObservedGeneration = restore.Generation
-	r.Status().Update(ctx, restore)
 }
 
 func (r *Neo4jRestoreReconciler) updateRestoreStats(ctx context.Context, restore *neo4jv1alpha1.Neo4jRestore, job *batchv1.Job) {
-	// Calculate and update restore statistics
-	stats := &neo4jv1alpha1.RestoreStats{
-		DataSize:   "unknown",
-		Throughput: "unknown",
-		FileCount:  0,
-		ErrorCount: 0,
+	// Update completion time
+	if job.Status.CompletionTime != nil {
+		restore.Status.CompletionTime = job.Status.CompletionTime
 	}
 
-	if job.Status.CompletionTime != nil && job.Status.StartTime != nil {
-		duration := job.Status.CompletionTime.Sub(job.Status.StartTime.Time)
-		stats.Duration = duration.String()
+	// Update statistics from job
+	if len(job.Status.Conditions) > 0 {
+		lastCondition := job.Status.Conditions[len(job.Status.Conditions)-1]
+		restore.Status.Message = lastCondition.Message
 	}
 
-	restore.Status.Stats = stats
-	r.Status().Update(ctx, restore)
+	if err := r.Status().Update(ctx, restore); err != nil {
+		log.FromContext(ctx).Error(err, "Failed to update restore stats")
+	}
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -639,4 +891,19 @@ func (r *Neo4jRestoreReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			MaxConcurrentReconciles: r.MaxConcurrentReconciles,
 		}).
 		Complete(r)
+}
+
+// Helper function to check if pod is ready
+func isPodReady(pod *corev1.Pod) bool {
+	if pod.Status.Phase != corev1.PodRunning {
+		return false
+	}
+
+	for _, condition := range pod.Status.Conditions {
+		if condition.Type == corev1.PodReady {
+			return condition.Status == corev1.ConditionTrue
+		}
+	}
+
+	return false
 }

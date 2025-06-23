@@ -36,7 +36,7 @@ FORCE=${FORCE:-false}
 cleanup_cluster() {
     if [[ "${CLEANUP_CLUSTER}" == "true" ]]; then
         log_info "Cleaning up Kind cluster..."
-        
+
         # Use safer pattern matching
         local clusters
         clusters=$(kind get clusters 2>/dev/null || echo "")
@@ -61,19 +61,19 @@ cleanup_cluster() {
 cleanup_resources() {
     if [[ "${CLEANUP_RESOURCES}" == "true" ]]; then
         log_info "Cleaning up Kubernetes resources..."
-        
+
         # Check if kubectl is available
         if ! command -v kubectl >/dev/null 2>&1; then
             log_warning "kubectl not found, skipping resource cleanup"
             return 0
         fi
-        
+
         # Check if cluster is accessible
         if ! kubectl cluster-info >/dev/null 2>&1; then
             log_warning "Kubernetes cluster not accessible, skipping resource cleanup"
             return 0
         fi
-        
+
         # Cleanup Neo4j resources with better error handling
         log_info "Cleaning up Neo4j resources..."
         local resources=(
@@ -85,7 +85,7 @@ cleanup_resources() {
             "neo4jgrants"
             "neo4jrestores"
         )
-        
+
         for resource in "${resources[@]}"; do
             if kubectl get "${resource}" --all-namespaces >/dev/null 2>&1; then
                 log_info "Deleting ${resource}..."
@@ -94,7 +94,7 @@ cleanup_resources() {
                 }
             fi
         done
-        
+
         # Cleanup operator deployment
         if kubectl get deployment neo4j-operator-controller-manager -n neo4j-operator-system >/dev/null 2>&1; then
             if [[ "${FORCE}" == "true" ]] || confirm "Delete operator deployment?"; then
@@ -103,7 +103,7 @@ cleanup_resources() {
                 }
             fi
         fi
-        
+
         # Cleanup CRDs
         if [[ "${FORCE}" == "true" ]] || confirm "Delete CRDs? This will remove all Neo4j resources!"; then
             local crds
@@ -114,7 +114,7 @@ cleanup_resources() {
                 }
             fi
         fi
-        
+
         # Cleanup namespaces
         if kubectl get namespace neo4j-operator-system >/dev/null 2>&1; then
             if [[ "${FORCE}" == "true" ]] || confirm "Delete neo4j-operator-system namespace?"; then
@@ -123,7 +123,7 @@ cleanup_resources() {
                 }
             fi
         fi
-        
+
         log_success "Kubernetes resources cleaned up"
     fi
 }
@@ -132,7 +132,7 @@ cleanup_resources() {
 cleanup_temp() {
     if [[ "${CLEANUP_TEMP}" == "true" ]]; then
         log_info "Cleaning up temporary files..."
-        
+
         # Remove build artifacts safely
         local temp_dirs=("bin" "tmp" "dist")
         for dir in "${temp_dirs[@]}"; do
@@ -141,7 +141,7 @@ cleanup_temp() {
                 log_info "Removed ${dir}/ directory"
             fi
         done
-        
+
         # Remove individual files safely
         local temp_files=("cover.out" "results.sarif" "build-errors.log" ".air.toml")
         for file in "${temp_files[@]}"; do
@@ -150,7 +150,7 @@ cleanup_temp() {
                 log_info "Removed ${file}"
             fi
         done
-        
+
         # Remove vendor if exists
         if [[ -d "vendor" ]]; then
             if [[ "${FORCE}" == "true" ]] || confirm "Delete vendor/ directory?"; then
@@ -158,7 +158,7 @@ cleanup_temp() {
                 log_info "Removed vendor/ directory"
             fi
         fi
-        
+
         log_success "Temporary files cleaned up"
     fi
 }
@@ -167,7 +167,7 @@ cleanup_temp() {
 cleanup_logs() {
     if [[ "${CLEANUP_LOGS}" == "true" ]]; then
         log_info "Cleaning up log files..."
-        
+
         if [[ -d "logs" ]]; then
             if [[ "${FORCE}" == "true" ]] || confirm "Delete all log files?"; then
                 # Safer log cleanup
@@ -188,16 +188,16 @@ confirm() {
     if [[ "${FORCE}" == "true" ]]; then
         return 0
     fi
-    
+
     local response
     read -r -t 30 -p "$1 [y/N] " response || {
         echo
         log_info "No response received, defaulting to 'no'"
         return 1
     }
-    
+
     case "${response}" in
-        [yY][eE][sS]|[yY]) 
+        [yY][eE][sS]|[yY])
             return 0
             ;;
         *)
@@ -224,7 +224,7 @@ validate_environment() {
         log_error "This script must be run from the neo4j-operator project root directory"
         exit 1
     fi
-    
+
     # Check if running as root (which could be dangerous)
     if [[ "${EUID}" -eq 0 ]]; then
         log_warning "Running as root. This may be dangerous for file cleanup operations."
@@ -238,21 +238,21 @@ validate_environment() {
 # Main function
 main() {
     log_info "Neo4j Operator Development Cleanup"
-    
+
     validate_environment
     show_plan
-    
+
     if [[ "${FORCE}" != "true" ]] && ! confirm "Proceed with cleanup?"; then
         log_info "Cleanup cancelled"
         exit 0
     fi
-    
+
     # Run cleanup operations in order
     cleanup_resources
     cleanup_cluster
     cleanup_temp
     cleanup_logs
-    
+
     log_success "Cleanup complete!"
 }
 
@@ -294,7 +294,7 @@ Options:
 Environment Variables:
   CLEANUP_CLUSTER    Set to 'true' to cleanup cluster (default: false)
   CLEANUP_RESOURCES  Set to 'false' to skip resources (default: true)
-  CLEANUP_TEMP       Set to 'false' to skip temp files (default: true)  
+  CLEANUP_TEMP       Set to 'false' to skip temp files (default: true)
   CLEANUP_LOGS       Set to 'true' to cleanup logs (default: false)
   FORCE              Set to 'true' to skip prompts (default: false)
 
@@ -319,4 +319,4 @@ if [[ -t 0 ]]; then
 else
     log_error "This script should not be run in a pipeline for safety reasons"
     exit 1
-fi 
+fi

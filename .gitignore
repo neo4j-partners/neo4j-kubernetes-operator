@@ -9,6 +9,8 @@ Dockerfile.cross
 
 # Test binary, built with `go test -c`
 *.test
+e2e.test
+integration.test
 
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
@@ -74,6 +76,12 @@ docker-compose.override.yml
 /test-results/
 *.html
 quality-summary.md
+
+# Temporary analysis and summary files
+*_SUMMARY.md
+*_REPORT.md
+*ANALYSIS*.md
+*VALIDATION*.md
 
 # Test artifacts
 /test/artifacts/

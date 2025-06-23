@@ -152,7 +152,7 @@ spec:
         resources:
           limits:
             cpu: 500m
-            memory: 512Mi  
+            memory: 512Mi
           requests:
             cpu: 100m
             memory: 64Mi
@@ -231,14 +231,14 @@ k8s_yaml(blob(metrics_service))
 
 # Port forwards
 print("🌐 Setting up port forwards...")
-k8s_resource('neo4j-operator-controller-manager', 
+k8s_resource('neo4j-operator-controller-manager',
              port_forwards=[
                  '8080:8080',  # Metrics
                  '8081:8081',  # Health
              ])
 
 if debug_mode:
-    k8s_resource('neo4j-operator-controller-manager', 
+    k8s_resource('neo4j-operator-controller-manager',
                  port_forwards=[
                      '6060:6060',  # pprof
                  ])
@@ -283,11 +283,11 @@ spec:
 k8s_yaml(blob(basic_cluster_yaml))
 
 # Resource grouping
-k8s_resource('neo4j-operator-controller-manager', 
+k8s_resource('neo4j-operator-controller-manager',
              labels=['operator'])
-k8s_resource('neo4j-operator-metrics', 
+k8s_resource('neo4j-operator-metrics',
              labels=['operator'])
-k8s_resource('basic-neo4j', 
+k8s_resource('basic-neo4j',
              labels=['samples'])
 
 # Custom buttons
@@ -341,4 +341,4 @@ print("   tilt up                    # Start development environment")
 print("   tilt down                  # Stop development environment")
 print("   tilt trigger test-unit     # Run unit tests")
 print("   tilt trigger test-samples  # Test sample configurations")
-print("   tilt trigger logs          # View operator logs") 
+print("   tilt trigger logs          # View operator logs")

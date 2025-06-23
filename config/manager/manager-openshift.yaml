@@ -1,0 +1,157 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    control-plane: controller-manager
+    app.kubernetes.io/name: neo4j-operator
+    app.kubernetes.io/managed-by: kustomize
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+  name: system
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: controller-manager
+  namespace: system
+  labels:
+    control-plane: controller-manager
+    app.kubernetes.io/name: neo4j-operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/component: manager
+    app.kubernetes.io/part-of: neo4j-operator
+    app.kubernetes.io/version: "1.0.0"
+spec:
+  selector:
+    matchLabels:
+      control-plane: controller-manager
+  replicas: 1
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: manager
+        # OpenShift-specific annotations
+        openshift.io/scc: restricted-v2
+      labels:
+        control-plane: controller-manager
+        app.kubernetes.io/name: neo4j-operator
+        app.kubernetes.io/component: manager
+    spec:
+      # Multi-architecture support for OpenShift
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                - key: kubernetes.io/arch
+                  operator: In
+                  values:
+                    - amd64
+                    - arm64
+                - key: kubernetes.io/os
+                  operator: In
+                  values:
+                    - linux
+      # OpenShift restricted-v2 SCC compatible security context
+      securityContext:
+        runAsNonRoot: true
+        # Use a specific non-root UID that works with OpenShift
+        runAsUser: 1001
+        runAsGroup: 0
+        fsGroup: 0
+        # Required for restricted-v2 SCC
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - command:
+        - /manager
+        args:
+          - --leader-elect
+          - --health-probe-bind-address=:8081
+          - --metrics-bind-address=:8080
+        image: controller:latest
+        name: manager
+        # Container-level security context for restricted-v2 SCC
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1001
+          runAsGroup: 0
+          capabilities:
+            drop:
+            - ALL
+          seccompProfile:
+            type: RuntimeDefault
+        # Health and readiness probes
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          initialDelaySeconds: 15
+          periodSeconds: 20
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8081
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        # Startup probe for better handling of slow starts
+        startupProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 30
+        # Resource limits and requests
+        resources:
+          limits:
+            cpu: 500m
+            memory: 256Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        # Environment variables for OpenShift
+        env:
+        - name: WATCH_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: OPERATOR_NAME
+          value: "neo4j-operator"
+        # Ports
+        ports:
+        - containerPort: 8080
+          name: metrics
+          protocol: TCP
+        - containerPort: 8081
+          name: health
+          protocol: TCP
+        - containerPort: 9443
+          name: webhook-server
+          protocol: TCP
+        # Volume mounts for read-only root filesystem
+        volumeMounts:
+        - mountPath: /tmp
+          name: tmp-dir
+        - mountPath: /var/tmp
+          name: var-tmp-dir
+      serviceAccountName: controller-manager
+      terminationGracePeriodSeconds: 10
+      # Volumes for read-only root filesystem
+      volumes:
+      - name: tmp-dir
+        emptyDir: {}
+      - name: var-tmp-dir
+        emptyDir: {}
