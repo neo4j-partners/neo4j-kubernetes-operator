@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
   pull_request:
-    branches: [main, develop]
+    branches: [main]
   release:
     types: [published]
 
@@ -18,103 +18,19 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Go
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: ${{ env.GO_VERSION }}
-
-      - name: Cache dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
-
-      - name: Download dependencies
-        run: go mod download
-
+          go-version: '1.21'
       - name: Run tests
         run: make test
-
-      - name: Upload coverage reports
-        uses: codecov/codecov-action@v4
-        with:
-          file: ./cover.out
-          flags: unittests
-          name: codecov-umbrella
-
-  lint:
-    name: Lint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-
-      - name: Cache dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
-
-      - name: Download dependencies
-        run: go mod download
-
-      - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v6
-        with:
-          version: v1.55.2
-          args: --timeout=5m
-
-      - name: Install staticcheck
-        run: go install honnef.co/go/tools/cmd/staticcheck@2025.1.1
-
-      - name: Run staticcheck
-        run: staticcheck ./...
-
-      - name: Run comprehensive static analysis
-        run: make lint-comprehensive
-
-  security:
-    name: Security Scan
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-
-      - name: Install gosec
-        run: go install github.com/securecodewarrior/gosec/v2/cmd/gosec@latest
-
-      - name: Run Gosec Security Scanner
-        run: gosec -no-fail -fmt sarif -out results.sarif ./...
-        continue-on-error: true
-
-      - name: Upload SARIF file
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: results.sarif
-        if: always()
 
   integration-test:
     name: Integration Test
     runs-on: ubuntu-latest
-    needs: [test, lint]
+    needs: [test]
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -151,21 +67,18 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
-    needs: [test, lint]
+    needs: test
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Go
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: ${{ env.GO_VERSION }}
-
-      - name: Build binary
+          go-version: '1.21'
+      - name: Build
         run: make build
-
-      - name: Build Docker image
+      - name: Build container image
         run: make docker-build
-
       - name: Log in to Container Registry
         if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
@@ -173,7 +86,6 @@ jobs:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Extract metadata
         if: github.event_name != 'pull_request'
         id: meta
@@ -186,7 +98,6 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=sha
-
       - name: Build and push Docker image
         if: github.event_name != 'pull_request'
         uses: docker/build-push-action@v5
@@ -196,30 +107,42 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
-  release:
-    name: Release
+  security:
+    name: Security Scan
     runs-on: ubuntu-latest
-    if: github.event_name == 'release'
-    needs: [integration-test, build]
     steps:
       - uses: actions/checkout@v4
-
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
-
-      - name: Create release artifacts
+      - name: Run Gosec Security Scanner
         run: |
-          make build-installer
-          make bundle
+          go install github.com/securecodewarrior/gosec/v2/cmd/gosec@latest
+          gosec -no-fail -fmt sarif -out results.sarif ./...
+        continue-on-error: true
+      - name: Upload SARIF file
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
+        if: always()
 
-      - name: Upload release artifacts
-        uses: actions/upload-release-asset@v1
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    needs: [integration-test, build]
+    if: github.event_name == 'release'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v5
+        with:
+          version: latest
+          args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: ./dist/install.yaml
-          asset_name: neo4j-operator-${{ github.event.release.tag_name }}.yaml
-          asset_content_type: application/yaml

@@ -2,21 +2,15 @@ name: Static Analysis
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
   pull_request:
-    branches: [main, develop]
-  schedule:
-    # Run weekly on Sundays at 2 AM UTC
-    - cron: '0 2 * * 0'
-
-env:
-  GO_VERSION: '1.21'
+    branches: [main]
 
 jobs:
-  comprehensive-analysis:
-    name: Comprehensive Static Analysis
+  lint:
+    name: Lint
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -24,144 +18,8 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version: '1.21'
 
-      - name: Cache Go modules
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
-
-      - name: Download dependencies
-        run: go mod download
-
-      - name: Install analysis tools
+      - name: Run comprehensive static analysis
         run: |
-          go install honnef.co/go/tools/cmd/staticcheck@2025.1.1
-          go install github.com/kisielk/errcheck@latest
-          go install github.com/fzipp/gocyclo/cmd/gocyclo@latest
-          go install github.com/client9/misspell/cmd/misspell@latest
-          go install github.com/gordonklaus/ineffassign@latest
-          go install github.com/mdempsky/unconvert@latest
-          go install golang.org/x/vuln/cmd/govulncheck@latest
-
-      - name: Create reports directory
-        run: mkdir -p reports
-
-      - name: Run golangci-lint with full config
-        run: make lint
-        continue-on-error: true
-
-      - name: Run staticcheck
-        run: |
-          staticcheck -f stylish ./... | tee reports/staticcheck.txt
-        continue-on-error: true
-
-      - name: Run errcheck
-        run: |
-          errcheck -verbose ./... | tee reports/errcheck.txt
-        continue-on-error: true
-
-      - name: Run gocyclo (complexity analysis)
-        run: |
-          gocyclo -over 10 . | tee reports/gocyclo.txt
-        continue-on-error: true
-
-      - name: Run misspell
-        run: |
-          misspell -error . | tee reports/misspell.txt
-        continue-on-error: true
-
-      - name: Run ineffassign
-        run: |
-          ineffassign . | tee reports/ineffassign.txt
-        continue-on-error: true
-
-      - name: Run unconvert
-        run: |
-          unconvert . | tee reports/unconvert.txt
-        continue-on-error: true
-
-      - name: Run vulnerability check
-        run: |
-          govulncheck ./... | tee reports/govulncheck.txt
-        continue-on-error: true
-
-      - name: Upload analysis reports
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: static-analysis-reports
-          path: reports/
-          retention-days: 30
-
-      - name: Comment PR with analysis summary
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const path = require('path');
-
-            let summary = '## 📊 Static Analysis Summary\n\n';
-
-            const reportFiles = [
-              { name: 'staticcheck.txt', tool: 'Staticcheck' },
-              { name: 'errcheck.txt', tool: 'Errcheck' },
-              { name: 'gocyclo.txt', tool: 'Gocyclo' },
-              { name: 'misspell.txt', tool: 'Misspell' },
-              { name: 'ineffassign.txt', tool: 'Ineffassign' },
-              { name: 'unconvert.txt', tool: 'Unconvert' },
-              { name: 'govulncheck.txt', tool: 'Govulncheck' }
-            ];
-
-            for (const report of reportFiles) {
-              const filePath = path.join('reports', report.name);
-              if (fs.existsSync(filePath)) {
-                const content = fs.readFileSync(filePath, 'utf8').trim();
-                if (content) {
-                  summary += `### ⚠️ ${report.tool}\n\`\`\`\n${content.slice(0, 1000)}${content.length > 1000 ? '\n... (truncated)' : ''}\n\`\`\`\n\n`;
-                } else {
-                  summary += `### ✅ ${report.tool}\nNo issues found.\n\n`;
-                }
-              }
-            }
-
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: summary
-            });
-
-  code-quality-metrics:
-    name: Code Quality Metrics
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-
-      - name: Run comprehensive code quality analysis
-        run: |
-          chmod +x scripts/code-quality.sh
-          ./scripts/code-quality.sh --all --report
-        continue-on-error: true
-
-      - name: Upload quality reports
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: code-quality-reports
-          path: |
-            reports/
-            coverage/
-          retention-days: 30
+          make lint-comprehensive
