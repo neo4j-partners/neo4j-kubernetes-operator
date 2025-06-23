@@ -371,6 +371,7 @@ start_normal_mode() {
         --zap-devel=true \
         --zap-log-level=debug \
         --leader-elect=false \
+        --enable-webhooks=false \
         --metrics-bind-address=":${METRICS_PORT}" \
         --health-probe-bind-address=":${HEALTH_PORT}" \
         2>&1 | tee "logs/operator-$(date +%Y%m%d-%H%M%S).log"
@@ -390,6 +391,9 @@ start_debug_mode() {
         --zap-devel=true \
         --zap-log-level=debug \
         --leader-elect=false \
+        --enable-webhooks=false \
+        --metrics-bind-address=":${METRICS_PORT}" \
+        --health-probe-bind-address=":${HEALTH_PORT}" \
         --pprof-bind-address=":${PPROF_PORT}"
 }
 
@@ -419,7 +423,7 @@ start_tilt_mode() {
 
 # Create air configuration
 create_air_config() {
-    cat > "${PROJECT_ROOT}/.air.toml" << 'EOF'
+    cat > "${PROJECT_ROOT}/.air.toml" << EOF
 root = "."
 testdata_dir = "testdata"
 tmp_dir = "tmp"
@@ -429,8 +433,9 @@ tmp_dir = "tmp"
     "--zap-devel=true",
     "--zap-log-level=debug",
     "--leader-elect=false",
-    "--metrics-bind-address=:8080",
-    "--health-probe-bind-address=:8081"
+    "--enable-webhooks=false",
+    "--metrics-bind-address=:${METRICS_PORT}",
+    "--health-probe-bind-address=:${HEALTH_PORT}"
   ]
   bin = "./tmp/main"
   cmd = "go build -o ./tmp/main cmd/main.go"
