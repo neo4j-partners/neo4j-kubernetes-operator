@@ -192,6 +192,9 @@ init_dev_env() {
     # Create development directories
     mkdir -p "${PROJECT_ROOT}/"{logs,tmp,coverage,reports,docs/dev}
 
+    # Load existing configuration or set defaults
+    load_config
+
     # Initialize configuration
     save_config
 
@@ -222,7 +225,6 @@ install_dev_tools() {
         "github.com/air-verse/air@latest"
         "github.com/golangci/golangci-lint/cmd/golangci-lint@latest"
         "github.com/onsi/ginkgo/v2/ginkgo@latest"
-        "github.com/securecodewarrior/sast-scan/cmd/sast-scan@latest"
         "github.com/fzipp/gocyclo/cmd/gocyclo@latest"
         "honnef.co/go/tools/cmd/staticcheck@latest"
         "github.com/kisielk/errcheck@latest"
