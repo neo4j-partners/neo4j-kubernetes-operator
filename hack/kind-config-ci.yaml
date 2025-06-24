@@ -1,0 +1,36 @@
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: neo4j-operator-test
+nodes:
+- role: control-plane
+  kubeadmConfigPatches:
+  - |
+    kind: InitConfiguration
+    nodeRegistration:
+      kubeletExtraArgs:
+        node-labels: "topology.kubernetes.io/zone=zone-a"
+        # Reduced resource limits for CI stability
+        max-pods: "50"
+        # Disable problematic feature gates
+        feature-gates: "LocalStorageCapacityIsolation=false"
+  extraPortMappings:
+  - containerPort: 7474
+    hostPort: 7474
+    protocol: TCP
+  - containerPort: 7687
+    hostPort: 7687
+    protocol: TCP
+- role: worker
+  kubeadmConfigPatches:
+  - |
+    kind: JoinConfiguration
+    nodeRegistration:
+      kubeletExtraArgs:
+        node-labels: "topology.kubernetes.io/zone=zone-b"
+        max-pods: "50"
+networking:
+  apiServerAddress: "127.0.0.1"
+  apiServerPort: 6443
+  podSubnet: "10.244.0.0/16"
+  serviceSubnet: "10.96.0.0/12"
+  disableDefaultCNI: false
