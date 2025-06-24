@@ -20,9 +20,8 @@ jobs:
         with:
           go-version: '1.24'
 
-      - name: Install dependencies
+      - name: Install dependencies and generate manifests
         run: |
-          make install-tools
           make manifests
 
       - name: Environment cleanup and sanity checks

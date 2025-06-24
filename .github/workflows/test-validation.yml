@@ -25,9 +25,8 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
 
-      - name: Install dependencies
+      - name: Install dependencies and generate manifests
         run: |
-          make install-tools
           make manifests
 
       - name: Environment cleanup and sanity checks
