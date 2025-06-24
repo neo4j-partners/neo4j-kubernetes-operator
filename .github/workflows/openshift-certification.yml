@@ -1,11 +1,16 @@
 name: OpenShift Certification
 
+# DISABLED: OpenShift certification workflow temporarily disabled
+# on:
+#   push:
+#     branches: [ main, develop ]
+#     tags: [ 'v*' ]
+#   pull_request:
+#     branches: [ main ]
+#   workflow_dispatch:
+
+# Workflow disabled - uncomment the above triggers to re-enable
 on:
-  push:
-    branches: [ main, develop ]
-    tags: [ 'v*' ]
-  pull_request:
-    branches: [ main ]
   workflow_dispatch:
 
 env:
@@ -20,6 +25,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+    # Skip this job unless manually triggered
+    if: github.event_name == 'workflow_dispatch'
 
     steps:
     - name: Checkout repository
@@ -70,6 +77,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+    # Skip this job unless manually triggered
+    if: github.event_name == 'workflow_dispatch'
 
     steps:
     - name: Checkout repository

@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"testing"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -34,11 +33,6 @@ import (
 	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1"
 	controller "github.com/neo4j-labs/neo4j-kubernetes-operator/internal/controller"
 )
-
-func TestSecurityCoordinator(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "Security Coordinator Suite")
-}
 
 var _ = Describe("Security Coordinator", func() {
 	var (

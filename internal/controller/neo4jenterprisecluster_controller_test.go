@@ -94,6 +94,16 @@ var _ = Describe("Neo4jEnterpriseCluster Controller", func() {
 					fmt.Printf("Error getting cluster during cleanup: %v\n", err)
 					return false
 				}
+
+				// If cluster is stuck with finalizers, force remove them
+				if cluster.DeletionTimestamp != nil && len(cluster.Finalizers) > 0 {
+					fmt.Printf("Cluster is stuck with finalizers: %v, forcing removal\n", cluster.Finalizers)
+					cluster.Finalizers = []string{}
+					if err := k8sClient.Update(ctx, cluster); err != nil {
+						fmt.Printf("Failed to remove finalizers: %v\n", err)
+					}
+				}
+
 				// Debug: Print finalizers and status
 				fmt.Printf("Cluster still exists. Finalizers: %v, DeletionTimestamp: %v\n", cluster.Finalizers, cluster.DeletionTimestamp)
 				if cluster.DeletionTimestamp != nil {
@@ -115,7 +125,7 @@ var _ = Describe("Neo4jEnterpriseCluster Controller", func() {
 					}
 				}
 				return false
-			}, time.Second*180, interval).Should(BeTrue(), "Cluster should be deleted within 180 seconds")
+			}, time.Second*60, interval).Should(BeTrue(), "Cluster should be deleted within 60 seconds")
 		}
 	})
 

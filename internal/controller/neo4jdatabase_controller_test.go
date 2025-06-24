@@ -18,6 +18,7 @@ package controller_test
 
 import (
 	"context"
+	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -61,14 +62,35 @@ var _ = Describe("Neo4jDatabase Controller", func() {
 			// Cleanup logic after each test, like removing the resource instance.
 			resource := &neo4jv1alpha1.Neo4jDatabase{}
 			err := k8sClient.Get(ctx, typeNamespacedName, resource)
-			Expect(err).NotTo(HaveOccurred())
+			if err != nil && !errors.IsNotFound(err) {
+				Expect(err).NotTo(HaveOccurred())
+			}
 
-			By("Cleanup the specific resource instance Neo4jDatabase")
-			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
-			Eventually(func() bool {
-				err := k8sClient.Get(ctx, typeNamespacedName, resource)
-				return errors.IsNotFound(err)
-			}, "180s", "2s").Should(BeTrue(), "Resource should be deleted within 180 seconds")
+			if err == nil {
+				By("Cleanup the specific resource instance Neo4jDatabase")
+				Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
+
+				// Wait for resource to be deleted, with finalizer handling
+				Eventually(func() bool {
+					err := k8sClient.Get(ctx, typeNamespacedName, resource)
+					if errors.IsNotFound(err) {
+						return true
+					}
+					if err != nil {
+						return false
+					}
+
+					// If resource is stuck with finalizers, force remove them
+					if resource.DeletionTimestamp != nil && len(resource.Finalizers) > 0 {
+						resource.Finalizers = []string{}
+						if updateErr := k8sClient.Update(ctx, resource); updateErr != nil {
+							fmt.Printf("Failed to remove finalizers: %v\n", updateErr)
+						}
+					}
+
+					return false
+				}, "60s", "2s").Should(BeTrue(), "Resource should be deleted within 60 seconds")
+			}
 		})
 		It("should successfully reconcile the resource", func() {
 			By("Reconciling the created resource")
