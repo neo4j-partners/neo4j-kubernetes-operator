@@ -53,8 +53,8 @@ var _ = Describe("Security Coordinator", func() {
 	BeforeEach(func() {
 		ctx, cancel = context.WithCancel(context.Background())
 		scheme = runtime.NewScheme()
-		_ = clientgoscheme.AddToScheme(scheme)
-		_ = neo4jv1alpha1.AddToScheme(scheme)
+		Expect(clientgoscheme.AddToScheme(scheme)).To(Succeed())
+		Expect(neo4jv1alpha1.AddToScheme(scheme)).To(Succeed())
 
 		fakeClient = fake.NewClientBuilder().WithScheme(scheme).Build()
 		coordinator = controller.NewSecurityCoordinator(fakeClient)

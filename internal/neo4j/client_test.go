@@ -50,8 +50,8 @@ var _ = Describe("Neo4j Client", func() {
 	BeforeEach(func() {
 		ctx = context.Background()
 		scheme = runtime.NewScheme()
-		_ = clientgoscheme.AddToScheme(scheme)
-		_ = neo4jv1alpha1.AddToScheme(scheme)
+		Expect(clientgoscheme.AddToScheme(scheme)).To(Succeed())
+		Expect(neo4jv1alpha1.AddToScheme(scheme)).To(Succeed())
 
 		// Create test cluster
 		cluster = &neo4jv1alpha1.Neo4jEnterpriseCluster{

@@ -39,7 +39,8 @@ var _ = Describe("controller", Ordered, func() {
 
 		By("creating manager namespace")
 		cmd := exec.Command("kubectl", "create", "ns", namespace)
-		_, _ = utils.Run(cmd)
+		_, err := utils.Run(cmd)
+		Expect(err).To(Succeed())
 	})
 
 	AfterAll(func() {
@@ -51,17 +52,29 @@ var _ = Describe("controller", Ordered, func() {
 
 		By("removing manager namespace")
 		cmd := exec.Command("kubectl", "delete", "ns", namespace)
-		_, _ = utils.Run(cmd)
+		_, err := utils.Run(cmd)
+		Expect(err).To(Succeed())
 	})
 
 	AfterEach(func() {
 		By("removing the controller-manager")
 		cmd := exec.Command("make", "undeploy")
-		_, _ = utils.Run(cmd)
+		_, err := utils.Run(cmd)
+		Expect(err).To(Succeed())
 
 		By("removing the CRDs")
 		cmd = exec.Command("make", "uninstall")
-		_, _ = utils.Run(cmd)
+		_, err = utils.Run(cmd)
+		Expect(err).To(Succeed())
+
+		Eventually(func() error {
+			cmd := exec.Command("kubectl", "get", "namespace", namespace)
+			_, err := utils.Run(cmd)
+			if err != nil {
+				return nil // Namespace is deleted
+			}
+			return fmt.Errorf("namespace still exists")
+		}, "180s", "2s").Should(Succeed())
 	})
 
 	Context("Operator", func() {

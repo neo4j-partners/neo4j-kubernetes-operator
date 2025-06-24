@@ -46,8 +46,8 @@ var _ = Describe("Neo4jEnterpriseCluster Webhook", func() {
 	BeforeEach(func() {
 		ctx = context.Background()
 		scheme = runtime.NewScheme()
-		_ = clientgoscheme.AddToScheme(scheme)
-		_ = neo4jv1alpha1.AddToScheme(scheme)
+		Expect(clientgoscheme.AddToScheme(scheme)).To(Succeed())
+		Expect(neo4jv1alpha1.AddToScheme(scheme)).To(Succeed())
 
 		client := fake.NewClientBuilder().WithScheme(scheme).Build()
 		webhook = &webhooks.Neo4jEnterpriseClusterWebhook{

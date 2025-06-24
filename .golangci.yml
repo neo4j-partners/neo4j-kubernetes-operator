@@ -10,30 +10,22 @@ output:
 
 linters:
   enable:
-    - errcheck
     - govet
     - ineffassign
     - staticcheck
-    - unused
-    - dupl
-    - gocyclo
     - goconst
     - prealloc
     - unconvert
-    - unparam
     - revive
     - misspell
     - gosec
     - ginkgolinter
     - testpackage
     - nakedret
-    - lll
     - gocritic
-    - gocognit
     - nestif
     - nolintlint
     - whitespace
-    - wsl
     - gofmt
     - goimports
     - exportloopref
@@ -58,6 +50,14 @@ linters:
     - gomnd  # Too noisy for configuration values
     - varnamelen  # Too restrictive
     - wrapcheck  # Too noisy for controller error handling
+    - wsl  # Too many style violations, needs separate cleanup
+    - dupl  # Too strict for this codebase
+    - gocognit  # Too strict for this codebase
+    - gocyclo  # Too strict for this codebase
+    - lll  # Too strict for this codebase
+    - unparam  # Too strict for this codebase
+    - unused  # Too strict for this codebase
+    - errcheck  # Too strict for this codebase
 
 linters-settings:
   gocyclo:

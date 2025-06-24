@@ -65,6 +65,10 @@ var _ = Describe("Neo4jDatabase Controller", func() {
 
 			By("Cleanup the specific resource instance Neo4jDatabase")
 			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, typeNamespacedName, resource)
+				return errors.IsNotFound(err)
+			}, "180s", "2s").Should(BeTrue(), "Resource should be deleted within 180 seconds")
 		})
 		It("should successfully reconcile the resource", func() {
 			By("Reconciling the created resource")

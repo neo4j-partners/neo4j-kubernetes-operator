@@ -46,7 +46,7 @@ var _ = Describe("Failure Scenarios", func() {
 				Name: namespace,
 			},
 		}
-		_ = k8sClient.Create(ctx, ns)
+		Expect(k8sClient.Create(ctx, ns)).To(Succeed())
 	})
 
 	AfterEach(func() {
@@ -56,7 +56,7 @@ var _ = Describe("Failure Scenarios", func() {
 				Name: namespace,
 			},
 		}
-		_ = k8sClient.Delete(ctx, ns)
+		Expect(k8sClient.Delete(ctx, ns)).To(Succeed())
 	})
 
 	Context("Invalid Cluster Configurations", func() {
@@ -202,7 +202,7 @@ var _ = Describe("Failure Scenarios", func() {
 			Expect(errors.IsAlreadyExists(err)).To(BeTrue())
 
 			// Clean up
-			_ = k8sClient.Delete(ctx, cluster1)
+			Expect(k8sClient.Delete(ctx, cluster1)).To(Succeed())
 		})
 	})
 
@@ -393,7 +393,7 @@ var _ = Describe("Failure Scenarios", func() {
 			}, time.Minute*2, time.Second*10).ShouldNot(Equal("Ready"))
 
 			// Clean up
-			_ = k8sClient.Delete(ctx, cluster)
+			Expect(k8sClient.Delete(ctx, cluster)).To(Succeed())
 		})
 	})
 
@@ -436,7 +436,7 @@ var _ = Describe("Failure Scenarios", func() {
 			}, time.Minute*2, time.Second*10).ShouldNot(Equal("Ready"))
 
 			// Clean up
-			_ = k8sClient.Delete(ctx, cluster)
+			Expect(k8sClient.Delete(ctx, cluster)).To(Succeed())
 		})
 	})
 
@@ -533,9 +533,9 @@ var _ = Describe("Failure Scenarios", func() {
 			}, time.Minute*5, time.Second*10).Should(BeTrue())
 
 			// Clean up
-			_ = k8sClient.Delete(ctx, backup1)
-			_ = k8sClient.Delete(ctx, backup2)
-			_ = k8sClient.Delete(ctx, cluster)
+			Expect(k8sClient.Delete(ctx, backup1)).To(Succeed())
+			Expect(k8sClient.Delete(ctx, backup2)).To(Succeed())
+			Expect(k8sClient.Delete(ctx, cluster)).To(Succeed())
 		})
 	})
 })

@@ -45,9 +45,9 @@ var _ = Describe("AutoScaler", func() {
 		ctx = context.Background()
 
 		scheme := runtime.NewScheme()
-		_ = neo4jv1alpha1.AddToScheme(scheme)
-		_ = corev1.AddToScheme(scheme)
-		_ = appsv1.AddToScheme(scheme)
+		Expect(neo4jv1alpha1.AddToScheme(scheme)).To(Succeed())
+		Expect(corev1.AddToScheme(scheme)).To(Succeed())
+		Expect(appsv1.AddToScheme(scheme)).To(Succeed())
 
 		fakeClient = fake.NewClientBuilder().WithScheme(scheme).Build()
 		autoScaler = controller.NewAutoScaler(fakeClient)

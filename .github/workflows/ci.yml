@@ -63,24 +63,9 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
 
-      - name: Environment cleanup and sanity checks
+      - name: Environment preparation
         run: |
-          echo "Performing aggressive environment cleanup and sanity checks..."
-
-          # Check if we're in a Kubernetes environment
-          if command -v kubectl &> /dev/null; then
-            echo "Kubernetes environment detected, running aggressive cleanup..."
-            # Run cleanup script if available
-            if [ -f "scripts/test-cleanup.sh" ]; then
-              chmod +x scripts/test-cleanup.sh
-              export FORCE_CLEANUP=true
-              export DELETE_NAMESPACES=true
-              export VERBOSE=true
-              ./scripts/test-cleanup.sh cleanup
-            fi
-          else
-            echo "No Kubernetes environment detected, skipping cleanup"
-          fi
+          echo "Performing environment preparation..."
 
           # Clean up any local test artifacts
           rm -rf test-results/ coverage/ logs/ tmp/
@@ -147,10 +132,35 @@ jobs:
       - name: Cleanup resources
         if: always()
         run: |
+          echo "Performing comprehensive cleanup..."
+
           # Ensure kubectl is configured before cleanup
           kubectl config use-context kind-neo4j-operator-test || true
-          make undeploy
-          make uninstall
+
+          # Clean up Neo4j resources if cluster is accessible
+          if kubectl cluster-info &> /dev/null; then
+            echo "Cleaning up Neo4j resources..."
+            if [ -f "scripts/test-cleanup.sh" ]; then
+              chmod +x scripts/test-cleanup.sh
+              export FORCE_CLEANUP=true
+              export DELETE_NAMESPACES=true
+              export VERBOSE=true
+              ./scripts/test-cleanup.sh cleanup || echo "Cleanup script completed with warnings"
+            fi
+
+            # Clean up operator resources
+            make undeploy || echo "Undeploy completed with warnings"
+            make uninstall || echo "Uninstall completed with warnings"
+          else
+            echo "Cluster not accessible, skipping resource cleanup"
+          fi
+
+          # Clean up kind cluster
+          echo "Cleaning up kind cluster..."
+          kind delete cluster --name neo4j-operator-test || echo "Kind cluster cleanup completed with warnings"
+
+          # Clean up local artifacts
+          rm -rf test-results/ coverage/ logs/ tmp/ bin/
 
   build:
     name: Build

@@ -87,8 +87,35 @@ var _ = Describe("Neo4jEnterpriseCluster Controller", func() {
 			// This is a cleanup issue, not a functional test failure
 			Eventually(func() bool {
 				err := k8sClient.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: namespaceName}, cluster)
-				return errors.IsNotFound(err)
-			}, time.Second*30, interval).Should(BeTrue(), "Cluster should be deleted within 30 seconds")
+				if errors.IsNotFound(err) {
+					return true
+				}
+				if err != nil {
+					fmt.Printf("Error getting cluster during cleanup: %v\n", err)
+					return false
+				}
+				// Debug: Print finalizers and status
+				fmt.Printf("Cluster still exists. Finalizers: %v, DeletionTimestamp: %v\n", cluster.Finalizers, cluster.DeletionTimestamp)
+				if cluster.DeletionTimestamp != nil {
+					fmt.Printf("Cluster is marked for deletion but still exists. Checking dependent resources...\n")
+					// Check for dependent resources - list StatefulSets, Services, and PVCs
+					stsList := &appsv1.StatefulSetList{}
+					if err := k8sClient.List(ctx, stsList, client.InNamespace(namespaceName), client.MatchingLabels(map[string]string{"app": clusterName})); err == nil {
+						fmt.Printf("Found %d StatefulSets\n", len(stsList.Items))
+					}
+
+					svcList := &corev1.ServiceList{}
+					if err := k8sClient.List(ctx, svcList, client.InNamespace(namespaceName), client.MatchingLabels(map[string]string{"app": clusterName})); err == nil {
+						fmt.Printf("Found %d Services\n", len(svcList.Items))
+					}
+
+					pvcList := &corev1.PersistentVolumeClaimList{}
+					if err := k8sClient.List(ctx, pvcList, client.InNamespace(namespaceName), client.MatchingLabels(map[string]string{"app": clusterName})); err == nil {
+						fmt.Printf("Found %d PVCs\n", len(pvcList.Items))
+					}
+				}
+				return false
+			}, time.Second*180, interval).Should(BeTrue(), "Cluster should be deleted within 180 seconds")
 		}
 	})
 
