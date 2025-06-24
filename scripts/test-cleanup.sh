@@ -35,6 +35,7 @@ FORCE_CLEANUP=${FORCE_CLEANUP:-true}
 DELETE_NAMESPACES=${DELETE_NAMESPACES:-true}
 DELETE_CRDS=${DELETE_CRDS:-false}
 VERBOSE=${VERBOSE:-false}
+AGGRESSIVE_CLEANUP=${AGGRESSIVE_CLEANUP:-true}
 
 # Check if kubectl is available
 check_kubectl() {
@@ -109,9 +110,48 @@ check_crds() {
     log_success "All required CRDs are installed"
 }
 
+# Force remove finalizers from resources
+force_remove_finalizers() {
+    log_info "Force removing finalizers from stuck resources..."
+
+    # Remove finalizers from Neo4jEnterpriseClusters
+    kubectl get neo4jenterpriseclusters --all-namespaces --no-headers -o custom-columns="NAMESPACE:.metadata.namespace,NAME:.metadata.name" 2>/dev/null | while read -r namespace name; do
+        if [ -n "$namespace" ] && [ -n "$name" ]; then
+            log_info "  Removing finalizers from Neo4jEnterpriseCluster $namespace/$name"
+            kubectl patch neo4jenterprisecluster "$name" -n "$namespace" -p '{"metadata":{"finalizers":[]}}' --type=merge || log_warning "Failed to remove finalizers from $namespace/$name"
+        fi
+    done
+
+    # Remove finalizers from Neo4jDatabases
+    kubectl get neo4jdatabases --all-namespaces --no-headers -o custom-columns="NAMESPACE:.metadata.namespace,NAME:.metadata.name" 2>/dev/null | while read -r namespace name; do
+        if [ -n "$namespace" ] && [ -n "$name" ]; then
+            log_info "  Removing finalizers from Neo4jDatabase $namespace/$name"
+            kubectl patch neo4jdatabase "$name" -n "$namespace" -p '{"metadata":{"finalizers":[]}}' --type=merge || log_warning "Failed to remove finalizers from $namespace/$name"
+        fi
+    done
+
+    # Remove finalizers from other Neo4j resources
+    local neo4j_resources=("neo4jbackups" "neo4jrestores" "neo4jusers" "neo4jroles" "neo4jgrants" "neo4jplugins")
+    for resource in "${neo4j_resources[@]}"; do
+        kubectl get "$resource" --all-namespaces --no-headers -o custom-columns="NAMESPACE:.metadata.namespace,NAME:.metadata.name" 2>/dev/null | while read -r namespace name; do
+            if [ -n "$namespace" ] && [ -n "$name" ]; then
+                log_info "  Removing finalizers from $resource $namespace/$name"
+                kubectl patch "$resource" "$name" -n "$namespace" -p '{"metadata":{"finalizers":[]}}' --type=merge || log_warning "Failed to remove finalizers from $resource $namespace/$name"
+            fi
+        done
+    done
+
+    log_success "Finalizer removal completed"
+}
+
 # Clean up Neo4j custom resources
 cleanup_neo4j_resources() {
     log_info "Cleaning up Neo4j custom resources..."
+
+    # First, force remove finalizers if aggressive cleanup is enabled
+    if [ "$AGGRESSIVE_CLEANUP" = "true" ]; then
+        force_remove_finalizers
+    fi
 
     local neo4j_resources=(
         "neo4jenterpriseclusters"
@@ -187,6 +227,15 @@ cleanup_orphaned_resources() {
         fi
     done
 
+    # Clean up Services
+    log_info "Cleaning up orphaned Services..."
+    kubectl get services --all-namespaces --no-headers -l "app.kubernetes.io/part-of=neo4j-operator" -o custom-columns="NAMESPACE:.metadata.namespace,NAME:.metadata.name" 2>/dev/null | while read -r namespace name; do
+        if [ -n "$namespace" ] && [ -n "$name" ]; then
+            log_info "  Deleting Service $namespace/$name"
+            kubectl delete service "$name" -n "$namespace" --force --grace-period=0 --timeout=60s || log_warning "Failed to delete Service $namespace/$name"
+        fi
+    done
+
     # Clean up ServiceAccounts
     log_info "Cleaning up orphaned ServiceAccounts..."
     kubectl get serviceaccounts --all-namespaces --no-headers -l "app.kubernetes.io/part-of=neo4j-operator" -o custom-columns="NAMESPACE:.metadata.namespace,NAME:.metadata.name" 2>/dev/null | while read -r namespace name; do
@@ -256,8 +305,9 @@ verify_cleanup() {
         local remaining_clusters=$(kubectl get neo4jenterpriseclusters --all-namespaces --no-headers 2>/dev/null | wc -l || echo "0")
         local remaining_backups=$(kubectl get neo4jbackups --all-namespaces --no-headers 2>/dev/null | wc -l || echo "0")
         local remaining_restores=$(kubectl get neo4jrestores --all-namespaces --no-headers 2>/dev/null | wc -l || echo "0")
+        local remaining_databases=$(kubectl get neo4jdatabases --all-namespaces --no-headers 2>/dev/null | wc -l || echo "0")
 
-        remaining_resources=$((remaining_clusters + remaining_backups + remaining_restores))
+        remaining_resources=$((remaining_clusters + remaining_backups + remaining_restores + remaining_databases))
 
         # Check for remaining test namespaces
         if [ "$DELETE_NAMESPACES" = "true" ]; then
@@ -294,6 +344,7 @@ main_cleanup() {
     log_info "  DELETE_CRDS: $DELETE_CRDS"
     log_info "  CLEANUP_TIMEOUT: ${CLEANUP_TIMEOUT}s"
     log_info "  VERBOSE: $VERBOSE"
+    log_info "  AGGRESSIVE_CLEANUP: $AGGRESSIVE_CLEANUP"
 
     # Perform checks
     check_kubectl
@@ -338,6 +389,7 @@ case "${1:-cleanup}" in
         echo "  DELETE_CRDS       - Delete CRDs (default: false)"
         echo "  CLEANUP_TIMEOUT   - Cleanup timeout in seconds (default: 300)"
         echo "  VERBOSE           - Verbose output (default: false)"
+        echo "  AGGRESSIVE_CLEANUP - Force remove finalizers (default: true)"
         ;;
     *)
         log_error "Unknown command: $1"

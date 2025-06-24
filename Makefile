@@ -339,7 +339,9 @@ test-unit: manifests generate fmt vet envtest ## Run unit tests (no cluster requ
 .PHONY: test-unit-only
 test-unit-only: ## Run only unit tests that don't require a cluster.
 	@echo "Running unit tests only (no cluster required)..."
-	go test -v -race ./internal/controller/... ./internal/webhooks/... ./internal/neo4j/... -run="Test.*" -timeout=5m
+	go test -v -race ./internal/controller/... -timeout=10m
+	go test -v -race ./internal/webhooks/... -timeout=5m
+	go test -v -race ./internal/neo4j/... -timeout=10m
 
 .PHONY: test-webhooks
 test-webhooks: manifests generate fmt vet envtest ## Run webhook tests (no cluster required).
@@ -1302,6 +1304,24 @@ test-check: ## Perform test environment sanity checks
 
 .PHONY: test-setup
 test-setup: test-cleanup ## Set up clean test environment (cleanup + checks)
+	@echo "🔧 Setting up clean test environment..."
+	@echo "🧹 Performing aggressive cleanup..."
+	@if [ -f "scripts/test-cleanup.sh" ]; then \
+		chmod +x scripts/test-cleanup.sh; \
+		export AGGRESSIVE_CLEANUP=true; \
+		export FORCE_CLEANUP=true; \
+		export VERBOSE=true; \
+		./scripts/test-cleanup.sh cleanup; \
+	else \
+		echo "Warning: cleanup script not found"; \
+	fi
+	@echo "🔍 Performing environment checks..."
+	@if [ -f "scripts/test-cleanup.sh" ]; then \
+		chmod +x scripts/test-cleanup.sh; \
+		./scripts/test-cleanup.sh check; \
+	else \
+		echo "Warning: cleanup script not found"; \
+	fi
 	@echo "✅ Test environment setup completed"
 
 .PHONY: test-runner

@@ -49,7 +49,10 @@ jobs:
             # Run cleanup script if available
             if [ -f "scripts/test-cleanup.sh" ]; then
               chmod +x scripts/test-cleanup.sh
-              ./scripts/test-cleanup.sh check
+              export AGGRESSIVE_CLEANUP=true
+              export FORCE_CLEANUP=true
+              export VERBOSE=true
+              ./scripts/test-cleanup.sh cleanup || echo "Cleanup completed with warnings"
             fi
           else
             echo "No Kubernetes environment detected, skipping cleanup"
@@ -155,4 +158,15 @@ jobs:
             echo "- Coverage: $COVERAGE" >> $GITHUB_STEP_SUMMARY
           else
             echo "- Coverage: Not available" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Final cleanup
+        if: always()
+        run: |
+          echo "Performing final cleanup..."
+          if [ -f "scripts/test-cleanup.sh" ]; then
+            chmod +x scripts/test-cleanup.sh
+            export AGGRESSIVE_CLEANUP=true
+            export FORCE_CLEANUP=true
+            ./scripts/test-cleanup.sh cleanup || echo "Final cleanup completed with warnings"
           fi

@@ -498,3 +498,90 @@ func (r *Neo4jEnterpriseClusterReconciler) createNeo4jClient(ctx context.Context
 
 	// Create Neo4j client
 	neo4jClient, err := neo4jclient.NewClientForEnterprise(cluster, r.Client, adminSecretName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Neo4j client: %w", err)
+	}
+
+	return neo4jClient, nil
+}
+
+// reconcilePlugins handles plugin installation and management
+func (r *Neo4jEnterpriseClusterReconciler) reconcilePlugins(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) error {
+	logger := log.FromContext(ctx)
+
+	// Create plugin controller
+	pluginController := NewPluginController(r.Client)
+
+	// Reconcile each plugin
+	for _, plugin := range cluster.Spec.Plugins {
+		if err := pluginController.ReconcilePlugin(ctx, cluster, plugin); err != nil {
+			logger.Error(err, "Failed to reconcile plugin", "plugin", plugin.Name)
+			return fmt.Errorf("failed to reconcile plugin %s: %w", plugin.Name, err)
+		}
+	}
+
+	return nil
+}
+
+// NewQueryMonitor creates a new query monitor
+func NewQueryMonitor(client client.Client) *QueryMonitor {
+	return &QueryMonitor{
+		Client: client,
+	}
+}
+
+// QueryMonitor handles query performance monitoring
+type QueryMonitor struct {
+	client.Client
+}
+
+// ReconcileQueryMonitoring sets up query monitoring for the cluster
+func (qm *QueryMonitor) ReconcileQueryMonitoring(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) error {
+	logger := log.FromContext(ctx)
+	logger.Info("Setting up query monitoring", "cluster", cluster.Name)
+
+	// TODO: Implement query monitoring setup
+	// This could include:
+	// - Creating monitoring ConfigMaps
+	// - Setting up metrics collection
+	// - Configuring alerting rules
+
+	return nil
+}
+
+// NewPluginController creates a new plugin controller
+func NewPluginController(client client.Client) *PluginController {
+	return &PluginController{
+		Client: client,
+	}
+}
+
+// PluginController handles plugin management
+type PluginController struct {
+	client.Client
+}
+
+// ReconcilePlugin manages a single plugin
+func (pc *PluginController) ReconcilePlugin(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, plugin neo4jv1alpha1.PluginSpec) error {
+	logger := log.FromContext(ctx)
+	logger.Info("Reconciling plugin", "plugin", plugin.Name, "cluster", cluster.Name)
+
+	// TODO: Implement plugin installation logic
+	// This could include:
+	// - Downloading plugin from repository
+	// - Installing plugin in Neo4j
+	// - Configuring plugin settings
+
+	return nil
+}
+
+// SetupWithManager sets up the controller with the Manager.
+func (r *Neo4jEnterpriseClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&neo4jv1alpha1.Neo4jEnterpriseCluster{}).
+		Owns(&appsv1.StatefulSet{}).
+		Owns(&corev1.Service{}).
+		Owns(&corev1.ConfigMap{}).
+		Owns(&corev1.Secret{}).
+		Complete(r)
+}

@@ -33,11 +33,13 @@ jobs:
         run: |
           echo "Running unit tests with race detection..."
           make test-unit
+        timeout-minutes: 15
 
       - name: Run tests that don't require a cluster
         run: |
           echo "Running all tests that don't require a cluster..."
           make test-no-cluster
+        timeout-minutes: 10
 
       - name: Check cluster availability
         run: |
@@ -48,6 +50,17 @@ jobs:
           else
             echo "No cluster available, running only tests that don't require a cluster..."
             echo "✅ Tests completed successfully without cluster"
+          fi
+
+      - name: Cleanup test environment
+        if: always()
+        run: |
+          echo "Performing test environment cleanup..."
+          if [ -f "scripts/test-cleanup.sh" ]; then
+            chmod +x scripts/test-cleanup.sh
+            export AGGRESSIVE_CLEANUP=true
+            export FORCE_CLEANUP=true
+            ./scripts/test-cleanup.sh cleanup || echo "Cleanup completed with warnings"
           fi
 
   integration-test:
@@ -145,6 +158,7 @@ jobs:
               export FORCE_CLEANUP=true
               export DELETE_NAMESPACES=true
               export VERBOSE=true
+              export AGGRESSIVE_CLEANUP=true
               ./scripts/test-cleanup.sh cleanup || echo "Cleanup script completed with warnings"
             fi
 

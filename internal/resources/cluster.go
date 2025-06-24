@@ -604,6 +604,10 @@ func buildPodSpecForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, ro
 			Name:      LogsVolume,
 			MountPath: "/logs",
 		},
+		{
+			Name:      "plugins",
+			MountPath: "/plugins",
+		},
 	}
 
 	// Add TLS volume mount
@@ -726,6 +730,12 @@ func buildPodSpecForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, ro
 				EmptyDir: &corev1.EmptyDirVolumeSource{},
 			},
 		},
+		{
+			Name: "plugins",
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			},
+		},
 	}
 
 	// Add TLS volume
@@ -763,6 +773,58 @@ func buildPodSpecForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, ro
 	// Add affinity if specified
 	if cluster.Spec.Affinity != nil {
 		podSpec.Affinity = cluster.Spec.Affinity
+	}
+
+	// --- Plugin Management: Add init containers for plugins ---
+	var initContainers []corev1.Container
+	for _, plugin := range cluster.Spec.Plugins {
+		if plugin.Enabled && plugin.Source != nil && plugin.Source.URL != "" {
+			initContainers = append(initContainers, corev1.Container{
+				Name:    "install-plugin-" + plugin.Name,
+				Image:   "alpine:3.18",
+				Command: []string{"/bin/sh", "-c"},
+				Args: []string{
+					"apk add --no-cache curl && " +
+						"echo Downloading plugin: " + plugin.Source.URL + " && " +
+						"curl -L --fail --retry 3 -o /plugins/" + plugin.Name + ".jar '" + plugin.Source.URL + "'",
+				},
+				VolumeMounts: []corev1.VolumeMount{{
+					Name:      "plugins",
+					MountPath: "/plugins",
+				}},
+			})
+		}
+	}
+	if len(initContainers) > 0 {
+		podSpec.InitContainers = initContainers
+	}
+
+	// --- Query Monitoring: Add Prometheus exporter sidecar ---
+	if cluster.Spec.QueryMonitoring != nil && cluster.Spec.QueryMonitoring.Enabled {
+		exporterContainer := corev1.Container{
+			Name:  "prometheus-exporter",
+			Image: "neo4j/prometheus-exporter:4.0.0",
+			Args:  []string{"--neo4j.uri=bolt://localhost:7687", "--neo4j.user=neo4j", "--neo4j.password=$(NEO4J_AUTH)"},
+			Env: []corev1.EnvVar{
+				{
+					Name: "NEO4J_AUTH",
+					ValueFrom: &corev1.EnvVarSource{
+						SecretKeyRef: &corev1.SecretKeySelector{
+							LocalObjectReference: corev1.LocalObjectReference{
+								Name: adminSecret,
+							},
+							Key: "password",
+						},
+					},
+				},
+			},
+			Ports: []corev1.ContainerPort{{
+				Name:          "metrics",
+				ContainerPort: 2004,
+				Protocol:      corev1.ProtocolTCP,
+			}},
+		}
+		podSpec.Containers = append(podSpec.Containers, exporterContainer)
 	}
 
 	return podSpec
