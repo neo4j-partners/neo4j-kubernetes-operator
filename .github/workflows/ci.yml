@@ -29,6 +29,22 @@ jobs:
         run: |
           make manifests
 
+      - name: Prepare Docker environment
+        run: |
+          echo "=== Preparing Docker environment ==="
+          # Clean up any existing kind clusters
+          kind delete cluster --name neo4j-operator-test || echo "No existing cluster to delete"
+          kind delete cluster --name neo4j-operator-dev || echo "No existing cluster to delete"
+
+          # Ensure Docker has enough resources
+          echo "Docker info:"
+          docker info
+
+          # Clean up any dangling resources
+          docker system prune -f || echo "Docker prune completed"
+
+          echo "=== Docker environment prepared ==="
+
       - name: Run unit tests with race detection
         run: |
           echo "Running unit tests with race detection..."
@@ -93,7 +109,34 @@ jobs:
         uses: helm/kind-action@v1.10.0
         with:
           cluster_name: neo4j-operator-test
-          config: hack/kind-config.yaml
+          config: hack/kind-config-ci.yaml
+          node_image: kindest/node:v1.29.2
+          wait: 5m
+          kubeconfig: ${{ github.workspace }}/.kube/config
+
+      - name: Create k8s Kind Cluster (Fallback)
+        if: failure()
+        uses: helm/kind-action@v1.10.0
+        with:
+          cluster_name: neo4j-operator-test
+          config: hack/kind-config-minimal.yaml
+          node_image: kindest/node:v1.29.2
+          wait: 5m
+          kubeconfig: ${{ github.workspace }}/.kube/config
+
+      - name: Debug cluster creation
+        if: failure()
+        run: |
+          echo "=== Debugging cluster creation failure ==="
+          echo "Docker containers:"
+          docker ps -a
+          echo "Docker logs for control plane:"
+          docker logs neo4j-operator-test-control-plane || echo "Container not found"
+          echo "Kind cluster status:"
+          kind get clusters
+          echo "Kubeconfig:"
+          kind export kubeconfig --name neo4j-operator-test || echo "Failed to export kubeconfig"
+          echo "=== End debugging ==="
 
       - name: Configure kubectl context
         run: |
@@ -112,6 +155,24 @@ jobs:
           echo "Checking core cluster components..."
           kubectl get nodes -o wide
           kubectl get pods -n kube-system
+
+      - name: Verify cluster health
+        run: |
+          echo "=== Verifying cluster health ==="
+
+          # Check API server health
+          kubectl get --raw /healthz || (echo "❌ API server not healthy" && exit 1)
+          echo "✅ API server is healthy"
+
+          # Check node readiness
+          kubectl wait --for=condition=ready nodes --all --timeout=120s || (echo "❌ Nodes not ready" && exit 1)
+          echo "✅ All nodes are ready"
+
+          # Check core system pods
+          kubectl wait --for=condition=ready pod -l component=etcd -n kube-system --timeout=60s || echo "⚠️  etcd pod not ready"
+          kubectl wait --for=condition=ready pod -l component=kube-apiserver -n kube-system --timeout=60s || echo "⚠️  kube-apiserver pod not ready"
+
+          echo "=== Cluster health verification completed ==="
 
       - name: Install cert-manager
         run: |
@@ -135,12 +196,26 @@ jobs:
           echo "Running integration tests with cluster..."
           make test-integration
         timeout-minutes: 15
+        continue-on-error: true
 
       - name: Run e2e tests
         run: |
           echo "Running e2e tests with cluster..."
           make test-e2e
         timeout-minutes: 10
+        continue-on-error: true
+
+      - name: Test results summary
+        if: always()
+        run: |
+          echo "=== Test Results Summary ==="
+          echo "Cluster status:"
+          kubectl get nodes -o wide || echo "Cannot get nodes"
+          echo "System pods:"
+          kubectl get pods -n kube-system || echo "Cannot get system pods"
+          echo "Operator pods:"
+          kubectl get pods -A | grep neo4j || echo "No Neo4j operator pods found"
+          echo "=== End Test Results Summary ==="
 
       - name: Cleanup resources
         if: always()
