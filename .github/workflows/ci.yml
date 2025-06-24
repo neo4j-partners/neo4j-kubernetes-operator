@@ -24,8 +24,32 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.24'
-      - name: Run tests
-        run: make test
+
+      - name: Install dependencies
+        run: |
+          make install-tools
+          make manifests
+
+      - name: Run unit tests with race detection
+        run: |
+          echo "Running unit tests with race detection..."
+          make test-unit
+
+      - name: Run tests that don't require a cluster
+        run: |
+          echo "Running all tests that don't require a cluster..."
+          make test-no-cluster
+
+      - name: Check cluster availability
+        run: |
+          echo "Checking if cluster is available for additional tests..."
+          if ./scripts/check-cluster.sh --verbose; then
+            echo "Cluster is available, running all tests..."
+            make test-all
+          else
+            echo "No cluster available, running only tests that don't require a cluster..."
+            echo "✅ Tests completed successfully without cluster"
+          fi
 
   integration-test:
     name: Integration Test
@@ -111,11 +135,15 @@ jobs:
           kind load docker-image neo4j-operator:ci --name neo4j-operator-test
 
       - name: Run integration tests
-        run: make test-integration
+        run: |
+          echo "Running integration tests with cluster..."
+          make test-integration
         timeout-minutes: 15
 
       - name: Run e2e tests
-        run: make test-e2e
+        run: |
+          echo "Running e2e tests with cluster..."
+          make test-e2e
         timeout-minutes: 10
 
       - name: Cleanup resources

@@ -48,6 +48,11 @@ var _ = Describe("Neo4jBackup Controller", func() {
 	)
 
 	BeforeEach(func() {
+		// Ensure context is properly initialized
+		if ctx == nil {
+			ctx = context.Background()
+		}
+
 		backupName = fmt.Sprintf("test-backup-%d", time.Now().UnixNano())
 		clusterName = fmt.Sprintf("test-cluster-%d", time.Now().UnixNano())
 		namespaceName = "default"
@@ -72,9 +77,22 @@ var _ = Describe("Neo4jBackup Controller", func() {
 					ClassName: "standard",
 					Size:      "10Gi",
 				},
+				Auth: &neo4jv1alpha1.AuthSpec{
+					AdminSecret: "neo4j-admin-secret",
+				},
 			},
 		}
 		Expect(k8sClient.Create(ctx, cluster)).Should(Succeed())
+
+		// Patch cluster status to Ready so backup controller proceeds
+		patch := client.MergeFrom(cluster.DeepCopy())
+		cluster.Status.Conditions = []metav1.Condition{{
+			Type:               "Ready",
+			Status:             metav1.ConditionTrue,
+			Reason:             "TestReady",
+			LastTransitionTime: metav1.Now(),
+		}}
+		Expect(k8sClient.Status().Patch(ctx, cluster, patch)).To(Succeed())
 
 		// Create basic backup spec
 		backup = &neo4jv1alpha1.Neo4jBackup{
@@ -142,7 +160,7 @@ var _ = Describe("Neo4jBackup Controller", func() {
 			cronJob := &batchv1.CronJob{}
 			Eventually(func() error {
 				return k8sClient.Get(ctx, types.NamespacedName{
-					Name:      backupName,
+					Name:      backupName + "-backup-cron",
 					Namespace: namespaceName,
 				}, cronJob)
 			}, timeout, interval).Should(Succeed())
@@ -300,9 +318,9 @@ var _ = Describe("Neo4jBackup Controller", func() {
 	Context("When handling database-specific backups", func() {
 		It("Should create backup for specific database", func() {
 			By("Configuring database-specific backup")
-			backup.Spec.Target = neo4jv1alpha1.BackupTarget{
-				Kind: "Database",
-				Name: "testdb",
+			// Use AdditionalArgs to specify the database
+			backup.Spec.Options = &neo4jv1alpha1.BackupOptions{
+				AdditionalArgs: []string{"--database=testdb"},
 			}
 			Expect(k8sClient.Create(ctx, backup)).Should(Succeed())
 

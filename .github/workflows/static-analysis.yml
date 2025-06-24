@@ -20,6 +20,11 @@ jobs:
         with:
           go-version: '1.24'
 
+      - name: Install dependencies
+        run: |
+          make install-tools
+          make manifests
+
       - name: Environment cleanup and sanity checks
         run: |
           echo "Performing environment cleanup and sanity checks..."
@@ -53,4 +58,26 @@ jobs:
 
       - name: Run comprehensive static analysis
         run: |
+          echo "Running comprehensive static analysis..."
           make lint-comprehensive
+
+      - name: Run unit tests with race detection
+        run: |
+          echo "Running unit tests with race detection..."
+          make test-unit
+
+      - name: Run tests that don't require a cluster
+        run: |
+          echo "Running all tests that don't require a cluster..."
+          make test-no-cluster
+
+      - name: Check cluster availability for additional tests
+        run: |
+          echo "Checking cluster availability for additional tests..."
+          if ./scripts/check-cluster.sh --verbose; then
+            echo "Cluster is available, running integration tests..."
+            make test-integration
+          else
+            echo "No cluster available, skipping integration tests..."
+            echo "✅ Static analysis and unit tests completed successfully"
+          fi

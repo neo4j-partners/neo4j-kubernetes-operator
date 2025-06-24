@@ -332,97 +332,177 @@ debug: ## Build and run with delve debugger.
 ##@ Testing
 
 .PHONY: test-unit
-test-unit: manifests generate fmt vet envtest ## Run unit tests.
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -v /e2e) -coverprofile cover.out -race -v
+test-unit: manifests generate fmt vet envtest ## Run unit tests (no cluster required).
+	@echo "Running unit tests (no cluster required)..."
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -v /e2e | grep -v /integration) -coverprofile cover.out -race -v
 
-.PHONY: test-comprehensive
-test-comprehensive: test-unit test-integration test-webhooks ## Run comprehensive test suite.
-
-.PHONY: test-integration
-test-integration: test-setup ## Run integration tests with clean environment
-	go test -v -race -coverprofile=coverage-integration.out ./test/integration/...
-	go tool cover -html=coverage-integration.out -o coverage-integration.html
+.PHONY: test-unit-only
+test-unit-only: ## Run only unit tests that don't require a cluster.
+	@echo "Running unit tests only (no cluster required)..."
+	go test -v -race ./internal/controller/... ./internal/webhooks/... ./internal/neo4j/... -run="Test.*" -timeout=5m
 
 .PHONY: test-webhooks
-test-webhooks: manifests generate fmt vet envtest ## Run webhook tests.
+test-webhooks: manifests generate fmt vet envtest ## Run webhook tests (no cluster required).
+	@echo "Running webhook tests (no cluster required)..."
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test ./internal/webhooks/... -v -timeout=10m
 
-.PHONY: test-cloud
-test-cloud: test-eks test-gke test-aks ## Run all cloud provider tests.
+.PHONY: test-security
+test-security: ## Run security-focused tests (no cluster required).
+	@echo "Running security tests (no cluster required)..."
+	go test ./internal/controller/security_coordinator_test.go -v
+	go test ./internal/webhooks/... -v -run=".*Security.*"
 
-.PHONY: test-eks
-test-eks: ## Run EKS-specific tests.
-	@echo "Running EKS tests..."
-	@if [ "$(CLUSTER_TYPE)" = "eks" ]; then \
-		go test ./test/cloud/eks/... -v -timeout=20m; \
+.PHONY: test-neo4j-client
+test-neo4j-client: ## Run Neo4j client tests (no cluster required).
+	@echo "Running Neo4j client tests (no cluster required)..."
+	go test ./internal/neo4j/... -v
+
+.PHONY: test-controllers
+test-controllers: ## Run controller tests (no cluster required).
+	@echo "Running controller tests (no cluster required)..."
+	go test ./internal/controller/... -v -run="Test.*" -timeout=10m
+
+.PHONY: test-integration
+test-integration: test-setup ## Run integration tests (requires cluster).
+	@echo "Checking cluster availability for integration tests..."
+	@if ./scripts/check-cluster.sh --verbose; then \
+		echo "Cluster is available, running integration tests..."; \
+		go test -v -race -coverprofile=coverage-integration.out ./test/integration/...; \
+		go tool cover -html=coverage-integration.out -o coverage-integration.html; \
 	else \
-		echo "Skipping EKS tests - set CLUSTER_TYPE=eks to run"; \
+		echo "❌ No cluster available for integration tests"; \
+		echo "💡 Run 'make dev-cluster' to create a local cluster"; \
+		echo "💡 Or set up a remote cluster and configure kubectl"; \
+		echo "💡 Skipping integration tests..."; \
+		exit 0; \
 	fi
 
-.PHONY: test-gke
-test-gke: ## Run GKE-specific tests.
-	@echo "Running GKE tests..."
-	@if [ "$(CLUSTER_TYPE)" = "gke" ]; then \
-		go test ./test/cloud/gke/... -v -timeout=20m; \
+.PHONY: test-e2e
+test-e2e: test-setup ## Run e2e tests (requires cluster).
+	@echo "Checking cluster availability for e2e tests..."
+	@if ./scripts/check-cluster.sh --verbose; then \
+		echo "Cluster is available, running e2e tests..."; \
+		go test -v -race -coverprofile=coverage-e2e.out ./test/e2e/...; \
+		go tool cover -html=coverage-e2e.out -o coverage-e2e.html; \
 	else \
-		echo "Skipping GKE tests - set CLUSTER_TYPE=gke to run"; \
-	fi
-
-.PHONY: test-aks
-test-aks: ## Run AKS-specific tests.
-	@echo "Running AKS tests..."
-	@if [ "$(CLUSTER_TYPE)" = "aks" ]; then \
-		go test ./test/cloud/aks/... -v -timeout=20m; \
-	else \
-		echo "Skipping AKS tests - set CLUSTER_TYPE=aks to run"; \
+		echo "❌ No cluster available for e2e tests"; \
+		echo "💡 Run 'make dev-cluster' to create a local cluster"; \
+		echo "💡 Or set up a remote cluster and configure kubectl"; \
+		echo "💡 Skipping e2e tests..."; \
+		exit 0; \
 	fi
 
 .PHONY: test-local
 test-local: ## Run tests against local Kubernetes cluster.
-	@echo "Running tests against local cluster..."
-	@if kubectl cluster-info >/dev/null 2>&1; then \
+	@echo "Checking local cluster availability..."
+	@if ./scripts/check-cluster.sh --type kind --verbose; then \
+		echo "Local cluster is available, running tests..."; \
 		CLUSTER_TYPE=local go test ./test/integration/... -v -timeout=15m; \
 	else \
-		echo "No local cluster available - run 'make dev-cluster' first"; \
+		echo "❌ No local cluster available"; \
+		echo "💡 Run 'make dev-cluster' to create a local cluster"; \
 		exit 1; \
 	fi
 
-.PHONY: test-security
-test-security: ## Run security-focused tests.
-	@echo "Running security tests..."
-	go test ./internal/controller/security_coordinator_test.go -v
-	go test ./internal/webhooks/... -v -run=".*Security.*"
+.PHONY: test-cloud
+test-cloud: test-eks test-gke test-aks ## Run all cloud provider tests (requires cloud clusters).
+
+.PHONY: test-eks
+test-eks: ## Run EKS-specific tests (requires EKS cluster).
+	@echo "Checking EKS cluster availability..."
+	@if [ "$(CLUSTER_TYPE)" = "eks" ] && ./scripts/check-cluster.sh --type remote --verbose; then \
+		echo "EKS cluster is available, running tests..."; \
+		go test ./test/cloud/eks/... -v -timeout=20m; \
+	else \
+		echo "❌ EKS cluster not available or CLUSTER_TYPE not set to 'eks'"; \
+		echo "💡 Set CLUSTER_TYPE=eks and ensure kubectl is configured for EKS"; \
+		echo "💡 Skipping EKS tests..."; \
+		exit 0; \
+	fi
+
+.PHONY: test-gke
+test-gke: ## Run GKE-specific tests (requires GKE cluster).
+	@echo "Checking GKE cluster availability..."
+	@if [ "$(CLUSTER_TYPE)" = "gke" ] && ./scripts/check-cluster.sh --type remote --verbose; then \
+		echo "GKE cluster is available, running tests..."; \
+		go test ./test/cloud/gke/... -v -timeout=20m; \
+	else \
+		echo "❌ GKE cluster not available or CLUSTER_TYPE not set to 'gke'"; \
+		echo "💡 Set CLUSTER_TYPE=gke and ensure kubectl is configured for GKE"; \
+		echo "💡 Skipping GKE tests..."; \
+		exit 0; \
+	fi
+
+.PHONY: test-aks
+test-aks: ## Run AKS-specific tests (requires AKS cluster).
+	@echo "Checking AKS cluster availability..."
+	@if [ "$(CLUSTER_TYPE)" = "aks" ] && ./scripts/check-cluster.sh --type remote --verbose; then \
+		echo "AKS cluster is available, running tests..."; \
+		go test ./test/cloud/aks/... -v -timeout=20m; \
+	else \
+		echo "❌ AKS cluster not available or CLUSTER_TYPE not set to 'aks'"; \
+		echo "💡 Set CLUSTER_TYPE=aks and ensure kubectl is configured for AKS"; \
+		echo "💡 Skipping AKS tests..."; \
+		exit 0; \
+	fi
 
 .PHONY: test-backup-restore
-test-backup-restore: ## Run backup and restore tests.
-	@echo "Running backup/restore tests..."
-	go test ./internal/controller/neo4jbackup_controller_test.go -v
-	go test ./internal/controller/neo4jrestore_controller_test.go -v
+test-backup-restore: ## Run backup and restore tests (requires cluster).
+	@echo "Checking cluster availability for backup/restore tests..."
+	@if ./scripts/check-cluster.sh --verbose; then \
+		echo "Cluster is available, running backup/restore tests..."; \
+		go test ./internal/controller/neo4jbackup_controller_test.go -v; \
+		go test ./internal/controller/neo4jrestore_controller_test.go -v; \
+	else \
+		echo "❌ No cluster available for backup/restore tests"; \
+		echo "💡 Run 'make dev-cluster' to create a local cluster"; \
+		echo "💡 Or set up a remote cluster and configure kubectl"; \
+		echo "💡 Skipping backup/restore tests..."; \
+		exit 0; \
+	fi
 
-.PHONY: test-neo4j-client
-test-neo4j-client: ## Run Neo4j client tests.
-	@echo "Running Neo4j client tests..."
-	go test ./internal/neo4j/... -v
+.PHONY: test-comprehensive
+test-comprehensive: test-unit test-integration test-webhooks test-security ## Run comprehensive test suite (integration tests conditional on cluster).
+
+.PHONY: test-ci
+test-ci: test-unit test-webhooks test-security test-integration ## Run CI test suite (integration tests conditional on cluster).
+
+.PHONY: test-all
+test-all: test-unit test-integration test-e2e ## Run all tests (integration and e2e tests conditional on cluster).
+
+.PHONY: test-no-cluster
+test-no-cluster: test-unit test-webhooks test-security test-neo4j-client test-controllers ## Run all tests that don't require a cluster.
+
+.PHONY: test-with-cluster
+test-with-cluster: test-integration test-e2e test-backup-restore ## Run all tests that require a cluster.
 
 .PHONY: test-coverage-comprehensive
-test-coverage-comprehensive: ## Generate comprehensive test coverage report.
+test-coverage-comprehensive: ## Generate comprehensive test coverage report (conditional on cluster).
 	@echo "Generating comprehensive coverage report..."
+	@echo "Running unit tests (no cluster required)..."
 	go test -coverprofile=coverage-comprehensive.out -coverpkg=./... \
 		./internal/controller/... \
 		./internal/webhooks/... \
-		./internal/neo4j/... \
-		./test/integration/...
+		./internal/neo4j/...
+	@if ./scripts/check-cluster.sh; then \
+		echo "Cluster is available, running integration tests for coverage..."; \
+		go test -coverprofile=coverage-integration-temp.out -coverpkg=./... ./test/integration/...; \
+		cat coverage-integration-temp.out >> coverage-comprehensive.out; \
+		rm coverage-integration-temp.out; \
+	else \
+		echo "No cluster available, skipping integration tests for coverage..."; \
+	fi
 	go tool cover -html=coverage-comprehensive.out -o coverage-comprehensive.html
 	@echo "Coverage report generated: coverage-comprehensive.html"
 
 .PHONY: test-race
-test-race: ## Run tests with race detection.
-	@echo "Running tests with race detection..."
+test-race: ## Run tests with race detection (no cluster required).
+	@echo "Running tests with race detection (no cluster required)..."
 	go test -race ./internal/controller/... ./internal/webhooks/... ./internal/neo4j/...
 
 .PHONY: test-parallel
-test-parallel: ## Run tests in parallel for faster execution.
-	@echo "Running tests in parallel..."
+test-parallel: ## Run tests in parallel for faster execution (no cluster required).
+	@echo "Running tests in parallel (no cluster required)..."
 	go test -parallel 4 ./internal/controller/... ./internal/webhooks/... ./internal/neo4j/...
 
 .PHONY: test-cloud-setup
@@ -445,22 +525,16 @@ test-cloud-setup: ## Setup environment for cloud provider tests.
 	@echo "  - AZURE_STORAGE_CONTAINER: Azure storage container"
 	@echo "  - AZURE_CLIENT_ID: Client ID for Azure Workload Identity"
 
-.PHONY: test-ci
-test-ci: test-unit test-integration test-webhooks test-security ## Run CI test suite.
-
-.PHONY: test-all
-test-all: test-unit test-integration test-e2e ## Run all tests.
-
 .PHONY: coverage
-coverage: test-unit ## Generate and view test coverage report.
+coverage: test-unit ## Generate and view test coverage report (no cluster required).
 	@echo "Generating coverage report..."
 	@go tool cover -html=cover.out -o coverage.html
 	@echo "Coverage report generated: coverage.html"
 	@if command -v open >/dev/null 2>&1; then open coverage.html; fi
 
 .PHONY: benchmark
-benchmark: ## Run benchmarks.
-	@echo "Running benchmarks..."
+benchmark: ## Run benchmarks (no cluster required).
+	@echo "Running benchmarks (no cluster required)..."
 	@go test -bench=. -benchmem ./...
 
 ##@ Code Quality

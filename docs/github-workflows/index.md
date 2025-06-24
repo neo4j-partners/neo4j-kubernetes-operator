@@ -33,10 +33,26 @@ Detailed summary of recent improvements made to the workflows:
 
 The actual workflow files are located in `.github/workflows/`:
 
-- **`ci.yml`** - Main continuous integration pipeline
-- **`static-analysis.yml`** - Code quality and security checks
-- **`openshift-certification.yml`** - OpenShift compatibility testing
+- **`ci.yml`** - Main continuous integration pipeline with enhanced testing
+- **`static-analysis.yml`** - Code quality and security checks with race detection
+- **`openshift-certification.yml`** - OpenShift compatibility testing with comprehensive test suite
 - **`cluster-test.yml`** - Reusable cluster testing workflow
+- **`test-validation.yml`** - Dedicated test validation suite with race detection
+
+## Recent Improvements
+
+### Test Infrastructure Enhancements
+- **Data Race Fixes**: Resolved Gomega registration data race issues across test suites
+- **Race Detection**: Added comprehensive race detection to all unit tests
+- **Controller Improvements**: Enhanced backup controller with cloud storage support
+- **Test Organization**: Improved test categorization (cluster vs non-cluster tests)
+- **Error Handling**: Better error handling and cleanup procedures
+
+### Workflow Enhancements
+- **Conditional Test Execution**: Tests run based on cluster availability
+- **Comprehensive Coverage**: Added dedicated test validation workflow
+- **Better Reporting**: Enhanced test results and coverage reporting
+- **Timeout Management**: Improved timeout handling for long-running tests
 
 ## Quick Start
 
@@ -54,6 +70,21 @@ The actual workflow files are located in `.github/workflows/`:
 1. Review the workflow dependencies and relationships
 2. Understand the fail-fast mechanisms and error handling
 3. Monitor workflow performance and reliability metrics
+
+## Test Categories
+
+### Unit Tests (No Cluster Required)
+- Controller tests with race detection
+- Webhook validation tests
+- Security coordinator tests
+- Neo4j client tests
+- Backup and restore functionality tests
+
+### Integration Tests (Cluster Required)
+- Cluster lifecycle management
+- Enterprise features validation
+- Failure scenario handling
+- Multi-cluster operations
 
 ## Related Resources
 

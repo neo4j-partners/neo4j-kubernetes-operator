@@ -227,6 +227,29 @@ func (r *Neo4jBackupReconciler) createBackupJob(ctx context.Context, backup *neo
 	// Build backup command
 	backupCmd := r.buildBackupCommand(backup)
 
+	// Build environment variables
+	env := []corev1.EnvVar{
+		{
+			Name: "NEO4J_ADMIN_PASSWORD",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: cluster.Spec.Auth.AdminSecret,
+					},
+					Key: "password",
+				},
+			},
+		},
+	}
+
+	// Add cloud storage environment variables
+	if backup.Spec.Storage.Type == "s3" || backup.Spec.Storage.Type == "gcs" || backup.Spec.Storage.Type == "azure" {
+		env = append(env, corev1.EnvVar{
+			Name:  "BACKUP_BUCKET",
+			Value: backup.Spec.Storage.Bucket,
+		})
+	}
+
 	// Create job spec
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
@@ -246,23 +269,11 @@ func (r *Neo4jBackupReconciler) createBackupJob(ctx context.Context, backup *neo
 					RestartPolicy: corev1.RestartPolicyNever,
 					Containers: []corev1.Container{
 						{
-							Name:    "neo4j-backup",
-							Image:   fmt.Sprintf("%s:%s", cluster.Spec.Image.Repo, cluster.Spec.Image.Tag),
-							Command: []string{"/bin/sh"},
-							Args:    []string{"-c", backupCmd},
-							Env: []corev1.EnvVar{
-								{
-									Name: "NEO4J_ADMIN_PASSWORD",
-									ValueFrom: &corev1.EnvVarSource{
-										SecretKeyRef: &corev1.SecretKeySelector{
-											LocalObjectReference: corev1.LocalObjectReference{
-												Name: cluster.Spec.Auth.AdminSecret,
-											},
-											Key: "password",
-										},
-									},
-								},
-							},
+							Name:         "neo4j-backup",
+							Image:        fmt.Sprintf("%s:%s", cluster.Spec.Image.Repo, cluster.Spec.Image.Tag),
+							Command:      []string{"/bin/sh"},
+							Args:         []string{"-c", backupCmd},
+							Env:          env,
 							VolumeMounts: r.buildVolumeMounts(backup),
 						},
 					},
@@ -304,6 +315,29 @@ func (r *Neo4jBackupReconciler) createBackupCronJob(ctx context.Context, backup 
 	// Build backup command
 	backupCmd := r.buildBackupCommand(backup)
 
+	// Build environment variables
+	env := []corev1.EnvVar{
+		{
+			Name: "NEO4J_ADMIN_PASSWORD",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: cluster.Spec.Auth.AdminSecret,
+					},
+					Key: "password",
+				},
+			},
+		},
+	}
+
+	// Add cloud storage environment variables
+	if backup.Spec.Storage.Type == "s3" || backup.Spec.Storage.Type == "gcs" || backup.Spec.Storage.Type == "azure" {
+		env = append(env, corev1.EnvVar{
+			Name:  "BACKUP_BUCKET",
+			Value: backup.Spec.Storage.Bucket,
+		})
+	}
+
 	// Create CronJob spec
 	cronJob := &batchv1.CronJob{
 		ObjectMeta: metav1.ObjectMeta{
@@ -326,23 +360,11 @@ func (r *Neo4jBackupReconciler) createBackupCronJob(ctx context.Context, backup 
 							RestartPolicy: corev1.RestartPolicyNever,
 							Containers: []corev1.Container{
 								{
-									Name:    "neo4j-backup",
-									Image:   fmt.Sprintf("%s:%s", cluster.Spec.Image.Repo, cluster.Spec.Image.Tag),
-									Command: []string{"/bin/sh"},
-									Args:    []string{"-c", backupCmd},
-									Env: []corev1.EnvVar{
-										{
-											Name: "NEO4J_ADMIN_PASSWORD",
-											ValueFrom: &corev1.EnvVarSource{
-												SecretKeyRef: &corev1.SecretKeySelector{
-													LocalObjectReference: corev1.LocalObjectReference{
-														Name: cluster.Spec.Auth.AdminSecret,
-													},
-													Key: "password",
-												},
-											},
-										},
-									},
+									Name:         "neo4j-backup",
+									Image:        fmt.Sprintf("%s:%s", cluster.Spec.Image.Repo, cluster.Spec.Image.Tag),
+									Command:      []string{"/bin/sh"},
+									Args:         []string{"-c", backupCmd},
+									Env:          env,
 									VolumeMounts: r.buildVolumeMounts(backup),
 								},
 							},
@@ -390,6 +412,16 @@ func (r *Neo4jBackupReconciler) buildBackupCommand(backup *neo4jv1alpha1.Neo4jBa
 	// Add verification if specified
 	if backup.Spec.Options != nil && backup.Spec.Options.Verify {
 		cmd += " --check-consistency"
+	}
+
+	// Add retention policy flags
+	if backup.Spec.Retention != nil {
+		if backup.Spec.Retention.MaxAge != "" {
+			cmd += " --max-age=" + backup.Spec.Retention.MaxAge
+		}
+		if backup.Spec.Retention.MaxCount > 0 {
+			cmd += fmt.Sprintf(" --max-count=%d", backup.Spec.Retention.MaxCount)
+		}
 	}
 
 	// Add additional arguments if specified

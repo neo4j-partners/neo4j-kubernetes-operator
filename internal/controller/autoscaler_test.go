@@ -105,6 +105,38 @@ var _ = Describe("AutoScaler", func() {
 		It("Should reconcile auto-scaling successfully", func() {
 			Expect(fakeClient.Create(ctx, cluster)).Should(Succeed())
 
+			// Create the primary StatefulSet that the auto-scaler expects
+			primaryStatefulSet := &appsv1.StatefulSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster-primary",
+					Namespace: "default",
+				},
+				Spec: appsv1.StatefulSetSpec{
+					Replicas: &[]int32{3}[0],
+				},
+				Status: appsv1.StatefulSetStatus{
+					ReadyReplicas: 3,
+					Replicas:      3,
+				},
+			}
+			Expect(fakeClient.Create(ctx, primaryStatefulSet)).Should(Succeed())
+
+			// Create the secondary StatefulSet
+			secondaryStatefulSet := &appsv1.StatefulSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster-secondary",
+					Namespace: "default",
+				},
+				Spec: appsv1.StatefulSetSpec{
+					Replicas: &[]int32{2}[0],
+				},
+				Status: appsv1.StatefulSetStatus{
+					ReadyReplicas: 2,
+					Replicas:      2,
+				},
+			}
+			Expect(fakeClient.Create(ctx, secondaryStatefulSet)).Should(Succeed())
+
 			err := autoScaler.ReconcileAutoScaling(ctx, cluster)
 			Expect(err).NotTo(HaveOccurred())
 		})
@@ -127,6 +159,38 @@ var _ = Describe("AutoScaler", func() {
 
 		It("Should collect cluster metrics", func() {
 			Expect(fakeClient.Create(ctx, cluster)).Should(Succeed())
+
+			// Create the primary StatefulSet that the metrics collector expects
+			primaryStatefulSet := &appsv1.StatefulSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster-primary",
+					Namespace: "default",
+				},
+				Spec: appsv1.StatefulSetSpec{
+					Replicas: &[]int32{3}[0],
+				},
+				Status: appsv1.StatefulSetStatus{
+					ReadyReplicas: 3,
+					Replicas:      3,
+				},
+			}
+			Expect(fakeClient.Create(ctx, primaryStatefulSet)).Should(Succeed())
+
+			// Create the secondary StatefulSet
+			secondaryStatefulSet := &appsv1.StatefulSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster-secondary",
+					Namespace: "default",
+				},
+				Spec: appsv1.StatefulSetSpec{
+					Replicas: &[]int32{2}[0],
+				},
+				Status: appsv1.StatefulSetStatus{
+					ReadyReplicas: 2,
+					Replicas:      2,
+				},
+			}
+			Expect(fakeClient.Create(ctx, secondaryStatefulSet)).Should(Succeed())
 
 			metrics, err := metricsCollector.CollectMetrics(ctx, cluster)
 			Expect(err).NotTo(HaveOccurred())

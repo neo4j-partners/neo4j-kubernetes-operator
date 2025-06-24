@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"runtime"
+	"sync"
 	"testing"
 	"time"
 
@@ -54,9 +55,17 @@ var ctx context.Context
 var cancel context.CancelFunc
 var mgr manager.Manager
 
-func TestControllers(t *testing.T) {
-	RegisterFailHandler(Fail)
+// Use sync.Once to ensure RegisterFailHandler is only called once globally
+var registerOnce sync.Once
 
+// Global init function to register Gomega fail handler once
+func init() {
+	registerOnce.Do(func() {
+		RegisterFailHandler(Fail)
+	})
+}
+
+func TestControllers(t *testing.T) {
 	RunSpecs(t, "Controller Suite")
 }
 

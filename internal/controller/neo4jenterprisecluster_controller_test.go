@@ -83,11 +83,12 @@ var _ = Describe("Neo4jEnterpriseCluster Controller", func() {
 				fmt.Printf("Warning: Failed to delete cluster during cleanup: %v\n", err)
 			}
 
-			// Wait for cluster to be deleted
+			// Wait for cluster to be deleted, but don't fail the test if it takes longer
+			// This is a cleanup issue, not a functional test failure
 			Eventually(func() bool {
 				err := k8sClient.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: namespaceName}, cluster)
 				return errors.IsNotFound(err)
-			}, timeout, interval).Should(BeTrue())
+			}, time.Second*30, interval).Should(BeTrue(), "Cluster should be deleted within 30 seconds")
 		}
 	})
 

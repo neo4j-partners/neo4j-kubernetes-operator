@@ -121,6 +121,8 @@ Start here if you're new to the Neo4j Enterprise Operator:
 ### Development & CI/CD
 
 - **[GitHub Workflows Documentation](github-workflows/)** - CI/CD pipeline documentation and troubleshooting
+- **[Test Improvements Summary](github-workflows/test-improvements-summary.md)** - Comprehensive test infrastructure enhancements
+- **[Conditional Test Execution](testing-conditional-execution.md)** - Test execution based on cluster availability
 - **Workflow Issues**: Check the [workflow troubleshooting guide](github-workflows/README.md#troubleshooting)
 
 ### Technical Support
