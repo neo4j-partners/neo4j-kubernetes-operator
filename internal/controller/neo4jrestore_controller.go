@@ -654,15 +654,20 @@ func (r *Neo4jRestoreReconciler) waitForClusterReady(ctx context.Context, cluste
 					logger.Info("Failed to create Neo4j client, retrying...")
 					continue
 				}
-				defer func() {
-					if err := neo4jClient.Close(); err != nil {
-						logger.Error(err, "failed to close Neo4j client")
-					}
-				}()
 
+				// Test connectivity
 				if err := neo4jClient.VerifyConnectivity(ctx); err != nil {
+					// Close client immediately on error
+					if closeErr := neo4jClient.Close(); closeErr != nil {
+						logger.Error(closeErr, "failed to close Neo4j client")
+					}
 					logger.Info("Neo4j not ready yet, retrying...")
 					continue
+				}
+
+				// Close client on success
+				if err := neo4jClient.Close(); err != nil {
+					logger.Error(err, "failed to close Neo4j client")
 				}
 
 				logger.Info("Cluster is ready")
