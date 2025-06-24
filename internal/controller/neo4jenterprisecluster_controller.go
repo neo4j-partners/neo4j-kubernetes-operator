@@ -267,13 +267,21 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 }
 
 func (r *Neo4jEnterpriseClusterReconciler) handleDeletion(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) (ctrl.Result, error) {
+	logger := log.FromContext(ctx)
 	if !controllerutil.ContainsFinalizer(cluster, ClusterFinalizer) {
+		logger.Info("Finalizer not present, nothing to do", "finalizers", cluster.Finalizers, "deletionTimestamp", cluster.DeletionTimestamp)
 		return ctrl.Result{}, nil
 	}
 
-	// Remove finalizer
+	logger.Info("Removing finalizer from cluster", "finalizers", cluster.Finalizers, "deletionTimestamp", cluster.DeletionTimestamp)
 	controllerutil.RemoveFinalizer(cluster, ClusterFinalizer)
-	return ctrl.Result{}, r.Update(ctx, cluster)
+	err := r.Update(ctx, cluster)
+	if err != nil {
+		logger.Error(err, "Failed to update cluster after removing finalizer", "finalizers", cluster.Finalizers, "deletionTimestamp", cluster.DeletionTimestamp)
+		return ctrl.Result{}, err
+	}
+	logger.Info("Successfully removed finalizer and updated cluster", "finalizers", cluster.Finalizers, "deletionTimestamp", cluster.DeletionTimestamp)
+	return ctrl.Result{}, nil
 }
 
 func (r *Neo4jEnterpriseClusterReconciler) createOrUpdateResource(ctx context.Context, obj client.Object, owner client.Object) error {
@@ -490,185 +498,3 @@ func (r *Neo4jEnterpriseClusterReconciler) createNeo4jClient(ctx context.Context
 
 	// Create Neo4j client
 	neo4jClient, err := neo4jclient.NewClientForEnterprise(cluster, r.Client, adminSecretName)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create Neo4j client: %w", err)
-	}
-
-	return neo4jClient, nil
-}
-
-// reconcilePlugins handles plugin management for the cluster
-func (r *Neo4jEnterpriseClusterReconciler) reconcilePlugins(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) error {
-	logger := log.FromContext(ctx)
-
-	for _, pluginSpec := range cluster.Spec.Plugins {
-		if !pluginSpec.Enabled {
-			continue
-		}
-
-		// Create or update Neo4jPlugin resource
-		plugin := &neo4jv1alpha1.Neo4jPlugin{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      fmt.Sprintf("%s-%s", cluster.Name, pluginSpec.Name),
-				Namespace: cluster.Namespace,
-				Labels: map[string]string{
-					"app.kubernetes.io/name":       "neo4j-plugin",
-					"app.kubernetes.io/instance":   cluster.Name,
-					"app.kubernetes.io/managed-by": "neo4j-operator",
-				},
-			},
-			Spec: neo4jv1alpha1.Neo4jPluginSpec{
-				ClusterRef: cluster.Name,
-				Name:       pluginSpec.Name,
-				Version:    pluginSpec.Version,
-				Enabled:    pluginSpec.Enabled,
-				Config:     pluginSpec.Config,
-				Source:     pluginSpec.Source,
-			},
-		}
-
-		// Set owner reference
-		if err := controllerutil.SetControllerReference(cluster, plugin, r.Scheme); err != nil {
-			return fmt.Errorf("failed to set owner reference for plugin %s: %w", pluginSpec.Name, err)
-		}
-
-		// Create or update plugin
-		if err := r.createOrUpdateResource(ctx, plugin, cluster); err != nil {
-			return fmt.Errorf("failed to create/update plugin %s: %w", pluginSpec.Name, err)
-		}
-
-		logger.Info("Plugin reconciled", "plugin", pluginSpec.Name, "version", pluginSpec.Version)
-	}
-
-	return nil
-}
-
-// SetupWithManager configures the controller with the manager
-func (r *Neo4jEnterpriseClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&neo4jv1alpha1.Neo4jEnterpriseCluster{}).
-		Owns(&appsv1.StatefulSet{}).
-		Owns(&corev1.Service{}).
-		Owns(&corev1.ConfigMap{}).
-		Complete(r)
-}
-
-// QueryMonitor manages query performance monitoring
-type QueryMonitor struct {
-	client.Client
-}
-
-// NewQueryMonitor creates a new query monitor
-func NewQueryMonitor(client client.Client) *QueryMonitor {
-	return &QueryMonitor{Client: client}
-}
-
-// ReconcileQueryMonitoring sets up query performance monitoring
-func (qm *QueryMonitor) ReconcileQueryMonitoring(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) error {
-	logger := log.FromContext(ctx).WithName("query-monitor")
-
-	// Set up query logging configuration
-	if err := qm.setupQueryLogging(ctx, cluster); err != nil {
-		return fmt.Errorf("failed to setup query logging: %w", err)
-	}
-
-	// Create ServiceMonitor for Prometheus if enabled
-	if cluster.Spec.QueryMonitoring.MetricsExport != nil && cluster.Spec.QueryMonitoring.MetricsExport.Prometheus {
-		if err := qm.createServiceMonitor(ctx, cluster); err != nil {
-			return fmt.Errorf("failed to create ServiceMonitor: %w", err)
-		}
-	}
-
-	logger.Info("Query monitoring configured successfully")
-	return nil
-}
-
-func (qm *QueryMonitor) setupQueryLogging(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) error {
-	logger := log.FromContext(ctx)
-
-	if cluster.Spec.QueryMonitoring == nil || !cluster.Spec.QueryMonitoring.Enabled {
-		return nil
-	}
-
-	// Configure Neo4j for query logging
-	config := map[string]string{
-		"dbms.logs.query.enabled":                    "true",
-		"dbms.logs.query.threshold":                  cluster.Spec.QueryMonitoring.SlowQueryThreshold,
-		"dbms.logs.query.parameter_logging_enabled":  "true",
-		"dbms.logs.query.time_logging_enabled":       "true",
-		"dbms.logs.query.allocation_logging_enabled": "true",
-		"dbms.logs.query.page_logging_enabled":       "true",
-		"dbms.track_query_cpu_time":                  "true",
-		"dbms.track_query_allocation":                "true",
-	}
-
-	// Enable sampling if configured
-	if cluster.Spec.QueryMonitoring.Sampling != nil {
-		config["dbms.logs.query.sample_rate"] = cluster.Spec.QueryMonitoring.Sampling.Rate
-	}
-
-	// Create ConfigMap with query monitoring configuration
-	configMap := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      cluster.Name + "-query-monitoring",
-			Namespace: cluster.Namespace,
-			Labels: map[string]string{
-				"app.kubernetes.io/name":      "neo4j",
-				"app.kubernetes.io/instance":  cluster.Name,
-				"app.kubernetes.io/component": "query-monitoring",
-			},
-		},
-		Data: config,
-	}
-
-	if err := qm.Create(ctx, configMap); err != nil && !errors.IsAlreadyExists(err) {
-		return fmt.Errorf("failed to create query monitoring ConfigMap: %w", err)
-	}
-
-	logger.Info("Query logging configured", "threshold", cluster.Spec.QueryMonitoring.SlowQueryThreshold)
-	return nil
-}
-
-func (qm *QueryMonitor) createServiceMonitor(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) error {
-	logger := log.FromContext(ctx)
-
-	// Create ServiceMonitor for Prometheus scraping
-	serviceMonitor := &unstructured.Unstructured{
-		Object: map[string]interface{}{
-			"apiVersion": "monitoring.coreos.com/v1",
-			"kind":       "ServiceMonitor",
-			"metadata": map[string]interface{}{
-				"name":      cluster.Name + "-query-metrics",
-				"namespace": cluster.Namespace,
-				"labels": map[string]interface{}{
-					"app.kubernetes.io/name":      "neo4j",
-					"app.kubernetes.io/instance":  cluster.Name,
-					"app.kubernetes.io/component": "monitoring",
-				},
-			},
-			"spec": map[string]interface{}{
-				"selector": map[string]interface{}{
-					"matchLabels": map[string]interface{}{
-						"app.kubernetes.io/name":     "neo4j",
-						"app.kubernetes.io/instance": cluster.Name,
-					},
-				},
-				"endpoints": []interface{}{
-					map[string]interface{}{
-						"port":          "metrics",
-						"interval":      cluster.Spec.QueryMonitoring.MetricsExport.Interval,
-						"path":          "/metrics",
-						"scrapeTimeout": "10s",
-					},
-				},
-			},
-		},
-	}
-
-	if err := qm.Create(ctx, serviceMonitor); err != nil && !errors.IsAlreadyExists(err) {
-		return fmt.Errorf("failed to create ServiceMonitor: %w", err)
-	}
-
-	logger.Info("ServiceMonitor created for query metrics")
-	return nil
-}

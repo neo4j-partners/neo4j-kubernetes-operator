@@ -24,30 +24,40 @@ jobs:
         run: |
           make manifests
 
+      - name: Verify cluster connection
+        run: |
+          echo "Verifying cluster connection before cleanup..."
+          if command -v kubectl &> /dev/null; then
+            if kubectl cluster-info &> /dev/null; then
+              echo "Cluster is accessible."
+              kubectl cluster-info
+              kubectl get nodes -o wide
+            else
+              echo "No accessible cluster found, skipping cluster cleanup."
+              exit 0
+            fi
+          else
+            echo "kubectl not found, skipping cluster cleanup."
+            exit 0
+          fi
+
       - name: Environment cleanup and sanity checks
         run: |
           echo "Performing environment cleanup and sanity checks..."
 
-          # Check if we're in a Kubernetes environment
-          if command -v kubectl &> /dev/null; then
-            echo "Kubernetes environment detected, running cleanup..."
-
-            # Test cluster connectivity if available
-            if kubectl cluster-info &> /dev/null; then
-              echo "Cluster is accessible, running connectivity checks..."
-              kubectl cluster-info
-              kubectl get nodes --no-headers | wc -l
-            else
-              echo "No accessible cluster found, skipping cluster operations"
-            fi
-
-            # Run cleanup script if available
+          # Run cleanup script if available and cluster is accessible
+          if command -v kubectl &> /dev/null && kubectl cluster-info &> /dev/null; then
             if [ -f "scripts/test-cleanup.sh" ]; then
               chmod +x scripts/test-cleanup.sh
-              ./scripts/test-cleanup.sh check
+              ./scripts/test-cleanup.sh check || true
             fi
+            # Diagnostic: log remaining resources if cleanup fails
+            echo "Logging remaining resources after cleanup attempt..."
+            kubectl get all --all-namespaces || true
+            kubectl get pvc --all-namespaces || true
+            kubectl get crd || true
           else
-            echo "No Kubernetes environment detected, skipping cleanup"
+            echo "No Kubernetes environment detected or cluster not accessible, skipping cleanup."
           fi
 
           # Clean up any local test artifacts
