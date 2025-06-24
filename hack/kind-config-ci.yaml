@@ -10,9 +10,15 @@ nodes:
       kubeletExtraArgs:
         node-labels: "topology.kubernetes.io/zone=zone-a"
         # Reduced resource limits for CI stability
-        max-pods: "50"
-        # Disable problematic feature gates
-        feature-gates: "LocalStorageCapacityIsolation=false"
+        max-pods: "30"
+        # Disable problematic feature gates and enable stable ones
+        feature-gates: "LocalStorageCapacityIsolation=false,MemoryManager=false"
+        # Add memory limits to prevent OOM
+        system-reserved: "memory=512Mi"
+        kube-reserved: "memory=256Mi"
+        eviction-hard: "memory.available<100Mi"
+        eviction-soft: "memory.available<200Mi"
+        eviction-soft-grace-period: "memory.available=30s"
   extraPortMappings:
   - containerPort: 7474
     hostPort: 7474
@@ -27,7 +33,13 @@ nodes:
     nodeRegistration:
       kubeletExtraArgs:
         node-labels: "topology.kubernetes.io/zone=zone-b"
-        max-pods: "50"
+        max-pods: "30"
+        # Add memory limits to prevent OOM
+        system-reserved: "memory=256Mi"
+        kube-reserved: "memory=128Mi"
+        eviction-hard: "memory.available<100Mi"
+        eviction-soft: "memory.available<200Mi"
+        eviction-soft-grace-period: "memory.available=30s"
 networking:
   apiServerAddress: "127.0.0.1"
   apiServerPort: 6443

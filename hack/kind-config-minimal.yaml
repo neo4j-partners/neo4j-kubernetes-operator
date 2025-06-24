@@ -8,7 +8,15 @@ nodes:
     kind: InitConfiguration
     nodeRegistration:
       kubeletExtraArgs:
-        max-pods: "30"
+        max-pods: "20"
+        # Disable problematic features
+        feature-gates: "LocalStorageCapacityIsolation=false,MemoryManager=false"
+        # Conservative memory limits
+        system-reserved: "memory=256Mi"
+        kube-reserved: "memory=128Mi"
+        eviction-hard: "memory.available<50Mi"
+        eviction-soft: "memory.available<100Mi"
+        eviction-soft-grace-period: "memory.available=30s"
 networking:
   apiServerAddress: "127.0.0.1"
   apiServerPort: 6443
