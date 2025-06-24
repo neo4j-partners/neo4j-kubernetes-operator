@@ -59,7 +59,3 @@ networking:
   serviceSubnet: "10.96.0.0/16"
   disableDefaultCNI: false
   kubeProxyMode: "iptables"
-  # Add DNS configuration for better connectivity
-  dns:
-    type: "CoreDNS"
-    replicas: 1
