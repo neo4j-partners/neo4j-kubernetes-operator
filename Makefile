@@ -1397,6 +1397,11 @@ test-cluster-configs: ## Test all Kind cluster configurations to ensure they wor
 	@echo "Testing Kind cluster configurations..."
 	@./scripts/test-cluster-creation.sh
 
+.PHONY: test-ci-cluster
+test-ci-cluster: ## Test CI cluster creation with the fixes applied.
+	@echo "Testing CI cluster creation..."
+	@./scripts/test-ci-cluster.sh
+
 .PHONY: test-local
 test-local: ## Run tests against local Kubernetes cluster.
 	@echo "Checking local cluster availability..."

@@ -144,6 +144,30 @@ jobs:
         run: |
           make manifests
 
+      - name: Prepare runner for Kind
+        run: |
+          echo "=== Preparing runner for Kind cluster creation ==="
+
+          # Ensure cgroup support is available
+          echo "Setting up cgroup support..."
+          sudo mkdir -p /sys/fs/cgroup/systemd
+          sudo mount -t cgroup -o none,name=systemd cgroup /sys/fs/cgroup/systemd || true
+
+          # Verify cgroup mounts
+          echo "Verifying cgroup mounts..."
+          mount | grep cgroup || echo "No cgroup mounts found"
+          ls -la /sys/fs/cgroup/ || echo "Cannot access cgroups"
+
+          # Check Docker capabilities
+          echo "Checking Docker capabilities..."
+          docker info | grep -i cgroup || echo "Cannot get Docker cgroup info"
+
+          # Ensure Docker can run privileged containers
+          echo "Testing Docker privileged mode..."
+          docker run --rm --privileged hello-world || echo "Docker privileged mode test failed"
+
+          echo "=== Runner preparation completed ==="
+
       - name: Create k8s Kind Cluster with Fallbacks
         run: |
           echo "=== Creating Kind cluster with progressive fallbacks ==="
@@ -152,7 +176,7 @@ jobs:
           create_cluster() {
             local config_file=$1
             local attempt_name=$2
-            local node_image=${3:-"kindest/node:v1.29.2"}
+            local node_image=${3:-"kindest/node:v1.30.0"}
 
             echo "Attempting cluster creation with: $attempt_name"
             echo "Using config: $config_file"
@@ -161,8 +185,8 @@ jobs:
             # Clean up any existing cluster first
             kind delete cluster --name neo4j-operator-test 2>/dev/null || true
 
-            # Try to create cluster
-            if kind create cluster --name neo4j-operator-test --config "$config_file" --image "$node_image" --wait 10m; then
+            # Try to create cluster with longer timeout and better error handling
+            if kind create cluster --name neo4j-operator-test --config "$config_file" --image "$node_image" --wait 15m; then
               echo "✅ Cluster created successfully with $attempt_name"
               return 0
             else
@@ -177,41 +201,46 @@ jobs:
           CLUSTER_NODE_IMAGE=""
 
           # Try progressive configurations
-          if create_cluster "hack/kind-config-robust.yaml" "robust configuration (1 node)"; then
+          if create_cluster "hack/kind-config-robust.yaml" "robust configuration (1 node)" "kindest/node:v1.30.0"; then
             echo "SUCCESS: Using robust configuration"
             CLUSTER_CREATED=true
             CLUSTER_CONFIG="robust configuration (1 node)"
-            CLUSTER_NODE_IMAGE="kindest/node:v1.29.2"
-          elif create_cluster "hack/kind-config-single.yaml" "single node configuration"; then
+            CLUSTER_NODE_IMAGE="kindest/node:v1.30.0"
+          elif create_cluster "hack/kind-config-single.yaml" "single node configuration" "kindest/node:v1.30.0"; then
             echo "SUCCESS: Using single node configuration"
             CLUSTER_CREATED=true
             CLUSTER_CONFIG="single node configuration"
-            CLUSTER_NODE_IMAGE="kindest/node:v1.29.2"
-          elif create_cluster "hack/kind-config-minimal.yaml" "minimal configuration (1 node)"; then
+            CLUSTER_NODE_IMAGE="kindest/node:v1.30.0"
+          elif create_cluster "hack/kind-config-minimal.yaml" "minimal configuration (1 node)" "kindest/node:v1.30.0"; then
             echo "SUCCESS: Using minimal configuration"
             CLUSTER_CREATED=true
             CLUSTER_CONFIG="minimal configuration (1 node)"
-            CLUSTER_NODE_IMAGE="kindest/node:v1.29.2"
-          elif create_cluster "hack/kind-config-ci.yaml" "CI configuration (2 nodes)"; then
+            CLUSTER_NODE_IMAGE="kindest/node:v1.30.0"
+          elif create_cluster "hack/kind-config-basic.yaml" "basic configuration" "kindest/node:v1.30.0"; then
+            echo "SUCCESS: Using basic configuration"
+            CLUSTER_CREATED=true
+            CLUSTER_CONFIG="basic configuration"
+            CLUSTER_NODE_IMAGE="kindest/node:v1.30.0"
+          elif create_cluster "hack/kind-config-ci.yaml" "CI configuration (2 nodes)" "kindest/node:v1.30.0"; then
             echo "SUCCESS: Using CI configuration"
             CLUSTER_CREATED=true
             CLUSTER_CONFIG="CI configuration (2 nodes)"
-            CLUSTER_NODE_IMAGE="kindest/node:v1.29.2"
-          elif create_cluster "hack/kind-config-cgroups.yaml" "cgroups-aware configuration"; then
+            CLUSTER_NODE_IMAGE="kindest/node:v1.30.0"
+          elif create_cluster "hack/kind-config-cgroups.yaml" "cgroups-aware configuration" "kindest/node:v1.30.0"; then
             echo "SUCCESS: Using cgroups-aware configuration"
             CLUSTER_CREATED=true
             CLUSTER_CONFIG="cgroups-aware configuration"
-            CLUSTER_NODE_IMAGE="kindest/node:v1.29.2"
-          elif create_cluster "hack/kind-config-basic.yaml" "basic configuration" "kindest/node:v1.28.0"; then
+            CLUSTER_NODE_IMAGE="kindest/node:v1.30.0"
+          elif create_cluster "hack/kind-config-basic.yaml" "basic configuration" "kindest/node:v1.29.2"; then
             echo "SUCCESS: Using basic configuration with older node image"
             CLUSTER_CREATED=true
             CLUSTER_CONFIG="basic configuration"
-            CLUSTER_NODE_IMAGE="kindest/node:v1.28.0"
-          elif create_cluster "hack/kind-config-basic.yaml" "basic configuration" "kindest/node:v1.27.0"; then
-            echo "SUCCESS: Using basic configuration with older node image v1.27"
+            CLUSTER_NODE_IMAGE="kindest/node:v1.29.2"
+          elif create_cluster "hack/kind-config-basic.yaml" "basic configuration" "kindest/node:v1.28.0"; then
+            echo "SUCCESS: Using basic configuration with older node image v1.28"
             CLUSTER_CREATED=true
             CLUSTER_CONFIG="basic configuration"
-            CLUSTER_NODE_IMAGE="kindest/node:v1.27.0"
+            CLUSTER_NODE_IMAGE="kindest/node:v1.28.0"
           else
             echo "❌ All cluster creation attempts failed"
             echo "=== Debugging information ==="
