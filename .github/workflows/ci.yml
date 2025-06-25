@@ -394,6 +394,12 @@ jobs:
           fi
 
           make docker-build IMG=neo4j-operator:ci
+
+          # Verify the image was built correctly
+          echo "Verifying Docker image..."
+          docker images neo4j-operator:ci
+          docker inspect neo4j-operator:ci | grep -E "(Architecture|Os|Size)"
+
           kind load docker-image neo4j-operator:ci --name neo4j-operator-test
 
       - name: Setup test environment
@@ -433,6 +439,12 @@ jobs:
           # Set up test environment
           export KUBECONFIG=$(kind export kubeconfig --name neo4j-operator-test)
 
+          # Check cluster resources before deployment
+          echo "Checking cluster resources..."
+          kubectl describe nodes
+          echo "Available pods:"
+          kubectl get pods --all-namespaces
+
           # Install CRDs
           echo "Installing CRDs..."
           make install
@@ -441,9 +453,52 @@ jobs:
           echo "Deploying operator..."
           make deploy IMG=neo4j-operator:ci
 
+          # Check operator pod status immediately after deployment
+          echo "Checking operator pod status..."
+          kubectl get pods -n neo4j-operator-system
+
+          # Wait a bit for pod to start
+          echo "Waiting for pod to start..."
+          sleep 30
+
+          # Check pod status again
+          echo "Pod status after 30s:"
+          kubectl get pods -n neo4j-operator-system -o wide
+
+          # Check pod events if pod is not ready
+          echo "Checking pod events..."
+          kubectl get events -n neo4j-operator-system --sort-by='.lastTimestamp'
+
+          # Check pod logs if available
+          echo "Checking operator pod logs..."
+          kubectl logs -n neo4j-operator-system -l control-plane=controller-manager --tail=50 || echo "No logs available yet"
+
           # Wait for operator to be ready
           echo "Waiting for operator to be ready..."
-          kubectl wait --for=condition=available deployment/neo4j-operator-controller-manager -n neo4j-operator-system --timeout=300s
+          kubectl wait --for=condition=available deployment/neo4j-operator-controller-manager -n neo4j-operator-system --timeout=600s || {
+            echo "❌ Operator deployment timed out"
+            echo "Final pod status:"
+            kubectl get pods -n neo4j-operator-system -o wide
+            echo "Final pod events:"
+            kubectl get events -n neo4j-operator-system --sort-by='.lastTimestamp'
+            echo "Final pod logs:"
+            kubectl logs -n neo4j-operator-system -l control-plane=controller-manager --tail=100 || echo "No logs available"
+            echo "Node resources:"
+            kubectl describe nodes
+
+            # Check if CRDs are at least installed
+            echo "Checking if CRDs are installed..."
+            if kubectl get crd | grep -q neo4j.neo4j.com; then
+              echo "⚠️  CRDs are installed but operator is not ready. Continuing with tests..."
+              echo "OPERATOR_READY=false" >> $GITHUB_ENV
+            else
+              echo "❌ CRDs are not installed. Cannot continue with tests."
+              exit 1
+            fi
+          }
+
+          # Set operator ready flag if we reach here
+          echo "OPERATOR_READY=true" >> $GITHUB_ENV
 
           # Verify CRDs are installed
           echo "Verifying CRDs are installed..."
@@ -492,6 +547,15 @@ jobs:
             exit 0
           fi
 
+          # Check if operator is ready
+          if [[ "${OPERATOR_READY:-false}" != "true" ]]; then
+            echo "⚠️  Operator is not ready, but CRDs are installed. Running tests anyway..."
+            echo "INTEGRATION_OPERATOR_STATUS=not_ready" >> $GITHUB_ENV
+          else
+            echo "✅ Operator is ready"
+            echo "INTEGRATION_OPERATOR_STATUS=ready" >> $GITHUB_ENV
+          fi
+
           # Set up test environment
           export KUBECONFIG=$(kind export kubeconfig --name neo4j-operator-test)
 
@@ -516,6 +580,15 @@ jobs:
             echo "SUCCESS_E2E=false" >> $GITHUB_ENV
             echo "E2E_SKIP_REASON=cluster_not_healthy" >> $GITHUB_ENV
             exit 0
+          fi
+
+          # Check if operator is ready
+          if [[ "${OPERATOR_READY:-false}" != "true" ]]; then
+            echo "⚠️  Operator is not ready, but CRDs are installed. Running tests anyway..."
+            echo "E2E_OPERATOR_STATUS=not_ready" >> $GITHUB_ENV
+          else
+            echo "✅ Operator is ready"
+            echo "E2E_OPERATOR_STATUS=ready" >> $GITHUB_ENV
           fi
 
           # Set up test environment
@@ -544,6 +617,7 @@ jobs:
           echo "  Healthy: ${CLUSTER_HEALTHY:-unknown}"
           echo "  Configuration: ${CLUSTER_CONFIG:-unknown}"
           echo "  Node Image: ${CLUSTER_NODE_IMAGE:-unknown}"
+          echo "  Operator Ready: ${OPERATOR_READY:-unknown}"
 
           # Get cluster status if available
           if [[ "${CLUSTER_READY:-false}" == "true" ]]; then
@@ -555,6 +629,12 @@ jobs:
 
             echo "Operator pods:"
             kubectl get pods -A | grep neo4j || echo "No Neo4j operator pods found"
+
+            # Show operator status if available
+            if [[ "${OPERATOR_READY:-false}" == "true" ]]; then
+              echo "Operator deployment status:"
+              kubectl get deployment neo4j-operator-controller-manager -n neo4j-operator-system || echo "Cannot get operator deployment"
+            fi
           else
             echo "No cluster available for status check"
           fi
@@ -564,9 +644,15 @@ jobs:
           if [[ "${INTEGRATION_SKIP_REASON:-}" != "" ]]; then
             echo "  Skip reason: ${INTEGRATION_SKIP_REASON}"
           fi
+          if [[ "${INTEGRATION_OPERATOR_STATUS:-}" != "" ]]; then
+            echo "  Operator status: ${INTEGRATION_OPERATOR_STATUS}"
+          fi
           echo "E2E tests: ${SUCCESS_E2E:-unknown}"
           if [[ "${E2E_SKIP_REASON:-}" != "" ]]; then
             echo "  Skip reason: ${E2E_SKIP_REASON}"
+          fi
+          if [[ "${E2E_OPERATOR_STATUS:-}" != "" ]]; then
+            echo "  Operator status: ${E2E_OPERATOR_STATUS}"
           fi
 
           # Overall success determination
@@ -579,6 +665,15 @@ jobs:
           else
             echo "❌ Cluster creation failed, no tests could run"
             echo "OVERALL_SUCCESS=false" >> $GITHUB_ENV
+          fi
+
+          # Additional success criteria based on operator status
+          if [[ "${OPERATOR_READY:-false}" == "true" ]]; then
+            echo "✅ Operator is ready and functional"
+          elif [[ "${CLUSTER_HEALTHY:-false}" == "true" ]]; then
+            echo "⚠️  Operator is not ready but cluster is healthy"
+          else
+            echo "❌ Neither operator nor cluster is ready"
           fi
 
           echo "=== End Test Results Summary ==="

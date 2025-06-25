@@ -3,6 +3,24 @@ apiVersion: kind.x-k8s.io/v1alpha4
 name: neo4j-operator-test
 nodes:
 - role: control-plane
+  kubeadmConfigPatches:
+  - |
+    kind: InitConfiguration
+    nodeRegistration:
+      kubeletExtraArgs:
+        node-labels: "ingress-ready=true"
+        system-reserved: "memory=512Mi,cpu=500m"
+        kube-reserved: "memory=512Mi,cpu=500m"
+        eviction-hard: "memory.available<100Mi,nodefs.available<10%"
+        eviction-soft: "memory.available<200Mi,nodefs.available<20%"
+        eviction-soft-grace-period: "memory.available=30s,nodefs.available=30s"
+  resources:
+    requests:
+      memory: "2Gi"
+      cpu: "1"
+    limits:
+      memory: "4Gi"
+      cpu: "2"
 networking:
   apiServerAddress: "127.0.0.1"
   apiServerPort: 6443
