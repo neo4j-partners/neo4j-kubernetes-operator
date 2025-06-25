@@ -100,6 +100,16 @@ check_crds() {
     done
 
     if [ ${#missing_crds[@]} -gt 0 ]; then
+        # If this is just a check (not cleanup), be more lenient
+        if [[ "${2:-}" == "check_only" ]]; then
+            log_warning "Missing required CRDs (this is expected before operator deployment):"
+            for crd in "${missing_crds[@]}"; do
+                log_warning "  - $crd"
+            done
+            log_info "CRDs will be installed when the operator is deployed"
+            return 0
+        fi
+
         log_error "Missing required CRDs:"
         for crd in "${missing_crds[@]}"; do
             log_error "  - $crd"
@@ -349,7 +359,7 @@ main_cleanup() {
     # Perform checks
     check_kubectl
     check_cluster_health
-    check_crds
+    check_crds "cleanup"
     check_conflicting_resources
 
     # Perform cleanup
@@ -371,7 +381,7 @@ case "${1:-cleanup}" in
     "check")
         check_kubectl
         check_cluster_health
-        check_crds
+        check_crds "check_only"
         check_conflicting_resources
         log_success "Environment checks completed"
         ;;
