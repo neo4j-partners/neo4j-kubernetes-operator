@@ -23,6 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -51,9 +52,22 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 	})
 
 	AfterEach(func() {
-		// Clean up namespace (will cascade delete all resources)
+		// Clean up namespace (will cascade delete all resources) with retry logic
 		if namespace != nil {
-			Expect(k8sClient.Delete(ctx, namespace)).Should(Succeed())
+			Eventually(func() error {
+				err := k8sClient.Delete(ctx, namespace)
+				if err != nil && !errors.IsNotFound(err) {
+					return err
+				}
+				return nil
+			}, timeout, interval).Should(Succeed())
+
+			// Wait for namespace to be fully deleted
+			Eventually(func() bool {
+				ns := &corev1.Namespace{}
+				err := k8sClient.Get(ctx, types.NamespacedName{Name: namespace.Name}, ns)
+				return errors.IsNotFound(err)
+			}, timeout*2, interval).Should(BeTrue())
 		}
 	})
 

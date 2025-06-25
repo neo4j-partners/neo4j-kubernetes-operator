@@ -18,12 +18,12 @@ package integration_test
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -38,15 +38,23 @@ var _ = Describe("Enterprise Features Integration Tests", func() {
 
 	BeforeEach(func() {
 		ctx = context.Background()
-		namespace = fmt.Sprintf("test-enterprise-%d", time.Now().Unix())
+		namespace = createTestNamespace("enterprise")
 
-		// Create test namespace
-		ns := &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: namespace,
-			},
-		}
-		Expect(k8sClient.Create(ctx, ns)).To(Succeed())
+		// Create test namespace with retry logic
+		Eventually(func() error {
+			ns := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: namespace,
+				},
+			}
+			return k8sClient.Create(ctx, ns)
+		}, timeout, interval).Should(Succeed())
+
+		// Wait for namespace to be ready
+		Eventually(func() error {
+			ns := &corev1.Namespace{}
+			return k8sClient.Get(ctx, types.NamespacedName{Name: namespace}, ns)
+		}, timeout, interval).Should(Succeed())
 
 		// Create admin secret
 		secret := &corev1.Secret{
@@ -62,13 +70,28 @@ var _ = Describe("Enterprise Features Integration Tests", func() {
 	})
 
 	AfterEach(func() {
-		// Clean up namespace
-		ns := &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: namespace,
-			},
+		// Clean up namespace with retry logic and force deletion
+		if namespace != "" {
+			Eventually(func() error {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: namespace,
+					},
+				}
+				err := k8sClient.Delete(ctx, ns)
+				if err != nil && !errors.IsNotFound(err) {
+					return err
+				}
+				return nil
+			}, timeout, interval).Should(Succeed())
+
+			// Wait for namespace to be fully deleted
+			Eventually(func() bool {
+				ns := &corev1.Namespace{}
+				err := k8sClient.Get(ctx, types.NamespacedName{Name: namespace}, ns)
+				return errors.IsNotFound(err)
+			}, timeout*2, interval).Should(BeTrue())
 		}
-		Expect(k8sClient.Delete(ctx, ns)).To(Succeed())
 	})
 
 	Describe("Auto-Scaling Feature", func() {

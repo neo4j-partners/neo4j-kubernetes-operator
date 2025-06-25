@@ -58,23 +58,27 @@ check_kubectl() {
 check_cluster_health() {
     log_info "Checking cluster health..."
 
-    # Check nodes
-    local ready_nodes=$(kubectl get nodes --no-headers | grep -c "Ready" || echo "0")
-    if [ "$ready_nodes" -eq 0 ]; then
-        log_error "No ready nodes found in cluster"
-        exit 1
+    # Check if kubectl can connect
+    if ! kubectl cluster-info >/dev/null 2>&1; then
+        log_error "Cannot connect to Kubernetes cluster"
+        return 1
     fi
-    log_info "Found $ready_nodes ready nodes"
 
-    # Check storage classes
-    local storage_classes=$(kubectl get storageclass --no-headers | wc -l || echo "0")
-    if [ "$storage_classes" -eq 0 ]; then
-        log_warning "No storage classes found"
-    else
-        log_info "Found $storage_classes storage classes"
+    # Check node readiness
+    local ready_nodes=$(kubectl get nodes --no-headers 2>/dev/null | grep -c "Ready" || echo "0")
+    if [ "${ready_nodes:-0}" -eq 0 ]; then
+        log_warning "No ready nodes found in cluster"
+        return 1
+    fi
+
+    # Check for storage classes
+    local storage_classes=$(kubectl get storageclass --no-headers 2>/dev/null | wc -l || echo "0")
+    if [ "${storage_classes:-0}" -eq 0 ]; then
+        log_warning "No storage classes found in cluster"
     fi
 
     log_success "Cluster health check passed"
+    return 0
 }
 
 # Check for required CRDs
@@ -325,7 +329,7 @@ verify_cleanup() {
             remaining_resources=$((remaining_resources + remaining_namespaces))
         fi
 
-        if [ $remaining_resources -eq 0 ]; then
+        if [ "${remaining_resources:-0}" -eq 0 ]; then
             log_success "Cleanup verification passed - no conflicting resources found"
             return 0
         fi

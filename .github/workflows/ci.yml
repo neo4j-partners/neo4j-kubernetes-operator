@@ -191,6 +191,53 @@ jobs:
 
           echo "✅ Operator image built and loaded"
 
+      - name: Verify operator image
+        run: |
+          echo "=== Verifying operator image ==="
+
+          # Check if cluster is healthy
+          if [[ "${CLUSTER_HEALTHY:-false}" != "true" ]]; then
+            echo "❌ Cluster is not healthy, skipping image verification"
+            exit 0
+          fi
+
+          # Check if image exists in Docker
+          if ! docker images | grep -q "neo4j-operator.*ci"; then
+            echo "❌ Operator image not found in Docker"
+            exit 1
+          fi
+
+          # Check if image is loaded in Kind cluster
+          if ! docker exec neo4j-operator-test-control-plane crictl images | grep -q "neo4j-operator"; then
+            echo "❌ Operator image not loaded in Kind cluster"
+            echo "Available images in Kind cluster:"
+            docker exec neo4j-operator-test-control-plane crictl images
+            exit 1
+          fi
+
+          echo "✅ Operator image verified"
+
+      - name: Prepare operator namespace
+        run: |
+          echo "=== Preparing operator namespace ==="
+
+          # Check if cluster is healthy
+          if [[ "${CLUSTER_HEALTHY:-false}" != "true" ]]; then
+            echo "❌ Cluster is not healthy, skipping namespace preparation"
+            exit 0
+          fi
+
+          # Create namespace if it doesn't exist
+          kubectl create namespace neo4j-operator-system --dry-run=client -o yaml | kubectl apply -f -
+
+          # Verify namespace exists
+          if kubectl get namespace neo4j-operator-system >/dev/null 2>&1; then
+            echo "✅ Operator namespace ready"
+          else
+            echo "❌ Failed to create operator namespace"
+            exit 1
+          fi
+
       - name: Deploy operator
         run: |
           echo "=== Deploying operator ==="
@@ -227,6 +274,37 @@ jobs:
 
           echo "✅ Operator deployment completed"
 
+      - name: Debug operator deployment on failure
+        if: failure() && env.CLUSTER_HEALTHY == 'true'
+        run: |
+          echo "=== Debugging operator deployment failure ==="
+
+          echo "Cluster nodes:"
+          kubectl get nodes -o wide
+
+          echo "All pods in neo4j-operator-system:"
+          kubectl get pods -n neo4j-operator-system -o wide
+
+          echo "Operator deployment details:"
+          kubectl describe deployment neo4j-operator-controller-manager -n neo4j-operator-system || echo "Deployment not found"
+
+          echo "Operator pod details:"
+          kubectl get pods -n neo4j-operator-system -l app=neo4j-operator-controller-manager -o name | head -1 | xargs -r kubectl describe -n neo4j-operator-system || echo "No operator pods found"
+
+          echo "Operator pod logs:"
+          kubectl logs -n neo4j-operator-system -l app=neo4j-operator-controller-manager --tail=100 || echo "No operator logs found"
+
+          echo "Events in neo4j-operator-system namespace:"
+          kubectl get events -n neo4j-operator-system --sort-by='.lastTimestamp' | tail -20 || echo "No events found"
+
+          echo "All deployments in neo4j-operator-system:"
+          kubectl get deployments -n neo4j-operator-system
+
+          echo "All services in neo4j-operator-system:"
+          kubectl get services -n neo4j-operator-system
+
+          echo "=== End operator deployment debugging ==="
+
       - name: Run integration tests
         run: |
           echo "Running integration tests..."
@@ -237,12 +315,54 @@ jobs:
             exit 1
           fi
 
+          # Check if operator is ready
+          if [[ "${OPERATOR_READY:-false}" != "true" ]]; then
+            echo "❌ Operator is not ready, cannot run integration tests"
+            exit 1
+          fi
+
           # Set up test environment
           export KUBECONFIG=$(kind export kubeconfig --name neo4j-operator-test)
+
+          # Clean up any existing test namespaces to prevent conflicts
+          echo "Cleaning up existing test namespaces..."
+          kubectl get namespaces --no-headers -o custom-columns="NAME:.metadata.name" | grep -E "^(test-)" | xargs -r kubectl delete namespace --force --grace-period=0 || echo "No existing test namespaces found"
+
+          # Wait for cleanup to complete
+          sleep 10
+
+          # Verify test environment
+          echo "Verifying test environment..."
+          kubectl get nodes
+          kubectl get pods -n neo4j-operator-system
+          kubectl get crd | grep neo4j.neo4j.com
 
           # Run integration tests
           make test-integration
         timeout-minutes: 15
+
+      - name: Debug integration test failure
+        if: failure() && env.CLUSTER_HEALTHY == 'true' && env.OPERATOR_READY == 'true'
+        run: |
+          echo "=== Debugging integration test failure ==="
+
+          echo "Cluster status:"
+          kubectl get nodes -o wide
+
+          echo "Operator status:"
+          kubectl get pods -n neo4j-operator-system -o wide
+          kubectl logs -n neo4j-operator-system -l app=neo4j-operator-controller-manager --tail=50 || echo "No operator logs"
+
+          echo "CRDs status:"
+          kubectl get crd | grep neo4j.neo4j.com
+
+          echo "Test namespaces:"
+          kubectl get namespaces | grep -E "(test-|gke-|aks-|eks-)" || echo "No test namespaces found"
+
+          echo "Recent events:"
+          kubectl get events --all-namespaces --sort-by='.lastTimestamp' | tail -20 || echo "No events found"
+
+          echo "=== End integration test debugging ==="
 
       - name: Run e2e tests
         run: |

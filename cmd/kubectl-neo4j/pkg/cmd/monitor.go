@@ -457,7 +457,9 @@ func showPerformanceStats(ctx context.Context, crClient client.Client, clusterNa
 		for _, pvc := range pvcs.Items {
 			fmt.Printf("  PVC: %s\n", pvc.Name)
 			fmt.Printf("    Status: %s\n", pvc.Status.Phase)
-			fmt.Printf("    Capacity: %s\n", pvc.Status.Capacity[corev1.ResourceStorage])
+			if capacity, exists := pvc.Status.Capacity[corev1.ResourceStorage]; exists {
+				fmt.Printf("    Capacity: %s\n", capacity.String())
+			}
 			if pvc.Spec.Resources.Requests != nil {
 				if storage := pvc.Spec.Resources.Requests[corev1.ResourceStorage]; !storage.IsZero() {
 					fmt.Printf("    Requested: %s\n", storage.String())

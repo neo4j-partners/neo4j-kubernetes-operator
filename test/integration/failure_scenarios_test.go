@@ -38,25 +38,48 @@ var _ = Describe("Failure Scenarios", func() {
 
 	BeforeEach(func() {
 		ctx = context.Background()
-		namespace = "failure-test"
+		namespace = createTestNamespace("failure")
 
-		// Create test namespace
-		ns := &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: namespace,
-			},
-		}
-		Expect(k8sClient.Create(ctx, ns)).To(Succeed())
+		// Create test namespace with retry logic
+		Eventually(func() error {
+			ns := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: namespace,
+				},
+			}
+			return k8sClient.Create(ctx, ns)
+		}, timeout, interval).Should(Succeed())
+
+		// Wait for namespace to be ready
+		Eventually(func() error {
+			ns := &corev1.Namespace{}
+			return k8sClient.Get(ctx, types.NamespacedName{Name: namespace}, ns)
+		}, timeout, interval).Should(Succeed())
 	})
 
 	AfterEach(func() {
-		// Clean up namespace
-		ns := &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: namespace,
-			},
+		// Clean up namespace with retry logic and force deletion
+		if namespace != "" {
+			Eventually(func() error {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: namespace,
+					},
+				}
+				err := k8sClient.Delete(ctx, ns)
+				if err != nil && !errors.IsNotFound(err) {
+					return err
+				}
+				return nil
+			}, timeout, interval).Should(Succeed())
+
+			// Wait for namespace to be fully deleted
+			Eventually(func() bool {
+				ns := &corev1.Namespace{}
+				err := k8sClient.Get(ctx, types.NamespacedName{Name: namespace}, ns)
+				return errors.IsNotFound(err)
+			}, timeout*2, interval).Should(BeTrue())
 		}
-		Expect(k8sClient.Delete(ctx, ns)).To(Succeed())
 	})
 
 	Context("Invalid Cluster Configurations", func() {
