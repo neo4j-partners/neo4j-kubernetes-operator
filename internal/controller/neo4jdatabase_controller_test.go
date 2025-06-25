@@ -29,7 +29,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1"
-	controller "github.com/neo4j-labs/neo4j-kubernetes-operator/internal/controller"
+	"github.com/neo4j-labs/neo4j-kubernetes-operator/internal/controller"
 )
 
 var _ = Describe("Neo4jDatabase Controller", func() {

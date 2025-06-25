@@ -29,8 +29,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1"
-	controller "github.com/neo4j-labs/neo4j-kubernetes-operator/internal/controller"
-	client "sigs.k8s.io/controller-runtime/pkg/client"
+	"github.com/neo4j-labs/neo4j-kubernetes-operator/internal/controller"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 var _ = Describe("AutoScaler", func() {

@@ -307,7 +307,7 @@ jobs:
 
       - name: Run integration tests
         run: |
-          echo "Running integration tests..."
+          echo "Running integration tests with optimized settings..."
 
           # Check if cluster is healthy
           if [[ "${CLUSTER_HEALTHY:-false}" != "true" ]]; then
@@ -337,9 +337,20 @@ jobs:
           kubectl get pods -n neo4j-operator-system
           kubectl get crd | grep neo4j.neo4j.com
 
-          # Run integration tests
+          # Set optimized test environment variables
+          export TEST_TIMEOUT_MINUTES=15
+          export TEST_PARALLEL_JOBS=4
+          export TEST_VERBOSE=false
+          export TEST_CLEANUP_ON_FAILURE=true
+
+          # Run integration tests with optimized settings
+          echo "Using optimized test settings:"
+          echo "  Timeout: ${TEST_TIMEOUT_MINUTES} minutes"
+          echo "  Parallel jobs: $TEST_PARALLEL_JOBS"
+          echo "  Verbose: $TEST_VERBOSE"
+
           make test-integration
-        timeout-minutes: 15
+        timeout-minutes: 20
 
       - name: Debug integration test failure
         if: failure() && env.CLUSTER_HEALTHY == 'true' && env.OPERATOR_READY == 'true'

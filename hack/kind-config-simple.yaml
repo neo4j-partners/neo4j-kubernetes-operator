@@ -8,17 +8,28 @@ nodes:
     kind: InitConfiguration
     nodeRegistration:
       kubeletExtraArgs:
-        # Conservative resource limits for CI environments
-        max-pods: "20"
-        system-reserved: "memory=128Mi,cpu=100m"
-        kube-reserved: "memory=64Mi,cpu=50m"
-        # Simple eviction policy
-        eviction-hard: "memory.available<50Mi"
-        # Basic kubelet health check
+        # Increased resource limits for better performance
+        max-pods: "50"
+        system-reserved: "memory=256Mi,cpu=200m"
+        kube-reserved: "memory=128Mi,cpu=100m"
+        # Optimized eviction policy
+        eviction-hard: "memory.available<100Mi"
+        # Enhanced kubelet health check
         healthz-port: "10248"
         healthz-bind-address: "127.0.0.1"
-        # Reduce logging verbosity
-        v: "2"
+        # Reduced logging verbosity for better performance
+        v: "1"
+        # Optimize for faster startup
+        container-runtime-endpoint: "unix:///run/containerd/containerd.sock"
+        # Increase API server timeout
+        runtime-request-timeout: "15m"
+  # Increase node resources
+  extraMounts:
+  - hostPath: /tmp/kind-logs
+    containerPath: /var/log
 networking:
   apiServerAddress: "127.0.0.1"
   apiServerPort: 6443
+  # Optimize networking
+  disableDefaultCNI: false
+  ipFamily: ipv4

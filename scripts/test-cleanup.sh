@@ -287,7 +287,8 @@ check_conflicting_resources() {
     log_info "Checking for conflicting resources..."
 
     # Check for existing Neo4j resources
-    local existing_clusters=$(kubectl get neo4jenterpriseclusters --all-namespaces --no-headers 2>/dev/null | wc -l || echo "0")
+    local existing_clusters=$(kubectl get neo4jenterpriseclusters --all-namespaces --no-headers 2>/dev/null | wc -l | tr -d '[:space:]' || echo "0")
+    existing_clusters=${existing_clusters:-0}
     if [ "$existing_clusters" -gt 0 ]; then
         log_warning "Found $existing_clusters existing Neo4jEnterpriseClusters that might conflict with tests"
         if [ "$VERBOSE" = "true" ]; then
@@ -296,7 +297,8 @@ check_conflicting_resources() {
     fi
 
     # Check for test namespaces
-    local test_namespaces=$(kubectl get namespaces --no-headers -o custom-columns="NAME:.metadata.name" | grep -E "^(test-|gke-|aks-|eks-)" | wc -l || echo "0")
+    local test_namespaces=$(kubectl get namespaces --no-headers -o custom-columns="NAME:.metadata.name" | grep -E "^(test-|gke-|aks-|eks-)" | wc -l | tr -d '[:space:]' || echo "0")
+    test_namespaces=${test_namespaces:-0}
     if [ "$test_namespaces" -gt 0 ]; then
         log_warning "Found $test_namespaces test namespaces that might conflict"
         if [ "$VERBOSE" = "true" ]; then
@@ -316,16 +318,23 @@ verify_cleanup() {
         local remaining_resources=0
 
         # Check for remaining Neo4j resources
-        local remaining_clusters=$(kubectl get neo4jenterpriseclusters --all-namespaces --no-headers 2>/dev/null | wc -l || echo "0")
-        local remaining_backups=$(kubectl get neo4jbackups --all-namespaces --no-headers 2>/dev/null | wc -l || echo "0")
-        local remaining_restores=$(kubectl get neo4jrestores --all-namespaces --no-headers 2>/dev/null | wc -l || echo "0")
-        local remaining_databases=$(kubectl get neo4jdatabases --all-namespaces --no-headers 2>/dev/null | wc -l || echo "0")
+        local remaining_clusters=$(kubectl get neo4jenterpriseclusters --all-namespaces --no-headers 2>/dev/null | wc -l | tr -d '[:space:]' || echo "0")
+        local remaining_backups=$(kubectl get neo4jbackups --all-namespaces --no-headers 2>/dev/null | wc -l | tr -d '[:space:]' || echo "0")
+        local remaining_restores=$(kubectl get neo4jrestores --all-namespaces --no-headers 2>/dev/null | wc -l | tr -d '[:space:]' || echo "0")
+        local remaining_databases=$(kubectl get neo4jdatabases --all-namespaces --no-headers 2>/dev/null | wc -l | tr -d '[:space:]' || echo "0")
+
+        # Ensure variables are numeric
+        remaining_clusters=${remaining_clusters:-0}
+        remaining_backups=${remaining_backups:-0}
+        remaining_restores=${remaining_restores:-0}
+        remaining_databases=${remaining_databases:-0}
 
         remaining_resources=$((remaining_clusters + remaining_backups + remaining_restores + remaining_databases))
 
         # Check for remaining test namespaces
         if [ "$DELETE_NAMESPACES" = "true" ]; then
-            local remaining_namespaces=$(kubectl get namespaces --no-headers -o custom-columns="NAME:.metadata.name" | grep -E "^(test-|gke-|aks-|eks-)" | wc -l || echo "0")
+            local remaining_namespaces=$(kubectl get namespaces --no-headers -o custom-columns="NAME:.metadata.name" | grep -E "^(test-|gke-|aks-|eks-)" | wc -l | tr -d '[:space:]' || echo "0")
+            remaining_namespaces=${remaining_namespaces:-0}
             remaining_resources=$((remaining_resources + remaining_namespaces))
         fi
 

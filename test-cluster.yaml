@@ -1,0 +1,18 @@
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: test-cluster
+  namespace: test-operator
+spec:
+  edition: "enterprise"
+  image:
+    repo: "neo4j"
+    tag: "5.26-enterprise"
+  topology:
+    primaries: 3
+    secondaries: 0
+  storage:
+    size: "1Gi"
+    className: "standard"
+  auth:
+    adminSecret: "neo4j-admin-secret"

@@ -1,0 +1,21 @@
+# ... existing rules ...
+- apiGroups:
+  - neo4j.neo4j.com
+  resources:
+  - neo4jbackups
+  - neo4jenterpriseclusters
+  - neo4jplugins
+  - neo4jrestores
+  - neo4jdatabases
+  - neo4jroles
+  - neo4jgrants
+  - neo4jusers
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+# ... existing rules ...
