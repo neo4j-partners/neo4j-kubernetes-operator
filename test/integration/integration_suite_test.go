@@ -21,11 +21,13 @@ import (
 	"fmt"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -34,6 +36,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1"
+	corev1 "k8s.io/api/core/v1"
 )
 
 var cfg *rest.Config
@@ -41,6 +44,7 @@ var k8sClient client.Client
 var testEnv *envtest.Environment
 var ctx context.Context
 var cancel context.CancelFunc
+var testRunID string
 
 func TestIntegration(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -51,6 +55,9 @@ var _ = BeforeSuite(func() {
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
 	ctx, cancel = context.WithCancel(context.Background())
+
+	// Generate unique test run ID
+	testRunID = fmt.Sprintf("%d", time.Now().UnixNano())
 
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
@@ -74,6 +81,9 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = AfterSuite(func() {
+	By("cleaning up any leftover test namespaces")
+	cleanupTestNamespaces()
+
 	By("tearing down the test environment")
 	cancel()
 	err := testEnv.Stop()
@@ -87,5 +97,36 @@ const (
 )
 
 func createTestNamespace(name string) string {
-	return fmt.Sprintf("test-%s-%d", name, time.Now().UnixNano())
+	return fmt.Sprintf("test-%s-%s-%d", name, testRunID, time.Now().UnixNano())
+}
+
+// cleanupTestNamespaces removes any leftover test namespaces
+func cleanupTestNamespaces() {
+	if k8sClient == nil {
+		return
+	}
+
+	ctx := context.Background()
+	namespaceList := &corev1.NamespaceList{}
+
+	err := k8sClient.List(ctx, namespaceList)
+	if err != nil {
+		return
+	}
+
+	for _, ns := range namespaceList.Items {
+		if isTestNamespace(ns.Name) {
+			// Force delete the namespace
+			err := k8sClient.Delete(ctx, &ns)
+			if err != nil && !errors.IsNotFound(err) {
+				// Log but don't fail the test
+				fmt.Printf("Warning: Failed to cleanup namespace %s: %v\n", ns.Name, err)
+			}
+		}
+	}
+}
+
+// isTestNamespace checks if a namespace is a test namespace
+func isTestNamespace(name string) bool {
+	return strings.HasPrefix(name, "test-")
 }
