@@ -9,18 +9,14 @@ nodes:
     nodeRegistration:
       kubeletExtraArgs:
         node-labels: "ingress-ready=true"
-        system-reserved: "memory=512Mi,cpu=500m"
-        kube-reserved: "memory=512Mi,cpu=500m"
+        system-reserved: "memory=256Mi,cpu=250m"
+        kube-reserved: "memory=256Mi,cpu=250m"
         eviction-hard: "memory.available<100Mi,nodefs.available<10%"
         eviction-soft: "memory.available<200Mi,nodefs.available<20%"
         eviction-soft-grace-period: "memory.available=30s,nodefs.available=30s"
-  resources:
-    requests:
-      memory: "2Gi"
-      cpu: "1"
-    limits:
-      memory: "4Gi"
-      cpu: "2"
+        max-pods: "50"
+        # Disable problematic features
+        feature-gates: "LocalStorageCapacityIsolation=false,MemoryManager=false"
 networking:
   apiServerAddress: "127.0.0.1"
   apiServerPort: 6443

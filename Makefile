@@ -1391,3 +1391,20 @@ test-runner-parallel: ## Run all tests in parallel with cleanup using the test r
 		echo "Error: test runner script not found"; \
 		exit 1; \
 	fi
+
+.PHONY: test-cluster-configs
+test-cluster-configs: ## Test all Kind cluster configurations to ensure they work.
+	@echo "Testing Kind cluster configurations..."
+	@./scripts/test-cluster-creation.sh
+
+.PHONY: test-local
+test-local: ## Run tests against local Kubernetes cluster.
+	@echo "Checking local cluster availability..."
+	@if ./scripts/check-cluster.sh --type kind --verbose; then \
+		echo "Local cluster is available, running tests..."; \
+		CLUSTER_TYPE=local go test ./test/integration/... -v -timeout=15m; \
+	else \
+		echo "❌ No local cluster available"; \
+		echo "💡 Run 'make dev-cluster' to create a local cluster"; \
+		exit 1; \
+	fi

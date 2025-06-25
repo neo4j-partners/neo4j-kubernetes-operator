@@ -1,0 +1,39 @@
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: neo4j-operator-test
+nodes:
+- role: control-plane
+  kubeadmConfigPatches:
+  - |
+    kind: InitConfiguration
+    nodeRegistration:
+      kubeletExtraArgs:
+        # Minimal resource configuration for CI
+        max-pods: "8"
+        # Disable all problematic features
+        feature-gates: "LocalStorageCapacityIsolation=false,MemoryManager=false,NodeLease=false"
+        # Very conservative memory limits
+        system-reserved: "memory=32Mi"
+        kube-reserved: "memory=16Mi"
+        eviction-hard: "memory.available<10Mi"
+        eviction-soft: "memory.available<20Mi"
+        eviction-soft-grace-period: "memory.available=30s"
+        # Improve kubelet stability
+        healthz-port: "10248"
+        healthz-bind-address: "127.0.0.1"
+        # Minimal logging
+        v: "1"
+        # Use systemd cgroup driver
+        cgroup-driver: "systemd"
+        # Disable unnecessary components
+        enable-server: "true"
+        # Reduce API server memory usage
+        apiserver-count: "1"
+        # Disable admission plugins that might cause issues
+        disable-admission-plugins: "ServiceAccount,NamespaceLifecycle"
+networking:
+  apiServerAddress: "127.0.0.1"
+  apiServerPort: 6443
+  podSubnet: "10.244.0.0/16"
+  serviceSubnet: "10.96.0.0/12"
+  disableDefaultCNI: false

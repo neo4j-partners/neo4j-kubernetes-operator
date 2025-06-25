@@ -12,8 +12,8 @@ nodes:
         # Minimal feature gates
         feature-gates: "LocalStorageCapacityIsolation=false,MemoryManager=false"
         # Very conservative memory limits
-        system-reserved: "memory=128Mi"
-        kube-reserved: "memory=64Mi"
+        system-reserved: "memory=64Mi"
+        kube-reserved: "memory=32Mi"
         eviction-hard: "memory.available<25Mi"
         eviction-soft: "memory.available<50Mi"
         eviction-soft-grace-period: "memory.available=30s"
@@ -21,6 +21,11 @@ nodes:
         enable-server: "true"
         # Reduce logging verbosity
         v: "1"
+        # Improve kubelet stability
+        healthz-port: "10248"
+        healthz-bind-address: "127.0.0.1"
+        # Disable cgroups v2 features that might cause issues
+        cgroup-driver: "systemd"
 networking:
   apiServerAddress: "127.0.0.1"
   apiServerPort: 6443

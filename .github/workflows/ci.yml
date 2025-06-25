@@ -177,20 +177,25 @@ jobs:
           CLUSTER_NODE_IMAGE=""
 
           # Try progressive configurations
-          if create_cluster "hack/kind-config-ci.yaml" "CI configuration (2 nodes)"; then
-            echo "SUCCESS: Using CI configuration"
+          if create_cluster "hack/kind-config-robust.yaml" "robust configuration (1 node)"; then
+            echo "SUCCESS: Using robust configuration"
             CLUSTER_CREATED=true
-            CLUSTER_CONFIG="CI configuration (2 nodes)"
+            CLUSTER_CONFIG="robust configuration (1 node)"
+            CLUSTER_NODE_IMAGE="kindest/node:v1.29.2"
+          elif create_cluster "hack/kind-config-single.yaml" "single node configuration"; then
+            echo "SUCCESS: Using single node configuration"
+            CLUSTER_CREATED=true
+            CLUSTER_CONFIG="single node configuration"
             CLUSTER_NODE_IMAGE="kindest/node:v1.29.2"
           elif create_cluster "hack/kind-config-minimal.yaml" "minimal configuration (1 node)"; then
             echo "SUCCESS: Using minimal configuration"
             CLUSTER_CREATED=true
             CLUSTER_CONFIG="minimal configuration (1 node)"
             CLUSTER_NODE_IMAGE="kindest/node:v1.29.2"
-          elif create_cluster "hack/kind-config-single.yaml" "single node configuration"; then
-            echo "SUCCESS: Using single node configuration"
+          elif create_cluster "hack/kind-config-ci.yaml" "CI configuration (2 nodes)"; then
+            echo "SUCCESS: Using CI configuration"
             CLUSTER_CREATED=true
-            CLUSTER_CONFIG="single node configuration"
+            CLUSTER_CONFIG="CI configuration (2 nodes)"
             CLUSTER_NODE_IMAGE="kindest/node:v1.29.2"
           elif create_cluster "hack/kind-config-cgroups.yaml" "cgroups-aware configuration"; then
             echo "SUCCESS: Using cgroups-aware configuration"
@@ -216,6 +221,10 @@ jobs:
             docker system df
             echo "Available memory:"
             free -h || echo "free command not available"
+            echo "Available disk space:"
+            df -h || echo "df command not available"
+            echo "System load:"
+            uptime || echo "uptime command not available"
             echo "Cgroups information:"
             ls -la /sys/fs/cgroup/ || echo "Cannot access cgroups"
             cat /proc/cgroups || echo "Cannot read cgroups"
@@ -223,6 +232,12 @@ jobs:
             docker info | grep -i cgroup || echo "Cannot get Docker cgroup info"
             echo "System cgroup version:"
             stat -f /sys/fs/cgroup/cgroup.controllers 2>/dev/null && echo "cgroups v2" || echo "cgroups v1"
+            echo "Kind version:"
+            kind version || echo "Cannot get Kind version"
+            echo "Kubectl version:"
+            kubectl version --client || echo "Cannot get kubectl version"
+            echo "Docker version:"
+            docker version || echo "Cannot get Docker version"
             echo "=== End debugging ==="
             CLUSTER_CREATED=false
             CLUSTER_CONFIG="failed"
@@ -276,33 +291,55 @@ jobs:
           fi
 
           # Wait a bit for kubelet to stabilize
-          sleep 30
+          sleep 60
 
-          # Check kubelet health
-          for i in {1..5}; do
-            echo "Checking kubelet health (attempt $i/5)..."
+          # Check kubelet health with better error handling
+          for i in {1..10}; do
+            echo "Checking kubelet health (attempt $i/10)..."
 
-            # Try to get kubelet health
+            # Try multiple ways to check kubelet health
             if docker exec neo4j-operator-test-control-plane curl -s http://localhost:10248/healthz >/dev/null 2>&1; then
-              echo "✅ Kubelet is healthy"
+              echo "✅ Kubelet is healthy (HTTP check)"
+              break
+            elif docker exec neo4j-operator-test-control-plane systemctl is-active kubelet >/dev/null 2>&1; then
+              echo "✅ Kubelet is active (systemctl check)"
               break
             else
-              echo "⚠️  Kubelet health check failed, attempting to restart..."
+              echo "⚠️  Kubelet health check failed (attempt $i/10), attempting to restart..."
 
-              # Restart kubelet
+              # Try to restart kubelet
               docker exec neo4j-operator-test-control-plane systemctl restart kubelet || echo "Failed to restart kubelet"
 
-              # Wait for restart
-              sleep 30
+              # Also try to restart containerd if kubelet restart fails
+              docker exec neo4j-operator-test-control-plane systemctl restart containerd || echo "Failed to restart containerd"
+
+              # Wait longer for restart
+              sleep 60
             fi
           done
 
-          # Final kubelet health check
-          if docker exec neo4j-operator-test-control-plane curl -s http://localhost:10248/healthz >/dev/null 2>&1; then
-            echo "✅ Kubelet is healthy after monitoring"
+          # Final comprehensive kubelet health check
+          echo "Performing final kubelet health check..."
+
+          # Check if kubelet process is running
+          if docker exec neo4j-operator-test-control-plane pgrep kubelet >/dev/null 2>&1; then
+            echo "✅ Kubelet process is running"
           else
-            echo "❌ Kubelet health check failed after monitoring"
-            # Continue anyway as the cluster might still be usable
+            echo "❌ Kubelet process is not running"
+          fi
+
+          # Check kubelet service status
+          if docker exec neo4j-operator-test-control-plane systemctl is-active kubelet >/dev/null 2>&1; then
+            echo "✅ Kubelet service is active"
+          else
+            echo "❌ Kubelet service is not active"
+          fi
+
+          # Check kubelet health endpoint
+          if docker exec neo4j-operator-test-control-plane curl -s http://localhost:10248/healthz >/dev/null 2>&1; then
+            echo "✅ Kubelet health endpoint is responding"
+          else
+            echo "❌ Kubelet health endpoint is not responding"
           fi
 
           echo "=== Kubelet health monitoring completed ==="
