@@ -8,25 +8,17 @@ nodes:
     kind: InitConfiguration
     nodeRegistration:
       kubeletExtraArgs:
-        # Minimal configuration for CI
-        max-pods: "5"
-        # Disable problematic features
-        feature-gates: "LocalStorageCapacityIsolation=false,MemoryManager=false"
-        # Very conservative memory limits
-        system-reserved: "memory=16Mi"
-        kube-reserved: "memory=8Mi"
-        eviction-hard: "memory.available<5Mi"
-        eviction-soft: "memory.available<10Mi"
-        eviction-soft-grace-period: "memory.available=30s"
-        # Improve kubelet stability
+        # Conservative resource limits for CI environments
+        max-pods: "20"
+        system-reserved: "memory=128Mi,cpu=100m"
+        kube-reserved: "memory=64Mi,cpu=50m"
+        # Simple eviction policy
+        eviction-hard: "memory.available<50Mi"
+        # Basic kubelet health check
         healthz-port: "10248"
         healthz-bind-address: "127.0.0.1"
-        # Minimal logging
-        v: "1"
-        # Use systemd cgroup driver
-        cgroup-driver: "systemd"
-        # Disable unnecessary components
-        enable-server: "true"
+        # Reduce logging verbosity
+        v: "2"
 networking:
   apiServerAddress: "127.0.0.1"
   apiServerPort: 6443

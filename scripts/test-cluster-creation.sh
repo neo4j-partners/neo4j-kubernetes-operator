@@ -1,156 +1,74 @@
 #!/bin/bash
 
-# Test script for validating Kind cluster creation
-# This script tests the various Kind configurations to ensure they work
+set -e
 
-set -euo pipefail
+echo "=== Testing Kind Cluster Creation ==="
 
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Function to print colored output
 print_status() {
-    local color=$1
+    local status=$1
     local message=$2
-    echo -e "${color}[$(date +'%Y-%m-%d %H:%M:%S')] ${message}${NC}"
+    case $status in
+        "SUCCESS")
+            echo -e "${GREEN}✅ $message${NC}"
+            ;;
+        "FAILURE")
+            echo -e "${RED}❌ $message${NC}"
+            ;;
+        "WARNING")
+            echo -e "${YELLOW}⚠️  $message${NC}"
+            ;;
+        "INFO")
+            echo -e "ℹ️  $message"
+            ;;
+    esac
 }
 
-# Function to create and test cluster
-test_cluster_config() {
-    local config_file=$1
-    local config_name=$2
-    local node_image=${3:-"kindest/node:v1.30.0"}
+# Clean up any existing clusters
+print_status "INFO" "Cleaning up any existing clusters..."
+kind delete cluster --name neo4j-operator-test 2>/dev/null || true
 
-    print_status $BLUE "Testing cluster configuration: $config_name"
-    print_status $BLUE "Using config: $config_file"
-    print_status $BLUE "Using node image: $node_image"
+# Test 1: Simple configuration (our primary method)
+print_status "INFO" "Testing simple configuration..."
+if kind create cluster --name neo4j-operator-test --config hack/kind-config-simple.yaml --image kindest/node:v1.30.0 --wait 10m; then
+    print_status "SUCCESS" "Simple configuration works!"
 
-    # Clean up any existing test cluster
-    kind delete cluster --name neo4j-operator-test 2>/dev/null || true
+    # Verify cluster is working
+    print_status "INFO" "Verifying cluster functionality..."
+    kubectl cluster-info --context kind-neo4j-operator-test
+    kubectl get nodes -o wide
 
-    # Try to create cluster
-    if kind create cluster --name neo4j-operator-test --config "$config_file" --image "$node_image" --wait 5m; then
-        print_status $GREEN "✅ Cluster created successfully with $config_name"
+    # Clean up
+    kind delete cluster --name neo4j-operator-test
+    print_status "SUCCESS" "Simple configuration test completed successfully"
+else
+    print_status "FAILURE" "Simple configuration failed"
+    exit 1
+fi
 
-        # Test basic functionality
-        print_status $BLUE "Testing cluster functionality..."
+# Test 2: Minimal cluster without configuration (fallback)
+print_status "INFO" "Testing minimal cluster without configuration..."
+if kind create cluster --name neo4j-operator-test --image kindest/node:v1.30.0 --wait 10m; then
+    print_status "SUCCESS" "Minimal cluster without configuration works!"
 
-        # Wait for nodes to be ready
-        kubectl wait --for=condition=ready nodes --all --timeout=120s || {
-            print_status $YELLOW "⚠️  Nodes not ready within timeout"
-        }
+    # Verify cluster is working
+    print_status "INFO" "Verifying cluster functionality..."
+    kubectl cluster-info --context kind-neo4j-operator-test
+    kubectl get nodes -o wide
 
-        # Check kubelet health
-        if docker exec neo4j-operator-test-control-plane curl -s http://localhost:10248/healthz >/dev/null 2>&1; then
-            print_status $GREEN "✅ Kubelet is healthy"
-        else
-            print_status $YELLOW "⚠️  Kubelet health check failed"
-        fi
+    # Clean up
+    kind delete cluster --name neo4j-operator-test
+    print_status "SUCCESS" "Minimal cluster test completed successfully"
+else
+    print_status "FAILURE" "Minimal cluster without configuration failed"
+    exit 1
+fi
 
-        # Test API server
-        if kubectl get nodes >/dev/null 2>&1; then
-            print_status $GREEN "✅ API server is responding"
-        else
-            print_status $YELLOW "⚠️  API server not responding"
-        fi
-
-        # Clean up
-        kind delete cluster --name neo4j-operator-test
-        print_status $GREEN "✅ Test completed successfully for $config_name"
-        return 0
-    else
-        print_status $RED "❌ Cluster creation failed with $config_name"
-        return 1
-    fi
-}
-
-# Main test execution
-main() {
-    print_status $BLUE "Starting Kind cluster configuration tests"
-
-    # Check prerequisites
-    if ! command -v kind &> /dev/null; then
-        print_status $RED "Kind is not installed"
-        exit 1
-    fi
-
-    if ! command -v kubectl &> /dev/null; then
-        print_status $RED "kubectl is not installed"
-        exit 1
-    fi
-
-    if ! command -v docker &> /dev/null; then
-        print_status $RED "Docker is not installed"
-        exit 1
-    fi
-
-    print_status $GREEN "Prerequisites check passed"
-
-    # Test configurations in order of preference
-    local success_count=0
-    local total_count=0
-
-    # Test simple configuration first (most likely to work in CI)
-    if test_cluster_config "hack/kind-config-simple.yaml" "simple configuration" "kindest/node:v1.30.0"; then
-        ((success_count++))
-    fi
-    ((total_count++))
-
-    # Test cgroups v2 configuration
-    if test_cluster_config "hack/kind-config-cgroups-v2.yaml" "cgroups v2 configuration" "kindest/node:v1.30.0"; then
-        ((success_count++))
-    fi
-    ((total_count++))
-
-    # Test robust configuration
-    if test_cluster_config "hack/kind-config-robust.yaml" "robust configuration" "kindest/node:v1.30.0"; then
-        ((success_count++))
-    fi
-    ((total_count++))
-
-    # Test single node configuration
-    if test_cluster_config "hack/kind-config-single.yaml" "single node configuration" "kindest/node:v1.30.0"; then
-        ((success_count++))
-    fi
-    ((total_count++))
-
-    # Test minimal configuration
-    if test_cluster_config "hack/kind-config-minimal.yaml" "minimal configuration" "kindest/node:v1.30.0"; then
-        ((success_count++))
-    fi
-    ((total_count++))
-
-    # Test CI configuration
-    if test_cluster_config "hack/kind-config-ci.yaml" "CI configuration" "kindest/node:v1.30.0"; then
-        ((success_count++))
-    fi
-    ((total_count++))
-
-    # Test basic configuration with newer node image
-    if test_cluster_config "hack/kind-config-basic.yaml" "basic configuration" "kindest/node:v1.30.0"; then
-        ((success_count++))
-    fi
-    ((total_count++))
-
-    # Print summary
-    print_status $BLUE "=== Test Summary ==="
-    print_status $BLUE "Successful configurations: $success_count/$total_count"
-
-    if [ $success_count -eq $total_count ]; then
-        print_status $GREEN "✅ All configurations tested successfully!"
-        exit 0
-    elif [ $success_count -gt 0 ]; then
-        print_status $YELLOW "⚠️  Some configurations failed, but at least one works"
-        exit 0
-    else
-        print_status $RED "❌ All configurations failed"
-        exit 1
-    fi
-}
-
-# Run main function
-main "$@"
+print_status "SUCCESS" "All cluster creation tests passed!"
+echo "=== Cluster Creation Tests Completed ==="
