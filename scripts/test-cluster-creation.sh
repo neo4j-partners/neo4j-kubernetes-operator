@@ -23,7 +23,7 @@ print_status() {
 test_cluster_config() {
     local config_file=$1
     local config_name=$2
-    local node_image=${3:-"kindest/node:v1.29.2"}
+    local node_image=${3:-"kindest/node:v1.30.0"}
 
     print_status $BLUE "Testing cluster configuration: $config_name"
     print_status $BLUE "Using config: $config_file"
@@ -95,31 +95,31 @@ main() {
     local total_count=0
 
     # Test robust configuration first
-    if test_cluster_config "hack/kind-config-robust.yaml" "robust configuration"; then
+    if test_cluster_config "hack/kind-config-robust.yaml" "robust configuration" "kindest/node:v1.30.0"; then
         ((success_count++))
     fi
     ((total_count++))
 
     # Test single node configuration
-    if test_cluster_config "hack/kind-config-single.yaml" "single node configuration"; then
+    if test_cluster_config "hack/kind-config-single.yaml" "single node configuration" "kindest/node:v1.30.0"; then
         ((success_count++))
     fi
     ((total_count++))
 
     # Test minimal configuration
-    if test_cluster_config "hack/kind-config-minimal.yaml" "minimal configuration"; then
+    if test_cluster_config "hack/kind-config-minimal.yaml" "minimal configuration" "kindest/node:v1.30.0"; then
         ((success_count++))
     fi
     ((total_count++))
 
     # Test CI configuration
-    if test_cluster_config "hack/kind-config-ci.yaml" "CI configuration"; then
+    if test_cluster_config "hack/kind-config-ci.yaml" "CI configuration" "kindest/node:v1.30.0"; then
         ((success_count++))
     fi
     ((total_count++))
 
-    # Test basic configuration with older node image
-    if test_cluster_config "hack/kind-config-basic.yaml" "basic configuration" "kindest/node:v1.28.0"; then
+    # Test basic configuration with newer node image
+    if test_cluster_config "hack/kind-config-basic.yaml" "basic configuration" "kindest/node:v1.30.0"; then
         ((success_count++))
     fi
     ((total_count++))

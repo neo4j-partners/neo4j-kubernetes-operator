@@ -26,6 +26,12 @@ nodes:
         healthz-bind-address: "127.0.0.1"
         # Disable cgroups v2 features that might cause issues
         cgroup-driver: "systemd"
+  # Add cgroup support
+  extraMounts:
+  - hostPath: /sys/fs/cgroup
+    containerPath: /sys/fs/cgroup
+    readOnly: true
+    propagation: HostToContainer
 networking:
   apiServerAddress: "127.0.0.1"
   apiServerPort: 6443

@@ -17,6 +17,17 @@ nodes:
         max-pods: "50"
         # Disable problematic features
         feature-gates: "LocalStorageCapacityIsolation=false,MemoryManager=false"
+        # Improve kubelet stability
+        healthz-port: "10248"
+        healthz-bind-address: "127.0.0.1"
+        # Use systemd cgroup driver
+        cgroup-driver: "systemd"
+  # Add cgroup support
+  extraMounts:
+  - hostPath: /sys/fs/cgroup
+    containerPath: /sys/fs/cgroup
+    readOnly: true
+    propagation: HostToContainer
 networking:
   apiServerAddress: "127.0.0.1"
   apiServerPort: 6443

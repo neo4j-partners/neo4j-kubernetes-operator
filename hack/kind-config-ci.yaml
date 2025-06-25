@@ -24,6 +24,8 @@ nodes:
         healthz-bind-address: "127.0.0.1"
         # Reduce logging verbosity
         v: "2"
+        # Use systemd cgroup driver
+        cgroup-driver: "systemd"
   extraPortMappings:
   - containerPort: 7474
     hostPort: 7474
@@ -31,6 +33,12 @@ nodes:
   - containerPort: 7687
     hostPort: 7687
     protocol: TCP
+  # Add cgroup support
+  extraMounts:
+  - hostPath: /sys/fs/cgroup
+    containerPath: /sys/fs/cgroup
+    readOnly: true
+    propagation: HostToContainer
 - role: worker
   kubeadmConfigPatches:
   - |
@@ -50,6 +58,14 @@ nodes:
         healthz-bind-address: "127.0.0.1"
         # Reduce logging verbosity
         v: "2"
+        # Use systemd cgroup driver
+        cgroup-driver: "systemd"
+  # Add cgroup support
+  extraMounts:
+  - hostPath: /sys/fs/cgroup
+    containerPath: /sys/fs/cgroup
+    readOnly: true
+    propagation: HostToContainer
 networking:
   apiServerAddress: "127.0.0.1"
   apiServerPort: 6443

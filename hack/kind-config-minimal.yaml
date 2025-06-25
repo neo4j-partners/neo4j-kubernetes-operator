@@ -24,6 +24,14 @@ nodes:
         v: "2"
         # Disable unnecessary components
         enable-server: "true"
+        # Use systemd cgroup driver
+        cgroup-driver: "systemd"
+  # Add cgroup support
+  extraMounts:
+  - hostPath: /sys/fs/cgroup
+    containerPath: /sys/fs/cgroup
+    readOnly: true
+    propagation: HostToContainer
 networking:
   apiServerAddress: "127.0.0.1"
   apiServerPort: 6443
