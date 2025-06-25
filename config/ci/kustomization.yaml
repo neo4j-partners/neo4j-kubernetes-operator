@@ -1,0 +1,25 @@
+# CI-specific configuration that disables webhooks
+namespace: neo4j-operator-system
+namePrefix: neo4j-operator-
+
+resources:
+- ../crd
+- ../rbac
+- ../manager
+# Webhooks are disabled for CI to avoid certificate issues
+#- ../webhook
+- metrics_service.yaml
+
+patches:
+# [METRICS] The following patch will enable the metrics endpoint using HTTPS and the port :8443.
+- path: manager_metrics_patch.yaml
+  target:
+    kind: Deployment
+# Resource patch for CI environments
+- path: manager_resources_patch.yaml
+  target:
+    kind: Deployment
+# Disable webhooks for CI
+- path: disable_webhooks_patch.yaml
+  target:
+    kind: Deployment

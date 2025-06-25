@@ -83,222 +83,51 @@ jobs:
         run: |
           make manifests
 
-      - name: Prepare runner for Kind
+      - name: Create Kind Cluster
         run: |
-          echo "=== Preparing runner for Kind cluster creation ==="
+          echo "=== Creating Kind cluster with simple configuration ==="
 
-          # Detect CI environment
-          echo "Detecting CI environment..."
-          if [ -n "${CI:-}" ] || [ -n "${GITHUB_ACTIONS:-}" ]; then
-            echo "Running in CI environment"
-            export CI_ENVIRONMENT=true
+          # Clean up any existing cluster first
+          kind delete cluster --name neo4j-operator-test 2>/dev/null || true
+
+          # Create cluster with simple configuration (proven to work)
+          if kind create cluster --name neo4j-operator-test --config hack/kind-config-simple.yaml --image kindest/node:v1.30.0 --wait 10m; then
+            echo "✅ Cluster created successfully with simple configuration"
+            echo "CLUSTER_CREATED=true" >> $GITHUB_ENV
+            echo "CLUSTER_CONFIG=simple configuration" >> $GITHUB_ENV
           else
-            echo "Running in local environment"
-            export CI_ENVIRONMENT=false
-          fi
+            echo "❌ Simple configuration failed, trying minimal cluster without config"
 
-          # Detect cgroup version
-          echo "Detecting cgroup version..."
-          if [ -f /sys/fs/cgroup/cgroup.controllers ]; then
-            echo "Detected cgroups v2"
-            export CGROUP_VERSION="v2"
-          else
-            echo "Detected cgroups v1"
-            export CGROUP_VERSION="v1"
-          fi
-
-          # Check current cgroup setup
-          echo "Current cgroup setup:"
-          ls -la /sys/fs/cgroup/ || echo "Cannot access cgroups"
-          mount | grep cgroup || echo "No cgroup mounts found"
-
-          # Ensure cgroup support is available
-          echo "Setting up cgroup support..."
-          sudo mkdir -p /sys/fs/cgroup/systemd
-          sudo mount -t cgroup -o none,name=systemd cgroup /sys/fs/cgroup/systemd || true
-
-          # Try alternative cgroup setup for different environments
-          echo "Setting up alternative cgroup mounts..."
-          sudo mkdir -p /sys/fs/cgroup/cpu
-          sudo mkdir -p /sys/fs/cgroup/memory
-          sudo mkdir -p /sys/fs/cgroup/pids
-          sudo mount -t cgroup -o cpu cgroup /sys/fs/cgroup/cpu || true
-          sudo mount -t cgroup -o memory cgroup /sys/fs/cgroup/memory || true
-          sudo mount -t cgroup -o pids cgroup /sys/fs/cgroup/pids || true
-
-          # Verify cgroup mounts
-          echo "Verifying cgroup mounts after setup:"
-          mount | grep cgroup || echo "No cgroup mounts found"
-          ls -la /sys/fs/cgroup/ || echo "Cannot access cgroups"
-
-          # Check Docker capabilities
-          echo "Checking Docker capabilities..."
-          docker info | grep -i cgroup || echo "Cannot get Docker cgroup info"
-
-          # Ensure Docker can run privileged containers
-          echo "Testing Docker privileged mode..."
-          docker run --rm --privileged hello-world || echo "Docker privileged mode test failed"
-
-          # Check system resources
-          echo "System resources:"
-          free -h || echo "free command not available"
-          df -h || echo "df command not available"
-          nproc || echo "nproc command not available"
-
-          echo "=== Runner preparation completed ==="
-
-      - name: Create k8s Kind Cluster with Fallbacks
-        run: |
-          echo "=== Creating Kind cluster with progressive fallbacks ==="
-
-          # Function to create cluster with given config
-          create_cluster() {
-            local config_file=$1
-            local attempt_name=$2
-            local node_image=${3:-"kindest/node:v1.30.0"}
-
-            echo "Attempting cluster creation with: $attempt_name"
-            echo "Using config: $config_file"
-            echo "Using node image: $node_image"
-
-            # Clean up any existing cluster first
-            kind delete cluster --name neo4j-operator-test 2>/dev/null || true
-
-            # Try to create cluster with longer timeout and better error handling
-            if kind create cluster --name neo4j-operator-test --config "$config_file" --image "$node_image" --wait 15m --verbosity 2; then
-              echo "✅ Cluster created successfully with $attempt_name"
-              return 0
+            # Fallback to minimal cluster without configuration
+            if kind create cluster --name neo4j-operator-test --image kindest/node:v1.30.0 --wait 10m; then
+              echo "✅ Cluster created successfully with minimal configuration"
+              echo "CLUSTER_CREATED=true" >> $GITHUB_ENV
+              echo "CLUSTER_CONFIG=minimal configuration" >> $GITHUB_ENV
             else
-              echo "❌ Cluster creation failed with $attempt_name"
-
-              # Get additional debugging information
-              echo "=== Debugging cluster creation failure ==="
+              echo "❌ All cluster creation attempts failed"
+              echo "=== Debugging information ==="
               echo "Docker containers:"
               docker ps -a
-              echo "Docker logs for any kind containers:"
-              docker logs neo4j-operator-test-control-plane 2>/dev/null || echo "No control plane container found"
-              echo "Cgroup mounts:"
-              mount | grep cgroup || echo "No cgroup mounts found"
+              echo "Docker system info:"
+              docker system df
+              echo "Available memory:"
+              free -h || echo "free command not available"
+              echo "Available disk space:"
+              df -h || echo "df command not available"
+              echo "Kind version:"
+              kind version || echo "Cannot get Kind version"
+              echo "Docker version:"
+              docker version || echo "Cannot get Docker version"
               echo "=== End debugging ==="
-
-              return 1
+              exit 1
             fi
-          }
-
-          # Initialize success tracking
-          CLUSTER_CREATED=false
-          CLUSTER_CONFIG=""
-          CLUSTER_NODE_IMAGE=""
-
-          # Try progressive configurations
-          if create_cluster "hack/kind-config-simple.yaml" "simple configuration (1 node)" "kindest/node:v1.30.0"; then
-            echo "SUCCESS: Using simple configuration"
-            CLUSTER_CREATED=true
-            CLUSTER_CONFIG="simple configuration (1 node)"
-            CLUSTER_NODE_IMAGE="kindest/node:v1.30.0"
-          elif create_cluster "hack/kind-config-cgroups-v2.yaml" "cgroups v2 configuration" "kindest/node:v1.30.0"; then
-            echo "SUCCESS: Using cgroups v2 configuration"
-            CLUSTER_CREATED=true
-            CLUSTER_CONFIG="cgroups v2 configuration"
-            CLUSTER_NODE_IMAGE="kindest/node:v1.30.0"
-          elif create_cluster "hack/kind-config-robust.yaml" "robust configuration (1 node)" "kindest/node:v1.30.0"; then
-            echo "SUCCESS: Using robust configuration"
-            CLUSTER_CREATED=true
-            CLUSTER_CONFIG="robust configuration (1 node)"
-            CLUSTER_NODE_IMAGE="kindest/node:v1.30.0"
-          elif create_cluster "hack/kind-config-single.yaml" "single node configuration" "kindest/node:v1.30.0"; then
-            echo "SUCCESS: Using single node configuration"
-            CLUSTER_CREATED=true
-            CLUSTER_CONFIG="single node configuration"
-            CLUSTER_NODE_IMAGE="kindest/node:v1.30.0"
-          elif create_cluster "hack/kind-config-minimal.yaml" "minimal configuration (1 node)" "kindest/node:v1.30.0"; then
-            echo "SUCCESS: Using minimal configuration"
-            CLUSTER_CREATED=true
-            CLUSTER_CONFIG="minimal configuration (1 node)"
-            CLUSTER_NODE_IMAGE="kindest/node:v1.30.0"
-          elif create_cluster "hack/kind-config-basic.yaml" "basic configuration" "kindest/node:v1.30.0"; then
-            echo "SUCCESS: Using basic configuration"
-            CLUSTER_CREATED=true
-            CLUSTER_CONFIG="basic configuration"
-            CLUSTER_NODE_IMAGE="kindest/node:v1.30.0"
-          elif create_cluster "hack/kind-config-ci.yaml" "CI configuration (2 nodes)" "kindest/node:v1.30.0"; then
-            echo "SUCCESS: Using CI configuration"
-            CLUSTER_CREATED=true
-            CLUSTER_CONFIG="CI configuration (2 nodes)"
-            CLUSTER_NODE_IMAGE="kindest/node:v1.30.0"
-          elif create_cluster "hack/kind-config-cgroups.yaml" "cgroups-aware configuration" "kindest/node:v1.30.0"; then
-            echo "SUCCESS: Using cgroups-aware configuration"
-            CLUSTER_CREATED=true
-            CLUSTER_CONFIG="cgroups-aware configuration"
-            CLUSTER_NODE_IMAGE="kindest/node:v1.30.0"
-          elif create_cluster "hack/kind-config-basic.yaml" "basic configuration" "kindest/node:v1.29.2"; then
-            echo "SUCCESS: Using basic configuration with older node image"
-            CLUSTER_CREATED=true
-            CLUSTER_CONFIG="basic configuration"
-            CLUSTER_NODE_IMAGE="kindest/node:v1.29.2"
-          elif create_cluster "hack/kind-config-basic.yaml" "basic configuration" "kindest/node:v1.28.0"; then
-            echo "SUCCESS: Using basic configuration with older node image v1.28"
-            CLUSTER_CREATED=true
-            CLUSTER_CONFIG="basic configuration"
-            CLUSTER_NODE_IMAGE="kindest/node:v1.28.0"
-          elif kind create cluster --name neo4j-operator-test --image kindest/node:v1.30.0 --wait 15m; then
-            echo "SUCCESS: Using minimal cluster without configuration"
-            CLUSTER_CREATED=true
-            CLUSTER_CONFIG="minimal cluster without configuration"
-            CLUSTER_NODE_IMAGE="kindest/node:v1.30.0"
-          else
-            echo "❌ All cluster creation attempts failed"
-            echo "=== Debugging information ==="
-            echo "Docker containers:"
-            docker ps -a
-            echo "Docker system info:"
-            docker system df
-            echo "Available memory:"
-            free -h || echo "free command not available"
-            echo "Available disk space:"
-            df -h || echo "df command not available"
-            echo "System load:"
-            uptime || echo "uptime command not available"
-            echo "Cgroups information:"
-            ls -la /sys/fs/cgroup/ || echo "Cannot access cgroups"
-            cat /proc/cgroups || echo "Cannot read cgroups"
-            echo "Docker cgroup driver:"
-            docker info | grep -i cgroup || echo "Cannot get Docker cgroup info"
-            echo "System cgroup version:"
-            stat -f /sys/fs/cgroup/cgroup.controllers 2>/dev/null && echo "cgroups v2" || echo "cgroups v1"
-            echo "Kind version:"
-            kind version || echo "Cannot get Kind version"
-            echo "Kubectl version:"
-            kubectl version --client || echo "Cannot get kubectl version"
-            echo "Docker version:"
-            docker version || echo "Cannot get Docker version"
-            echo "=== End debugging ==="
-            CLUSTER_CREATED=false
-            CLUSTER_CONFIG="failed"
-            CLUSTER_NODE_IMAGE="none"
-            exit 1
           fi
 
-          # Set environment variables for subsequent steps
-          echo "CLUSTER_CREATED=$CLUSTER_CREATED" >> $GITHUB_ENV
-          echo "CLUSTER_CONFIG=$CLUSTER_CONFIG" >> $GITHUB_ENV
-          echo "CLUSTER_NODE_IMAGE=$CLUSTER_NODE_IMAGE" >> $GITHUB_ENV
-
           echo "=== Cluster creation completed successfully ==="
-          echo "Cluster created: $CLUSTER_CREATED"
-          echo "Configuration used: $CLUSTER_CONFIG"
-          echo "Node image used: $CLUSTER_NODE_IMAGE"
 
       - name: Configure kubectl context
         run: |
           echo "=== Configuring kubectl context ==="
-
-          # Check if cluster was created successfully
-          if [[ "${CLUSTER_CREATED:-false}" != "true" ]]; then
-            echo "❌ No cluster was created successfully, skipping kubectl configuration"
-            echo "CLUSTER_READY=false" >> $GITHUB_ENV
-            exit 0
-          fi
 
           # Export kubeconfig from kind
           kind export kubeconfig --name neo4j-operator-test
@@ -310,73 +139,8 @@ jobs:
           # Verify kubectl can connect
           kubectl cluster-info || (echo "❌ kubectl cannot connect to cluster" && exit 1)
           echo "✅ kubectl context configured successfully"
-          echo "CLUSTER_READY=true" >> $GITHUB_ENV
 
           echo "=== kubectl context configuration completed ==="
-
-      - name: Monitor and fix kubelet health
-        run: |
-          echo "=== Monitoring kubelet health ==="
-
-          # Check if cluster is ready
-          if [[ "${CLUSTER_READY:-false}" != "true" ]]; then
-            echo "❌ Cluster is not ready, skipping kubelet health monitoring"
-            exit 0
-          fi
-
-          # Wait a bit for kubelet to stabilize
-          sleep 60
-
-          # Check kubelet health with better error handling
-          for i in {1..10}; do
-            echo "Checking kubelet health (attempt $i/10)..."
-
-            # Try multiple ways to check kubelet health
-            if docker exec neo4j-operator-test-control-plane curl -s http://localhost:10248/healthz >/dev/null 2>&1; then
-              echo "✅ Kubelet is healthy (HTTP check)"
-              break
-            elif docker exec neo4j-operator-test-control-plane systemctl is-active kubelet >/dev/null 2>&1; then
-              echo "✅ Kubelet is active (systemctl check)"
-              break
-            else
-              echo "⚠️  Kubelet health check failed (attempt $i/10), attempting to restart..."
-
-              # Try to restart kubelet
-              docker exec neo4j-operator-test-control-plane systemctl restart kubelet || echo "Failed to restart kubelet"
-
-              # Also try to restart containerd if kubelet restart fails
-              docker exec neo4j-operator-test-control-plane systemctl restart containerd || echo "Failed to restart containerd"
-
-              # Wait longer for restart
-              sleep 60
-            fi
-          done
-
-          # Final comprehensive kubelet health check
-          echo "Performing final kubelet health check..."
-
-          # Check if kubelet process is running
-          if docker exec neo4j-operator-test-control-plane pgrep kubelet >/dev/null 2>&1; then
-            echo "✅ Kubelet process is running"
-          else
-            echo "❌ Kubelet process is not running"
-          fi
-
-          # Check kubelet service status
-          if docker exec neo4j-operator-test-control-plane systemctl is-active kubelet >/dev/null 2>&1; then
-            echo "✅ Kubelet service is active"
-          else
-            echo "❌ Kubelet service is not active"
-          fi
-
-          # Check kubelet health endpoint
-          if docker exec neo4j-operator-test-control-plane curl -s http://localhost:10248/healthz >/dev/null 2>&1; then
-            echo "✅ Kubelet health endpoint is responding"
-          else
-            echo "❌ Kubelet health endpoint is not responding"
-          fi
-
-          echo "=== Kubelet health monitoring completed ==="
 
       - name: Debug cluster creation
         if: failure()
@@ -392,225 +156,70 @@ jobs:
           kind export kubeconfig --name neo4j-operator-test || echo "Failed to export kubeconfig"
           echo "=== End debugging ==="
 
-      - name: Comprehensive debugging on failure
-        if: failure()
-        run: |
-          echo "=== Comprehensive debugging information ==="
-
-          # System information
-          echo "System information:"
-          uname -a
-          cat /etc/os-release || echo "Cannot read OS release"
-
-          # Docker information
-          echo "Docker information:"
-          docker version
-          docker info
-
-          # Cgroup information
-          echo "Cgroup information:"
-          ls -la /sys/fs/cgroup/ || echo "Cannot access cgroups"
-          mount | grep cgroup || echo "No cgroup mounts found"
-          cat /proc/cgroups || echo "Cannot read cgroups"
-
-          # System resources
-          echo "System resources:"
-          free -h || echo "free command not available"
-          df -h || echo "df command not available"
-          nproc || echo "nproc command not available"
-
-          # Kind information
-          echo "Kind information:"
-          kind version || echo "Kind not available"
-
-          # Check for any kind containers
-          echo "Kind containers:"
-          docker ps -a | grep kind || echo "No kind containers found"
-
-          # Check for any kind processes
-          echo "Kind processes:"
-          ps aux | grep kind || echo "No kind processes found"
-
-          echo "=== End comprehensive debugging ==="
-
       - name: Verify cluster health
         run: |
           echo "=== Verifying cluster health ==="
 
-          # Check if cluster is ready
-          if [[ "${CLUSTER_READY:-false}" != "true" ]]; then
-            echo "❌ Cluster is not ready, skipping health verification"
-            echo "CLUSTER_HEALTHY=false" >> $GITHUB_ENV
-            exit 0
-          fi
+          # Wait for cluster to be ready
+          kubectl wait --for=condition=ready node --all --timeout=300s || echo "Node readiness check failed"
 
-          # Wait for kubelet to be ready
-          echo "Waiting for kubelet to be ready..."
-          for i in {1..10}; do
-            if docker exec neo4j-operator-test-control-plane curl -s http://localhost:10248/healthz >/dev/null 2>&1; then
-              echo "✅ Kubelet is ready"
-              break
-            else
-              echo "Waiting for kubelet (attempt $i/10)..."
-              sleep 30
-            fi
-          done
+          # Check cluster status
+          kubectl get nodes -o wide
+          kubectl get pods -n kube-system
 
-          # Check API server health
-          kubectl get --raw /healthz || (echo "❌ API server not healthy" && exit 1)
-          echo "✅ API server is healthy"
+          # Verify core components are running
+          kubectl get pods -n kube-system | grep -E "(coredns|kube-apiserver|kube-controller-manager|kube-scheduler)" || echo "Some core components not found"
 
-          # Check node readiness
-          kubectl wait --for=condition=ready nodes --all --timeout=300s || (echo "❌ Nodes not ready" && exit 1)
-          echo "✅ All nodes are ready"
-
-          # Check core system pods
-          kubectl wait --for=condition=ready pod -l component=etcd -n kube-system --timeout=120s || echo "⚠️  etcd pod not ready"
-          kubectl wait --for=condition=ready pod -l component=kube-apiserver -n kube-system --timeout=120s || echo "⚠️  kube-apiserver pod not ready"
-
-          # Check kubelet status
-          echo "Kubelet status:"
-          docker exec neo4j-operator-test-control-plane systemctl status kubelet --no-pager || echo "Cannot get kubelet status"
-
-          # Check node resources
-          echo "Node resources:"
-          kubectl describe nodes || echo "Cannot describe nodes"
-
+          echo "✅ Cluster health verification completed"
           echo "CLUSTER_HEALTHY=true" >> $GITHUB_ENV
-          echo "=== Cluster health verification completed ==="
 
-      - name: Install cert-manager
+      - name: Build operator image
         run: |
+          echo "=== Building operator image ==="
+
           # Check if cluster is healthy
           if [[ "${CLUSTER_HEALTHY:-false}" != "true" ]]; then
-            echo "❌ Cluster is not healthy, skipping cert-manager installation"
+            echo "❌ Cluster is not healthy, skipping image build"
             exit 0
           fi
 
-          # Install cert-manager
-          kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.13.0/cert-manager.yaml
-
-          # Wait for cert-manager to be ready
-          echo "Waiting for cert-manager to be ready..."
-          kubectl wait --for=condition=ready pod -l app.kubernetes.io/instance=cert-manager -n cert-manager --timeout=300s
-
-          # Verify cert-manager installation
-          kubectl get pods -n cert-manager
-
-      - name: Load Docker image
-        run: |
-          # Check if cluster is healthy
-          if [[ "${CLUSTER_HEALTHY:-false}" != "true" ]]; then
-            echo "❌ Cluster is not healthy, skipping Docker image loading"
-            exit 0
-          fi
-
+          # Build the operator image
           make docker-build IMG=neo4j-operator:ci
 
-          # Verify the image was built correctly
-          echo "Verifying Docker image..."
-          docker images neo4j-operator:ci
-          docker inspect neo4j-operator:ci | grep -E "(Architecture|Os|Size)"
-
+          # Load the image into Kind cluster
           kind load docker-image neo4j-operator:ci --name neo4j-operator-test
 
-      - name: Setup test environment
-        run: |
-          # Check if cluster is healthy
-          if [[ "${CLUSTER_HEALTHY:-false}" != "true" ]]; then
-            echo "❌ Cluster is not healthy, skipping test environment setup"
-            exit 0
-          fi
-
-          echo "=== Setting up test environment ==="
-
-          # Set up test environment
-          export KUBECONFIG=$(kind export kubeconfig --name neo4j-operator-test)
-
-          # Run test environment checks (lenient mode)
-          echo "Running test environment checks..."
-          if [ -f "scripts/test-cleanup.sh" ]; then
-            chmod +x scripts/test-cleanup.sh
-            ./scripts/test-cleanup.sh check || echo "Environment checks completed with warnings"
-          else
-            echo "Warning: cleanup script not found"
-          fi
-
-          echo "✅ Test environment setup completed"
+          echo "✅ Operator image built and loaded"
 
       - name: Deploy operator
         run: |
+          echo "=== Deploying operator ==="
+
           # Check if cluster is healthy
           if [[ "${CLUSTER_HEALTHY:-false}" != "true" ]]; then
             echo "❌ Cluster is not healthy, skipping operator deployment"
+            echo "OPERATOR_READY=false" >> $GITHUB_ENV
             exit 0
           fi
 
-          echo "=== Deploying Neo4j Operator ==="
-
-          # Set up test environment
-          export KUBECONFIG=$(kind export kubeconfig --name neo4j-operator-test)
-
-          # Check cluster resources before deployment
-          echo "Checking cluster resources..."
-          kubectl describe nodes
-          echo "Available pods:"
-          kubectl get pods --all-namespaces
-
-          # Install CRDs
-          echo "Installing CRDs..."
-          make install
-
-          # Deploy the operator
-          echo "Deploying operator..."
-          make deploy IMG=neo4j-operator:ci
-
-          # Check operator pod status immediately after deployment
-          echo "Checking operator pod status..."
-          kubectl get pods -n neo4j-operator-system
-
-          # Wait a bit for pod to start
-          echo "Waiting for pod to start..."
-          sleep 30
-
-          # Check pod status again
-          echo "Pod status after 30s:"
-          kubectl get pods -n neo4j-operator-system -o wide
-
-          # Check pod events if pod is not ready
-          echo "Checking pod events..."
-          kubectl get events -n neo4j-operator-system --sort-by='.lastTimestamp'
-
-          # Check pod logs if available
-          echo "Checking operator pod logs..."
-          kubectl logs -n neo4j-operator-system -l control-plane=controller-manager --tail=50 || echo "No logs available yet"
+          # Deploy the operator with webhooks disabled for CI
+          make deploy-ci IMG=neo4j-operator:ci
 
           # Wait for operator to be ready
-          echo "Waiting for operator to be ready..."
-          kubectl wait --for=condition=available deployment/neo4j-operator-controller-manager -n neo4j-operator-system --timeout=600s || {
-            echo "❌ Operator deployment timed out"
-            echo "Final pod status:"
-            kubectl get pods -n neo4j-operator-system -o wide
-            echo "Final pod events:"
-            kubectl get events -n neo4j-operator-system --sort-by='.lastTimestamp'
-            echo "Final pod logs:"
-            kubectl logs -n neo4j-operator-system -l control-plane=controller-manager --tail=100 || echo "No logs available"
-            echo "Node resources:"
-            kubectl describe nodes
+          kubectl wait --for=condition=available deployment/neo4j-operator-controller-manager -n neo4j-operator-system --timeout=300s || echo "Operator deployment timeout"
 
-            # Check if CRDs are at least installed
-            echo "Checking if CRDs are installed..."
-            if kubectl get crd | grep -q neo4j.neo4j.com; then
-              echo "⚠️  CRDs are installed but operator is not ready. Continuing with tests..."
-              echo "OPERATOR_READY=false" >> $GITHUB_ENV
-            else
-              echo "❌ CRDs are not installed. Cannot continue with tests."
-              exit 1
-            fi
-          }
+          # Check operator status
+          kubectl get pods -n neo4j-operator-system
+          kubectl get deployment neo4j-operator-controller-manager -n neo4j-operator-system
 
-          # Set operator ready flag if we reach here
-          echo "OPERATOR_READY=true" >> $GITHUB_ENV
+          # Verify operator is ready
+          if kubectl get deployment neo4j-operator-controller-manager -n neo4j-operator-system -o jsonpath='{.status.readyReplicas}' | grep -q "1"; then
+            echo "✅ Operator is ready"
+            echo "OPERATOR_READY=true" >> $GITHUB_ENV
+          else
+            echo "⚠️  Operator is not ready"
+            echo "OPERATOR_READY=false" >> $GITHUB_ENV
+          fi
 
           # Verify CRDs are installed
           echo "Verifying CRDs are installed..."
@@ -618,213 +227,50 @@ jobs:
 
           echo "✅ Operator deployment completed"
 
-      - name: Post-deployment test setup
-        run: |
-          # Check if cluster is healthy
-          if [[ "${CLUSTER_HEALTHY:-false}" != "true" ]]; then
-            echo "❌ Cluster is not healthy, skipping post-deployment setup"
-            exit 0
-          fi
-
-          echo "=== Post-deployment test setup ==="
-
-          # Set up test environment
-          export KUBECONFIG=$(kind export kubeconfig --name neo4j-operator-test)
-
-          # Run test environment setup (now that CRDs are installed)
-          echo "Running test environment setup..."
-          if [ -f "scripts/test-cleanup.sh" ]; then
-            chmod +x scripts/test-cleanup.sh
-            ./scripts/test-cleanup.sh check || echo "Post-deployment checks completed"
-          else
-            echo "Warning: cleanup script not found"
-          fi
-
-          # Verify operator is ready
-          echo "Verifying operator readiness..."
-          kubectl get pods -n neo4j-operator-system
-          kubectl wait --for=condition=ready pod -l control-plane=controller-manager -n neo4j-operator-system --timeout=120s
-
-          echo "✅ Post-deployment test setup completed"
-
       - name: Run integration tests
         run: |
-          echo "Running integration tests with cluster..."
+          echo "Running integration tests..."
 
           # Check if cluster is healthy
           if [[ "${CLUSTER_HEALTHY:-false}" != "true" ]]; then
             echo "❌ Cluster is not healthy, cannot run integration tests"
-            echo "SUCCESS_INTEGRATION=false" >> $GITHUB_ENV
-            echo "INTEGRATION_SKIP_REASON=cluster_not_healthy" >> $GITHUB_ENV
-            exit 0
-          fi
-
-          # Check if operator is ready
-          if [[ "${OPERATOR_READY:-false}" != "true" ]]; then
-            echo "⚠️  Operator is not ready, but CRDs are installed. Running tests anyway..."
-            echo "INTEGRATION_OPERATOR_STATUS=not_ready" >> $GITHUB_ENV
-          else
-            echo "✅ Operator is ready"
-            echo "INTEGRATION_OPERATOR_STATUS=ready" >> $GITHUB_ENV
+            exit 1
           fi
 
           # Set up test environment
           export KUBECONFIG=$(kind export kubeconfig --name neo4j-operator-test)
 
-          # Run tests with detailed output
-          if make test-integration; then
-            echo "✅ Integration tests completed successfully"
-            echo "SUCCESS_INTEGRATION=true" >> $GITHUB_ENV
-          else
-            echo "❌ Integration tests failed"
-            echo "SUCCESS_INTEGRATION=false" >> $GITHUB_ENV
-          fi
+          # Run integration tests
+          make test-integration
         timeout-minutes: 15
-        continue-on-error: true
 
       - name: Run e2e tests
         run: |
-          echo "Running e2e tests with cluster..."
+          echo "Running e2e tests..."
 
           # Check if cluster is healthy
           if [[ "${CLUSTER_HEALTHY:-false}" != "true" ]]; then
             echo "❌ Cluster is not healthy, cannot run e2e tests"
-            echo "SUCCESS_E2E=false" >> $GITHUB_ENV
-            echo "E2E_SKIP_REASON=cluster_not_healthy" >> $GITHUB_ENV
-            exit 0
-          fi
-
-          # Check if operator is ready
-          if [[ "${OPERATOR_READY:-false}" != "true" ]]; then
-            echo "⚠️  Operator is not ready, but CRDs are installed. Running tests anyway..."
-            echo "E2E_OPERATOR_STATUS=not_ready" >> $GITHUB_ENV
-          else
-            echo "✅ Operator is ready"
-            echo "E2E_OPERATOR_STATUS=ready" >> $GITHUB_ENV
+            exit 1
           fi
 
           # Set up test environment
           export KUBECONFIG=$(kind export kubeconfig --name neo4j-operator-test)
 
-          # Run tests with detailed output
-          if make test-e2e; then
-            echo "✅ E2E tests completed successfully"
-            echo "SUCCESS_E2E=true" >> $GITHUB_ENV
-          else
-            echo "❌ E2E tests failed"
-            echo "SUCCESS_E2E=false" >> $GITHUB_ENV
-          fi
+          # Run e2e tests
+          make test-e2e
         timeout-minutes: 10
-        continue-on-error: true
-
-      - name: Test results summary
-        if: always()
-        run: |
-          echo "=== Test Results Summary ==="
-
-          # Report cluster status
-          echo "Cluster Status:"
-          echo "  Created: ${CLUSTER_CREATED:-unknown}"
-          echo "  Ready: ${CLUSTER_READY:-unknown}"
-          echo "  Healthy: ${CLUSTER_HEALTHY:-unknown}"
-          echo "  Configuration: ${CLUSTER_CONFIG:-unknown}"
-          echo "  Node Image: ${CLUSTER_NODE_IMAGE:-unknown}"
-          echo "  Operator Ready: ${OPERATOR_READY:-unknown}"
-
-          # Get cluster status if available
-          if [[ "${CLUSTER_READY:-false}" == "true" ]]; then
-            echo "Cluster status:"
-            kubectl get nodes -o wide || echo "Cannot get nodes"
-
-            echo "System pods:"
-            kubectl get pods -n kube-system || echo "Cannot get system pods"
-
-            echo "Operator pods:"
-            kubectl get pods -A | grep neo4j || echo "No Neo4j operator pods found"
-
-            # Show operator status if available
-            if [[ "${OPERATOR_READY:-false}" == "true" ]]; then
-              echo "Operator deployment status:"
-              kubectl get deployment neo4j-operator-controller-manager -n neo4j-operator-system || echo "Cannot get operator deployment"
-            fi
-          else
-            echo "No cluster available for status check"
-          fi
-
-          # Report test results
-          echo "Integration tests: ${SUCCESS_INTEGRATION:-unknown}"
-          if [[ "${INTEGRATION_SKIP_REASON:-}" != "" ]]; then
-            echo "  Skip reason: ${INTEGRATION_SKIP_REASON}"
-          fi
-          if [[ "${INTEGRATION_OPERATOR_STATUS:-}" != "" ]]; then
-            echo "  Operator status: ${INTEGRATION_OPERATOR_STATUS}"
-          fi
-          echo "E2E tests: ${SUCCESS_E2E:-unknown}"
-          if [[ "${E2E_SKIP_REASON:-}" != "" ]]; then
-            echo "  Skip reason: ${E2E_SKIP_REASON}"
-          fi
-          if [[ "${E2E_OPERATOR_STATUS:-}" != "" ]]; then
-            echo "  Operator status: ${E2E_OPERATOR_STATUS}"
-          fi
-
-          # Overall success determination
-          if [[ "${CLUSTER_HEALTHY:-false}" == "true" ]] && ([[ "${SUCCESS_INTEGRATION:-false}" == "true" ]] || [[ "${SUCCESS_E2E:-false}" == "true" ]]); then
-            echo "✅ At least one test suite passed"
-            echo "OVERALL_SUCCESS=true" >> $GITHUB_ENV
-          elif [[ "${CLUSTER_CREATED:-false}" == "true" ]]; then
-            echo "⚠️  Cluster created but tests failed or were skipped"
-            echo "OVERALL_SUCCESS=false" >> $GITHUB_ENV
-          else
-            echo "❌ Cluster creation failed, no tests could run"
-            echo "OVERALL_SUCCESS=false" >> $GITHUB_ENV
-          fi
-
-          # Additional success criteria based on operator status
-          if [[ "${OPERATOR_READY:-false}" == "true" ]]; then
-            echo "✅ Operator is ready and functional"
-          elif [[ "${CLUSTER_HEALTHY:-false}" == "true" ]]; then
-            echo "⚠️  Operator is not ready but cluster is healthy"
-          else
-            echo "❌ Neither operator nor cluster is ready"
-          fi
-
-          echo "=== End Test Results Summary ==="
-
-      - name: Final test status
-        if: always()
-        run: |
-          echo "=== Final Test Status ==="
-          echo "Integration Tests: ${SUCCESS_INTEGRATION:-unknown}"
-          echo "E2E Tests: ${SUCCESS_E2E:-unknown}"
-          echo "Overall Success: ${OVERALL_SUCCESS:-unknown}"
-
-          # Exit with appropriate code based on overall success
-          if [[ "${OVERALL_SUCCESS:-false}" == "true" ]]; then
-            echo "✅ Tests completed with at least one success"
-            exit 0
-          else
-            echo "❌ All tests failed"
-            exit 1
-          fi
 
       - name: Cleanup
         if: always()
         run: |
           echo "=== Cleaning up test environment ==="
 
-          # Check if we have a cluster to clean up
-          if [[ "${CLUSTER_CREATED:-false}" == "true" ]]; then
-            echo "Cleaning up Kind cluster..."
-            kind delete cluster --name neo4j-operator-test || echo "Cluster cleanup failed"
-          else
-            echo "No cluster to clean up"
-          fi
+          # Clean up Kind cluster
+          kind delete cluster --name neo4j-operator-test || echo "Cluster cleanup failed"
 
-          # Clean up any remaining containers
+          # Clean up Docker resources
           docker system prune -f || echo "Docker cleanup failed"
-
-          # Clean up any remaining images
-          docker image prune -f || echo "Image cleanup failed"
 
           echo "=== Cleanup completed ==="
 
