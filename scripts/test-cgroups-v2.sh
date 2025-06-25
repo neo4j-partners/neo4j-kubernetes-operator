@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Test script for CI cluster creation
-# This script tests the cluster creation with the fixes applied
+# Test script for cgroups v2 configuration
+# This script tests the cgroups v2 configuration specifically
 
 set -euo pipefail
 
@@ -19,7 +19,7 @@ print_status() {
 }
 
 main() {
-    print_status $BLUE "Testing CI cluster creation with fixes"
+    print_status $BLUE "Testing cgroups v2 configuration"
 
     # Check prerequisites
     if ! command -v kind &> /dev/null; then
@@ -44,24 +44,20 @@ main() {
     if [ -f /sys/fs/cgroup/cgroup.controllers ]; then
         print_status $GREEN "Detected cgroups v2"
         CGROUP_VERSION="v2"
-        CONFIG_FILE="hack/kind-config-cgroups-v2.yaml"
-        CONFIG_NAME="cgroups v2 configuration"
     else
-        print_status $YELLOW "Detected cgroups v1"
+        print_status $YELLOW "Detected cgroups v1 (will test v2 config anyway)"
         CGROUP_VERSION="v1"
-        CONFIG_FILE="hack/kind-config-simple.yaml"
-        CONFIG_NAME="simple configuration"
     fi
 
     # Clean up any existing cluster
     print_status $BLUE "Cleaning up any existing test cluster..."
     kind delete cluster --name neo4j-operator-test 2>/dev/null || true
 
-    # Test the appropriate configuration based on cgroup version
-    print_status $BLUE "Testing $CONFIG_NAME with v1.30.0 node image..."
+    # Test the cgroups v2 configuration
+    print_status $BLUE "Testing cgroups v2 configuration with v1.30.0 node image..."
 
-    if kind create cluster --name neo4j-operator-test --config "$CONFIG_FILE" --image kindest/node:v1.30.0 --wait 10m; then
-        print_status $GREEN "✅ Cluster created successfully!"
+    if kind create cluster --name neo4j-operator-test --config hack/kind-config-cgroups-v2.yaml --image kindest/node:v1.30.0 --wait 10m; then
+        print_status $GREEN "✅ Cgroups v2 cluster created successfully!"
 
         # Test basic functionality
         print_status $BLUE "Testing cluster functionality..."
@@ -85,6 +81,14 @@ main() {
             print_status $YELLOW "⚠️  API server not responding"
         fi
 
+        # Check cgroup configuration
+        print_status $BLUE "Checking cgroup configuration..."
+        if docker exec neo4j-operator-test-control-plane cat /proc/1/cgroup | grep -q "systemd"; then
+            print_status $GREEN "✅ Systemd cgroup driver is active"
+        else
+            print_status $YELLOW "⚠️  Systemd cgroup driver not detected"
+        fi
+
         # Show cluster info
         print_status $BLUE "Cluster information:"
         kubectl cluster-info
@@ -94,13 +98,14 @@ main() {
         print_status $BLUE "Cleaning up test cluster..."
         kind delete cluster --name neo4j-operator-test
 
-        print_status $GREEN "✅ Test completed successfully!"
+        print_status $GREEN "✅ Cgroups v2 test completed successfully!"
         exit 0
     else
-        print_status $RED "❌ Cluster creation failed"
+        print_status $RED "❌ Cgroups v2 cluster creation failed"
 
         # Show debugging information
         print_status $BLUE "=== Debugging information ==="
+        echo "Cgroup version detected: $CGROUP_VERSION"
         echo "Docker containers:"
         docker ps -a
         echo "Docker system info:"

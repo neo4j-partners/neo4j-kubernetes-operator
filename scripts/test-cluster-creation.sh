@@ -94,7 +94,19 @@ main() {
     local success_count=0
     local total_count=0
 
-    # Test robust configuration first
+    # Test simple configuration first (most likely to work in CI)
+    if test_cluster_config "hack/kind-config-simple.yaml" "simple configuration" "kindest/node:v1.30.0"; then
+        ((success_count++))
+    fi
+    ((total_count++))
+
+    # Test cgroups v2 configuration
+    if test_cluster_config "hack/kind-config-cgroups-v2.yaml" "cgroups v2 configuration" "kindest/node:v1.30.0"; then
+        ((success_count++))
+    fi
+    ((total_count++))
+
+    # Test robust configuration
     if test_cluster_config "hack/kind-config-robust.yaml" "robust configuration" "kindest/node:v1.30.0"; then
         ((success_count++))
     fi

@@ -1402,6 +1402,16 @@ test-ci-cluster: ## Test CI cluster creation with the fixes applied.
 	@echo "Testing CI cluster creation..."
 	@./scripts/test-ci-cluster.sh
 
+.PHONY: test-minimal-cluster
+test-minimal-cluster: ## Test minimal Kind cluster creation without configuration.
+	@echo "Testing minimal cluster creation..."
+	@./scripts/test-minimal-cluster.sh
+
+.PHONY: test-cgroups-v2
+test-cgroups-v2: ## Test cgroups v2 configuration specifically.
+	@echo "Testing cgroups v2 configuration..."
+	@./scripts/test-cgroups-v2.sh
+
 .PHONY: test-local
 test-local: ## Run tests against local Kubernetes cluster.
 	@echo "Checking local cluster availability..."

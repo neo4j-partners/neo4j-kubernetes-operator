@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Test script for CI cluster creation
-# This script tests the cluster creation with the fixes applied
+# Minimal test script for Kind cluster creation
+# This script creates the simplest possible Kind cluster to test basic functionality
 
 set -euo pipefail
 
@@ -19,7 +19,7 @@ print_status() {
 }
 
 main() {
-    print_status $BLUE "Testing CI cluster creation with fixes"
+    print_status $BLUE "Testing minimal Kind cluster creation"
 
     # Check prerequisites
     if ! command -v kind &> /dev/null; then
@@ -39,44 +39,23 @@ main() {
 
     print_status $GREEN "Prerequisites check passed"
 
-    # Detect cgroup version
-    print_status $BLUE "Detecting cgroup version..."
-    if [ -f /sys/fs/cgroup/cgroup.controllers ]; then
-        print_status $GREEN "Detected cgroups v2"
-        CGROUP_VERSION="v2"
-        CONFIG_FILE="hack/kind-config-cgroups-v2.yaml"
-        CONFIG_NAME="cgroups v2 configuration"
-    else
-        print_status $YELLOW "Detected cgroups v1"
-        CGROUP_VERSION="v1"
-        CONFIG_FILE="hack/kind-config-simple.yaml"
-        CONFIG_NAME="simple configuration"
-    fi
-
     # Clean up any existing cluster
     print_status $BLUE "Cleaning up any existing test cluster..."
     kind delete cluster --name neo4j-operator-test 2>/dev/null || true
 
-    # Test the appropriate configuration based on cgroup version
-    print_status $BLUE "Testing $CONFIG_NAME with v1.30.0 node image..."
+    # Create minimal cluster without any configuration
+    print_status $BLUE "Creating minimal cluster without configuration..."
 
-    if kind create cluster --name neo4j-operator-test --config "$CONFIG_FILE" --image kindest/node:v1.30.0 --wait 10m; then
-        print_status $GREEN "✅ Cluster created successfully!"
+    if kind create cluster --name neo4j-operator-test --image kindest/node:v1.30.0 --wait 5m; then
+        print_status $GREEN "✅ Minimal cluster created successfully!"
 
         # Test basic functionality
         print_status $BLUE "Testing cluster functionality..."
 
         # Wait for nodes to be ready
-        kubectl wait --for=condition=ready nodes --all --timeout=120s || {
+        kubectl wait --for=condition=ready nodes --all --timeout=60s || {
             print_status $YELLOW "⚠️  Nodes not ready within timeout"
         }
-
-        # Check kubelet health
-        if docker exec neo4j-operator-test-control-plane curl -s http://localhost:10248/healthz >/dev/null 2>&1; then
-            print_status $GREEN "✅ Kubelet is healthy"
-        else
-            print_status $YELLOW "⚠️  Kubelet health check failed"
-        fi
 
         # Test API server
         if kubectl get nodes >/dev/null 2>&1; then
@@ -94,10 +73,10 @@ main() {
         print_status $BLUE "Cleaning up test cluster..."
         kind delete cluster --name neo4j-operator-test
 
-        print_status $GREEN "✅ Test completed successfully!"
+        print_status $GREEN "✅ Minimal test completed successfully!"
         exit 0
     else
-        print_status $RED "❌ Cluster creation failed"
+        print_status $RED "❌ Minimal cluster creation failed"
 
         # Show debugging information
         print_status $BLUE "=== Debugging information ==="

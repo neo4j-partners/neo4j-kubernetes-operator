@@ -29,60 +29,12 @@ jobs:
         run: |
           make manifests
 
-      - name: Prepare Docker environment
+      - name: Environment preparation
         run: |
-          echo "=== Preparing Docker environment ==="
-          # Clean up any existing kind clusters
-          kind delete cluster --name neo4j-operator-test || echo "No existing cluster to delete"
-          kind delete cluster --name neo4j-operator-dev || echo "No existing cluster to delete"
-
-          # Ensure Docker has enough resources
-          echo "Docker info:"
-          docker info
-
-          # Clean up any dangling resources
-          docker system prune -f || echo "Docker prune completed"
-
-          # Set Docker resource limits for CI
-          echo "Setting Docker resource limits..."
-          # Note: These are suggestions for CI environment
-          # Actual limits depend on the runner configuration
-
-          echo "=== Docker environment prepared ==="
-
-      - name: Check and fix cgroups configuration
-        run: |
-          echo "=== Checking cgroups configuration ==="
-
-          # Check cgroups version
-          if [ -f /sys/fs/cgroup/cgroup.controllers ]; then
-            echo "System is using cgroups v2"
-            CGROUPS_VERSION="v2"
-          else
-            echo "System is using cgroups v1"
-            CGROUPS_VERSION="v1"
-          fi
-
-          # Check Docker cgroup driver
-          DOCKER_CGROUP=$(docker info | grep -i "cgroup driver" | awk '{print $3}' || echo "unknown")
-          echo "Docker cgroup driver: $DOCKER_CGROUP"
-
-          # Check if cgroups are properly mounted
-          if mountpoint -q /sys/fs/cgroup; then
-            echo "✅ Cgroups are properly mounted"
-          else
-            echo "⚠️  Cgroups are not properly mounted"
-          fi
-
-          # Check available cgroup controllers
-          echo "Available cgroup controllers:"
-          cat /proc/cgroups 2>/dev/null || echo "Cannot read cgroup controllers"
-
-          # Store cgroups info for later use
-          echo "CGROUPS_VERSION=$CGROUPS_VERSION" >> $GITHUB_ENV
-          echo "DOCKER_CGROUP=$DOCKER_CGROUP" >> $GITHUB_ENV
-
-          echo "=== Cgroups configuration check completed ==="
+          echo "Performing environment preparation..."
+          # Clean up any local test artifacts
+          rm -rf test-results/ coverage/ logs/ tmp/
+          echo "Environment preparation completed"
 
       - name: Run unit tests with race detection
         run: |
@@ -95,17 +47,6 @@ jobs:
           echo "Running all tests that don't require a cluster..."
           make test-no-cluster
         timeout-minutes: 10
-
-      - name: Check cluster availability
-        run: |
-          echo "Checking if cluster is available for additional tests..."
-          if ./scripts/check-cluster.sh --verbose; then
-            echo "Cluster is available, running all tests..."
-            make test-all
-          else
-            echo "No cluster available, running only tests that don't require a cluster..."
-            echo "✅ Tests completed successfully without cluster"
-          fi
 
       - name: Cleanup test environment
         if: always()
@@ -134,10 +75,8 @@ jobs:
       - name: Environment preparation
         run: |
           echo "Performing environment preparation..."
-
           # Clean up any local test artifacts
           rm -rf test-results/ coverage/ logs/ tmp/
-
           echo "Environment preparation completed"
 
       - name: Install dependencies and generate manifests
@@ -148,13 +87,47 @@ jobs:
         run: |
           echo "=== Preparing runner for Kind cluster creation ==="
 
+          # Detect CI environment
+          echo "Detecting CI environment..."
+          if [ -n "${CI:-}" ] || [ -n "${GITHUB_ACTIONS:-}" ]; then
+            echo "Running in CI environment"
+            export CI_ENVIRONMENT=true
+          else
+            echo "Running in local environment"
+            export CI_ENVIRONMENT=false
+          fi
+
+          # Detect cgroup version
+          echo "Detecting cgroup version..."
+          if [ -f /sys/fs/cgroup/cgroup.controllers ]; then
+            echo "Detected cgroups v2"
+            export CGROUP_VERSION="v2"
+          else
+            echo "Detected cgroups v1"
+            export CGROUP_VERSION="v1"
+          fi
+
+          # Check current cgroup setup
+          echo "Current cgroup setup:"
+          ls -la /sys/fs/cgroup/ || echo "Cannot access cgroups"
+          mount | grep cgroup || echo "No cgroup mounts found"
+
           # Ensure cgroup support is available
           echo "Setting up cgroup support..."
           sudo mkdir -p /sys/fs/cgroup/systemd
           sudo mount -t cgroup -o none,name=systemd cgroup /sys/fs/cgroup/systemd || true
 
+          # Try alternative cgroup setup for different environments
+          echo "Setting up alternative cgroup mounts..."
+          sudo mkdir -p /sys/fs/cgroup/cpu
+          sudo mkdir -p /sys/fs/cgroup/memory
+          sudo mkdir -p /sys/fs/cgroup/pids
+          sudo mount -t cgroup -o cpu cgroup /sys/fs/cgroup/cpu || true
+          sudo mount -t cgroup -o memory cgroup /sys/fs/cgroup/memory || true
+          sudo mount -t cgroup -o pids cgroup /sys/fs/cgroup/pids || true
+
           # Verify cgroup mounts
-          echo "Verifying cgroup mounts..."
+          echo "Verifying cgroup mounts after setup:"
           mount | grep cgroup || echo "No cgroup mounts found"
           ls -la /sys/fs/cgroup/ || echo "Cannot access cgroups"
 
@@ -165,6 +138,12 @@ jobs:
           # Ensure Docker can run privileged containers
           echo "Testing Docker privileged mode..."
           docker run --rm --privileged hello-world || echo "Docker privileged mode test failed"
+
+          # Check system resources
+          echo "System resources:"
+          free -h || echo "free command not available"
+          df -h || echo "df command not available"
+          nproc || echo "nproc command not available"
 
           echo "=== Runner preparation completed ==="
 
@@ -186,11 +165,22 @@ jobs:
             kind delete cluster --name neo4j-operator-test 2>/dev/null || true
 
             # Try to create cluster with longer timeout and better error handling
-            if kind create cluster --name neo4j-operator-test --config "$config_file" --image "$node_image" --wait 15m; then
+            if kind create cluster --name neo4j-operator-test --config "$config_file" --image "$node_image" --wait 15m --verbosity 2; then
               echo "✅ Cluster created successfully with $attempt_name"
               return 0
             else
               echo "❌ Cluster creation failed with $attempt_name"
+
+              # Get additional debugging information
+              echo "=== Debugging cluster creation failure ==="
+              echo "Docker containers:"
+              docker ps -a
+              echo "Docker logs for any kind containers:"
+              docker logs neo4j-operator-test-control-plane 2>/dev/null || echo "No control plane container found"
+              echo "Cgroup mounts:"
+              mount | grep cgroup || echo "No cgroup mounts found"
+              echo "=== End debugging ==="
+
               return 1
             fi
           }
@@ -201,7 +191,17 @@ jobs:
           CLUSTER_NODE_IMAGE=""
 
           # Try progressive configurations
-          if create_cluster "hack/kind-config-robust.yaml" "robust configuration (1 node)" "kindest/node:v1.30.0"; then
+          if create_cluster "hack/kind-config-simple.yaml" "simple configuration (1 node)" "kindest/node:v1.30.0"; then
+            echo "SUCCESS: Using simple configuration"
+            CLUSTER_CREATED=true
+            CLUSTER_CONFIG="simple configuration (1 node)"
+            CLUSTER_NODE_IMAGE="kindest/node:v1.30.0"
+          elif create_cluster "hack/kind-config-cgroups-v2.yaml" "cgroups v2 configuration" "kindest/node:v1.30.0"; then
+            echo "SUCCESS: Using cgroups v2 configuration"
+            CLUSTER_CREATED=true
+            CLUSTER_CONFIG="cgroups v2 configuration"
+            CLUSTER_NODE_IMAGE="kindest/node:v1.30.0"
+          elif create_cluster "hack/kind-config-robust.yaml" "robust configuration (1 node)" "kindest/node:v1.30.0"; then
             echo "SUCCESS: Using robust configuration"
             CLUSTER_CREATED=true
             CLUSTER_CONFIG="robust configuration (1 node)"
@@ -241,6 +241,11 @@ jobs:
             CLUSTER_CREATED=true
             CLUSTER_CONFIG="basic configuration"
             CLUSTER_NODE_IMAGE="kindest/node:v1.28.0"
+          elif kind create cluster --name neo4j-operator-test --image kindest/node:v1.30.0 --wait 15m; then
+            echo "SUCCESS: Using minimal cluster without configuration"
+            CLUSTER_CREATED=true
+            CLUSTER_CONFIG="minimal cluster without configuration"
+            CLUSTER_NODE_IMAGE="kindest/node:v1.30.0"
           else
             echo "❌ All cluster creation attempts failed"
             echo "=== Debugging information ==="
@@ -386,6 +391,47 @@ jobs:
           echo "Kubeconfig:"
           kind export kubeconfig --name neo4j-operator-test || echo "Failed to export kubeconfig"
           echo "=== End debugging ==="
+
+      - name: Comprehensive debugging on failure
+        if: failure()
+        run: |
+          echo "=== Comprehensive debugging information ==="
+
+          # System information
+          echo "System information:"
+          uname -a
+          cat /etc/os-release || echo "Cannot read OS release"
+
+          # Docker information
+          echo "Docker information:"
+          docker version
+          docker info
+
+          # Cgroup information
+          echo "Cgroup information:"
+          ls -la /sys/fs/cgroup/ || echo "Cannot access cgroups"
+          mount | grep cgroup || echo "No cgroup mounts found"
+          cat /proc/cgroups || echo "Cannot read cgroups"
+
+          # System resources
+          echo "System resources:"
+          free -h || echo "free command not available"
+          df -h || echo "df command not available"
+          nproc || echo "nproc command not available"
+
+          # Kind information
+          echo "Kind information:"
+          kind version || echo "Kind not available"
+
+          # Check for any kind containers
+          echo "Kind containers:"
+          docker ps -a | grep kind || echo "No kind containers found"
+
+          # Check for any kind processes
+          echo "Kind processes:"
+          ps aux | grep kind || echo "No kind processes found"
+
+          echo "=== End comprehensive debugging ==="
 
       - name: Verify cluster health
         run: |
@@ -785,7 +831,7 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
-    needs: test
+    needs: [test, integration-test]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -828,6 +874,7 @@ jobs:
   security:
     name: Security Scan
     runs-on: ubuntu-latest
+    needs: [test]
     steps:
       - uses: actions/checkout@v4
       - name: Set up Go
