@@ -149,24 +149,17 @@ test-controllers: ## Run controller tests (no cluster required).
 	@echo "Running controller tests (no cluster required)..."
 	go test ./internal/controller/... -v -run="Test.*" -timeout=10m
 
-.PHONY: test-integration
-test-integration: test-setup ## Run integration tests (requires cluster).
-	@echo "Checking cluster availability for integration tests..."
-	@if ./scripts/check-cluster.sh --verbose; then \
-		echo "Cluster is available, running integration tests..."; \
-		echo "Using optimized test settings for faster execution..."; \
-		TEST_TIMEOUT=5m go test -v -race -coverprofile=coverage-integration.out \
-			-timeout=5m \
-			-failfast \
-			./test/integration/...; \
-		go tool cover -html=coverage-integration.out -o coverage-integration.html; \
-	else \
-		echo "❌ No cluster available for integration tests"; \
-		echo "💡 Run 'make dev-cluster' to create a local cluster"; \
-		echo "💡 Or set up a remote cluster and configure kubectl"; \
-		echo "💡 Skipping integration tests..."; \
-		exit 0; \
-	fi
+.PHONY: test-integration test-integration-with-webhooks
+
+# Run integration tests
+test-integration: ## Run integration tests
+	@echo "🧪 Running integration tests..."
+	@./scripts/run-tests.sh integration
+
+# Run integration tests with webhooks enabled
+test-integration-with-webhooks: ## Run integration tests with webhooks enabled
+	@echo "🧪 Running integration tests with webhooks enabled..."
+	@./scripts/test-integration-with-webhooks.sh
 
 .PHONY: test-e2e
 test-e2e: test-setup ## Run e2e tests (requires cluster).

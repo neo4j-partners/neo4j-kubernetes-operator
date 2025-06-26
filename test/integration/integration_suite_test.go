@@ -18,7 +18,10 @@ package integration_test
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
+	"net"
+	"net/http"
 	"os"
 	"strings"
 	"testing"
@@ -26,12 +29,10 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	appsv1 "k8s.io/api/apps/v1"
-	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes/scheme"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -42,6 +43,7 @@ import (
 
 	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1"
 	"github.com/neo4j-labs/neo4j-kubernetes-operator/internal/controller"
+	"github.com/neo4j-labs/neo4j-kubernetes-operator/internal/webhooks"
 )
 
 var cfg *rest.Config
@@ -75,18 +77,10 @@ var _ = BeforeSuite(func() {
 	Expect(cfg).NotTo(BeNil())
 
 	// Register the scheme
-	err = neo4jv1alpha1.AddToScheme(scheme.Scheme)
+	err = neo4jv1alpha1.AddToScheme(clientgoscheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
-	// Register other schemes
-	err = appsv1.AddToScheme(scheme.Scheme)
-	Expect(err).NotTo(HaveOccurred())
-	err = batchv1.AddToScheme(scheme.Scheme)
-	Expect(err).NotTo(HaveOccurred())
-	err = corev1.AddToScheme(scheme.Scheme)
-	Expect(err).NotTo(HaveOccurred())
-
-	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
+	k8sClient, err = client.New(cfg, client.Options{Scheme: clientgoscheme.Scheme})
 	Expect(err).NotTo(HaveOccurred())
 	Expect(k8sClient).NotTo(BeNil())
 
@@ -95,7 +89,7 @@ var _ = BeforeSuite(func() {
 
 	// Use minimal cache options for faster test execution
 	cacheOpt := manager.Options{
-		Scheme:                 scheme.Scheme,
+		Scheme:                 clientgoscheme.Scheme,
 		HealthProbeBindAddress: "0",
 		Metrics:                metricsserver.Options{BindAddress: "0"},
 	}
@@ -168,9 +162,22 @@ var _ = BeforeSuite(func() {
 	}).SetupWithManager(mgr)
 	Expect(err).NotTo(HaveOccurred())
 
-	// Skip webhooks for integration tests to avoid TLS certificate issues
-	// Webhooks are tested separately in unit tests
-	By("skipping webhooks for integration tests")
+	// Setup webhooks if enabled via environment variable
+	enableWebhooks := os.Getenv("ENABLE_WEBHOOKS") == "true"
+	if enableWebhooks {
+		By("setting up webhooks for integration tests")
+
+		// Register webhooks
+		if err = (&webhooks.Neo4jEnterpriseClusterWebhook{
+			Client: mgr.GetClient(),
+		}).SetupWebhookWithManager(mgr); err != nil {
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		By("webhooks enabled for integration tests")
+	} else {
+		By("webhooks disabled for integration tests")
+	}
 
 	// Start the manager
 	By("starting the manager")
@@ -184,6 +191,13 @@ var _ = BeforeSuite(func() {
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	Expect(mgr.GetCache().WaitForCacheSync(ctxWithTimeout)).To(BeTrue())
+
+	// Wait for webhook server to be ready if webhooks are enabled
+	if enableWebhooks {
+		By("waiting for webhook server to be ready")
+		webhookReady := waitForWebhookServerReady(ctx, 30*time.Second)
+		Expect(webhookReady).To(BeTrue(), "Webhook server should be ready within timeout")
+	}
 })
 
 var _ = AfterSuite(func() {
@@ -252,6 +266,88 @@ func cleanupTestNamespaces() {
 // isTestNamespace checks if a namespace is a test namespace
 func isTestNamespace(name string) bool {
 	return strings.HasPrefix(name, "test-")
+}
+
+// waitForWebhookServerReady waits for the webhook server to be ready by checking if the TLS certificate exists
+func waitForWebhookServerReady(ctx context.Context, timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+
+	for time.Now().Before(deadline) {
+		// Check multiple possible certificate paths
+		possiblePaths := []string{
+			"/tmp/k8s-webhook-server/serving-certs/tls.crt",
+			os.TempDir() + "/k8s-webhook-server/serving-certs/tls.crt",
+			"/var/folders/8_/z8fx9g411bdc0n0fzsw545l80000gp/T/k8s-webhook-server/serving-certs/tls.crt",
+		}
+
+		for _, certPath := range possiblePaths {
+			if _, err := os.Stat(certPath); err == nil {
+				// Certificate exists, now check if webhook server is responding
+				if isWebhookServerResponding() {
+					return true
+				}
+			}
+		}
+
+		// Wait a bit before checking again
+		select {
+		case <-ctx.Done():
+			return false
+		case <-time.After(500 * time.Millisecond):
+			continue
+		}
+	}
+
+	return false
+}
+
+// isWebhookServerResponding checks if the webhook server is responding to requests
+func isWebhookServerResponding() bool {
+	// Try to make a simple HTTP request to the webhook server
+	// The webhook server typically runs on port 9443
+	client := &http.Client{
+		Timeout: 2 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true, // Skip certificate verification for testing
+			},
+		},
+	}
+
+	// Try multiple endpoints that might be available
+	endpoints := []string{
+		"https://localhost:9443/healthz",
+		"https://localhost:9443/readyz",
+		"https://localhost:9443/",
+	}
+
+	for _, endpoint := range endpoints {
+		resp, err := client.Get(endpoint)
+		if err == nil {
+			defer resp.Body.Close()
+			// Any response means the server is up
+			if resp.StatusCode >= 200 && resp.StatusCode < 500 {
+				return true
+			}
+		}
+	}
+
+	// If HTTP checks fail, try to check if the port is listening
+	return isPortListening("localhost", "9443")
+}
+
+// isPortListening checks if a port is listening on the given host
+func isPortListening(host, port string) bool {
+	timeout := time.Second
+	conn, err := net.DialTimeout("tcp", net.JoinHostPort(host, port), timeout)
+	if err != nil {
+		return false
+	}
+	if conn != nil {
+		defer conn.Close()
+		return true
+	}
+	return false
 }
 
 // aggressiveCleanup performs fast cleanup without waiting for complete deletion

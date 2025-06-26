@@ -11,11 +11,3 @@ spec:
     kind: Issuer
     name: neo4j-operator-selfsigned-issuer
   secretName: webhook-server-cert # this should match the one in manager_webhook_patch.yaml
----
-apiVersion: cert-manager.io/v1
-kind: Issuer
-metadata:
-  name: neo4j-operator-selfsigned-issuer
-  namespace: neo4j-operator-system
-spec:
-  selfSigned: {}
