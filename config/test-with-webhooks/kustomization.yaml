@@ -11,8 +11,6 @@ resources:
   - ../webhook
   - ../certmanager
   - metrics_service.yaml
-  - ../default
-  - ../webhook
 
 patches:
   # Enable metrics endpoint
@@ -27,6 +25,21 @@ patches:
   - path: manager_webhook_patch.yaml
     target:
       kind: Deployment
+  # Enable cert-manager CA injection for webhooks
+  - target:
+      kind: ValidatingWebhookConfiguration
+    patch: |-
+      - op: add
+        path: /metadata/annotations
+        value:
+          cert-manager.io/inject-ca-from: neo4j-operator-system/serving-cert
+  - target:
+      kind: MutatingWebhookConfiguration
+    patch: |-
+      - op: add
+        path: /metadata/annotations
+        value:
+          cert-manager.io/inject-ca-from: neo4j-operator-system/serving-cert
   - target:
       kind: Deployment
       name: neo4j-operator-controller-manager
@@ -38,7 +51,9 @@ patches:
         - --leader-elect
         - --health-probe-bind-address=:8081
         - --mode=dev
-        - --enable-webhooks=false
+        - --enable-webhooks=true
+        - --cache-strategy=lazy
+        - --skip-cache-wait
       - op: replace
         path: /spec/template/spec/containers/0/resources/limits/memory
         value: "1Gi"

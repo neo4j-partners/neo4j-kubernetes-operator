@@ -178,6 +178,27 @@ jobs:
           echo "✅ Cluster health verification completed"
           echo "CLUSTER_HEALTHY=true" >> $GITHUB_ENV
 
+      - name: Install cert-manager
+        run: |
+          echo "=== Installing cert-manager for webhook support ==="
+
+          # Check if cluster is healthy
+          if [[ "${CLUSTER_HEALTHY:-false}" != "true" ]]; then
+            echo "❌ Cluster is not healthy, skipping cert-manager installation"
+            exit 0
+          fi
+
+          # Install cert-manager
+          kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.13.0/cert-manager.yaml
+
+          # Wait for cert-manager to be ready
+          kubectl wait --for=condition=ready pod -l app.kubernetes.io/instance=cert-manager -n cert-manager --timeout=300s || echo "Cert-manager readiness check failed"
+
+          # Verify cert-manager is running
+          kubectl get pods -n cert-manager
+
+          echo "✅ Cert-manager installation completed"
+
       - name: Build operator image
         run: |
           echo "=== Building operator image ==="
@@ -254,18 +275,18 @@ jobs:
             exit 0
           fi
 
-          # Deploy the operator with webhooks disabled for CI
-          make deploy-ci IMG=neo4j-operator:ci
+          # Deploy the operator with webhooks enabled (service account issue is fixed)
+          make deploy-test-with-webhooks IMG=neo4j-operator:ci
 
           # Wait for operator to be ready
-          kubectl wait --for=condition=available deployment/neo4j-operator-controller-manager -n neo4j-operator-system --timeout=300s || echo "Operator deployment timeout"
+          kubectl wait --for=condition=available deployment/controller-manager -n neo4j-operator-system --timeout=300s || echo "Operator deployment timeout"
 
           # Check operator status
           kubectl get pods -n neo4j-operator-system
-          kubectl get deployment neo4j-operator-controller-manager -n neo4j-operator-system
+          kubectl get deployment controller-manager -n neo4j-operator-system
 
           # Verify operator is ready
-          if kubectl get deployment neo4j-operator-controller-manager -n neo4j-operator-system -o jsonpath='{.status.readyReplicas}' | grep -q "1"; then
+          if kubectl get deployment controller-manager -n neo4j-operator-system -o jsonpath='{.status.readyReplicas}' | grep -q "1"; then
             echo "✅ Operator is ready"
             echo "OPERATOR_READY=true" >> $GITHUB_ENV
           else
@@ -453,8 +474,6 @@ jobs:
 
           echo ""
           echo "📊 Debug information collection complete"
-        env:
-          KUBECONFIG: $(kind export kubeconfig --name neo4j-operator-test)
 
       - name: Verify environment variables
         run: |
@@ -489,13 +508,13 @@ jobs:
           kubectl get pods -n neo4j-operator-system -o wide
 
           echo "Operator deployment details:"
-          kubectl describe deployment neo4j-operator-controller-manager -n neo4j-operator-system || echo "Deployment not found"
+          kubectl describe deployment controller-manager -n neo4j-operator-system || echo "Deployment not found"
 
           echo "Operator pod details:"
-          kubectl get pods -n neo4j-operator-system -l app=neo4j-operator-controller-manager -o name | head -1 | xargs -r kubectl describe -n neo4j-operator-system || echo "No operator pods found"
+          kubectl get pods -n neo4j-operator-system -l app=neo4j-kubernetes-operator -o name | head -1 | xargs -r kubectl describe -n neo4j-operator-system || echo "No operator pods found"
 
           echo "Operator pod logs:"
-          kubectl logs -n neo4j-operator-system -l app=neo4j-operator-controller-manager --tail=100 || echo "No operator logs found"
+          kubectl logs -n neo4j-operator-system -l app=neo4j-kubernetes-operator --tail=100 || echo "No operator logs found"
 
           echo "Events in neo4j-operator-system namespace:"
           kubectl get events -n neo4j-operator-system --sort-by='.lastTimestamp' | tail -20 || echo "No events found"
@@ -510,7 +529,7 @@ jobs:
 
       - name: Run integration tests
         run: |
-          echo "Running integration tests with optimized settings..."
+          echo "Running integration tests with webhooks enabled..."
 
           # Check if cluster is healthy
           if [[ "${CLUSTER_HEALTHY:-false}" != "true" ]]; then
@@ -547,14 +566,15 @@ jobs:
           export TEST_VERBOSE=false
           export TEST_CLEANUP_ON_FAILURE=true
 
-          # Run integration tests with optimized settings
-          echo "Using optimized test settings:"
+          # Run integration tests with webhooks enabled
+          echo "Using optimized test settings with webhooks:"
           echo "  TEST_MODE: $TEST_MODE (enables fast retry behavior)"
           echo "  Timeout: $TEST_TIMEOUT"
           echo "  Parallel jobs: $TEST_PARALLEL_JOBS"
           echo "  Verbose: $TEST_VERBOSE"
+          echo "  Webhooks: enabled"
 
-          make test-integration
+          make test-integration-with-webhooks
         timeout-minutes: 20
 
       - name: Debug integration test failure
@@ -567,7 +587,7 @@ jobs:
 
           echo "Operator status:"
           kubectl get pods -n neo4j-operator-system -o wide
-          kubectl logs -n neo4j-operator-system -l app=neo4j-operator-controller-manager --tail=50 || echo "No operator logs"
+          kubectl logs -n neo4j-operator-system -l app=neo4j-kubernetes-operator --tail=50 || echo "No operator logs"
 
           echo "CRDs status:"
           kubectl get crd | grep neo4j.neo4j.com

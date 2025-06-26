@@ -175,7 +175,7 @@ func main() {
 	if *cacheStrategy == "" {
 		switch operatorMode {
 		case ProductionMode:
-			*cacheStrategy = string(StandardCache)
+			*cacheStrategy = string(LazyCache)
 		case DevelopmentMode:
 			if *ultraFast {
 				*cacheStrategy = string(NoCache)
@@ -670,8 +670,14 @@ func configureLazyCache(base cache.Options, minimalResources bool) cache.Options
 			&neo4jv1alpha1.Neo4jDatabase{}:          {},
 		}
 	} else {
-		// Cache essential resources only
+		// Cache essential resources only - optimized for production
 		base.ByObject = getEssentialResourceCache()
+
+		// Add production-specific optimizations
+		base.SyncPeriod = func() *time.Duration {
+			d := 5 * time.Minute // Longer sync period for production stability
+			return &d
+		}()
 	}
 
 	return base
@@ -708,11 +714,15 @@ func configureOnDemandCache(base cache.Options, minimalResources bool) cache.Opt
 // getEssentialResourceCache returns cache config for essential resources
 func getEssentialResourceCache() map[client.Object]cache.ByObject {
 	return map[client.Object]cache.ByObject{
-		// Neo4j CRDs
+		// Neo4j CRDs - always essential
 		&neo4jv1alpha1.Neo4jEnterpriseCluster{}: {},
 		&neo4jv1alpha1.Neo4jDatabase{}:          {},
 		&neo4jv1alpha1.Neo4jBackup{}:            {},
 		&neo4jv1alpha1.Neo4jRestore{}:           {},
+		&neo4jv1alpha1.Neo4jUser{}:              {},
+		&neo4jv1alpha1.Neo4jRole{}:              {},
+		&neo4jv1alpha1.Neo4jGrant{}:             {},
+		&neo4jv1alpha1.Neo4jPlugin{}:            {},
 	}
 }
 

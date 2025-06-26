@@ -1,0 +1,12 @@
+# github.com/neo4j-labs/neo4j-kubernetes-operator/test/integration.test
+ld: warning: '/private/var/folders/8_/z8fx9g411bdc0n0fzsw545l80000gp/T/go-link-1048276040/000013.o' has malformed LC_DYSYMTAB, expected 98 undefined symbols to start at index 1626, found 95 undefined symbols starting at index 1626
+=== RUN   TestIntegration
+[38;5;9mGinkgo detected configuration issues:[0m
+[1m[38;5;9mUse of go test -parallel[0m
+  Go test's implementation of parallelization does not actually parallelize
+  Ginkgo specs.  Please use the ginkgo cli and `ginkgo -p` or `ginkgo -procs=N`
+  instead.
+
+program not built with -cover
+FAIL	github.com/neo4j-labs/neo4j-kubernetes-operator/test/integration	0.644s
+FAIL
