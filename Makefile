@@ -190,12 +190,17 @@ test-setup: test-cleanup ## Set up clean test environment (cleanup + checks)
 		echo "Warning: cleanup script not found"; \
 	fi
 	@echo "🔍 Performing environment checks..."
-	@if [ -f "scripts/test-cleanup.sh" ]; then \
-		chmod +x scripts/test-cleanup.sh; \
+	@if [ -f "scripts/setup-test-environment.sh" ]; then \
+		chmod +x scripts/setup-test-environment.sh; \
 		export E2E_TEST=true; \
-		./scripts/test-cleanup.sh check; \
+		./scripts/setup-test-environment.sh check; \
 	else \
-		echo "Warning: cleanup script not found"; \
+		echo "Warning: setup script not found, using fallback checks"; \
+		if [ -f "scripts/test-cleanup.sh" ]; then \
+			chmod +x scripts/test-cleanup.sh; \
+			export E2E_TEST=true; \
+			./scripts/test-cleanup.sh check; \
+		fi; \
 	fi
 	@echo "✅ Test environment setup completed"
 

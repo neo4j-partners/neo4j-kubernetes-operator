@@ -103,7 +103,7 @@ jobs:
         run: |
           echo "Checking cluster availability for integration tests..."
           if ./scripts/check-cluster.sh --verbose; then
-            echo "Cluster is available, running integration tests with optimized settings..."
+            echo "Cluster is available, running integration tests with webhooks enabled..."
 
             # Set optimized test environment variables for faster execution
             export TEST_MODE=true
@@ -113,12 +113,12 @@ jobs:
             echo "  TEST_MODE: $TEST_MODE (enables fast retry behavior)"
             echo "  Timeout: $TEST_TIMEOUT"
 
-            make test-integration
+            make test-integration-with-webhooks
           else
             echo "No cluster available, skipping integration tests..."
             echo "✅ Unit tests completed successfully without cluster"
           fi
-        timeout-minutes: 15
+        timeout-minutes: 20
 
       - name: Generate test coverage report
         if: always()
@@ -154,6 +154,7 @@ jobs:
           echo "- Webhook validation tests" >> $GITHUB_STEP_SUMMARY
           echo "- Security coordinator tests" >> $GITHUB_STEP_SUMMARY
           echo "- Neo4j client tests" >> $GITHUB_STEP_SUMMARY
+          echo "- Integration tests with webhooks enabled" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 🔧 Improvements Applied:" >> $GITHUB_STEP_SUMMARY
           echo "- Fixed data race issues in Gomega registration" >> $GITHUB_STEP_SUMMARY

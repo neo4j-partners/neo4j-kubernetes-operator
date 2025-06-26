@@ -106,12 +106,22 @@ func InstallCertManager() error {
 
 // LoadImageToKindClusterWithName loads a local docker image to the kind cluster
 func LoadImageToKindClusterWithName(name string, clusterName ...string) error {
-	cluster := "kind"
+	cluster := "neo4j-operator-test" // Default cluster name used in CI
 	if len(clusterName) > 0 {
 		cluster = clusterName[0]
 	} else if v, ok := os.LookupEnv("KIND_CLUSTER"); ok {
 		cluster = v
+	} else {
+		// Try to detect available clusters
+		cmd := exec.Command("kind", "get", "clusters")
+		if output, err := cmd.Output(); err == nil {
+			clusters := strings.Split(strings.TrimSpace(string(output)), "\n")
+			if len(clusters) > 0 && clusters[0] != "" {
+				cluster = clusters[0]
+			}
+		}
 	}
+
 	kindOptions := []string{"load", "docker-image", name, "--name", cluster}
 	cmd := exec.Command("kind", kindOptions...)
 	_, err := Run(cmd)

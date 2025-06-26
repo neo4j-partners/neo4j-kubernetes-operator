@@ -38,13 +38,18 @@ var _ = Describe("controller", Ordered, func() {
 		By("installing the cert-manager")
 		Expect(utils.InstallCertManager()).To(Succeed())
 
+		By("installing CRDs")
+		cmd := exec.Command("make", "install")
+		_, err := utils.Run(cmd)
+		Expect(err).To(Succeed())
+
 		By("creating manager namespace")
-		cmd := exec.Command("kubectl", "apply", "-f", "-")
+		cmd = exec.Command("kubectl", "apply", "-f", "-")
 		cmd.Stdin = strings.NewReader(fmt.Sprintf(`apiVersion: v1
 kind: Namespace
 metadata:
   name: %s`, namespace))
-		_, err := utils.Run(cmd)
+		_, err = utils.Run(cmd)
 		Expect(err).To(Succeed())
 	})
 
@@ -99,11 +104,6 @@ metadata:
 
 			By("loading the the manager(Operator) image on Kind")
 			err = utils.LoadImageToKindClusterWithName(projectimage)
-			ExpectWithOffset(1, err).NotTo(HaveOccurred())
-
-			By("installing CRDs")
-			cmd = exec.Command("make", "install")
-			_, err = utils.Run(cmd)
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 			By("deploying the controller-manager")

@@ -71,30 +71,33 @@ check_cluster_health() {
 run_integration_tests() {
     log_info "Running integration tests with optimized settings..."
 
+    # Check for ginkgo CLI
+    if ! command -v ginkgo &> /dev/null; then
+        log_warning "Ginkgo CLI not found. Installing..."
+        go install github.com/onsi/ginkgo/v2/ginkgo@latest
+        export PATH="$PATH:$(go env GOPATH)/bin"
+    fi
+
     # Set optimized environment variables
     export TEST_TIMEOUT="${TIMEOUT_MINUTES}m"
     export TEST_PARALLEL="$PARALLEL_JOBS"
     export GOMAXPROCS="$PARALLEL_JOBS"
 
-    # Run tests with optimized flags
-    cd "$PROJECT_ROOT"
+    # Run tests with Ginkgo CLI
+    cd "$PROJECT_ROOT/test/integration"
 
     if [ "$VERBOSE" = "true" ]; then
-        go test -v -race -coverprofile=coverage-integration.out \
-            -timeout="${TIMEOUT_MINUTES}m" \
-            -parallel="$PARALLEL_JOBS" \
-            -count=1 \
-            ./test/integration/...
+        ginkgo -v -p --fail-fast --timeout="${TIMEOUT_MINUTES}m" --output-dir="../../" --coverprofile=coverage-integration.out
     else
-        go test -v -race -coverprofile=coverage-integration.out \
-            -timeout="${TIMEOUT_MINUTES}m" \
-            -parallel="$PARALLEL_JOBS" \
-            -count=1 \
-            ./test/integration/... 2>&1 | tee test-output.log
+        ginkgo -v -p --fail-fast --timeout="${TIMEOUT_MINUTES}m" --output-dir="../../" --coverprofile=coverage-integration.out 2>&1 | tee ../../test-output.log
     fi
 
+    cd "$PROJECT_ROOT"
+
     # Generate coverage report
-    go tool cover -html=coverage-integration.out -o coverage-integration.html
+    if [ -f "coverage-integration.out" ]; then
+        go tool cover -html=coverage-integration.out -o coverage-integration.html
+    fi
 
     log_success "Integration tests completed successfully"
 }

@@ -34,19 +34,44 @@ fi
 
 # Check if cert-manager is installed
 echo -e "${YELLOW}🔍 Checking cert-manager installation...${NC}"
-if ! kubectl get pods -n cert-manager &> /dev/null; then
-    echo -e "${RED}❌ cert-manager is not installed${NC}"
-    echo -e "${YELLOW}Installing cert-manager...${NC}"
 
-    # Install cert-manager
-    kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.13.0/cert-manager.yaml
+# Ensure cert-manager namespace exists
+kubectl get ns cert-manager 2>/dev/null || kubectl create ns cert-manager
 
-    # Wait for cert-manager to be ready
-    echo -e "${YELLOW}Waiting for cert-manager to be ready...${NC}"
-    kubectl wait --for=condition=ready pod -l app.kubernetes.io/instance=cert-manager -n cert-manager --timeout=300s
-    echo -e "${GREEN}✅ cert-manager is ready${NC}"
-else
-    echo -e "${GREEN}✅ cert-manager is already installed${NC}"
+# Always apply cert-manager deployment manifest
+kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.13.0/cert-manager.yaml
+
+# Wait for all cert-manager pods to be ready
+for i in {1..60}; do
+  NOT_READY=$(kubectl get pods -n cert-manager --no-headers 2>/dev/null | grep -v 'Running' | grep -v 'Completed' | wc -l)
+  TOTAL=$(kubectl get pods -n cert-manager --no-headers 2>/dev/null | wc -l)
+  if [ "$TOTAL" -gt 0 ] && [ "$NOT_READY" -eq 0 ]; then
+    echo -e "${GREEN}✅ All cert-manager pods are running and ready${NC}"
+    break
+  fi
+  echo -e "${YELLOW}Waiting for cert-manager pods to be ready... ($i/60)${NC}"
+  sleep 5
+  if [ $i -eq 60 ]; then
+    echo -e "${RED}❌ Timed out waiting for cert-manager pods to be ready${NC}"
+    kubectl get pods -n cert-manager
+    exit 1
+  fi
+done
+
+# Check if cert-manager CRDs are installed
+if ! kubectl get crd certificates.cert-manager.io &> /dev/null; then
+    echo -e "${YELLOW}Installing cert-manager CRDs...${NC}"
+    kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.13.0/cert-manager.crds.yaml
+    # Wait for CRDs to be established
+    for crd in certificates.cert-manager.io issuers.cert-manager.io; do
+        for i in {1..30}; do
+            if kubectl get crd $crd &> /dev/null; then
+                break
+            fi
+            echo -e "${YELLOW}Waiting for CRD $crd to be established... ($i/30)${NC}"
+            sleep 2
+        done
+    done
 fi
 
 # Deploy the operator with webhooks enabled
@@ -101,15 +126,27 @@ done
 
 echo -e "${GREEN}✅ Operator with webhooks is ready${NC}"
 
-# Run integration tests with webhooks enabled
-echo -e "${YELLOW}🧪 Running integration tests with webhooks (Ginkgo CLI)...${NC}"
-export ENABLE_WEBHOOKS=true
-export TEST_MODE=true
+# Wait for the webhook server to be ready
+WEBHOOK_POD=$(kubectl get pods -n neo4j-operator-system -l control-plane=controller-manager -o jsonpath='{.items[0].metadata.name}')
+for i in {1..60}; do
+  STATUS=$(kubectl get pod "$WEBHOOK_POD" -n neo4j-operator-system -o jsonpath='{.status.containerStatuses[0].ready}')
+  if [ "$STATUS" == "true" ]; then
+    echo -e "${GREEN}✅ Webhook server is ready${NC}"
+    break
+  fi
+  echo -e "${YELLOW}Waiting for webhook server to be ready... ($i/60)${NC}"
+  sleep 2
+  if [ $i -eq 60 ]; then
+    echo -e "${RED}❌ Timed out waiting for webhook server${NC}"
+    exit 1
+  fi
+done
 
+# Run integration tests with webhooks enabled using Ginkgo CLI
 cd "$PROJECT_ROOT/test/integration"
-ginkgo -p --fail-fast --timeout=15m
-
+ginkgo -v -p --fail-fast --timeout=15m --output-dir="../../" --coverprofile=coverage-integration.out 2>&1 | tee ../../test-output.log
 cd "$PROJECT_ROOT"
+
 echo -e "${GREEN}✅ Integration tests with webhooks completed${NC}"
 
 # Cleanup
