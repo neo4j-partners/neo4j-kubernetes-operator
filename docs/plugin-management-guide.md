@@ -29,7 +29,7 @@ metadata:
 spec:
   image:
     repo: neo4j/neo4j
-    tag: 5.15.0-enterprise
+    tag: 5.26-enterprise
   topology:
     primaries: 3
   storage:

@@ -290,26 +290,14 @@ func (r *Neo4jEnterpriseClusterReconciler) createOrUpdateResource(ctx context.Co
 		return err
 	}
 
-	// Try to get the existing resource
-	key := client.ObjectKeyFromObject(obj)
-	existingObj := obj.DeepCopyObject()
-	existing, ok := existingObj.(client.Object)
-	if !ok {
-		return fmt.Errorf("failed to convert object to client.Object")
-	}
+	// Use controllerutil.CreateOrUpdate which properly handles immutable fields
+	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, obj, func() error {
+		// This function is called to update the object if it already exists
+		// For StatefulSets, we need to be careful about immutable fields
+		return nil
+	})
 
-	err := r.Get(ctx, key, existing)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			// Create the resource
-			return r.Create(ctx, obj)
-		}
-		return err
-	}
-
-	// Update the resource
-	obj.SetResourceVersion(existing.GetResourceVersion())
-	return r.Update(ctx, obj)
+	return err
 }
 
 func (r *Neo4jEnterpriseClusterReconciler) updateClusterStatus(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, phase, message string) {

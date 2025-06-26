@@ -8,6 +8,9 @@ spec:
     spec:
       containers:
       - name: manager
+        env:
+        - name: TEST_MODE
+          value: "true"
         resources:
           limits:
             cpu: 1000m

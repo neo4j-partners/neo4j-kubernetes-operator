@@ -103,7 +103,16 @@ jobs:
         run: |
           echo "Checking cluster availability for integration tests..."
           if ./scripts/check-cluster.sh --verbose; then
-            echo "Cluster is available, running integration tests..."
+            echo "Cluster is available, running integration tests with optimized settings..."
+
+            # Set optimized test environment variables for faster execution
+            export TEST_MODE=true
+            export TEST_TIMEOUT=5m
+
+            echo "Using optimized test settings:"
+            echo "  TEST_MODE: $TEST_MODE (enables fast retry behavior)"
+            echo "  Timeout: $TEST_TIMEOUT"
+
             make test-integration
           else
             echo "No cluster available, skipping integration tests..."

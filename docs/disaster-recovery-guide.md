@@ -128,7 +128,7 @@ spec:
   # Other configuration...
   image:
     repo: "neo4j"
-    tag: "5.15-enterprise"
+    tag: "5.26-enterprise"
 
   storage:
     className: "gp3"
@@ -195,7 +195,7 @@ spec:
   # Other configuration...
   image:
     repo: "neo4j"
-    tag: "5.15-enterprise"
+    tag: "5.26-enterprise"
 
   storage:
     className: "gp3"
@@ -270,7 +270,7 @@ spec:
   # Other configuration...
   image:
     repo: "neo4j"
-    tag: "5.15-enterprise"
+    tag: "5.26-enterprise"
 ```
 
 ### Step 3: Cross-Cloud DR Setup
@@ -312,7 +312,7 @@ spec:
   # Other configuration...
   image:
     repo: "neo4j"
-    tag: "5.15-enterprise"
+    tag: "5.26-enterprise"
 
   storage:
     className: "ssd"

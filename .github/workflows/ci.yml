@@ -337,15 +337,17 @@ jobs:
           kubectl get pods -n neo4j-operator-system
           kubectl get crd | grep neo4j.neo4j.com
 
-          # Set optimized test environment variables
-          export TEST_TIMEOUT_MINUTES=15
+          # Set optimized test environment variables for faster execution
+          export TEST_MODE=true
+          export TEST_TIMEOUT=5m
           export TEST_PARALLEL_JOBS=4
           export TEST_VERBOSE=false
           export TEST_CLEANUP_ON_FAILURE=true
 
           # Run integration tests with optimized settings
           echo "Using optimized test settings:"
-          echo "  Timeout: ${TEST_TIMEOUT_MINUTES} minutes"
+          echo "  TEST_MODE: $TEST_MODE (enables fast retry behavior)"
+          echo "  Timeout: $TEST_TIMEOUT"
           echo "  Parallel jobs: $TEST_PARALLEL_JOBS"
           echo "  Verbose: $TEST_VERBOSE"
 
@@ -377,7 +379,7 @@ jobs:
 
       - name: Run e2e tests
         run: |
-          echo "Running e2e tests..."
+          echo "Running e2e tests with optimized settings..."
 
           # Check if cluster is healthy
           if [[ "${CLUSTER_HEALTHY:-false}" != "true" ]]; then
@@ -387,6 +389,14 @@ jobs:
 
           # Set up test environment
           export KUBECONFIG=$(kind export kubeconfig --name neo4j-operator-test)
+
+          # Set optimized test environment variables for faster execution
+          export TEST_MODE=true
+          export TEST_TIMEOUT=5m
+
+          echo "Using optimized e2e test settings:"
+          echo "  TEST_MODE: $TEST_MODE (enables fast retry behavior)"
+          echo "  Timeout: $TEST_TIMEOUT"
 
           # Run e2e tests
           make test-e2e

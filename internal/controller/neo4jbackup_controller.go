@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	batchv1 "k8s.io/api/batch/v1"
@@ -61,6 +62,13 @@ const (
 // +kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
+
+func GetTestRequeueAfter() time.Duration {
+	if os.Getenv("TEST_MODE") == "true" {
+		return time.Second
+	}
+	return 30 * time.Second
+}
 
 // Reconcile handles the reconciliation of Neo4jBackup resources
 func (r *Neo4jBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {

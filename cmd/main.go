@@ -382,7 +382,7 @@ func setupProductionControllers(mgr ctrl.Manager) error {
 				Client:            mgr.GetClient(),
 				Scheme:            mgr.GetScheme(),
 				Recorder:          mgr.GetEventRecorderFor("neo4j-enterprise-cluster-controller"),
-				RequeueAfter:      30 * time.Second,
+				RequeueAfter:      controller.GetTestRequeueAfter(),
 				TopologyScheduler: controller.NewTopologyScheduler(mgr.GetClient()),
 			},
 		},
@@ -392,7 +392,7 @@ func setupProductionControllers(mgr ctrl.Manager) error {
 				Client:       mgr.GetClient(),
 				Scheme:       mgr.GetScheme(),
 				Recorder:     mgr.GetEventRecorderFor("neo4j-database-controller"),
-				RequeueAfter: 30 * time.Second,
+				RequeueAfter: controller.GetTestRequeueAfter(),
 			},
 		},
 		{
@@ -401,7 +401,7 @@ func setupProductionControllers(mgr ctrl.Manager) error {
 				Client:       mgr.GetClient(),
 				Scheme:       mgr.GetScheme(),
 				Recorder:     mgr.GetEventRecorderFor("neo4j-backup-controller"),
-				RequeueAfter: 60 * time.Second,
+				RequeueAfter: controller.GetTestRequeueAfter(),
 			},
 		},
 		{
@@ -410,7 +410,7 @@ func setupProductionControllers(mgr ctrl.Manager) error {
 				Client:       mgr.GetClient(),
 				Scheme:       mgr.GetScheme(),
 				Recorder:     mgr.GetEventRecorderFor("neo4j-restore-controller"),
-				RequeueAfter: 30 * time.Second,
+				RequeueAfter: controller.GetTestRequeueAfter(),
 			},
 		},
 		{
@@ -419,7 +419,7 @@ func setupProductionControllers(mgr ctrl.Manager) error {
 				Client:       mgr.GetClient(),
 				Scheme:       mgr.GetScheme(),
 				Recorder:     mgr.GetEventRecorderFor("neo4j-role-controller"),
-				RequeueAfter: 30 * time.Second,
+				RequeueAfter: controller.GetTestRequeueAfter(),
 			},
 		},
 		{
@@ -428,7 +428,7 @@ func setupProductionControllers(mgr ctrl.Manager) error {
 				Client:       mgr.GetClient(),
 				Scheme:       mgr.GetScheme(),
 				Recorder:     mgr.GetEventRecorderFor("neo4j-grant-controller"),
-				RequeueAfter: 30 * time.Second,
+				RequeueAfter: controller.GetTestRequeueAfter(),
 			},
 		},
 		{
@@ -437,7 +437,7 @@ func setupProductionControllers(mgr ctrl.Manager) error {
 				Client:       mgr.GetClient(),
 				Scheme:       mgr.GetScheme(),
 				Recorder:     mgr.GetEventRecorderFor("neo4j-user-controller"),
-				RequeueAfter: 30 * time.Second,
+				RequeueAfter: controller.GetTestRequeueAfter(),
 			},
 		},
 		{
@@ -445,7 +445,7 @@ func setupProductionControllers(mgr ctrl.Manager) error {
 			controller: &controller.Neo4jPluginReconciler{
 				Client:       mgr.GetClient(),
 				Scheme:       mgr.GetScheme(),
-				RequeueAfter: 2 * time.Minute,
+				RequeueAfter: controller.GetTestRequeueAfter(),
 			},
 		},
 	}
@@ -468,7 +468,7 @@ func setupDevelopmentControllers(mgr ctrl.Manager, controllers []string) error {
 				Client:            mgr.GetClient(),
 				Scheme:            mgr.GetScheme(),
 				Recorder:          mgr.GetEventRecorderFor("neo4j-enterprise-cluster-controller"),
-				RequeueAfter:      30 * time.Second,
+				RequeueAfter:      controller.GetTestRequeueAfter(),
 				TopologyScheduler: controller.NewTopologyScheduler(mgr.GetClient()),
 			}, "Neo4jEnterpriseCluster"
 		},
@@ -477,7 +477,7 @@ func setupDevelopmentControllers(mgr ctrl.Manager, controllers []string) error {
 				Client:       mgr.GetClient(),
 				Scheme:       mgr.GetScheme(),
 				Recorder:     mgr.GetEventRecorderFor("neo4j-database-controller"),
-				RequeueAfter: 30 * time.Second,
+				RequeueAfter: controller.GetTestRequeueAfter(),
 			}, "Neo4jDatabase"
 		},
 		"backup": func() (interface{ SetupWithManager(ctrl.Manager) error }, string) {
@@ -485,7 +485,7 @@ func setupDevelopmentControllers(mgr ctrl.Manager, controllers []string) error {
 				Client:       mgr.GetClient(),
 				Scheme:       mgr.GetScheme(),
 				Recorder:     mgr.GetEventRecorderFor("neo4j-backup-controller"),
-				RequeueAfter: 60 * time.Second,
+				RequeueAfter: controller.GetTestRequeueAfter(),
 			}, "Neo4jBackup"
 		},
 		"restore": func() (interface{ SetupWithManager(ctrl.Manager) error }, string) {
@@ -493,7 +493,7 @@ func setupDevelopmentControllers(mgr ctrl.Manager, controllers []string) error {
 				Client:       mgr.GetClient(),
 				Scheme:       mgr.GetScheme(),
 				Recorder:     mgr.GetEventRecorderFor("neo4j-restore-controller"),
-				RequeueAfter: 30 * time.Second,
+				RequeueAfter: controller.GetTestRequeueAfter(),
 			}, "Neo4jRestore"
 		},
 		"role": func() (interface{ SetupWithManager(ctrl.Manager) error }, string) {
@@ -501,7 +501,7 @@ func setupDevelopmentControllers(mgr ctrl.Manager, controllers []string) error {
 				Client:       mgr.GetClient(),
 				Scheme:       mgr.GetScheme(),
 				Recorder:     mgr.GetEventRecorderFor("neo4j-role-controller"),
-				RequeueAfter: 30 * time.Second,
+				RequeueAfter: controller.GetTestRequeueAfter(),
 			}, "Neo4jRole"
 		},
 		"grant": func() (interface{ SetupWithManager(ctrl.Manager) error }, string) {
@@ -509,7 +509,7 @@ func setupDevelopmentControllers(mgr ctrl.Manager, controllers []string) error {
 				Client:       mgr.GetClient(),
 				Scheme:       mgr.GetScheme(),
 				Recorder:     mgr.GetEventRecorderFor("neo4j-grant-controller"),
-				RequeueAfter: 30 * time.Second,
+				RequeueAfter: controller.GetTestRequeueAfter(),
 			}, "Neo4jGrant"
 		},
 		"user": func() (interface{ SetupWithManager(ctrl.Manager) error }, string) {
@@ -517,14 +517,14 @@ func setupDevelopmentControllers(mgr ctrl.Manager, controllers []string) error {
 				Client:       mgr.GetClient(),
 				Scheme:       mgr.GetScheme(),
 				Recorder:     mgr.GetEventRecorderFor("neo4j-user-controller"),
-				RequeueAfter: 30 * time.Second,
+				RequeueAfter: controller.GetTestRequeueAfter(),
 			}, "Neo4jUser"
 		},
 		"plugin": func() (interface{ SetupWithManager(ctrl.Manager) error }, string) {
 			return &controller.Neo4jPluginReconciler{
 				Client:       mgr.GetClient(),
 				Scheme:       mgr.GetScheme(),
-				RequeueAfter: 2 * time.Minute,
+				RequeueAfter: controller.GetTestRequeueAfter(),
 			}, "Neo4jPlugin"
 		},
 	}
@@ -550,7 +550,7 @@ func setupMinimalController(mgr ctrl.Manager) error {
 		Client:            mgr.GetClient(),
 		Scheme:            mgr.GetScheme(),
 		Recorder:          mgr.GetEventRecorderFor("neo4j-enterprise-cluster-controller"),
-		RequeueAfter:      30 * time.Second,
+		RequeueAfter:      controller.GetTestRequeueAfter(),
 		TopologyScheduler: controller.NewTopologyScheduler(mgr.GetClient()),
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("failed to setup Neo4jEnterpriseCluster controller: %w", err)

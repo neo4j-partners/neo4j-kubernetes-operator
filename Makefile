@@ -155,8 +155,8 @@ test-integration: test-setup ## Run integration tests (requires cluster).
 	@if ./scripts/check-cluster.sh --verbose; then \
 		echo "Cluster is available, running integration tests..."; \
 		echo "Using optimized test settings for faster execution..."; \
-		TEST_TIMEOUT=15m TEST_PARALLEL=4 go test -v -race -coverprofile=coverage-integration.out \
-			-timeout=15m -parallel=4 \
+		TEST_TIMEOUT=5m go test -v -race -coverprofile=coverage-integration.out \
+			-timeout=5m \
 			./test/integration/...; \
 		go tool cover -html=coverage-integration.out -o coverage-integration.html; \
 	else \

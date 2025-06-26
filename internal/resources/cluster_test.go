@@ -16,7 +16,7 @@ func TestBuildPodSpecForEnterprise_WithPlugins(t *testing.T) {
 		Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 			Image: neo4jv1alpha1.ImageSpec{
 				Repo: "neo4j/neo4j",
-				Tag:  "5.15.0-enterprise",
+				Tag:  "5.26-enterprise",
 			},
 			Topology: neo4jv1alpha1.TopologyConfiguration{
 				Primaries: 3,
@@ -100,7 +100,7 @@ func TestBuildPodSpecForEnterprise_WithQueryMonitoring(t *testing.T) {
 		Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 			Image: neo4jv1alpha1.ImageSpec{
 				Repo: "neo4j/neo4j",
-				Tag:  "5.15.0-enterprise",
+				Tag:  "5.26-enterprise",
 			},
 			Topology: neo4jv1alpha1.TopologyConfiguration{
 				Primaries: 3,
@@ -141,7 +141,7 @@ func TestBuildPodSpecForEnterprise_WithoutFeatures(t *testing.T) {
 		Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 			Image: neo4jv1alpha1.ImageSpec{
 				Repo: "neo4j/neo4j",
-				Tag:  "5.15.0-enterprise",
+				Tag:  "5.26-enterprise",
 			},
 			Topology: neo4jv1alpha1.TopologyConfiguration{
 				Primaries: 3,
@@ -167,7 +167,7 @@ func TestBuildStatefulSetForEnterprise_WithFeatures(t *testing.T) {
 		Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 			Image: neo4jv1alpha1.ImageSpec{
 				Repo: "neo4j/neo4j",
-				Tag:  "5.15.0-enterprise",
+				Tag:  "5.26-enterprise",
 			},
 			Topology: neo4jv1alpha1.TopologyConfiguration{
 				Primaries: 3,

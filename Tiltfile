@@ -263,7 +263,7 @@ metadata:
   name: basic-neo4j
   namespace: {namespace}
 spec:
-  image: "neo4j:5.15.0-enterprise"
+  image: "neo4j:5.26-enterprise"
   edition: enterprise
   acceptLicenseAgreement: "yes"
   topology:

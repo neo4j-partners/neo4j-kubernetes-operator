@@ -52,8 +52,116 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 	})
 
 	AfterEach(func() {
-		// Clean up namespace (will cascade delete all resources) with retry logic
 		if namespace != nil {
+			crds := []client.ObjectList{
+				&neo4jv1alpha1.Neo4jEnterpriseClusterList{},
+				&neo4jv1alpha1.Neo4jBackupList{},
+				&neo4jv1alpha1.Neo4jRestoreList{},
+				&neo4jv1alpha1.Neo4jPluginList{},
+				&neo4jv1alpha1.Neo4jUserList{},
+				&neo4jv1alpha1.Neo4jRoleList{},
+				&neo4jv1alpha1.Neo4jGrantList{},
+			}
+			for _, crdList := range crds {
+				_ = k8sClient.List(ctx, crdList, client.InNamespace(namespace.Name))
+				switch list := crdList.(type) {
+				case *neo4jv1alpha1.Neo4jEnterpriseClusterList:
+					for _, item := range list.Items {
+						if len(item.Finalizers) > 0 {
+							item.Finalizers = nil
+							_ = k8sClient.Update(ctx, &item)
+						}
+						_ = k8sClient.Delete(ctx, &item)
+					}
+				case *neo4jv1alpha1.Neo4jBackupList:
+					for _, item := range list.Items {
+						if len(item.Finalizers) > 0 {
+							item.Finalizers = nil
+							_ = k8sClient.Update(ctx, &item)
+						}
+						_ = k8sClient.Delete(ctx, &item)
+					}
+				case *neo4jv1alpha1.Neo4jRestoreList:
+					for _, item := range list.Items {
+						if len(item.Finalizers) > 0 {
+							item.Finalizers = nil
+							_ = k8sClient.Update(ctx, &item)
+						}
+						_ = k8sClient.Delete(ctx, &item)
+					}
+				case *neo4jv1alpha1.Neo4jPluginList:
+					for _, item := range list.Items {
+						if len(item.Finalizers) > 0 {
+							item.Finalizers = nil
+							_ = k8sClient.Update(ctx, &item)
+						}
+						_ = k8sClient.Delete(ctx, &item)
+					}
+				case *neo4jv1alpha1.Neo4jUserList:
+					for _, item := range list.Items {
+						if len(item.Finalizers) > 0 {
+							item.Finalizers = nil
+							_ = k8sClient.Update(ctx, &item)
+						}
+						_ = k8sClient.Delete(ctx, &item)
+					}
+				case *neo4jv1alpha1.Neo4jRoleList:
+					for _, item := range list.Items {
+						if len(item.Finalizers) > 0 {
+							item.Finalizers = nil
+							_ = k8sClient.Update(ctx, &item)
+						}
+						_ = k8sClient.Delete(ctx, &item)
+					}
+				case *neo4jv1alpha1.Neo4jGrantList:
+					for _, item := range list.Items {
+						if len(item.Finalizers) > 0 {
+							item.Finalizers = nil
+							_ = k8sClient.Update(ctx, &item)
+						}
+						_ = k8sClient.Delete(ctx, &item)
+					}
+				}
+			}
+			// Wait for all custom resources to be deleted
+			Eventually(func() bool {
+				for _, crdList := range crds {
+					_ = k8sClient.List(ctx, crdList, client.InNamespace(namespace.Name))
+					switch list := crdList.(type) {
+					case *neo4jv1alpha1.Neo4jEnterpriseClusterList:
+						if len(list.Items) > 0 {
+							return false
+						}
+					case *neo4jv1alpha1.Neo4jBackupList:
+						if len(list.Items) > 0 {
+							return false
+						}
+					case *neo4jv1alpha1.Neo4jRestoreList:
+						if len(list.Items) > 0 {
+							return false
+						}
+					case *neo4jv1alpha1.Neo4jPluginList:
+						if len(list.Items) > 0 {
+							return false
+						}
+					case *neo4jv1alpha1.Neo4jUserList:
+						if len(list.Items) > 0 {
+							return false
+						}
+					case *neo4jv1alpha1.Neo4jRoleList:
+						if len(list.Items) > 0 {
+							return false
+						}
+					case *neo4jv1alpha1.Neo4jGrantList:
+						if len(list.Items) > 0 {
+							return false
+						}
+					}
+				}
+				return true
+			}, timeout, interval).Should(BeTrue())
+
+			// Now delete the namespace
 			Eventually(func() error {
 				err := k8sClient.Delete(ctx, namespace)
 				if err != nil && !errors.IsNotFound(err) {
