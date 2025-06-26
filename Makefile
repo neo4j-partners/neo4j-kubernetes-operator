@@ -164,17 +164,7 @@ test-integration-with-webhooks: ## Run integration tests with webhooks enabled
 .PHONY: test-e2e
 test-e2e: test-setup ## Run e2e tests (requires cluster).
 	@echo "Checking cluster availability for e2e tests..."
-	@if ./scripts/check-cluster.sh --verbose; then \
-		echo "Cluster is available, running e2e tests..."; \
-		go test -v -race -coverprofile=coverage-e2e.out ./test/e2e/...; \
-		go tool cover -html=coverage-e2e.out -o coverage-e2e.html; \
-	else \
-		echo "❌ No cluster available for e2e tests"; \
-		echo "💡 Run 'make dev-cluster' to create a local cluster"; \
-		echo "💡 Or set up a remote cluster and configure kubectl"; \
-		echo "💡 Skipping e2e tests..."; \
-		exit 0; \
-	fi
+	@export E2E_TEST=true; export KIND_CLUSTER=test-ci; go test -v ./test/e2e/... -ginkgo.v -ginkgo.timeout=1h
 
 .PHONY: test-no-cluster
 test-no-cluster: test-unit test-webhooks test-security test-neo4j-client test-controllers ## Run all tests that don't require a cluster.
@@ -194,6 +184,7 @@ test-setup: test-cleanup ## Set up clean test environment (cleanup + checks)
 		export AGGRESSIVE_CLEANUP=true; \
 		export FORCE_CLEANUP=true; \
 		export VERBOSE=true; \
+		export E2E_TEST=true; \
 		./scripts/test-cleanup.sh cleanup; \
 	else \
 		echo "Warning: cleanup script not found"; \
@@ -201,6 +192,7 @@ test-setup: test-cleanup ## Set up clean test environment (cleanup + checks)
 	@echo "🔍 Performing environment checks..."
 	@if [ -f "scripts/test-cleanup.sh" ]; then \
 		chmod +x scripts/test-cleanup.sh; \
+		export E2E_TEST=true; \
 		./scripts/test-cleanup.sh check; \
 	else \
 		echo "Warning: cleanup script not found"; \
@@ -212,6 +204,7 @@ test-cleanup: ## Perform aggressive test environment cleanup
 	@echo "🧹 Performing aggressive test environment cleanup..."
 	@if [ -f "scripts/test-cleanup.sh" ]; then \
 		chmod +x scripts/test-cleanup.sh; \
+		export E2E_TEST=true; \
 		./scripts/test-cleanup.sh cleanup; \
 	else \
 		echo "Warning: cleanup script not found"; \
@@ -250,7 +243,7 @@ install: manifests kustomize ## Install CRDs into the K8s cluster specified in ~
 
 .PHONY: uninstall
 uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
-	$(KUSTOMIZE) build config/crd | $(KUBECTL) delete --ignore-not-found=$(ignore-not-found) -f -
+	$(KUSTOMIZE) build config/crd | $(KUBECTL) delete --ignore-not-found=true -f -
 
 .PHONY: deploy
 deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.

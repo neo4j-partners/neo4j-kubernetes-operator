@@ -19,6 +19,7 @@ package e2e_test
 import (
 	"fmt"
 	"os/exec"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -38,7 +39,11 @@ var _ = Describe("controller", Ordered, func() {
 		Expect(utils.InstallCertManager()).To(Succeed())
 
 		By("creating manager namespace")
-		cmd := exec.Command("kubectl", "create", "ns", namespace)
+		cmd := exec.Command("kubectl", "apply", "-f", "-")
+		cmd.Stdin = strings.NewReader(fmt.Sprintf(`apiVersion: v1
+kind: Namespace
+metadata:
+  name: %s`, namespace))
 		_, err := utils.Run(cmd)
 		Expect(err).To(Succeed())
 	})
@@ -53,7 +58,9 @@ var _ = Describe("controller", Ordered, func() {
 		By("removing manager namespace")
 		cmd := exec.Command("kubectl", "delete", "ns", namespace)
 		_, err := utils.Run(cmd)
-		Expect(err).To(Succeed())
+		if err != nil && !strings.Contains(err.Error(), "NotFound") {
+			Expect(err).To(Succeed())
+		}
 	})
 
 	AfterEach(func() {
@@ -91,7 +98,7 @@ var _ = Describe("controller", Ordered, func() {
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 			By("loading the the manager(Operator) image on Kind")
-			err = utils.LoadImageToKindClusterWithName(projectimage, "neo4j-operator-dev")
+			err = utils.LoadImageToKindClusterWithName(projectimage)
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 			By("installing CRDs")

@@ -104,8 +104,8 @@ check_crds() {
     done
 
     if [ ${#missing_crds[@]} -gt 0 ]; then
-        # If this is just a check (not cleanup), be more lenient
-        if [[ "${2:-}" == "check_only" ]]; then
+        # For e2e tests or when CRDs are expected to be missing, be more lenient
+        if [[ "${2:-}" == "check_only" ]] || [[ "${E2E_TEST:-false}" == "true" ]]; then
             log_warning "Missing required CRDs (this is expected before operator deployment):"
             for crd in "${missing_crds[@]}"; do
                 log_warning "  - $crd"
@@ -128,25 +128,35 @@ check_crds() {
 force_remove_finalizers() {
     log_info "Force removing finalizers from stuck resources..."
 
-    # Remove finalizers from Neo4jEnterpriseClusters
-    kubectl get neo4jenterpriseclusters --all-namespaces --no-headers -o custom-columns="NAMESPACE:.metadata.namespace,NAME:.metadata.name" 2>/dev/null | while read -r namespace name; do
-        if [ -n "$namespace" ] && [ -n "$name" ]; then
-            log_info "  Removing finalizers from Neo4jEnterpriseCluster $namespace/$name"
-            kubectl patch neo4jenterprisecluster "$name" -n "$namespace" -p '{"metadata":{"finalizers":[]}}' --type=merge || log_warning "Failed to remove finalizers from $namespace/$name"
-        fi
-    done
+    # List of Neo4j CRDs
+    local crds=(
+        "neo4jenterpriseclusters.neo4j.neo4j.com"
+        "neo4jdatabases.neo4j.neo4j.com"
+        "neo4jbackups.neo4j.neo4j.com"
+        "neo4jrestores.neo4j.neo4j.com"
+        "neo4jusers.neo4j.neo4j.com"
+        "neo4jroles.neo4j.neo4j.com"
+        "neo4jgrants.neo4j.neo4j.com"
+        "neo4jplugins.neo4j.neo4j.com"
+    )
+    local resources=(
+        "neo4jenterpriseclusters"
+        "neo4jdatabases"
+        "neo4jbackups"
+        "neo4jrestores"
+        "neo4jusers"
+        "neo4jroles"
+        "neo4jgrants"
+        "neo4jplugins"
+    )
 
-    # Remove finalizers from Neo4jDatabases
-    kubectl get neo4jdatabases --all-namespaces --no-headers -o custom-columns="NAMESPACE:.metadata.namespace,NAME:.metadata.name" 2>/dev/null | while read -r namespace name; do
-        if [ -n "$namespace" ] && [ -n "$name" ]; then
-            log_info "  Removing finalizers from Neo4jDatabase $namespace/$name"
-            kubectl patch neo4jdatabase "$name" -n "$namespace" -p '{"metadata":{"finalizers":[]}}' --type=merge || log_warning "Failed to remove finalizers from $namespace/$name"
+    for i in "${!resources[@]}"; do
+        crd="${crds[$i]}"
+        resource="${resources[$i]}"
+        if ! kubectl get crd "$crd" &> /dev/null; then
+            log_warning "CRD $crd not found, skipping $resource finalizer removal."
+            continue
         fi
-    done
-
-    # Remove finalizers from other Neo4j resources
-    local neo4j_resources=("neo4jbackups" "neo4jrestores" "neo4jusers" "neo4jroles" "neo4jgrants" "neo4jplugins")
-    for resource in "${neo4j_resources[@]}"; do
         kubectl get "$resource" --all-namespaces --no-headers -o custom-columns="NAMESPACE:.metadata.namespace,NAME:.metadata.name" 2>/dev/null | while read -r namespace name; do
             if [ -n "$namespace" ] && [ -n "$name" ]; then
                 log_info "  Removing finalizers from $resource $namespace/$name"
@@ -167,7 +177,17 @@ cleanup_neo4j_resources() {
         force_remove_finalizers
     fi
 
-    local neo4j_resources=(
+    local crds=(
+        "neo4jenterpriseclusters.neo4j.neo4j.com"
+        "neo4jbackups.neo4j.neo4j.com"
+        "neo4jrestores.neo4j.neo4j.com"
+        "neo4jusers.neo4j.neo4j.com"
+        "neo4jroles.neo4j.neo4j.com"
+        "neo4jgrants.neo4j.neo4j.com"
+        "neo4jdatabases.neo4j.neo4j.com"
+        "neo4jplugins.neo4j.neo4j.com"
+    )
+    local resources=(
         "neo4jenterpriseclusters"
         "neo4jbackups"
         "neo4jrestores"
@@ -178,12 +198,15 @@ cleanup_neo4j_resources() {
         "neo4jplugins"
     )
 
-    for resource in "${neo4j_resources[@]}"; do
+    for i in "${!resources[@]}"; do
+        crd="${crds[$i]}"
+        resource="${resources[$i]}"
+        if ! kubectl get crd "$crd" &> /dev/null; then
+            log_warning "CRD $crd not found, skipping $resource cleanup."
+            continue
+        fi
         log_info "Cleaning up $resource..."
-
-        # Get all instances of this resource
         local instances=$(kubectl get "$resource" --all-namespaces --no-headers -o custom-columns="NAMESPACE:.metadata.namespace,NAME:.metadata.name" 2>/dev/null || true)
-
         if [ -n "$instances" ]; then
             echo "$instances" | while read -r namespace name; do
                 if [ -n "$namespace" ] && [ -n "$name" ]; then
