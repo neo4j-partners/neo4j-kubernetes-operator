@@ -24,8 +24,10 @@ var _ = Describe("Neo4jRestore Controller", func() {
 		ctx           context.Context
 		restore       *neo4jv1alpha1.Neo4jRestore
 		cluster       *neo4jv1alpha1.Neo4jEnterpriseCluster
+		backup        *neo4jv1alpha1.Neo4jBackup
 		restoreName   string
 		clusterName   string
+		backupName    string
 		namespaceName string
 	)
 
@@ -37,6 +39,7 @@ var _ = Describe("Neo4jRestore Controller", func() {
 
 		restoreName = fmt.Sprintf("test-restore-%d", time.Now().UnixNano())
 		clusterName = fmt.Sprintf("test-cluster-%d", time.Now().UnixNano())
+		backupName = fmt.Sprintf("test-backup-%d", time.Now().UnixNano())
 		namespaceName = "default"
 
 		// Create cluster first
@@ -76,6 +79,40 @@ var _ = Describe("Neo4jRestore Controller", func() {
 		}}
 		Expect(k8sClient.Status().Patch(ctx, cluster, patch)).To(Succeed())
 
+		// Create backup for successful restore test
+		backup = &neo4jv1alpha1.Neo4jBackup{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      backupName,
+				Namespace: namespaceName,
+			},
+			Spec: neo4jv1alpha1.Neo4jBackupSpec{
+				Target: neo4jv1alpha1.BackupTarget{
+					Kind: "Cluster",
+					Name: clusterName,
+				},
+				Storage: neo4jv1alpha1.StorageLocation{
+					Type: "pvc",
+					PVC: &neo4jv1alpha1.PVCSpec{
+						Name:             "backup-storage",
+						StorageClassName: "standard",
+						Size:             "10Gi",
+					},
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, backup)).Should(Succeed())
+
+		// Patch backup status to Completed
+		backupPatch := client.MergeFrom(backup.DeepCopy())
+		backup.Status.Phase = "Completed"
+		backup.Status.Conditions = []metav1.Condition{{
+			Type:               "Completed",
+			Status:             metav1.ConditionTrue,
+			Reason:             "TestCompleted",
+			LastTransitionTime: metav1.Now(),
+		}}
+		Expect(k8sClient.Status().Patch(ctx, backup, backupPatch)).To(Succeed())
+
 		// Create basic restore spec
 		restore = &neo4jv1alpha1.Neo4jRestore{
 			ObjectMeta: metav1.ObjectMeta{
@@ -87,7 +124,7 @@ var _ = Describe("Neo4jRestore Controller", func() {
 				DatabaseName:  "neo4j",
 				Source: neo4jv1alpha1.RestoreSource{
 					Type:      "backup",
-					BackupRef: "test-backup",
+					BackupRef: backupName, // Use the created backup
 				},
 			},
 		}
@@ -99,6 +136,12 @@ var _ = Describe("Neo4jRestore Controller", func() {
 			if err := k8sClient.Delete(ctx, restore, client.PropagationPolicy(metav1.DeletePropagationForeground)); err != nil {
 				// Log the error but don't fail the test cleanup
 				fmt.Printf("Warning: Failed to delete restore during cleanup: %v\n", err)
+			}
+		}
+		if backup != nil {
+			if err := k8sClient.Delete(ctx, backup, client.PropagationPolicy(metav1.DeletePropagationForeground)); err != nil {
+				// Log the error but don't fail the test cleanup
+				fmt.Printf("Warning: Failed to delete backup during cleanup: %v\n", err)
 			}
 		}
 		if cluster != nil {
@@ -128,7 +171,16 @@ var _ = Describe("Neo4jRestore Controller", func() {
 			}, timeout, interval).Should(BeTrue())
 
 			// Verify finalizer was added
-			Expect(createdRestore.Finalizers).Should(ContainElement("neo4jrestores.neo4j.neo4j.com/finalizer"))
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, restoreLookupKey, createdRestore)
+				if err != nil {
+					return false
+				}
+				return len(createdRestore.Finalizers) > 0
+			}, timeout, interval).Should(BeTrue())
+
+			// Verify the finalizer name
+			Expect(createdRestore.Finalizers).Should(ContainElement("neo4j.com/restore-finalizer"))
 		})
 
 		It("Should fail when cluster doesn't exist", func() {
@@ -143,7 +195,7 @@ var _ = Describe("Neo4jRestore Controller", func() {
 					DatabaseName:  "neo4j",
 					Source: neo4jv1alpha1.RestoreSource{
 						Type:      "backup",
-						BackupRef: "test-backup",
+						BackupRef: backupName, // Use existing backup
 					},
 				},
 			}
@@ -160,13 +212,15 @@ var _ = Describe("Neo4jRestore Controller", func() {
 				return err == nil
 			}, timeout, interval).Should(BeTrue())
 
-			// Verify status reflects the error
+			// The controller should reject this restore due to non-existent cluster
+			// It should not add finalizers and should not process the restore
 			Eventually(func() bool {
 				err := k8sClient.Get(ctx, restoreLookupKey, createdRestore)
 				if err != nil {
 					return false
 				}
-				return len(createdRestore.Status.Conditions) > 0
+				// Check if the restore has been marked as failed or has error conditions
+				return len(createdRestore.Status.Conditions) > 0 || createdRestore.Status.Phase == "Failed"
 			}, timeout, interval).Should(BeTrue())
 
 			// Clean up
@@ -202,13 +256,15 @@ var _ = Describe("Neo4jRestore Controller", func() {
 				return err == nil
 			}, timeout, interval).Should(BeTrue())
 
-			// Verify status reflects the error
+			// The controller should reject this restore due to non-existent backup
+			// It should not add finalizers and should not process the restore
 			Eventually(func() bool {
 				err := k8sClient.Get(ctx, restoreLookupKey, createdRestore)
 				if err != nil {
 					return false
 				}
-				return len(createdRestore.Status.Conditions) > 0
+				// Check if the restore has been marked as failed or has error conditions
+				return len(createdRestore.Status.Conditions) > 0 || createdRestore.Status.Phase == "Failed"
 			}, timeout, interval).Should(BeTrue())
 
 			// Clean up

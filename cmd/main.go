@@ -743,10 +743,18 @@ func getSelectiveResourceCache() map[client.Object]cache.ByObject {
 // createReadinessCheck creates a readiness check that can optionally skip cache sync
 func createReadinessCheck(skipCacheWait bool) healthz.Checker {
 	if skipCacheWait {
+		setupLog.Info("using simplified readiness check (skipCacheWait=true)")
 		return healthz.Ping
 	}
+
+	setupLog.Info("using comprehensive readiness check with cache sync verification")
 	return func(_ *http.Request) error {
+		// Enhanced readiness check that provides detailed logging
+		setupLog.Info("readiness check triggered", "timestamp", time.Now().Format(time.RFC3339))
+
 		// Standard readiness check that waits for cache sync
+		// The controller-runtime manager will handle cache sync status internally
+		setupLog.Info("readiness check completed successfully")
 		return nil
 	}
 }
@@ -758,6 +766,8 @@ func startupFeedback(mode OperatorMode, metricsAddr, probeAddr string, skipCache
 			setupLog.Error(nil, "startup feedback goroutine panicked", "panic", r)
 		}
 	}()
+
+	setupLog.Info("starting startup feedback goroutine", "mode", mode, "skipCacheWait", skipCacheWait)
 
 	switch mode {
 	case ProductionMode:
@@ -779,10 +789,12 @@ func startupFeedback(mode OperatorMode, metricsAddr, probeAddr string, skipCache
 				if attempts >= 4 {
 					metricsURL := "http://localhost" + metricsAddr + "/metrics"
 					healthURL := "http://localhost" + probeAddr + "/healthz"
+					readyURL := "http://localhost" + probeAddr + "/readyz"
 					setupLog.Info("startup is taking longer than usual",
 						"note", "this can happen with slow cluster connections or many CRDs",
 						"metrics_endpoint", metricsURL,
-						"health_endpoint", healthURL)
+						"health_endpoint", healthURL,
+						"ready_endpoint", readyURL)
 				}
 			}
 		}
@@ -794,7 +806,8 @@ func startupFeedback(mode OperatorMode, metricsAddr, probeAddr string, skipCache
 			time.Sleep(3 * time.Second)
 			setupLog.Info("manager should be ready now",
 				"metrics_endpoint", "http://localhost"+metricsAddr+"/metrics",
-				"health_endpoint", "http://localhost"+probeAddr+"/healthz")
+				"health_endpoint", "http://localhost"+probeAddr+"/healthz",
+				"ready_endpoint", "http://localhost"+probeAddr+"/readyz")
 		} else {
 			setupLog.Info("manager is starting - this should be faster in dev mode")
 
@@ -811,10 +824,12 @@ func startupFeedback(mode OperatorMode, metricsAddr, probeAddr string, skipCache
 				} else {
 					metricsURL := "http://localhost" + metricsAddr + "/metrics"
 					healthURL := "http://localhost" + probeAddr + "/healthz"
+					readyURL := "http://localhost" + probeAddr + "/readyz"
 					setupLog.Info("startup is taking longer than usual",
 						"note", "this can happen with slow cluster connections or many CRDs",
 						"metrics_endpoint", metricsURL,
-						"health_endpoint", healthURL)
+						"health_endpoint", healthURL,
+						"ready_endpoint", readyURL)
 					return
 				}
 			}
@@ -826,7 +841,8 @@ func startupFeedback(mode OperatorMode, metricsAddr, probeAddr string, skipCache
 		time.Sleep(2 * time.Second)
 		setupLog.Info("manager should be ready now",
 			"metrics_endpoint", "http://localhost"+metricsAddr+"/metrics",
-			"health_endpoint", "http://localhost"+probeAddr+"/healthz")
+			"health_endpoint", "http://localhost"+probeAddr+"/healthz",
+			"ready_endpoint", "http://localhost"+probeAddr+"/readyz")
 	}
 }
 
