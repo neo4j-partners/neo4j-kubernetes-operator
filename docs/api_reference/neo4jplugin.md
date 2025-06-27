@@ -1,6 +1,6 @@
 # Neo4jPlugin
 
-This document provides a reference for the `Neo4jPlugin` Custom Resource Definition (CRD).
+This document provides a reference for the `Neo4jPlugin` Custom Resource Definition (CRD). This resource is used to install plugins into a Neo4j cluster.
 
 ## Spec
 

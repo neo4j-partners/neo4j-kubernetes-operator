@@ -1,6 +1,8 @@
 # Neo4jBackup
 
-This document provides a reference for the `Neo4jBackup` Custom Resource Definition (CRD).
+This document provides a reference for the `Neo4jBackup` Custom Resource Definition (CRD). This resource is used to define and manage backups of your Neo4j clusters.
+
+For a high-level overview of how to use this resource, see the [Backup and Restore Guide](../user_guide/guides/backup_restore.md).
 
 ## Spec
 

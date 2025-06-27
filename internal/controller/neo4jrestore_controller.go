@@ -121,7 +121,7 @@ func (r *Neo4jRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	}
 
 	// Check if restore is already completed
-	if restore.Status.Phase == StatusCompleted {
+	if restore.Status.Phase == StatusCompleted && restore.Status.ObservedGeneration == restore.Generation {
 		logger.Info("Restore already completed")
 		return ctrl.Result{}, nil
 	}
@@ -878,6 +878,7 @@ func (r *Neo4jRestoreReconciler) updateRestoreStatus(ctx context.Context, restor
 		}
 		latest.Status.Phase = phase
 		latest.Status.Message = message
+		latest.Status.ObservedGeneration = latest.Generation
 		return r.Status().Update(ctx, latest)
 	}
 	err := retry.RetryOnConflict(retry.DefaultBackoff, update)

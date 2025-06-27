@@ -1,6 +1,6 @@
 # Neo4jDatabase
 
-This document provides a reference for the `Neo4jDatabase` Custom Resource Definition (CRD).
+This document provides a reference for the `Neo4jDatabase` Custom Resource Definition (CRD). This resource is used to create and manage databases within a Neo4j cluster.
 
 ## Spec
 

@@ -1,6 +1,8 @@
 # Neo4jUser
 
-This document provides a reference for the `Neo4jUser` Custom Resource Definition (CRD).
+This document provides a reference for the `Neo4jUser` Custom Resource Definition (CRD). This resource is used to create and manage users in a Neo4j cluster.
+
+For a high-level overview of how to manage security, see the [Security Guide](../user_guide/guides/security.md).
 
 ## Spec
 

@@ -61,9 +61,21 @@ kubectl apply -f https://github.com/neo4j-labs/neo4j-kubernetes-operator/release
     kubectl apply -f my-neo4j-cluster.yaml
     ```
 
+### What Happens Next?
+
+The operator will now create several Kubernetes resources to bring your cluster to life:
+
+*   A **StatefulSet** to manage the Neo4j pods.
+*   **PersistentVolumeClaims** for storing data and logs.
+*   A **headless Service** for internal cluster discovery.
+*   A **client-facing Service** for applications to connect to.
+*   A **ConfigMap** with your Neo4j configuration.
+
+You can monitor the progress with `kubectl get pods -w`.
+
 ## Accessing Your Cluster
 
-Once the cluster is running, you can access it using `kubectl port-forward`:
+Once the pods are in the `Running` state, you can access the cluster using `kubectl port-forward`:
 
 ```bash
 kubectl port-forward service/my-neo4j-cluster-client 7474:7474 7687:7687

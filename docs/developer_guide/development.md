@@ -8,6 +8,7 @@ This guide explains how to set up your development environment and get started w
 *   Docker
 *   `kubectl`
 *   `kind`
+*   `make`
 
 ## Getting Started
 
@@ -19,11 +20,15 @@ This guide explains how to set up your development environment and get started w
     make setup-dev
     ```
 
+    This command will install all the necessary tools and dependencies for building and testing the operator.
+
 3.  **Create a development cluster:**
 
     ```bash
     make dev-cluster
     ```
+
+    This will create a local Kubernetes cluster using `kind`.
 
 4.  **Run the operator locally:**
 
@@ -31,10 +36,14 @@ This guide explains how to set up your development environment and get started w
     make dev-run
     ```
 
+    This will build and run the operator on your local machine, connected to the `kind` cluster. This allows for rapid iteration and debugging.
+
 ## Testing
 
-To run the test suite, use the following command:
+To run the full test suite, use the following command:
 
 ```bash
 make test
 ```
+
+For more detailed information on testing, see the [Testing Guide](testing.md).
