@@ -1,13 +1,27 @@
 name: OpenShift Certification
 
-# DISABLED: OpenShift certification workflow temporarily disabled
+# Disabled workflow - kept for reference but not triggered
 # on:
 #   push:
-#     branches: [ main, develop ]
-#     tags: [ 'v*' ]
+#     branches: [main]
 #   pull_request:
-#     branches: [ main ]
+#     branches: [main]
 #   workflow_dispatch:
+#     inputs:
+#       openshift_version:
+#         description: 'OpenShift version to test against'
+#         required: false
+#         default: '4.15'
+#         type: string
+#       test_type:
+#         description: 'Type of certification test'
+#         required: false
+#         default: 'basic'
+#         type: choice
+#         options:
+#           - basic
+#           - full
+#           - security
 
 # Workflow disabled - uncomment the above triggers to re-enable
 on:

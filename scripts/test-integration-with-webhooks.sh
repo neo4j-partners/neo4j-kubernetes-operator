@@ -117,7 +117,7 @@ kubectl wait --for=condition=ready certificate/serving-cert -n neo4j-operator-sy
 
 # Wait for the operator to be ready
 echo -e "${YELLOW}⏳ Waiting for operator to be ready...${NC}"
-kubectl wait --for=condition=available deployment/controller-manager -n neo4j-operator-system --timeout=300s
+kubectl wait --for=condition=available deployment/neo4j-operator-controller-manager -n neo4j-operator-system --timeout=300s
 
 # Wait for the actual tls.crt file to exist (race condition fix)
 WEBHOOK_CERT_PATH="/var/folders/8_/z8fx9g411bdc0n0fzsw545l80000gp/T/k8s-webhook-server/serving-certs/tls.crt"
@@ -148,7 +148,7 @@ done
 echo -e "${GREEN}✅ Operator with webhooks is ready${NC}"
 
 # Wait for the webhook server to be ready
-WEBHOOK_POD=$(kubectl get pods -n neo4j-operator-system -l control-plane=controller-manager -o jsonpath='{.items[0].metadata.name}')
+WEBHOOK_POD=$(kubectl get pods -n neo4j-operator-system -l control-plane=neo4j-operator-controller-manager -o jsonpath='{.items[0].metadata.name}')
 for i in {1..60}; do
   STATUS=$(kubectl get pod "$WEBHOOK_POD" -n neo4j-operator-system -o jsonpath='{.status.containerStatuses[0].ready}')
   if [ "$STATUS" == "true" ]; then

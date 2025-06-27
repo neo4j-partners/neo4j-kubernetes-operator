@@ -40,7 +40,7 @@ if ! kubectl get namespace neo4j-operator-system &> /dev/null; then
     echo "⚠️  Operator namespace not found"
     echo "   This will be created during test setup"
 else
-    if kubectl wait --for=condition=Available deployment/controller-manager -n neo4j-operator-system --timeout=30s &> /dev/null; then
+    if kubectl wait --for=condition=Available deployment/neo4j-operator-controller-manager -n neo4j-operator-system --timeout=30s &> /dev/null; then
         echo "✅ Operator is ready"
     else
         echo "⚠️  Operator is deployed but not ready"

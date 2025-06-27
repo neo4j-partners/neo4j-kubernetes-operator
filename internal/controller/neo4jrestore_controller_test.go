@@ -12,6 +12,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1"
+	corev1 "k8s.io/api/core/v1"
 )
 
 var _ = Describe("Neo4jRestore Controller", func() {
@@ -68,6 +69,18 @@ var _ = Describe("Neo4jRestore Controller", func() {
 			},
 		}
 		Expect(k8sClient.Create(ctx, cluster)).Should(Succeed())
+
+		// Create admin secret
+		secret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "neo4j-admin-secret",
+				Namespace: namespaceName,
+			},
+			Data: map[string][]byte{
+				"NEO4J_AUTH": []byte("neo4j/testpassword123"),
+			},
+		}
+		Expect(k8sClient.Create(ctx, secret)).Should(Succeed())
 
 		// Patch cluster status to Ready so restore controller proceeds
 		patch := client.MergeFrom(cluster.DeepCopy())
@@ -149,6 +162,17 @@ var _ = Describe("Neo4jRestore Controller", func() {
 				// Log the error but don't fail the test cleanup
 				fmt.Printf("Warning: Failed to delete cluster during cleanup: %v\n", err)
 			}
+		}
+		// Clean up admin secret
+		secret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "neo4j-admin-secret",
+				Namespace: namespaceName,
+			},
+		}
+		if err := k8sClient.Delete(ctx, secret); err != nil {
+			// Log the error but don't fail the test cleanup
+			fmt.Printf("Warning: Failed to delete admin secret during cleanup: %v\n", err)
 		}
 	})
 

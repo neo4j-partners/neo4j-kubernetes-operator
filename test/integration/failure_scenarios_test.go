@@ -40,17 +40,7 @@ var _ = Describe("Failure Scenarios", func() {
 		ctx = context.Background()
 		namespace = createTestNamespace("failure")
 
-		// Create test namespace with retry logic
-		Eventually(func() error {
-			ns := &corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: namespace,
-				},
-			}
-			return k8sClient.Create(ctx, ns)
-		}, timeout, interval).Should(Succeed())
-
-		// Wait for namespace to be ready
+		// Wait for namespace to be ready (namespace is already created by createTestNamespace)
 		Eventually(func() error {
 			ns := &corev1.Namespace{}
 			return k8sClient.Get(ctx, types.NamespacedName{Name: namespace}, ns)

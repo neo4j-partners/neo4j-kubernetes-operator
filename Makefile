@@ -127,35 +127,46 @@ lint-lenient: golangci-lint ## Run lenient static analysis with higher threshold
 .PHONY: test-setup
 test-setup: ## Setup test environment (cleanup + validation)
 	@echo "🔧 Setting up test environment..."
-	@if [ -f "scripts/setup-test-environment.sh" ]; then \
-		chmod +x scripts/setup-test-environment.sh; \
-		./scripts/setup-test-environment.sh setup; \
+	@if [ -f "scripts/test-environment-manager.sh" ]; then \
+		chmod +x scripts/test-environment-manager.sh; \
+		./scripts/test-environment-manager.sh setup; \
 	else \
-		echo "❌ Test setup script not found"; \
+		echo "❌ Test environment manager not found"; \
 		exit 1; \
 	fi
 
 .PHONY: test-check
 test-check: ## Check test environment requirements
 	@echo "🔍 Checking test environment..."
-	@if [ -f "scripts/setup-test-environment.sh" ]; then \
-		chmod +x scripts/setup-test-environment.sh; \
-		./scripts/setup-test-environment.sh check; \
+	@if [ -f "scripts/test-environment-manager.sh" ]; then \
+		chmod +x scripts/test-environment-manager.sh; \
+		./scripts/test-environment-manager.sh check; \
 	else \
-		echo "❌ Test setup script not found"; \
+		echo "❌ Test environment manager not found"; \
 		exit 1; \
 	fi
 
 .PHONY: test-cleanup
 test-cleanup: ## Clean up test environment and artifacts
 	@echo "🧹 Cleaning up test environment..."
-	@if [ -f "scripts/setup-test-environment.sh" ]; then \
-		chmod +x scripts/setup-test-environment.sh; \
-		./scripts/setup-test-environment.sh cleanup; \
+	@if [ -f "scripts/test-environment-manager.sh" ]; then \
+		chmod +x scripts/test-environment-manager.sh; \
+		./scripts/test-environment-manager.sh cleanup; \
 	else \
-		echo "⚠️  Test cleanup script not found, using fallback cleanup"; \
+		echo "⚠️  Test environment manager not found, using fallback cleanup"; \
 		rm -rf test-results coverage logs tmp; \
 		rm -f test-output.log coverage-*.out coverage-*.html; \
+	fi
+
+.PHONY: test-env-detect
+test-env-detect: ## Detect and display current test environment
+	@echo "🔍 Detecting test environment..."
+	@if [ -f "scripts/test-environment-manager.sh" ]; then \
+		chmod +x scripts/test-environment-manager.sh; \
+		./scripts/test-environment-manager.sh detect; \
+	else \
+		echo "❌ Test environment manager not found"; \
+		exit 1; \
 	fi
 
 # Unit Tests
@@ -220,7 +231,10 @@ test-controllers: ## Run controller tests (no cluster required).
 
 test-integration: ## Run integration tests with webhooks and cert-manager
 	@echo "🔗 Running integration tests with webhooks and cert-manager..."
-	@if [ -f "scripts/run-tests.sh" ]; then \
+	@if [ -f "scripts/test-with-operator.sh" ]; then \
+		chmod +x scripts/test-with-operator.sh; \
+		./scripts/test-with-operator.sh integration; \
+	elif [ -f "scripts/run-tests.sh" ]; then \
 		chmod +x scripts/run-tests.sh; \
 		./scripts/run-tests.sh integration; \
 	else \
@@ -232,7 +246,10 @@ test-integration: ## Run integration tests with webhooks and cert-manager
 .PHONY: test-e2e
 test-e2e: test-setup ## Run e2e tests with webhooks and cert-manager (requires cluster).
 	@echo "🌐 Running e2e tests with webhooks and cert-manager..."
-	@if [ -f "scripts/run-tests.sh" ]; then \
+	@if [ -f "scripts/test-with-operator.sh" ]; then \
+		chmod +x scripts/test-with-operator.sh; \
+		./scripts/test-with-operator.sh e2e; \
+	elif [ -f "scripts/run-tests.sh" ]; then \
 		chmod +x scripts/run-tests.sh; \
 		./scripts/run-tests.sh e2e --no-setup; \
 	else \
@@ -244,7 +261,10 @@ test-e2e: test-setup ## Run e2e tests with webhooks and cert-manager (requires c
 .PHONY: test-smoke
 test-smoke: ## Run smoke tests (basic functionality)
 	@echo "💨 Running smoke tests..."
-	@if [ -f "scripts/run-tests.sh" ]; then \
+	@if [ -f "scripts/test-with-operator.sh" ]; then \
+		chmod +x scripts/test-with-operator.sh; \
+		./scripts/test-with-operator.sh smoke; \
+	elif [ -f "scripts/run-tests.sh" ]; then \
 		chmod +x scripts/run-tests.sh; \
 		./scripts/run-tests.sh smoke; \
 	else \
@@ -266,7 +286,10 @@ test-ci: test-unit test-webhooks test-security test-integration ## Run CI test s
 .PHONY: test
 test: ## Run all tests using unified test runner
 	@echo "🚀 Running comprehensive test suite with webhooks..."
-	@if [ -f "scripts/run-tests.sh" ]; then \
+	@if [ -f "scripts/test-with-operator.sh" ]; then \
+		chmod +x scripts/test-with-operator.sh; \
+		./scripts/test-with-operator.sh all --coverage; \
+	elif [ -f "scripts/run-tests.sh" ]; then \
 		chmod +x scripts/run-tests.sh; \
 		./scripts/run-tests.sh all --coverage; \
 	else \
@@ -277,7 +300,10 @@ test: ## Run all tests using unified test runner
 .PHONY: test-verbose
 test-verbose: ## Run all tests with verbose output
 	@echo "🚀 Running comprehensive test suite with verbose output..."
-	@if [ -f "scripts/run-tests.sh" ]; then \
+	@if [ -f "scripts/test-with-operator.sh" ]; then \
+		chmod +x scripts/test-with-operator.sh; \
+		./scripts/test-with-operator.sh all --coverage --verbose; \
+	elif [ -f "scripts/run-tests.sh" ]; then \
 		chmod +x scripts/run-tests.sh; \
 		./scripts/run-tests.sh all --coverage --verbose; \
 	else \
@@ -288,12 +314,50 @@ test-verbose: ## Run all tests with verbose output
 .PHONY: test-fast
 test-fast: ## Run fast test suite (unit + smoke)
 	@echo "⚡ Running fast test suite..."
-	@if [ -f "scripts/run-tests.sh" ]; then \
+	@if [ -f "scripts/test-with-operator.sh" ]; then \
+		chmod +x scripts/test-with-operator.sh; \
+		./scripts/test-with-operator.sh unit --coverage; \
+		./scripts/test-with-operator.sh smoke --no-setup; \
+	elif [ -f "scripts/run-tests.sh" ]; then \
 		chmod +x scripts/run-tests.sh; \
 		./scripts/run-tests.sh unit --coverage; \
 		./scripts/run-tests.sh smoke --no-setup; \
 	else \
 		echo "❌ Unified test runner not found"; \
+		exit 1; \
+	fi
+
+# Test with Operator Setup
+.PHONY: test-with-operator
+test-with-operator: ## Run tests with automatic operator setup
+	@echo "🔧 Running tests with automatic operator setup..."
+	@if [ -f "scripts/test-with-operator.sh" ]; then \
+		chmod +x scripts/test-with-operator.sh; \
+		./scripts/test-with-operator.sh all --coverage --verbose; \
+	else \
+		echo "❌ Test with operator script not found"; \
+		exit 1; \
+	fi
+
+.PHONY: test-with-operator-unit
+test-with-operator-unit: ## Run unit tests with operator setup script
+	@echo "🧪 Running unit tests with operator setup script..."
+	@if [ -f "scripts/test-with-operator.sh" ]; then \
+		chmod +x scripts/test-with-operator.sh; \
+		./scripts/test-with-operator.sh unit --coverage; \
+	else \
+		echo "❌ Test with operator script not found"; \
+		exit 1; \
+	fi
+
+.PHONY: test-with-operator-integration
+test-with-operator-integration: ## Run integration tests with operator setup script
+	@echo "🔗 Running integration tests with operator setup script..."
+	@if [ -f "scripts/test-with-operator.sh" ]; then \
+		chmod +x scripts/test-with-operator.sh; \
+		./scripts/test-with-operator.sh integration --coverage; \
+	else \
+		echo "❌ Test with operator script not found"; \
 		exit 1; \
 	fi
 
@@ -529,6 +593,50 @@ dev-cluster: ## Create a Kind cluster for development.
 		echo "Development cluster ready!"; \
 	else \
 		echo "Development cluster already exists"; \
+	fi
+
+.PHONY: operator-setup
+operator-setup: ## Set up the Neo4j operator with webhooks and cert-manager for development/testing.
+	@echo "🔧 Setting up Neo4j operator with webhooks and cert-manager..."
+	@if [ -f "scripts/setup-operator.sh" ]; then \
+		chmod +x scripts/setup-operator.sh; \
+		./scripts/setup-operator.sh setup; \
+	else \
+		echo "❌ Operator setup script not found"; \
+		exit 1; \
+	fi
+
+.PHONY: operator-status
+operator-status: ## Show operator status and configuration.
+	@echo "📊 Checking operator status..."
+	@if [ -f "scripts/setup-operator.sh" ]; then \
+		chmod +x scripts/setup-operator.sh; \
+		./scripts/setup-operator.sh status; \
+	else \
+		echo "❌ Operator setup script not found"; \
+		exit 1; \
+	fi
+
+.PHONY: operator-logs
+operator-logs: ## Follow operator logs.
+	@echo "📋 Following operator logs..."
+	@if [ -f "scripts/setup-operator.sh" ]; then \
+		chmod +x scripts/setup-operator.sh; \
+		./scripts/setup-operator.sh logs; \
+	else \
+		echo "❌ Operator setup script not found"; \
+		exit 1; \
+	fi
+
+.PHONY: operator-cleanup
+operator-cleanup: ## Clean up operator setup artifacts.
+	@echo "🧹 Cleaning up operator setup..."
+	@if [ -f "scripts/setup-operator.sh" ]; then \
+		chmod +x scripts/setup-operator.sh; \
+		./scripts/setup-operator.sh cleanup; \
+	else \
+		echo "❌ Operator setup script not found"; \
+		exit 1; \
 	fi
 
 .PHONY: dev-cluster-delete

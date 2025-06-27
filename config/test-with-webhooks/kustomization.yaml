@@ -8,10 +8,10 @@ resources:
   - ../crd
   - ../rbac
   - ../manager
-  - ../webhook
   - ../certmanager
   - metrics_service.yaml
 
+# Apply webhook resources separately to avoid namePrefix issues
 patches:
   # Enable metrics endpoint
   - path: manager_metrics_patch.yaml
@@ -40,10 +40,14 @@ patches:
         path: /metadata/annotations
         value:
           cert-manager.io/inject-ca-from: neo4j-operator-system/serving-cert
+  # Rename deployment to avoid conflicts
   - target:
       kind: Deployment
-      name: neo4j-operator-controller-manager
+      name: controller-manager
     patch: |-
+      - op: replace
+        path: /metadata/name
+        value: neo4j-operator-controller-manager
       - op: replace
         path: /spec/template/spec/containers/0/args
         value:
@@ -79,7 +83,7 @@ patches:
           value: "10"
   - target:
       kind: ClusterRoleBinding
-      name: neo4j-operator-manager-rolebinding
+      name: manager-rolebinding
     patch: |-
       - op: replace
         path: /subjects/0/name

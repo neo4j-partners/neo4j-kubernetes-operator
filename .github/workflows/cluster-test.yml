@@ -18,6 +18,11 @@ on:
         required: false
         default: '10'
         type: string
+      create-cluster:
+        description: 'Whether to create a new cluster'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   test-cluster-connectivity:
@@ -64,7 +69,7 @@ jobs:
           echo "✅ OpenShift credentials are configured"
 
       - name: Create kind cluster
-        if: inputs.cluster-type == 'kind'
+        if: inputs.cluster-type == 'kind' && inputs.create-cluster == 'true'
         uses: helm/kind-action@v1.10.0
         with:
           cluster_name: ${{ inputs.cluster-name }}
@@ -149,6 +154,6 @@ jobs:
           esac
 
       - name: Cleanup kind cluster
-        if: always() && inputs.cluster-type == 'kind'
+        if: always() && inputs.cluster-type == 'kind' && inputs.create-cluster == 'true'
         run: |
           kind delete cluster --name ${{ inputs.cluster-name }} || true
