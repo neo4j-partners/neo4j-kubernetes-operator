@@ -178,6 +178,10 @@ func newClusterCreateCommand(configFlags *genericclioptions.ConfigFlags) *cobra.
 		enableTLS       bool
 		enableAutoScale bool
 		enableBackups   bool
+		discoveryType   string
+		clusterPort     int32
+		discoveryPort   int32
+		routingPort     int32
 		dryRun          bool
 		wait            bool
 		timeout         time.Duration
@@ -196,6 +200,9 @@ func newClusterCreateCommand(configFlags *genericclioptions.ConfigFlags) *cobra.
 
   # Create a cluster with custom storage
   kubectl neo4j cluster create production --primaries=3 --storage-size=100Gi --storage-class=fast-ssd
+
+  # Create a cluster with custom discovery settings
+  kubectl neo4j cluster create production --primaries=3 --discovery-type=k8s
 
   # Dry run to see what would be created
   kubectl neo4j cluster create production --primaries=3 --dry-run`,
@@ -222,6 +229,9 @@ func newClusterCreateCommand(configFlags *genericclioptions.ConfigFlags) *cobra.
 			if strings.TrimSpace(image) == "" {
 				return fmt.Errorf("image cannot be empty")
 			}
+			if discoveryType != "k8s" && discoveryType != "dns" && discoveryType != "list" {
+				return fmt.Errorf("discovery type must be one of: k8s, dns, list, got %s", discoveryType)
+			}
 
 			// Build cluster specification
 			cluster := &neo4jv1alpha1.Neo4jEnterpriseCluster{
@@ -243,7 +253,22 @@ func newClusterCreateCommand(configFlags *genericclioptions.ConfigFlags) *cobra.
 						Size:      storageSize,
 						ClassName: storageClass,
 					},
+					Config: map[string]string{
+						// Neo4j 5.x clustering configuration
+						"dbms.cluster.discovery.resolver_type":                discoveryType,
+						"dbms.cluster.minimum_core_cluster_size_at_formation": fmt.Sprintf("%d", primaries),
+						"dbms.cluster.minimum_core_cluster_size_at_runtime":   fmt.Sprintf("%d", primaries),
+						"server.cluster.listen_address":                       fmt.Sprintf("0.0.0.0:%d", clusterPort),
+						"server.discovery.listen_address":                     fmt.Sprintf("0.0.0.0:%d", discoveryPort),
+						"server.routing.listen_address":                       fmt.Sprintf("0.0.0.0:%d", routingPort),
+					},
 				},
+			}
+
+			// Add Kubernetes-specific discovery configuration
+			if discoveryType == "k8s" {
+				cluster.Spec.Config["dbms.kubernetes.label_selector"] = fmt.Sprintf("app.kubernetes.io/name=%s,app.kubernetes.io/instance=%s", clusterName, clusterName)
+				cluster.Spec.Config["dbms.kubernetes.discovery.service_port_name"] = "cluster"
 			}
 
 			// Add optional configurations
@@ -311,6 +336,10 @@ func newClusterCreateCommand(configFlags *genericclioptions.ConfigFlags) *cobra.
 	cmd.Flags().BoolVar(&enableTLS, "enable-tls", false, "Enable TLS encryption")
 	cmd.Flags().BoolVar(&enableAutoScale, "enable-autoscale", false, "Enable auto-scaling")
 	cmd.Flags().BoolVar(&enableBackups, "enable-backups", false, "Enable scheduled backups")
+	cmd.Flags().StringVar(&discoveryType, "discovery-type", "k8s", "Cluster discovery type (k8s|dns|list)")
+	cmd.Flags().Int32Var(&clusterPort, "cluster-port", 5000, "Cluster communication port")
+	cmd.Flags().Int32Var(&discoveryPort, "discovery-port", 6000, "Discovery service port")
+	cmd.Flags().Int32Var(&routingPort, "routing-port", 7688, "Routing service port")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Show what would be created without actually creating")
 	cmd.Flags().BoolVar(&wait, "wait", false, "Wait for cluster to be ready")
 	cmd.Flags().DurationVar(&timeout, "timeout", 10*time.Minute, "Timeout for waiting")

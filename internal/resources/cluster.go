@@ -45,6 +45,8 @@ const (
 	ClusterPort = 5000
 	// DiscoveryPort is the default port for Neo4j cluster discovery
 	DiscoveryPort = 6000
+	// RoutingPort is the default port for Neo4j routing service
+	RoutingPort = 7688
 	// RaftPort is the default port for Neo4j Raft consensus
 	RaftPort = 7000
 	// BackupPort is the default port for Neo4j backup operations
@@ -176,6 +178,12 @@ func BuildHeadlessServiceForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseClu
 					Name:       "discovery",
 					Port:       DiscoveryPort,
 					TargetPort: intstr.FromInt(DiscoveryPort),
+					Protocol:   corev1.ProtocolTCP,
+				},
+				{
+					Name:       "routing",
+					Port:       RoutingPort,
+					TargetPort: intstr.FromInt(RoutingPort),
 					Protocol:   corev1.ProtocolTCP,
 				},
 				{
@@ -656,6 +664,11 @@ func BuildPodSpecForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, ro
 				Protocol:      corev1.ProtocolTCP,
 			},
 			{
+				Name:          "routing",
+				ContainerPort: RoutingPort,
+				Protocol:      corev1.ProtocolTCP,
+			},
+			{
 				Name:          "raft",
 				ContainerPort: RaftPort,
 				Protocol:      corev1.ProtocolTCP,
@@ -880,7 +893,7 @@ server.default_listen_address=0.0.0.0
 server.bolt.listen_address=0.0.0.0:7687
 server.http.listen_address=0.0.0.0:7474
 
-# Enterprise clustering
+# Neo4j 5.x Enterprise clustering
 server.cluster.advertised_address=$(hostname -f):5000
 server.cluster.listen_address=0.0.0.0:5000
 server.discovery.advertised_address=$(hostname -f):6000
@@ -888,9 +901,14 @@ server.discovery.listen_address=0.0.0.0:6000
 server.routing.advertised_address=$(hostname -f):7688
 server.routing.listen_address=0.0.0.0:7688
 
-# Cluster membership
-causal_clustering.minimum_core_cluster_size_at_formation=3
-causal_clustering.minimum_core_cluster_size_at_runtime=3
+# Cluster discovery configuration for Kubernetes
+dbms.cluster.discovery.resolver_type=K8S
+dbms.kubernetes.label_selector=app.kubernetes.io/name=` + cluster.Name + `,app.kubernetes.io/instance=` + cluster.Name + `
+dbms.kubernetes.discovery.service_port_name=cluster
+
+# Cluster membership (minimum 3 primaries for quorum)
+dbms.cluster.minimum_core_cluster_size_at_formation=3
+dbms.cluster.minimum_core_cluster_size_at_runtime=3
 
 # Paths
 server.directories.data=/data
@@ -954,26 +972,8 @@ until nslookup ` + cluster.Name + `-headless.` + cluster.Namespace + `.svc.clust
     sleep 2
 done
 
-# Initialize cluster discovery
-if [[ "$NEO4J_CLUSTER_ROLE" == "primary" ]]; then
-    # For primary nodes, discover other primaries
-    DISCOVERY_MEMBERS=""
-    for i in $(seq 0 $((NEO4J_CLUSTER_PRIMARIES-1))); do
-        if [[ "$i" != "${HOSTNAME##*-}" ]]; then
-            MEMBER="` + cluster.Name + `-primary-$i.` + cluster.Name + `-headless.` + cluster.Namespace + `.svc.cluster.local:5000"
-            if [[ -n "$DISCOVERY_MEMBERS" ]]; then
-                DISCOVERY_MEMBERS="$DISCOVERY_MEMBERS,$MEMBER"
-            else
-                DISCOVERY_MEMBERS="$MEMBER"
-            fi
-        fi
-    done
-    export NEO4J_causal__clustering_discovery__members="$DISCOVERY_MEMBERS"
-    export NEO4J_causal__clustering_initial__discovery__members="$DISCOVERY_MEMBERS"
-fi
-
-# Set server ID based on pod ordinal
-export NEO4J_causal__clustering_server__id="${HOSTNAME##*-}"
+# Set server ID based on pod ordinal for Neo4j 5.x clustering
+export NEO4J_dbms__cluster__server__id="${HOSTNAME##*-}"
 
 # Start Neo4j
 exec /docker-entrypoint.sh neo4j
