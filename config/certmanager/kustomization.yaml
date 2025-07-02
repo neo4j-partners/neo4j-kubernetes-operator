@@ -4,3 +4,5 @@ kind: Kustomization
 resources:
 - certificate.yaml
 - issuer.yaml
+# Uncomment to use LetsEncrypt issuers instead of self-signed
+# - letsencrypt-issuer.yaml

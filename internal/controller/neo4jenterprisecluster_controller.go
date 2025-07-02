@@ -232,16 +232,6 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 		}
 	}
 
-	// Handle Multi-cluster deployment
-	if cluster.Spec.MultiCluster != nil && cluster.Spec.MultiCluster.Enabled {
-		multiClusterController := NewMultiClusterController(r.Client, r.Scheme)
-		if err := multiClusterController.ReconcileMultiCluster(ctx, cluster); err != nil {
-			logger.Error(err, "Failed to reconcile multi-cluster deployment")
-			r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Multi-cluster deployment failed: %v", err))
-			return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
-		}
-	}
-
 	// Handle Query Performance Monitoring
 	if cluster.Spec.QueryMonitoring != nil && cluster.Spec.QueryMonitoring.Enabled {
 		queryMonitor := NewQueryMonitor(r.Client, r.Scheme)

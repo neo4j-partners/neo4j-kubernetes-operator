@@ -46,6 +46,8 @@ import (
 	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1"
 	"github.com/neo4j-labs/neo4j-kubernetes-operator/internal/controller"
 	"github.com/neo4j-labs/neo4j-kubernetes-operator/internal/webhooks"
+
+	certv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -85,6 +87,7 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(neo4jv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(certv1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -273,6 +276,10 @@ func main() {
 			setupLog.Info("WARNING: using direct client in production mode - this may impact performance")
 			cacheOpts = cache.Options{}
 		} else {
+			// Force lazy cache for production to avoid RBAC and startup issues
+			if *cacheStrategy == "" {
+				*cacheStrategy = "lazy"
+			}
 			cacheOpts = configureProductionCache(*cacheStrategy, *lazyInformers, *minimalResources)
 		}
 		setupLog.Info("production mode enabled - using standard settings")

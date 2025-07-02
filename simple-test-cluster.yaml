@@ -1,7 +1,7 @@
 apiVersion: neo4j.neo4j.com/v1alpha1
 kind: Neo4jEnterpriseCluster
 metadata:
-  name: test-cluster
+  name: simple-cluster
   namespace: neo4j-dev
 spec:
   # Neo4j Enterprise image
@@ -34,11 +34,6 @@ spec:
       memory: "2Gi"
       cpu: "1"
 
-  # TLS configuration
+  # Disable TLS for simple testing
   tls:
-    mode: cert-manager
-    issuerRef:
-      name: neo4j-operator-dev-ca-issuer-fixed
-      kind: ClusterIssuer
-    duration: "720h"
-    renewBefore: "240h"
+    mode: disabled

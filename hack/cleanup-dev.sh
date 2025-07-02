@@ -220,8 +220,8 @@ show_plan() {
 # Validate environment
 validate_environment() {
     # Check if we're in the right directory
-    if [[ ! -f "go.mod" ]] || ! grep -q "neo4j-operator" go.mod 2>/dev/null; then
-        log_error "This script must be run from the neo4j-operator project root directory"
+    if [[ ! -f "go.mod" ]] || ! grep -q "neo4j-kubernetes-operator" go.mod 2>/dev/null; then
+        log_error "This script must be run from the neo4j-kubernetes-operator project root directory"
         exit 1
     fi
 

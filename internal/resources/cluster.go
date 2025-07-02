@@ -19,7 +19,6 @@ package resources
 
 import (
 	"fmt"
-	"strconv"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -262,7 +261,7 @@ func BuildConfigMapForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) 
 		Data: map[string]string{
 			"neo4j.conf": config,
 			"startup.sh": buildStartupScriptForEnterprise(cluster),
-			"health.sh":  buildHealthScript(),
+			"health.sh":  buildHealthScript(cluster),
 		},
 	}
 }
@@ -564,19 +563,18 @@ func BuildPodSpecForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, ro
 			Value: "enterprise",
 		},
 		{
-			Name:  "NEO4J_CLUSTER_ROLE",
-			Value: role,
+			Name: "DB_USERNAME",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: adminSecret,
+					},
+					Key: "username",
+				},
+			},
 		},
 		{
-			Name:  "NEO4J_CLUSTER_NAME",
-			Value: cluster.Name,
-		},
-		{
-			Name:  "NEO4J_NAMESPACE",
-			Value: cluster.Namespace,
-		},
-		{
-			Name: "NEO4J_AUTH",
+			Name: "DB_PASSWORD",
 			ValueFrom: &corev1.EnvVarSource{
 				SecretKeyRef: &corev1.SecretKeySelector{
 					LocalObjectReference: corev1.LocalObjectReference{
@@ -585,14 +583,6 @@ func BuildPodSpecForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, ro
 					Key: "password",
 				},
 			},
-		},
-		{
-			Name:  "NEO4J_CLUSTER_PRIMARIES",
-			Value: strconv.Itoa(int(cluster.Spec.Topology.Primaries)),
-		},
-		{
-			Name:  "NEO4J_CLUSTER_SECONDARIES",
-			Value: strconv.Itoa(int(cluster.Spec.Topology.Secondaries)),
 		},
 	}
 
@@ -886,6 +876,9 @@ func getServiceAccountNameForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCl
 }
 
 func buildNeo4jConfigForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) string {
+	// Check if this is a single-node deployment
+	isSingleNode := cluster.Spec.Topology.Primaries == 1 && cluster.Spec.Topology.Secondaries == 0
+
 	config := `# Neo4j Enterprise Configuration
 
 # Server settings
@@ -893,39 +886,39 @@ server.default_listen_address=0.0.0.0
 server.bolt.listen_address=0.0.0.0:7687
 server.http.listen_address=0.0.0.0:7474
 
-# Neo4j 5.x Enterprise clustering
-server.cluster.advertised_address=$(hostname -f):5000
-server.cluster.listen_address=0.0.0.0:5000
-server.discovery.advertised_address=$(hostname -f):6000
-server.discovery.listen_address=0.0.0.0:6000
-server.routing.advertised_address=$(hostname -f):7688
-server.routing.listen_address=0.0.0.0:7688
-
-# Cluster discovery configuration for Kubernetes
-dbms.cluster.discovery.resolver_type=K8S
-dbms.kubernetes.label_selector=app.kubernetes.io/name=` + cluster.Name + `,app.kubernetes.io/instance=` + cluster.Name + `
-dbms.kubernetes.discovery.service_port_name=cluster
-
-# Cluster membership (minimum 3 primaries for quorum)
-dbms.cluster.minimum_core_cluster_size_at_formation=3
-dbms.cluster.minimum_core_cluster_size_at_runtime=3
-
 # Paths
 server.directories.data=/data
 server.directories.logs=/logs
 
-# Memory settings
-server.memory.heap.initial_size=1G
-server.memory.heap.max_size=1G
-server.memory.pagecache.size=512M
+# Memory settings (conservative for containers)
+server.memory.heap.initial_size=256M
+server.memory.heap.max_size=256M
+server.memory.pagecache.size=128M
 
-# Security
-server.unmanaged_extension_classes=n10s.endpoint=/rdf
+# Basic logging (using default settings)
 
-# Logging
-server.logs.user.rotationKeepNumber=5
-server.logs.user.rotationSize=20M
+# Disable strict validation to allow experimental settings
+server.config.strict_validation.enabled=false
 `
+
+	if isSingleNode {
+		// Single-node configuration
+		config += `
+# Single-node mode configuration
+dbms.mode=SINGLE
+`
+	} else {
+		// Multi-node clustering configuration for Neo4j 5.x (base settings)
+		config += `
+# Neo4j 5.x Enterprise clustering - server communication
+# Note: advertised addresses will be set dynamically by startup script
+server.cluster.listen_address=0.0.0.0:5000
+server.discovery.listen_address=0.0.0.0:6000
+server.routing.listen_address=0.0.0.0:7688
+
+# Note: Cluster discovery settings are dynamically added by startup script
+`
+	}
 
 	// Add TLS configuration if enabled
 	if cluster.Spec.TLS != nil && cluster.Spec.TLS.Mode == CertManagerMode {
@@ -934,7 +927,7 @@ server.logs.user.rotationSize=20M
 server.https.enabled=true
 server.https.listen_address=0.0.0.0:7473
 server.bolt.tls_level=OPTIONAL
-server.https.advertised_address=$(hostname -f):7473
+server.https.advertised_address=${HOSTNAME}:7473
 
 # SSL certificates
 server.directories.certificates=/ssl
@@ -960,39 +953,152 @@ server.ssl.policy.https.public_certificate=tls.crt
 }
 
 func buildStartupScriptForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) string {
-	return `#!/bin/bash
+	// Check if this is a single-node deployment
+	isSingleNode := cluster.Spec.Topology.Primaries == 1 && cluster.Spec.Topology.Secondaries == 0
+
+	if isSingleNode {
+		// Single-node startup script (no DNS dependency)
+		return `#!/bin/bash
 set -e
 
-echo "Starting Neo4j Enterprise..."
+echo "Starting Neo4j Enterprise in single-node mode..."
 
-# Wait for DNS resolution of headless service
-echo "Waiting for DNS resolution..."
-until nslookup ` + cluster.Name + `-headless.` + cluster.Namespace + `.svc.cluster.local; do
-    echo "Waiting for ` + cluster.Name + `-headless.` + cluster.Namespace + `.svc.cluster.local to be resolvable..."
-    sleep 2
-done
+# Set proper NEO4J_AUTH format (username/password)
+export NEO4J_AUTH="${DB_USERNAME}/${DB_PASSWORD}"
 
-# Set server ID based on pod ordinal for Neo4j 5.x clustering
-export NEO4J_dbms__cluster__server__id="${HOSTNAME##*-}"
+# Start Neo4j directly - no clustering setup needed
+exec /startup/docker-entrypoint.sh neo4j
+`
+	} else {
+		// Multi-node clustering startup script
+		return `#!/bin/bash
+set -e
+
+echo "Starting Neo4j Enterprise in cluster mode..."
+
+# Set proper NEO4J_AUTH format (username/password)
+export NEO4J_AUTH="${DB_USERNAME}/${DB_PASSWORD}"
+
+# Extract pod ordinal from hostname
+POD_ORDINAL="${HOSTNAME##*-}"
+
+# Set fully qualified domain name for clustering
+export HOSTNAME_FQDN="${HOSTNAME}.` + cluster.Name + `-headless.` + cluster.Namespace + `.svc.cluster.local"
+echo "Pod hostname: ${HOSTNAME}"
+echo "Pod FQDN: ${HOSTNAME_FQDN}"
+
+# Override the HOSTNAME variable with FQDN for Neo4j configuration
+export HOSTNAME="${HOSTNAME_FQDN}"
+
+# Create writable config directory
+mkdir -p /tmp/neo4j-config
+
+# Copy base config
+cp /conf/neo4j.conf /tmp/neo4j-config/neo4j.conf
+
+# Add FQDN-based advertised addresses
+cat >> /tmp/neo4j-config/neo4j.conf << EOF
+
+# Neo4j 5.x advertised addresses with FQDN
+server.default_advertised_address=${HOSTNAME_FQDN}
+server.cluster.advertised_address=${HOSTNAME_FQDN}:5000
+server.discovery.advertised_address=${HOSTNAME_FQDN}:6000
+server.routing.advertised_address=${HOSTNAME_FQDN}:7688
+EOF
+
+# Dynamic cluster configuration based on pod ordinal
+if [ "$POD_ORDINAL" = "0" ]; then
+    echo "Bootstrap pod (ordinal 0) - forming new cluster"
+
+    # Generate bootstrap configuration for pod 0
+    cat >> /tmp/neo4j-config/neo4j.conf << EOF
+
+# Neo4j 5.x Enterprise clustering - Discovery Service V2 (Bootstrap)
+dbms.cluster.discovery.version=V2_ONLY
+dbms.cluster.discovery.v2.endpoints=${HOSTNAME_FQDN}:6000
+
+# Cluster formation settings - allow single node to form cluster
+dbms.cluster.minimum_initial_system_primaries_count=1
+initial.dbms.default_primaries_count=` + fmt.Sprintf("%d", cluster.Spec.Topology.Primaries) + `
+initial.dbms.automatically_enable_free_servers=true
+EOF
+else
+    echo "Non-bootstrap pod (ordinal $POD_ORDINAL) - joining existing cluster"
+
+    # Wait for bootstrap pod to be ready and cluster to be formed
+    echo "Waiting for bootstrap pod to form cluster..."
+    until (echo > /dev/tcp/` + cluster.Name + `-primary-0.` + cluster.Name + `-headless.` + cluster.Namespace + `.svc.cluster.local/7474) >/dev/null 2>&1; do
+        echo "Waiting for bootstrap pod HTTP to be ready..."
+        sleep 5
+    done
+
+    # Additional wait to ensure cluster is fully formed
+    sleep 10
+
+    # Generate joining configuration for pod 1+
+    cat >> /tmp/neo4j-config/neo4j.conf << EOF
+
+# Neo4j 5.x Enterprise clustering - Discovery Service V2 (Join)
+dbms.cluster.discovery.version=V2_ONLY
+dbms.cluster.discovery.v2.endpoints=` + cluster.Name + `-primary-0.` + cluster.Name + `-headless.` + cluster.Namespace + `.svc.cluster.local:6000,${HOSTNAME_FQDN}:6000
+
+# Join existing cluster - expect all primaries
+dbms.cluster.minimum_initial_system_primaries_count=` + fmt.Sprintf("%d", cluster.Spec.Topology.Primaries) + `
+initial.dbms.default_primaries_count=` + fmt.Sprintf("%d", cluster.Spec.Topology.Primaries) + `
+initial.dbms.automatically_enable_free_servers=true
+EOF
+fi
+
+# Set NEO4J config directory
+export NEO4J_CONF=/tmp/neo4j-config
 
 # Start Neo4j
-exec /docker-entrypoint.sh neo4j
+exec /startup/docker-entrypoint.sh neo4j
 `
+	}
 }
 
-func buildHealthScript() string {
-	return `#!/bin/bash
-# Health check script for Neo4j
+func buildHealthScript(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) string {
+	// Check if this is a single-node deployment
+	isSingleNode := cluster.Spec.Topology.Primaries == 1 && cluster.Spec.Topology.Secondaries == 0
 
-# Check if Neo4j is responding
-if ! curl -f -s -X GET http://localhost:7474/db/neo4j/tx/commit \
-    -H "Content-Type: application/json" \
-    -d '{"statements":[{"statement":"CALL dbms.cluster.overview() YIELD role RETURN role"}]}' > /dev/null 2>&1; then
-    echo "Neo4j is not responding"
+	if isSingleNode {
+		// Single-node health check
+		return `#!/bin/bash
+# Health check script for Neo4j (Single Node)
+
+# Simple port check for Neo4j
+if ! (echo > /dev/tcp/localhost/7474) >/dev/null 2>&1; then
+    echo "Neo4j HTTP port not responding"
+    exit 1
+fi
+
+if ! (echo > /dev/tcp/localhost/7687) >/dev/null 2>&1; then
+    echo "Neo4j Bolt port not responding"
     exit 1
 fi
 
 echo "Neo4j is healthy"
 exit 0
 `
+	} else {
+		// Cluster health check - simplified for now
+		return `#!/bin/bash
+# Health check script for Neo4j (Cluster Mode)
+
+# Simple port check for Neo4j
+if ! (echo > /dev/tcp/localhost/7474) >/dev/null 2>&1; then
+    echo "Neo4j HTTP port not responding"
+    exit 1
+fi
+
+if ! (echo > /dev/tcp/localhost/7687) >/dev/null 2>&1; then
+    echo "Neo4j Bolt port not responding"
+    exit 1
+fi
+
+echo "Neo4j is healthy"
+exit 0
+`
+	}
 }

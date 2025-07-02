@@ -1,0 +1,41 @@
+# Invalid Neo4j cluster for webhook validation testing
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: invalid-cluster
+spec:
+  # Missing required field: imageRef
+  # Missing required field: acceptLicenseAgreement
+
+  # Invalid node configuration (negative resources)
+  primaryNode:
+    resources:
+      requests:
+        memory: "-1Gi"  # Invalid: negative memory
+        cpu: "0"        # Invalid: zero CPU
+    storage:
+      size: "0Gi"      # Invalid: zero storage
+
+  # Invalid TLS configuration
+  tls:
+    mode: "invalid-mode"  # Invalid: should be cert-manager or disabled
+    issuerRef:
+      name: ""           # Invalid: empty issuer name
+
+  # Invalid service configuration
+  service:
+    type: "InvalidType"  # Invalid: not a valid service type
+
+---
+# Another invalid example: missing auth configuration
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: missing-auth-cluster
+spec:
+  imageRef: "neo4j:5.26.0-enterprise"
+  acceptLicenseAgreement: "yes"
+  # Missing authConfigRef - should be rejected by webhook
+  primaryNode:
+    storage:
+      size: "10Gi"

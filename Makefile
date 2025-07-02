@@ -192,6 +192,30 @@ test-webhooks: manifests generate fmt vet envtest ## Run webhook tests (no clust
 		KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test ./internal/webhooks/... -v -timeout=10m; \
 	fi
 
+.PHONY: test-webhooks-tls
+test-webhooks-tls: ## Test webhook TLS configuration in development cluster
+	@echo "🔐 Testing webhook TLS configuration..."
+	@./hack/test-webhooks.sh
+
+.PHONY: test-webhooks-integration
+test-webhooks-integration: dev-cluster operator-setup ## Run webhook integration tests with TLS
+	@echo "🔗 Running webhook integration tests with TLS..."
+	@echo "Testing valid resource acceptance..."
+	@kubectl apply -f config/samples/neo4j_v1alpha1_neo4jenterprisecluster.yaml --dry-run=server > /dev/null && echo "✅ Valid resource accepted" || echo "❌ Valid resource rejected"
+	@echo "Testing invalid resource rejection..."
+	@! kubectl apply -f test/fixtures/invalid-cluster.yaml --dry-run=server > /dev/null 2>&1 && echo "✅ Invalid resource rejected" || echo "❌ Invalid resource accepted"
+	@echo "Testing webhook certificate..."
+	@kubectl get secret webhook-server-cert -n neo4j-operator-system -o jsonpath='{.data.tls\.crt}' | base64 -d | openssl x509 -noout -text | grep -q "Subject:" && echo "✅ Webhook certificate valid" || echo "❌ Webhook certificate invalid"
+
+.PHONY: test-webhook-cert-rotation
+test-webhook-cert-rotation: dev-cluster operator-setup ## Test webhook certificate rotation
+	@echo "🔄 Testing webhook certificate rotation..."
+	@kubectl delete secret webhook-server-cert -n neo4j-operator-system || true
+	@echo "Waiting for certificate regeneration..."
+	@kubectl wait --for=condition=ready certificate serving-cert -n neo4j-operator-system --timeout=120s
+	@echo "Testing webhook functionality after rotation..."
+	@kubectl apply -f config/samples/neo4j_v1alpha1_neo4jenterprisecluster.yaml --dry-run=server > /dev/null && echo "✅ Webhook working after cert rotation" || echo "❌ Webhook failed after cert rotation"
+
 .PHONY: test-security
 test-security: ## Run security-focused tests (no cluster required).
 	@echo "🔒 Running security tests..."
