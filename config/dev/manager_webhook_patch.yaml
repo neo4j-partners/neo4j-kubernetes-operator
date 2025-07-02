@@ -12,7 +12,7 @@ spec:
     spec:
       containers:
       - name: manager
-        image: neo4j-operator:fast-cache
+        image: neo4j-operator:rbac-fixed
         args:
         - --health-probe-bind-address=:8081
         - --metrics-bind-address=127.0.0.1:8080

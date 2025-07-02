@@ -1,0 +1,175 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: neo4j-operator-manager-role
+rules:
+# Core Kubernetes resources
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  - secrets
+  - services
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+- apiGroups:
+  - ""
+  resources:
+  - persistentvolumeclaims
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+
+# Kubernetes workload resources
+- apiGroups:
+  - apps
+  resources:
+  - statefulsets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - batch
+  resources:
+  - cronjobs
+  - jobs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+
+# Network resources
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - ingresses
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+
+# Certificate Manager resources
+- apiGroups:
+  - cert-manager.io
+  resources:
+  - certificates
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - cert-manager.io
+  resources:
+  - clusterissuers
+  - issuers
+  verbs:
+  - get
+  - list
+  - watch
+
+# External Secrets resources
+- apiGroups:
+  - external-secrets.io
+  resources:
+  - clustersecretstores
+  - secretstores
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - external-secrets.io
+  resources:
+  - externalsecrets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+
+# Neo4j CRD resources (ALL under neo4j.neo4j.com API group)
+- apiGroups:
+  - neo4j.neo4j.com
+  resources:
+  - neo4jbackups
+  - neo4jdatabases
+  - neo4jenterpriseclusters
+  - neo4jgrants
+  - neo4jplugins
+  - neo4jrestores
+  - neo4jroles
+  - neo4jusers
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - neo4j.neo4j.com
+  resources:
+  - neo4jbackups/finalizers
+  - neo4jdatabases/finalizers
+  - neo4jenterpriseclusters/finalizers
+  - neo4jgrants/finalizers
+  - neo4jplugins/finalizers
+  - neo4jrestores/finalizers
+  - neo4jroles/finalizers
+  - neo4jusers/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - neo4j.neo4j.com
+  resources:
+  - neo4jbackups/status
+  - neo4jdatabases/status
+  - neo4jenterpriseclusters/status
+  - neo4jgrants/status
+  - neo4jplugins/status
+  - neo4jrestores/status
+  - neo4jroles/status
+  - neo4jusers/status
+  verbs:
+  - get
+  - patch
+  - update

@@ -178,12 +178,12 @@ func main() {
 	if *cacheStrategy == "" {
 		switch operatorMode {
 		case ProductionMode:
-			*cacheStrategy = string(LazyCache)
+			*cacheStrategy = string(OnDemandCache) // Use fastest cache method for production
 		case DevelopmentMode:
 			if *ultraFast {
 				*cacheStrategy = string(NoCache)
 			} else {
-				*cacheStrategy = string(LazyCache)
+				*cacheStrategy = string(OnDemandCache) // Use fastest cache method for development
 			}
 		case MinimalMode:
 			*cacheStrategy = string(NoCache) // Always use no-cache for minimal mode

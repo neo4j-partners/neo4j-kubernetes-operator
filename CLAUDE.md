@@ -167,3 +167,8 @@ GitHub Actions runs:
 4. Multi-arch container builds
 
 PRs must pass all checks. Use conventional commits (feat:, fix:, docs:).
+
+
+## Reports
+
+All reports that Claude generates should go into the reports directory. The reports can be reviewed by Claude to determine changes that were made.
