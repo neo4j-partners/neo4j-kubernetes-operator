@@ -11,14 +11,12 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
-	neo4jv1alpha1 "github.com/neo4j/neo4j-kubernetes-operator/api/v1alpha1"
+	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1"
 )
 
 var _ = Describe("Webhook TLS Configuration", func() {
@@ -26,7 +24,6 @@ var _ = Describe("Webhook TLS Configuration", func() {
 		ctx       context.Context
 		cancel    context.CancelFunc
 		k8sClient client.Client
-		clientset *kubernetes.Clientset
 		testEnv   *envtest.Environment
 	)
 
@@ -50,9 +47,6 @@ var _ = Describe("Webhook TLS Configuration", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		k8sClient, err = client.New(cfg, client.Options{Scheme: scheme})
-		Expect(err).NotTo(HaveOccurred())
-
-		clientset, err = kubernetes.NewForConfig(cfg)
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -102,15 +96,20 @@ var _ = Describe("Webhook TLS Configuration", func() {
 					Namespace: "default",
 				},
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
-					ImageRef:               "neo4j:5.26.0-enterprise",
-					AcceptLicenseAgreement: "yes",
-					AuthConfigRef: &corev1.SecretReference{
-						Name: "test-auth",
+					Image: neo4jv1alpha1.ImageSpec{
+						Repo: "neo4j",
+						Tag:  "5.26.0-enterprise",
 					},
-					PrimaryNode: neo4jv1alpha1.NodeSpec{
-						Storage: neo4jv1alpha1.StorageSpec{
-							Size: "10Gi",
-						},
+					Topology: neo4jv1alpha1.TopologyConfiguration{
+						Primaries: 1,
+					},
+					Storage: neo4jv1alpha1.StorageSpec{
+						ClassName: "standard",
+						Size:      "10Gi",
+					},
+					Auth: &neo4jv1alpha1.AuthSpec{
+						Provider:    "native",
+						AdminSecret: "test-auth",
 					},
 				},
 			}
@@ -133,15 +132,14 @@ var _ = Describe("Webhook TLS Configuration", func() {
 					Namespace: "default",
 				},
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
-					// Missing required fields
-					ImageRef: "neo4j:5.26.0-enterprise",
-					// Missing AcceptLicenseAgreement
-					// Missing AuthConfigRef
-					PrimaryNode: neo4jv1alpha1.NodeSpec{
-						Storage: neo4jv1alpha1.StorageSpec{
-							Size: "-10Gi", // Invalid negative size
-						},
+					// Missing required fields - only provide Image but not Topology/Storage/Auth
+					Image: neo4jv1alpha1.ImageSpec{
+						Repo: "neo4j",
+						Tag:  "5.26.0-enterprise",
 					},
+					// Missing Topology
+					// Missing Storage
+					// Missing Auth
 				},
 			}
 
@@ -201,15 +199,20 @@ var _ = Describe("Webhook TLS Configuration", func() {
 					Namespace: "default",
 				},
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
-					ImageRef:               "neo4j:5.26.0-enterprise",
-					AcceptLicenseAgreement: "yes",
-					AuthConfigRef: &corev1.SecretReference{
-						Name: "test-auth",
+					Image: neo4jv1alpha1.ImageSpec{
+						Repo: "neo4j",
+						Tag:  "5.26.0-enterprise",
 					},
-					PrimaryNode: neo4jv1alpha1.NodeSpec{
-						Storage: neo4jv1alpha1.StorageSpec{
-							Size: "10Gi",
-						},
+					Topology: neo4jv1alpha1.TopologyConfiguration{
+						Primaries: 1,
+					},
+					Storage: neo4jv1alpha1.StorageSpec{
+						ClassName: "standard",
+						Size:      "10Gi",
+					},
+					Auth: &neo4jv1alpha1.AuthSpec{
+						Provider:    "native",
+						AdminSecret: "test-auth",
 					},
 				},
 			}
