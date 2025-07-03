@@ -1,6 +1,6 @@
 # Testing
 
-This guide explains how to run the test suite for the Neo4j Enterprise Operator. The project has a comprehensive testing strategy with unit, integration, and end-to-end (E2E) tests.
+This guide explains how to run the test suite for the Neo4j Enterprise Operator. The project has a comprehensive testing strategy with unit and integration tests.
 
 ## Unit Tests
 
@@ -18,20 +18,36 @@ Integration tests use the `envtest` library to test the controllers against a re
 make test-integration
 ```
 
-## E2E Tests
+## Test Clusters
 
-End-to-end tests run against a real `kind` cluster and test the full lifecycle of the operator and its resources. To run the E2E tests, you first need to create a test environment:
-
-```bash
-make test-env-setup
-```
-
-Then, you can run the E2E tests:
+For integration tests, you'll need a Kubernetes cluster. The project provides convenient targets for managing test clusters:
 
 ```bash
-make test-e2e
+# Create a test cluster
+make test-cluster
+
+# Run integration tests
+make test-integration
+
+# Clean up test cluster resources
+make test-cluster-clean
+
+# Delete the test cluster entirely
+make test-cluster-delete
 ```
 
-## Test Runner Script
+## All Tests
 
-The `scripts/run-tests.sh` script provides a unified way to run all types of tests with various options. You can use this script to run specific test suites, enable coverage, and more.
+To run the complete test suite:
+
+```bash
+make test
+```
+
+## Test Coverage
+
+To generate test coverage reports:
+
+```bash
+make test-coverage
+```

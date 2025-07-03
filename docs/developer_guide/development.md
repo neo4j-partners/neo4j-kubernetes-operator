@@ -14,13 +14,13 @@ This guide explains how to set up your development environment and get started w
 
 1.  **Fork and clone the repository.**
 
-2.  **Install the development tools:**
+2.  **Generate code and manifests:**
 
     ```bash
-    make setup-dev
+    make manifests generate
     ```
 
-    This command will install all the necessary tools and dependencies for building and testing the operator.
+    This command will generate CRDs, RBAC manifests, and Go DeepCopy methods.
 
 3.  **Create a development cluster:**
 

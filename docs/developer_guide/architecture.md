@@ -10,9 +10,9 @@ The operator is built around a set of controllers that manage the lifecycle of N
 
 The operator defines a set of CRDs to represent Neo4j resources, such as clusters, backups, and databases. The Go type definitions for these CRDs are located in `api/v1alpha1/`.
 
-## Webhooks
+## Input Validation
 
-The operator uses admission webhooks to validate and mutate Neo4j resources. This ensures that the resources are correctly configured before they are created or updated. The webhook logic can be found in `internal/webhooks/`.
+The operator uses client-side validation to ensure that Neo4j resources are correctly configured before they are created or updated. The validation logic can be found in `internal/validation/`.
 
 ## RBAC
 
