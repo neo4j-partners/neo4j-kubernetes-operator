@@ -1,9 +1,0 @@
-test/cloud/gke/gke_suite_test.go:105:19                    errcheck     Error return value of `k8sClient.Delete` is not checked
-internal/controller/neo4jbackup_controller_test.go:105:20  errcheck     Error return value of `k8sClient.Delete` is not checked
-internal/controller/neo4jbackup_controller_test.go:108:20  errcheck     Error return value of `k8sClient.Delete` is not checked
-internal/controller/security_coordinator_test.go:133:22    errcheck     Error return value of `coordinator.Start` is not checked
-internal/controller/security_coordinator_test.go:154:22    errcheck     Error return value of `coordinator.Start` is not checked
-internal/controller/security_coordinator_test.go:175:22    errcheck     Error return value of `coordinator.Start` is not checked
-internal/webhooks/neo4jenterprisecluster_webhook.go:669:2  staticcheck  SA9003: empty branch
-internal/neo4j/client.go:141:3                             staticcheck  SA9003: empty branch
-test/cloud/testutil/testutil.go:30:2                       staticcheck  SA1019: rand.Seed has been deprecated since Go 1.20 and an alternative has been available since Go 1.0: As of Go 1.20 there is no reason to call Seed with a random value. Programs that call Seed with a known value to get a specific sequence of results should use New(NewSource(seed)) to obtain a local random generator.

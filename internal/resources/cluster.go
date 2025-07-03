@@ -19,6 +19,7 @@ package resources
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -851,7 +852,10 @@ func buildNeo4jConfigForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster
 	// Check if this is a single-node deployment
 	isSingleNode := cluster.Spec.Topology.Primaries == 1 && cluster.Spec.Topology.Secondaries == 0
 
-	config := `# Neo4j Enterprise Configuration
+	// Calculate optimal memory settings for Neo4j 5.26+
+	memoryConfig := GetMemoryConfigForCluster(cluster)
+
+	config := fmt.Sprintf(`# Neo4j Enterprise Configuration (5.26+ / 2025.x.x)
 
 # Server settings
 server.default_listen_address=0.0.0.0
@@ -862,16 +866,24 @@ server.http.listen_address=0.0.0.0:7474
 server.directories.data=/data
 server.directories.logs=/logs
 
-# Memory settings (conservative for containers)
-server.memory.heap.initial_size=256M
-server.memory.heap.max_size=256M
-server.memory.pagecache.size=128M
+# Memory settings (optimized for Neo4j 5.26+ and container resources)
+server.memory.heap.initial_size=%s
+server.memory.heap.max_size=%s
+server.memory.pagecache.size=%s
 
 # Basic logging (using default settings)
 
 # Disable strict validation to allow experimental settings
 server.config.strict_validation.enabled=false
-`
+
+# Cloud storage integration settings (5.26+ / 2025.x.x)
+# dbms.integrations.cloud_storage.azb.blob_endpoint_suffix=blob.core.windows.net
+# dbms.integrations.cloud_storage.azb.authority_endpoint=
+
+# Database format - use block format (default in 5.26+ / 2025.x.x)
+# Note: standard and high_limit formats are deprecated
+db.format=block
+`, memoryConfig.HeapInitialSize, memoryConfig.HeapMaxSize, memoryConfig.PageCacheSize)
 
 	if isSingleNode {
 		// Single-node configuration
@@ -942,6 +954,15 @@ export NEO4J_AUTH="${DB_USERNAME}/${DB_PASSWORD}"
 exec /startup/docker-entrypoint.sh neo4j
 `
 	} else {
+		// Generate discovery endpoints for all expected primary nodes
+		var discoveryEndpoints []string
+		for i := int32(0); i < cluster.Spec.Topology.Primaries; i++ {
+			endpoint := fmt.Sprintf("%s-primary-%d.%s-headless.%s.svc.cluster.local:6000",
+				cluster.Name, i, cluster.Name, cluster.Namespace)
+			discoveryEndpoints = append(discoveryEndpoints, endpoint)
+		}
+		allDiscoveryEndpoints := strings.Join(discoveryEndpoints, ",")
+
 		// Multi-node clustering startup script
 		return `#!/bin/bash
 set -e
@@ -987,7 +1008,7 @@ if [ "$POD_ORDINAL" = "0" ]; then
 
 # Neo4j 5.x Enterprise clustering - Discovery Service V2 (Bootstrap)
 dbms.cluster.discovery.version=V2_ONLY
-dbms.cluster.discovery.v2.endpoints=${HOSTNAME_FQDN}:6000
+dbms.cluster.discovery.v2.endpoints=` + allDiscoveryEndpoints + `
 
 # Cluster formation settings - allow single node to form cluster
 dbms.cluster.minimum_initial_system_primaries_count=1
@@ -1012,10 +1033,10 @@ else
 
 # Neo4j 5.x Enterprise clustering - Discovery Service V2 (Join)
 dbms.cluster.discovery.version=V2_ONLY
-dbms.cluster.discovery.v2.endpoints=` + cluster.Name + `-primary-0.` + cluster.Name + `-headless.` + cluster.Namespace + `.svc.cluster.local:6000,${HOSTNAME_FQDN}:6000
+dbms.cluster.discovery.v2.endpoints=` + allDiscoveryEndpoints + `
 
-# Join existing cluster - expect all primaries
-dbms.cluster.minimum_initial_system_primaries_count=` + fmt.Sprintf("%d", cluster.Spec.Topology.Primaries) + `
+# Join existing cluster - allow incremental cluster formation
+dbms.cluster.minimum_initial_system_primaries_count=1
 initial.dbms.default_primaries_count=` + fmt.Sprintf("%d", cluster.Spec.Topology.Primaries) + `
 initial.dbms.automatically_enable_free_servers=true
 EOF

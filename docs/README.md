@@ -32,7 +32,4 @@ The [API Reference](api_reference) contains detailed information about the opera
 *   **[Neo4jBackup](api_reference/neo4jbackup.md)**
 *   **[Neo4jRestore](api_reference/neo4jrestore.md)**
 *   **[Neo4jDatabase](api_reference/neo4jdatabase.md)**
-*   **[Neo4jUser](api_reference/neo4juser.md)**
-*   **[Neo4jRole](api_reference/neo4jrole.md)**
-*   **[Neo4jGrant](api_reference/neo4jgrant.md)**
 *   **[Neo4jPlugin](api_reference/neo4jplugin.md)**

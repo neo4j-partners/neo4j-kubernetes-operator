@@ -65,9 +65,6 @@ var requiredCRDs = []string{
 	"neo4jrestores.neo4j.neo4j.com",
 	"neo4jplugins.neo4j.neo4j.com",
 	"neo4jdatabases.neo4j.neo4j.com",
-	"neo4jroles.neo4j.neo4j.com",
-	"neo4jusers.neo4j.neo4j.com",
-	"neo4jgrants.neo4j.neo4j.com",
 }
 
 func TestIntegration(t *testing.T) {

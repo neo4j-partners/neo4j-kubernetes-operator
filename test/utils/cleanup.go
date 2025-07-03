@@ -117,39 +117,6 @@ func cleanupNeo4jResources(ctx context.Context, k8sClient client.Client, options
 		}
 	}
 
-	// Delete all Neo4jUsers
-	users := &neo4jv1alpha1.Neo4jUserList{}
-	if err := k8sClient.List(ctx, users); err == nil {
-		for _, user := range users.Items {
-			ginkgo.By(fmt.Sprintf("Deleting Neo4jUser: %s/%s", user.Namespace, user.Name))
-			if err := deleteWithPropagation(ctx, k8sClient, &user, options.ForceDelete); err != nil {
-				fmt.Printf("Warning: Failed to delete user %s/%s: %v\n", user.Namespace, user.Name, err)
-			}
-		}
-	}
-
-	// Delete all Neo4jRoles
-	roles := &neo4jv1alpha1.Neo4jRoleList{}
-	if err := k8sClient.List(ctx, roles); err == nil {
-		for _, role := range roles.Items {
-			ginkgo.By(fmt.Sprintf("Deleting Neo4jRole: %s/%s", role.Namespace, role.Name))
-			if err := deleteWithPropagation(ctx, k8sClient, &role, options.ForceDelete); err != nil {
-				fmt.Printf("Warning: Failed to delete role %s/%s: %v\n", role.Namespace, role.Name, err)
-			}
-		}
-	}
-
-	// Delete all Neo4jGrants
-	grants := &neo4jv1alpha1.Neo4jGrantList{}
-	if err := k8sClient.List(ctx, grants); err == nil {
-		for _, grant := range grants.Items {
-			ginkgo.By(fmt.Sprintf("Deleting Neo4jGrant: %s/%s", grant.Namespace, grant.Name))
-			if err := deleteWithPropagation(ctx, k8sClient, &grant, options.ForceDelete); err != nil {
-				fmt.Printf("Warning: Failed to delete grant %s/%s: %v\n", grant.Namespace, grant.Name, err)
-			}
-		}
-	}
-
 	// Delete all Neo4jDatabases
 	databases := &neo4jv1alpha1.Neo4jDatabaseList{}
 	if err := k8sClient.List(ctx, databases); err == nil {
@@ -349,15 +316,6 @@ func checkCRDs(ctx context.Context, k8sClient client.Client) {
 			case "neo4jrestores.neo4j.neo4j.com":
 				restores := &neo4jv1alpha1.Neo4jRestoreList{}
 				return k8sClient.List(ctx, restores)
-			case "neo4jusers.neo4j.neo4j.com":
-				users := &neo4jv1alpha1.Neo4jUserList{}
-				return k8sClient.List(ctx, users)
-			case "neo4jroles.neo4j.neo4j.com":
-				roles := &neo4jv1alpha1.Neo4jRoleList{}
-				return k8sClient.List(ctx, roles)
-			case "neo4jgrants.neo4j.neo4j.com":
-				grants := &neo4jv1alpha1.Neo4jGrantList{}
-				return k8sClient.List(ctx, grants)
 			case "neo4jdatabases.neo4j.neo4j.com":
 				databases := &neo4jv1alpha1.Neo4jDatabaseList{}
 				return k8sClient.List(ctx, databases)

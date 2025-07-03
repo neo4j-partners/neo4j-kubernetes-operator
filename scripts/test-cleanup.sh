@@ -89,9 +89,6 @@ check_crds() {
         "neo4jenterpriseclusters.neo4j.neo4j.com"
         "neo4jbackups.neo4j.neo4j.com"
         "neo4jrestores.neo4j.neo4j.com"
-        "neo4jusers.neo4j.neo4j.com"
-        "neo4jroles.neo4j.neo4j.com"
-        "neo4jgrants.neo4j.neo4j.com"
         "neo4jdatabases.neo4j.neo4j.com"
         "neo4jplugins.neo4j.neo4j.com"
     )
@@ -134,9 +131,6 @@ force_remove_finalizers() {
         "neo4jdatabases.neo4j.neo4j.com"
         "neo4jbackups.neo4j.neo4j.com"
         "neo4jrestores.neo4j.neo4j.com"
-        "neo4jusers.neo4j.neo4j.com"
-        "neo4jroles.neo4j.neo4j.com"
-        "neo4jgrants.neo4j.neo4j.com"
         "neo4jplugins.neo4j.neo4j.com"
     )
     local resources=(
@@ -144,9 +138,6 @@ force_remove_finalizers() {
         "neo4jdatabases"
         "neo4jbackups"
         "neo4jrestores"
-        "neo4jusers"
-        "neo4jroles"
-        "neo4jgrants"
         "neo4jplugins"
     )
 
@@ -181,9 +172,6 @@ cleanup_neo4j_resources() {
         "neo4jenterpriseclusters.neo4j.neo4j.com"
         "neo4jbackups.neo4j.neo4j.com"
         "neo4jrestores.neo4j.neo4j.com"
-        "neo4jusers.neo4j.neo4j.com"
-        "neo4jroles.neo4j.neo4j.com"
-        "neo4jgrants.neo4j.neo4j.com"
         "neo4jdatabases.neo4j.neo4j.com"
         "neo4jplugins.neo4j.neo4j.com"
     )
@@ -191,9 +179,6 @@ cleanup_neo4j_resources() {
         "neo4jenterpriseclusters"
         "neo4jbackups"
         "neo4jrestores"
-        "neo4jusers"
-        "neo4jroles"
-        "neo4jgrants"
         "neo4jdatabases"
         "neo4jplugins"
     )
@@ -320,12 +305,12 @@ check_conflicting_resources() {
     fi
 
     # Check for test namespaces
-    local test_namespaces=$(kubectl get namespaces --no-headers -o custom-columns="NAME:.metadata.name" | grep -E "^(test-|gke-|aks-|eks-)" | wc -l | tr -d '[:space:]' || echo "0")
+    local test_namespaces=$(kubectl get namespaces --no-headers -o custom-columns="NAME:.metadata.name" | grep -E "^test-" | wc -l | tr -d '[:space:]' || echo "0")
     test_namespaces=${test_namespaces:-0}
     if [ "$test_namespaces" -gt 0 ]; then
         log_warning "Found $test_namespaces test namespaces that might conflict"
         if [ "$VERBOSE" = "true" ]; then
-            kubectl get namespaces | grep -E "^(test-|gke-|aks-|eks-)"
+            kubectl get namespaces | grep -E "^test-"
         fi
     fi
 }
@@ -356,7 +341,7 @@ verify_cleanup() {
 
         # Check for remaining test namespaces
         if [ "$DELETE_NAMESPACES" = "true" ]; then
-            local remaining_namespaces=$(kubectl get namespaces --no-headers -o custom-columns="NAME:.metadata.name" | grep -E "^(test-|gke-|aks-|eks-)" | wc -l | tr -d '[:space:]' || echo "0")
+            local remaining_namespaces=$(kubectl get namespaces --no-headers -o custom-columns="NAME:.metadata.name" | grep -E "^test-" | wc -l | tr -d '[:space:]' || echo "0")
             remaining_namespaces=${remaining_namespaces:-0}
             remaining_resources=$((remaining_resources + remaining_namespaces))
         fi
@@ -378,7 +363,7 @@ verify_cleanup() {
 # Helper function to check if namespace is a test namespace
 is_test_namespace() {
     local namespace="$1"
-    [[ "$namespace" =~ ^(test-|gke-|aks-|eks-) ]]
+    [[ "$namespace" =~ ^test- ]]
 }
 
 # Main cleanup function

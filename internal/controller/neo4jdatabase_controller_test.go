@@ -18,11 +18,9 @@ package controller_test
 
 import (
 	"context"
-	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -33,78 +31,39 @@ import (
 )
 
 var _ = Describe("Neo4jDatabase Controller", func() {
-	Context("When reconciling a resource", func() {
-		const resourceName = "test-resource"
+	Context("When reconciling a database with missing cluster reference", func() {
+		It("should handle missing referenced cluster gracefully", func() {
+			ctx := context.Background()
 
-		ctx := context.Background()
-
-		typeNamespacedName := types.NamespacedName{
-			Name:      resourceName,
-			Namespace: "default",
-		}
-		neo4jdatabase := &neo4jv1alpha1.Neo4jDatabase{}
-
-		BeforeEach(func() {
-			By("creating the custom resource for the Kind Neo4jDatabase")
-			err := k8sClient.Get(ctx, typeNamespacedName, neo4jdatabase)
-			if err != nil && errors.IsNotFound(err) {
-				resource := &neo4jv1alpha1.Neo4jDatabase{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      resourceName,
-						Namespace: "default",
-					},
-				}
-				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
+			By("Creating a database with non-existent cluster reference")
+			database := &neo4jv1alpha1.Neo4jDatabase{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-orphan-db",
+					Namespace: "default",
+				},
+				Spec: neo4jv1alpha1.Neo4jDatabaseSpec{
+					ClusterRef: "non-existent-cluster",
+					Name:       "orphandb",
+				},
 			}
-		})
+			Expect(k8sClient.Create(ctx, database)).To(Succeed())
 
-		AfterEach(func() {
-			// Cleanup logic after each test, like removing the resource instance.
-			resource := &neo4jv1alpha1.Neo4jDatabase{}
-			err := k8sClient.Get(ctx, typeNamespacedName, resource)
-			if err != nil && !errors.IsNotFound(err) {
-				Expect(err).NotTo(HaveOccurred())
-			}
-
-			if err == nil {
-				By("Cleanup the specific resource instance Neo4jDatabase")
-				Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
-
-				// Wait for resource to be deleted, with finalizer handling
-				Eventually(func() bool {
-					err := k8sClient.Get(ctx, typeNamespacedName, resource)
-					if errors.IsNotFound(err) {
-						return true
-					}
-					if err != nil {
-						return false
-					}
-
-					// If resource is stuck with finalizers, force remove them
-					if resource.DeletionTimestamp != nil && len(resource.Finalizers) > 0 {
-						resource.Finalizers = []string{}
-						if updateErr := k8sClient.Update(ctx, resource); updateErr != nil {
-							fmt.Printf("Failed to remove finalizers: %v\n", updateErr)
-						}
-					}
-
-					return false
-				}, "60s", "2s").Should(BeTrue(), "Resource should be deleted within 60 seconds")
-			}
-		})
-		It("should successfully reconcile the resource", func() {
-			By("Reconciling the created resource")
+			By("Reconciling the database with missing cluster")
 			controllerReconciler := &controller.Neo4jDatabaseReconciler{
 				Client: k8sClient,
 				Scheme: k8sClient.Scheme(),
 			}
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedName,
+				NamespacedName: types.NamespacedName{
+					Name:      "test-orphan-db",
+					Namespace: "default",
+				},
 			})
-			Expect(err).NotTo(HaveOccurred())
-			// Add more specific assertions depending on your controller's reconciliation logic.
-			// Example: If you expect a certain status condition after reconciliation, verify it here.
+			Expect(err).NotTo(HaveOccurred()) // Should not error when cluster is missing
+
+			// Cleanup
+			Expect(k8sClient.Delete(ctx, database)).To(Succeed())
 		})
 	})
 })

@@ -77,12 +77,6 @@ docker-compose.override.yml
 *.html
 quality-summary.md
 
-# Temporary analysis and summary files
-*_SUMMARY.md
-*_REPORT.md
-*ANALYSIS*.md
-*VALIDATION*.md
-
 # Test artifacts
 /test/artifacts/
 .dev-config

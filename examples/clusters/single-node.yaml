@@ -1,0 +1,53 @@
+# Single-node Neo4j Enterprise cluster example
+# This creates a standalone Neo4j instance running in single-node mode
+# Suitable for development, testing, and small production workloads
+
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: single-node-cluster
+  namespace: default
+spec:
+  # Neo4j Enterprise Edition (required for this operator)
+  edition: enterprise
+
+  # Neo4j Docker image configuration
+  image:
+    repo: neo4j
+    tag: "5.26-enterprise"  # Neo4j 5.26+ required
+    pullPolicy: IfNotPresent
+
+  # Single-node topology: 1 primary, 0 secondaries
+  # This triggers single-node mode (dbms.mode=SINGLE)
+  topology:
+    primaries: 1      # Exactly 1 primary for single-node
+    secondaries: 0    # Must be 0 for single-node mode
+
+  # Storage configuration
+  storage:
+    className: standard  # Use your cluster's default storage class
+    size: "10Gi"        # Adjust based on your data needs
+
+  # Resource allocation
+  resources:
+    requests:
+      memory: "2Gi"     # Initial memory allocation
+      cpu: "500m"       # Initial CPU allocation
+    limits:
+      memory: "4Gi"     # Maximum memory
+      cpu: "2"          # Maximum CPU cores
+
+  # TLS disabled for simplicity (enable for production)
+  tls:
+    mode: disabled
+
+  # Required environment variables
+  env:
+    - name: NEO4J_ACCEPT_LICENSE_AGREEMENT
+      value: "yes"      # Required for Neo4j Enterprise
+
+---
+# Admin credentials secret (create this before applying the cluster)
+# kubectl create secret generic neo4j-admin-secret \
+#   --from-literal=username=neo4j \
+#   --from-literal=password=your-secure-password

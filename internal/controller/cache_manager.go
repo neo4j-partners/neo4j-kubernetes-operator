@@ -150,9 +150,6 @@ func (cm *CacheManager) GetCacheOptions() cache.Options {
 			&neo4jv1alpha1.Neo4jDatabase{}:          {},
 			&neo4jv1alpha1.Neo4jBackup{}:            {},
 			&neo4jv1alpha1.Neo4jRestore{}:           {},
-			&neo4jv1alpha1.Neo4jUser{}:              {},
-			&neo4jv1alpha1.Neo4jRole{}:              {},
-			&neo4jv1alpha1.Neo4jGrant{}:             {},
 
 			// Core Kubernetes resources - filtered by labels
 			&corev1.Secret{}: {
@@ -317,10 +314,7 @@ func (cm *CacheManager) ShouldFilterResource(obj client.Object) bool {
 	case *neo4jv1alpha1.Neo4jEnterpriseCluster,
 		*neo4jv1alpha1.Neo4jDatabase,
 		*neo4jv1alpha1.Neo4jBackup,
-		*neo4jv1alpha1.Neo4jRestore,
-		*neo4jv1alpha1.Neo4jUser,
-		*neo4jv1alpha1.Neo4jRole,
-		*neo4jv1alpha1.Neo4jGrant:
+		*neo4jv1alpha1.Neo4jRestore:
 		return false
 	}
 

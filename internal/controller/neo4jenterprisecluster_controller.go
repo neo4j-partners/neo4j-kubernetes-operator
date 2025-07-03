@@ -40,6 +40,7 @@ import (
 	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1"
 	neo4jclient "github.com/neo4j-labs/neo4j-kubernetes-operator/internal/neo4j"
 	"github.com/neo4j-labs/neo4j-kubernetes-operator/internal/resources"
+	"github.com/neo4j-labs/neo4j-kubernetes-operator/internal/validation"
 )
 
 // Neo4jEnterpriseClusterReconciler reconciles a Neo4jEnterpriseCluster object
@@ -49,6 +50,7 @@ type Neo4jEnterpriseClusterReconciler struct {
 	Recorder          record.EventRecorder
 	RequeueAfter      time.Duration
 	TopologyScheduler *TopologyScheduler
+	Validator         *validation.ClusterValidator
 }
 
 const (
@@ -91,6 +93,49 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 	// Handle deletion
 	if cluster.DeletionTimestamp != nil {
 		return r.handleDeletion(ctx, cluster)
+	}
+
+	// Apply defaults and validate the cluster
+	if r.Validator != nil {
+		// Apply defaults to the cluster
+		r.Validator.ApplyDefaults(ctx, cluster)
+
+		// Check if this is an update by looking at the generation
+		isUpdate := cluster.Generation > 1 || !cluster.CreationTimestamp.IsZero()
+
+		if isUpdate {
+			// For updates, we need to get the current state from the API server
+			// to compare with the new desired state
+			currentCluster := &neo4jv1alpha1.Neo4jEnterpriseCluster{}
+			if err := r.Get(ctx, req.NamespacedName, currentCluster); err != nil {
+				if !errors.IsNotFound(err) {
+					logger.Error(err, "Failed to get current cluster state for validation")
+					return ctrl.Result{}, err
+				}
+				// If not found, treat as create
+				isUpdate = false
+			}
+
+			if isUpdate {
+				// Validate the cluster update
+				if err := r.Validator.ValidateUpdate(ctx, currentCluster, cluster); err != nil {
+					logger.Error(err, "Cluster update validation failed")
+					r.Recorder.Eventf(cluster, corev1.EventTypeWarning, "ValidationFailed", "Cluster update validation failed: %v", err)
+					r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Update validation failed: %v", err))
+					return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
+				}
+			}
+		}
+
+		if !isUpdate {
+			// Validate the cluster configuration for create
+			if err := r.Validator.ValidateCreate(ctx, cluster); err != nil {
+				logger.Error(err, "Cluster validation failed")
+				r.Recorder.Eventf(cluster, corev1.EventTypeWarning, "ValidationFailed", "Cluster validation failed: %v", err)
+				r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Validation failed: %v", err))
+				return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
+			}
+		}
 	}
 
 	// Add finalizer if not present

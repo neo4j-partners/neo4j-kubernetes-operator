@@ -53,33 +53,6 @@ resources:
   controller: true
   domain: neo4j.com
   group: neo4j
-  kind: Neo4jRole
-  path: github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1
-  version: v1alpha1
-- api:
-    crdVersion: v1
-    namespaced: true
-  controller: true
-  domain: neo4j.com
-  group: neo4j
-  kind: Neo4jGrant
-  path: github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1
-  version: v1alpha1
-- api:
-    crdVersion: v1
-    namespaced: true
-  controller: true
-  domain: neo4j.com
-  group: neo4j
-  kind: Neo4jUser
-  path: github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1
-  version: v1alpha1
-- api:
-    crdVersion: v1
-    namespaced: true
-  controller: true
-  domain: neo4j.com
-  group: neo4j
   kind: Neo4jPlugin
   path: github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1
   version: v1alpha1

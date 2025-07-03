@@ -125,292 +125,53 @@ lint-lenient: golangci-lint ## Run lenient static analysis with higher threshold
 
 # Test Environment Management
 .PHONY: test-setup
-test-setup: ## Setup test environment (cleanup + validation)
+test-setup: ## Setup test environment
 	@echo "🔧 Setting up test environment..."
-	@if [ -f "scripts/test-environment-manager.sh" ]; then \
-		chmod +x scripts/test-environment-manager.sh; \
-		./scripts/test-environment-manager.sh setup; \
-	else \
-		echo "❌ Test environment manager not found"; \
-		exit 1; \
-	fi
-
-.PHONY: test-check
-test-check: ## Check test environment requirements
-	@echo "🔍 Checking test environment..."
-	@if [ -f "scripts/test-environment-manager.sh" ]; then \
-		chmod +x scripts/test-environment-manager.sh; \
-		./scripts/test-environment-manager.sh check; \
-	else \
-		echo "❌ Test environment manager not found"; \
-		exit 1; \
-	fi
+	@./scripts/test-env.sh setup
 
 .PHONY: test-cleanup
-test-cleanup: ## Clean up test environment and artifacts
+test-cleanup: ## Clean up test environment
 	@echo "🧹 Cleaning up test environment..."
-	@if [ -f "scripts/test-environment-manager.sh" ]; then \
-		chmod +x scripts/test-environment-manager.sh; \
-		./scripts/test-environment-manager.sh cleanup; \
-	else \
-		echo "⚠️  Test environment manager not found, using fallback cleanup"; \
-		rm -rf test-results coverage logs tmp; \
-		rm -f test-output.log coverage-*.out coverage-*.html; \
-	fi
-
-.PHONY: test-env-detect
-test-env-detect: ## Detect and display current test environment
-	@echo "🔍 Detecting test environment..."
-	@if [ -f "scripts/test-environment-manager.sh" ]; then \
-		chmod +x scripts/test-environment-manager.sh; \
-		./scripts/test-environment-manager.sh detect; \
-	else \
-		echo "❌ Test environment manager not found"; \
-		exit 1; \
-	fi
+	@./scripts/test-env.sh cleanup
+	@rm -rf test-results coverage logs tmp
+	@rm -f test-output.log coverage-*.out coverage-*.html
 
 # Unit Tests
 .PHONY: test-unit
-test-unit: manifests generate fmt vet envtest ## Run unit tests (no cluster required).
+test-unit: manifests generate fmt vet envtest ## Run unit tests (no cluster required)
 	@echo "🧪 Running unit tests..."
-	@if [ -f "scripts/run-tests.sh" ]; then \
-		chmod +x scripts/run-tests.sh; \
-		./scripts/run-tests.sh unit --no-setup; \
-	else \
-		echo "📋 Running unit tests with go test..."; \
-		KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -v /e2e | grep -v /integration | grep -v "/test/webhooks") -coverprofile coverage/coverage-unit.out -race -v; \
-	fi
+	@mkdir -p coverage
+	@KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -v /e2e | grep -v /integration | grep -v "/test/webhooks") -coverprofile coverage/coverage-unit.out -race -v
 
-.PHONY: test-webhooks
-test-webhooks: manifests generate fmt vet envtest ## Run webhook tests (no cluster required).
-	@echo "🔗 Running webhook tests..."
-	@if [ -f "scripts/run-tests.sh" ]; then \
-		chmod +x scripts/run-tests.sh; \
-		./scripts/run-tests.sh webhooks --no-setup; \
-	else \
-		echo "📋 Running webhook tests with go test..."; \
-		KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test ./internal/webhooks/... ./test/webhooks/... -v -timeout=10m; \
-	fi
+# Webhook tests removed - webhooks migrated to client-side validation
 
-.PHONY: test-webhooks-tls
-test-webhooks-tls: ## Test webhook TLS configuration in development cluster
-	@echo "🔐 Testing webhook TLS configuration..."
-	@./hack/test-webhooks.sh
+# Webhook tests removed - webhooks migrated to client-side validation
 
-.PHONY: test-webhooks-integration
-test-webhooks-integration: dev-cluster operator-setup ## Run webhook integration tests with TLS
-	@echo "🔗 Running webhook integration tests with TLS..."
-	@echo "Testing valid resource acceptance..."
-	@kubectl apply -f config/samples/neo4j_v1alpha1_neo4jenterprisecluster.yaml --dry-run=server > /dev/null && echo "✅ Valid resource accepted" || echo "❌ Valid resource rejected"
-	@echo "Testing invalid resource rejection..."
-	@! kubectl apply -f test/fixtures/invalid-cluster.yaml --dry-run=server > /dev/null 2>&1 && echo "✅ Invalid resource rejected" || echo "❌ Invalid resource accepted"
-	@echo "Testing webhook certificate..."
-	@kubectl get secret webhook-server-cert -n neo4j-operator-system -o jsonpath='{.data.tls\.crt}' | base64 -d | openssl x509 -noout -text | grep -q "Subject:" && echo "✅ Webhook certificate valid" || echo "❌ Webhook certificate invalid"
-
-.PHONY: test-webhook-cert-rotation
-test-webhook-cert-rotation: dev-cluster operator-setup ## Test webhook certificate rotation
-	@echo "🔄 Testing webhook certificate rotation..."
-	@kubectl delete secret webhook-server-cert -n neo4j-operator-system || true
-	@echo "Waiting for certificate regeneration..."
-	@kubectl wait --for=condition=ready certificate serving-cert -n neo4j-operator-system --timeout=120s
-	@echo "Testing webhook functionality after rotation..."
-	@kubectl apply -f config/samples/neo4j_v1alpha1_neo4jenterprisecluster.yaml --dry-run=server > /dev/null && echo "✅ Webhook working after cert rotation" || echo "❌ Webhook failed after cert rotation"
-
-.PHONY: test-security
-test-security: ## Run security-focused tests (no cluster required).
-	@echo "🔒 Running security tests..."
-	@if [ -f "scripts/run-tests.sh" ]; then \
-		chmod +x scripts/run-tests.sh; \
-		./scripts/run-tests.sh unit --no-setup; \
-	else \
-		echo "📋 Running security tests with go test..."; \
-		go test ./internal/controller/security_coordinator_test.go -v; \
-		go test ./internal/webhooks/... -v -run=".*Security.*"; \
-	fi
-
-.PHONY: test-neo4j-client
-test-neo4j-client: ## Run Neo4j client tests (no cluster required).
-	@echo "🗄️  Running Neo4j client tests..."
-	@if [ -f "scripts/run-tests.sh" ]; then \
-		chmod +x scripts/run-tests.sh; \
-		./scripts/run-tests.sh unit --no-setup; \
-	else \
-		echo "📋 Running Neo4j client tests with go test..."; \
-		go test ./internal/neo4j/... -v; \
-	fi
-
-.PHONY: test-controllers
-test-controllers: ## Run controller tests (no cluster required).
-	@echo "🎮 Running controller tests..."
-	@if [ -f "scripts/run-tests.sh" ]; then \
-		chmod +x scripts/run-tests.sh; \
-		./scripts/run-tests.sh unit --no-setup; \
-	else \
-		echo "📋 Running controller tests with go test..."; \
-		go test ./internal/controller/... -v -run="Test.*" -timeout=10m; \
-	fi
 
 # Integration Tests
 .PHONY: test-integration
+test-integration: test-cluster ## Run integration tests
+	@echo "🔗 Running integration tests..."
+	@export KUBECONFIG=$(kind export kubeconfig --name neo4j-operator-test 2>/dev/null) && \
+		go test ./test/integration/... -v -timeout=30m
 
-test-integration: ## Run integration tests with webhooks and cert-manager
-	@echo "🔗 Running integration tests with webhooks and cert-manager..."
-	@if [ -f "scripts/test-with-operator.sh" ]; then \
-		chmod +x scripts/test-with-operator.sh; \
-		./scripts/test-with-operator.sh integration; \
-	elif [ -f "scripts/run-tests.sh" ]; then \
-		chmod +x scripts/run-tests.sh; \
-		./scripts/run-tests.sh integration; \
-	else \
-		echo "📋 Running integration tests with legacy script..."; \
-		@./scripts/run-tests.sh integration; \
-	fi
+# E2E Tests - Removed to simplify test structure
 
-# E2E Tests
-.PHONY: test-e2e
-test-e2e: test-setup ## Run e2e tests with webhooks and cert-manager (requires cluster).
-	@echo "🌐 Running e2e tests with webhooks and cert-manager..."
-	@if [ -f "scripts/test-with-operator.sh" ]; then \
-		chmod +x scripts/test-with-operator.sh; \
-		./scripts/test-with-operator.sh e2e; \
-	elif [ -f "scripts/run-tests.sh" ]; then \
-		chmod +x scripts/run-tests.sh; \
-		./scripts/run-tests.sh e2e --no-setup; \
-	else \
-		echo "📋 Running e2e tests with ginkgo..."; \
-		export E2E_TEST=true; export KIND_CLUSTER=neo4j-operator-test; go test -v ./test/e2e/... -ginkgo.v -ginkgo.timeout=1h; \
-	fi
-
-# Smoke Tests
-.PHONY: test-smoke
-test-smoke: ## Run smoke tests (basic functionality)
-	@echo "💨 Running smoke tests..."
-	@if [ -f "scripts/test-with-operator.sh" ]; then \
-		chmod +x scripts/test-with-operator.sh; \
-		./scripts/test-with-operator.sh smoke; \
-	elif [ -f "scripts/run-tests.sh" ]; then \
-		chmod +x scripts/run-tests.sh; \
-		./scripts/run-tests.sh smoke; \
-	else \
-		echo "❌ Smoke test script not found"; \
-		exit 1; \
-	fi
-
-# Comprehensive Test Suites
+# Test Suites
 .PHONY: test-no-cluster
-test-no-cluster: test-unit test-webhooks test-security test-neo4j-client test-controllers ## Run all tests that don't require a cluster.
+test-no-cluster: test-unit ## Run all tests that don't require a cluster
 
-.PHONY: test-comprehensive
-test-comprehensive: test-unit test-integration test-webhooks test-security ## Run comprehensive test suite with webhooks.
-
-.PHONY: test-ci
-test-ci: test-unit test-webhooks test-security test-integration ## Run CI test suite with webhooks.
-
-# Unified Test Runner
 .PHONY: test
-test: ## Run all tests using unified test runner
-	@echo "🚀 Running comprehensive test suite with webhooks..."
-	@if [ -f "scripts/test-with-operator.sh" ]; then \
-		chmod +x scripts/test-with-operator.sh; \
-		./scripts/test-with-operator.sh all --coverage; \
-	elif [ -f "scripts/run-tests.sh" ]; then \
-		chmod +x scripts/run-tests.sh; \
-		./scripts/run-tests.sh all --coverage; \
-	else \
-		echo "❌ Unified test runner not found, falling back to individual tests"; \
-		$(MAKE) test-comprehensive; \
-	fi
+test: test-unit test-integration ## Run all tests
+	@echo "✅ All tests completed"
 
-.PHONY: test-verbose
-test-verbose: ## Run all tests with verbose output
-	@echo "🚀 Running comprehensive test suite with verbose output..."
-	@if [ -f "scripts/test-with-operator.sh" ]; then \
-		chmod +x scripts/test-with-operator.sh; \
-		./scripts/test-with-operator.sh all --coverage --verbose; \
-	elif [ -f "scripts/run-tests.sh" ]; then \
-		chmod +x scripts/run-tests.sh; \
-		./scripts/run-tests.sh all --coverage --verbose; \
-	else \
-		echo "❌ Unified test runner not found"; \
-		exit 1; \
-	fi
-
-.PHONY: test-fast
-test-fast: ## Run fast test suite (unit + smoke)
-	@echo "⚡ Running fast test suite..."
-	@if [ -f "scripts/test-with-operator.sh" ]; then \
-		chmod +x scripts/test-with-operator.sh; \
-		./scripts/test-with-operator.sh unit --coverage; \
-		./scripts/test-with-operator.sh smoke --no-setup; \
-	elif [ -f "scripts/run-tests.sh" ]; then \
-		chmod +x scripts/run-tests.sh; \
-		./scripts/run-tests.sh unit --coverage; \
-		./scripts/run-tests.sh smoke --no-setup; \
-	else \
-		echo "❌ Unified test runner not found"; \
-		exit 1; \
-	fi
-
-# Test with Operator Setup
-.PHONY: test-with-operator
-test-with-operator: ## Run tests with automatic operator setup
-	@echo "🔧 Running tests with automatic operator setup..."
-	@if [ -f "scripts/test-with-operator.sh" ]; then \
-		chmod +x scripts/test-with-operator.sh; \
-		./scripts/test-with-operator.sh all --coverage --verbose; \
-	else \
-		echo "❌ Test with operator script not found"; \
-		exit 1; \
-	fi
-
-.PHONY: test-with-operator-unit
-test-with-operator-unit: ## Run unit tests with operator setup script
-	@echo "🧪 Running unit tests with operator setup script..."
-	@if [ -f "scripts/test-with-operator.sh" ]; then \
-		chmod +x scripts/test-with-operator.sh; \
-		./scripts/test-with-operator.sh unit --coverage; \
-	else \
-		echo "❌ Test with operator script not found"; \
-		exit 1; \
-	fi
-
-.PHONY: test-with-operator-integration
-test-with-operator-integration: ## Run integration tests with operator setup script
-	@echo "🔗 Running integration tests with operator setup script..."
-	@if [ -f "scripts/test-with-operator.sh" ]; then \
-		chmod +x scripts/test-with-operator.sh; \
-		./scripts/test-with-operator.sh integration --coverage; \
-	else \
-		echo "❌ Test with operator script not found"; \
-		exit 1; \
-	fi
-
-# Test Coverage
 .PHONY: test-coverage
-test-coverage: ## Generate comprehensive coverage report
+test-coverage: ## Generate coverage report
 	@echo "📊 Generating coverage report..."
-	@if [ -f "scripts/run-tests.sh" ]; then \
-		chmod +x scripts/run-tests.sh; \
-		./scripts/run-tests.sh all --coverage --verbose; \
-	else \
-		echo "📋 Generating coverage with go test..."; \
-		go test -coverprofile=coverage/coverage.out -covermode=atomic ./...; \
-		go tool cover -html=coverage/coverage.out -o coverage/coverage.html; \
-		go tool cover -func=coverage/coverage.out | tail -1; \
-	fi
-
-# Test Debug
-.PHONY: test-debug
-test-debug: ## Run tests in debug mode
-	@echo "🐛 Running tests in debug mode..."
-	@export TEST_DEBUG=true; \
-	if [ -f "scripts/run-tests.sh" ]; then \
-		chmod +x scripts/run-tests.sh; \
-		./scripts/run-tests.sh all --verbose --retain-logs; \
-	else \
-		echo "❌ Unified test runner not found"; \
-		exit 1; \
-	fi
+	@mkdir -p coverage
+	@go test -coverprofile=coverage/coverage.out -covermode=atomic ./...
+	@go tool cover -html=coverage/coverage.out -o coverage/coverage.html
+	@go tool cover -func=coverage/coverage.out | tail -1
 
 ##@ Build
 
@@ -603,12 +364,11 @@ catalog-push-test: ## Push a catalog image for testing.
 ##@ Development
 
 .PHONY: dev-cluster
-dev-cluster: ## Create a Kind cluster for development.
+dev-cluster: ## Create a Kind cluster for development
 	@echo "Creating development cluster..."
-	@echo "Setting up Kind cluster prerequisites..."
 	@./scripts/setup-kind-dirs.sh
 	@if ! kind get clusters | grep -q "neo4j-operator-dev"; then \
-		kind create cluster --config hack/kind-config.yaml; \
+		kind create cluster --name neo4j-operator-dev --config hack/kind-config.yaml; \
 		echo "Waiting for cluster to be ready..."; \
 		kubectl wait --for=condition=ready node --all --timeout=300s; \
 		echo "Installing cert-manager..."; \
@@ -619,62 +379,112 @@ dev-cluster: ## Create a Kind cluster for development.
 		echo "Development cluster already exists"; \
 	fi
 
-.PHONY: operator-setup
-operator-setup: ## Set up the Neo4j operator with webhooks and cert-manager for development/testing.
-	@echo "🔧 Setting up Neo4j operator with webhooks and cert-manager..."
-	@if [ -f "scripts/setup-operator.sh" ]; then \
-		chmod +x scripts/setup-operator.sh; \
-		./scripts/setup-operator.sh setup; \
+.PHONY: test-cluster
+test-cluster: ## Create a Kind cluster for testing
+	@echo "Creating test cluster..."
+	@./scripts/test-env.sh cluster
+
+.PHONY: test-cluster-clean
+test-cluster-clean: ## Clean operator resources from test cluster
+	@echo "Cleaning operator resources from test cluster..."
+	@if kind get clusters | grep -q "neo4j-operator-test"; then \
+		echo "Switching to test cluster context..."; \
+		kind export kubeconfig --name neo4j-operator-test; \
+		echo "Removing operator deployment..."; \
+		kubectl delete namespace neo4j-operator-system --ignore-not-found=true --timeout=60s; \
+		echo "Removing test resources..."; \
+		kubectl delete namespace neo4j --ignore-not-found=true --timeout=60s; \
+		echo "Removing CRDs..."; \
+		kubectl delete crd --selector=app.kubernetes.io/name=neo4j-operator --ignore-not-found=true; \
+		echo "Removing webhook configurations..."; \
+		kubectl delete mutatingwebhookconfiguration --selector=app.kubernetes.io/name=neo4j-operator --ignore-not-found=true; \
+		kubectl delete validatingwebhookconfiguration --selector=app.kubernetes.io/name=neo4j-operator --ignore-not-found=true; \
+		echo "Removing cluster roles and bindings..."; \
+		kubectl delete clusterrole --selector=app.kubernetes.io/name=neo4j-operator --ignore-not-found=true; \
+		kubectl delete clusterrolebinding --selector=app.kubernetes.io/name=neo4j-operator --ignore-not-found=true; \
+		echo "Test cluster cleaned!"; \
 	else \
-		echo "❌ Operator setup script not found"; \
-		exit 1; \
+		echo "Test cluster not found, skipping cleanup."; \
 	fi
+
+.PHONY: test-cluster-delete
+test-cluster-delete: ## Delete the test cluster
+	@echo "Deleting test cluster..."
+	@kind delete cluster --name neo4j-operator-test 2>/dev/null || true
+
+.PHONY: test-cluster-reset
+test-cluster-reset: test-cluster-delete test-cluster ## Reset test cluster (delete and recreate)
+	@echo "Test cluster reset complete!"
+
+.PHONY: test-destroy
+test-destroy: ## Completely destroy test environment
+	@echo "Destroying test environment..."
+	@./scripts/test-env.sh cleanup
+	@echo "Test environment destroyed!"
+
+.PHONY: operator-setup
+operator-setup: ## Set up the Neo4j operator with webhooks
+	@echo "🔧 Setting up Neo4j operator with webhooks..."
+	@./scripts/setup-operator.sh setup
 
 .PHONY: operator-status
-operator-status: ## Show operator status and configuration.
+operator-status: ## Show operator status
 	@echo "📊 Checking operator status..."
-	@if [ -f "scripts/setup-operator.sh" ]; then \
-		chmod +x scripts/setup-operator.sh; \
-		./scripts/setup-operator.sh status; \
-	else \
-		echo "❌ Operator setup script not found"; \
-		exit 1; \
-	fi
+	@./scripts/setup-operator.sh status
 
 .PHONY: operator-logs
-operator-logs: ## Follow operator logs.
+operator-logs: ## Follow operator logs
 	@echo "📋 Following operator logs..."
-	@if [ -f "scripts/setup-operator.sh" ]; then \
-		chmod +x scripts/setup-operator.sh; \
-		./scripts/setup-operator.sh logs; \
-	else \
-		echo "❌ Operator setup script not found"; \
-		exit 1; \
-	fi
+	@./scripts/setup-operator.sh logs
 
-.PHONY: operator-cleanup
-operator-cleanup: ## Clean up operator setup artifacts.
-	@echo "🧹 Cleaning up operator setup..."
-	@if [ -f "scripts/setup-operator.sh" ]; then \
-		chmod +x scripts/setup-operator.sh; \
-		./scripts/setup-operator.sh cleanup; \
+.PHONY: dev-cluster-clean
+dev-cluster-clean: ## Clean operator resources from dev cluster
+	@echo "Cleaning operator resources from development cluster..."
+	@if kind get clusters | grep -q "neo4j-operator-dev"; then \
+		echo "Switching to dev cluster context..."; \
+		kind export kubeconfig --name neo4j-operator-dev; \
+		echo "Removing operator deployment..."; \
+		kubectl delete namespace neo4j-operator-system --ignore-not-found=true --timeout=120s; \
+		echo "Removing CRDs..."; \
+		kubectl delete crd --selector=app.kubernetes.io/name=neo4j-operator --ignore-not-found=true; \
+		echo "Removing webhook configurations..."; \
+		kubectl delete mutatingwebhookconfiguration --selector=app.kubernetes.io/name=neo4j-operator --ignore-not-found=true; \
+		kubectl delete validatingwebhookconfiguration --selector=app.kubernetes.io/name=neo4j-operator --ignore-not-found=true; \
+		echo "Removing cluster roles and bindings..."; \
+		kubectl delete clusterrole --selector=app.kubernetes.io/name=neo4j-operator --ignore-not-found=true; \
+		kubectl delete clusterrolebinding --selector=app.kubernetes.io/name=neo4j-operator --ignore-not-found=true; \
+		echo "Development cluster cleaned!"; \
 	else \
-		echo "❌ Operator setup script not found"; \
-		exit 1; \
+		echo "Development cluster not found, skipping cleanup."; \
 	fi
 
 .PHONY: dev-cluster-delete
-dev-cluster-delete: ## Delete the Kind development cluster.
+dev-cluster-delete: ## Delete the Kind development cluster
 	@echo "Deleting development cluster..."
 	@kind delete cluster --name neo4j-operator-dev || true
 
+.PHONY: dev-cluster-reset
+dev-cluster-reset: dev-cluster-delete dev-cluster ## Reset development cluster (delete and recreate)
+	@echo "Development cluster reset complete!"
+
 .PHONY: dev-run
-dev-run: ## Run the operator locally for development.
+dev-run: ## Run the operator locally for development
 	@hack/dev-run.sh
 
 .PHONY: dev-cleanup
-dev-cleanup: ## Clean up development environment.
+dev-cleanup: ## Clean up development environment completely
+	@echo "Cleaning up development environment..."
 	@hack/cleanup-dev.sh
+	@if kind get clusters | grep -q "neo4j-operator-dev"; then \
+		echo "Development cluster still exists. Use 'make dev-cluster-delete' to remove it."; \
+	fi
+
+.PHONY: dev-destroy
+dev-destroy: ## Completely destroy development environment
+	@echo "Destroying development environment..."
+	@hack/cleanup-dev.sh || true
+	@kind delete cluster --name neo4j-operator-dev || true
+	@echo "Development environment destroyed!"
 
 ##@ Code Quality
 
