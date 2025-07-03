@@ -178,7 +178,7 @@ test-unit: manifests generate fmt vet envtest ## Run unit tests (no cluster requ
 		./scripts/run-tests.sh unit --no-setup; \
 	else \
 		echo "📋 Running unit tests with go test..."; \
-		KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -v /e2e | grep -v /integration) -coverprofile coverage/coverage-unit.out -race -v; \
+		KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -v /e2e | grep -v /integration | grep -v "/test/webhooks") -coverprofile coverage/coverage-unit.out -race -v; \
 	fi
 
 .PHONY: test-webhooks
@@ -186,10 +186,10 @@ test-webhooks: manifests generate fmt vet envtest ## Run webhook tests (no clust
 	@echo "🔗 Running webhook tests..."
 	@if [ -f "scripts/run-tests.sh" ]; then \
 		chmod +x scripts/run-tests.sh; \
-		./scripts/run-tests.sh unit --no-setup; \
+		./scripts/run-tests.sh webhooks --no-setup; \
 	else \
 		echo "📋 Running webhook tests with go test..."; \
-		KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test ./internal/webhooks/... -v -timeout=10m; \
+		KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test ./internal/webhooks/... ./test/webhooks/... -v -timeout=10m; \
 	fi
 
 .PHONY: test-webhooks-tls

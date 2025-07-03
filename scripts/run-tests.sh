@@ -78,6 +78,7 @@ show_usage() {
     echo "  unit         - Run unit tests only"
     echo "  integration  - Run integration tests only"
     echo "  e2e          - Run end-to-end tests only"
+    echo "  webhooks     - Run webhook tests only"
     echo "  all          - Run all tests (default)"
     echo "  simple       - Run simple integration tests"
     echo "  smoke        - Run smoke tests"
@@ -167,9 +168,9 @@ run_unit_tests() {
         test_args+=("-failfast")
     fi
 
-    # Run unit tests - exclude integration and e2e test packages
+    # Run unit tests - exclude integration, e2e, and webhook test packages
     # Use go list to get packages excluding test directories
-    local unit_packages=$(go list ./... | grep -v "/test/integration" | grep -v "/test/e2e" | grep -v "/test/cloud")
+    local unit_packages=$(go list ./... | grep -v "/test/integration" | grep -v "/test/e2e" | grep -v "/test/cloud" | grep -v "/test/webhooks")
 
     if [[ "$VERBOSE" == "true" ]]; then
         print_status $BLUE "📋 Running unit tests in packages:"
@@ -177,7 +178,11 @@ run_unit_tests() {
     fi
 
     # Run unit tests on the filtered packages
-    if echo "$unit_packages" | xargs go test -timeout="$TIMEOUT" "${test_args[@]}" 2>&1 | tee -a logs/unit-tests.log; then
+    # Use PIPESTATUS to get the exit code of go test, not tee
+    echo "$unit_packages" | xargs go test -timeout="$TIMEOUT" "${test_args[@]}" 2>&1 | tee -a logs/unit-tests.log
+    local test_exit_code=${PIPESTATUS[1]}  # Get exit code of xargs go test
+
+    if [[ $test_exit_code -eq 0 ]]; then
         print_status $GREEN "✅ Unit tests passed"
         ((PASSED_TESTS++))
     else
@@ -200,7 +205,10 @@ run_integration_tests() {
     local start_time=$(date +%s)
 
     # Run the integration tests with webhooks
-    if go test -v -timeout="$TIMEOUT" ./test/integration/... 2>&1 | tee -a logs/integration-tests.log; then
+    go test -v -timeout="$TIMEOUT" ./test/integration/... 2>&1 | tee -a logs/integration-tests.log
+    local test_exit_code=${PIPESTATUS[0]}  # Get exit code of go test
+
+    if [[ $test_exit_code -eq 0 ]]; then
         print_status $GREEN "✅ Integration tests passed"
         ((PASSED_TESTS++))
     else
@@ -223,7 +231,10 @@ run_simple_integration_tests() {
     local start_time=$(date +%s)
 
     # Run simple integration tests (subset of integration tests)
-    if go test -v -timeout="$TIMEOUT" ./test/integration/... -ginkgo.focus="Simple" 2>&1 | tee -a logs/simple-integration-tests.log; then
+    go test -v -timeout="$TIMEOUT" ./test/integration/... -ginkgo.focus="Simple" 2>&1 | tee -a logs/simple-integration-tests.log
+    local test_exit_code=${PIPESTATUS[0]}  # Get exit code of go test
+
+    if [[ $test_exit_code -eq 0 ]]; then
         print_status $GREEN "✅ Simple integration tests passed"
         ((PASSED_TESTS++))
     else
@@ -256,7 +267,10 @@ run_e2e_tests() {
     export KIND_CLUSTER=neo4j-operator-test
 
     # Run e2e tests
-    if ginkgo -v -timeout="$TIMEOUT" ./test/e2e/... 2>&1 | tee -a logs/e2e-tests.log; then
+    ginkgo -v -timeout="$TIMEOUT" ./test/e2e/... 2>&1 | tee -a logs/e2e-tests.log
+    local test_exit_code=${PIPESTATUS[0]}  # Get exit code of ginkgo
+
+    if [[ $test_exit_code -eq 0 ]]; then
         print_status $GREEN "✅ E2E tests passed"
         ((PASSED_TESTS++))
     else
@@ -279,7 +293,10 @@ run_smoke_tests() {
     local start_time=$(date +%s)
 
     # Run smoke tests (basic functionality tests)
-    if go test -v -timeout="$TIMEOUT" ./test/integration/... -ginkgo.focus="Smoke" 2>&1 | tee -a logs/smoke-tests.log; then
+    go test -v -timeout="$TIMEOUT" ./test/integration/... -ginkgo.focus="Smoke" 2>&1 | tee -a logs/smoke-tests.log
+    local test_exit_code=${PIPESTATUS[0]}  # Get exit code of go test
+
+    if [[ $test_exit_code -eq 0 ]]; then
         print_status $GREEN "✅ Smoke tests passed"
         ((PASSED_TESTS++))
     else
@@ -295,11 +312,51 @@ run_smoke_tests() {
     ((TOTAL_TESTS++))
 }
 
+# Function to run webhook tests
+run_webhook_tests() {
+    print_status $BLUE "🔗 Running webhook tests..."
+
+    local start_time=$(date +%s)
+    local test_args=()
+
+    if [[ "$VERBOSE" == "true" ]]; then
+        test_args+=("-v")
+    fi
+
+    if [[ "$COVERAGE" == "true" ]]; then
+        test_args+=("-coverprofile=coverage/coverage-webhooks.out")
+        test_args+=("-covermode=atomic")
+    fi
+
+    if [[ "$FAIL_FAST" == "true" ]]; then
+        test_args+=("-failfast")
+    fi
+
+    # Run webhook tests - both internal/webhooks and test/webhooks directories
+    go test -timeout="$TIMEOUT" "${test_args[@]}" ./internal/webhooks/... ./test/webhooks/... 2>&1 | tee -a logs/webhook-tests.log
+    local test_exit_code=${PIPESTATUS[0]}  # Get exit code of go test
+
+    if [[ $test_exit_code -eq 0 ]]; then
+        print_status $GREEN "✅ Webhook tests passed"
+        ((PASSED_TESTS++))
+    else
+        print_status $RED "❌ Webhook tests failed"
+        ((FAILED_TESTS++))
+        return 1
+    fi
+
+    local end_time=$(date +%s)
+    local duration=$((end_time - start_time))
+    verbose "Webhook tests completed in ${duration}s"
+
+    ((TOTAL_TESTS++))
+}
+
 # Function to run all tests
 run_all_tests() {
     print_status $BLUE "🚀 Running all tests..."
 
-    local tests_to_run=("unit" "integration" "e2e")
+    local tests_to_run=("unit" "webhooks" "integration" "e2e")
     local failed_tests=()
 
     for test_type in "${tests_to_run[@]}"; do
@@ -309,6 +366,14 @@ run_all_tests() {
             "unit")
                 if ! run_unit_tests; then
                     failed_tests+=("unit")
+                    if [[ "$FAIL_FAST" == "true" ]]; then
+                        break
+                    fi
+                fi
+                ;;
+            "webhooks")
+                if ! run_webhook_tests; then
+                    failed_tests+=("webhooks")
                     if [[ "$FAIL_FAST" == "true" ]]; then
                         break
                     fi
@@ -373,7 +438,7 @@ main() {
     # Parse command line arguments
     while [[ $# -gt 0 ]]; do
         case $1 in
-            unit|integration|e2e|all|simple|smoke)
+            unit|integration|e2e|webhooks|all|simple|smoke)
                 TEST_TYPE="$1"
                 shift
                 ;;
@@ -453,6 +518,9 @@ main() {
             ;;
         "e2e")
             run_e2e_tests
+            ;;
+        "webhooks")
+            run_webhook_tests
             ;;
         "simple")
             run_simple_integration_tests
