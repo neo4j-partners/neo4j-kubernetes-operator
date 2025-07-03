@@ -10,7 +10,6 @@ The Neo4j Enterprise Operator for Kubernetes provides a complete solution for de
 
 - **Neo4j**: Version 5.26 or higher (supports both SemVer and CalVer formats)
 - **Kubernetes**: Version 1.21 or higher
-- **cert-manager**: Required for webhook TLS certificates
 - **Go**: Version 1.21+ (for development)
 
 ## 🚀 Quick Start
@@ -19,9 +18,10 @@ The Neo4j Enterprise Operator for Kubernetes provides a complete solution for de
 
 If you're new to Kubernetes, start here:
 
-1. **Install the operator** using our guided installation:
+1. **Install the operator** using the latest release:
    ```bash
-   kubectl apply -f https://github.com/neo4j-labs/neo4j-kubernetes-operator/releases/latest/download/install.yaml
+   # Install the CRDs and operator
+   kubectl apply -f https://github.com/neo4j-labs/neo4j-kubernetes-operator/releases/latest/download/neo4j-kubernetes-operator.yaml
    ```
 
 2. **Create admin credentials**:
@@ -47,8 +47,8 @@ If you're new to Kubernetes, start here:
 Jump right in with advanced configurations:
 
 ```bash
-# Install with custom configuration
-helm install neo4j-operator oci://ghcr.io/neo4j-labs/neo4j-operator-helm
+# Install the operator
+kubectl apply -f https://github.com/neo4j-labs/neo4j-kubernetes-operator/releases/latest/download/neo4j-kubernetes-operator.yaml
 
 # Deploy production cluster with high availability
 kubectl apply -f examples/clusters/three-node-cluster.yaml
@@ -101,7 +101,7 @@ Complete CRD documentation for all custom resources:
 - **Rolling Updates**: Zero-downtime Neo4j version upgrades
 
 ### 🔐 Security & Authentication
-- **TLS/SSL**: Automatic certificate management via cert-manager
+- **TLS/SSL**: Configurable TLS encryption for client and cluster communications
 - **Authentication**: Support for LDAP, OIDC, and native authentication
 - **RBAC**: Kubernetes role-based access control integration
 - **Network Policies**: Pod-to-pod communication security

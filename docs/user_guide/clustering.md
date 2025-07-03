@@ -4,7 +4,7 @@ This document describes how to configure and manage Neo4j Enterprise clusters us
 
 ## Overview
 
-The Neo4j Kubernetes Operator supports Neo4j 5.x Enterprise clustering with multiple discovery mechanisms and advanced features like auto-scaling, read replicas, and multi-zone deployments.
+The Neo4j Kubernetes Operator supports Neo4j 5.26+ Enterprise clustering with multiple discovery mechanisms and advanced features like auto-scaling, read replicas, and multi-zone deployments.
 
 ## Cluster Architecture
 

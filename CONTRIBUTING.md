@@ -27,13 +27,13 @@ cd neo4j-kubernetes-operator
 2. **Set Up Development Environment**
 
    ```bash
-   make setup-dev
+   make dev-cluster
    ```
 
-3. **Install Pre-commit Hooks**
+3. **Install Dependencies**
 
    ```bash
-   make install-hooks
+   make manifests generate
    ```
 
 4. **Run Tests**
@@ -56,7 +56,7 @@ cd neo4j-kubernetes-operator
 1. **Install all dependencies**:
 
    ```bash
-   make setup-dev
+   make manifests generate
    ```
 
 2. **Create a development cluster**:
@@ -102,10 +102,10 @@ cd neo4j-kubernetes-operator
 
 We have several levels of testing:
 
-- **Unit Tests**: `make test`
+- **Unit Tests**: `make test-unit`
 - **Integration Tests**: `make test-integration`
-- **E2E Tests**: `make test-e2e`
-- **All Tests**: `make test-all`
+- **All Tests**: `make test`
+- **Coverage Report**: `make test-coverage`
 
 ### Code Generation
 
@@ -154,7 +154,7 @@ Install the Go extension and use the provided `.vscode/settings.json` for optima
 
 ### Debugging
 
-Use `make debug` to run the operator with delve debugger support.
+Use `make dev-run` to run the operator locally for development and debugging.
 
 ## Project Structure
 
@@ -166,7 +166,7 @@ Use `make debug` to run the operator with delve debugger support.
 │   ├── controller/         # Controller implementations
 │   ├── resources/          # Resource builders
 │   ├── neo4j/             # Neo4j client and utilities
-│   └── webhooks/          # Admission webhooks
+│   └── validation/        # Input validation logic
 ├── test/                   # Test files
 ├── hack/                   # Development scripts
 └── docs/                   # Documentation

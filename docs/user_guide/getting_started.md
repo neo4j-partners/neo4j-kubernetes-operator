@@ -4,7 +4,7 @@ This guide will walk you through the process of deploying your first Neo4j Enter
 
 ## Prerequisites
 
-*   A Kubernetes cluster (v1.19+).
+*   A Kubernetes cluster (v1.21+).
 *   `kubectl` installed and configured.
 *   A Neo4j Enterprise license.
 
@@ -15,7 +15,7 @@ For detailed installation instructions, see the [Installation Guide](installatio
 For a quick start, you can install the operator with a single command:
 
 ```bash
-kubectl apply -f https://github.com/neo4j-labs/neo4j-kubernetes-operator/releases/latest/download/neo4j-operator.yaml
+kubectl apply -f https://github.com/neo4j-labs/neo4j-kubernetes-operator/releases/latest/download/neo4j-kubernetes-operator.yaml
 ```
 
 ## Deploying a Cluster
