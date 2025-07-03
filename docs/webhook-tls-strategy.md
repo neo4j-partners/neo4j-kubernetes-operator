@@ -14,7 +14,7 @@ make dev-run ARGS="--enable-webhooks=false"
 make test-webhooks
 ```
 
-### 2. Local Kubernetes (Kind/Minikube)
+### 2. Local Kubernetes (Kind)
 ```yaml
 # config/dev/kustomization.yaml
 apiVersion: kustomize.config.k8s.io/v1beta1
@@ -179,7 +179,7 @@ configMapGenerator:
 For production, webhooks should use:
 1. **Internal CA**: Organization's internal CA for private clusters
 2. **Service Mesh**: Istio/Linkerd can handle mTLS automatically
-3. **Cloud Provider CA**: EKS/GKE/AKS integrated certificate management
+3. **Cloud Provider CA**: Integrated certificate management from cloud providers
 
 ## Testing Checklist
 

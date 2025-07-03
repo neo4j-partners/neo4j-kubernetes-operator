@@ -1,559 +1,183 @@
-name: CI Unified
+name: CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [ main, develop ]
   pull_request:
-    branches: [main, develop]
-  release:
-    types: [published]
-  workflow_dispatch:
+    branches: [ main, develop ]
 
 env:
-  GO_VERSION: '1.24'
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  GO_VERSION: '1.22'
 
 jobs:
-  # Fast feedback tests - run first and fail fast
-  fast-tests:
-    name: Fast Feedback Tests
+  code-quality:
+    name: Code Quality
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
 
-      - name: Install dependencies and generate manifests
-        run: |
-          make manifests
+    - name: Download dependencies
+      run: go mod download
 
-      - name: Environment cleanup and sanity checks
-        run: |
-          echo "Performing environment cleanup and sanity checks..."
-          # Clean up any local test artifacts
-          rm -rf test-results/ coverage/ logs/ tmp/
-          # Clean up any build artifacts
-          rm -rf bin/ dist/ build/
-          echo "Environment preparation completed"
+    - name: Generate code
+      run: make generate manifests
 
-      - name: Install pre-commit
-        run: pip install pre-commit
+    - name: Check formatting
+      run: |
+        make fmt
+        git diff --exit-code || (echo "Code is not formatted. Run 'make fmt'" && exit 1)
 
-      - name: Cache pre-commit
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pre-commit
-          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+    - name: Run linting
+      run: make lint-lenient
 
-      - name: Run pre-commit checks
-        run: pre-commit run --all-files
+    - name: Run vet
+      run: make vet
 
-      - name: Run comprehensive static analysis
-        run: |
-          echo "Running lenient static analysis..."
-          make lint-lenient || {
-            echo "Static analysis completed with warnings (this is expected for lenient mode)"
-            echo "See the output above for details on any issues found"
-          }
+    - name: Check for security issues
+      run: make security
 
-      - name: Run unit tests with race detection
-        run: |
-          echo "Running unit tests with race detection..."
-          make test-unit
-        timeout-minutes: 10
-
-      - name: Run tests that don't require a cluster
-        run: |
-          echo "Running all tests that don't require a cluster..."
-          make test-no-cluster
-        timeout-minutes: 8
-
-      - name: Run specific controller tests
-        run: |
-          echo "Running specific controller tests..."
-          make test-controllers
-        timeout-minutes: 8
-
-      - name: Run webhook tests
-        run: |
-          echo "Running webhook tests..."
-          make test-webhooks
-        timeout-minutes: 5
-
-      - name: Run security tests
-        run: |
-          echo "Running security tests..."
-          make test-security
-        timeout-minutes: 5
-
-      - name: Run Neo4j client tests
-        run: |
-          echo "Running Neo4j client tests..."
-          make test-neo4j-client
-        timeout-minutes: 8
-
-      - name: Generate test coverage report
-        if: always()
-        run: |
-          echo "Generating test coverage report..."
-          if [ -f "cover.out" ]; then
-            go tool cover -html=cover.out -o coverage.html
-            echo "Coverage report generated: coverage.html"
-          else
-            echo "No coverage file found"
-          fi
-
-      - name: Upload fast test results and coverage
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: fast-test-results
-          path: |
-            test-results/
-            coverage/
-            logs/
-            coverage.html
-            cover.out
-          retention-days: 7
-
-      - name: Fast Tests Summary
-        if: always()
-        run: |
-          echo "## Fast Feedback Tests Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### ✅ Completed Tests:" >> $GITHUB_STEP_SUMMARY
-          echo "- Pre-commit checks" >> $GITHUB_STEP_SUMMARY
-          echo "- Static analysis with lenient configuration" >> $GITHUB_STEP_SUMMARY
-          echo "- Unit tests with race detection" >> $GITHUB_STEP_SUMMARY
-          echo "- Controller tests (backup, enterprise cluster, autoscaler)" >> $GITHUB_STEP_SUMMARY
-          echo "- Webhook validation tests" >> $GITHUB_STEP_SUMMARY
-          echo "- Security coordinator tests" >> $GITHUB_STEP_SUMMARY
-          echo "- Neo4j client tests" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 📊 Test Results:" >> $GITHUB_STEP_SUMMARY
-          if [ -f "cover.out" ]; then
-            COVERAGE=$(go tool cover -func=cover.out | grep total | awk '{print $3}')
-            echo "- Coverage: $COVERAGE" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "- Coverage: Not available" >> $GITHUB_STEP_SUMMARY
-          fi
-
-  # Integration tests - run after fast tests pass
-  integration-test:
-    name: Integration Test
+  unit-tests:
+    name: Unit Tests
     runs-on: ubuntu-latest
-    needs: [fast-tests]
-    timeout-minutes: 30
-    env:
-      CI: true
-      GITHUB_ACTIONS: true
+    needs: code-quality
+
     steps:
-      - uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
 
-      - name: Environment preparation
-        run: |
-          echo "Performing environment preparation..."
-          # Clean up any local test artifacts
-          rm -rf test-results/ coverage/ logs/ tmp/
-          echo "Environment preparation completed"
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
 
-      - name: Install dependencies and generate manifests
-        run: |
-          make manifests
+    - name: Download dependencies
+      run: go mod download
 
-      - name: Setup test environment using environment manager
-        run: |
-          echo "=== Setting up test environment using environment manager ==="
-          chmod +x scripts/test-environment-manager.sh
-          ./scripts/test-environment-manager.sh setup --verbose --timeout=15m
-          echo "=== Test environment setup completed ==="
+    - name: Run unit tests
+      run: make test-unit
 
-      - name: Build operator image
-        run: |
-          echo "=== Building operator image ==="
-          # Build the operator image
-          make docker-build IMG=neo4j-operator:ci
-          # Load the image into Kind cluster
-          kind load docker-image neo4j-operator:ci --name neo4j-operator-test
-          echo "✅ Operator image built and loaded"
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        file: ./coverage/coverage-unit.out
+        flags: unit
+        name: unit-tests
+        fail_ci_if_error: false
+      env:
+        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
-      - name: Apply webhook and cert-manager resources
-        run: |
-          echo "=== Applying webhook and cert-manager resources ==="
-          # Apply webhook configurations
-          kubectl apply -k config/webhook/
-          # Apply cert-manager resources
-          kubectl apply -f config/certmanager/
-          echo "✅ Webhook and cert-manager resources applied"
-
-      - name: Wait for webhook certificate to be ready
-        run: |
-          echo "=== Waiting for webhook certificate to be ready ==="
-          kubectl wait --for=condition=Ready certificate/serving-cert -n neo4j-operator-system --timeout=60s
-          kubectl get secret webhook-server-cert -n neo4j-operator-system
-          echo "✅ Webhook certificate is ready"
-
-      - name: Deploy operator with webhooks
-        run: |
-          echo "=== Deploying operator with webhooks and cert-manager ==="
-          # Deploy the operator with webhooks and cert-manager
-          make deploy IMG=neo4j-operator:ci
-          echo "✅ Operator deployment initiated"
-
-      - name: Patch deployment with webhook certificate mount
-        run: |
-          echo "=== Patching deployment with webhook certificate mount ==="
-          # Create the webhook patch with correct namespace
-          cat > webhook_patch_fixed.yaml << 'EOF'
-          apiVersion: apps/v1
-          kind: Deployment
-          metadata:
-            name: neo4j-operator-controller-manager
-            namespace: neo4j-operator-system
-          spec:
-            template:
-              spec:
-                containers:
-                - name: manager
-                  ports:
-                  - containerPort: 9443
-                    name: webhook-server
-                    protocol: TCP
-                  volumeMounts:
-                  - mountPath: /tmp/k8s-webhook-server/serving-certs
-                    name: cert
-                    readOnly: true
-                volumes:
-                - name: cert
-                  secret:
-                    defaultMode: 420
-                    secretName: webhook-server-cert
-          EOF
-          # Apply the patch
-          kubectl patch deployment neo4j-operator-controller-manager -n neo4j-operator-system --patch-file webhook_patch_fixed.yaml
-          echo "✅ Webhook certificate mount patch applied"
-
-      - name: Wait for operator to be ready
-        run: |
-          echo "=== Waiting for operator to be ready ==="
-          # Wait for deployment rollout to complete
-          kubectl rollout status deployment/neo4j-operator-controller-manager -n neo4j-operator-system --timeout=300s
-          # Check operator status
-          kubectl get pods -n neo4j-operator-system
-          kubectl get deployment controller-manager -n neo4j-operator-system
-          echo "✅ Operator deployment with webhooks completed"
-
-      - name: Verify operator logs
-        run: |
-          echo "=== Verifying operator logs ==="
-          # Wait a moment for operator to fully initialize
-          sleep 10
-          # Check operator logs for successful startup
-          kubectl logs -n neo4j-operator-system deployment/neo4j-operator-controller-manager --tail=50
-          # Verify no crash loop backoff
-          if kubectl get pods -n neo4j-operator-system | grep -q "CrashLoopBackOff"; then
-            echo "❌ Operator pod is in CrashLoopBackOff state"
-            kubectl describe pods -n neo4j-operator-system
-            exit 1
-          fi
-          echo "✅ Operator logs verified - no crash loop detected"
-
-      - name: Run integration tests
-        run: |
-          echo "Running integration tests with webhooks and cert-manager..."
-          # Set up test environment
-          export KUBECONFIG=$(kind export kubeconfig --name neo4j-operator-test)
-          # Set optimized test environment variables for faster execution
-          export TEST_MODE=true
-          export TEST_TIMEOUT=10m
-          export TEST_PARALLEL_JOBS=2
-          export TEST_VERBOSE=false
-          export TEST_CLEANUP_ON_FAILURE=true
-          # Run integration tests with webhooks
-          make test-integration
-        timeout-minutes: 20
-
-      - name: Upload integration test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: integration-test-results
-          path: |
-            test-output.log
-            coverage-integration.out
-            coverage-integration.html
-          retention-days: 7
-
-      - name: Cleanup test environment
-        if: always()
-        run: |
-          echo "=== Cleaning up test environment ==="
-          chmod +x scripts/test-environment-manager.sh
-          ./scripts/test-environment-manager.sh cleanup --force
-          echo "=== Test environment cleanup completed ==="
-
-  # E2E tests - run after integration tests pass
-  e2e-test:
-    name: E2E Test
+  integration-tests:
+    name: Integration Tests
     runs-on: ubuntu-latest
-    needs: [fast-tests]
+    needs: unit-tests
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'integration-tests'))
     timeout-minutes: 45
-    env:
-      CI: true
-      GITHUB_ACTIONS: true
-      KIND_CLUSTER: neo4j-operator-test
-      E2E_TEST: true
+
     steps:
-      - uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
 
-      - name: Environment preparation
-        run: |
-          echo "Performing environment preparation..."
-          # Clean up any local test artifacts
-          rm -rf test-results/ coverage/ logs/ tmp/
-          echo "Environment preparation completed"
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
 
-      - name: Install dependencies and generate manifests
-        run: |
-          make manifests
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
 
-      - name: Setup test environment using environment manager
-        run: |
-          echo "=== Setting up test environment using environment manager ==="
-          chmod +x scripts/test-environment-manager.sh
-          ./scripts/test-environment-manager.sh setup --verbose --timeout=15m
-          echo "=== Test environment setup completed ==="
+    - name: Install Kind
+      run: |
+        curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
+        chmod +x ./kind
+        sudo mv ./kind /usr/local/bin/kind
 
-      - name: Build operator image
-        run: |
-          echo "=== Building operator image ==="
-          # Build the operator image
-          make docker-build IMG=neo4j-operator:ci
-          # Load the image into Kind cluster
-          kind load docker-image neo4j-operator:ci --name neo4j-operator-test
-          echo "✅ Operator image built and loaded"
+    - name: Install kubectl
+      run: |
+        curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+        chmod +x kubectl
+        sudo mv kubectl /usr/local/bin/
 
-      - name: Apply webhook and cert-manager resources
-        run: |
-          echo "=== Applying webhook and cert-manager resources ==="
-          # Apply webhook configurations
-          kubectl apply -k config/webhook/
-          # Apply cert-manager resources
-          kubectl apply -f config/certmanager/
-          echo "✅ Webhook and cert-manager resources applied"
+    - name: Download dependencies
+      run: go mod download
 
-      - name: Wait for webhook certificate to be ready
-        run: |
-          echo "=== Waiting for webhook certificate to be ready ==="
-          kubectl wait --for=condition=Ready certificate/serving-cert -n neo4j-operator-system --timeout=60s
-          kubectl get secret webhook-server-cert -n neo4j-operator-system
-          echo "✅ Webhook certificate is ready"
+    - name: Create test cluster
+      run: make test-cluster
 
-      - name: Deploy operator with webhooks
-        run: |
-          echo "=== Deploying operator with webhooks and cert-manager ==="
-          # Deploy the operator with webhooks and cert-manager
-          make deploy IMG=neo4j-operator:ci
-          echo "✅ Operator deployment initiated"
+    - name: Install CRDs and operator setup
+      run: |
+        make manifests
+        make install
 
-      - name: Patch deployment with webhook certificate mount
-        run: |
-          echo "=== Patching deployment with webhook certificate mount ==="
-          # Create the webhook patch with correct namespace
-          cat > webhook_patch_fixed.yaml << 'EOF'
-          apiVersion: apps/v1
-          kind: Deployment
-          metadata:
-            name: neo4j-operator-controller-manager
-            namespace: neo4j-operator-system
-          spec:
-            template:
-              spec:
-                containers:
-                - name: manager
-                  ports:
-                  - containerPort: 9443
-                    name: webhook-server
-                    protocol: TCP
-                  volumeMounts:
-                  - mountPath: /tmp/k8s-webhook-server/serving-certs
-                    name: cert
-                    readOnly: true
-                volumes:
-                - name: cert
-                  secret:
-                    defaultMode: 420
-                    secretName: webhook-server-cert
-          EOF
-          # Apply the patch
-          kubectl patch deployment neo4j-operator-controller-manager -n neo4j-operator-system --patch-file webhook_patch_fixed.yaml
-          echo "✅ Webhook certificate mount patch applied"
+    - name: Wait for cluster to be ready
+      run: |
+        kubectl wait --for=condition=Ready nodes --all --timeout=300s
+        kubectl get nodes
 
-      - name: Wait for operator to be ready
-        run: |
-          echo "=== Waiting for operator to be ready ==="
-          # Wait for deployment rollout to complete
-          kubectl rollout status deployment/neo4j-operator-controller-manager -n neo4j-operator-system --timeout=300s
-          # Check operator status
-          kubectl get pods -n neo4j-operator-system
-          kubectl get deployment controller-manager -n neo4j-operator-system
-          echo "✅ Operator deployment with webhooks completed"
+    - name: Run integration tests
+      run: make test-integration
+      env:
+        KUBECONFIG: ~/.kube/config
 
-      - name: Verify operator logs
-        run: |
-          echo "=== Verifying operator logs ==="
-          # Wait a moment for operator to fully initialize
-          sleep 10
-          # Check operator logs for successful startup
-          kubectl logs -n neo4j-operator-system deployment/neo4j-operator-controller-manager --tail=50
-          # Verify no crash loop backoff
-          if kubectl get pods -n neo4j-operator-system | grep -q "CrashLoopBackOff"; then
-            echo "❌ Operator pod is in CrashLoopBackOff state"
-            kubectl describe pods -n neo4j-operator-system
-            exit 1
-          fi
-          echo "✅ Operator logs verified - no crash loop detected"
+    - name: Collect cluster logs on failure
+      if: failure()
+      run: |
+        echo "=== Cluster Info ==="
+        kubectl get nodes -o wide
+        kubectl get pods -A
+        echo "=== Operator Logs ==="
+        kubectl logs -n neo4j-operator-system deployment/neo4j-operator-controller-manager || true
+        echo "=== CRD Status ==="
+        kubectl get crd | grep neo4j || true
 
-      - name: Run E2E tests
-        run: |
-          echo "Running e2e tests with webhooks and cert-manager..."
-          # Set up test environment
-          export KUBECONFIG=$(kind export kubeconfig --name neo4j-operator-test)
-          export KIND_CLUSTER=neo4j-operator-test
-          export E2E_TEST=true
-          # Set optimized test environment variables for faster execution
-          export TEST_MODE=true
-          export TEST_TIMEOUT=5m
-          # Run E2E tests
-          make test-e2e
-        timeout-minutes: 30
+    - name: Archive test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: integration-test-results
+        path: |
+          coverage/
+          *.out
 
-      - name: Upload E2E test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: e2e-test-results
-          path: |
-            test-output.log
-          retention-days: 7
-
-      - name: Cleanup test environment
-        if: always()
-        run: |
-          echo "=== Cleaning up test environment ==="
-          chmod +x scripts/test-environment-manager.sh
-          ./scripts/test-environment-manager.sh cleanup --force
-          echo "=== Test environment cleanup completed ==="
-
-  # Security scan - run in parallel with integration tests
-  security:
-    name: Security Scan
-    runs-on: ubuntu-latest
-    needs: [fast-tests]
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-      - name: Run Gosec Security Scanner
-        run: |
-          go install github.com/securego/gosec/v2/cmd/gosec@latest
-          gosec -no-fail -fmt sarif -out results.sarif ./...
-        continue-on-error: true
-      - name: Ensure SARIF file exists
-        run: |
-          if [ ! -f results.sarif ]; then
-            echo '{"version":"2.1.0","runs":[]}' > results.sarif
-          fi
-      - name: Upload SARIF file
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: results.sarif
-        if: always()
-
-  # Build - run after all tests pass
-  build:
-    name: Build
-    runs-on: ubuntu-latest
-    needs: [fast-tests, integration-test, e2e-test, security]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.24'
-      - name: Build
-        run: make build
-      - name: Build container image
-        run: make docker-build
-      - name: Log in to Container Registry
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Extract metadata
-        if: github.event_name != 'pull_request'
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=sha
-      - name: Build and push Docker image
-        if: github.event_name != 'pull_request'
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-
-  # Release - run only on release events
-  release:
-    name: Release
-    runs-on: ubuntu-latest
-    needs: [integration-test, e2e-test, build]
-    if: github.event_name == 'release'
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.24'
-      - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v5
-        with:
-          version: latest
-          args: release --clean
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Cleanup test cluster
+      if: always()
+      run: make test-cluster-delete || true

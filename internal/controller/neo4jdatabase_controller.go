@@ -51,9 +51,9 @@ const (
 	DatabaseFinalizer = "neo4j.com/database-finalizer"
 )
 
-// +kubebuilder:rbac:groups=neo4j.com,resources=neo4jdatabases,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=neo4j.com,resources=neo4jdatabases/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=neo4j.com,resources=neo4jdatabases/finalizers,verbs=update
+// +kubebuilder:rbac:groups=neo4j.neo4j.com,resources=neo4jdatabases,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=neo4j.neo4j.com,resources=neo4jdatabases/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=neo4j.neo4j.com,resources=neo4jdatabases/finalizers,verbs=update
 // +kubebuilder:rbac:groups=neo4j.neo4j.com,resources=neo4jenterpriseclusters,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 

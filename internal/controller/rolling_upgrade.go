@@ -640,11 +640,9 @@ func (r *RollingUpgradeOrchestrator) validateSemVerUpgrade(current, target *Vers
 		return fmt.Errorf("only Neo4j 5.26+ versions are supported")
 	}
 
-	if current.Major == 4 && target.Major == 4 {
-		if current.Minor >= 4 {
-			return nil // Allow upgrades within 4.4+
-		}
-		return fmt.Errorf("only Neo4j 4.4+ versions are supported")
+	// Neo4j 4.x is no longer supported - only 5.26+ versions are supported
+	if current.Major == 4 || target.Major == 4 {
+		return fmt.Errorf("Neo4j 4.x versions are not supported - only 5.26+ versions are supported")
 	}
 
 	return fmt.Errorf("unsupported SemVer upgrade path from %s to %s", currentStr, targetStr)
@@ -903,12 +901,12 @@ func (r *RollingUpgradeOrchestrator) parseVersionFromQueryResult(result string) 
 	lines := strings.Split(result, "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		// Look for version patterns like "5.15.0", "4.4.12", etc.
+		// Look for version patterns like "5.26.0", "2025.01.0", etc.
 		if r.isVersionString(line) {
 			return line
 		}
 
-		// Also check if the line contains a version (e.g., "version: 5.15.0")
+		// Also check if the line contains a version (e.g., "version: 5.26.0")
 		if strings.Contains(line, ":") {
 			parts := strings.Split(line, ":")
 			if len(parts) >= 2 {
@@ -971,7 +969,7 @@ func (r *RollingUpgradeOrchestrator) versionsMatch(actual, expected string) bool
 		return true
 	}
 
-	// Try semantic version comparison (handle cases like "5.15" vs "5.15.0")
+	// Try semantic version comparison (handle cases like "5.26" vs "5.26.0")
 	actualParts := strings.Split(actual, ".")
 	expectedParts := strings.Split(expected, ".")
 

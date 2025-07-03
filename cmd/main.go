@@ -23,7 +23,6 @@ limitations under the License.
 package main
 
 import (
-	"crypto/tls"
 	"flag"
 	"fmt"
 	"net/http"
@@ -31,6 +30,9 @@ import (
 	"strings"
 	"time"
 
+	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1"
+	"github.com/neo4j-labs/neo4j-kubernetes-operator/internal/controller"
+	"github.com/neo4j-labs/neo4j-kubernetes-operator/internal/validation"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -41,13 +43,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
-
-	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1"
-	"github.com/neo4j-labs/neo4j-kubernetes-operator/internal/controller"
-	"github.com/neo4j-labs/neo4j-kubernetes-operator/internal/webhooks"
-
-	certv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -87,7 +82,6 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(neo4jv1alpha1.AddToScheme(scheme))
-	utilruntime.Must(certv1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -98,8 +92,6 @@ func main() {
 		probeAddr            = flag.String("health-probe-bind-address", "", "The address the probe endpoint binds to. (auto-assigned based on mode if empty)")
 		enableLeaderElection = flag.Bool("leader-elect", false, "Enable leader election for controller manager.")
 		secureMetrics        = flag.Bool("metrics-secure", false, "If set the metrics endpoint is served securely")
-		enableHTTP2          = flag.Bool("enable-http2", false, "If set, HTTP/2 will be enabled for the metrics and webhook servers")
-		enableWebhooks       = flag.Bool("enable-webhooks", true, "Enable admission webhooks")
 
 		// Development mode specific flags
 		controllersToLoad = flag.String("controllers", "cluster", "Comma-separated list of controllers to load (dev mode only)")
@@ -151,11 +143,6 @@ func main() {
 		case MinimalMode:
 			*probeAddr = ":8085"
 		}
-	}
-
-	// Adjust webhook defaults based on mode
-	if operatorMode == DevelopmentMode && !isFlagSet("enable-webhooks") {
-		*enableWebhooks = false
 	}
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
@@ -213,28 +200,7 @@ func main() {
 		"ultra_fast", *ultraFast,
 		"metrics_address", *metricsAddr,
 		"health_address", *probeAddr,
-		"webhooks_enabled", *enableWebhooks)
-
-	disableHTTP2 := func(c *tls.Config) {
-		if c == nil {
-			setupLog.Error(nil, "tls.Config is nil")
-			return
-		}
-		setupLog.Info("disabling http/2")
-		c.NextProtos = []string{"http/1.1"}
-	}
-
-	tlsOpts := []func(*tls.Config){}
-	if !*enableHTTP2 {
-		tlsOpts = append(tlsOpts, disableHTTP2)
-	}
-
-	var webhookServer webhook.Server
-	if *enableWebhooks {
-		webhookServer = webhook.NewServer(webhook.Options{
-			TLSOpts: tlsOpts,
-		})
-	}
+	)
 
 	// Configure cache options based on mode and strategy
 	var cacheOpts cache.Options
@@ -291,7 +257,7 @@ func main() {
 
 	if useDirectClient {
 		// Create manager with minimal caching
-		mgr, err = createDirectClientManager(config, cacheOpts, *metricsAddr, *probeAddr, *secureMetrics, operatorMode, tlsOpts, webhookServer, *enableLeaderElection)
+		mgr, err = createDirectClientManager(config, cacheOpts, *metricsAddr, *probeAddr, *secureMetrics, operatorMode, *enableLeaderElection)
 	} else {
 		// Standard manager creation
 		mgr, err = ctrl.NewManager(config, ctrl.Options{
@@ -299,9 +265,7 @@ func main() {
 			Metrics: metricsserver.Options{
 				BindAddress:   *metricsAddr,
 				SecureServing: *secureMetrics && operatorMode == ProductionMode,
-				TLSOpts:       tlsOpts,
 			},
-			WebhookServer:          webhookServer,
 			HealthProbeBindAddress: *probeAddr,
 			LeaderElection:         *enableLeaderElection,
 			LeaderElectionID:       "neo4j-operator-leader-election",
@@ -320,15 +284,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Setup webhooks if enabled
-	if *enableWebhooks {
-		if err = setupWebhooks(mgr); err != nil {
-			setupLog.Error(err, "failed to setup webhooks")
-			os.Exit(1)
-		}
-	} else {
-		setupLog.Info("webhooks disabled")
-	}
 	// +kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
@@ -391,6 +346,7 @@ func setupProductionControllers(mgr ctrl.Manager) error {
 				Recorder:          mgr.GetEventRecorderFor("neo4j-enterprise-cluster-controller"),
 				RequeueAfter:      controller.GetTestRequeueAfter(),
 				TopologyScheduler: controller.NewTopologyScheduler(mgr.GetClient()),
+				Validator:         validation.NewClusterValidator(mgr.GetClient()),
 			},
 		},
 		{
@@ -417,33 +373,6 @@ func setupProductionControllers(mgr ctrl.Manager) error {
 				Client:       mgr.GetClient(),
 				Scheme:       mgr.GetScheme(),
 				Recorder:     mgr.GetEventRecorderFor("neo4j-restore-controller"),
-				RequeueAfter: controller.GetTestRequeueAfter(),
-			},
-		},
-		{
-			name: "Neo4jRole",
-			controller: &controller.Neo4jRoleReconciler{
-				Client:       mgr.GetClient(),
-				Scheme:       mgr.GetScheme(),
-				Recorder:     mgr.GetEventRecorderFor("neo4j-role-controller"),
-				RequeueAfter: controller.GetTestRequeueAfter(),
-			},
-		},
-		{
-			name: "Neo4jGrant",
-			controller: &controller.Neo4jGrantReconciler{
-				Client:       mgr.GetClient(),
-				Scheme:       mgr.GetScheme(),
-				Recorder:     mgr.GetEventRecorderFor("neo4j-grant-controller"),
-				RequeueAfter: controller.GetTestRequeueAfter(),
-			},
-		},
-		{
-			name: "Neo4jUser",
-			controller: &controller.Neo4jUserReconciler{
-				Client:       mgr.GetClient(),
-				Scheme:       mgr.GetScheme(),
-				Recorder:     mgr.GetEventRecorderFor("neo4j-user-controller"),
 				RequeueAfter: controller.GetTestRequeueAfter(),
 			},
 		},
@@ -477,6 +406,7 @@ func setupDevelopmentControllers(mgr ctrl.Manager, controllers []string) error {
 				Recorder:          mgr.GetEventRecorderFor("neo4j-enterprise-cluster-controller"),
 				RequeueAfter:      controller.GetTestRequeueAfter(),
 				TopologyScheduler: controller.NewTopologyScheduler(mgr.GetClient()),
+				Validator:         validation.NewClusterValidator(mgr.GetClient()),
 			}, "Neo4jEnterpriseCluster"
 		},
 		"database": func() (interface{ SetupWithManager(ctrl.Manager) error }, string) {
@@ -502,30 +432,6 @@ func setupDevelopmentControllers(mgr ctrl.Manager, controllers []string) error {
 				Recorder:     mgr.GetEventRecorderFor("neo4j-restore-controller"),
 				RequeueAfter: controller.GetTestRequeueAfter(),
 			}, "Neo4jRestore"
-		},
-		"role": func() (interface{ SetupWithManager(ctrl.Manager) error }, string) {
-			return &controller.Neo4jRoleReconciler{
-				Client:       mgr.GetClient(),
-				Scheme:       mgr.GetScheme(),
-				Recorder:     mgr.GetEventRecorderFor("neo4j-role-controller"),
-				RequeueAfter: controller.GetTestRequeueAfter(),
-			}, "Neo4jRole"
-		},
-		"grant": func() (interface{ SetupWithManager(ctrl.Manager) error }, string) {
-			return &controller.Neo4jGrantReconciler{
-				Client:       mgr.GetClient(),
-				Scheme:       mgr.GetScheme(),
-				Recorder:     mgr.GetEventRecorderFor("neo4j-grant-controller"),
-				RequeueAfter: controller.GetTestRequeueAfter(),
-			}, "Neo4jGrant"
-		},
-		"user": func() (interface{ SetupWithManager(ctrl.Manager) error }, string) {
-			return &controller.Neo4jUserReconciler{
-				Client:       mgr.GetClient(),
-				Scheme:       mgr.GetScheme(),
-				Recorder:     mgr.GetEventRecorderFor("neo4j-user-controller"),
-				RequeueAfter: controller.GetTestRequeueAfter(),
-			}, "Neo4jUser"
 		},
 		"plugin": func() (interface{ SetupWithManager(ctrl.Manager) error }, string) {
 			return &controller.Neo4jPluginReconciler{
@@ -559,35 +465,12 @@ func setupMinimalController(mgr ctrl.Manager) error {
 		Recorder:          mgr.GetEventRecorderFor("neo4j-enterprise-cluster-controller"),
 		RequeueAfter:      controller.GetTestRequeueAfter(),
 		TopologyScheduler: controller.NewTopologyScheduler(mgr.GetClient()),
+		Validator:         validation.NewClusterValidator(mgr.GetClient()),
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("failed to setup Neo4jEnterpriseCluster controller: %w", err)
 	}
 
 	setupLog.Info("loaded controller", "controller", "Neo4jEnterpriseCluster")
-	return nil
-}
-
-// setupWebhooks sets up all webhooks
-func setupWebhooks(mgr ctrl.Manager) error {
-	webhooks := []struct {
-		name    string
-		webhook interface{ SetupWebhookWithManager(ctrl.Manager) error }
-	}{
-		{
-			name: "Neo4jEnterpriseCluster",
-			webhook: &webhooks.Neo4jEnterpriseClusterWebhook{
-				Client: mgr.GetClient(),
-			},
-		},
-	}
-
-	for _, wh := range webhooks {
-		if err := wh.webhook.SetupWebhookWithManager(mgr); err != nil {
-			return fmt.Errorf("failed to setup webhook %s: %w", wh.name, err)
-		}
-		setupLog.Info("webhook setup completed", "webhook", wh.name)
-	}
-
 	return nil
 }
 
@@ -726,9 +609,6 @@ func getEssentialResourceCache() map[client.Object]cache.ByObject {
 		&neo4jv1alpha1.Neo4jDatabase{}:          {},
 		&neo4jv1alpha1.Neo4jBackup{}:            {},
 		&neo4jv1alpha1.Neo4jRestore{}:           {},
-		&neo4jv1alpha1.Neo4jUser{}:              {},
-		&neo4jv1alpha1.Neo4jRole{}:              {},
-		&neo4jv1alpha1.Neo4jGrant{}:             {},
 		&neo4jv1alpha1.Neo4jPlugin{}:            {},
 	}
 }
@@ -741,9 +621,6 @@ func getSelectiveResourceCache() map[client.Object]cache.ByObject {
 		&neo4jv1alpha1.Neo4jDatabase{}:          {},
 		&neo4jv1alpha1.Neo4jBackup{}:            {},
 		&neo4jv1alpha1.Neo4jRestore{}:           {},
-		&neo4jv1alpha1.Neo4jUser{}:              {},
-		&neo4jv1alpha1.Neo4jRole{}:              {},
-		&neo4jv1alpha1.Neo4jGrant{}:             {},
 	}
 }
 
@@ -875,7 +752,7 @@ func parseControllers(controllersStr string) []string {
 }
 
 // createDirectClientManager creates a manager that bypasses informer caching
-func createDirectClientManager(config *rest.Config, _ cache.Options, metricsAddr, probeAddr string, secureMetrics bool, mode OperatorMode, tlsOpts []func(*tls.Config), webhookServer webhook.Server, enableLeaderElection bool) (ctrl.Manager, error) {
+func createDirectClientManager(config *rest.Config, _ cache.Options, metricsAddr, probeAddr string, secureMetrics bool, mode OperatorMode, enableLeaderElection bool) (ctrl.Manager, error) {
 	setupLog.Info("creating direct client manager - bypassing informer cache for ultra-fast startup")
 
 	// Create a minimal cache that doesn't watch anything by default
@@ -890,9 +767,7 @@ func createDirectClientManager(config *rest.Config, _ cache.Options, metricsAddr
 		Metrics: metricsserver.Options{
 			BindAddress:   metricsAddr,
 			SecureServing: secureMetrics && mode == ProductionMode,
-			TLSOpts:       tlsOpts,
 		},
-		WebhookServer:          webhookServer,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "neo4j-operator-leader-election-direct",

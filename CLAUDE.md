@@ -4,15 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is the Neo4j Enterprise Operator for Kubernetes, which manages Neo4j Enterprise clusters (v5.26+) in Kubernetes environments. Built with Kubebuilder framework.
+This is the Neo4j Enterprise Operator for Kubernetes, which manages Neo4j Enterprise clusters (v5.26+) in Kubernetes environments. Built with Kubebuilder framework. The operator supports only Neo4j database 5.26+ - Semver releases from 5.26.0 and up, Calver releases 2025.01.0 and up, Only Discovery v2 should be supported in 5.26.0 and other supported semver releases. All tests, samples, documents should enforce this.
 
 ## Architecture
 
 **Key Components:**
-- **CRDs**: Neo4jEnterpriseCluster, Neo4jBackup/Restore, Neo4jDatabase, Neo4jUser/Role/Grant, Neo4jPlugin
-- **Controllers**: Enterprise cluster controller with autoscaling and security coordinator
+- **CRDs**: Neo4jEnterpriseCluster, Neo4jBackup/Restore, Neo4jDatabase, Neo4jPlugin
+- **Controllers**: Enterprise cluster controller with autoscaling
 - **Webhooks**: Validation webhooks integrated with cert-manager
-- **CLI Plugin**: kubectl-neo4j for cluster management
 
 **Directory Structure:**
 - `api/v1alpha1/` - CRD type definitions
@@ -30,8 +29,32 @@ make docker-build         # Build container image
 make manifests            # Generate CRDs and RBAC
 make generate             # Generate DeepCopy methods
 make dev-run              # Run operator locally (outside cluster)
-make dev-cluster          # Create Kind development cluster
-make operator-setup       # Deploy operator with webhooks to cluster
+
+# Development cluster management
+make dev-cluster          # Create Kind development cluster (neo4j-operator-dev)
+make dev-cluster-clean    # Clean operator resources from dev cluster
+make dev-cluster-reset    # Delete and recreate dev cluster
+make dev-cluster-delete   # Delete dev cluster
+make dev-cleanup          # Clean dev environment (keep cluster)
+make dev-destroy          # Completely destroy dev environment
+
+make operator-setup       # Deploy operator to test cluster
+```
+
+### Quick Testing with Examples
+```bash
+# Deploy a single-node cluster for testing
+kubectl create secret generic neo4j-admin-secret \
+  --from-literal=username=neo4j --from-literal=password=admin123
+kubectl apply -f examples/clusters/single-node.yaml
+
+# Check cluster status
+kubectl get neo4jenterprisecluster
+kubectl get pods
+
+# Access Neo4j Browser
+kubectl port-forward svc/single-node-cluster-client 7474:7474 &
+open http://localhost:7474
 ```
 
 ### Testing
@@ -40,22 +63,27 @@ make operator-setup       # Deploy operator with webhooks to cluster
 make test-unit            # Unit tests only
 make test-webhooks        # Webhook validation tests with envtest
 
-# Webhook-specific tests
-make test-webhooks-tls           # Test webhook TLS in dev cluster
-make test-webhooks-integration   # Full webhook integration tests
-make test-webhook-cert-rotation  # Test certificate rotation
+# Test cluster management
+make test-cluster         # Create test cluster (neo4j-operator-test)
+make test-cluster-clean   # Clean operator resources from test cluster
+make test-cluster-reset   # Delete and recreate test cluster
+make test-cluster-delete  # Delete test cluster
 
-# Integration tests (requires cluster)
-make test-integration     # Full integration suite
-make test-with-operator   # Tests with automatic operator setup
+# Cluster-based tests
+make test-integration     # Integration tests (requires test cluster)
+make test-e2e            # End-to-end tests (requires test cluster)
 
 # Full test suite
-make test                 # All tests with coverage report
+make test                 # Run unit + integration tests
+make test-coverage       # Generate coverage report
+
+# Environment cleanup
+make test-cleanup        # Clean test artifacts (keep cluster)
+make test-destroy        # Completely destroy test environment
 
 # Run specific test
 go test ./internal/controller -run TestClusterReconciler
 ginkgo run -focus "should create backup" ./test/integration
-ginkgo run -focus "webhook TLS" ./test/webhooks
 ```
 
 ### Code Quality
@@ -95,10 +123,10 @@ Always run `make test-unit` before committing. Integration tests require a clust
 
 ## Important Development Notes
 
-1. **Webhook Development**: Webhooks require cert-manager. Use `make operator-setup` for local testing.
-2. **Controller Testing**: Use envtest for controller tests without real cluster.
-3. **Neo4j Client**: The operator communicates with Neo4j via Bolt protocol (internal/neo4j/client.go).
-4. **Security**: All Neo4j auth is handled by SecurityCoordinator - never bypass it.
+1. **Kind Only**: This project uses Kind clusters exclusively. No other cluster types (minikube, k3s, etc.) are supported.
+2. **Webhook Development**: Webhooks require cert-manager. Use `make operator-setup` for local testing.
+3. **Controller Testing**: Use envtest for controller tests without real cluster.
+4. **Neo4j Client**: The operator communicates with Neo4j via Bolt protocol (internal/neo4j/client.go).
 
 ## Common Development Tasks
 
@@ -109,42 +137,39 @@ Always run `make test-unit` before committing. Integration tests require a clust
 4. Add tests in `test/unit/controllers/`
 5. Update RBAC in `config/rbac/role.yaml`
 
-### Testing Webhooks Locally
+### Environment Separation
 
-#### Quick Webhook Testing
-```bash
-# Test webhooks without cluster (unit tests with envtest)
-make test-webhooks
+The project uses two separate Kind clusters:
 
-# Test webhook TLS configuration in development cluster
-make test-webhooks-tls
+- **Development Cluster** (`neo4j-operator-dev`): For local development and manual testing
+  - Created with `make dev-cluster`
+  - Uses `hack/kind-config.yaml` with development optimizations
+  - Includes cert-manager for webhook development
 
-# Full webhook integration tests with TLS
-make test-webhooks-integration
+- **Test Cluster** (`neo4j-operator-test`): For automated testing only
+  - Created with `make test-cluster`
+  - Minimal configuration for fast test execution
+  - Automatically managed by test scripts
 
-# Test certificate rotation
-make test-webhook-cert-rotation
-```
+### Cleanup Strategy
 
-#### Development Webhook Setup
-```bash
-# Create development cluster with enhanced self-signed certificates
-make dev-cluster
-make deploy KUSTOMIZE_DIR=config/dev  # Uses development config with CA hierarchy
+The project provides granular cleanup options for both environments:
 
-# Test webhook functionality
-./hack/test-webhooks.sh
+**Operator Resource Cleanup** (keeps cluster running):
+- `make dev-cluster-clean` - Remove operator resources from dev cluster
+- `make test-cluster-clean` - Remove operator resources from test cluster
 
-# Apply sample resources to test validation
-kubectl apply -f config/samples/neo4j_v1alpha1_neo4jenterprisecluster.yaml --dry-run=server
-kubectl apply -f test/fixtures/invalid-cluster.yaml --dry-run=server  # Should fail
-```
+**Environment Reset** (recreate cluster):
+- `make dev-cluster-reset` - Delete and recreate dev cluster
+- `make test-cluster-reset` - Delete and recreate test cluster
 
-#### Webhook TLS Strategy
-- **Development**: Use self-signed certificates with proper CA hierarchy (`config/dev/`)
-- **Testing**: Automated cert-manager setup with Kind clusters
-- **Production**: Can use LetsEncrypt for Neo4j clusters, self-signed for webhooks
-- **CI/CD**: Comprehensive webhook testing in GitHub Actions
+**Complete Destruction**:
+- `make dev-destroy` - Destroy entire dev environment
+- `make test-destroy` - Destroy entire test environment
+
+**Artifact Cleanup** (files only):
+- `make dev-cleanup` - Clean dev files (keep cluster)
+- `make test-cleanup` - Clean test files (keep cluster)
 
 ### Debugging Failed Reconciliation
 ```bash
@@ -168,7 +193,18 @@ GitHub Actions runs:
 
 PRs must pass all checks. Use conventional commits (feat:, fix:, docs:).
 
+## Version Support
+
+- **Supported Neo4j Versions**:
+  - The operator supports only Neo4j database 5.26+
+    - Semver releases from 5.26.0 and up
+    - Calver releases 2025.01.0 and up
+  - Only Discovery v2 should be supported in 5.26.0 and other supported semver releases.
+  - All tests, samples, documents should enforce this
 
 ## Reports
 
 All reports that Claude generates should go into the reports directory. The reports can be reviewed by Claude to determine changes that were made.
+
+## Important Considerations
+  - Compliance requirements @docs/reports/neo4j-operator-comprehensive-audit-report.md

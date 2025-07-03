@@ -1,0 +1,84 @@
+# Three-node Neo4j Enterprise cluster (TLS disabled for testing)
+# This creates a highly available Neo4j cluster with 3 primary nodes
+# Ideal for testing, development, or environments without cert-manager
+
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: three-node-simple
+  namespace: default
+spec:
+  # Neo4j Enterprise Edition
+  edition: enterprise
+
+  # Neo4j Docker image configuration
+  image:
+    repo: neo4j
+    tag: "5.26-enterprise"  # Neo4j 5.26+ required
+    pullPolicy: IfNotPresent
+
+  # Three-node cluster topology for high availability
+  # Provides fault tolerance and quorum-based decisions
+  topology:
+    primaries: 3      # 3 primaries for quorum (must be odd)
+    secondaries: 0    # Optional read replicas
+
+  # Storage configuration
+  storage:
+    className: standard
+    size: "20Gi"      # Reduced for testing
+
+  # Resource allocation (suitable for testing)
+  resources:
+    requests:
+      memory: "2Gi"   # Lower memory for testing
+      cpu: "500m"
+    limits:
+      memory: "4Gi"
+      cpu: "2"
+
+  # TLS disabled for simplicity (no cert-manager required)
+  tls:
+    mode: disabled
+
+  # Service configuration
+  service:
+    type: ClusterIP
+
+  # Required environment variables
+  env:
+    - name: NEO4J_ACCEPT_LICENSE_AGREEMENT
+      value: "yes"
+
+  # Custom Neo4j configuration
+  config:
+    # Enable query logging for monitoring
+    dbms.logs.query.enabled: "INFO"
+    # Increase transaction timeout for long operations
+    dbms.transaction.timeout: "60s"
+    # Enable metrics collection
+    metrics.enabled: "true"
+
+---
+# Deployment Notes:
+#
+# 1. Create admin credentials first:
+#    kubectl create secret generic neo4j-admin-secret \
+#      --from-literal=username=neo4j \
+#      --from-literal=password=your-secure-password
+#
+# 2. Deploy the cluster:
+#    kubectl apply -f three-node-simple.yaml
+#
+# 3. Expected deployment time: 3-5 minutes total
+#    - Pods start sequentially (StatefulSet behavior)
+#    - pod-0 starts first and forms cluster (0-2 mins)
+#    - pod-1 joins cluster (2-4 mins)
+#    - pod-2 joins cluster (4-6 mins)
+#
+# 4. Monitor deployment progress:
+#    kubectl get pods -l app.kubernetes.io/name=neo4j -w
+#
+# 5. Access Neo4j Browser:
+#    kubectl port-forward svc/three-node-simple-client 7474:7474 7687:7687
+#    open http://localhost:7474

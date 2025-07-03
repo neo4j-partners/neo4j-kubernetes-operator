@@ -85,17 +85,17 @@ spec:
     server.routing.listen_address: 0.0.0.0:7688
 ```
 
-### Using kubectl-neo4j CLI
+### Using kubectl Commands
 
 ```bash
-# Create a basic 3-node cluster
-kubectl neo4j cluster create my-cluster --primaries=3 --discovery-type=k8s
+# Check cluster status
+kubectl get neo4jenterprisecluster my-cluster -o yaml
 
-# Create a cluster with read replicas
-kubectl neo4j cluster create my-cluster --primaries=3 --secondaries=2 --enable-autoscale
+# View cluster details
+kubectl describe neo4jenterprisecluster my-cluster
 
-# Create a cluster with custom ports
-kubectl neo4j cluster create my-cluster --primaries=3 --cluster-port=5000 --discovery-port=6000 --routing-port=7688
+# Check pod status
+kubectl get pods -l app.kubernetes.io/instance=my-cluster
 ```
 
 ## Advanced Configuration
@@ -197,13 +197,13 @@ The operator provides comprehensive health monitoring:
 
 ```bash
 # Check cluster health
-kubectl neo4j cluster health my-cluster
+kubectl get neo4jenterprisecluster my-cluster -o jsonpath='{.status.phase}'
 
 # Get cluster status
-kubectl neo4j cluster status my-cluster
+kubectl describe neo4jenterprisecluster my-cluster
 
 # View cluster logs
-kubectl neo4j cluster logs my-cluster
+kubectl logs -l app.kubernetes.io/instance=my-cluster
 ```
 
 ## Scaling Operations
@@ -211,14 +211,14 @@ kubectl neo4j cluster logs my-cluster
 ### Scale Up/Down
 
 ```bash
-# Scale primaries
-kubectl neo4j cluster scale my-cluster --primaries=5
+# Scale primaries by editing the resource
+kubectl patch neo4jenterprisecluster my-cluster --type='merge' -p='{"spec":{"topology":{"primaries":5}}}'
 
 # Scale secondaries
-kubectl neo4j cluster scale my-cluster --secondaries=4
+kubectl patch neo4jenterprisecluster my-cluster --type='merge' -p='{"spec":{"topology":{"secondaries":4}}}'
 
-# Scale both
-kubectl neo4j cluster scale my-cluster --primaries=5 --secondaries=4
+# Or edit the resource directly
+kubectl edit neo4jenterprisecluster my-cluster
 ```
 
 ### Rolling Upgrades

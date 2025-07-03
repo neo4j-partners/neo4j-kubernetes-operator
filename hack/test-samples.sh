@@ -107,23 +107,6 @@ spec:
     - "dbms.default_database=movies"
 EOF
 
-    # Neo4j user
-    cat > samples/user.yaml << 'EOF'
-apiVersion: neo4j.com/v1alpha1
-kind: Neo4jUser
-metadata:
-  name: app-user
-  namespace: default
-spec:
-  clusterRef:
-    name: basic-neo4j
-  username: "appuser"
-  password:
-    secretName: "app-user-auth"
-    secretKey: "password"
-  roles:
-    - "reader"
-EOF
 
     # Secret for auth
     cat > samples/secrets.yaml << 'EOF'
@@ -252,19 +235,6 @@ test_database() {
     fi
 }
 
-# Test user creation
-test_user() {
-    log_info "Testing user creation..."
-
-    kubectl apply -f samples/user.yaml
-
-    if wait_for_resource "neo4juser" "app-user" "Ready"; then
-        log_success "User test passed"
-    else
-        log_error "User test failed"
-        return 1
-    fi
-}
 
 # Test connectivity to Neo4j cluster
 test_connectivity() {
@@ -405,9 +375,6 @@ main() {
         ((failed_tests++))
     fi
 
-    if ! test_user; then
-        ((failed_tests++))
-    fi
 
     # HA test is more resource intensive, skip in CI or if requested
     if [[ "${SKIP_HA_TEST:-false}" != "true" ]]; then

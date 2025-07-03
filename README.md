@@ -24,14 +24,21 @@ If you're new to Kubernetes, start here:
    kubectl apply -f https://github.com/neo4j-labs/neo4j-kubernetes-operator/releases/latest/download/install.yaml
    ```
 
-2. **Deploy your first Neo4j cluster**:
+2. **Create admin credentials**:
    ```bash
-   kubectl apply -f https://github.com/neo4j-labs/neo4j-kubernetes-operator/raw/main/config/samples/neo4jenterprisecluster-simple.yaml
+   kubectl create secret generic neo4j-admin-secret \
+     --from-literal=username=neo4j \
+     --from-literal=password=your-secure-password
    ```
 
-3. **Access your cluster**:
+3. **Deploy your first Neo4j cluster**:
    ```bash
-   kubectl port-forward svc/my-neo4j 7474:7474 7687:7687
+   kubectl apply -f https://github.com/neo4j-labs/neo4j-kubernetes-operator/raw/main/examples/clusters/single-node.yaml
+   ```
+
+4. **Access your cluster**:
+   ```bash
+   kubectl port-forward svc/single-node-cluster-client 7474:7474 7687:7687
    ```
    Open http://localhost:7474 in your browser.
 
@@ -43,11 +50,21 @@ Jump right in with advanced configurations:
 # Install with custom configuration
 helm install neo4j-operator oci://ghcr.io/neo4j-labs/neo4j-operator-helm
 
-# Deploy production cluster with HA, backups, and monitoring
-kubectl apply -f config/samples/neo4jenterprisecluster-production.yaml
+# Deploy production cluster with high availability
+kubectl apply -f examples/clusters/three-node-cluster.yaml
 ```
 
 See the [Complete Installation Guide](docs/user_guide/installation.md) for all deployment options.
+
+## 💡 Examples
+
+Ready-to-use configurations for common deployment scenarios:
+
+- **[Single-node cluster](examples/clusters/single-node.yaml)** - Development and testing
+- **[Three-node cluster](examples/clusters/three-node-cluster.yaml)** - Production with high availability
+- **[Cluster with read replicas](examples/clusters/cluster-with-read-replicas.yaml)** - Read scaling
+
+See the [examples directory](examples/) for complete documentation and additional configurations.
 
 ## 📚 Documentation Structure
 
@@ -73,7 +90,6 @@ Complete CRD documentation for all custom resources:
 - [Neo4jEnterpriseCluster](docs/api_reference/neo4jenterprisecluster.md)
 - [Neo4jBackup](docs/api_reference/neo4jbackup.md) & [Neo4jRestore](docs/api_reference/neo4jrestore.md)
 - [Neo4jDatabase](docs/api_reference/neo4jdatabase.md)
-- [Neo4jUser](docs/api_reference/neo4juser.md), [Neo4jRole](docs/api_reference/neo4jrole.md), [Neo4jGrant](docs/api_reference/neo4jgrant.md)
 - [Neo4jPlugin](docs/api_reference/neo4jplugin.md)
 
 ## ✨ Key Features
@@ -97,12 +113,12 @@ Complete CRD documentation for all custom resources:
 - **Plugin Management**: Install and configure Neo4j plugins (APOC, GDS, etc.)
 - **Query Monitoring**: Performance monitoring and slow query detection
 
-### 🔧 kubectl Plugin
-Includes `kubectl-neo4j` plugin for enhanced cluster management:
+### 🔧 Cluster Management
+Manage your Neo4j clusters using standard kubectl commands:
 ```bash
-kubectl neo4j status my-cluster
-kubectl neo4j backup create my-cluster
-kubectl neo4j restore my-cluster --from-backup backup-20240101
+kubectl get neo4jenterprisecluster
+kubectl describe neo4jenterprisecluster my-cluster
+kubectl logs -l app.kubernetes.io/name=neo4j-operator
 ```
 
 ## 🏃‍♂️ Common Use Cases

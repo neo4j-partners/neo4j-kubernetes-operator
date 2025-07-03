@@ -80,9 +80,6 @@ cleanup_resources() {
             "neo4jenterpriseclusters"
             "neo4jdatabases"
             "neo4jbackups"
-            "neo4jusers"
-            "neo4jroles"
-            "neo4jgrants"
             "neo4jrestores"
         )
 

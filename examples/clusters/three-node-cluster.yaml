@@ -1,0 +1,83 @@
+# Three-node Neo4j Enterprise cluster example
+# This creates a highly available Neo4j cluster with 3 primary nodes
+# Suitable for production workloads requiring high availability
+
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: three-node-cluster
+  namespace: default
+spec:
+  # Neo4j Enterprise Edition
+  edition: enterprise
+
+  # Neo4j Docker image configuration
+  image:
+    repo: neo4j
+    tag: "5.26-enterprise"  # Neo4j 5.26+ required
+    pullPolicy: IfNotPresent
+
+  # Three-node cluster topology for high availability
+  # Provides fault tolerance and quorum-based decisions
+  topology:
+    primaries: 3      # 3 primaries for quorum (must be odd)
+    secondaries: 0    # Optional read replicas
+
+  # Storage configuration
+  storage:
+    className: standard
+    size: "50Gi"      # Larger storage for production
+
+  # Production resource allocation
+  resources:
+    requests:
+      memory: "4Gi"   # Higher memory for cluster workload
+      cpu: "1"        # More CPU for cluster coordination
+    limits:
+      memory: "8Gi"
+      cpu: "4"
+
+  # TLS with cert-manager (recommended for production)
+  tls:
+    mode: cert-manager
+    issuerRef:
+      name: letsencrypt-prod  # Replace with your cert-manager issuer
+      kind: ClusterIssuer
+
+  # Service configuration
+  service:
+    type: ClusterIP     # Use LoadBalancer for external access
+
+  # Required environment variables
+  env:
+    - name: NEO4J_ACCEPT_LICENSE_AGREEMENT
+      value: "yes"
+
+  # Custom Neo4j configuration for production
+  config:
+    # Enable query logging for monitoring
+    dbms.logs.query.enabled: "INFO"
+    # Increase transaction timeout for long operations
+    dbms.transaction.timeout: "60s"
+    # Enable metrics collection
+    metrics.enabled: "true"
+
+---
+# Deployment Notes:
+#
+# 1. Create admin credentials first:
+#    kubectl create secret generic neo4j-admin-secret \
+#      --from-literal=username=neo4j \
+#      --from-literal=password=your-secure-password
+#
+# 2. For TLS mode, create cert-manager ClusterIssuer:
+#    kubectl apply -f your-cluster-issuer.yaml
+#
+# 3. Expected deployment time: 3-5 minutes total
+#    - Pods start sequentially (StatefulSet behavior)
+#    - pod-0 starts first and forms cluster (0-2 mins)
+#    - pod-1 joins cluster (2-4 mins)
+#    - pod-2 joins cluster (4-6 mins)
+#
+# 4. Monitor deployment progress:
+#    kubectl get pods -l app.kubernetes.io/name=neo4j -w

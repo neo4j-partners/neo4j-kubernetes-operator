@@ -7,9 +7,6 @@
   - neo4jplugins
   - neo4jrestores
   - neo4jdatabases
-  - neo4jroles
-  - neo4jgrants
-  - neo4jusers
   verbs:
   - create
   - delete

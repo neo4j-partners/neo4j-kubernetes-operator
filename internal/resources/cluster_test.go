@@ -28,10 +28,10 @@ func TestBuildPodSpecForEnterprise_WithPlugins(t *testing.T) {
 			Plugins: []neo4jv1alpha1.PluginSpec{
 				{
 					Name:    "apoc",
-					Version: "5.15.0",
+					Version: "5.26.0",
 					Enabled: true,
 					Source: &neo4jv1alpha1.PluginSource{
-						URL: "https://github.com/neo4j/apoc/releases/download/5.15.0/apoc-5.15.0-core.jar",
+						URL: "https://github.com/neo4j/apoc/releases/download/5.26.0/apoc-5.26.0-core.jar",
 					},
 				},
 				{
@@ -86,8 +86,8 @@ func TestBuildPodSpecForEnterprise_WithPlugins(t *testing.T) {
 	apocInitContainer := podSpec.InitContainers[0]
 	assert.Equal(t, "install-plugin-apoc", apocInitContainer.Name)
 	assert.Equal(t, "alpine:3.18", apocInitContainer.Image)
-	assert.Contains(t, apocInitContainer.Args[0], "apoc-5.15.0-core.jar")
-	assert.Contains(t, apocInitContainer.Args[0], "https://github.com/neo4j/apoc/releases/download/5.15.0/apoc-5.15.0-core.jar")
+	assert.Contains(t, apocInitContainer.Args[0], "apoc-5.26.0-core.jar")
+	assert.Contains(t, apocInitContainer.Args[0], "https://github.com/neo4j/apoc/releases/download/5.26.0/apoc-5.26.0-core.jar")
 
 	// Test second plugin init container
 	gdsInitContainer := podSpec.InitContainers[1]
@@ -179,10 +179,10 @@ func TestBuildStatefulSetForEnterprise_WithFeatures(t *testing.T) {
 			Plugins: []neo4jv1alpha1.PluginSpec{
 				{
 					Name:    "apoc",
-					Version: "5.15.0",
+					Version: "5.26.0",
 					Enabled: true,
 					Source: &neo4jv1alpha1.PluginSource{
-						URL: "https://github.com/neo4j/apoc/releases/download/5.15.0/apoc-5.15.0-core.jar",
+						URL: "https://github.com/neo4j/apoc/releases/download/5.26.0/apoc-5.26.0-core.jar",
 					},
 				},
 			},

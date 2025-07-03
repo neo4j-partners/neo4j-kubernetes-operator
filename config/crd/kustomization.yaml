@@ -7,9 +7,6 @@ resources:
   - bases/neo4j.neo4j.com_neo4jdatabases.yaml
   - bases/neo4j.neo4j.com_neo4jbackups.yaml
   - bases/neo4j.neo4j.com_neo4jrestores.yaml
-  - bases/neo4j.neo4j.com_neo4jgrants.yaml
-  - bases/neo4j.neo4j.com_neo4jroles.yaml
-  - bases/neo4j.neo4j.com_neo4jusers.yaml
   - bases/neo4j.neo4j.com_neo4jplugins.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 

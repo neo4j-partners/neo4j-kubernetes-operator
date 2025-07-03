@@ -229,12 +229,6 @@ func (fc *FastCache) warmupResource(ctx context.Context, gvk schema.GroupVersion
 		obj = &neo4jv1alpha1.Neo4jBackup{}
 	case neo4jv1alpha1.GroupVersion.WithKind("Neo4jRestore"):
 		obj = &neo4jv1alpha1.Neo4jRestore{}
-	case neo4jv1alpha1.GroupVersion.WithKind("Neo4jUser"):
-		obj = &neo4jv1alpha1.Neo4jUser{}
-	case neo4jv1alpha1.GroupVersion.WithKind("Neo4jRole"):
-		obj = &neo4jv1alpha1.Neo4jRole{}
-	case neo4jv1alpha1.GroupVersion.WithKind("Neo4jGrant"):
-		obj = &neo4jv1alpha1.Neo4jGrant{}
 	case neo4jv1alpha1.GroupVersion.WithKind("Neo4jPlugin"):
 		obj = &neo4jv1alpha1.Neo4jPlugin{}
 	default:

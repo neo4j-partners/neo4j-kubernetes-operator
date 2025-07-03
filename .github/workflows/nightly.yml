@@ -1,0 +1,164 @@
+name: Nightly Tests
+
+on:
+  schedule:
+    # Run nightly at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  comprehensive-tests:
+    name: Comprehensive Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    strategy:
+      matrix:
+        k8s-version: ['1.28', '1.29', '1.30']
+      fail-fast: false
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.22'
+        cache: true
+
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Install Kind
+      run: |
+        curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
+        chmod +x ./kind
+        sudo mv ./kind /usr/local/bin/kind
+
+    - name: Install kubectl
+      run: |
+        curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+        chmod +x kubectl
+        sudo mv kubectl /usr/local/bin/
+
+    - name: Download dependencies
+      run: go mod download
+
+    - name: Run unit tests
+      run: make test-unit
+
+    - name: Create test cluster (Kubernetes ${{ matrix.k8s-version }})
+      run: |
+        export ENVTEST_K8S_VERSION=${{ matrix.k8s-version }}
+        make test-cluster
+
+    - name: Install CRDs and operator setup
+      run: |
+        make manifests
+        make install
+
+    - name: Wait for cluster to be ready
+      run: |
+        kubectl wait --for=condition=Ready nodes --all --timeout=300s
+        kubectl get nodes
+
+    - name: Run integration tests
+      run: make test-integration
+      env:
+        KUBECONFIG: ~/.kube/config
+
+    - name: Generate coverage report
+      run: make test-coverage
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        file: ./coverage/coverage.out
+        flags: nightly
+        name: nightly-k8s-${{ matrix.k8s-version }}
+        fail_ci_if_error: false
+      env:
+        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+    - name: Collect cluster logs on failure
+      if: failure()
+      run: |
+        echo "=== Cluster Info ==="
+        kubectl get nodes -o wide
+        kubectl get pods -A
+        echo "=== Operator Logs ==="
+        kubectl logs -n neo4j-operator-system deployment/neo4j-operator-controller-manager || true
+        echo "=== CRD Status ==="
+        kubectl get crd | grep neo4j || true
+
+    - name: Archive test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: nightly-test-results-k8s-${{ matrix.k8s-version }}
+        path: |
+          coverage/
+          *.out
+
+    - name: Cleanup test cluster
+      if: always()
+      run: make test-cluster-delete || true
+
+  notify-on-failure:
+    name: Notify on Failure
+    runs-on: ubuntu-latest
+    needs: comprehensive-tests
+    if: failure()
+
+    steps:
+    - name: Create GitHub Issue on Failure
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const title = `Nightly tests failed - ${new Date().toISOString().split('T')[0]}`;
+          const body = `
+          ## Nightly Test Failure
+
+          The nightly integration tests have failed. Please investigate.
+
+          **Workflow Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          **Date:** ${new Date().toISOString()}
+          **Branch:** ${{ github.ref_name }}
+          **Commit:** ${{ github.sha }}
+
+          This issue was automatically created by the nightly test workflow.
+          `;
+
+          // Check if an issue already exists for today
+          const today = new Date().toISOString().split('T')[0];
+          const existingIssues = await github.rest.issues.listForRepo({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            labels: 'nightly-test-failure',
+            state: 'open'
+          });
+
+          const todayIssue = existingIssues.data.find(issue =>
+            issue.title.includes(today)
+          );
+
+          if (!todayIssue) {
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: title,
+              body: body,
+              labels: ['nightly-test-failure', 'bug']
+            });
+          }

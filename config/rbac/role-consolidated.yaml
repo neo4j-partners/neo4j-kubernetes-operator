@@ -132,11 +132,8 @@ rules:
   - neo4jbackups
   - neo4jdatabases
   - neo4jenterpriseclusters
-  - neo4jgrants
   - neo4jplugins
   - neo4jrestores
-  - neo4jroles
-  - neo4jusers
   verbs:
   - create
   - delete
@@ -151,11 +148,8 @@ rules:
   - neo4jbackups/finalizers
   - neo4jdatabases/finalizers
   - neo4jenterpriseclusters/finalizers
-  - neo4jgrants/finalizers
   - neo4jplugins/finalizers
   - neo4jrestores/finalizers
-  - neo4jroles/finalizers
-  - neo4jusers/finalizers
   verbs:
   - update
 - apiGroups:
@@ -164,11 +158,8 @@ rules:
   - neo4jbackups/status
   - neo4jdatabases/status
   - neo4jenterpriseclusters/status
-  - neo4jgrants/status
   - neo4jplugins/status
   - neo4jrestores/status
-  - neo4jroles/status
-  - neo4jusers/status
   verbs:
   - get
   - patch
