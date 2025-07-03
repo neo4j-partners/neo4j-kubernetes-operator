@@ -40,16 +40,6 @@ This directory contains GitHub Actions workflows for the Neo4j Kubernetes Operat
 - Detailed failure logging and artifact collection
 - Automatic cluster cleanup
 
-### 🌙 nightly.yml - Comprehensive Nightly Tests
-**Triggers:** Daily at 2 AM UTC, Manual dispatch
-**Purpose:** Comprehensive testing across multiple Kubernetes versions
-
-**Features:**
-- Matrix testing across Kubernetes 1.28, 1.29, 1.30
-- Full unit + integration test suite
-- Coverage reporting for all versions
-- Automatic GitHub issue creation on failure
-- 60-minute timeout for thorough testing
 
 ## Usage
 
@@ -78,9 +68,6 @@ gh workflow run integration-tests.yml
 # Run integration tests manually
 gh workflow run integration-tests.yml
 
-# Run nightly tests manually
-gh workflow run nightly.yml
-
 # Check workflow status
 gh run list --workflow=ci.yml
 ```
@@ -93,8 +80,7 @@ gh run list --workflow=ci.yml
 - **Integration tests** only run when needed to save resources
 
 ### Comprehensive Coverage
-- **Nightly tests** ensure compatibility across Kubernetes versions
-- **Matrix testing** catches version-specific issues
+- **Integration tests** ensure compatibility across scenarios
 - **Coverage reporting** tracks test effectiveness
 
 ### Resource Efficiency
@@ -144,7 +130,6 @@ gh run list --workflow=ci.yml
 1. **Check workflow logs** in GitHub Actions tab
 2. **Download artifacts** for detailed logs and coverage
 3. **Use manual dispatch** to test specific scenarios
-4. **Check nightly issues** for recurring problems
 
 ## Maintenance
 
@@ -156,7 +141,7 @@ gh run list --workflow=ci.yml
 ### Updating Dependencies
 1. Update Go version in all workflows consistently
 2. Update action versions (setup-go, checkout, etc.)
-3. Update Kubernetes versions in nightly matrix
+3. Update Kubernetes versions for testing compatibility
 
 ### Performance Optimization
 1. Monitor workflow execution times
