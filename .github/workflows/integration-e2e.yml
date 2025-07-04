@@ -1,0 +1,153 @@
+name: Full Integration Tests (E2E)
+
+on:
+  workflow_dispatch:
+    inputs:
+      operator-image-tag:
+        description: 'Operator image tag to test (default: latest commit)'
+        required: false
+        default: ''
+      neo4j-version:
+        description: 'Neo4j version to test against'
+        required: false
+        default: '5.26-enterprise'
+      timeout-minutes:
+        description: 'Test timeout in minutes'
+        required: false
+        default: '60'
+
+env:
+  GO_VERSION: '1.22'
+  KIND_VERSION: 'v0.20.0'
+
+jobs:
+  full-integration-tests:
+    name: Full Integration Tests with Operator
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ fromJson(github.event.inputs.timeout-minutes || '60') }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Go environment
+      uses: ./.github/actions/setup-go
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Install Kind
+      run: |
+        curl -Lo ./kind https://kind.sigs.k8s.io/dl/${{ env.KIND_VERSION }}/kind-linux-amd64
+        chmod +x ./kind
+        sudo mv ./kind /usr/local/bin/kind
+
+    - name: Install kubectl
+      run: |
+        curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+        chmod +x kubectl
+        sudo mv kubectl /usr/local/bin/
+
+    - name: Create test cluster
+      run: make test-cluster
+
+    - name: Install CRDs
+      run: |
+        make manifests
+        make install
+
+    - name: Determine operator image tag
+      id: image-tag
+      run: |
+        if [ -n "${{ github.event.inputs.operator-image-tag }}" ]; then
+          echo "tag=${{ github.event.inputs.operator-image-tag }}" >> $GITHUB_OUTPUT
+        else
+          echo "tag=e2e-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Build operator image
+      run: |
+        make docker-build IMG=neo4j-operator:${{ steps.image-tag.outputs.tag }}
+
+    - name: Load operator image into Kind
+      run: |
+        kind load docker-image neo4j-operator:${{ steps.image-tag.outputs.tag }} --name neo4j-operator-test
+
+    - name: Deploy operator to cluster
+      run: |
+        # Generate deployment manifests with the test image
+        make deploy IMG=neo4j-operator:${{ steps.image-tag.outputs.tag }}
+
+    - name: Wait for operator to be ready
+      run: |
+        echo "Waiting for operator deployment to be ready..."
+        kubectl wait --for=condition=Available deployment/neo4j-operator-controller-manager \
+          -n neo4j-operator-system --timeout=300s
+
+        echo "Waiting for operator pod to be ready..."
+        kubectl wait --for=condition=Ready pod \
+          -l control-plane=controller-manager \
+          -n neo4j-operator-system --timeout=300s
+
+    - name: Verify operator is running
+      run: |
+        echo "=== Operator Deployment Status ==="
+        kubectl get deployment -n neo4j-operator-system
+
+        echo "=== Operator Pod Status ==="
+        kubectl get pods -n neo4j-operator-system
+
+        echo "=== Operator Logs (last 50 lines) ==="
+        kubectl logs -n neo4j-operator-system -l control-plane=controller-manager --tail=50
+
+    - name: Run full integration tests
+      run: |
+        echo "Running integration tests with operator deployed..."
+        make test-integration-ci
+      env:
+        KUBECONFIG: ~/.kube/config
+        NEO4J_VERSION: ${{ github.event.inputs.neo4j-version || '5.26-enterprise' }}
+
+    - name: Collect detailed cluster information
+      if: always()
+      run: |
+        echo "=== Cluster Nodes ==="
+        kubectl get nodes -o wide || true
+
+        echo "=== All Pods ==="
+        kubectl get pods --all-namespaces || true
+
+        echo "=== Neo4j Enterprise Clusters ==="
+        kubectl get neo4jenterpriseclusters --all-namespaces || true
+
+        echo "=== Events ==="
+        kubectl get events --all-namespaces --sort-by='.lastTimestamp' || true
+
+    - name: Collect operator logs
+      uses: ./.github/actions/collect-logs
+      if: always()
+      with:
+        artifact-name: full-integration-logs
+
+    - name: Archive test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: full-integration-test-results
+        path: |
+          coverage/
+          *.out
+
+    - name: Archive cluster state
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: cluster-state-dump
+        path: |
+          /tmp/cluster-logs/
+
+    - name: Cleanup test cluster
+      if: always()
+      run: make test-cluster-delete || true
