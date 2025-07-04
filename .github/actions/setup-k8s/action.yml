@@ -1,0 +1,48 @@
+name: 'Setup Kubernetes Environment'
+description: 'Sets up Kind cluster with kubectl for testing'
+
+inputs:
+  kind-version:
+    description: 'Kind version to use'
+    required: false
+    default: 'v0.20.0'
+  cluster-name:
+    description: 'Kind cluster name'
+    required: false
+    default: 'neo4j-operator-test'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Install Kind
+      shell: bash
+      run: |
+        curl -Lo ./kind https://kind.sigs.k8s.io/dl/${{ inputs.kind-version }}/kind-linux-amd64
+        chmod +x ./kind
+        sudo mv ./kind /usr/local/bin/kind
+
+    - name: Install kubectl
+      shell: bash
+      run: |
+        curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+        chmod +x kubectl
+        sudo mv kubectl /usr/local/bin/
+
+    - name: Create test cluster
+      shell: bash
+      run: make test-cluster
+
+    - name: Install CRDs and operator setup
+      shell: bash
+      run: |
+        make manifests
+        make install
+
+    - name: Wait for cluster to be ready
+      shell: bash
+      run: |
+        kubectl wait --for=condition=Ready nodes --all --timeout=300s
+        kubectl get nodes

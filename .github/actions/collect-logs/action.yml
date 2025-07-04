@@ -1,0 +1,37 @@
+name: 'Collect Cluster Logs'
+description: 'Collects Kubernetes cluster logs on failure'
+
+inputs:
+  artifact-name:
+    description: 'Name for the log artifact'
+    required: false
+    default: 'cluster-logs'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Collect cluster info
+      if: failure()
+      shell: bash
+      run: |
+        echo "=== Cluster Info ===" > cluster-debug.log
+        kubectl get nodes -o wide >> cluster-debug.log 2>&1 || true
+        kubectl get pods -A >> cluster-debug.log 2>&1 || true
+
+        echo "=== Operator Logs ===" >> cluster-debug.log
+        kubectl logs -n neo4j-operator-system deployment/neo4j-operator-controller-manager >> cluster-debug.log 2>&1 || true
+
+        echo "=== CRD Status ===" >> cluster-debug.log
+        kubectl get crd | grep neo4j >> cluster-debug.log 2>&1 || true
+
+        echo "=== Events ===" >> cluster-debug.log
+        kubectl get events -A --sort-by='.lastTimestamp' >> cluster-debug.log 2>&1 || true
+
+    - name: Archive cluster logs
+      uses: actions/upload-artifact@v4
+      if: failure()
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: |
+          cluster-debug.log
+          /tmp/kind-*

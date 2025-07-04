@@ -14,6 +14,7 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  GO_VERSION: '1.22'
 
 jobs:
   validate-release:
@@ -24,16 +25,12 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up Go
-      uses: actions/setup-go@v5
+    - name: Setup Go environment
+      uses: ./.github/actions/setup-go
       with:
-        go-version: '1.22'
-        cache: true
+        go-version: ${{ env.GO_VERSION }}
 
-    - name: Download dependencies
-      run: go mod download
-
-    - name: Run full test suite
+    - name: Run unit tests
       run: make test-unit
 
     - name: Build operator binary
@@ -97,11 +94,10 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up Go
-      uses: actions/setup-go@v5
+    - name: Setup Go environment
+      uses: ./.github/actions/setup-go
       with:
-        go-version: '1.22'
-        cache: true
+        go-version: ${{ env.GO_VERSION }}
 
     - name: Generate release manifests
       run: |
