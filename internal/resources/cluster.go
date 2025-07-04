@@ -945,9 +945,20 @@ server.bolt.tls_level=OPTIONAL
 `
 	}
 
-	// Add custom configuration
+	// Add custom configuration (excluding memory settings already added above)
 	if cluster.Spec.Config != nil {
+		// Memory settings that are already set by memoryConfig
+		excludeKeys := map[string]bool{
+			"server.memory.heap.initial_size": true,
+			"server.memory.heap.max_size":     true,
+			"server.memory.pagecache.size":    true,
+		}
+
 		for key, value := range cluster.Spec.Config {
+			// Skip memory settings that are already configured above
+			if excludeKeys[key] {
+				continue
+			}
 			config += fmt.Sprintf("%s=%s\n", key, value)
 		}
 	}

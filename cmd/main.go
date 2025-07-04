@@ -350,6 +350,7 @@ func setupProductionControllers(mgr ctrl.Manager) error {
 				RequeueAfter:      controller.GetTestRequeueAfter(),
 				TopologyScheduler: controller.NewTopologyScheduler(mgr.GetClient()),
 				Validator:         validation.NewClusterValidator(mgr.GetClient()),
+				ConfigMapManager:  controller.NewConfigMapManager(mgr.GetClient()),
 			},
 		},
 		{
@@ -410,6 +411,7 @@ func setupDevelopmentControllers(mgr ctrl.Manager, controllers []string) error {
 				RequeueAfter:      controller.GetTestRequeueAfter(),
 				TopologyScheduler: controller.NewTopologyScheduler(mgr.GetClient()),
 				Validator:         validation.NewClusterValidator(mgr.GetClient()),
+				ConfigMapManager:  controller.NewConfigMapManager(mgr.GetClient()),
 			}, "Neo4jEnterpriseCluster"
 		},
 		"database": func() (interface{ SetupWithManager(ctrl.Manager) error }, string) {
@@ -469,6 +471,7 @@ func setupMinimalController(mgr ctrl.Manager) error {
 		RequeueAfter:      controller.GetTestRequeueAfter(),
 		TopologyScheduler: controller.NewTopologyScheduler(mgr.GetClient()),
 		Validator:         validation.NewClusterValidator(mgr.GetClient()),
+		ConfigMapManager:  controller.NewConfigMapManager(mgr.GetClient()),
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("failed to setup Neo4jEnterpriseCluster controller: %w", err)
 	}

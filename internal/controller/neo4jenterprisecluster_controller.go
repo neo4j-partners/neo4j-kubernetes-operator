@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"time"
 
+	"golang.org/x/time/rate"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -32,10 +33,13 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
+	"k8s.io/client-go/util/workqueue"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1"
 	neo4jclient "github.com/neo4j-labs/neo4j-kubernetes-operator/internal/neo4j"
@@ -51,6 +55,7 @@ type Neo4jEnterpriseClusterReconciler struct {
 	RequeueAfter      time.Duration
 	TopologyScheduler *TopologyScheduler
 	Validator         *validation.ClusterValidator
+	ConfigMapManager  *ConfigMapManager
 }
 
 const (
@@ -121,7 +126,7 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 				if err := r.Validator.ValidateUpdate(ctx, currentCluster, cluster); err != nil {
 					logger.Error(err, "Cluster update validation failed")
 					r.Recorder.Eventf(cluster, corev1.EventTypeWarning, "ValidationFailed", "Cluster update validation failed: %v", err)
-					r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Update validation failed: %v", err))
+					_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Update validation failed: %v", err))
 					return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 				}
 			}
@@ -132,7 +137,7 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 			if err := r.Validator.ValidateCreate(ctx, cluster); err != nil {
 				logger.Error(err, "Cluster validation failed")
 				r.Recorder.Eventf(cluster, corev1.EventTypeWarning, "ValidationFailed", "Cluster validation failed: %v", err)
-				r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Validation failed: %v", err))
+				_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Validation failed: %v", err))
 				return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 			}
 		}
@@ -154,8 +159,10 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 		return r.handleRollingUpgrade(ctx, cluster)
 	}
 
-	// Update cluster status to "Initializing"
-	r.updateClusterStatus(ctx, cluster, "Initializing", "Starting cluster reconciliation")
+	// Only set to "Initializing" if cluster is not already Ready
+	if cluster.Status.Phase != "Ready" {
+		_ = r.updateClusterStatus(ctx, cluster, "Initializing", "Starting cluster reconciliation")
+	}
 
 	// Create Certificate if cert-manager is enabled
 	if cluster.Spec.TLS != nil && cluster.Spec.TLS.Mode == "cert-manager" {
@@ -163,7 +170,7 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 		if certificate != nil {
 			if err := r.createOrUpdateResource(ctx, certificate, cluster); err != nil {
 				logger.Error(err, "Failed to create Certificate")
-				r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Failed to create Certificate: %v", err))
+				_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Failed to create Certificate: %v", err))
 				return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 			}
 		}
@@ -173,7 +180,7 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 	if cluster.Spec.TLS != nil && cluster.Spec.TLS.ExternalSecrets != nil && cluster.Spec.TLS.ExternalSecrets.Enabled {
 		if err := r.createExternalSecretForTLS(ctx, cluster); err != nil {
 			logger.Error(err, "Failed to create TLS ExternalSecret")
-			r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Failed to create TLS ExternalSecret: %v", err))
+			_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Failed to create TLS ExternalSecret: %v", err))
 			return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 		}
 	}
@@ -181,16 +188,15 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 	if cluster.Spec.Auth != nil && cluster.Spec.Auth.ExternalSecrets != nil && cluster.Spec.Auth.ExternalSecrets.Enabled {
 		if err := r.createExternalSecretForAuth(ctx, cluster); err != nil {
 			logger.Error(err, "Failed to create Auth ExternalSecret")
-			r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Failed to create Auth ExternalSecret: %v", err))
+			_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Failed to create Auth ExternalSecret: %v", err))
 			return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 		}
 	}
 
-	// Create ConfigMap
-	configMap := resources.BuildConfigMapForEnterprise(cluster)
-	if err := r.createOrUpdateResource(ctx, configMap, cluster); err != nil {
-		logger.Error(err, "Failed to create ConfigMap")
-		r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Failed to create ConfigMap: %v", err))
+	// Reconcile ConfigMap with immediate updates and pod restarts
+	if err := r.ConfigMapManager.ReconcileConfigMap(ctx, cluster); err != nil {
+		logger.Error(err, "Failed to reconcile ConfigMap")
+		_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Failed to reconcile ConfigMap: %v", err))
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 	}
 
@@ -202,7 +208,7 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 	for _, service := range services {
 		if err := r.createOrUpdateResource(ctx, service, cluster); err != nil {
 			logger.Error(err, "Failed to create Service", "service", service.Name)
-			r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Failed to create Service %s: %v", service.Name, err))
+			_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Failed to create Service %s: %v", service.Name, err))
 			return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 		}
 	}
@@ -213,7 +219,7 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 		placement, err := r.TopologyScheduler.CalculateTopologyPlacement(ctx, cluster)
 		if err != nil {
 			logger.Error(err, "Failed to calculate topology placement")
-			r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Failed to calculate topology placement: %v", err))
+			_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Failed to calculate topology placement: %v", err))
 			r.Recorder.Event(cluster, "Warning", "TopologyPlacementFailed", fmt.Sprintf("Failed to calculate topology placement: %v", err))
 			return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 		}
@@ -237,14 +243,14 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 	if r.TopologyScheduler != nil && topologyPlacement != nil {
 		if err := r.TopologyScheduler.ApplyTopologyConstraints(ctx, primarySts, cluster, topologyPlacement); err != nil {
 			logger.Error(err, "Failed to apply topology constraints to primary StatefulSet")
-			r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Failed to apply topology constraints: %v", err))
+			_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Failed to apply topology constraints: %v", err))
 			return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 		}
 	}
 
 	if err := r.createOrUpdateResource(ctx, primarySts, cluster); err != nil {
 		logger.Error(err, "Failed to create primary StatefulSet")
-		r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Failed to create primary StatefulSet: %v", err))
+		_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Failed to create primary StatefulSet: %v", err))
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 	}
 
@@ -255,14 +261,14 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 		if r.TopologyScheduler != nil && topologyPlacement != nil {
 			if err := r.TopologyScheduler.ApplyTopologyConstraints(ctx, secondarySts, cluster, topologyPlacement); err != nil {
 				logger.Error(err, "Failed to apply topology constraints to secondary StatefulSet")
-				r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Failed to apply topology constraints: %v", err))
+				_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Failed to apply topology constraints: %v", err))
 				return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 			}
 		}
 
 		if err := r.createOrUpdateResource(ctx, secondarySts, cluster); err != nil {
 			logger.Error(err, "Failed to create secondary StatefulSet")
-			r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Failed to create secondary StatefulSet: %v", err))
+			_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Failed to create secondary StatefulSet: %v", err))
 			return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 		}
 	}
@@ -272,7 +278,7 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 		autoScaler := NewAutoScaler(r.Client)
 		if err := autoScaler.ReconcileAutoScaling(ctx, cluster); err != nil {
 			logger.Error(err, "Failed to reconcile auto-scaling")
-			r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Auto-scaling failed: %v", err))
+			_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Auto-scaling failed: %v", err))
 			return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 		}
 	}
@@ -291,14 +297,18 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 	if len(cluster.Spec.Plugins) > 0 {
 		if err := r.reconcilePlugins(ctx, cluster); err != nil {
 			logger.Error(err, "Failed to reconcile plugins")
-			r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Plugin management failed: %v", err))
+			_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Plugin management failed: %v", err))
 			return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 		}
 	}
 
-	// Update status to "Ready"
-	r.updateClusterStatus(ctx, cluster, "Ready", "Cluster is ready")
-	r.Recorder.Event(cluster, "Normal", "ClusterReady", "Neo4j Enterprise cluster is ready")
+	// Update status to "Ready" only if it changed
+	statusChanged := r.updateClusterStatus(ctx, cluster, "Ready", "Cluster is ready")
+
+	// Only create event if status actually changed
+	if statusChanged {
+		r.Recorder.Event(cluster, "Normal", "ClusterReady", "Neo4j Enterprise cluster is ready")
+	}
 
 	return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
 }
@@ -335,28 +345,33 @@ func (r *Neo4jEnterpriseClusterReconciler) createOrUpdateResource(ctx context.Co
 
 	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, obj, func() error {
 		if sts, ok := obj.(*appsv1.StatefulSet); ok {
-			existing := &appsv1.StatefulSet{}
-			if err := r.Get(ctx, client.ObjectKeyFromObject(sts), existing); err == nil {
-				// Preserve metadata and status
-				sts.ObjectMeta = existing.ObjectMeta
-				sts.Status = existing.Status
+			// Check if this is an update (object already exists)
+			if sts.ResourceVersion != "" {
+				// This is an existing StatefulSet, only update allowed mutable fields
+				// Note: sts already contains the current state from CreateOrUpdate
+				originalMeta := sts.ObjectMeta.DeepCopy()
+				originalStatus := sts.Status.DeepCopy()
 
-				// Only update allowed mutable fields
+				// Apply desired spec
 				sts.Spec.Replicas = desiredSpec.Replicas
 				sts.Spec.UpdateStrategy = desiredSpec.UpdateStrategy
 				sts.Spec.PersistentVolumeClaimRetentionPolicy = desiredSpec.PersistentVolumeClaimRetentionPolicy
 				sts.Spec.MinReadySeconds = desiredSpec.MinReadySeconds
 				sts.Spec.Ordinals = desiredSpec.Ordinals
 
+				// Preserve original metadata and status
+				sts.ObjectMeta = *originalMeta
+				sts.Status = *originalStatus
+
 				// For template updates, ensure labels match the existing selector
-				if existing.Spec.Selector != nil {
+				if sts.Spec.Selector != nil {
 					// Copy the desired template but ensure labels match the existing selector
 					updatedTemplate := desiredSpec.Template.DeepCopy()
 					if updatedTemplate.Labels == nil {
 						updatedTemplate.Labels = make(map[string]string)
 					}
 					// Ensure all selector labels are present in the template
-					for key, value := range existing.Spec.Selector.MatchLabels {
+					for key, value := range sts.Spec.Selector.MatchLabels {
 						updatedTemplate.Labels[key] = value
 					}
 					sts.Spec.Template = *updatedTemplate
@@ -364,6 +379,9 @@ func (r *Neo4jEnterpriseClusterReconciler) createOrUpdateResource(ctx context.Co
 					// If no selector exists, just use the desired template
 					sts.Spec.Template = desiredSpec.Template
 				}
+			} else {
+				// This is a new StatefulSet, use the desired spec as-is
+				sts.Spec = desiredSpec
 			}
 		}
 		return nil
@@ -372,27 +390,67 @@ func (r *Neo4jEnterpriseClusterReconciler) createOrUpdateResource(ctx context.Co
 	return err
 }
 
-func (r *Neo4jEnterpriseClusterReconciler) updateClusterStatus(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, phase, message string) {
+func (r *Neo4jEnterpriseClusterReconciler) updateClusterStatus(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, phase, message string) bool {
+	logger := log.FromContext(ctx)
+	statusChanged := false
+
 	update := func() error {
 		// Get latest version
 		latest := &neo4jv1alpha1.Neo4jEnterpriseCluster{}
 		if err := r.Get(ctx, client.ObjectKeyFromObject(cluster), latest); err != nil {
 			return err
 		}
+
+		// Determine expected condition status
+		expectedConditionStatus := metav1.ConditionTrue
+		if phase == "Failed" {
+			expectedConditionStatus = metav1.ConditionFalse
+		}
+
+		// Check if status is already exactly what we want
+		statusNeedsUpdate := latest.Status.Phase != phase || latest.Status.Message != message
+		conditionNeedsUpdate := true
+
+		// Check existing condition
+		for _, cond := range latest.Status.Conditions {
+			if cond.Type == "Ready" {
+				if cond.Status == expectedConditionStatus &&
+					cond.Reason == phase &&
+					cond.Message == message {
+					conditionNeedsUpdate = false
+				}
+				break
+			}
+		}
+
+		// If neither status nor condition needs update, skip entirely
+		if !statusNeedsUpdate && !conditionNeedsUpdate {
+			logger.V(1).Info("Status and condition already correct, skipping update",
+				"phase", phase, "message", message)
+			statusChanged = false
+			return nil
+		}
+
+		// Log what we're updating
+		logger.V(1).Info("Updating cluster status",
+			"phase", phase, "message", message,
+			"statusNeedsUpdate", statusNeedsUpdate,
+			"conditionNeedsUpdate", conditionNeedsUpdate)
+
+		// Update status fields
 		latest.Status.Phase = phase
 		latest.Status.Message = message
 
 		// Update the condition
 		condition := metav1.Condition{
 			Type:               "Ready",
-			Status:             metav1.ConditionTrue,
+			Status:             expectedConditionStatus,
 			LastTransitionTime: metav1.Now(),
 			Reason:             phase,
 			Message:            message,
 		}
-		if phase == "Failed" {
-			condition.Status = metav1.ConditionFalse
-		}
+
+		// Update or add condition
 		found := false
 		for i, cond := range latest.Status.Conditions {
 			if cond.Type == condition.Type {
@@ -404,12 +462,17 @@ func (r *Neo4jEnterpriseClusterReconciler) updateClusterStatus(ctx context.Conte
 		if !found {
 			latest.Status.Conditions = append(latest.Status.Conditions, condition)
 		}
+
+		statusChanged = true
 		return r.Status().Update(ctx, latest)
 	}
+
 	err := retry.RetryOnConflict(retry.DefaultBackoff, update)
 	if err != nil {
-		log.FromContext(ctx).Error(err, "Failed to update cluster status")
+		logger.Error(err, "Failed to update cluster status")
+		return false
 	}
+	return statusChanged
 }
 
 // createExternalSecretForTLS creates an ExternalSecret resource for TLS certificates
@@ -512,7 +575,7 @@ func (r *Neo4jEnterpriseClusterReconciler) handleRollingUpgrade(ctx context.Cont
 	neo4jClient, err := r.createNeo4jClient(ctx, cluster)
 	if err != nil {
 		logger.Error(err, "Failed to create Neo4j client for upgrade")
-		r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Failed to create Neo4j client: %v", err))
+		_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Failed to create Neo4j client: %v", err))
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 	}
 	defer func() {
@@ -530,17 +593,17 @@ func (r *Neo4jEnterpriseClusterReconciler) handleRollingUpgrade(ctx context.Cont
 
 		// Check if auto-pause is enabled
 		if cluster.Spec.UpgradeStrategy != nil && cluster.Spec.UpgradeStrategy.AutoPauseOnFailure {
-			r.updateClusterStatus(ctx, cluster, "Paused", "Upgrade paused due to failure - manual intervention required")
+			_ = r.updateClusterStatus(ctx, cluster, "Paused", "Upgrade paused due to failure - manual intervention required")
 			r.Recorder.Event(cluster, "Warning", "UpgradePaused", fmt.Sprintf("Upgrade paused: %v", err))
 			return ctrl.Result{}, nil // Don't requeue automatically
 		}
 
-		r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Rolling upgrade failed: %v", err))
+		_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Rolling upgrade failed: %v", err))
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 	}
 
 	// Update cluster status and version
-	r.updateClusterStatus(ctx, cluster, "Ready", "Rolling upgrade completed successfully")
+	_ = r.updateClusterStatus(ctx, cluster, "Ready", "Rolling upgrade completed successfully")
 	cluster.Status.Version = cluster.Spec.Image.Tag
 	if err := r.Status().Update(ctx, cluster); err != nil {
 		logger.Error(err, "Failed to update cluster status")
@@ -1209,7 +1272,19 @@ func (r *Neo4jEnterpriseClusterReconciler) SetupWithManager(mgr ctrl.Manager) er
 		For(&neo4jv1alpha1.Neo4jEnterpriseCluster{}).
 		Owns(&appsv1.StatefulSet{}).
 		Owns(&corev1.Service{}).
-		Owns(&corev1.ConfigMap{}).
+		// Note: Removed ConfigMap from Owns() to prevent reconciliation feedback loops
+		// ConfigMaps are managed manually by ConfigMapManager with debounce
 		Owns(&corev1.Secret{}).
+		WithOptions(controller.Options{
+			MaxConcurrentReconciles: 1, // Limit concurrent reconciliations
+			RateLimiter: workqueue.NewTypedMaxOfRateLimiter(
+				// Exponential backoff starting at 5 seconds
+				workqueue.NewTypedItemExponentialFailureRateLimiter[reconcile.Request](5*time.Second, 30*time.Second),
+				// Overall rate limiting (max 10 reconciliations per minute)
+				&workqueue.TypedBucketRateLimiter[reconcile.Request]{
+					Limiter: rate.NewLimiter(rate.Every(6*time.Second), 10),
+				},
+			),
+		}).
 		Complete(r)
 }

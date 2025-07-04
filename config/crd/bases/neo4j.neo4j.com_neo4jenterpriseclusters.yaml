@@ -2704,6 +2704,153 @@ spec:
                     format: int32
                     type: integer
                 type: object
+              scalingStatus:
+                description: ScalingStatus provides detailed scaling operation progress
+                properties:
+                  completionTime:
+                    description: CompletionTime is when the scaling operation completed
+                    format: date-time
+                    type: string
+                  conditions:
+                    description: Conditions represent detailed scaling status conditions
+                    items:
+                      description: ScalingCondition represents a condition during
+                        scaling operations
+                      properties:
+                        lastProbeTime:
+                          description: LastProbeTime is the time the condition was
+                            last probed
+                          format: date-time
+                          type: string
+                        lastTransitionTime:
+                          description: LastTransitionTime is the time the condition
+                            transitioned from one status to another
+                          format: date-time
+                          type: string
+                        message:
+                          description: Message is a human-readable message indicating
+                            details about the transition
+                          type: string
+                        reason:
+                          description: Reason contains a programmatic identifier indicating
+                            the reason for the condition's last transition
+                          type: string
+                        status:
+                          description: Status of the condition
+                          enum:
+                          - "True"
+                          - "False"
+                          - Unknown
+                          type: string
+                        type:
+                          description: Type of scaling condition
+                          enum:
+                          - ResourceValidated
+                          - PodsScheduled
+                          - PodsReady
+                          - ClusterFormed
+                          - Completed
+                          type: string
+                      required:
+                      - lastTransitionTime
+                      - message
+                      - reason
+                      - status
+                      - type
+                      type: object
+                    type: array
+                  currentPrimaries:
+                    description: CurrentPrimaries shows the current number of primary
+                      nodes
+                    type: integer
+                  currentSecondaries:
+                    description: CurrentSecondaries shows the current number of secondary
+                      nodes
+                    type: integer
+                  lastError:
+                    description: LastError contains the last error message if scaling
+                      failed
+                    type: string
+                  lastScaleTime:
+                    description: LastScaleTime shows when the last successful scaling
+                      occurred
+                    format: date-time
+                    type: string
+                  message:
+                    description: Message provides additional information about the
+                      scaling operation
+                    type: string
+                  phase:
+                    description: Phase represents the current phase of the scaling
+                      operation
+                    enum:
+                    - Pending
+                    - InProgress
+                    - Completed
+                    - Failed
+                    - Paused
+                    type: string
+                  progress:
+                    description: Progress shows detailed progress of the scaling operation
+                    properties:
+                      completedSteps:
+                        description: CompletedSteps is the number of completed steps
+                        type: integer
+                      currentStep:
+                        description: CurrentStep describes what is currently happening
+                        type: string
+                      estimatedCompletion:
+                        description: EstimatedCompletion provides an estimate of when
+                          scaling will complete
+                        format: date-time
+                        type: string
+                      failedPods:
+                        description: FailedPods shows pods that have failed
+                        items:
+                          type: string
+                        type: array
+                      pendingPods:
+                        description: PendingPods shows pods that are pending scheduling
+                        items:
+                          type: string
+                        type: array
+                      readyPods:
+                        description: ReadyPods shows pods that are ready
+                        items:
+                          type: string
+                        type: array
+                      runningPods:
+                        description: RunningPods shows pods that are running but not
+                          ready
+                        items:
+                          type: string
+                        type: array
+                      totalSteps:
+                        description: TotalSteps is the total number of steps in the
+                          scaling operation
+                        type: integer
+                    required:
+                    - completedSteps
+                    - totalSteps
+                    type: object
+                  startTime:
+                    description: StartTime is when the scaling operation started
+                    format: date-time
+                    type: string
+                  targetPrimaries:
+                    description: TargetPrimaries shows the target number of primary
+                      nodes
+                    type: integer
+                  targetSecondaries:
+                    description: TargetSecondaries shows the target number of secondary
+                      nodes
+                    type: integer
+                required:
+                - currentPrimaries
+                - currentSecondaries
+                - targetPrimaries
+                - targetSecondaries
+                type: object
               upgradeStatus:
                 description: UpgradeStatus provides detailed upgrade progress information
                 properties:

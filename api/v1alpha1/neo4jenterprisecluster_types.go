@@ -483,6 +483,9 @@ type Neo4jEnterpriseClusterStatus struct {
 
 	// UpgradeStatus provides detailed upgrade progress information
 	UpgradeStatus *UpgradeStatus `json:"upgradeStatus,omitempty"`
+
+	// ScalingStatus provides detailed scaling operation progress
+	ScalingStatus *ScalingStatus `json:"scalingStatus,omitempty"`
 }
 
 // UpgradeStatus tracks the progress of an ongoing upgrade
@@ -1145,6 +1148,96 @@ type QueryMetricsExportConfig struct {
 
 	// Export interval
 	Interval string `json:"interval,omitempty"`
+}
+
+// ScalingStatus tracks the progress of scaling operations
+type ScalingStatus struct {
+	// Phase represents the current phase of the scaling operation
+	// +kubebuilder:validation:Enum=Pending;InProgress;Completed;Failed;Paused
+	Phase string `json:"phase,omitempty"`
+
+	// StartTime is when the scaling operation started
+	StartTime *metav1.Time `json:"startTime,omitempty"`
+
+	// CompletionTime is when the scaling operation completed
+	CompletionTime *metav1.Time `json:"completionTime,omitempty"`
+
+	// CurrentPrimaries shows the current number of primary nodes
+	CurrentPrimaries int `json:"currentPrimaries"`
+
+	// CurrentSecondaries shows the current number of secondary nodes
+	CurrentSecondaries int `json:"currentSecondaries"`
+
+	// TargetPrimaries shows the target number of primary nodes
+	TargetPrimaries int `json:"targetPrimaries"`
+
+	// TargetSecondaries shows the target number of secondary nodes
+	TargetSecondaries int `json:"targetSecondaries"`
+
+	// Conditions represent detailed scaling status conditions
+	Conditions []ScalingCondition `json:"conditions,omitempty"`
+
+	// LastScaleTime shows when the last successful scaling occurred
+	LastScaleTime *metav1.Time `json:"lastScaleTime,omitempty"`
+
+	// Message provides additional information about the scaling operation
+	Message string `json:"message,omitempty"`
+
+	// LastError contains the last error message if scaling failed
+	LastError string `json:"lastError,omitempty"`
+
+	// Progress shows detailed progress of the scaling operation
+	Progress *ScalingProgress `json:"progress,omitempty"`
+}
+
+// ScalingCondition represents a condition during scaling operations
+type ScalingCondition struct {
+	// Type of scaling condition
+	// +kubebuilder:validation:Enum=ResourceValidated;PodsScheduled;PodsReady;ClusterFormed;Completed
+	Type string `json:"type"`
+
+	// Status of the condition
+	// +kubebuilder:validation:Enum=True;False;Unknown
+	Status corev1.ConditionStatus `json:"status"`
+
+	// LastTransitionTime is the time the condition transitioned from one status to another
+	LastTransitionTime metav1.Time `json:"lastTransitionTime"`
+
+	// Reason contains a programmatic identifier indicating the reason for the condition's last transition
+	Reason string `json:"reason"`
+
+	// Message is a human-readable message indicating details about the transition
+	Message string `json:"message"`
+
+	// LastProbeTime is the time the condition was last probed
+	LastProbeTime *metav1.Time `json:"lastProbeTime,omitempty"`
+}
+
+// ScalingProgress tracks detailed progress of scaling operations
+type ScalingProgress struct {
+	// TotalSteps is the total number of steps in the scaling operation
+	TotalSteps int `json:"totalSteps"`
+
+	// CompletedSteps is the number of completed steps
+	CompletedSteps int `json:"completedSteps"`
+
+	// CurrentStep describes what is currently happening
+	CurrentStep string `json:"currentStep,omitempty"`
+
+	// PendingPods shows pods that are pending scheduling
+	PendingPods []string `json:"pendingPods,omitempty"`
+
+	// RunningPods shows pods that are running but not ready
+	RunningPods []string `json:"runningPods,omitempty"`
+
+	// ReadyPods shows pods that are ready
+	ReadyPods []string `json:"readyPods,omitempty"`
+
+	// FailedPods shows pods that have failed
+	FailedPods []string `json:"failedPods,omitempty"`
+
+	// EstimatedCompletion provides an estimate of when scaling will complete
+	EstimatedCompletion *metav1.Time `json:"estimatedCompletion,omitempty"`
 }
 
 func init() {

@@ -128,9 +128,10 @@ var _ = BeforeSuite(func() {
 
 	// Set up Neo4jEnterpriseCluster controller
 	if err := (&controller.Neo4jEnterpriseClusterReconciler{
-		Client:   mgr.GetClient(),
-		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorderFor("neo4j-enterprise-cluster-controller"),
+		Client:           mgr.GetClient(),
+		Scheme:           mgr.GetScheme(),
+		Recorder:         mgr.GetEventRecorderFor("neo4j-enterprise-cluster-controller"),
+		ConfigMapManager: controller.NewConfigMapManager(mgr.GetClient()),
 	}).SetupWithManager(mgr); err != nil {
 		Expect(err).NotTo(HaveOccurred())
 	}

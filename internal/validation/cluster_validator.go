@@ -37,6 +37,8 @@ type ClusterValidator struct {
 	authValidator     *AuthValidator
 	cloudValidator    *CloudValidator
 	upgradeValidator  *UpgradeValidator
+	memoryValidator   *MemoryValidator
+	resourceValidator *ResourceValidator
 }
 
 // NewClusterValidator creates a new cluster validator
@@ -51,6 +53,8 @@ func NewClusterValidator(client client.Client) *ClusterValidator {
 		authValidator:     NewAuthValidator(),
 		cloudValidator:    NewCloudValidator(),
 		upgradeValidator:  NewUpgradeValidator(),
+		memoryValidator:   NewMemoryValidator(),
+		resourceValidator: NewResourceValidator(client),
 	}
 }
 
@@ -161,6 +165,9 @@ func (v *ClusterValidator) validateCluster(ctx context.Context, cluster *neo4jv1
 	allErrs = append(allErrs, v.tlsValidator.Validate(cluster)...)
 	allErrs = append(allErrs, v.authValidator.Validate(cluster)...)
 
+	// Memory validation (critical for preventing runtime failures)
+	allErrs = append(allErrs, v.memoryValidator.Validate(cluster)...)
+
 	// Cloud identity validation (least critical, do last)
 	allErrs = append(allErrs, v.cloudValidator.Validate(cluster)...)
 
@@ -170,6 +177,11 @@ func (v *ClusterValidator) validateCluster(ctx context.Context, cluster *neo4jv1
 // validateClusterUpdate performs validation specific to cluster updates
 func (v *ClusterValidator) validateClusterUpdate(ctx context.Context, oldCluster, newCluster *neo4jv1alpha1.Neo4jEnterpriseCluster) field.ErrorList {
 	var allErrs field.ErrorList
+
+	// Validate scaling resource requirements
+	if v.isScalingUp(oldCluster, newCluster) {
+		allErrs = append(allErrs, v.resourceValidator.ValidateScaling(ctx, newCluster, newCluster.Spec.Topology)...)
+	}
 
 	// Prevent downgrading primary count below quorum
 	if newCluster.Spec.Topology.Primaries < oldCluster.Spec.Topology.Primaries {
@@ -195,4 +207,11 @@ func (v *ClusterValidator) validateClusterUpdate(ctx context.Context, oldCluster
 	}
 
 	return allErrs
+}
+
+// isScalingUp checks if the cluster is scaling up (increasing pod count)
+func (v *ClusterValidator) isScalingUp(oldCluster, newCluster *neo4jv1alpha1.Neo4jEnterpriseCluster) bool {
+	oldTotalPods := oldCluster.Spec.Topology.Primaries + oldCluster.Spec.Topology.Secondaries
+	newTotalPods := newCluster.Spec.Topology.Primaries + newCluster.Spec.Topology.Secondaries
+	return newTotalPods > oldTotalPods
 }
