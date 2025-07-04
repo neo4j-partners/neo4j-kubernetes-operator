@@ -160,9 +160,11 @@ test-integration-ci: ## Run integration tests in CI (assumes cluster already exi
 	@echo "🔗 Running integration tests in CI..."
 	@if [ -z "$$KUBECONFIG" ]; then \
 		echo "KUBECONFIG not set, trying to export from kind cluster..."; \
-		kind export kubeconfig --name neo4j-operator-test; \
+		export KUBECONFIG="$$HOME/.kube/config"; \
+		kind export kubeconfig --name neo4j-operator-test --kubeconfig="$$KUBECONFIG"; \
 	fi
-	@go test ./test/integration/... -v -timeout=30m
+	@echo "Using KUBECONFIG: $$KUBECONFIG"
+	@KUBECONFIG="$$KUBECONFIG" go test ./test/integration/... -v -timeout=30m
 
 # E2E Tests - Removed to simplify test structure
 
