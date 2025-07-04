@@ -40,6 +40,7 @@ import (
 
 	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1"
 	"github.com/neo4j-labs/neo4j-kubernetes-operator/internal/neo4j"
+	"github.com/neo4j-labs/neo4j-kubernetes-operator/internal/validation"
 )
 
 // Status constants
@@ -118,6 +119,13 @@ func (r *Neo4jRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		logger.Error(err, "Failed to get target cluster")
 		r.updateRestoreStatus(ctx, restore, "Failed", fmt.Sprintf("Failed to get target cluster: %v", err))
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
+	}
+
+	// Validate Neo4j version compatibility (5.26+ or 2025.01+)
+	if err := r.validateNeo4jVersion(targetCluster); err != nil {
+		logger.Error(err, "Neo4j version validation failed")
+		r.updateRestoreStatus(ctx, restore, "Failed", fmt.Sprintf("Neo4j version not supported: %v", err))
+		return ctrl.Result{}, err
 	}
 
 	// Check if restore is already completed
@@ -423,14 +431,27 @@ func (r *Neo4jRestoreReconciler) buildRestoreCommand(ctx context.Context, restor
 		backupPath = fmt.Sprintf("/backup/%s", restore.Spec.Source.BackupRef)
 	case "storage":
 		backupPath = restore.Spec.Source.BackupPath
+	case "pitr":
+		// Point-in-Time Recovery implementation
+		return r.buildPITRRestoreCommand(ctx, restore)
 	}
 
-	// Build the neo4j-admin restore command
+	// Build the neo4j-admin restore command with Neo4j 5.26+ enhancements
 	cmd = fmt.Sprintf("neo4j-admin restore --from=%s --database=%s", backupPath, restore.Spec.DatabaseName)
 
 	// Add force flag if specified
 	if restore.Spec.Force {
 		cmd += " --force"
+	}
+
+	// Add verification before restore for Neo4j 5.26+
+	if restore.Spec.Options != nil && restore.Spec.Options.VerifyBackup {
+		cmd = fmt.Sprintf("neo4j-admin inspect-backup --from=%s && %s", backupPath, cmd)
+	}
+
+	// Add point-in-time restore if specified (even for non-PITR source types)
+	if restore.Spec.Source.PointInTime != nil {
+		cmd += fmt.Sprintf(" --to-time=%s", restore.Spec.Source.PointInTime.Format("2006-01-02T15:04:05Z"))
 	}
 
 	// Add additional arguments if specified
@@ -443,7 +464,67 @@ func (r *Neo4jRestoreReconciler) buildRestoreCommand(ctx context.Context, restor
 	return cmd, nil
 }
 
-func (r *Neo4jRestoreReconciler) buildRestoreVolumeMounts(_ *neo4jv1alpha1.Neo4jRestore) []corev1.VolumeMount {
+// buildPITRRestoreCommand builds a Point-in-Time Recovery restore command
+func (r *Neo4jRestoreReconciler) buildPITRRestoreCommand(ctx context.Context, restore *neo4jv1alpha1.Neo4jRestore) (string, error) {
+	if restore.Spec.Source.PITR == nil {
+		return "", fmt.Errorf("PITR configuration is required for PITR restore type")
+	}
+
+	pitrConfig := restore.Spec.Source.PITR
+	var cmd string
+
+	// Step 1: Restore base backup if specified
+	if pitrConfig.BaseBackup != nil {
+		var baseBackupPath string
+		switch pitrConfig.BaseBackup.Type {
+		case "backup":
+			backup := &neo4jv1alpha1.Neo4jBackup{}
+			backupKey := types.NamespacedName{Name: pitrConfig.BaseBackup.BackupRef, Namespace: restore.Namespace}
+			if err := r.Get(ctx, backupKey, backup); err != nil {
+				return "", fmt.Errorf("failed to get base backup %s: %w", pitrConfig.BaseBackup.BackupRef, err)
+			}
+			baseBackupPath = fmt.Sprintf("/backup/%s", pitrConfig.BaseBackup.BackupRef)
+		case "storage":
+			baseBackupPath = pitrConfig.BaseBackup.BackupPath
+		default:
+			return "", fmt.Errorf("invalid base backup type: %s", pitrConfig.BaseBackup.Type)
+		}
+
+		// Verify base backup if validation is enabled
+		if pitrConfig.ValidateLogIntegrity {
+			cmd = fmt.Sprintf("neo4j-admin inspect-backup --from=%s && ", baseBackupPath)
+		}
+
+		// Restore base backup
+		cmd += fmt.Sprintf("neo4j-admin restore --from=%s --database=%s", baseBackupPath, restore.Spec.DatabaseName)
+
+		// Add force flag if specified
+		if restore.Spec.Force {
+			cmd += " --force"
+		}
+	}
+
+	// Step 2: Apply transaction logs if point-in-time is specified
+	if restore.Spec.Source.PointInTime != nil {
+		// Validate transaction log integrity if enabled
+		if pitrConfig.ValidateLogIntegrity {
+			cmd += " && neo4j-admin validate-transaction-logs --from=/transaction-logs"
+		}
+
+		// Apply transaction logs up to the specified time
+		cmd += fmt.Sprintf(" && neo4j-admin apply-transaction-logs --database=%s --from=/transaction-logs --to-time=%s",
+			restore.Spec.DatabaseName, restore.Spec.Source.PointInTime.Format("2006-01-02T15:04:05Z"))
+
+		// Add recovery point objective validation
+		if pitrConfig.RecoveryPointObjective != "" {
+			cmd += fmt.Sprintf(" --rpo=%s", pitrConfig.RecoveryPointObjective)
+		}
+	}
+
+	return cmd, nil
+}
+
+func (r *Neo4jRestoreReconciler) buildRestoreVolumeMounts(restore *neo4jv1alpha1.Neo4jRestore) []corev1.VolumeMount {
 	mounts := []corev1.VolumeMount{
 		{
 			Name:      "backup-storage",
@@ -454,6 +535,15 @@ func (r *Neo4jRestoreReconciler) buildRestoreVolumeMounts(_ *neo4jv1alpha1.Neo4j
 			Name:      "neo4j-data",
 			MountPath: "/data",
 		},
+	}
+
+	// Add transaction log volume mount for PITR
+	if restore.Spec.Source.Type == "pitr" && restore.Spec.Source.PITR != nil && restore.Spec.Source.PITR.LogStorage != nil {
+		mounts = append(mounts, corev1.VolumeMount{
+			Name:      "transaction-logs",
+			MountPath: "/transaction-logs",
+			ReadOnly:  true,
+		})
 	}
 
 	return mounts
@@ -506,6 +596,41 @@ func (r *Neo4jRestoreReconciler) buildRestoreVolumes(restore *neo4jv1alpha1.Neo4
 					EmptyDir: &corev1.EmptyDirVolumeSource{},
 				},
 			})
+		}
+	} else if restore.Spec.Source.Type == "pitr" {
+		// Add backup storage volume for PITR base backup
+		if restore.Spec.Source.PITR != nil && restore.Spec.Source.PITR.BaseBackup != nil {
+			volumes = append(volumes, corev1.Volume{
+				Name: "backup-storage",
+				VolumeSource: corev1.VolumeSource{
+					EmptyDir: &corev1.EmptyDirVolumeSource{},
+				},
+			})
+		}
+
+		// Add transaction log storage volume for PITR
+		if restore.Spec.Source.PITR != nil && restore.Spec.Source.PITR.LogStorage != nil {
+			switch restore.Spec.Source.PITR.LogStorage.Type {
+			case "pvc":
+				if restore.Spec.Source.PITR.LogStorage.PVC.Name != "" {
+					volumes = append(volumes, corev1.Volume{
+						Name: "transaction-logs",
+						VolumeSource: corev1.VolumeSource{
+							PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+								ClaimName: restore.Spec.Source.PITR.LogStorage.PVC.Name,
+								ReadOnly:  true,
+							},
+						},
+					})
+				}
+			default:
+				volumes = append(volumes, corev1.Volume{
+					Name: "transaction-logs",
+					VolumeSource: corev1.VolumeSource{
+						EmptyDir: &corev1.EmptyDirVolumeSource{},
+					},
+				})
+			}
 		}
 	}
 
@@ -913,6 +1038,15 @@ func (r *Neo4jRestoreReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			MaxConcurrentReconciles: r.MaxConcurrentReconciles,
 		}).
 		Complete(r)
+}
+
+// validateNeo4jVersion validates that the target cluster uses Neo4j 5.26+ or 2025.01+
+func (r *Neo4jRestoreReconciler) validateNeo4jVersion(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) error {
+	if cluster.Spec.Image.Tag == "" {
+		return fmt.Errorf("Neo4j image tag is not specified in cluster %s", cluster.Name)
+	}
+
+	return validation.ValidateNeo4jVersion(cluster.Spec.Image.Tag)
 }
 
 // Helper function to check if pod is ready

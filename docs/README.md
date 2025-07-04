@@ -10,7 +10,8 @@ The [User Guide](user_guide) is for users of the Neo4j Enterprise Operator. It c
 *   **[Installation](user_guide/installation.md)**: Detailed installation instructions.
 *   **[Configuration](user_guide/configuration.md)**: Comprehensive configuration options.
 *   **[Guides](user_guide/guides)**: In-depth guides on specific topics, such as:
-    *   [Backup and Restore](user_guide/guides/backup_restore.md)
+    *   [Backup and Restore](user_guide/guides/backup_restore.md) - Comprehensive backup and restore operations including PITR
+    *   [Backup & Restore Troubleshooting](user_guide/guides/troubleshooting_backup_restore.md) - Troubleshooting guide for backup/restore issues
     *   [Security](user_guide/guides/security.md)
     *   [Performance](user_guide/guides/performance.md)
     *   [Monitoring](user_guide/guides/monitoring.md)

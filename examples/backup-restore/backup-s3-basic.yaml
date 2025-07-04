@@ -1,0 +1,50 @@
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jBackup
+metadata:
+  name: s3-backup
+  labels:
+    environment: production
+    backup-type: cloud
+spec:
+  target:
+    kind: Cluster
+    name: single-node-cluster
+  storage:
+    type: s3
+    bucket: my-neo4j-backups
+    path: cluster-backups
+    cloud:
+      provider: aws
+      region: us-east-1
+  options:
+    compress: true
+    verify: true
+    encryption:
+      enabled: true
+      keySecret: backup-encryption-key
+      algorithm: AES256
+  retention:
+    maxAge: "30d"
+    maxCount: 30
+    deletePolicy: Delete
+
+---
+# Create this secret with your encryption key
+apiVersion: v1
+kind: Secret
+metadata:
+  name: backup-encryption-key
+type: Opaque
+data:
+  key: <base64-encoded-encryption-key>
+
+---
+# AWS credentials secret (if not using IAM roles)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: aws-credentials
+type: Opaque
+data:
+  AWS_ACCESS_KEY_ID: <base64-encoded-access-key>
+  AWS_SECRET_ACCESS_KEY: <base64-encoded-secret-key>

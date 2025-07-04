@@ -37,6 +37,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1"
+	"github.com/neo4j-labs/neo4j-kubernetes-operator/internal/validation"
 )
 
 // Neo4jBackupReconciler reconciles a Neo4jBackup object
@@ -106,6 +107,13 @@ func (r *Neo4jBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		logger.Error(err, "Failed to get target cluster")
 		r.updateBackupStatus(ctx, backup, "Failed", fmt.Sprintf("Failed to get target cluster: %v", err))
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
+	}
+
+	// Validate Neo4j version compatibility (5.26+ or 2025.01+)
+	if err := r.validateNeo4jVersion(targetCluster); err != nil {
+		logger.Error(err, "Neo4j version validation failed")
+		r.updateBackupStatus(ctx, backup, "Failed", fmt.Sprintf("Neo4j version not supported: %v", err))
+		return ctrl.Result{}, err
 	}
 
 	// Check if cluster is ready
@@ -411,11 +419,13 @@ func (r *Neo4jBackupReconciler) buildBackupCommand(backup *neo4jv1alpha1.Neo4jBa
 
 	switch backup.Spec.Target.Kind {
 	case "Cluster":
-		cmd = "neo4j-admin backup --database=system --to=/backup/" + backupName
+		// For cluster backups, backup all databases using --all-databases flag for Neo4j 5.26+
+		cmd = "neo4j-admin backup --all-databases --to=/backup/" + backupName
 	case "Database":
 		cmd = fmt.Sprintf("neo4j-admin backup --database=%s --to=/backup/%s", backup.Spec.Target.Name, backupName)
 	default:
-		cmd = "neo4j-admin backup --database=system --to=/backup/" + backupName
+		// Default to all databases for Neo4j 5.26+ compatibility
+		cmd = "neo4j-admin backup --all-databases --to=/backup/" + backupName
 	}
 
 	// Add compression if specified
@@ -428,13 +438,22 @@ func (r *Neo4jBackupReconciler) buildBackupCommand(backup *neo4jv1alpha1.Neo4jBa
 		cmd += " --check-consistency"
 	}
 
-	// Add retention policy flags
+	// Add backup aggregation for Neo4j 5.26+ (improves backup chain management)
+	cmd += " --backup-aggregation"
+
+	// Add metadata inspection to capture backup information
+	cmd += " --include-metadata"
+
+	// Add retention policy flags (note: these are not actual neo4j-admin flags,
+	// but will be handled by our retention cleanup job)
 	if backup.Spec.Retention != nil {
 		if backup.Spec.Retention.MaxAge != "" {
-			cmd += " --max-age=" + backup.Spec.Retention.MaxAge
+			// Store retention info in environment for cleanup job
+			cmd = fmt.Sprintf("export BACKUP_MAX_AGE='%s'; %s", backup.Spec.Retention.MaxAge, cmd)
 		}
 		if backup.Spec.Retention.MaxCount > 0 {
-			cmd += fmt.Sprintf(" --max-count=%d", backup.Spec.Retention.MaxCount)
+			// Store retention info in environment for cleanup job
+			cmd = fmt.Sprintf("export BACKUP_MAX_COUNT='%d'; %s", backup.Spec.Retention.MaxCount, cmd)
 		}
 	}
 
@@ -675,6 +694,15 @@ func (r *Neo4jBackupReconciler) updateBackupStats(ctx context.Context, backup *n
 	if err := r.Status().Update(ctx, backup); err != nil {
 		log.FromContext(ctx).Error(err, "Failed to update backup stats")
 	}
+}
+
+// validateNeo4jVersion validates that the target cluster uses Neo4j 5.26+ or 2025.01+
+func (r *Neo4jBackupReconciler) validateNeo4jVersion(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) error {
+	if cluster.Spec.Image.Tag == "" {
+		return fmt.Errorf("Neo4j image tag is not specified in cluster %s", cluster.Name)
+	}
+
+	return validation.ValidateNeo4jVersion(cluster.Spec.Image.Tag)
 }
 
 // SetupWithManager sets up the controller with the Manager.

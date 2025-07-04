@@ -376,7 +376,6 @@ func (rm *ResourceMonitor) generateScalingRecommendation(utilization *ResourceUt
 
 // checkResourceThresholds checks resource thresholds and emits warnings
 func (rm *ResourceMonitor) checkResourceThresholds(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, utilization *ResourceUtilization) {
-
 	// High memory utilization warning
 	if utilization.MemoryPercentage > 85 {
 		rm.recorder.Eventf(cluster, corev1.EventTypeWarning, "HighMemoryUtilization",

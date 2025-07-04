@@ -1,0 +1,65 @@
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jBackup
+metadata:
+  name: daily-backup
+  labels:
+    environment: production
+    backup-type: scheduled
+    schedule: daily
+spec:
+  target:
+    kind: Cluster
+    name: single-node-cluster
+  schedule: "0 2 * * *"  # Daily at 2 AM UTC
+  storage:
+    type: s3
+    bucket: production-neo4j-backups
+    path: daily-backups
+    cloud:
+      provider: aws
+      region: us-west-2
+  retention:
+    maxAge: "7d"
+    maxCount: 7
+    deletePolicy: Delete
+  options:
+    compress: true
+    verify: true
+    additionalArgs:
+      - "--parallel-recovery"
+  # Suspend can be set to true to temporarily stop scheduled backups
+  suspend: false
+
+---
+# Weekly backup with longer retention
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jBackup
+metadata:
+  name: weekly-backup
+  labels:
+    environment: production
+    backup-type: scheduled
+    schedule: weekly
+spec:
+  target:
+    kind: Cluster
+    name: single-node-cluster
+  schedule: "0 1 * * 0"  # Weekly on Sunday at 1 AM UTC
+  storage:
+    type: s3
+    bucket: production-neo4j-backups
+    path: weekly-backups
+    cloud:
+      provider: aws
+      region: us-west-2
+  retention:
+    maxAge: "90d"
+    maxCount: 12
+    deletePolicy: Archive
+  options:
+    compress: true
+    verify: true
+    encryption:
+      enabled: true
+      keySecret: backup-encryption-key
+      algorithm: AES256

@@ -425,10 +425,8 @@ func TestSecurityValidator_Validate(t *testing.T) {
 				if len(errors) != tt.errorCount {
 					t.Errorf("expected %d errors but got %d: %v", tt.errorCount, len(errors), errors)
 				}
-			} else {
-				if len(errors) > 0 {
-					t.Errorf("expected no validation errors but got %d: %v", len(errors), errors)
-				}
+			} else if len(errors) > 0 {
+				t.Errorf("expected no validation errors but got %d: %v", len(errors), errors)
 			}
 		})
 	}

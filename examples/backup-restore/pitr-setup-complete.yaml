@@ -1,0 +1,246 @@
+# Complete Point-in-Time Recovery Setup
+# This file demonstrates a complete PITR environment setup including:
+# - Base backup configuration
+# - Transaction log storage setup
+# - Secrets for encryption
+# - Example PITR restore configuration
+
+---
+# Base backup for PITR
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jBackup
+metadata:
+  name: pitr-base-backup
+  labels:
+    environment: production
+    backup-type: pitr-base
+    pitr: "true"
+spec:
+  target:
+    kind: Cluster
+    name: production-cluster
+  schedule: "0 0 * * *"  # Daily base backup at midnight
+  storage:
+    type: s3
+    bucket: pitr-base-backups
+    path: production/base
+    cloud:
+      provider: aws
+      region: us-east-1
+  retention:
+    maxAge: "30d"
+    maxCount: 30
+    deletePolicy: Delete
+  options:
+    compress: true
+    verify: true
+    encryption:
+      enabled: true
+      keySecret: pitr-encryption-key
+      algorithm: AES256
+    additionalArgs:
+      - "--parallel-recovery"
+      - "--include-metadata"
+
+---
+# Transaction log backup (conceptual - would be handled by Neo4j configuration)
+# This shows the expected configuration for transaction log storage
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pitr-transaction-log-config
+data:
+  neo4j.conf: |
+    # Transaction log configuration for PITR
+    dbms.tx_log.rotation.retention_policy=7d
+    dbms.tx_log.rotation.size=250M
+
+    # Archive transaction logs to cloud storage
+    dbms.backup.archive_transaction_logs=true
+    dbms.backup.transaction_log_archive.path=s3://transaction-logs/production/logs/
+    dbms.backup.transaction_log_archive.compression=true
+    dbms.backup.transaction_log_archive.encryption=true
+
+---
+# Encryption key for PITR backups and transaction logs
+apiVersion: v1
+kind: Secret
+metadata:
+  name: pitr-encryption-key
+type: Opaque
+data:
+  # Generate with: openssl rand -base64 32
+  key: <base64-encoded-32-byte-encryption-key>
+
+---
+# AWS credentials for PITR storage access
+apiVersion: v1
+kind: Secret
+metadata:
+  name: pitr-aws-credentials
+type: Opaque
+data:
+  AWS_ACCESS_KEY_ID: <base64-encoded-access-key>
+  AWS_SECRET_ACCESS_KEY: <base64-encoded-secret-key>
+
+---
+# Example PITR restore configuration
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jRestore
+metadata:
+  name: pitr-example-restore
+  labels:
+    environment: disaster-recovery
+    restore-type: pitr-example
+spec:
+  targetCluster: recovery-cluster
+  databaseName: production-db
+  source:
+    type: pitr
+    pointInTime: "2025-01-04T12:00:00Z"  # Adjust to desired recovery point
+    pitr:
+      baseBackup:
+        type: backup
+        backupRef: pitr-base-backup
+      logStorage:
+        type: s3
+        bucket: transaction-logs
+        path: production/logs
+        cloud:
+          provider: aws
+          region: us-east-1
+      logRetention: "7d"
+      recoveryPointObjective: "5m"
+      validateLogIntegrity: true
+      compression:
+        enabled: true
+        algorithm: gzip
+        level: 6
+      encryption:
+        enabled: true
+        keySecret: pitr-encryption-key
+        algorithm: AES256
+  options:
+    verifyBackup: true
+    replaceExisting: true
+    preRestore:
+      cypherStatements:
+        - "CALL dbms.backup.prepare()"
+        - "CALL db.checkpoint()"
+      job:
+        template:
+          container:
+            image: alpine:latest
+            command: ["/bin/sh"]
+            args:
+              - "-c"
+              - |
+                echo "=== PITR Pre-Restore Preparation ==="
+                echo "Target cluster: recovery-cluster"
+                echo "Database: production-db"
+                echo "Recovery point: 2025-01-04T12:00:00Z"
+                echo "Validating recovery environment..."
+                sleep 5
+                echo "Pre-restore preparation completed"
+        timeout: "10m"
+    postRestore:
+      cypherStatements:
+        - "CALL db.awaitIndexes(600)"
+        - "CALL dbms.security.clearAuthCache()"
+        - "CREATE CONSTRAINT pitr_recovery_log IF NOT EXISTS FOR (n:RecoveryLog) REQUIRE n.id IS UNIQUE"
+        - |
+          MERGE (log:RecoveryLog {id: randomUUID()})
+          SET log.timestamp = datetime(),
+              log.recovery_type = 'PITR',
+              log.recovery_point = '2025-01-04T12:00:00Z',
+              log.target_cluster = 'recovery-cluster',
+              log.source_backup = 'pitr-base-backup'
+      job:
+        template:
+          container:
+            image: neo4j:5.26.0-enterprise
+            command: ["/bin/sh"]
+            args:
+              - "-c"
+              - |
+                echo "=== PITR Post-Restore Validation ==="
+                echo "Connecting to restored database..."
+
+                # Basic connectivity test
+                cypher-shell -u neo4j -p $NEO4J_PASSWORD -d production-db \
+                  "CALL db.ping() YIELD success RETURN success"
+
+                # Data validation
+                echo "Validating data integrity..."
+                cypher-shell -u neo4j -p $NEO4J_PASSWORD -d production-db \
+                  "MATCH (n) RETURN labels(n)[0] as label, count(n) as count ORDER BY label"
+
+                # Check recovery log
+                echo "Verifying recovery log..."
+                cypher-shell -u neo4j -p $NEO4J_PASSWORD -d production-db \
+                  "MATCH (log:RecoveryLog) WHERE log.recovery_type = 'PITR'
+                   RETURN log ORDER BY log.timestamp DESC LIMIT 1"
+
+                echo "PITR validation completed successfully"
+            env:
+              - name: NEO4J_PASSWORD
+                valueFrom:
+                  secretKeyRef:
+                    name: recovery-cluster-admin-secret
+                    key: password
+        timeout: "20m"
+  force: true
+  stopCluster: true
+  timeout: "4h"
+
+---
+# Recovery cluster admin secret (create this for your recovery environment)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: recovery-cluster-admin-secret
+type: Opaque
+data:
+  username: bmVvNGo=  # neo4j
+  password: <base64-encoded-admin-password>
+
+---
+# Service account for PITR operations with appropriate permissions
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pitr-service-account
+  annotations:
+    # AWS IAM role for S3 access (if using IAM roles instead of access keys)
+    eks.amazonaws.com/role-arn: arn:aws:iam::YOUR-ACCOUNT:role/neo4j-pitr-role
+
+---
+# RBAC for PITR operations
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: pitr-operator-role
+rules:
+  - apiGroups: ["neo4j.neo4j.com"]
+    resources: ["neo4jbackups", "neo4jrestores", "neo4jenterpriseclusters"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["secrets", "configmaps", "persistentvolumeclaims"]
+    verbs: ["get", "list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: pitr-operator-binding
+subjects:
+  - kind: ServiceAccount
+    name: pitr-service-account
+    namespace: default
+roleRef:
+  kind: ClusterRole
+  name: pitr-operator-role
+  apiGroup: rbac.authorization.k8s.io

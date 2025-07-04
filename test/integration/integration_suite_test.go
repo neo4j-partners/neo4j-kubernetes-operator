@@ -294,7 +294,7 @@ func deployCertManagerIfNeeded() {
 
 // deployCertManager installs cert-manager
 func deployCertManager() {
-	cmd := exec.Command("kubectl", "apply", "-f", "https://github.com/cert-manager/cert-manager/releases/download/v1.13.0/cert-manager.yaml")
+	cmd := exec.Command("kubectl", "apply", "-f", "https://github.com/cert-manager/cert-manager/releases/download/v1.18.2/cert-manager.yaml")
 	cmd.Stdout = GinkgoWriter
 	cmd.Stderr = GinkgoWriter
 	Expect(cmd.Run()).To(Succeed(), "Failed to deploy cert-manager")

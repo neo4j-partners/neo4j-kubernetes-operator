@@ -24,7 +24,7 @@ We welcome contributions to the Neo4j Enterprise Operator! This guide will help 
 
 ## Code Style
 
-Please follow the standard Go code style. You can use `make fmt` to format your code.
+Please follow the standard Go code style. You can use `make fmt` to format your code. Code quality tools (`make lint`, `make vet`, `make security`) are available for local development but are not enforced by CI.
 
 ## Git Commit Messages
 

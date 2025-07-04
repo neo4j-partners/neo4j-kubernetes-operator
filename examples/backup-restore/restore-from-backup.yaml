@@ -1,0 +1,68 @@
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jRestore
+metadata:
+  name: simple-restore
+  labels:
+    environment: development
+    restore-type: backup-reference
+spec:
+  targetCluster: single-node-cluster
+  databaseName: neo4j
+  source:
+    type: backup
+    backupRef: simple-backup  # Reference to the backup resource
+  options:
+    verifyBackup: true
+    replaceExisting: true
+    preRestore:
+      cypherStatements:
+        - "CALL dbms.backup.prepare()"
+    postRestore:
+      cypherStatements:
+        - "CALL db.awaitIndexes()"
+        - "CALL dbms.security.clearAuthCache()"
+  force: false
+  stopCluster: true
+  timeout: "1h"
+
+---
+# More complex restore with job hooks
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jRestore
+metadata:
+  name: restore-with-validation
+  labels:
+    environment: staging
+    restore-type: with-hooks
+spec:
+  targetCluster: staging-cluster
+  databaseName: myapp
+  source:
+    type: backup
+    backupRef: daily-backup
+  options:
+    verifyBackup: true
+    replaceExisting: true
+    postRestore:
+      job:
+        template:
+          container:
+            image: neo4j:5.26.0-enterprise
+            command: ["/bin/sh"]
+            args:
+              - "-c"
+              - |
+                echo "Validating restored database..."
+                cypher-shell -u neo4j -p $NEO4J_PASSWORD -d myapp \
+                  "MATCH (n) RETURN count(n) as nodeCount"
+                echo "Database validation completed"
+            env:
+              - name: NEO4J_PASSWORD
+                valueFrom:
+                  secretKeyRef:
+                    name: neo4j-admin-secret
+                    key: password
+        timeout: "10m"
+  force: false
+  stopCluster: true
+  timeout: "2h"

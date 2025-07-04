@@ -17,6 +17,7 @@ limitations under the License.
 package validation
 
 import (
+	"strings"
 	"testing"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -255,10 +256,8 @@ func TestBackupValidator_ValidateFixed(t *testing.T) {
 				if len(errors) != tt.errorCount {
 					t.Errorf("expected %d errors but got %d: %v", tt.errorCount, len(errors), errors)
 				}
-			} else {
-				if len(errors) > 0 {
-					t.Errorf("expected no validation errors but got %d: %v", len(errors), errors)
-				}
+			} else if len(errors) > 0 {
+				t.Errorf("expected no validation errors but got %d: %v", len(errors), errors)
 			}
 		})
 	}
@@ -319,4 +318,114 @@ func TestBackupValidator_validateStorageType(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestValidateNeo4jVersion(t *testing.T) {
+	tests := []struct {
+		name        string
+		imageTag    string
+		expectError bool
+		errorMsg    string
+	}{
+		{
+			name:        "valid semver 5.26.0",
+			imageTag:    "5.26.0",
+			expectError: false,
+		},
+		{
+			name:        "valid semver 5.27.1",
+			imageTag:    "5.27.1",
+			expectError: false,
+		},
+		{
+			name:        "valid semver 6.0.0",
+			imageTag:    "6.0.0",
+			expectError: false,
+		},
+		{
+			name:        "valid calver 2025.01.0",
+			imageTag:    "2025.01.0",
+			expectError: false,
+		},
+		{
+			name:        "valid calver 2025.06.1",
+			imageTag:    "2025.06.1",
+			expectError: false,
+		},
+		{
+			name:        "valid calver 2026.01.0",
+			imageTag:    "2026.01.0",
+			expectError: false,
+		},
+		{
+			name:        "valid enterprise tag 5.26.0-enterprise",
+			imageTag:    "5.26.0-enterprise",
+			expectError: false,
+		},
+		{
+			name:        "valid enterprise calver 2025.01.0-enterprise",
+			imageTag:    "2025.01.0-enterprise",
+			expectError: false,
+		},
+		{
+			name:        "invalid semver 5.25.0 (too old)",
+			imageTag:    "5.25.0",
+			expectError: true,
+			errorMsg:    "not supported. Minimum required version is 5.26.0",
+		},
+		{
+			name:        "invalid semver 4.4.0 (too old)",
+			imageTag:    "4.4.0",
+			expectError: true,
+			errorMsg:    "not supported. Minimum required version is 5.26.0",
+		},
+		{
+			name:        "invalid calver 2024.12.0 (too old)",
+			imageTag:    "2024.12.0",
+			expectError: true,
+			errorMsg:    "not supported. Minimum required calver version is 2025.01.0",
+		},
+		{
+			name:        "empty image tag",
+			imageTag:    "",
+			expectError: true,
+			errorMsg:    "Neo4j image tag is required",
+		},
+		{
+			name:        "invalid format",
+			imageTag:    "latest",
+			expectError: true,
+			errorMsg:    "invalid Neo4j version format",
+		},
+		{
+			name:        "valid parsed version from alpha tag",
+			imageTag:    "5.26-alpha",
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateNeo4jVersion(tt.imageTag)
+
+			if tt.expectError {
+				if err == nil {
+					t.Errorf("expected error but got none")
+				} else if tt.errorMsg != "" && err.Error() != "" {
+					// Check if error message contains expected substring
+					if !containsSubstring(err.Error(), tt.errorMsg) {
+						t.Errorf("expected error message to contain '%s' but got: %v", tt.errorMsg, err)
+					}
+				}
+			} else {
+				if err != nil {
+					t.Errorf("expected no error but got: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func containsSubstring(str, substr string) bool {
+	return strings.Contains(str, substr)
 }

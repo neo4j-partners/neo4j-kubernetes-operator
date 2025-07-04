@@ -570,8 +570,7 @@ func (v *SecurityValidator) validateProcedureSecurityConfig(key, value string, c
 func (v *SecurityValidator) validateLogSecurityConfig(key, value string, configPath *field.Path) field.ErrorList {
 	var allErrs field.ErrorList
 
-	switch key {
-	case "dbms.security.logs.password_obfuscation":
+	if key == "dbms.security.logs.password_obfuscation" {
 		if value != "true" && value != "false" {
 			allErrs = append(allErrs, field.Invalid(
 				configPath.Child(key),

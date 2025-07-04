@@ -311,7 +311,10 @@ var _ = Describe("Neo4jBackup Controller", func() {
 			}, timeout, interval).Should(Succeed())
 
 			container := job.Spec.Template.Spec.Containers[0]
-			Expect(container.Args).To(ContainElement(ContainSubstring("--max-age=30d")))
+			// Check that retention policy is set in the backup command
+			Expect(container.Args).To(HaveLen(2))
+			Expect(container.Args[0]).To(Equal("-c"))
+			Expect(container.Args[1]).To(ContainSubstring("export BACKUP_MAX_AGE='30d'"))
 		})
 	})
 

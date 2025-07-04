@@ -110,15 +110,13 @@ func (v *BackupValidator) validateBackupTarget(target *neo4jv1alpha1.BackupTarge
 			targetPath.Child("name"),
 			"backup target name must be specified",
 		))
-	} else {
+	} else if !v.isValidResourceName(target.Name) {
 		// Validate name format (Kubernetes resource name validation)
-		if !v.isValidResourceName(target.Name) {
-			allErrs = append(allErrs, field.Invalid(
-				targetPath.Child("name"),
-				target.Name,
-				"invalid resource name format",
-			))
-		}
+		allErrs = append(allErrs, field.Invalid(
+			targetPath.Child("name"),
+			target.Name,
+			"invalid resource name format",
+		))
 	}
 
 	return allErrs
@@ -562,4 +560,84 @@ func (v *BackupValidator) isValidResourceName(name string) bool {
 	// Must start and end with alphanumeric character
 	validName := regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`)
 	return validName.MatchString(name)
+}
+
+// ValidateNeo4jVersion validates that the Neo4j version is 5.26+ or 2025.01+ (calver)
+func ValidateNeo4jVersion(imageTag string) error {
+	if imageTag == "" {
+		return fmt.Errorf("Neo4j image tag is required")
+	}
+
+	// Remove any additional tags or suffixes (e.g., "-enterprise")
+	version := strings.Split(imageTag, "-")[0]
+
+	// Check for calver format (2025.01.0 and up)
+	if matched, _ := regexp.MatchString(`^20\d{2}\.\d{2}(\.\d+)?$`, version); matched {
+		return validateCalverVersion(version)
+	}
+
+	// Check for semver format (5.26.0 and up)
+	if matched, _ := regexp.MatchString(`^\d+\.\d+(\.\d+)?$`, version); matched {
+		return validateSemverVersion(version)
+	}
+
+	return fmt.Errorf("invalid Neo4j version format: %s. Expected semver (5.26+) or calver (2025.01+)", version)
+}
+
+// validateSemverVersion validates semver format versions (5.26.0 and up)
+func validateSemverVersion(version string) error {
+	parts := strings.Split(version, ".")
+	if len(parts) < 2 {
+		return fmt.Errorf("invalid semver format: %s", version)
+	}
+
+	major, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return fmt.Errorf("invalid major version: %s", parts[0])
+	}
+
+	minor, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return fmt.Errorf("invalid minor version: %s", parts[1])
+	}
+
+	// Check minimum version requirements
+	if major < 5 {
+		return fmt.Errorf("Neo4j version %s is not supported. Minimum required version is 5.26.0", version)
+	}
+
+	if major == 5 && minor < 26 {
+		return fmt.Errorf("Neo4j version %s is not supported. Minimum required version is 5.26.0", version)
+	}
+
+	return nil
+}
+
+// validateCalverVersion validates calver format versions (2025.01.0 and up)
+func validateCalverVersion(version string) error {
+	parts := strings.Split(version, ".")
+	if len(parts) < 2 {
+		return fmt.Errorf("invalid calver format: %s", version)
+	}
+
+	year, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return fmt.Errorf("invalid year in calver: %s", parts[0])
+	}
+
+	month, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return fmt.Errorf("invalid month in calver: %s", parts[1])
+	}
+
+	// Check minimum version requirements (2025.01 and up)
+	if year < 2025 {
+		return fmt.Errorf("Neo4j version %s is not supported. Minimum required calver version is 2025.01.0", version)
+	}
+
+	if year == 2025 && month < 1 {
+		return fmt.Errorf("Neo4j version %s is not supported. Minimum required calver version is 2025.01.0", version)
+	}
+
+	return nil
 }

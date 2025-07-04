@@ -196,7 +196,7 @@ func (v *MemoryValidator) parseMemoryToBytes(memoryStr string) (int64, error) {
 	// Handle Neo4j format (e.g., "1g", "512m")
 	memoryStr = strings.ToLower(strings.TrimSpace(memoryStr))
 
-	var multiplier int64 = 1
+	var multiplier int64
 	var numStr string
 
 	if strings.HasSuffix(memoryStr, "g") {

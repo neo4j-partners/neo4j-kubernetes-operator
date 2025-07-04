@@ -1,0 +1,145 @@
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jRestore
+metadata:
+  name: pitr-restore
+  labels:
+    environment: production
+    restore-type: pitr
+spec:
+  targetCluster: recovery-cluster
+  databaseName: production-db
+  source:
+    type: pitr
+    pointInTime: "2025-01-04T12:30:00Z"
+    pitr:
+      baseBackup:
+        type: backup
+        backupRef: daily-backup
+      logStorage:
+        type: s3
+        bucket: transaction-logs
+        path: production/logs
+        cloud:
+          provider: aws
+          region: us-east-1
+      logRetention: "7d"
+      recoveryPointObjective: "5m"
+      validateLogIntegrity: true
+      compression:
+        enabled: true
+        algorithm: gzip
+        level: 6
+  options:
+    verifyBackup: true
+    replaceExisting: true
+    preRestore:
+      cypherStatements:
+        - "CALL db.checkpoint()"
+    postRestore:
+      cypherStatements:
+        - "CALL db.awaitIndexes()"
+        - "CALL dbms.security.clearAuthCache()"
+        - "MATCH (n:AuditLog) WHERE n.timestamp > datetime() - duration('PT1H') RETURN count(n) as recentAudits"
+  force: true
+  stopCluster: true
+  timeout: "3h"
+
+---
+# Advanced PITR with encryption and storage-based base backup
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jRestore
+metadata:
+  name: pitr-advanced-restore
+  labels:
+    environment: production
+    restore-type: pitr-advanced
+spec:
+  targetCluster: disaster-recovery
+  databaseName: critical-app
+  source:
+    type: pitr
+    pointInTime: "2025-01-04T14:45:30Z"
+    pitr:
+      baseBackup:
+        type: storage
+        storage:
+          type: s3
+          bucket: base-backups
+          path: production/base-backup-20250104
+          cloud:
+            provider: aws
+            region: us-east-1
+        backupPath: /backup/base-backup-20250104
+      logStorage:
+        type: s3
+        bucket: transaction-logs
+        path: production/logs
+        cloud:
+          provider: aws
+          region: us-east-1
+      logRetention: "14d"
+      recoveryPointObjective: "1m"
+      validateLogIntegrity: true
+      compression:
+        enabled: true
+        algorithm: zstd
+        level: 3
+      encryption:
+        enabled: true
+        keySecret: log-encryption-key
+        algorithm: AES256
+  options:
+    verifyBackup: true
+    replaceExisting: true
+    preRestore:
+      job:
+        template:
+          container:
+            image: alpine:latest
+            command: ["/bin/sh"]
+            args:
+              - "-c"
+              - |
+                echo "Preparing disaster recovery environment..."
+                echo "Validating target cluster readiness..."
+                echo "Pre-restore preparation completed"
+        timeout: "5m"
+    postRestore:
+      cypherStatements:
+        - "CALL db.awaitIndexes(600)"
+        - "CALL dbms.security.clearAuthCache()"
+        - "CREATE CONSTRAINT disaster_recovery_marker IF NOT EXISTS FOR (n:DisasterRecovery)
+           REQUIRE n.timestamp IS UNIQUE"
+        - "MERGE (dr:DisasterRecovery {timestamp: datetime()})
+           SET dr.restored_from = 'PITR', dr.point_in_time = '2025-01-04T14:45:30Z'"
+      job:
+        template:
+          container:
+            image: neo4j:5.26.0-enterprise
+            command: ["/bin/sh"]
+            args:
+              - "-c"
+              - |
+                echo "Running post-restore validation..."
+                cypher-shell -u neo4j -p $NEO4J_PASSWORD -d critical-app \
+                  "MATCH (n) RETURN labels(n)[0] as label, count(n) as count ORDER BY label"
+                echo "Validation completed successfully"
+            env:
+              - name: NEO4J_PASSWORD
+                valueFrom:
+                  secretKeyRef:
+                    name: disaster-recovery-admin-secret
+                    key: password
+        timeout: "15m"
+  force: true
+  stopCluster: true
+  timeout: "4h"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: log-encryption-key
+type: Opaque
+data:
+  key: <base64-encoded-encryption-key-for-transaction-logs>

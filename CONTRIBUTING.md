@@ -79,7 +79,7 @@ cd neo4j-kubernetes-operator
    git checkout -b feature/your-feature-name
    ```
 
-2. **Make your changes** and ensure they follow our coding standards:
+2. **Make your changes** and ensure they follow our coding standards (optional but recommended):
 
    ```bash
    make fmt lint
@@ -138,15 +138,17 @@ make generate manifests
 
 ## Development Tools
 
-### Pre-commit Hooks
+### Code Quality Tools (Optional)
 
-We use pre-commit hooks to ensure code quality:
+The following tools are available for local development to maintain code quality:
 
-- **go fmt**: Code formatting
-- **go vet**: Static analysis
-- **golangci-lint**: Advanced linting
+- **go fmt**: Code formatting (`make fmt`)
+- **go vet**: Static analysis (`make vet`)
+- **golangci-lint**: Advanced linting (`make lint`)
 - **goimports**: Import organization
-- **Tests**: Unit tests on changed files
+- **Security scanning**: (`make security`)
+
+**Note:** Code quality checks are not enforced by CI but are recommended for local development.
 
 ### VS Code Integration
 

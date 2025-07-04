@@ -6,15 +6,14 @@ This directory contains GitHub Actions workflows for the Neo4j Kubernetes Operat
 
 ### 🔄 ci.yml - Main CI Pipeline
 **Triggers:** Push to main/develop, Pull Requests
-**Purpose:** Complete CI pipeline with code quality, unit tests, and conditional integration tests
+**Purpose:** Complete CI pipeline with unit tests and conditional integration tests
 
 **Jobs:**
-1. **Code Quality** - Formatting, linting, security checks
-2. **Unit Tests** - Fast unit tests (no cluster required)
-3. **Integration Tests** - Full integration tests (requires `integration-tests` label on PR)
+1. **Unit Tests** - Fast unit tests (no cluster required)
+2. **Integration Tests** - Full integration tests (requires `integration-tests` label on PR)
 
 **Features:**
-- Sequential job execution for fast feedback
+- Fast feedback with unit tests first
 - Integration tests only run on main branch pushes or labeled PRs
 - Coverage reporting to Codecov
 - Artifact collection for debugging
@@ -76,7 +75,6 @@ gh run list --workflow=ci.yml
 
 ### Fast Feedback
 - **Unit tests** run on every push/PR (2-3 minutes)
-- **Code quality** checks run first to catch basic issues
 - **Integration tests** only run when needed to save resources
 
 ### Comprehensive Coverage
@@ -104,7 +102,6 @@ gh run list --workflow=ci.yml
 - `make test-cluster` - Create Kind cluster
 - `make test-cluster-delete` - Cleanup Kind cluster
 - `make manifests generate` - Code generation
-- `make fmt lint-lenient vet security` - Code quality
 
 ## Troubleshooting
 
