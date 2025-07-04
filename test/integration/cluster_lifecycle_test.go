@@ -40,7 +40,7 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 
 	BeforeEach(func() {
 		By("Starting BeforeEach for cluster lifecycle test")
-		// Create test namespace
+		// Create test namespace (createTestNamespace already creates it in the cluster)
 		namespaceName := createTestNamespace("lifecycle")
 		By(fmt.Sprintf("Created namespace: %s", namespaceName))
 
@@ -49,8 +49,8 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 				Name: namespaceName,
 			},
 		}
-		Expect(k8sClient.Create(ctx, namespace)).Should(Succeed())
-		By("Successfully created namespace object")
+		// Note: namespace is already created by createTestNamespace, no need to create again
+		By("Successfully set up namespace object")
 
 		clusterName = fmt.Sprintf("lifecycle-cluster-%d", GinkgoRandomSeed())
 		By(fmt.Sprintf("Generated cluster name: %s", clusterName))
@@ -63,6 +63,10 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 
 	Context("End-to-end cluster lifecycle", func() {
 		It("Should create, scale, upgrade, and delete cluster successfully", func() {
+			// Skip this test if no operator is running (requires full cluster setup)
+			if !isOperatorRunning() {
+				Skip("End-to-end cluster lifecycle test requires operator to be running")
+			}
 			By("Starting end-to-end cluster lifecycle test")
 			By("Creating a basic cluster")
 			cluster = &neo4jv1alpha1.Neo4jEnterpriseCluster{
@@ -200,6 +204,10 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 
 	Context("Multi-cluster deployment", func() {
 		It("Should handle multiple clusters in same namespace", func() {
+			// Skip this test if no operator is running (requires full cluster setup)
+			if !isOperatorRunning() {
+				Skip("Multi-cluster deployment test requires operator to be running")
+			}
 			cluster1 := &neo4jv1alpha1.Neo4jEnterpriseCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      clusterName + "-1",

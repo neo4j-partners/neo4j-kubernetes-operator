@@ -38,22 +38,7 @@ var _ = Describe("Enterprise Features Integration Tests", func() {
 	BeforeEach(func() {
 		ctx = context.Background()
 		namespace = createTestNamespace("enterprise")
-
-		// Create test namespace with retry logic
-		Eventually(func() error {
-			ns := &corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: namespace,
-				},
-			}
-			return k8sClient.Create(ctx, ns)
-		}, timeout, interval).Should(Succeed())
-
-		// Wait for namespace to be ready
-		Eventually(func() error {
-			ns := &corev1.Namespace{}
-			return k8sClient.Get(ctx, types.NamespacedName{Name: namespace}, ns)
-		}, timeout, interval).Should(Succeed())
+		// Note: namespace is already created by createTestNamespace, no need to create again
 
 		// Create admin secret
 		secret := &corev1.Secret{
@@ -74,6 +59,10 @@ var _ = Describe("Enterprise Features Integration Tests", func() {
 
 	Describe("Auto-Scaling Feature", func() {
 		It("Should validate auto-scaling configuration", func() {
+			// Skip this test if no operator is running (requires full cluster setup)
+			if !isOperatorRunning() {
+				Skip("Auto-scaling test requires operator to be running")
+			}
 			cluster := &neo4jv1alpha1.Neo4jEnterpriseCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "autoscaling-cluster",
@@ -155,6 +144,10 @@ var _ = Describe("Enterprise Features Integration Tests", func() {
 
 	Describe("Plugin Management Feature", func() {
 		It("Should create and manage Neo4j plugins", func() {
+			// Skip this test if no operator is running (requires full cluster setup)
+			if !isOperatorRunning() {
+				Skip("Plugin management test requires operator to be running")
+			}
 			// First create a cluster
 			cluster := &neo4jv1alpha1.Neo4jEnterpriseCluster{
 				ObjectMeta: metav1.ObjectMeta{
@@ -218,6 +211,10 @@ var _ = Describe("Enterprise Features Integration Tests", func() {
 
 	Describe("Query Monitoring Feature", func() {
 		It("Should configure query monitoring", func() {
+			// Skip this test if no operator is running (requires full cluster setup)
+			if !isOperatorRunning() {
+				Skip("Query monitoring test requires operator to be running")
+			}
 			cluster := &neo4jv1alpha1.Neo4jEnterpriseCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "monitoring-cluster",

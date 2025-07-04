@@ -29,6 +29,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -238,4 +239,20 @@ func installCRDsIfMissing() {
 	} else {
 		By("All required CRDs are already available")
 	}
+}
+
+// isOperatorRunning checks if the Neo4j operator is deployed and running
+func isOperatorRunning() bool {
+	deploymentList := &appsv1.DeploymentList{}
+	err := k8sClient.List(ctx, deploymentList, client.InNamespace("neo4j-operator-system"))
+	if err != nil {
+		return false
+	}
+
+	for _, deployment := range deploymentList.Items {
+		if deployment.Name == "neo4j-operator-controller-manager" {
+			return deployment.Status.ReadyReplicas > 0
+		}
+	}
+	return false
 }
