@@ -70,7 +70,7 @@ jobs:
     - name: Run integration tests
       run: make test-integration-ci
       env:
-        KUBECONFIG: ~/.kube/config
+        KUBECONFIG: /home/runner/.kube/config
 
     - name: Collect cluster logs
       uses: ./.github/actions/collect-logs

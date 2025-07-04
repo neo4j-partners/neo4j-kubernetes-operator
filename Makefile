@@ -160,7 +160,7 @@ test-integration-ci: ## Run integration tests in CI (assumes cluster already exi
 	@echo "🔗 Running integration tests in CI..."
 	@if [ -z "$$KUBECONFIG" ]; then \
 		echo "KUBECONFIG not set, trying to export from kind cluster..."; \
-		export KUBECONFIG="$$HOME/.kube/config"; \
+		export KUBECONFIG="$(HOME)/.kube/config"; \
 		kind export kubeconfig --name neo4j-operator-test --kubeconfig="$$KUBECONFIG"; \
 	fi
 	@echo "Using KUBECONFIG: $$KUBECONFIG"
