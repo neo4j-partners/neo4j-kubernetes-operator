@@ -44,13 +44,35 @@ func (v *ConfigValidator) Validate(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster
 
 	// Check for deprecated configuration settings
 	deprecatedSettings := map[string]string{
-		"dbms.default_database":                     "use dbms.setDefaultDatabase() procedure instead",
-		"dbms.cluster.discovery.version":            "deprecated in 5.26+, will be removed in future versions",
-		"db.format":                                 "standard and high_limit formats are deprecated, use block format",
+		"dbms.default_database": "use dbms.setDefaultDatabase() procedure instead",
+		"db.format":             "standard and high_limit formats are deprecated, use block format",
 		"dbms.integrations.cloud_storage.s3.region": "replaced by new cloud storage integration settings",
 	}
 
+	// Check for unsupported manual discovery configuration
+	unsupportedDiscoverySettings := map[string]string{
+		"dbms.cluster.discovery.resolver_type":        "manual discovery configuration is not supported - operator enforces Kubernetes discovery",
+		"dbms.cluster.discovery.v2.endpoints":         "static endpoint configuration is not supported - operator uses automatic Kubernetes discovery",
+		"dbms.cluster.endpoints":                      "static endpoint configuration is not supported - operator uses automatic Kubernetes discovery",
+		"dbms.kubernetes.label_selector":              "Kubernetes discovery is automatically configured by the operator",
+		"dbms.kubernetes.discovery.service_port_name": "Kubernetes discovery is automatically configured by the operator",
+	}
+
 	for configKey, configValue := range cluster.Spec.Config {
+		// Special handling for dbms.cluster.discovery.version
+		if configKey == "dbms.cluster.discovery.version" {
+			// V2_ONLY is required for Neo4j 5.26+ and should be allowed
+			if configValue != "V2_ONLY" {
+				validValues := []string{"V2_ONLY"}
+				allErrs = append(allErrs, field.NotSupported(
+					configPath.Child(configKey),
+					configValue,
+					validValues,
+				))
+			}
+			continue // Skip regular deprecated settings check for this key
+		}
+
 		// Check for deprecated settings
 		if deprecationMsg, isDeprecated := deprecatedSettings[configKey]; isDeprecated {
 			allErrs = append(allErrs, field.Invalid(
@@ -60,16 +82,12 @@ func (v *ConfigValidator) Validate(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster
 			))
 		}
 
-		// Validate Discovery version settings for 5.26+
-		if configKey == "dbms.cluster.discovery.version" {
-			validValues := []string{"V2_ONLY"}
-			if !v.isValidDiscoveryVersion(configValue) {
-				allErrs = append(allErrs, field.NotSupported(
-					configPath.Child(configKey),
-					configValue,
-					validValues,
-				))
-			}
+		// Check for unsupported manual discovery settings
+		if unsupportedMsg, isUnsupported := unsupportedDiscoverySettings[configKey]; isUnsupported {
+			allErrs = append(allErrs, field.Forbidden(
+				configPath.Child(configKey),
+				"unsupported configuration: "+unsupportedMsg,
+			))
 		}
 
 		// Validate database format settings

@@ -17,41 +17,98 @@ A Neo4j Enterprise cluster consists of:
 
 ## Discovery Methods
 
-The operator supports three discovery methods as described in the [Neo4j Operations Manual](https://neo4j.com/docs/operations-manual/current/clustering/setup/discovery/):
+The operator automatically uses **Kubernetes Discovery** (recommended) for all clusters as described in the [Neo4j Operations Manual](https://neo4j.com/docs/operations-manual/current/clustering/setup/discovery/).
 
-### 1. Kubernetes Discovery (Recommended)
+### Kubernetes Discovery (Automatic)
 
-Uses Kubernetes API to discover cluster members automatically.
+**The operator automatically configures Kubernetes API-based discovery for all clusters.** This provides:
 
-```yaml
-spec:
-  config:
-    dbms.cluster.discovery.resolver_type: k8s
-    dbms.kubernetes.label_selector: app.kubernetes.io/name=my-cluster,app.kubernetes.io/instance=my-cluster
-    dbms.kubernetes.discovery.service_port_name: cluster
-```
+- **Dynamic service discovery** via Kubernetes API
+- **Automatic adaptation** to scaling operations
+- **Native cloud-native integration**
+- **Reduced operator complexity**
 
-### 2. DNS Discovery
+**No manual configuration required** - the operator automatically:
 
-Uses DNS A records to discover cluster members.
+1. **Creates RBAC resources**:
+   - ServiceAccount: `{cluster-name}-discovery`
+   - Role: `{cluster-name}-discovery` (with permissions to list services)
+   - RoleBinding: `{cluster-name}-discovery`
 
-```yaml
-spec:
-  config:
-    dbms.cluster.discovery.resolver_type: dns
-    dbms.cluster.endpoints: my-cluster.example.com:6000
-```
+2. **Creates role-specific services**:
+   - Primary headless service: `{cluster-name}-primary-headless`
+   - Secondary headless service: `{cluster-name}-secondary-headless` (when secondaries > 0)
 
-### 3. List Discovery
+3. **Configures Neo4j automatically** with version-specific settings:
 
-Uses a static list of cluster member addresses.
+   **For Neo4j 5.26+ (SemVer)**:
+   ```properties
+   dbms.cluster.discovery.resolver_type=K8S
+   dbms.kubernetes.label_selector=neo4j.com/cluster={cluster-name}
+   dbms.kubernetes.discovery.v2.service_port_name=discovery
+   dbms.cluster.discovery.version=V2_ONLY
+   ```
 
-```yaml
-spec:
-  config:
-    dbms.cluster.discovery.resolver_type: list
-    dbms.cluster.endpoints: server1.example.com:6000,server2.example.com:6000,server3.example.com:6000
-```
+   **For Neo4j 2025.x+ (CalVer)**:
+   ```properties
+   dbms.cluster.discovery.resolver_type=K8S
+   dbms.kubernetes.label_selector=neo4j.com/cluster={cluster-name}
+   dbms.kubernetes.discovery.service_port_name=discovery
+   ```
+
+### Discovery Method Enforcement
+
+**The operator enforces Kubernetes discovery for all clusters.** Any manual discovery configuration in `spec.config` is automatically overridden during cluster startup to ensure:
+
+- ✅ **Consistent behavior** across all deployments
+- ✅ **Cloud-native integration** with Kubernetes API
+- ✅ **Automatic scaling support** without manual endpoint management
+- ✅ **Simplified operations** with zero discovery configuration
+
+**Note**: While you can specify discovery settings in `spec.config`, the operator will always override them with Kubernetes discovery during pod startup to maintain operational consistency.
+
+## Cluster Formation
+
+The operator uses a **unified cluster formation approach** that ensures all nodes coordinate properly during startup, eliminating the timing issues that can cause separate cluster formation.
+
+### Cluster Formation Strategy
+
+The operator employs different strategies based on cluster topology:
+
+#### Single-Node Clusters (1 Primary, 0 Secondaries)
+- Uses `internal.dbms.single_raft_enabled=true` for single-node operation
+- Can scale to multi-node later without restart
+- No coordination required during startup
+
+#### Multi-Node Clusters (2+ Primaries or Any Secondaries)
+- Uses **coordinated cluster formation** with Kubernetes service discovery
+- Implements proper minimum primaries logic to prevent split-brain scenarios
+- All pods use identical configuration and coordinate during startup
+
+### Minimum Primaries Logic
+
+The operator automatically sets `dbms.cluster.minimum_initial_system_primaries_count` based on cluster size:
+
+| Cluster Size | Minimum Required | Rationale |
+|--------------|------------------|-----------|
+| 1 primary | 1 | Single-node operation |
+| 2 primaries | 2 | Both nodes required for coordination |
+| 3+ primaries | `(total_primaries / 2) + 1` | Quorum-based for fault tolerance |
+
+### Cluster Formation Process
+
+1. **Resource Creation**: The operator creates all necessary Kubernetes resources (StatefulSets, Services, RBAC)
+2. **Pod Startup**: StatefulSets create pods sequentially (pod-0, then pod-1, etc.)
+3. **Coordination Phase**: All pods wait for the minimum required number to be available
+4. **Unified Bootstrap**: Once minimum requirements are met, all pods coordinate cluster formation
+5. **Service Ready**: Cluster accepts connections only after successful formation
+
+### Important Considerations
+
+- **2-Node Clusters**: Require both nodes to start together. If one fails, the remaining node cannot form quorum.
+- **3+ Node Clusters**: Use quorum logic for better fault tolerance during formation.
+- **Startup Time**: Multi-node clusters may take longer to start as they coordinate formation.
+- **Pod Readiness**: Pods are marked ready only after successful cluster formation.
 
 ## Basic Cluster Configuration
 
@@ -73,17 +130,15 @@ spec:
   storage:
     className: standard
     size: 10Gi
-  config:
-    # Neo4j 5.x clustering configuration
-    dbms.cluster.discovery.resolver_type: k8s
-    dbms.kubernetes.label_selector: app.kubernetes.io/name=simple-cluster,app.kubernetes.io/instance=simple-cluster
-    dbms.kubernetes.discovery.service_port_name: cluster
-    dbms.cluster.minimum_core_cluster_size_at_formation: 3
-    dbms.cluster.minimum_core_cluster_size_at_runtime: 3
-    server.cluster.listen_address: 0.0.0.0:5000
-    server.discovery.listen_address: 0.0.0.0:6000
-    server.routing.listen_address: 0.0.0.0:7688
+  # Kubernetes discovery is automatically configured by the operator
+  # No manual discovery configuration needed!
 ```
+
+**Note**: The operator automatically handles all clustering configuration including:
+- Kubernetes discovery setup
+- RBAC resource creation
+- Service creation for cluster communication
+- Neo4j configuration for optimal clustering
 
 ### Using kubectl Commands
 
@@ -243,12 +298,13 @@ spec:
 1. **Cluster Formation Fails**
    - Check that all required ports are open
    - Verify DNS resolution for headless service
-   - Ensure proper RBAC permissions for Kubernetes discovery
+   - Check RBAC resources were created: `kubectl get serviceaccount,role,rolebinding -l neo4j.com/cluster={cluster-name}`
 
 2. **Discovery Issues**
-   - Verify label selectors match pod labels
-   - Check service port names match configuration
-   - Ensure network policies allow cluster communication
+   - Verify automatic discovery services exist: `kubectl get service {cluster-name}-primary-headless`
+   - Check discovery service account permissions: `kubectl describe role {cluster-name}-discovery`
+   - Ensure network policies allow cluster communication on port 6000
+   - Verify pod has correct ServiceAccount: `kubectl get pod {cluster-name}-primary-0 -o jsonpath='{.spec.serviceAccountName}'`
 
 3. **Quorum Loss**
    - Check primary node health
@@ -270,22 +326,26 @@ kubectl logs my-cluster-primary-0 -c neo4j
 
 ## Best Practices
 
-1. **Always use odd numbers of primaries** for proper quorum consensus
+1. **Use odd numbers of primaries (3, 5, 7)** for optimal fault tolerance. Even numbers are allowed but generate warnings about potential split-brain scenarios.
 2. **Enable auto-scaling** for production workloads
 3. **Use multi-zone deployment** for high availability
 4. **Configure proper resource limits** based on workload
 5. **Enable TLS** for secure cluster communication
 6. **Monitor cluster health** regularly
 7. **Use rolling upgrades** for zero-downtime updates
+8. **Trust automatic discovery** - the operator handles all Kubernetes discovery configuration
 
 ## Migration from Neo4j 4.x
 
 When migrating from Neo4j 4.x clustering to 5.x:
 
-1. Update configuration from `causal_clustering.*` to `dbms.cluster.*`
-2. Replace `causal_clustering_discovery_members` with Kubernetes discovery
-3. Update port configurations for new routing service
-4. Test cluster formation in staging environment first
+1. **Remove all manual discovery configuration** - the operator handles discovery automatically
+2. **Update from `causal_clustering.*` to `dbms.cluster.*`** - but discovery settings are managed by operator
+3. **Update port configurations** for new routing service if customized
+4. **Remove static endpoint lists** - no longer needed with Kubernetes discovery
+5. **Test cluster formation** in staging environment first
+
+**Important**: The operator automatically handles all cluster discovery. Remove any manual discovery configuration from your cluster specifications.
 
 ## References
 

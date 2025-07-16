@@ -1,0 +1,92 @@
+# Four Primary Node Cluster Example
+#
+# WARNING: This configuration uses 4 primary nodes (even number), which provides
+# the same fault tolerance as 3 primary nodes but with additional resource overhead.
+# Consider using 3 primary nodes + 1 read replica for better resource efficiency.
+#
+# CLUSTER FORMATION: The operator uses quorum-based cluster formation for 3+ primaries.
+# This cluster requires 3 out of 4 nodes (quorum) to form initially, providing better
+# fault tolerance during startup compared to 2-node clusters.
+#
+# See: docs/user_guide/guides/fault_tolerance.md
+#
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: four-primary-cluster
+  namespace: default
+  annotations:
+    neo4j.neo4j.com/fault-tolerance-warning: "true"
+    neo4j.neo4j.com/topology-note: "4 primary nodes provide same fault tolerance as 3 but with higher resource cost"
+spec:
+  # Neo4j 5.26+ Enterprise image required
+  image:
+    repo: "neo4j"
+    tag: "5.26.0-enterprise"
+    pullPolicy: "IfNotPresent"
+
+  # WARNING: 4 primary nodes configuration
+  # This will generate a warning from the operator:
+  # - "Even number of primary nodes (4) reduces fault tolerance"
+  topology:
+    primaries: 4      # ⚠️ Even number - same fault tolerance as 3
+    secondaries: 2    # Read replicas for scaling
+    placement:
+      topologySpread:
+        enabled: true
+        topologyKey: "topology.kubernetes.io/zone"
+        maxSkew: 1
+      antiAffinity:
+        enabled: true
+        topologyKey: "kubernetes.io/hostname"
+
+  # Storage configuration
+  storage:
+    className: "fast-ssd"
+    size: "50Gi"
+
+  # Authentication
+  auth:
+    adminSecret: "neo4j-admin-secret"
+
+  # TLS configuration
+  tls:
+    mode: "cert-manager"
+    issuerRef:
+      name: "ca-cluster-issuer"
+      kind: "ClusterIssuer"
+
+  # Resource configuration for primary nodes
+  resources:
+    requests:
+      cpu: "2"
+      memory: "4Gi"
+    limits:
+      cpu: "4"
+      memory: "8Gi"
+
+  # Service configuration
+  service:
+    type: "LoadBalancer"
+    annotations:
+      service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+      service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+
+  # Auto-scaling configuration
+  autoScaling:
+    enabled: true
+    secondaries:
+      enabled: true
+      minReplicas: 1
+      maxReplicas: 5
+      metrics:
+        - type: cpu
+          target: "70"
+        - type: memory
+          target: "80"
+
+---
+# Required admin secret - create separately with:
+# kubectl create secret generic neo4j-admin-secret \
+#   --from-literal=username=neo4j \
+#   --from-literal=password=your-secure-password

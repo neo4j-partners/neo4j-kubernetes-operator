@@ -105,6 +105,11 @@ type StorageSpec struct {
 	// +kubebuilder:validation:Required
 	Size string `json:"size"`
 
+	// PVC retention policy when cluster is deleted
+	// +kubebuilder:validation:Enum=Delete;Retain
+	// +kubebuilder:default=Delete
+	RetentionPolicy string `json:"retentionPolicy,omitempty"`
+
 	// Additional storage for backups
 	BackupStorage *BackupStorageSpec `json:"backupStorage,omitempty"`
 }
@@ -685,7 +690,7 @@ type TopologyConfiguration struct {
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=7
-	// Neo4j clusters should have odd number of primaries for quorum
+	// Note: Odd numbers (1,3,5,7) are recommended for optimal fault tolerance
 	Primaries int32 `json:"primaries"`
 
 	// Secondaries specifies the number of secondary (read replica) servers

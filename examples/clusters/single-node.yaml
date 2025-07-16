@@ -1,6 +1,6 @@
-# Single-node Neo4j Enterprise cluster example
-# This creates a standalone Neo4j instance running in single-node mode
-# Suitable for development, testing, and small production workloads
+# Single-primary Neo4j Enterprise cluster example
+# This creates a single-primary cluster with RAFT enabled for seamless scaling
+# Suitable for development, testing, and small production workloads that may need to scale
 
 apiVersion: neo4j.neo4j.com/v1alpha1
 kind: Neo4jEnterpriseCluster
@@ -17,11 +17,11 @@ spec:
     tag: "5.26-enterprise"  # Neo4j 5.26+ required
     pullPolicy: IfNotPresent
 
-  # Single-node topology: 1 primary, 0 secondaries
-  # This triggers single-node mode (dbms.mode=SINGLE)
+  # Single-primary topology: 1 primary, 0 secondaries
+  # Uses unified clustering approach with RAFT enabled for future scaling
   topology:
-    primaries: 1      # Exactly 1 primary for single-node
-    secondaries: 0    # Must be 0 for single-node mode
+    primaries: 1      # Single primary - can be scaled up to multi-node
+    secondaries: 0    # No read replicas initially
 
   # Storage configuration
   storage:

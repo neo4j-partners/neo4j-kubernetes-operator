@@ -161,19 +161,34 @@ func (v *MemoryValidator) validateMemoryAllocation(cluster *neo4jv1alpha1.Neo4jE
 		))
 	}
 
-	// Use resource recommender to provide intelligent recommendations
-	recommendation := v.recommender.RecommendResourcesForTopology(cluster.Spec.Topology, cluster.Spec.Resources)
-	recommendedMemoryBytes := recommendation.ResourceRequirements.Limits.Memory().Value()
-
-	// Check if current memory is significantly below recommendation
-	if containerMemoryBytes < recommendedMemoryBytes {
+	// Check if current memory is critically below minimum operational requirements
+	// Only enforce if memory is below absolute minimum (1Gi) rather than recommendation-based
+	minOperationalMemory := int64(1024 * 1024 * 1024) // 1GB minimum for basic operation
+	if containerMemoryBytes < minOperationalMemory {
 		allErrs = append(allErrs, field.Invalid(
 			field.NewPath("spec", "resources", "limits", "memory"),
 			v.formatMemorySize(containerMemoryBytes),
-			fmt.Sprintf("Current memory allocation may be insufficient. Recommendation: %s. Reason: %s",
-				recommendation.RecommendedMemoryLimit, recommendation.Reason),
+			fmt.Sprintf("Memory allocation is below minimum operational requirement. Current: %s, Required minimum: %s",
+				v.formatMemorySize(containerMemoryBytes), v.formatMemorySize(minOperationalMemory)),
 		))
 	}
+
+	// Check if memory is sufficient for cluster size
+	totalNodes := cluster.Spec.Topology.Primaries + cluster.Spec.Topology.Secondaries
+	if totalNodes > 3 {
+		// For larger clusters (>3 nodes), require at least 2GB per node for basic operation
+		minMemoryForClusterSize := int64(2 * 1024 * 1024 * 1024) // 2GB minimum for larger clusters
+		if containerMemoryBytes < minMemoryForClusterSize {
+			allErrs = append(allErrs, field.Invalid(
+				field.NewPath("spec", "resources", "limits", "memory"),
+				v.formatMemorySize(containerMemoryBytes),
+				fmt.Sprintf("insufficient memory for cluster size (%d nodes). Current: %s, Required minimum: %s",
+					totalNodes, v.formatMemorySize(containerMemoryBytes), v.formatMemorySize(minMemoryForClusterSize)),
+			))
+		}
+	}
+
+	// Recommendations are now advisory only - logged as events, not validation errors
 
 	// Log optimization tips as events instead of validation errors
 	// We'll emit these as events in the controller rather than blocking validation

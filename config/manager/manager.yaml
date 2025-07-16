@@ -83,5 +83,5 @@ spec:
           requests:
             cpu: 10m
             memory: 64Mi
-      serviceAccountName: neo4j-operator-controller-manager
+      serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10

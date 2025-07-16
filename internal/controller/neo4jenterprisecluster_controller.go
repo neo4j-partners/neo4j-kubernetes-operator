@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -73,6 +74,11 @@ const (
 //+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="",resources=events,verbs=create;patch
+//+kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;delete
+//+kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=rolebindings,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=cert-manager.io,resources=certificates,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=cert-manager.io,resources=issuers,verbs=get;list;watch
 //+kubebuilder:rbac:groups=cert-manager.io,resources=clusterissuers,verbs=get;list;watch
@@ -122,8 +128,17 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 			}
 
 			if isUpdate {
-				// Validate the cluster update
-				if err := r.Validator.ValidateUpdate(ctx, currentCluster, cluster); err != nil {
+				// Validate the cluster update with warnings
+				result := r.Validator.ValidateUpdateWithWarnings(ctx, currentCluster, cluster)
+
+				// Emit warnings as events
+				for _, warning := range result.Warnings {
+					r.Recorder.Eventf(cluster, corev1.EventTypeWarning, "TopologyWarning", warning)
+				}
+
+				// Check for validation errors
+				if len(result.Errors) > 0 {
+					err := fmt.Errorf("validation failed: %s", result.Errors.ToAggregate().Error())
 					logger.Error(err, "Cluster update validation failed")
 					r.Recorder.Eventf(cluster, corev1.EventTypeWarning, "ValidationFailed", "Cluster update validation failed: %v", err)
 					_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Update validation failed: %v", err))
@@ -133,8 +148,17 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 		}
 
 		if !isUpdate {
-			// Validate the cluster configuration for create
-			if err := r.Validator.ValidateCreate(ctx, cluster); err != nil {
+			// Validate the cluster configuration for create with warnings
+			result := r.Validator.ValidateCreateWithWarnings(ctx, cluster)
+
+			// Emit warnings as events
+			for _, warning := range result.Warnings {
+				r.Recorder.Eventf(cluster, corev1.EventTypeWarning, "TopologyWarning", warning)
+			}
+
+			// Check for validation errors
+			if len(result.Errors) > 0 {
+				err := fmt.Errorf("validation failed: %s", result.Errors.ToAggregate().Error())
 				logger.Error(err, "Cluster validation failed")
 				r.Recorder.Eventf(cluster, corev1.EventTypeWarning, "ValidationFailed", "Cluster validation failed: %v", err)
 				_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Validation failed: %v", err))
@@ -157,6 +181,22 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 	if r.isUpgradeRequired(ctx, cluster) {
 		logger.Info("Image upgrade detected, initiating rolling upgrade")
 		return r.handleRollingUpgrade(ctx, cluster)
+	}
+
+	// Check if this is a single-node to multi-node scaling scenario
+	if needsSingleNodeToMultiNodeTransition, err := r.detectSingleNodeToMultiNodeScaling(ctx, cluster); err != nil {
+		logger.Error(err, "Failed to detect scaling scenario")
+		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
+	} else if needsSingleNodeToMultiNodeTransition {
+		logger.Info("Single-node to multi-node scaling detected, handling transition")
+		if result, err := r.handleSingleNodeToMultiNodeScaling(ctx, cluster); err != nil {
+			return result, err
+		} else if result.RequeueAfter > 0 || result.Requeue {
+			// If the scaling transition needs to requeue, return here
+			return result, nil
+		}
+		// Otherwise, continue with normal reconciliation in this cycle
+		logger.Info("Scaling transition completed, continuing with normal reconciliation")
 	}
 
 	// Only set to "Initializing" if cluster is not already Ready
@@ -200,11 +240,44 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 	}
 
+	// Create RBAC resources for Kubernetes discovery
+	serviceAccount := resources.BuildDiscoveryServiceAccountForEnterprise(cluster)
+	if err := r.createOrUpdateResource(ctx, serviceAccount, cluster); err != nil {
+		logger.Error(err, "Failed to create discovery ServiceAccount", "serviceAccount", serviceAccount.Name)
+		_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Failed to create ServiceAccount %s: %v", serviceAccount.Name, err))
+		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
+	}
+
+	role := resources.BuildDiscoveryRoleForEnterprise(cluster)
+	if err := r.createOrUpdateResource(ctx, role, cluster); err != nil {
+		logger.Error(err, "Failed to create discovery Role", "role", role.Name)
+		_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Failed to create Role %s: %v", role.Name, err))
+		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
+	}
+
+	roleBinding := resources.BuildDiscoveryRoleBindingForEnterprise(cluster)
+	if err := r.createOrUpdateResource(ctx, roleBinding, cluster); err != nil {
+		logger.Error(err, "Failed to create discovery RoleBinding", "roleBinding", roleBinding.Name)
+		_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Failed to create RoleBinding %s: %v", roleBinding.Name, err))
+		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
+	}
+
 	// Create Services
 	services := []*corev1.Service{
-		resources.BuildHeadlessServiceForEnterprise(cluster),
+		resources.BuildHeadlessServiceForEnterprise(cluster),          // Keep for backward compatibility
+		resources.BuildPrimaryHeadlessServiceForEnterprise(cluster),   // Primary-specific for K8S discovery
+		resources.BuildSecondaryHeadlessServiceForEnterprise(cluster), // Secondary-specific for K8S discovery (if needed)
 		resources.BuildClientServiceForEnterprise(cluster),
 	}
+
+	// Filter out nil services (e.g., secondary service when secondaries = 0)
+	var validServices []*corev1.Service
+	for _, service := range services {
+		if service != nil {
+			validServices = append(validServices, service)
+		}
+	}
+	services = validServices
 	for _, service := range services {
 		if err := r.createOrUpdateResource(ctx, service, cluster); err != nil {
 			logger.Error(err, "Failed to create Service", "service", service.Name)
@@ -320,6 +393,19 @@ func (r *Neo4jEnterpriseClusterReconciler) handleDeletion(ctx context.Context, c
 		return ctrl.Result{}, nil
 	}
 
+	// Clean up PVCs if retention policy is Delete (default behavior)
+	retentionPolicy := cluster.Spec.Storage.RetentionPolicy
+	if retentionPolicy == "" || retentionPolicy == "Delete" {
+		logger.Info("Cleaning up PVCs due to Delete retention policy", "retentionPolicy", retentionPolicy)
+		if err := r.cleanupPVCs(ctx, cluster); err != nil {
+			logger.Error(err, "Failed to cleanup PVCs")
+			return ctrl.Result{RequeueAfter: time.Second * 10}, err
+		}
+		logger.Info("Successfully cleaned up PVCs")
+	} else {
+		logger.Info("Retaining PVCs due to Retain retention policy", "retentionPolicy", retentionPolicy)
+	}
+
 	logger.Info("Removing finalizer from cluster", "finalizers", cluster.Finalizers, "deletionTimestamp", cluster.DeletionTimestamp)
 	controllerutil.RemoveFinalizer(cluster, ClusterFinalizer)
 	err := r.Update(ctx, cluster)
@@ -329,6 +415,38 @@ func (r *Neo4jEnterpriseClusterReconciler) handleDeletion(ctx context.Context, c
 	}
 	logger.Info("Successfully removed finalizer and updated cluster", "finalizers", cluster.Finalizers, "deletionTimestamp", cluster.DeletionTimestamp)
 	return ctrl.Result{}, nil
+}
+
+func (r *Neo4jEnterpriseClusterReconciler) cleanupPVCs(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) error {
+	logger := log.FromContext(ctx)
+
+	// List PVCs that belong to this cluster
+	pvcList := &corev1.PersistentVolumeClaimList{}
+	labelSelector := client.MatchingLabels{
+		"app.kubernetes.io/name":     "neo4j",
+		"app.kubernetes.io/instance": cluster.Name,
+	}
+
+	if err := r.List(ctx, pvcList, client.InNamespace(cluster.Namespace), labelSelector); err != nil {
+		return fmt.Errorf("failed to list PVCs for cluster %s: %w", cluster.Name, err)
+	}
+
+	logger.Info("Found PVCs to delete", "count", len(pvcList.Items), "cluster", cluster.Name)
+
+	// Delete each PVC
+	for _, pvc := range pvcList.Items {
+		logger.Info("Deleting PVC", "pvc", pvc.Name, "cluster", cluster.Name)
+		if err := r.Delete(ctx, &pvc); err != nil {
+			if client.IgnoreNotFound(err) != nil {
+				return fmt.Errorf("failed to delete PVC %s: %w", pvc.Name, err)
+			}
+			logger.Info("PVC already deleted", "pvc", pvc.Name)
+		} else {
+			logger.Info("Successfully deleted PVC", "pvc", pvc.Name)
+		}
+	}
+
+	return nil
 }
 
 func (r *Neo4jEnterpriseClusterReconciler) createOrUpdateResource(ctx context.Context, obj client.Object, owner client.Object) error {
@@ -1264,6 +1382,122 @@ func (pc *PluginController) uninstallPlugin(ctx context.Context, cluster *neo4jv
 
 	logger.Info("Plugin uninstallation completed", "plugin", plugin.Name)
 	return nil
+}
+
+// detectSingleNodeToMultiNodeScaling detects if we're scaling from 1 primary to multiple primaries
+func (r *Neo4jEnterpriseClusterReconciler) detectSingleNodeToMultiNodeScaling(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) (bool, error) {
+	logger := log.FromContext(ctx)
+
+	// Only relevant if current spec has multiple primaries or any secondaries
+	if cluster.Spec.Topology.Primaries <= 1 && cluster.Spec.Topology.Secondaries == 0 {
+		return false, nil
+	}
+
+	// Check if this is a generation update (indicating a spec change)
+	if cluster.Generation <= 1 {
+		return false, nil
+	}
+
+	// Get the current StatefulSet to see the current replica count
+	primaryStsName := fmt.Sprintf("%s-primary", cluster.Name)
+	currentSts := &appsv1.StatefulSet{}
+	err := r.Get(ctx, types.NamespacedName{Name: primaryStsName, Namespace: cluster.Namespace}, currentSts)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			// StatefulSet doesn't exist yet, not a scaling scenario
+			return false, nil
+		}
+		return false, fmt.Errorf("failed to get current primary StatefulSet: %w", err)
+	}
+
+	// Check if current StatefulSet has exactly 1 replica but spec wants more primaries or any secondaries
+	currentReplicas := int32(1) // Default if nil
+	if currentSts.Spec.Replicas != nil {
+		currentReplicas = *currentSts.Spec.Replicas
+	}
+
+	// Detect single-node to multi-node transition
+	isSingleNodeToMultiNode := currentReplicas == 1 && (cluster.Spec.Topology.Primaries > 1 || cluster.Spec.Topology.Secondaries > 0)
+
+	if isSingleNodeToMultiNode {
+		logger.Info("Detected single-node to multi-node scaling",
+			"currentPrimaryReplicas", currentReplicas,
+			"desiredPrimaries", cluster.Spec.Topology.Primaries,
+			"desiredSecondaries", cluster.Spec.Topology.Secondaries)
+	}
+
+	return isSingleNodeToMultiNode, nil
+}
+
+// handleSingleNodeToMultiNodeScaling handles the transition from single-node to multi-node cluster
+func (r *Neo4jEnterpriseClusterReconciler) handleSingleNodeToMultiNodeScaling(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) (ctrl.Result, error) {
+	logger := log.FromContext(ctx)
+
+	// Update status to indicate scaling is in progress
+	_ = r.updateClusterStatus(ctx, cluster, "Scaling", "Transitioning from single-node to multi-node cluster")
+	r.Recorder.Event(cluster, "Normal", "ScalingTransition", "Starting single-node to multi-node transition")
+
+	// Step 1: Update ConfigMap first to ensure all pods get the new configuration
+	if err := r.ConfigMapManager.ReconcileConfigMap(ctx, cluster); err != nil {
+		logger.Error(err, "Failed to update ConfigMap for scaling transition")
+		_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Failed to update ConfigMap for scaling: %v", err))
+		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
+	}
+
+	// Step 2: Restart all existing pods to apply new cluster configuration
+	// List all pods for this cluster
+	podList := &corev1.PodList{}
+	labelSelector := client.MatchingLabels{
+		"app.kubernetes.io/instance": cluster.Name,
+		"neo4j.com/role":             "primary",
+	}
+
+	if err := r.List(ctx, podList, client.InNamespace(cluster.Namespace), labelSelector); err != nil {
+		logger.Error(err, "Failed to list cluster pods for restart")
+		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
+	}
+
+	// Check if any pods need restart (haven't been restarted recently)
+	var podsToRestart []corev1.Pod
+	for _, pod := range podList.Items {
+		// Check if pod was restarted recently (within last 60 seconds) to avoid restart loops
+		if time.Since(pod.CreationTimestamp.Time) >= 60*time.Second {
+			podsToRestart = append(podsToRestart, pod)
+		} else {
+			logger.Info("Pod was recently created, skipping restart", "pod", pod.Name, "age", time.Since(pod.CreationTimestamp.Time))
+		}
+	}
+
+	if len(podsToRestart) > 0 {
+		// Restart bootstrap pod first, then others
+		var podToRestart *corev1.Pod
+		for i, pod := range podsToRestart {
+			if strings.HasSuffix(pod.Name, "-0") {
+				podToRestart = &podsToRestart[i]
+				break
+			}
+		}
+		// If no bootstrap pod to restart, restart the first one
+		if podToRestart == nil {
+			podToRestart = &podsToRestart[0]
+		}
+
+		logger.Info("Restarting pod to apply new cluster configuration", "pod", podToRestart.Name)
+		if err := r.Delete(ctx, podToRestart); err != nil {
+			logger.Error(err, "Failed to delete pod for restart", "pod", podToRestart.Name)
+			return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
+		}
+		r.Recorder.Event(cluster, "Normal", "PodRestart", fmt.Sprintf("Restarted pod %s to apply cluster configuration", podToRestart.Name))
+		// Return here to let the pod restart complete before continuing
+		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+	}
+
+	// Step 3: Continue with normal reconciliation to create/update StatefulSets
+	// The normal reconciliation flow will handle creating the additional pods
+	logger.Info("Pod restarts completed or not needed, proceeding with normal reconciliation")
+
+	// Don't return here - continue with normal reconciliation in this cycle
+	return ctrl.Result{}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

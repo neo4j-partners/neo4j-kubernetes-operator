@@ -204,6 +204,38 @@ PRs must pass all checks. Use conventional commits (feat:, fix:, docs:).
   - Only Discovery v2 should be supported in 5.26.0 and other supported semver releases.
   - All tests, samples, documents should enforce this
 
+### Unified Configuration Approach
+
+**Important**: The operator uses a unified clustering approach for all deployment sizes:
+
+- **No Special Single-Node Mode**: All deployments use clustering infrastructure, even single-primary clusters
+- **RAFT Enabled**: All deployments use `internal.dbms.single_raft_enabled=true` for seamless scaling
+- **Scalable by Design**: Single-primary clusters can be scaled to multi-node without data migration
+- **No `dbms.mode=SINGLE`**: The deprecated single-node mode is not used
+
+### Version-Specific Configuration
+
+**Critical**: Neo4j Kubernetes discovery parameters differ between versions:
+
+- **Neo4j 5.x (semver releases)**:
+  - Use `dbms.kubernetes.service_port_name=discovery`
+  - Use `dbms.kubernetes.discovery.v2.service_port_name=discovery`
+  - **MANDATORY**: Set `dbms.cluster.discovery.version=V2_ONLY` for 5.26+
+- **Neo4j 2025.x+ (calver releases)**: Use `dbms.kubernetes.discovery.service_port_name`
+
+The operator automatically detects the Neo4j version from the image tag and applies the correct parameters. This is implemented in `internal/resources/cluster.go` via the `getKubernetesDiscoveryParameter()` function.
+
+### Automatic Scaling Transitions
+
+The operator supports automatic scaling from single-primary to multi-node clusters:
+
+- **Detection**: Controller detects topology changes from 1 primary to multiple primaries
+- **Restart Logic**: Automatically restarts existing pods with multi-node configuration
+- **Configuration Update**: Applies proper Kubernetes discovery settings for cluster formation
+- **Implementation**: See `neo4jenterprisecluster_controller.go` functions:
+  - `detectSingleNodeToMultiNodeScaling()`
+  - `handleSingleNodeToMultiNodeScaling()`
+
 ## Reports
 
 All reports that Claude generates should go into the reports directory. The reports can be reviewed by Claude to determine changes that were made.

@@ -9,7 +9,6 @@ resources:
 - ../crd
 - ../rbac
 - ../manager
-- ../webhook
 - self-signed-issuer.yaml
 
 patches:

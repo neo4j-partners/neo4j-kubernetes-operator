@@ -8,5 +8,5 @@ roleRef:
   name: leader-election-role
 subjects:
 - kind: ServiceAccount
-  name: neo4j-operator-controller-manager
+  name: controller-manager
   namespace: neo4j-operator-system

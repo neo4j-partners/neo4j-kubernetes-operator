@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1"
 	"github.com/neo4j-labs/neo4j-kubernetes-operator/internal/resources"
@@ -208,4 +209,181 @@ func TestBuildStatefulSetForEnterprise_WithFeatures(t *testing.T) {
 	assert.Equal(t, "true", annotations["prometheus.io/scrape"])
 	assert.Equal(t, "2004", annotations["prometheus.io/port"])
 	assert.Equal(t, "/metrics", annotations["prometheus.io/path"])
+}
+
+func TestBuildDiscoveryServiceAccountForEnterprise(t *testing.T) {
+	cluster := &neo4jv1alpha1.Neo4jEnterpriseCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+		},
+		Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
+			Topology: neo4jv1alpha1.TopologyConfiguration{
+				Primaries: 3,
+			},
+		},
+	}
+
+	serviceAccount := resources.BuildDiscoveryServiceAccountForEnterprise(cluster)
+
+	// Test ServiceAccount metadata
+	assert.Equal(t, "test-cluster-discovery", serviceAccount.Name)
+	assert.Equal(t, "default", serviceAccount.Namespace)
+
+	// Test labels
+	expectedLabels := map[string]string{
+		"app.kubernetes.io/name":       "neo4j",
+		"app.kubernetes.io/instance":   "test-cluster",
+		"app.kubernetes.io/component":  "database",
+		"app.kubernetes.io/part-of":    "neo4j-cluster",
+		"app.kubernetes.io/managed-by": "neo4j-operator",
+		"neo4j.com/cluster":            "test-cluster",
+		"neo4j.com/role":               "discovery-service-account",
+	}
+	for key, expectedValue := range expectedLabels {
+		assert.Equal(t, expectedValue, serviceAccount.Labels[key])
+	}
+}
+
+func TestBuildDiscoveryRoleForEnterprise(t *testing.T) {
+	cluster := &neo4jv1alpha1.Neo4jEnterpriseCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+		},
+		Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
+			Topology: neo4jv1alpha1.TopologyConfiguration{
+				Primaries: 3,
+			},
+		},
+	}
+
+	role := resources.BuildDiscoveryRoleForEnterprise(cluster)
+
+	// Test Role metadata
+	assert.Equal(t, "test-cluster-discovery", role.Name)
+	assert.Equal(t, "default", role.Namespace)
+
+	// Test permissions
+	require.Len(t, role.Rules, 1, "should have one policy rule")
+	rule := role.Rules[0]
+	assert.Equal(t, []string{""}, rule.APIGroups)
+	assert.Equal(t, []string{"services"}, rule.Resources)
+	assert.Equal(t, []string{"get", "list", "watch"}, rule.Verbs)
+}
+
+func TestBuildDiscoveryRoleBindingForEnterprise(t *testing.T) {
+	cluster := &neo4jv1alpha1.Neo4jEnterpriseCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+		},
+		Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
+			Topology: neo4jv1alpha1.TopologyConfiguration{
+				Primaries: 3,
+			},
+		},
+	}
+
+	roleBinding := resources.BuildDiscoveryRoleBindingForEnterprise(cluster)
+
+	// Test RoleBinding metadata
+	assert.Equal(t, "test-cluster-discovery", roleBinding.Name)
+	assert.Equal(t, "default", roleBinding.Namespace)
+
+	// Test subject
+	require.Len(t, roleBinding.Subjects, 1, "should have one subject")
+	subject := roleBinding.Subjects[0]
+	assert.Equal(t, "ServiceAccount", subject.Kind)
+	assert.Equal(t, "test-cluster-discovery", subject.Name)
+	assert.Equal(t, "default", subject.Namespace)
+
+	// Test role reference
+	assert.Equal(t, "rbac.authorization.k8s.io", roleBinding.RoleRef.APIGroup)
+	assert.Equal(t, "Role", roleBinding.RoleRef.Kind)
+	assert.Equal(t, "test-cluster-discovery", roleBinding.RoleRef.Name)
+}
+
+func TestBuildPrimaryHeadlessServiceForEnterprise(t *testing.T) {
+	cluster := &neo4jv1alpha1.Neo4jEnterpriseCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+		},
+		Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
+			Topology: neo4jv1alpha1.TopologyConfiguration{
+				Primaries: 3,
+			},
+		},
+	}
+
+	service := resources.BuildPrimaryHeadlessServiceForEnterprise(cluster)
+
+	// Test Service metadata
+	assert.Equal(t, "test-cluster-primary-headless", service.Name)
+	assert.Equal(t, "default", service.Namespace)
+
+	// Test that it's headless
+	assert.Equal(t, "None", service.Spec.ClusterIP)
+
+	// Test labels include role
+	assert.Equal(t, "primary", service.Labels["neo4j.com/role"])
+
+	// Test selector includes role
+	assert.Equal(t, "primary", service.Spec.Selector["neo4j.com/role"])
+
+	// Test discovery port is present
+	var discoveryPort *corev1.ServicePort
+	for _, port := range service.Spec.Ports {
+		if port.Name == "discovery" {
+			discoveryPort = &port
+			break
+		}
+	}
+	require.NotNil(t, discoveryPort, "discovery port should be present")
+	assert.Equal(t, int32(6000), discoveryPort.Port)
+}
+
+func TestBuildSecondaryHeadlessServiceForEnterprise(t *testing.T) {
+	t.Run("with_secondaries", func(t *testing.T) {
+		cluster := &neo4jv1alpha1.Neo4jEnterpriseCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-cluster",
+				Namespace: "default",
+			},
+			Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
+				Topology: neo4jv1alpha1.TopologyConfiguration{
+					Primaries:   3,
+					Secondaries: 2,
+				},
+			},
+		}
+
+		service := resources.BuildSecondaryHeadlessServiceForEnterprise(cluster)
+
+		// Test Service is created
+		require.NotNil(t, service, "service should be created when secondaries > 0")
+		assert.Equal(t, "test-cluster-secondary-headless", service.Name)
+		assert.Equal(t, "secondary", service.Labels["neo4j.com/role"])
+	})
+
+	t.Run("without_secondaries", func(t *testing.T) {
+		cluster := &neo4jv1alpha1.Neo4jEnterpriseCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-cluster",
+				Namespace: "default",
+			},
+			Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
+				Topology: neo4jv1alpha1.TopologyConfiguration{
+					Primaries:   3,
+					Secondaries: 0,
+				},
+			},
+		}
+
+		service := resources.BuildSecondaryHeadlessServiceForEnterprise(cluster)
+
+		// Test Service is not created
+		assert.Nil(t, service, "service should not be created when secondaries = 0")
+	})
 }

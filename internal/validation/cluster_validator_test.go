@@ -107,7 +107,7 @@ func TestClusterValidator_ValidateCreate(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "invalid topology - even primaries",
+			name: "valid topology with even primaries (warnings only)",
 			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 					Edition: "enterprise",
@@ -126,7 +126,7 @@ func TestClusterValidator_ValidateCreate(t *testing.T) {
 					},
 				},
 			},
-			wantErr: true,
+			wantErr: false,
 		},
 	}
 
@@ -159,7 +159,7 @@ func TestClusterValidator_ApplyDefaults(t *testing.T) {
 				Size:      "100Gi",
 			},
 			Topology: neo4jv1alpha1.TopologyConfiguration{
-				Primaries:   2, // Will be adjusted to 3
+				Primaries:   2, // No longer adjusted - even numbers are allowed
 				Secondaries: 1,
 			},
 		},
@@ -176,12 +176,12 @@ func TestClusterValidator_ApplyDefaults(t *testing.T) {
 		t.Errorf("Expected image pull policy to be defaulted to 'IfNotPresent', got %s", cluster.Spec.Image.PullPolicy)
 	}
 
-	if cluster.Spec.Topology.Primaries != 3 {
-		t.Errorf("Expected primaries to be adjusted to 3, got %d", cluster.Spec.Topology.Primaries)
+	if cluster.Spec.Topology.Primaries != 2 {
+		t.Errorf("Expected primaries to remain unchanged at 2, got %d", cluster.Spec.Topology.Primaries)
 	}
 
-	if cluster.Spec.TLS == nil || cluster.Spec.TLS.Mode != "cert-manager" {
-		t.Errorf("Expected TLS mode to be defaulted to 'cert-manager'")
+	if cluster.Spec.TLS == nil || cluster.Spec.TLS.Mode != "disabled" {
+		t.Errorf("Expected TLS mode to be defaulted to 'disabled'")
 	}
 
 	if cluster.Spec.Auth == nil || cluster.Spec.Auth.Provider != "native" {

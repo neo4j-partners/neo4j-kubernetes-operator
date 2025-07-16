@@ -22,7 +22,7 @@ kubectl apply -f https://github.com/neo4j-labs/neo4j-kubernetes-operator/release
 
 We provide ready-to-use examples for common scenarios. Choose the one that fits your needs:
 
-### Option 1: Single-node Cluster (Recommended for Development)
+### Option 1: Single-primary Cluster (Recommended for Development)
 
 1.  **Create admin credentials:**
 
@@ -69,7 +69,7 @@ We provide ready-to-use examples for common scenarios. Choose the one that fits 
 If you need a custom configuration, create your own manifest based on our examples:
 
 1. **Browse the examples directory:**
-   - [Single-node cluster](../../examples/clusters/single-node.yaml) - For development and testing
+   - [Single-primary cluster](../../examples/clusters/single-node.yaml) - For development and testing (scalable)
    - [Three-node cluster](../../examples/clusters/three-node-cluster.yaml) - For production HA (with TLS)
    - [Three-node simple](../../examples/clusters/three-node-simple.yaml) - For testing HA (TLS disabled)
    - [Cluster with read replicas](../../examples/clusters/cluster-with-read-replicas.yaml) - For read scaling

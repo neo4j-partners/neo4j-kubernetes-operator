@@ -2214,6 +2214,13 @@ spec:
                     type: object
                   className:
                     type: string
+                  retentionPolicy:
+                    default: Delete
+                    description: PVC retention policy when cluster is deleted
+                    enum:
+                    - Delete
+                    - Retain
+                    type: string
                   size:
                     type: string
                 required:
@@ -2450,7 +2457,7 @@ spec:
                   primaries:
                     description: |-
                       Primaries specifies the number of primary (core) servers
-                      Neo4j clusters should have odd number of primaries for quorum
+                      Note: Odd numbers (1,3,5,7) are recommended for optimal fault tolerance
                     format: int32
                     maximum: 7
                     minimum: 1

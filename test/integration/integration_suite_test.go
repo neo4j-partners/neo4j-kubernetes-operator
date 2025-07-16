@@ -256,3 +256,29 @@ func isOperatorRunning() bool {
 	}
 	return false
 }
+
+// randomName generates a random name for test resources
+func randomName(prefix string) string {
+	return fmt.Sprintf("%s-%d", prefix, time.Now().UnixNano()%100000)
+}
+
+// createBasicCluster creates a basic Neo4j cluster for testing
+func createBasicCluster(name, namespace string) *neo4jv1alpha1.Neo4jEnterpriseCluster {
+	return &neo4jv1alpha1.Neo4jEnterpriseCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
+			Edition: "enterprise",
+			Image: neo4jv1alpha1.ImageSpec{
+				Repo: "neo4j",
+				Tag:  "5.26-enterprise",
+			},
+			Storage: neo4jv1alpha1.StorageSpec{
+				ClassName: "standard",
+				Size:      "10Gi",
+			},
+		},
+	}
+}

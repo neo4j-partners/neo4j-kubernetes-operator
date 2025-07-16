@@ -26,6 +26,12 @@ import (
 	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1"
 )
 
+// ClusterValidationResult holds validation results including warnings
+type ClusterValidationResult struct {
+	Errors   field.ErrorList
+	Warnings []string
+}
+
 // ClusterValidator provides validation for Neo4jEnterpriseCluster resources
 type ClusterValidator struct {
 	client            client.Client
@@ -90,13 +96,13 @@ func (v *ClusterValidator) ApplyDefaults(ctx context.Context, cluster *neo4jv1al
 		cluster.Spec.Image.PullPolicy = "IfNotPresent"
 	}
 
-	// Default TLS configuration
+	// Default TLS configuration - disable TLS by default for simplicity
 	if cluster.Spec.TLS == nil {
 		cluster.Spec.TLS = &neo4jv1alpha1.TLSSpec{
-			Mode: "cert-manager",
+			Mode: "disabled",
 		}
 	} else if cluster.Spec.TLS.Mode == "" {
-		cluster.Spec.TLS.Mode = "cert-manager"
+		cluster.Spec.TLS.Mode = "disabled"
 	}
 
 	// Default TLS issuer reference
@@ -122,18 +128,13 @@ func (v *ClusterValidator) ApplyDefaults(ctx context.Context, cluster *neo4jv1al
 		}
 	}
 
-	// Check if this is a single-node deployment
-	isSingleNode := cluster.Spec.Topology.Primaries == 1 && cluster.Spec.Topology.Secondaries == 0
-
-	// For clustered deployments, ensure primaries is odd and >= 3
-	// For single-node deployments, allow primaries=1, secondaries=0
-	if !isSingleNode {
-		if cluster.Spec.Topology.Primaries < 3 {
-			cluster.Spec.Topology.Primaries = 3
-		} else if cluster.Spec.Topology.Primaries%2 == 0 {
-			cluster.Spec.Topology.Primaries++
-		}
+	// Default storage retention policy to Delete
+	if cluster.Spec.Storage.RetentionPolicy == "" {
+		cluster.Spec.Storage.RetentionPolicy = "Delete"
 	}
+
+	// Note: We no longer auto-adjust topology values
+	// Topology warnings will be generated during validation instead
 }
 
 // validateCluster performs comprehensive validation of the cluster
@@ -183,13 +184,13 @@ func (v *ClusterValidator) validateClusterUpdate(ctx context.Context, oldCluster
 		allErrs = append(allErrs, v.resourceValidator.ValidateScaling(ctx, newCluster, newCluster.Spec.Topology)...)
 	}
 
-	// Prevent downgrading primary count below quorum
+	// Prevent downgrading primary count below 1
 	if newCluster.Spec.Topology.Primaries < oldCluster.Spec.Topology.Primaries {
-		if newCluster.Spec.Topology.Primaries < 3 {
+		if newCluster.Spec.Topology.Primaries < 1 {
 			allErrs = append(allErrs, field.Invalid(
 				field.NewPath("spec", "topology", "primaries"),
 				newCluster.Spec.Topology.Primaries,
-				"cannot reduce primaries below 3",
+				"cannot reduce primaries below 1",
 			))
 		}
 	}
@@ -214,4 +215,32 @@ func (v *ClusterValidator) isScalingUp(oldCluster, newCluster *neo4jv1alpha1.Neo
 	oldTotalPods := oldCluster.Spec.Topology.Primaries + oldCluster.Spec.Topology.Secondaries
 	newTotalPods := newCluster.Spec.Topology.Primaries + newCluster.Spec.Topology.Secondaries
 	return newTotalPods > oldTotalPods
+}
+
+// ValidateCreateWithWarnings validates a Neo4jEnterpriseCluster for creation and returns warnings
+func (v *ClusterValidator) ValidateCreateWithWarnings(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) ClusterValidationResult {
+	result := ClusterValidationResult{
+		Errors:   v.validateCluster(ctx, cluster),
+		Warnings: []string{},
+	}
+
+	// Get topology warnings
+	topologyResult := v.topologyValidator.ValidateWithWarnings(cluster)
+	result.Warnings = append(result.Warnings, topologyResult.Warnings...)
+
+	return result
+}
+
+// ValidateUpdateWithWarnings validates a Neo4jEnterpriseCluster for update and returns warnings
+func (v *ClusterValidator) ValidateUpdateWithWarnings(ctx context.Context, oldCluster, newCluster *neo4jv1alpha1.Neo4jEnterpriseCluster) ClusterValidationResult {
+	result := ClusterValidationResult{
+		Errors: v.validateCluster(ctx, newCluster),
+	}
+	result.Errors = append(result.Errors, v.validateClusterUpdate(ctx, oldCluster, newCluster)...)
+
+	// Get topology warnings
+	topologyResult := v.topologyValidator.ValidateWithWarnings(newCluster)
+	result.Warnings = append(result.Warnings, topologyResult.Warnings...)
+
+	return result
 }

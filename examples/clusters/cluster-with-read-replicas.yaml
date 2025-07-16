@@ -44,12 +44,12 @@ spec:
 
   # Configuration optimized for read workloads
   config:
-    # Enable read replica routing
-    causal_clustering.enable_pre_voting: "true"
     # Optimize for read performance
     dbms.memory.pagecache.size: "1g"
-    # Query routing configuration
+    # Query routing configuration for read scaling
     dbms.routing.default_router: "SERVER"
+    # Enable query logging for monitoring read performance
+    dbms.logs.query.enabled: "INFO"
 
 ---
 # Note: Create admin secret before deploying:

@@ -62,6 +62,7 @@ Ready-to-use configurations for common deployment scenarios:
 
 - **[Single-node cluster](examples/clusters/single-node.yaml)** - Development and testing
 - **[Three-node cluster](examples/clusters/three-node-cluster.yaml)** - Production with high availability
+- **[Kubernetes discovery cluster](examples/clusters/k8s-discovery-cluster.yaml)** - Production with automatic discovery
 - **[Cluster with read replicas](examples/clusters/cluster-with-read-replicas.yaml)** - Read scaling
 
 See the [examples directory](examples/) for complete documentation and additional configurations.

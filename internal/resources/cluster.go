@@ -25,6 +25,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -49,6 +50,8 @@ const (
 	RoutingPort = 7688
 	// RaftPort is the default port for Neo4j Raft consensus
 	RaftPort = 7000
+	// TransactionPort is the default port for Neo4j transaction streaming
+	TransactionPort = 7689
 	// BackupPort is the default port for Neo4j backup operations
 	BackupPort = 6362
 
@@ -190,6 +193,122 @@ func BuildHeadlessServiceForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseClu
 					Name:       "raft",
 					Port:       RaftPort,
 					TargetPort: intstr.FromInt(RaftPort),
+					Protocol:   corev1.ProtocolTCP,
+				},
+				{
+					Name:       "transaction",
+					Port:       TransactionPort,
+					TargetPort: intstr.FromInt(TransactionPort),
+					Protocol:   corev1.ProtocolTCP,
+				},
+			},
+		},
+	}
+}
+
+// BuildPrimaryHeadlessServiceForEnterprise creates a headless service for primary cluster discovery
+func BuildPrimaryHeadlessServiceForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) *corev1.Service {
+	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-primary-headless", cluster.Name),
+			Namespace: cluster.Namespace,
+			Labels:    getLabelsForEnterprise(cluster, "primary"),
+		},
+		Spec: corev1.ServiceSpec{
+			ClusterIP: "None",
+			Selector:  getLabelsForEnterprise(cluster, "primary"),
+			Ports: []corev1.ServicePort{
+				{
+					Name:       "discovery",
+					Port:       DiscoveryPort,
+					TargetPort: intstr.FromInt(DiscoveryPort),
+					Protocol:   corev1.ProtocolTCP,
+				},
+				{
+					Name:       "bolt",
+					Port:       BoltPort,
+					TargetPort: intstr.FromInt(BoltPort),
+					Protocol:   corev1.ProtocolTCP,
+				},
+				{
+					Name:       "http",
+					Port:       HTTPPort,
+					TargetPort: intstr.FromInt(HTTPPort),
+					Protocol:   corev1.ProtocolTCP,
+				},
+				{
+					Name:       "cluster",
+					Port:       ClusterPort,
+					TargetPort: intstr.FromInt(ClusterPort),
+					Protocol:   corev1.ProtocolTCP,
+				},
+				{
+					Name:       "routing",
+					Port:       RoutingPort,
+					TargetPort: intstr.FromInt(RoutingPort),
+					Protocol:   corev1.ProtocolTCP,
+				},
+				{
+					Name:       "raft",
+					Port:       RaftPort,
+					TargetPort: intstr.FromInt(RaftPort),
+					Protocol:   corev1.ProtocolTCP,
+				},
+				{
+					Name:       "transaction",
+					Port:       TransactionPort,
+					TargetPort: intstr.FromInt(TransactionPort),
+					Protocol:   corev1.ProtocolTCP,
+				},
+			},
+		},
+	}
+}
+
+// BuildSecondaryHeadlessServiceForEnterprise creates a headless service for secondary cluster discovery
+func BuildSecondaryHeadlessServiceForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) *corev1.Service {
+	if cluster.Spec.Topology.Secondaries == 0 {
+		return nil
+	}
+
+	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-secondary-headless", cluster.Name),
+			Namespace: cluster.Namespace,
+			Labels:    getLabelsForEnterprise(cluster, "secondary"),
+		},
+		Spec: corev1.ServiceSpec{
+			ClusterIP: "None",
+			Selector:  getLabelsForEnterprise(cluster, "secondary"),
+			Ports: []corev1.ServicePort{
+				{
+					Name:       "discovery",
+					Port:       DiscoveryPort,
+					TargetPort: intstr.FromInt(DiscoveryPort),
+					Protocol:   corev1.ProtocolTCP,
+				},
+				{
+					Name:       "bolt",
+					Port:       BoltPort,
+					TargetPort: intstr.FromInt(BoltPort),
+					Protocol:   corev1.ProtocolTCP,
+				},
+				{
+					Name:       "http",
+					Port:       HTTPPort,
+					TargetPort: intstr.FromInt(HTTPPort),
+					Protocol:   corev1.ProtocolTCP,
+				},
+				{
+					Name:       "cluster",
+					Port:       ClusterPort,
+					TargetPort: intstr.FromInt(ClusterPort),
+					Protocol:   corev1.ProtocolTCP,
+				},
+				{
+					Name:       "routing",
+					Port:       RoutingPort,
+					TargetPort: intstr.FromInt(RoutingPort),
 					Protocol:   corev1.ProtocolTCP,
 				},
 			},
@@ -448,6 +567,58 @@ func buildExternalSecret(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, esConfig
 	}
 }
 
+// BuildDiscoveryServiceAccountForEnterprise creates a ServiceAccount for Kubernetes discovery
+func BuildDiscoveryServiceAccountForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) *corev1.ServiceAccount {
+	return &corev1.ServiceAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      getDiscoveryServiceAccountNameForEnterprise(cluster),
+			Namespace: cluster.Namespace,
+			Labels:    getLabelsForEnterprise(cluster, "discovery-service-account"),
+		},
+	}
+}
+
+// BuildDiscoveryRoleForEnterprise creates a Role for Kubernetes discovery
+func BuildDiscoveryRoleForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) *rbacv1.Role {
+	return &rbacv1.Role{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      getDiscoveryRoleNameForEnterprise(cluster),
+			Namespace: cluster.Namespace,
+			Labels:    getLabelsForEnterprise(cluster, "discovery-role"),
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				APIGroups: []string{""},
+				Resources: []string{"services"},
+				Verbs:     []string{"get", "list", "watch"},
+			},
+		},
+	}
+}
+
+// BuildDiscoveryRoleBindingForEnterprise creates a RoleBinding for Kubernetes discovery
+func BuildDiscoveryRoleBindingForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) *rbacv1.RoleBinding {
+	return &rbacv1.RoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      getDiscoveryRoleBindingNameForEnterprise(cluster),
+			Namespace: cluster.Namespace,
+			Labels:    getLabelsForEnterprise(cluster, "discovery-role-binding"),
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:      "ServiceAccount",
+				Name:      getDiscoveryServiceAccountNameForEnterprise(cluster),
+				Namespace: cluster.Namespace,
+			},
+		},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: "rbac.authorization.k8s.io",
+			Kind:     "Role",
+			Name:     getDiscoveryRoleNameForEnterprise(cluster),
+		},
+	}
+}
+
 // BuildServiceAccountForEnterprise creates a ServiceAccount for cloud identity
 func BuildServiceAccountForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) *corev1.ServiceAccount {
 	if cluster.Spec.Backups == nil || cluster.Spec.Backups.Cloud == nil ||
@@ -664,6 +835,11 @@ func BuildPodSpecForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, ro
 				ContainerPort: RaftPort,
 				Protocol:      corev1.ProtocolTCP,
 			},
+			{
+				Name:          "transaction",
+				ContainerPort: TransactionPort,
+				Protocol:      corev1.ProtocolTCP,
+			},
 		},
 		ReadinessProbe: buildReadinessProbe(cluster),
 		LivenessProbe:  buildLivenessProbe(cluster),
@@ -731,7 +907,7 @@ func BuildPodSpecForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, ro
 
 	// Build pod spec
 	podSpec := corev1.PodSpec{
-		ServiceAccountName: getServiceAccountNameForEnterprise(cluster),
+		ServiceAccountName: getDiscoveryServiceAccountNameForEnterprise(cluster),
 		SecurityContext: &corev1.PodSecurityContext{
 			FSGroup: func() *int64 { gid := int64(7474); return &gid }(),
 		},
@@ -849,9 +1025,6 @@ func getServiceAccountNameForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCl
 }
 
 func buildNeo4jConfigForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) string {
-	// Check if this is a single-node deployment
-	isSingleNode := cluster.Spec.Topology.Primaries == 1 && cluster.Spec.Topology.Secondaries == 0
-
 	// Calculate optimal memory settings for Neo4j 5.26+
 	memoryConfig := GetMemoryConfigForCluster(cluster)
 
@@ -883,26 +1056,16 @@ server.config.strict_validation.enabled=false
 # Database format - use block format (default in 5.26+ / 2025.x.x)
 # Note: standard and high_limit formats are deprecated
 db.format=block
-`, memoryConfig.HeapInitialSize, memoryConfig.HeapMaxSize, memoryConfig.PageCacheSize)
 
-	if isSingleNode {
-		// Single-node configuration
-		config += `
-# Single-node mode configuration
-dbms.mode=SINGLE
-`
-	} else {
-		// Multi-node clustering configuration for Neo4j 5.x (base settings)
-		config += `
-# Neo4j 5.x Enterprise clustering - server communication
+# Enterprise clustering configuration for Neo4j 5.x
 # Note: advertised addresses will be set dynamically by startup script
 server.cluster.listen_address=0.0.0.0:5000
 server.discovery.listen_address=0.0.0.0:6000
 server.routing.listen_address=0.0.0.0:7688
+server.cluster.raft.listen_address=0.0.0.0:7000
 
-# Note: Cluster discovery settings are dynamically added by startup script
-`
-	}
+# Note: Single RAFT and cluster discovery settings are dynamically added by startup script
+`, memoryConfig.HeapInitialSize, memoryConfig.HeapMaxSize, memoryConfig.PageCacheSize)
 
 	// Add TLS configuration if enabled
 	if cluster.Spec.TLS != nil && cluster.Spec.TLS.Mode == CertManagerMode {
@@ -966,35 +1129,39 @@ server.bolt.tls_level=OPTIONAL
 	return config
 }
 
-func buildStartupScriptForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) string {
-	// Check if this is a single-node deployment
-	isSingleNode := cluster.Spec.Topology.Primaries == 1 && cluster.Spec.Topology.Secondaries == 0
+// getKubernetesDiscoveryParameter returns the correct Kubernetes discovery parameter based on Neo4j version
+func getKubernetesDiscoveryParameter(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) string {
+	// Extract version from image tag
+	imageTag := cluster.Spec.Image.Tag
 
-	if isSingleNode {
-		// Single-node startup script (no DNS dependency)
-		return `#!/bin/bash
-set -e
-
-echo "Starting Neo4j Enterprise in single-node mode..."
-
-# Set proper NEO4J_AUTH format (username/password)
-export NEO4J_AUTH="${DB_USERNAME}/${DB_PASSWORD}"
-
-# Start Neo4j directly - no clustering setup needed
-exec /startup/docker-entrypoint.sh neo4j
-`
-	} else {
-		// Generate discovery endpoints for all expected primary nodes
-		var discoveryEndpoints []string
-		for i := int32(0); i < cluster.Spec.Topology.Primaries; i++ {
-			endpoint := fmt.Sprintf("%s-primary-%d.%s-headless.%s.svc.cluster.local:6000",
-				cluster.Name, i, cluster.Name, cluster.Namespace)
-			discoveryEndpoints = append(discoveryEndpoints, endpoint)
+	// For Neo4j 5.x (semver): Always use V2_ONLY discovery for 5.26+
+	// For Neo4j 2025.x+ (calver): use dbms.kubernetes.discovery.service_port_name
+	if strings.HasPrefix(imageTag, "5.") {
+		// For Neo4j 5.26+, always use V2_ONLY discovery
+		if strings.HasPrefix(imageTag, "5.26") || strings.Contains(imageTag, "5.26") {
+			return `dbms.cluster.discovery.version=V2_ONLY
+dbms.kubernetes.cluster_domain=cluster.local`
 		}
-		allDiscoveryEndpoints := strings.Join(discoveryEndpoints, ",")
+		// For other 5.x versions
+		return `dbms.kubernetes.service_port_name=discovery
+dbms.cluster.discovery.version=V2_ONLY
+dbms.kubernetes.cluster_domain=cluster.local`
+	} else if strings.HasPrefix(imageTag, "2025.") || strings.Contains(imageTag, "2025") {
+		return `dbms.kubernetes.discovery.service_port_name=discovery
+dbms.kubernetes.cluster_domain=cluster.local`
+	}
 
-		// Multi-node clustering startup script
-		return `#!/bin/bash
+	// Default to 5.x configuration for maximum compatibility
+	return `dbms.kubernetes.service_port_name=discovery
+dbms.cluster.discovery.version=V2_ONLY`
+}
+
+func buildStartupScriptForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) string {
+	// Get discovery parameters for Neo4j version
+	kubernetesDiscoveryParam := getKubernetesDiscoveryParameter(cluster)
+
+	// Unified startup script for all deployments
+	return `#!/bin/bash
 set -e
 
 echo "Starting Neo4j Enterprise in cluster mode..."
@@ -1027,50 +1194,70 @@ server.default_advertised_address=${HOSTNAME_FQDN}
 server.cluster.advertised_address=${HOSTNAME_FQDN}:5000
 server.discovery.advertised_address=${HOSTNAME_FQDN}:6000
 server.routing.advertised_address=${HOSTNAME_FQDN}:7688
+server.cluster.raft.advertised_address=${HOSTNAME_FQDN}:7000
 EOF
 
-# Dynamic cluster configuration based on pod ordinal
-if [ "$POD_ORDINAL" = "0" ]; then
-    echo "Bootstrap pod (ordinal 0) - forming new cluster"
+# Cluster configuration based on topology
+TOTAL_PRIMARIES=` + fmt.Sprintf("%d", cluster.Spec.Topology.Primaries) + `
+TOTAL_SECONDARIES=` + fmt.Sprintf("%d", cluster.Spec.Topology.Secondaries) + `
 
-    # Generate bootstrap configuration for pod 0
+echo "Cluster topology: ${TOTAL_PRIMARIES} primaries, ${TOTAL_SECONDARIES} secondaries"
+echo "Pod ordinal: ${POD_ORDINAL}"
+
+# Determine clustering strategy based on initial topology
+if [ "$TOTAL_PRIMARIES" = "1" ] && [ "$TOTAL_SECONDARIES" = "0" ]; then
+    echo "Single-node cluster: using internal.dbms.single_raft_enabled=true"
+    # Single-node cluster with single RAFT - can scale later
     cat >> /tmp/neo4j-config/neo4j.conf << EOF
 
-# Neo4j 5.x Enterprise clustering - Discovery Service V2 (Bootstrap)
-dbms.cluster.discovery.version=V2_ONLY
-dbms.cluster.discovery.v2.endpoints=` + allDiscoveryEndpoints + `
-
-# Cluster formation settings - allow single node to form cluster
+# Single-node cluster settings (scalable to multi-node)
+internal.dbms.single_raft_enabled=true
 dbms.cluster.minimum_initial_system_primaries_count=1
-initial.dbms.default_primaries_count=` + fmt.Sprintf("%d", cluster.Spec.Topology.Primaries) + `
-initial.dbms.automatically_enable_free_servers=true
+initial.dbms.default_primaries_count=1
 EOF
 else
-    echo "Non-bootstrap pod (ordinal $POD_ORDINAL) - joining existing cluster"
+    echo "Multi-node cluster: using Kubernetes discovery with pod sequencing"
 
-    # Wait for bootstrap pod to be ready and cluster to be formed
-    echo "Waiting for bootstrap pod to form cluster..."
-    until (echo > /dev/tcp/` + cluster.Name + `-primary-0.` + cluster.Name + `-headless.` + cluster.Namespace + `.svc.cluster.local/7474) >/dev/null 2>&1; do
-        echo "Waiting for bootstrap pod HTTP to be ready..."
-        sleep 5
-    done
+    # Use Kubernetes service discovery with label selectors (correct approach)
+    echo "Configuring Kubernetes service discovery with label selectors"
 
-    # Additional wait to ensure cluster is fully formed
-    sleep 10
+    # Unified approach: Use bootstrap discovery with timeout for cluster formation
+    echo "Using unified bootstrap discovery approach for cluster formation"
 
-    # Generate joining configuration for pod 1+
+    # Set minimum primaries to ensure cluster coordination
+    # For 2-node clusters, require both nodes to start cluster formation
+    # For 3+ nodes, require quorum
+    if [ "$TOTAL_PRIMARIES" -eq "2" ]; then
+        MIN_PRIMARIES=2
+    elif [ "$TOTAL_PRIMARIES" -gt "2" ]; then
+        MIN_PRIMARIES=$((TOTAL_PRIMARIES / 2 + 1))
+    else
+        MIN_PRIMARIES=1
+    fi
+
+    echo "Setting minimum primaries for bootstrap: ${MIN_PRIMARIES}"
+
+    # All pods use identical configuration for coordinated cluster formation
     cat >> /tmp/neo4j-config/neo4j.conf << EOF
 
-# Neo4j 5.x Enterprise clustering - Discovery Service V2 (Join)
-dbms.cluster.discovery.version=V2_ONLY
-dbms.cluster.discovery.v2.endpoints=` + allDiscoveryEndpoints + `
+# Multi-node cluster using Kubernetes service discovery (Neo4j 5.26+ standard pattern)
+dbms.cluster.discovery.resolver_type=K8S
+dbms.kubernetes.label_selector=neo4j.com/cluster=` + cluster.Name + `
+dbms.kubernetes.discovery.v2.service_port_name=discovery
+` + kubernetesDiscoveryParam + `
 
-# Join existing cluster - allow incremental cluster formation
-dbms.cluster.minimum_initial_system_primaries_count=1
+# Unified cluster formation - use minimum required for bootstrap, grow to target
+dbms.cluster.minimum_initial_system_primaries_count=${MIN_PRIMARIES}
 initial.dbms.default_primaries_count=` + fmt.Sprintf("%d", cluster.Spec.Topology.Primaries) + `
+initial.dbms.default_secondaries_count=` + fmt.Sprintf("%d", cluster.Spec.Topology.Secondaries) + `
 initial.dbms.automatically_enable_free_servers=true
+
+# Cluster formation optimization for Neo4j 5.26+
+dbms.cluster.catchup.tx_log_fallback_enabled=true
+dbms.cluster.leader_election.timeout=15s
 EOF
 fi
+
 
 # Set NEO4J config directory
 export NEO4J_CONF=/tmp/neo4j-config
@@ -1078,60 +1265,44 @@ export NEO4J_CONF=/tmp/neo4j-config
 # Start Neo4j
 exec /startup/docker-entrypoint.sh neo4j
 `
-	}
 }
 
-func buildHealthScript(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) string {
-	// Check if this is a single-node deployment
-	isSingleNode := cluster.Spec.Topology.Primaries == 1 && cluster.Spec.Topology.Secondaries == 0
+func buildHealthScript(_ *neo4jv1alpha1.Neo4jEnterpriseCluster) string {
+	// Enhanced health check for cluster deployments
+	return `#!/bin/bash
+# Health check script for Neo4j clustering
 
-	if isSingleNode {
-		// Single-node health check
-		return `#!/bin/bash
-# Health check script for Neo4j (Single Node)
-
-# Simple port check for Neo4j
-if ! (echo > /dev/tcp/localhost/7474) >/dev/null 2>&1; then
-    echo "Neo4j HTTP port not responding"
+# Check if Neo4j process is running
+if ! pgrep -f "neo4j.*EnterpriseEntryPoint" > /dev/null; then
+    echo "Neo4j process not running"
     exit 1
 fi
 
-if ! (echo > /dev/tcp/localhost/7687) >/dev/null 2>&1; then
-    echo "Neo4j Bolt port not responding"
-    exit 1
+# Try HTTP port check
+if (echo > /dev/tcp/localhost/7474) >/dev/null 2>&1; then
+    echo "Neo4j HTTP port responding - healthy"
+    exit 0
 fi
 
-echo "Neo4j is healthy"
-exit 0
+# If HTTP not responding, check if we're in cluster formation process
+if grep -q "Resolved endpoints" /logs/neo4j.log 2>/dev/null || \
+   grep -q "Starting.*cluster" /logs/neo4j.log 2>/dev/null || \
+   grep -q "Waiting for.*primaries" /logs/neo4j.log 2>/dev/null || \
+   grep -q "minimum_initial_system_primaries_count" /logs/neo4j.log 2>/dev/null || \
+   grep -q "cluster formation barrier" /logs/neo4j.log 2>/dev/null; then
+    echo "Neo4j in cluster formation process - allowing more time"
+    exit 0
+fi
+
+# If process is running but no clustering activity, fail
+echo "Neo4j process running but HTTP port not responding and no cluster activity detected"
+exit 1
 `
-	} else {
-		// Cluster health check - simplified for now
-		return `#!/bin/bash
-# Health check script for Neo4j (Cluster Mode)
-
-# Simple port check for Neo4j
-if ! (echo > /dev/tcp/localhost/7474) >/dev/null 2>&1; then
-    echo "Neo4j HTTP port not responding"
-    exit 1
-fi
-
-if ! (echo > /dev/tcp/localhost/7687) >/dev/null 2>&1; then
-    echo "Neo4j Bolt port not responding"
-    exit 1
-fi
-
-echo "Neo4j is healthy"
-exit 0
-`
-	}
 }
 
-// buildReadinessProbe creates a cluster-aware readiness probe
-func buildReadinessProbe(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) *corev1.Probe {
-	// Check if this is a single-node deployment
-	isSingleNode := cluster.Spec.Topology.Primaries == 1 && cluster.Spec.Topology.Secondaries == 0
-
-	probe := &corev1.Probe{
+// buildReadinessProbe creates a readiness probe
+func buildReadinessProbe(_ *neo4jv1alpha1.Neo4jEnterpriseCluster) *corev1.Probe {
+	return &corev1.Probe{
 		ProbeHandler: corev1.ProbeHandler{
 			Exec: &corev1.ExecAction{
 				Command: []string{
@@ -1141,29 +1312,16 @@ func buildReadinessProbe(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) *corev1.
 				},
 			},
 		},
-		TimeoutSeconds:   5,
-		FailureThreshold: 3,
+		InitialDelaySeconds: 45, // Allow time for cluster discovery and joining
+		PeriodSeconds:       15, // Less frequent checks during startup
+		TimeoutSeconds:      5,
+		FailureThreshold:    3,
 	}
-
-	if isSingleNode {
-		// Single-node: faster startup
-		probe.InitialDelaySeconds = 30
-		probe.PeriodSeconds = 10
-	} else {
-		// Multi-node cluster: longer startup time due to cluster formation
-		probe.InitialDelaySeconds = 45 // Allow time for cluster discovery and joining
-		probe.PeriodSeconds = 15       // Less frequent checks during startup
-	}
-
-	return probe
 }
 
-// buildLivenessProbe creates a cluster-aware liveness probe
-func buildLivenessProbe(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) *corev1.Probe {
-	// Check if this is a single-node deployment
-	isSingleNode := cluster.Spec.Topology.Primaries == 1 && cluster.Spec.Topology.Secondaries == 0
-
-	probe := &corev1.Probe{
+// buildLivenessProbe creates a liveness probe
+func buildLivenessProbe(_ *neo4jv1alpha1.Neo4jEnterpriseCluster) *corev1.Probe {
+	return &corev1.Probe{
 		ProbeHandler: corev1.ProbeHandler{
 			Exec: &corev1.ExecAction{
 				Command: []string{
@@ -1173,19 +1331,22 @@ func buildLivenessProbe(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) *corev1.P
 				},
 			},
 		},
-		TimeoutSeconds:   10,
-		FailureThreshold: 3,
+		InitialDelaySeconds: 120, // Allow sufficient time for joining pods to connect
+		PeriodSeconds:       60,  // Less frequent checks to avoid interrupting cluster operations
+		TimeoutSeconds:      10,
+		FailureThreshold:    3,
 	}
+}
 
-	if isSingleNode {
-		// Single-node: standard timing
-		probe.InitialDelaySeconds = 60
-		probe.PeriodSeconds = 30
-	} else {
-		// Multi-node cluster: allow more time for cluster operations
-		probe.InitialDelaySeconds = 120 // Allow sufficient time for joining pods to connect
-		probe.PeriodSeconds = 60        // Less frequent checks to avoid interrupting cluster operations
-	}
+// Helper functions for Kubernetes discovery resources
+func getDiscoveryServiceAccountNameForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) string {
+	return fmt.Sprintf("%s-discovery", cluster.Name)
+}
 
-	return probe
+func getDiscoveryRoleNameForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) string {
+	return fmt.Sprintf("%s-discovery", cluster.Name)
+}
+
+func getDiscoveryRoleBindingNameForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) string {
+	return fmt.Sprintf("%s-discovery", cluster.Name)
 }
