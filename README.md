@@ -4,7 +4,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/neo4j-labs/neo4j-kubernetes-operator)](https://goreportcard.com/report/github.com/neo4j-labs/neo4j-kubernetes-operator)
 [![GitHub Release](https://img.shields.io/github/release/neo4j-labs/neo4j-kubernetes-operator.svg)](https://github.com/neo4j-labs/neo4j-kubernetes-operator/releases)
 
-The Neo4j Enterprise Operator for Kubernetes provides a complete solution for deploying, managing, and scaling Neo4j Enterprise clusters (v5.26+) in Kubernetes environments. Built with the Kubebuilder framework, it enables cloud-native operations for Neo4j graph databases.
+The Neo4j Enterprise Operator for Kubernetes provides a complete solution for deploying, managing, and scaling Neo4j Enterprise instances (v5.26+) in Kubernetes environments. Built with the Kubebuilder framework, it supports both clustered and standalone deployments for cloud-native graph database operations.
 
 ## 📋 Requirements
 
@@ -31,14 +31,25 @@ If you're new to Kubernetes, start here:
      --from-literal=password=your-secure-password
    ```
 
-3. **Deploy your first Neo4j cluster**:
+3. **Deploy your first Neo4j instance**:
+
+   **For single-node development** (non-clustered):
    ```bash
-   kubectl apply -f https://github.com/neo4j-labs/neo4j-kubernetes-operator/raw/main/examples/clusters/single-node.yaml
+   kubectl apply -f https://github.com/neo4j-labs/neo4j-kubernetes-operator/raw/main/examples/standalone/single-node-standalone.yaml
    ```
 
-4. **Access your cluster**:
+   **For clustered deployment** (production):
    ```bash
-   kubectl port-forward svc/single-node-cluster-client 7474:7474 7687:7687
+   kubectl apply -f https://github.com/neo4j-labs/neo4j-kubernetes-operator/raw/main/examples/clusters/minimal-cluster.yaml
+   ```
+
+4. **Access your Neo4j instance**:
+   ```bash
+   # For standalone deployment
+   kubectl port-forward svc/standalone-neo4j-service 7474:7474 7687:7687
+
+   # For cluster deployment
+   kubectl port-forward svc/minimal-cluster-client 7474:7474 7687:7687
    ```
    Open http://localhost:7474 in your browser.
 
@@ -51,7 +62,7 @@ Jump right in with advanced configurations:
 kubectl apply -f https://github.com/neo4j-labs/neo4j-kubernetes-operator/releases/latest/download/neo4j-kubernetes-operator.yaml
 
 # Deploy production cluster with high availability
-kubectl apply -f examples/clusters/three-node-cluster.yaml
+kubectl apply -f examples/clusters/multi-primary-cluster.yaml
 ```
 
 See the [Complete Installation Guide](docs/user_guide/installation.md) for all deployment options.
@@ -60,10 +71,13 @@ See the [Complete Installation Guide](docs/user_guide/installation.md) for all d
 
 Ready-to-use configurations for common deployment scenarios:
 
-- **[Single-node cluster](examples/clusters/single-node.yaml)** - Development and testing
-- **[Three-node cluster](examples/clusters/three-node-cluster.yaml)** - Production with high availability
+### Standalone Deployments (Single-Node, Non-Clustered)
+- **[Single-node standalone](examples/standalone/single-node-standalone.yaml)** - Development and testing
+
+### Clustered Deployments (Enterprise Clustering)
+- **[Minimal cluster](examples/clusters/minimal-cluster.yaml)** - 1 primary + 1 secondary (minimum cluster topology)
+- **[Multi-primary cluster](examples/clusters/multi-primary-cluster.yaml)** - Production with high availability
 - **[Kubernetes discovery cluster](examples/clusters/k8s-discovery-cluster.yaml)** - Production with automatic discovery
-- **[Cluster with read replicas](examples/clusters/cluster-with-read-replicas.yaml)** - Read scaling
 
 See the [examples directory](examples/) for complete documentation and additional configurations.
 
@@ -88,7 +102,8 @@ See the [examples directory](examples/) for complete documentation and additiona
 
 ### 📖 API Reference
 Complete CRD documentation for all custom resources:
-- [Neo4jEnterpriseCluster](docs/api_reference/neo4jenterprisecluster.md)
+- [Neo4jEnterpriseCluster](docs/api_reference/neo4jenterprisecluster.md) - Clustered deployments
+- [Neo4jEnterpriseStandalone](docs/api_reference/neo4jenterprisestandalone.md) - Single-node deployments
 - [Neo4jBackup](docs/api_reference/neo4jbackup.md) & [Neo4jRestore](docs/api_reference/neo4jrestore.md)
 - [Neo4jDatabase](docs/api_reference/neo4jdatabase.md)
 - [Neo4jPlugin](docs/api_reference/neo4jplugin.md)
@@ -96,8 +111,10 @@ Complete CRD documentation for all custom resources:
 ## ✨ Key Features
 
 ### 🏗️ Core Capabilities
-- **Enterprise Clusters**: Deploy Neo4j Enterprise with clustering support
-- **High Availability**: Multi-replica clusters with automatic leader election
+- **Dual Deployment Modes**: Choose between clustered (Neo4jEnterpriseCluster) or standalone (Neo4jEnterpriseStandalone) deployments
+- **Enterprise Clusters**: Deploy Neo4j Enterprise with clustering support (minimum 1 primary + 1 secondary or multiple primaries)
+- **Standalone Deployments**: Single-node Neo4j instances running in single mode for development and testing
+- **High Availability**: Multi-replica clusters with automatic leader election and V2_ONLY discovery
 - **Persistent Storage**: Configurable storage classes and volume management
 - **Rolling Updates**: Zero-downtime Neo4j version upgrades
 
@@ -121,19 +138,27 @@ Complete CRD documentation for all custom resources:
 - **Resource Validation**: Automatic validation ensures optimal Neo4j memory settings
 - **Built-in Monitoring**: Real-time resource monitoring with operational insights
 
-### 🔧 Cluster Management
-Manage your Neo4j clusters using standard kubectl commands:
+### 🔧 Deployment Management
+Manage your Neo4j deployments using standard kubectl commands:
 ```bash
+# For clustered deployments
 kubectl get neo4jenterprisecluster
 kubectl describe neo4jenterprisecluster my-cluster
+
+# For standalone deployments
+kubectl get neo4jenterprisestandalone
+kubectl describe neo4jenterprisestandalone my-standalone
+
+# Operator logs
 kubectl logs -l app.kubernetes.io/name=neo4j-operator
 ```
 
 ## 🏃‍♂️ Common Use Cases
 
 ### Development & Testing
-- **Single-node clusters** for development environments
-- **Ephemeral clusters** for CI/CD pipelines
+- **Standalone deployments** for development environments (non-clustered)
+- **Minimal clusters** for integration testing (1 primary + 1 secondary)
+- **Ephemeral deployments** for CI/CD pipelines
 - **Sample data loading** for testing scenarios
 
 ### Production Deployments

@@ -95,6 +95,17 @@ func cleanupNeo4jResources(ctx context.Context, k8sClient client.Client, options
 		}
 	}
 
+	// Delete all Neo4jEnterpriseStandalones
+	standalones := &neo4jv1alpha1.Neo4jEnterpriseStandaloneList{}
+	if err := k8sClient.List(ctx, standalones); err == nil {
+		for _, standalone := range standalones.Items {
+			ginkgo.By(fmt.Sprintf("Deleting Neo4jEnterpriseStandalone: %s/%s", standalone.Namespace, standalone.Name))
+			if err := deleteWithPropagation(ctx, k8sClient, &standalone, options.ForceDelete); err != nil {
+				fmt.Printf("Warning: Failed to delete standalone %s/%s: %v\n", standalone.Namespace, standalone.Name, err)
+			}
+		}
+	}
+
 	// Delete all Neo4jBackups
 	backups := &neo4jv1alpha1.Neo4jBackupList{}
 	if err := k8sClient.List(ctx, backups); err == nil {
@@ -250,6 +261,11 @@ func verifyCleanup(ctx context.Context, k8sClient client.Client, options Cleanup
 			return false
 		}
 
+		standalones := &neo4jv1alpha1.Neo4jEnterpriseStandaloneList{}
+		if err := k8sClient.List(ctx, standalones); err == nil && len(standalones.Items) > 0 {
+			return false
+		}
+
 		backups := &neo4jv1alpha1.Neo4jBackupList{}
 		if err := k8sClient.List(ctx, backups); err == nil && len(backups.Items) > 0 {
 			return false
@@ -294,6 +310,7 @@ func checkCRDs(ctx context.Context, k8sClient client.Client) {
 
 	requiredCRDs := []string{
 		"neo4jenterpriseclusters.neo4j.neo4j.com",
+		"neo4jenterprisestandalones.neo4j.neo4j.com",
 		"neo4jbackups.neo4j.neo4j.com",
 		"neo4jrestores.neo4j.neo4j.com",
 		"neo4jusers.neo4j.neo4j.com",
@@ -310,6 +327,9 @@ func checkCRDs(ctx context.Context, k8sClient client.Client) {
 			case "neo4jenterpriseclusters.neo4j.neo4j.com":
 				clusters := &neo4jv1alpha1.Neo4jEnterpriseClusterList{}
 				return k8sClient.List(ctx, clusters)
+			case "neo4jenterprisestandalones.neo4j.neo4j.com":
+				standalones := &neo4jv1alpha1.Neo4jEnterpriseStandaloneList{}
+				return k8sClient.List(ctx, standalones)
 			case "neo4jbackups.neo4j.neo4j.com":
 				backups := &neo4jv1alpha1.Neo4jBackupList{}
 				return k8sClient.List(ctx, backups)
@@ -381,6 +401,14 @@ func checkConflictingResources(ctx context.Context, k8sClient client.Client) {
 		fmt.Printf("Warning: Found %d existing Neo4jEnterpriseClusters that might conflict with tests\n", len(clusters.Items))
 		for _, cluster := range clusters.Items {
 			fmt.Printf("  - %s/%s\n", cluster.Namespace, cluster.Name)
+		}
+	}
+
+	standalones := &neo4jv1alpha1.Neo4jEnterpriseStandaloneList{}
+	if err := k8sClient.List(ctx, standalones); err == nil && len(standalones.Items) > 0 {
+		fmt.Printf("Warning: Found %d existing Neo4jEnterpriseStandalones that might conflict with tests\n", len(standalones.Items))
+		for _, standalone := range standalones.Items {
+			fmt.Printf("  - %s/%s\n", standalone.Namespace, standalone.Name)
 		}
 	}
 

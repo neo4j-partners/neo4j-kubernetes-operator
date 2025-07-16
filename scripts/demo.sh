@@ -394,8 +394,8 @@ EOF
     show_connection_info "${CLUSTER_NAME_SINGLE}" "${DEMO_NAMESPACE}" false
 
     log_success "Single-node cluster is ready!"
-    log_demo "The cluster is now running in single-node mode (dbms.mode=SINGLE)"
-    log_demo "This means it operates as a standalone database without clustering features"
+    log_demo "The cluster is now running with a single member using unified clustering infrastructure"
+    log_demo "This provides a simplified deployment suitable for development and testing"
 
     confirm "Ready to proceed to the multi-node TLS-enabled cluster demo?"
 }

@@ -1129,6 +1129,20 @@ server.bolt.tls_level=OPTIONAL
 	return config
 }
 
+// isNeo4jVersion526OrHigher checks if the Neo4j version is 5.26 or higher
+func isNeo4jVersion526OrHigher(imageTag string) bool {
+	// Support for various 5.26+ versions
+	supportedVersions := []string{"5.26", "5.27", "5.28", "5.29", "5.30", "5.31", "5.32", "5.33", "5.34", "5.35"}
+
+	for _, version := range supportedVersions {
+		if strings.Contains(imageTag, version) {
+			return true
+		}
+	}
+
+	return false
+}
+
 // getKubernetesDiscoveryParameter returns the correct Kubernetes discovery parameter based on Neo4j version
 func getKubernetesDiscoveryParameter(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) string {
 	// Extract version from image tag
@@ -1138,22 +1152,25 @@ func getKubernetesDiscoveryParameter(cluster *neo4jv1alpha1.Neo4jEnterpriseClust
 	// For Neo4j 2025.x+ (calver): use dbms.kubernetes.discovery.service_port_name
 	if strings.HasPrefix(imageTag, "5.") {
 		// For Neo4j 5.26+, always use V2_ONLY discovery
-		if strings.HasPrefix(imageTag, "5.26") || strings.Contains(imageTag, "5.26") {
+		if isNeo4jVersion526OrHigher(imageTag) {
 			return `dbms.cluster.discovery.version=V2_ONLY
+dbms.kubernetes.discovery.v2.service_port_name=discovery
 dbms.kubernetes.cluster_domain=cluster.local`
 		}
-		// For other 5.x versions
+		// For other 5.x versions (pre-5.26) - not supported by this operator
 		return `dbms.kubernetes.service_port_name=discovery
 dbms.cluster.discovery.version=V2_ONLY
 dbms.kubernetes.cluster_domain=cluster.local`
 	} else if strings.HasPrefix(imageTag, "2025.") || strings.Contains(imageTag, "2025") {
+		// For Neo4j 2025.x+ (calver), use the new parameter name
 		return `dbms.kubernetes.discovery.service_port_name=discovery
 dbms.kubernetes.cluster_domain=cluster.local`
 	}
 
-	// Default to 5.x configuration for maximum compatibility
-	return `dbms.kubernetes.service_port_name=discovery
-dbms.cluster.discovery.version=V2_ONLY`
+	// Default to 5.26+ configuration for maximum compatibility
+	return `dbms.cluster.discovery.version=V2_ONLY
+dbms.kubernetes.discovery.v2.service_port_name=discovery
+dbms.kubernetes.cluster_domain=cluster.local`
 }
 
 func buildStartupScriptForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) string {

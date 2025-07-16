@@ -62,6 +62,7 @@ var interval = 10 * time.Second
 // List of required CRDs for integration tests
 var requiredCRDs = []string{
 	"neo4jenterpriseclusters.neo4j.neo4j.com",
+	"neo4jenterprisestandalones.neo4j.neo4j.com",
 	"neo4jbackups.neo4j.neo4j.com",
 	"neo4jrestores.neo4j.neo4j.com",
 	"neo4jplugins.neo4j.neo4j.com",
@@ -262,7 +263,7 @@ func randomName(prefix string) string {
 	return fmt.Sprintf("%s-%d", prefix, time.Now().UnixNano()%100000)
 }
 
-// createBasicCluster creates a basic Neo4j cluster for testing
+// createBasicCluster creates a basic Neo4j cluster for testing with minimum topology
 func createBasicCluster(name, namespace string) *neo4jv1alpha1.Neo4jEnterpriseCluster {
 	return &neo4jv1alpha1.Neo4jEnterpriseCluster{
 		ObjectMeta: metav1.ObjectMeta{
@@ -270,6 +271,31 @@ func createBasicCluster(name, namespace string) *neo4jv1alpha1.Neo4jEnterpriseCl
 			Namespace: namespace,
 		},
 		Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
+			Edition: "enterprise",
+			Image: neo4jv1alpha1.ImageSpec{
+				Repo: "neo4j",
+				Tag:  "5.26-enterprise",
+			},
+			Topology: neo4jv1alpha1.TopologyConfiguration{
+				Primaries:   1,
+				Secondaries: 1, // Minimum cluster topology
+			},
+			Storage: neo4jv1alpha1.StorageSpec{
+				ClassName: "standard",
+				Size:      "10Gi",
+			},
+		},
+	}
+}
+
+// createBasicStandalone creates a basic Neo4j standalone deployment for testing
+func createBasicStandalone(name, namespace string) *neo4jv1alpha1.Neo4jEnterpriseStandalone {
+	return &neo4jv1alpha1.Neo4jEnterpriseStandalone{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: neo4jv1alpha1.Neo4jEnterpriseStandaloneSpec{
 			Edition: "enterprise",
 			Image: neo4jv1alpha1.ImageSpec{
 				Repo: "neo4j",

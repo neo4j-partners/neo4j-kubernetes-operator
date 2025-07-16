@@ -55,12 +55,8 @@ var _ = Describe("Multi-Node Cluster Formation Integration Tests", func() {
 	})
 
 	AfterEach(func() {
-		if cluster != nil {
-			cleanupCluster(cluster)
-		}
-		if namespace != nil {
-			cleanupNamespace(namespace.Name)
-		}
+		// Cleanup will be handled by the test suite cleanup
+		// which removes all test namespaces and their resources
 	})
 
 	Context("Two-Node Cluster Formation", func() {
@@ -269,9 +265,9 @@ var _ = Describe("Multi-Node Cluster Formation Integration Tests", func() {
 		})
 	})
 
-	Context("Single-Node Cluster (Baseline)", func() {
-		It("should use single RAFT mode for single-node clusters", func() {
-			By("Creating a 1-primary cluster specification")
+	Context("Minimal Cluster (1 Primary + 1 Secondary)", func() {
+		It("should create a minimal cluster with proper coordination", func() {
+			By("Creating a minimal cluster specification")
 			cluster = &neo4jv1alpha1.Neo4jEnterpriseCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      clusterName,
@@ -285,7 +281,7 @@ var _ = Describe("Multi-Node Cluster Formation Integration Tests", func() {
 					},
 					Topology: neo4jv1alpha1.TopologyConfiguration{
 						Primaries:   1,
-						Secondaries: 0,
+						Secondaries: 1, // Minimum cluster topology
 					},
 					Storage: neo4jv1alpha1.StorageSpec{
 						ClassName: "standard",
@@ -303,7 +299,7 @@ var _ = Describe("Multi-Node Cluster Formation Integration Tests", func() {
 			By("Creating the cluster resource")
 			Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
 
-			By("Waiting for ConfigMap with single RAFT configuration")
+			By("Waiting for ConfigMap with cluster configuration")
 			configMapKey := types.NamespacedName{
 				Name:      clusterName + "-config",
 				Namespace: namespace.Name,
@@ -320,14 +316,47 @@ var _ = Describe("Multi-Node Cluster Formation Integration Tests", func() {
 					return fmt.Errorf("startup.sh not found in ConfigMap")
 				}
 
-				// Check for single RAFT mode
-				if !containsString(startupScript, "internal.dbms.single_raft_enabled=true") {
-					return fmt.Errorf("startup script does not contain single RAFT mode for single-node cluster")
+				// Check for proper cluster configuration
+				if !containsString(startupScript, "dbms.cluster.discovery.resolver_type=K8S") {
+					return fmt.Errorf("startup script does not contain Kubernetes service discovery")
 				}
 
-				// Ensure it doesn't use multi-node logic
-				if containsString(startupScript, "Using unified bootstrap discovery approach") {
-					return fmt.Errorf("single-node cluster should not use multi-node bootstrap approach")
+				// Check for V2_ONLY discovery mode
+				if !containsString(startupScript, "dbms.cluster.discovery.version=V2_ONLY") {
+					return fmt.Errorf("startup script does not contain V2_ONLY discovery mode")
+				}
+
+				return nil
+			}, time.Minute*2, time.Second*5).Should(Succeed())
+
+			By("Waiting for both primary and secondary StatefulSets to be created")
+			primaryStatefulSetKey := types.NamespacedName{
+				Name:      clusterName + "-primary",
+				Namespace: namespace.Name,
+			}
+			secondaryStatefulSetKey := types.NamespacedName{
+				Name:      clusterName + "-secondary",
+				Namespace: namespace.Name,
+			}
+
+			Eventually(func() error {
+				primaryStatefulSet := &appsv1.StatefulSet{}
+				if err := k8sClient.Get(ctx, primaryStatefulSetKey, primaryStatefulSet); err != nil {
+					return fmt.Errorf("primary StatefulSet not found: %v", err)
+				}
+
+				secondaryStatefulSet := &appsv1.StatefulSet{}
+				if err := k8sClient.Get(ctx, secondaryStatefulSetKey, secondaryStatefulSet); err != nil {
+					return fmt.Errorf("secondary StatefulSet not found: %v", err)
+				}
+
+				// Verify StatefulSet replicas
+				if primaryStatefulSet.Spec.Replicas == nil || *primaryStatefulSet.Spec.Replicas != 1 {
+					return fmt.Errorf("primary StatefulSet should have 1 replica, got %v", primaryStatefulSet.Spec.Replicas)
+				}
+
+				if secondaryStatefulSet.Spec.Replicas == nil || *secondaryStatefulSet.Spec.Replicas != 1 {
+					return fmt.Errorf("secondary StatefulSet should have 1 replica, got %v", secondaryStatefulSet.Spec.Replicas)
 				}
 
 				return nil

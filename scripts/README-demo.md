@@ -32,7 +32,7 @@ make demo-fast
 - Perfect for development and testing
 - Simple deployment model
 - Resource efficient
-- Single-node mode (`dbms.mode=SINGLE`)
+- Uses unified clustering infrastructure (Neo4j 5.26+)
 
 ### 🎯 **Part 2: Multi-Node TLS Cluster**
 - Production-ready high availability

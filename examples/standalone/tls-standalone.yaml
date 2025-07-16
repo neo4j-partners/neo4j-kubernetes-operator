@@ -1,0 +1,40 @@
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jEnterpriseStandalone
+metadata:
+  name: tls-standalone-example
+  namespace: default
+spec:
+  edition: enterprise
+  image:
+    repo: neo4j
+    tag: "5.26-enterprise"
+    pullPolicy: IfNotPresent
+  storage:
+    className: standard
+    size: "10Gi"
+  resources:
+    requests:
+      memory: "2Gi"
+      cpu: "500m"
+    limits:
+      memory: "4Gi"
+      cpu: "2"
+  # TLS configuration using cert-manager
+  tls:
+    mode: cert-manager
+    issuerRef:
+      name: ca-cluster-issuer
+      kind: ClusterIssuer
+  auth:
+    provider: native
+    adminSecret: neo4j-admin-secret
+  env:
+    - name: NEO4J_ACCEPT_LICENSE_AGREEMENT
+      value: "yes"
+  config:
+    server.memory.heap.initial_size: "1G"
+    server.memory.heap.max_size: "2G"
+    server.memory.pagecache.size: "512m"
+    # Additional Neo4j configuration
+    db.logs.query.enabled: "INFO"
+    db.logs.query.threshold: "1s"

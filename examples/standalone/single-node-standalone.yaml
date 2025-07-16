@@ -1,0 +1,103 @@
+# Single-node Neo4j Enterprise Standalone deployment
+# This creates a standalone Neo4j deployment in single mode (not clustered)
+# Suitable for development, testing, and simple production workloads that don't need scaling
+
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jEnterpriseStandalone
+metadata:
+  name: standalone-neo4j
+  namespace: default
+spec:
+  # Neo4j Enterprise Edition (required for this operator)
+  edition: enterprise
+
+  # Neo4j Docker image configuration
+  image:
+    repo: neo4j
+    tag: "5.26-enterprise"  # Neo4j 5.26+ required
+    pullPolicy: IfNotPresent
+
+  # Storage configuration
+  storage:
+    className: standard  # Use your cluster's default storage class
+    size: "10Gi"        # Adjust based on your data needs
+
+  # Persistence configuration
+  persistence:
+    enabled: true
+    retentionPolicy: Delete  # Delete PVCs when standalone is deleted
+    accessModes:
+      - ReadWriteOnce
+
+  # Resource allocation
+  resources:
+    requests:
+      memory: "2Gi"     # Initial memory allocation
+      cpu: "500m"       # Initial CPU allocation
+    limits:
+      memory: "4Gi"     # Maximum memory
+      cpu: "2"          # Maximum CPU cores
+
+  # TLS disabled for simplicity (enable for production)
+  tls:
+    mode: disabled
+
+  # Authentication configuration
+  auth:
+    provider: native
+    adminSecret: neo4j-admin-secret  # Reference to admin credentials secret
+
+  # Service configuration
+  service:
+    type: ClusterIP
+    annotations:
+      service.beta.kubernetes.io/aws-load-balancer-type: nlb  # Example annotation
+
+  # Custom Neo4j configuration (single mode is automatically set)
+  config:
+    # Memory settings
+    server.memory.heap.initial_size: "1G"
+    server.memory.heap.max_size: "2G"
+    server.memory.pagecache.size: "1G"
+
+    # Security settings
+    dbms.security.auth_enabled: "true"
+    dbms.security.procedures.unrestricted: "gds.*,apoc.*"
+
+    # Logging settings
+    dbms.logs.query.enabled: "true"
+    dbms.logs.query.threshold: "1s"
+
+  # Required environment variables
+  env:
+    - name: NEO4J_ACCEPT_LICENSE_AGREEMENT
+      value: "yes"      # Required for Neo4j Enterprise
+
+  # Node selector for pod scheduling
+  nodeSelector:
+    kubernetes.io/arch: amd64
+
+  # Tolerations for pod scheduling
+  tolerations:
+    - key: "neo4j"
+      operator: "Equal"
+      value: "true"
+      effect: "NoSchedule"
+
+  # Query monitoring
+  queryMonitoring:
+    enabled: true
+    slowQueryThreshold: "5s"
+    explainPlan: true
+
+---
+# Admin credentials secret (create this before applying the standalone)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: neo4j-admin-secret
+  namespace: default
+type: Opaque
+stringData:
+  username: neo4j
+  password: your-secure-password-here

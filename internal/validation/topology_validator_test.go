@@ -33,11 +33,35 @@ func TestTopologyValidator_Validate(t *testing.T) {
 		expectErrors bool
 	}{
 		{
-			name: "valid single node cluster",
+			name: "invalid single node cluster - should now error",
 			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 					Topology: neo4jv1alpha1.TopologyConfiguration{
 						Primaries:   1,
+						Secondaries: 0,
+					},
+				},
+			},
+			expectErrors: true,
+		},
+		{
+			name: "valid minimal cluster with 1 primary + 1 secondary",
+			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
+				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
+					Topology: neo4jv1alpha1.TopologyConfiguration{
+						Primaries:   1,
+						Secondaries: 1,
+					},
+				},
+			},
+			expectErrors: false,
+		},
+		{
+			name: "valid multi-primary cluster",
+			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
+				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
+					Topology: neo4jv1alpha1.TopologyConfiguration{
+						Primaries:   2,
 						Secondaries: 0,
 					},
 				},
@@ -114,12 +138,25 @@ func TestTopologyValidator_ValidateWithWarnings(t *testing.T) {
 		warningKeywords []string
 	}{
 		{
-			name: "single node - no warnings",
+			name: "single node - now should error",
 			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 					Topology: neo4jv1alpha1.TopologyConfiguration{
 						Primaries:   1,
 						Secondaries: 0,
+					},
+				},
+			},
+			expectErrors:   true,
+			expectWarnings: false,
+		},
+		{
+			name: "minimal cluster (1 primary + 1 secondary) - no warnings",
+			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
+				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
+					Topology: neo4jv1alpha1.TopologyConfiguration{
+						Primaries:   1,
+						Secondaries: 1,
 					},
 				},
 			},

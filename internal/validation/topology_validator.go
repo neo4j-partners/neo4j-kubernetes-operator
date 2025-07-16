@@ -43,7 +43,7 @@ func (v *TopologyValidator) Validate(cluster *neo4jv1alpha1.Neo4jEnterpriseClust
 	var allErrs field.ErrorList
 	topologyPath := field.NewPath("spec", "topology")
 
-	// Validate primaries - only enforce minimum of 1
+	// Validate primaries - enforce minimum clustering requirements
 	if cluster.Spec.Topology.Primaries < 1 {
 		allErrs = append(allErrs, field.Invalid(
 			topologyPath.Child("primaries"),
@@ -58,6 +58,18 @@ func (v *TopologyValidator) Validate(cluster *neo4jv1alpha1.Neo4jEnterpriseClust
 			topologyPath.Child("secondaries"),
 			cluster.Spec.Topology.Secondaries,
 			"secondaries cannot be negative",
+		))
+	}
+
+	// Enforce minimum cluster topology requirements
+	// Neo4jEnterpriseCluster must have either:
+	// 1. One primary AND at least one secondary (1+1 minimum)
+	// 2. Multiple primaries (2+ primaries, any number of secondaries)
+	if cluster.Spec.Topology.Primaries == 1 && cluster.Spec.Topology.Secondaries == 0 {
+		allErrs = append(allErrs, field.Invalid(
+			topologyPath,
+			fmt.Sprintf("primaries=%d, secondaries=%d", cluster.Spec.Topology.Primaries, cluster.Spec.Topology.Secondaries),
+			"Neo4jEnterpriseCluster requires minimum cluster topology: either 1 primary + 1 secondary, or multiple primaries. For single-node deployments, use Neo4jEnterpriseStandalone instead",
 		))
 	}
 

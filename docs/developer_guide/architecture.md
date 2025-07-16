@@ -17,7 +17,7 @@ The operator is built around a set of controllers that manage the lifecycle of N
 
 ### Neo4jEnterpriseCluster Controller
 
-The main controller (`internal/controller/neo4jenterprisecluster_controller.go`) includes several key architectural components:
+The main controller (`internal/controller/neo4jenterprisecluster_controller.go`) manages clustered Neo4j Enterprise deployments with the following architectural components:
 
 #### Performance Optimizations
 - **Efficient Reconciliation**: Optimized from ~18,000 to ~34 reconciliations per minute
@@ -28,35 +28,65 @@ The main controller (`internal/controller/neo4jenterprisecluster_controller.go`)
 - **ConfigMap Manager** (`internal/controller/configmap_manager.go`): Handles Neo4j configuration with hash-based change detection
 - **Scaling Status Manager** (`internal/controller/scaling_status_manager.go`): Manages autoscaling status and operations
 - **Topology Scheduler**: Handles pod placement and anti-affinity rules
+- **Cluster Topology Validator**: Enforces minimum cluster topology requirements (1 primary + 1 secondary OR 2+ primaries)
+
+### Neo4jEnterpriseStandalone Controller
+
+The standalone controller (`internal/controller/neo4jenterprisestandalone_controller.go`) manages single-node Neo4j Enterprise deployments:
+
+#### Key Features
+- **Unified Clustering Infrastructure**: Uses clustering infrastructure with single member (Neo4j 5.26+ approach)
+- **Simplified Topology**: Single-node deployment without complex clustering configurations
+- **Resource Management**: Handles ConfigMap, Service, and StatefulSet for single-node deployments
+- **Status Tracking**: Provides comprehensive status updates for standalone instances
 
 ### Other Controllers
 
 - **Neo4jDatabase Controller**: Manages database lifecycle within clusters
-- **Neo4jBackup/Restore Controllers**: Handle backup and restore operations
+- **Neo4jBackup/Restore Controllers**: Handle backup and restore operations (supports both cluster and standalone targets)
 - **Neo4jPlugin Controller**: Manages Neo4j plugin installation and configuration
 
 ## Custom Resource Definitions (CRDs)
 
 The operator defines a set of CRDs to represent Neo4j resources. The Go type definitions are located in `api/v1alpha1/`.
 
+### Core CRDs
+
+#### Neo4jEnterpriseCluster
+- **Purpose**: Manages clustered Neo4j Enterprise deployments requiring high availability
+- **Minimum Topology**: Enforces 1 primary + 1 secondary OR 2+ primaries
+- **Discovery Mode**: Automatically configures V2_ONLY discovery for Neo4j 5.26+
+- **Scaling**: Supports horizontal scaling with topology validation
+
+#### Neo4jEnterpriseStandalone
+- **Purpose**: Manages single-node Neo4j Enterprise deployments
+- **Use Cases**: Development, testing, simple production workloads
+- **Configuration**: Uses unified clustering approach with single member (Neo4j 5.26+)
+- **Restrictions**: Fixed at 1 replica, does not support scaling to multiple nodes
+
 ### Enhanced CRD Features
 - **Resource Validation**: Built-in validation for resource limits and Neo4j configuration
 - **Status Conditions**: Comprehensive status reporting with detailed conditions
-- **Autoscaling Support**: HPA integration with Neo4j-specific metrics
+- **Autoscaling Support**: HPA integration with Neo4j-specific metrics (cluster only)
+- **Topology Validation**: Prevents invalid cluster configurations
 
 ## Validation Framework
 
 The operator uses a comprehensive validation framework (`internal/validation/`) to ensure resource correctness:
 
 ### Validation Components
+- **Topology Validator** (`topology_validator.go`): Validates cluster topology and enforces minimum requirements
 - **Cluster Validator** (`cluster_validator.go`): Validates cluster configuration and topology
 - **Memory Validator** (`memory_validator.go`): Ensures Neo4j memory settings are within container limits
 - **Resource Validator** (`resource_validator.go`): Validates CPU, memory, and storage allocation
 
 ### Validation Features
 - **Proactive Validation**: Catches configuration errors before deployment
+- **Topology Enforcement**: Ensures Neo4jEnterpriseCluster meets minimum topology requirements
+- **CRD Separation**: Validates that single-node deployments use Neo4jEnterpriseStandalone
 - **Resource Recommendations**: Suggests optimal resource allocation
 - **Memory Ratio Validation**: Ensures proper heap/page cache ratios
+- **Configuration Restrictions**: Prevents clustering configurations in standalone deployments
 
 ## Monitoring and Observability
 
@@ -85,6 +115,9 @@ The operator includes intelligent resource management capabilities:
 - **Hash-based Change Detection**: Prevents unnecessary ConfigMap updates
 - **Debounce Mechanism**: Reduces configuration churn and restart loops
 - **Content Normalization**: Ensures consistent configuration formatting
+- **Dual CRD Support**: Handles configuration for both clustered and standalone deployments
+- **Discovery Configuration**: Automatically configures V2_ONLY discovery for Neo4j 5.26+
+- **Mode Setting**: Automatically sets appropriate `dbms.mode` based on deployment type
 
 ## RBAC and Security
 
@@ -135,3 +168,34 @@ The operator is designed for extensibility:
 - **Custom Metrics**: Extensible monitoring framework
 - **Webhook Integration**: Admission webhook support
 - **Event Handlers**: Pluggable event handling system
+- **Dual CRD Architecture**: Supports both clustered and standalone deployment patterns
+- **Migration Support**: Provides tools and guidance for migrating between deployment types
+
+## Configuration Management
+
+### Neo4j Version Compatibility
+
+The operator supports Neo4j 5.26+ and 2025.x+ versions. Key configuration considerations:
+
+1. **Memory Settings**: Always use `server.memory.*` prefix (not deprecated `dbms.memory.*`)
+2. **TLS/SSL Settings**: Use `server.https.*` and `server.bolt.*` (not deprecated `dbms.connector.*`)
+3. **Discovery Settings**: Use `dbms.cluster.discovery.resolver_type` (not deprecated `type`)
+4. **Database Format**: Use `db.format: "block"` (not deprecated "standard" or "high_limit")
+
+### Automatic Configuration
+
+The operator automatically manages:
+- Cluster discovery settings (`dbms.cluster.discovery.resolver_type: "K8S"`)
+- Discovery version (`dbms.cluster.discovery.version: "V2_ONLY"` for 5.26+)
+- Kubernetes-specific endpoints and advertised addresses
+- Network bindings for pods
+
+### Configuration Validation
+
+The validation framework (`internal/validation/`) ensures:
+- Deprecated settings are identified and warned about
+- Clustering settings are blocked in standalone deployments
+- Memory settings are validated against container resources
+- Required settings are present for the deployment type
+
+For detailed configuration guidelines, see the [Configuration Best Practices Guide](../user_guide/guides/configuration_best_practices.md).

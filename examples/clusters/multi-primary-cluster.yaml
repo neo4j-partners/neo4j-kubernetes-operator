@@ -1,0 +1,130 @@
+# Multi-primary Neo4j Enterprise cluster example
+# This creates a cluster with multiple primary nodes for high availability
+# Uses unified clustering approach with V2_ONLY discovery for 5.26+
+
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: multi-primary-cluster
+  namespace: default
+spec:
+  # Neo4j Enterprise Edition (required for this operator)
+  edition: enterprise
+
+  # Neo4j Docker image configuration
+  image:
+    repo: neo4j
+    tag: "5.26-enterprise"  # Neo4j 5.26+ required
+    pullPolicy: IfNotPresent
+
+  # Multi-primary topology: 3 primaries + 2 secondaries
+  # Odd number of primaries recommended for optimal fault tolerance
+  topology:
+    primaries: 3      # Three primaries for high availability
+    secondaries: 2    # Two read replicas for load distribution
+
+  # Storage configuration
+  storage:
+    className: standard  # Use your cluster's default storage class
+    size: "20Gi"        # Larger storage for production workloads
+
+  # Resource allocation for production
+  resources:
+    requests:
+      memory: "4Gi"     # Initial memory allocation
+      cpu: "1"          # Initial CPU allocation
+    limits:
+      memory: "8Gi"     # Maximum memory
+      cpu: "4"          # Maximum CPU cores
+
+  # TLS enabled for production
+  tls:
+    mode: cert-manager
+    issuerRef:
+      name: ca-cluster-issuer
+      kind: ClusterIssuer
+
+  # Authentication configuration
+  auth:
+    provider: native
+    adminSecret: neo4j-admin-secret
+
+  # Service configuration
+  service:
+    type: LoadBalancer
+    annotations:
+      service.beta.kubernetes.io/aws-load-balancer-type: nlb
+
+  # Auto-scaling configuration
+  autoScaling:
+    enabled: true
+    primaries:
+      enabled: true
+      minReplicas: 3
+      maxReplicas: 7
+      metrics:
+        - type: cpu
+          target: "70%"
+        - type: memory
+          target: "80%"
+    secondaries:
+      enabled: true
+      minReplicas: 1
+      maxReplicas: 10
+      metrics:
+        - type: cpu
+          target: "60%"
+        - type: connection_count
+          target: "1000"
+
+  # Pod anti-affinity for high availability
+  affinity:
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchLabels:
+              neo4j.com/cluster: multi-primary-cluster
+          topologyKey: kubernetes.io/hostname
+
+  # Required environment variables
+  env:
+    - name: NEO4J_ACCEPT_LICENSE_AGREEMENT
+      value: "yes"      # Required for Neo4j Enterprise
+
+  # Custom Neo4j configuration for production
+  config:
+    # Memory settings
+    server.memory.heap.initial_size: "2G"
+    server.memory.heap.max_size: "4G"
+    server.memory.pagecache.size: "2G"
+
+    # Security settings
+    dbms.security.auth_enabled: "true"
+    dbms.security.procedures.unrestricted: "gds.*,apoc.*"
+
+    # Logging settings
+    dbms.logs.query.enabled: "true"
+    dbms.logs.query.threshold: "500ms"
+
+    # Performance settings
+    dbms.transaction.timeout: "60s"
+    dbms.connector.bolt.thread_pool_max_size: "200"
+
+  # Query monitoring
+  queryMonitoring:
+    enabled: true
+    slowQueryThreshold: "1s"
+    explainPlan: true
+    indexRecommendations: true
+
+---
+# Admin credentials secret (create this before applying the cluster)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: neo4j-admin-secret
+  namespace: default
+type: Opaque
+stringData:
+  username: neo4j
+  password: your-secure-password-here

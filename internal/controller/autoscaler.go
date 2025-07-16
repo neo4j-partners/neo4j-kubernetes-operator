@@ -126,6 +126,12 @@ func (as *AutoScaler) scalePrimaries(ctx context.Context, cluster *neo4jv1alpha1
 		targetReplicas = primaryConfig.MaxReplicas
 	}
 
+	// Validate minimum cluster topology requirements
+	if err := as.validateClusterTopology(cluster, targetReplicas, cluster.Spec.Topology.Secondaries); err != nil {
+		logger.Info("Cluster topology validation blocked primary scaling", "reason", err.Error())
+		return nil
+	}
+
 	// Apply scaling
 	if err := as.applyScaling(ctx, cluster, "primary", targetReplicas, decision.Reason); err != nil {
 		return fmt.Errorf("failed to apply primary scaling: %w", err)
@@ -160,6 +166,12 @@ func (as *AutoScaler) scaleSecondaries(ctx context.Context, cluster *neo4jv1alph
 	}
 	if targetReplicas > secondaryConfig.MaxReplicas {
 		targetReplicas = secondaryConfig.MaxReplicas
+	}
+
+	// Validate minimum cluster topology requirements
+	if err := as.validateClusterTopology(cluster, cluster.Spec.Topology.Primaries, targetReplicas); err != nil {
+		as.logger.Info("Cluster topology validation blocked secondary scaling", "reason", err.Error())
+		return nil
 	}
 
 	// Apply scaling
@@ -199,6 +211,28 @@ func (as *AutoScaler) validateQuorumProtection(_ context.Context, cluster *neo4j
 	healthyPrimaries := metrics.PrimaryNodes.Healthy
 	if healthyPrimaries < protection.MinHealthyPrimaries {
 		return fmt.Errorf("insufficient healthy primaries: %d < %d", healthyPrimaries, protection.MinHealthyPrimaries)
+	}
+
+	return nil
+}
+
+// validateClusterTopology checks if scaling would violate minimum cluster topology requirements
+func (as *AutoScaler) validateClusterTopology(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, targetPrimaries, targetSecondaries int32) error {
+	// Neo4jEnterpriseCluster must have either:
+	// 1. One primary AND at least one secondary (1+1 minimum)
+	// 2. Multiple primaries (2+ primaries, any number of secondaries)
+	if targetPrimaries == 1 && targetSecondaries == 0 {
+		return fmt.Errorf("invalid cluster topology: Neo4jEnterpriseCluster requires minimum cluster topology of either 1 primary + 1 secondary, or multiple primaries. Target: %d primaries, %d secondaries", targetPrimaries, targetSecondaries)
+	}
+
+	// Additional safety check: ensure at least 1 primary
+	if targetPrimaries < 1 {
+		return fmt.Errorf("invalid cluster topology: must have at least 1 primary node, target: %d", targetPrimaries)
+	}
+
+	// Additional safety check: ensure non-negative secondaries
+	if targetSecondaries < 0 {
+		return fmt.Errorf("invalid cluster topology: cannot have negative secondary nodes, target: %d", targetSecondaries)
 	}
 
 	return nil

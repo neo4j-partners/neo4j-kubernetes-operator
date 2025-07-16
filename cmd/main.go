@@ -354,6 +354,17 @@ func setupProductionControllers(mgr ctrl.Manager) error {
 			},
 		},
 		{
+			name: "Neo4jEnterpriseStandalone",
+			controller: &controller.Neo4jEnterpriseStandaloneReconciler{
+				Client:           mgr.GetClient(),
+				Scheme:           mgr.GetScheme(),
+				Recorder:         mgr.GetEventRecorderFor("neo4j-enterprise-standalone-controller"),
+				RequeueAfter:     controller.GetTestRequeueAfter(),
+				Validator:        validation.NewStandaloneValidator(),
+				ConfigMapManager: controller.NewConfigMapManager(mgr.GetClient()),
+			},
+		},
+		{
 			name: "Neo4jDatabase",
 			controller: &controller.Neo4jDatabaseReconciler{
 				Client:       mgr.GetClient(),
@@ -413,6 +424,16 @@ func setupDevelopmentControllers(mgr ctrl.Manager, controllers []string) error {
 				Validator:         validation.NewClusterValidator(mgr.GetClient()),
 				ConfigMapManager:  controller.NewConfigMapManager(mgr.GetClient()),
 			}, "Neo4jEnterpriseCluster"
+		},
+		"standalone": func() (interface{ SetupWithManager(ctrl.Manager) error }, string) {
+			return &controller.Neo4jEnterpriseStandaloneReconciler{
+				Client:           mgr.GetClient(),
+				Scheme:           mgr.GetScheme(),
+				Recorder:         mgr.GetEventRecorderFor("neo4j-enterprise-standalone-controller"),
+				RequeueAfter:     controller.GetTestRequeueAfter(),
+				Validator:        validation.NewStandaloneValidator(),
+				ConfigMapManager: controller.NewConfigMapManager(mgr.GetClient()),
+			}, "Neo4jEnterpriseStandalone"
 		},
 		"database": func() (interface{ SetupWithManager(ctrl.Manager) error }, string) {
 			return &controller.Neo4jDatabaseReconciler{
@@ -562,8 +583,9 @@ func configureLazyCache(base cache.Options, minimalResources bool) cache.Options
 	if minimalResources {
 		// Only cache Neo4j CRDs initially
 		base.ByObject = map[client.Object]cache.ByObject{
-			&neo4jv1alpha1.Neo4jEnterpriseCluster{}: {},
-			&neo4jv1alpha1.Neo4jDatabase{}:          {},
+			&neo4jv1alpha1.Neo4jEnterpriseCluster{}:    {},
+			&neo4jv1alpha1.Neo4jEnterpriseStandalone{}: {},
+			&neo4jv1alpha1.Neo4jDatabase{}:             {},
 		}
 	} else {
 		// Cache essential resources only - optimized for production
@@ -584,7 +606,8 @@ func configureSelectiveCache(base cache.Options, minimalResources bool) cache.Op
 	if minimalResources {
 		// Ultra-minimal: only cluster CRD
 		base.ByObject = map[client.Object]cache.ByObject{
-			&neo4jv1alpha1.Neo4jEnterpriseCluster{}: {},
+			&neo4jv1alpha1.Neo4jEnterpriseCluster{}:    {},
+			&neo4jv1alpha1.Neo4jEnterpriseStandalone{}: {},
 		}
 	} else {
 		// Selective: Neo4j CRDs + core resources we manage
@@ -602,6 +625,7 @@ func configureOnDemandCache(base cache.Options, minimalResources bool) cache.Opt
 	if !minimalResources {
 		// Keep cluster CRD for basic functionality
 		base.ByObject[&neo4jv1alpha1.Neo4jEnterpriseCluster{}] = cache.ByObject{}
+		base.ByObject[&neo4jv1alpha1.Neo4jEnterpriseStandalone{}] = cache.ByObject{}
 	}
 
 	return base
@@ -611,11 +635,12 @@ func configureOnDemandCache(base cache.Options, minimalResources bool) cache.Opt
 func getEssentialResourceCache() map[client.Object]cache.ByObject {
 	return map[client.Object]cache.ByObject{
 		// Neo4j CRDs - always essential
-		&neo4jv1alpha1.Neo4jEnterpriseCluster{}: {},
-		&neo4jv1alpha1.Neo4jDatabase{}:          {},
-		&neo4jv1alpha1.Neo4jBackup{}:            {},
-		&neo4jv1alpha1.Neo4jRestore{}:           {},
-		&neo4jv1alpha1.Neo4jPlugin{}:            {},
+		&neo4jv1alpha1.Neo4jEnterpriseCluster{}:    {},
+		&neo4jv1alpha1.Neo4jEnterpriseStandalone{}: {},
+		&neo4jv1alpha1.Neo4jDatabase{}:             {},
+		&neo4jv1alpha1.Neo4jBackup{}:               {},
+		&neo4jv1alpha1.Neo4jRestore{}:              {},
+		&neo4jv1alpha1.Neo4jPlugin{}:               {},
 	}
 }
 
@@ -623,10 +648,11 @@ func getEssentialResourceCache() map[client.Object]cache.ByObject {
 func getSelectiveResourceCache() map[client.Object]cache.ByObject {
 	return map[client.Object]cache.ByObject{
 		// Neo4j CRDs
-		&neo4jv1alpha1.Neo4jEnterpriseCluster{}: {},
-		&neo4jv1alpha1.Neo4jDatabase{}:          {},
-		&neo4jv1alpha1.Neo4jBackup{}:            {},
-		&neo4jv1alpha1.Neo4jRestore{}:           {},
+		&neo4jv1alpha1.Neo4jEnterpriseCluster{}:    {},
+		&neo4jv1alpha1.Neo4jEnterpriseStandalone{}: {},
+		&neo4jv1alpha1.Neo4jDatabase{}:             {},
+		&neo4jv1alpha1.Neo4jBackup{}:               {},
+		&neo4jv1alpha1.Neo4jRestore{}:              {},
 	}
 }
 

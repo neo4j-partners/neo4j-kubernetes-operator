@@ -109,6 +109,7 @@ rules:
   - neo4jbackups
   - neo4jdatabases
   - neo4jenterpriseclusters
+  - neo4jenterprisestandalones
   - neo4jplugins
   - neo4jrestores
   verbs:
@@ -125,6 +126,7 @@ rules:
   - neo4jbackups/finalizers
   - neo4jdatabases/finalizers
   - neo4jenterpriseclusters/finalizers
+  - neo4jenterprisestandalones/finalizers
   - neo4jplugins/finalizers
   - neo4jrestores/finalizers
   verbs:
@@ -135,6 +137,7 @@ rules:
   - neo4jbackups/status
   - neo4jdatabases/status
   - neo4jenterpriseclusters/status
+  - neo4jenterprisestandalones/status
   - neo4jplugins/status
   - neo4jrestores/status
   verbs:

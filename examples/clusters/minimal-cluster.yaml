@@ -1,11 +1,11 @@
-# Single-primary Neo4j Enterprise cluster example
-# This creates a single-primary cluster with RAFT enabled for seamless scaling
-# Suitable for development, testing, and small production workloads that may need to scale
+# Minimal Neo4j Enterprise cluster example
+# This creates a cluster with minimum topology: 1 primary + 1 secondary
+# Uses unified clustering approach with RAFT enabled for full cluster capabilities
 
 apiVersion: neo4j.neo4j.com/v1alpha1
 kind: Neo4jEnterpriseCluster
 metadata:
-  name: single-node-cluster
+  name: minimal-cluster
   namespace: default
 spec:
   # Neo4j Enterprise Edition (required for this operator)
@@ -17,11 +17,11 @@ spec:
     tag: "5.26-enterprise"  # Neo4j 5.26+ required
     pullPolicy: IfNotPresent
 
-  # Single-primary topology: 1 primary, 0 secondaries
-  # Uses unified clustering approach with RAFT enabled for future scaling
+  # Minimal cluster topology: 1 primary + 1 secondary (minimum required)
+  # Uses unified clustering approach with V2_ONLY discovery for 5.26+
   topology:
-    primaries: 1      # Single primary - can be scaled up to multi-node
-    secondaries: 0    # No read replicas initially
+    primaries: 1      # Single primary with clustering enabled
+    secondaries: 1    # One read replica for minimum cluster topology
 
   # Storage configuration
   storage:
@@ -51,3 +51,6 @@ spec:
 # kubectl create secret generic neo4j-admin-secret \
 #   --from-literal=username=neo4j \
 #   --from-literal=password=your-secure-password
+#
+# NOTE: For single-node deployments without clustering, use Neo4jEnterpriseStandalone instead.
+# See examples/standalone/single-node-standalone.yaml for non-clustered deployments.

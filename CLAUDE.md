@@ -4,14 +4,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is the Neo4j Enterprise Operator for Kubernetes, which manages Neo4j Enterprise clusters (v5.26+) in Kubernetes environments. Built with Kubebuilder framework. The operator supports only Neo4j database 5.26+ - Semver releases from 5.26.0 and up, Calver releases 2025.01.0 and up, Only Discovery v2 should be supported in 5.26.0 and other supported semver releases. All tests, samples, documents should enforce this.
+This is the Neo4j Enterprise Operator for Kubernetes, which manages Neo4j Enterprise deployments (v5.26+) in Kubernetes environments. Built with Kubebuilder framework. The operator supports only Neo4j database 5.26+ - Semver releases from 5.26.0 and up, Calver releases 2025.01.0 and up, Only Discovery v2 should be supported in 5.26.0 and other supported semver releases. All tests, samples, documents should enforce this.
+
+**Deployment Types:**
+- **Neo4jEnterpriseCluster**: For clustered deployments requiring high availability (minimum 1 primary + 1 secondary OR 2+ primaries)
+- **Neo4jEnterpriseStandalone**: For single-node deployments in single mode (development/testing)
 
 ## Architecture
 
 **Key Components:**
-- **CRDs**: Neo4jEnterpriseCluster, Neo4jBackup/Restore, Neo4jDatabase, Neo4jPlugin
-- **Controllers**: Enterprise cluster controller with autoscaling
-- **Webhooks**: Validation webhooks integrated with cert-manager
+- **CRDs**: Neo4jEnterpriseCluster, Neo4jEnterpriseStandalone, Neo4jBackup/Restore, Neo4jDatabase, Neo4jPlugin
+- **Controllers**: Enterprise cluster controller with autoscaling, standalone controller for single-node deployments
+- **Validation**: Client-side validation with strict topology requirements
 
 **Directory Structure:**
 - `api/v1alpha1/` - CRD type definitions
@@ -43,18 +47,23 @@ make operator-setup       # Deploy operator to test cluster
 
 ### Quick Testing with Examples
 ```bash
-# Deploy a single-node cluster for testing
+# Deploy a standalone instance for development
 kubectl create secret generic neo4j-admin-secret \
   --from-literal=username=neo4j --from-literal=password=admin123
-kubectl apply -f examples/clusters/single-node.yaml
+kubectl apply -f examples/standalone/single-node-standalone.yaml
 
-# Check cluster status
-kubectl get neo4jenterprisecluster
+# Check standalone status
+kubectl get neo4jenterprisestandalone
 kubectl get pods
 
-# Access Neo4j Browser
-kubectl port-forward svc/single-node-cluster-client 7474:7474 &
+# Access Neo4j Browser (standalone)
+kubectl port-forward svc/standalone-neo4j-service 7474:7474 &
 open http://localhost:7474
+
+# Or deploy a minimal cluster for testing
+kubectl apply -f examples/clusters/minimal-cluster.yaml
+kubectl get neo4jenterprisecluster
+kubectl port-forward svc/minimal-cluster-client 7474:7474 &
 ```
 
 ### Testing
@@ -204,14 +213,22 @@ PRs must pass all checks. Use conventional commits (feat:, fix:, docs:).
   - Only Discovery v2 should be supported in 5.26.0 and other supported semver releases.
   - All tests, samples, documents should enforce this
 
-### Unified Configuration Approach
+### Deployment Configuration Approach
 
-**Important**: The operator uses a unified clustering approach for all deployment sizes:
+**Important**: The operator now uses two distinct deployment modes:
 
-- **No Special Single-Node Mode**: All deployments use clustering infrastructure, even single-primary clusters
-- **RAFT Enabled**: All deployments use `internal.dbms.single_raft_enabled=true` for seamless scaling
-- **Scalable by Design**: Single-primary clusters can be scaled to multi-node without data migration
-- **No `dbms.mode=SINGLE`**: The deprecated single-node mode is not used
+**Neo4jEnterpriseCluster** (Clustered Deployments):
+- **Minimum Topology**: Requires either 1 primary + 1 secondary OR 2+ primaries
+- **RAFT Enabled**: Uses `internal.dbms.single_raft_enabled=true` for seamless scaling
+- **V2_ONLY Discovery**: Uses `dbms.cluster.discovery.version=V2_ONLY` for Neo4j 5.26+
+- **Scalable by Design**: Can be scaled up/down while respecting minimum topology requirements
+
+**Neo4jEnterpriseStandalone** (Single-Node Deployments):
+- **Single Node Only**: Fixed at 1 replica, does not support scaling to multiple nodes
+- **Unified Clustering**: Uses clustering infrastructure with single member (Neo4j 5.26+ approach)
+- **No dbms.mode**: The `dbms.mode=SINGLE` setting is deprecated in Neo4j 5.x+ and should never be used
+- **No Scaling**: For multi-node deployments, use Neo4jEnterpriseCluster instead
+- **Development/Testing**: Ideal for development and testing environments
 
 ### Version-Specific Configuration
 
@@ -236,9 +253,152 @@ The operator supports automatic scaling from single-primary to multi-node cluste
   - `detectSingleNodeToMultiNodeScaling()`
   - `handleSingleNodeToMultiNodeScaling()`
 
+### Unified Configuration Approach
+
+**Important**: The operator uses a unified clustering approach for all deployment types:
+
+- **No Special Single-Node Mode**: All deployments use clustering infrastructure, even standalone single-node deployments
+- **RAFT Enabled**: All deployments use `internal.dbms.single_raft_enabled=true` for consistency
+- **Different Scaling Capabilities**:
+  - Neo4jEnterpriseCluster: Supports scaling up/down while respecting topology constraints
+  - Neo4jEnterpriseStandalone: Fixed at 1 replica, does not support scaling
+- **No `dbms.mode=SINGLE`**: The deprecated single-node mode is not used (Neo4j 4.x only)
+
+### Neo4j 5.26+ Configuration Notes
+
+**Critical**: Neo4j 5.26+ configuration differs from older versions:
+
+- **Deprecated Settings**: Never use `dbms.mode=SINGLE` (Neo4j 4.x only, no longer supported)
+- **Clustering Infrastructure**: All deployments use clustering protocols, even single-node
+- **Environment Variables**: Prefer environment variables over configuration file properties
+- **Configuration Validation**: Neo4j 5.26+ has strict validation that rejects deprecated settings
+
+### Neo4j 4.x to 5.x Configuration Migration
+
+**Important**: The operator only supports Neo4j 5.26+. All Neo4j 4.x settings must be avoided:
+
+**Removed Settings (NEVER USE)**:
+- `dbms.mode=SINGLE` - Completely removed in 5.x, use clustering infrastructure for all deployments
+- `causal_clustering.*` - Replaced with `dbms.cluster.*` and `server.cluster.*` prefixes
+- `dbms.logs.debug.format`, `dbms.logs.debug.level` - Logging settings restructured
+- `metrics.bolt.messages.enabled` and other `metrics.bolt.*` - Metrics configuration changed
+- Fabric-related configurations - Fabric functionality restructured
+
+**Deprecated Settings to Avoid**:
+- `dbms.cluster.discovery.endpoints` - Deprecated in 5.23, use Kubernetes discovery
+- `server.groups` - Deprecated in 5.4
+- `db.cluster.raft.leader_transfer.priority_group` - Deprecated in 5.4
+
+**Configuration Best Practices**:
+1. **Discovery**: Always use `dbms.cluster.discovery.version=V2_ONLY` for 5.26+
+2. **Kubernetes**: Use version-appropriate parameters:
+   - 5.x semver: `dbms.kubernetes.service_port_name` and `dbms.kubernetes.discovery.v2.service_port_name`
+   - 2025.x+ calver: `dbms.kubernetes.discovery.service_port_name`
+3. **SSL/TLS**: Use `dbms.ssl.policy.{scope}.*` format, not legacy SSL settings
+4. **Clustering**: Use `dbms.cluster.*` and `server.cluster.*`, not `causal_clustering.*`
+5. **Validation**: Test configurations - Neo4j 5.x will reject invalid/deprecated settings at startup
+
+### TLS/SSL Configuration
+
+The operator supports TLS/SSL encryption for both Neo4jEnterpriseCluster and Neo4jEnterpriseStandalone deployments using cert-manager for automatic certificate management.
+
+**Prerequisites**:
+- cert-manager must be installed in the cluster
+- A ClusterIssuer or Issuer must be available (development clusters have `ca-cluster-issuer` pre-configured)
+
+**Configuration**:
+```yaml
+spec:
+  tls:
+    mode: cert-manager
+    issuerRef:
+      name: ca-cluster-issuer
+      kind: ClusterIssuer
+```
+
+**SSL Policy Implementation**:
+- **Neo4j 5.26+**: Uses `dbms.ssl.policy.{scope}.enabled=true` format
+- **Neo4j 2025.x+**: Uses same SSL policy framework
+- **Supported Scopes**: `https` (web interface), `bolt` (database connections)
+
+**Automatic Certificate Management**:
+- Certificates are automatically created via cert-manager
+- Certificates include all necessary DNS names for service discovery
+- Certificate renewal is handled automatically by cert-manager
+- Certificates are mounted at `/ssl/` in Neo4j containers
+
+**Example TLS Configuration**:
+```yaml
+# Generated Neo4j configuration for TLS
+server.https.enabled=true
+server.https.listen_address=0.0.0.0:7473
+server.bolt.enabled=true
+server.bolt.listen_address=0.0.0.0:7687
+server.bolt.tls_level=REQUIRED
+
+# SSL Policy for HTTPS
+dbms.ssl.policy.https.enabled=true
+dbms.ssl.policy.https.base_directory=/ssl
+dbms.ssl.policy.https.private_key=tls.key
+dbms.ssl.policy.https.public_certificate=tls.crt
+dbms.ssl.policy.https.client_auth=NONE
+dbms.ssl.policy.https.tls_versions=TLSv1.3,TLSv1.2
+
+# SSL Policy for Bolt
+dbms.ssl.policy.bolt.enabled=true
+dbms.ssl.policy.bolt.base_directory=/ssl
+dbms.ssl.policy.bolt.private_key=tls.key
+dbms.ssl.policy.bolt.public_certificate=tls.crt
+dbms.ssl.policy.bolt.client_auth=NONE
+dbms.ssl.policy.bolt.tls_versions=TLSv1.3,TLSv1.2
+```
+
+**Testing TLS Connections**:
+```bash
+# Test HTTPS endpoint
+curl -k https://localhost:7473
+
+# Test Bolt TLS (using Neo4j driver)
+kubectl port-forward svc/deployment-service 7687:7687
+# Connect using bolt+ssc://localhost:7687
+```
+
+## Configuration Settings Validation
+
+When working with Neo4j configurations, ensure you use the correct settings for Neo4j 5.26+:
+
+### Quick Reference - Deprecated vs Correct Settings
+
+| Deprecated (Don't Use) | Correct (Use This) | Notes |
+|------------------------|-------------------|-------|
+| `dbms.memory.heap.initial_size` | `server.memory.heap.initial_size` | Changed in 5.x |
+| `dbms.memory.heap.max_size` | `server.memory.heap.max_size` | Changed in 5.x |
+| `dbms.memory.pagecache.size` | `server.memory.pagecache.size` | Changed in 5.x |
+| `dbms.connector.bolt.tls_level` | `server.bolt.tls_level` | Changed in 5.x |
+| `dbms.connector.https.enabled` | `server.https.enabled` | Changed in 5.x |
+| `dbms.mode=SINGLE` | (Don't set) | Removed in 5.x, use unified clustering |
+| `causal_clustering.*` | `dbms.cluster.*` | Renamed in 5.x |
+| `dbms.cluster.discovery.type` | `dbms.cluster.discovery.resolver_type` | Renamed |
+| `db.format: "standard"` | `db.format: "block"` | Deprecated in 5.23 |
+| `db.format: "high_limit"` | `db.format: "block"` | Deprecated in 5.23 |
+| `server.groups` | `initial.server.tags` | Deprecated in 5.4 |
+
+### Testing Configuration Changes
+
+When testing configuration changes:
+1. Always check Neo4j logs for deprecation warnings
+2. Verify the operator doesn't add deprecated settings
+3. Test with both Neo4j 5.26.x and 2025.x images
+4. Ensure examples use correct settings
+
+### Configuration Documentation
+
+All documentation should reference the [Configuration Best Practices Guide](docs/user_guide/guides/configuration_best_practices.md) which contains:
+- Complete list of deprecated settings
+- Migration guidance from 4.x to 5.x
+- Examples with correct settings
+- Version-specific considerations
+
 ## Reports
 
 All reports that Claude generates should go into the reports directory. The reports can be reviewed by Claude to determine changes that were made.
-
-## Important Considerations
-  - Compliance requirements @docs/reports/neo4j-operator-comprehensive-audit-report.md
