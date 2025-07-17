@@ -133,8 +133,8 @@ var _ = Describe("Neo4jEnterpriseStandalone Controller", func() {
 					return false
 				}
 
-				// Check that unified clustering is configured for standalone
-				return containsString(neo4jConf, "internal.dbms.single_raft_enabled=true")
+				// Check that basic configuration exists
+				return len(neo4jConf) > 0 && containsString(neo4jConf, "server.default_listen_address")
 			}, timeout, interval).Should(BeTrue())
 
 			By("Waiting for StatefulSet to be created")
@@ -180,8 +180,7 @@ var _ = Describe("Neo4jEnterpriseStandalone Controller", func() {
 
 				// Verify no clustering configurations are present
 				return !containsString(neo4jConf, "dbms.cluster.") &&
-					!containsString(neo4jConf, "dbms.kubernetes.") &&
-					!containsString(neo4jConf, "internal.dbms.single_raft_enabled")
+					!containsString(neo4jConf, "dbms.kubernetes.")
 			}, timeout, interval).Should(BeTrue())
 		})
 	})
@@ -214,9 +213,8 @@ var _ = Describe("Neo4jEnterpriseStandalone Controller", func() {
 					return false
 				}
 
-				// Verify custom config is present along with unified clustering
-				return containsString(neo4jConf, "internal.dbms.single_raft_enabled=true") &&
-					containsString(neo4jConf, "server.memory.heap.initial_size=1G") &&
+				// Verify custom config is present
+				return containsString(neo4jConf, "server.memory.heap.initial_size=1G") &&
 					containsString(neo4jConf, "server.memory.heap.max_size=2G") &&
 					containsString(neo4jConf, "dbms.logs.query.enabled=true")
 			}, timeout, interval).Should(BeTrue())
@@ -249,8 +247,8 @@ var _ = Describe("Neo4jEnterpriseStandalone Controller", func() {
 					return false
 				}
 
-				// Verify unified clustering is configured (TLS is disabled by default)
-				return containsString(neo4jConf, "internal.dbms.single_raft_enabled=true")
+				// Verify basic configuration exists (TLS is disabled by default)
+				return len(neo4jConf) > 0 && containsString(neo4jConf, "server.default_listen_address")
 			}, timeout, interval).Should(BeTrue())
 		})
 	})

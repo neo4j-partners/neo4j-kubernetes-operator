@@ -78,42 +78,44 @@ The operator uses a **unified cluster formation approach** that ensures all node
 
 ### Cluster Formation Strategy
 
-The operator employs different strategies based on cluster topology:
+The operator uses a unified clustering approach for all deployments:
 
-#### Single-Node Clusters (1 Primary, 0 Secondaries)
-- Uses `internal.dbms.single_raft_enabled=true` for single-node operation
-- Can scale to multi-node later without restart
-- No coordination required during startup
+#### Unified Cluster Formation
+- All deployments use Neo4j's clustering infrastructure (even single-node)
+- Automatic handling of discovery configuration based on Neo4j version
+- Coordinated startup ensures data consistency
 
-#### Multi-Node Clusters (2+ Primaries or Any Secondaries)
-- Uses **coordinated cluster formation** with Kubernetes service discovery
-- Implements proper minimum primaries logic to prevent split-brain scenarios
-- All pods use identical configuration and coordinate during startup
+#### Parallel Pod Management
+- Uses **parallel pod startup** for faster cluster formation
+- All pods start simultaneously and coordinate during bootstrap
+- Prevents split-brain scenarios through proper coordination
 
-### Minimum Primaries Logic
+### Cluster Formation Strategy
 
-The operator automatically sets `dbms.cluster.minimum_initial_system_primaries_count` based on cluster size:
+The operator uses a unified approach where all primaries must be present for initial cluster formation:
 
-| Cluster Size | Minimum Required | Rationale |
-|--------------|------------------|-----------|
-| 1 primary | 1 | Single-node operation |
-| 2 primaries | 2 | Both nodes required for coordination |
-| 3+ primaries | `(total_primaries / 2) + 1` | Quorum-based for fault tolerance |
+| Cluster Size | Formation Requirement | Rationale |
+|--------------|----------------------|-----------|
+| 1 primary | 1 node required | Single-node cluster |
+| 2 primaries | 2 nodes required | Prevents split-brain |
+| 3+ primaries | All nodes required | Ensures consistent initial state |
+
+This approach ensures that clusters form with a complete and consistent initial membership.
 
 ### Cluster Formation Process
 
-1. **Resource Creation**: The operator creates all necessary Kubernetes resources (StatefulSets, Services, RBAC)
-2. **Pod Startup**: StatefulSets create pods sequentially (pod-0, then pod-1, etc.)
-3. **Coordination Phase**: All pods wait for the minimum required number to be available
-4. **Unified Bootstrap**: Once minimum requirements are met, all pods coordinate cluster formation
-5. **Service Ready**: Cluster accepts connections only after successful formation
+1. **Resource Creation**: The operator creates all Kubernetes resources (StatefulSets, Services, RBAC)
+2. **Parallel Pod Startup**: All pods start simultaneously (not sequentially)
+3. **Discovery Phase**: Pods discover each other via Kubernetes service discovery
+4. **Coordination Phase**: All pods wait for complete membership before forming cluster
+5. **Service Ready**: Cluster accepts connections after successful formation
 
 ### Important Considerations
 
-- **2-Node Clusters**: Require both nodes to start together. If one fails, the remaining node cannot form quorum.
-- **3+ Node Clusters**: Use quorum logic for better fault tolerance during formation.
-- **Startup Time**: Multi-node clusters may take longer to start as they coordinate formation.
-- **Pod Readiness**: Pods are marked ready only after successful cluster formation.
+- **Complete Membership**: All configured primary nodes must be available for initial cluster formation
+- **Startup Time**: Cluster formation typically completes within 2-3 minutes
+- **Pod Readiness**: Pods are marked ready only after successful cluster formation
+- **Scaling**: After initial formation, clusters can be scaled following Neo4j's online scaling procedures
 
 ## Basic Cluster Configuration
 

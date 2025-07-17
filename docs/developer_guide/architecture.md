@@ -121,7 +121,7 @@ The operator includes intelligent resource management capabilities:
   - Neo4j 5.26.x: `dbms.kubernetes.discovery.v2.service_port_name=tcp-discovery`
   - Neo4j 2025.x: `dbms.kubernetes.discovery.service_port_name=tcp-discovery`
   - Implementation: `internal/resources/cluster.go:getKubernetesDiscoveryParameter()`
-- **Mode Setting**: Automatically sets appropriate `dbms.mode` based on deployment type
+- **Unified Clustering**: All deployments use clustering infrastructure (no special single mode)
 
 ## RBAC and Security
 

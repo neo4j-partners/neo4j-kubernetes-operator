@@ -101,7 +101,7 @@ open http://localhost:7474
 
 - **Use case**: Development, testing, small workloads that may need to scale
 - **Topology**: 1 primary, 0 secondaries (scalable to multi-node)
-- **Mode**: Unified clustering with RAFT enabled (`internal.dbms.single_raft_enabled=true`)
+- **Mode**: Unified clustering (all deployments use clustering infrastructure)
 - **TLS**: Disabled for simplicity
 - **Resources**: 2Gi RAM, 500m CPU
 
@@ -109,7 +109,7 @@ open http://localhost:7474
 
 - **Use case**: Production, high availability
 - **Topology**: 3 primaries, 0 secondaries
-- **Mode**: Clustered with quorum
+- **Mode**: Multi-node clustered deployment
 - **TLS**: cert-manager enabled
 - **Resources**: 4Gi RAM, 1 CPU
 - **Features**: Production configuration, monitoring enabled
@@ -250,22 +250,22 @@ config:
 
 ### Cluster Formation Process
 
-Multi-node Neo4j clusters follow a specific startup sequence:
+Neo4j clusters use parallel pod startup with coordinated formation:
 
-1. **Bootstrap Pod (ordinal 0)**: Starts first and forms the initial cluster
-2. **Joining Pods (ordinal 1+)**: Start sequentially after previous pod is ready
-3. **Readiness Timing**: Each pod takes 1-2 minutes to become ready
-4. **Total Time**: 3-node cluster typically takes 3-5 minutes to fully deploy
+1. **Parallel Startup**: All pods start simultaneously for faster deployment
+2. **Discovery Phase**: Pods discover each other via Kubernetes service discovery
+3. **Coordination**: All primary nodes coordinate to form initial cluster membership
+4. **Total Time**: Typical cluster formation completes in 2-3 minutes
 
 ### Expected Timeline
 
-| Pod | Status | Timing |
-|-----|--------|--------|
-| pod-0 | Bootstrap, forms cluster | 0-2 minutes |
-| pod-1 | Joins cluster | 2-4 minutes |
-| pod-2 | Joins cluster | 4-6 minutes |
+| Phase | Activity | Timing |
+|-------|----------|--------|
+| Resource Creation | StatefulSets, Services, ConfigMaps | 0-30 seconds |
+| Pod Startup | All pods start in parallel | 30-60 seconds |
+| Cluster Formation | Coordination and membership | 1-3 minutes |
 
-**Note**: This is normal StatefulSet behavior - pods start sequentially for data consistency.
+**Note**: The operator uses parallel pod management for efficient cluster formation while maintaining data consistency.
 
 ## Troubleshooting
 

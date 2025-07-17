@@ -92,10 +92,10 @@ config:
   dbms.logs.query.threshold: "1s"
 ```
 
-**Restricted Configurations**: The following clustering-related configurations are not allowed:
+**Restricted Configurations**: The following clustering-related configurations are not allowed (they are managed automatically by the operator):
 - `dbms.cluster.*`
 - `dbms.kubernetes.*`
-- `internal.dbms.single_raft_enabled`
+- Any internal clustering settings
 
 #### `tls` (TLSSpec)
 TLS/SSL configuration for secure connections.

@@ -16,9 +16,9 @@ kubectl apply -f https://github.com/neo4j-labs/neo4j-kubernetes-operator/release
 
 This command applies the necessary Custom Resource Definitions (CRDs), the operator `Deployment`, and all the required RBAC permissions (`ServiceAccount`, `ClusterRole`, `ClusterRoleBinding`).
 
-### 2. Using Helm
+### 2. Using Helm (For Operator Installation)
 
-Using the official Neo4j Helm chart is the recommended method for production deployments. It allows for greater customization and easier management of the operator's configuration.
+You can also install the Neo4j Kubernetes Operator using Helm. This method provides greater customization options for the operator deployment itself.
 
 ```bash
 # Add the Neo4j Helm repository

@@ -116,9 +116,9 @@ var _ = Describe("Multi-Node Cluster Formation Integration Tests", func() {
 					return fmt.Errorf("startup script does not contain unified bootstrap approach")
 				}
 
-				// Check for proper minimum primaries setting for 2-node cluster
-				if !containsString(startupScript, "MIN_PRIMARIES=2") {
-					return fmt.Errorf("startup script does not set MIN_PRIMARIES=2 for 2-node cluster")
+				// Check for unified cluster formation (all primaries required)
+				if !containsString(startupScript, "MIN_PRIMARIES=${TOTAL_PRIMARIES}") {
+					return fmt.Errorf("startup script does not contain unified cluster formation logic")
 				}
 
 				// Check for Kubernetes service discovery
@@ -270,9 +270,9 @@ var _ = Describe("Multi-Node Cluster Formation Integration Tests", func() {
 					return fmt.Errorf("startup.sh not found in ConfigMap")
 				}
 
-				// Check for quorum logic (3 primaries should require 2 for bootstrap)
-				if !containsString(startupScript, "MIN_PRIMARIES=$((TOTAL_PRIMARIES / 2 + 1))") {
-					return fmt.Errorf("startup script does not contain quorum logic for 3+ node cluster")
+				// Check for unified cluster formation (all primaries required for bootstrap)
+				if !containsString(startupScript, "MIN_PRIMARIES=${TOTAL_PRIMARIES}") {
+					return fmt.Errorf("startup script does not contain unified cluster formation logic")
 				}
 
 				return nil

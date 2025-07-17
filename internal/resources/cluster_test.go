@@ -303,3 +303,90 @@ func TestBuildDiscoveryRoleBindingForEnterprise(t *testing.T) {
 	assert.Equal(t, "Role", roleBinding.RoleRef.Kind)
 	assert.Equal(t, "test-cluster-discovery", roleBinding.RoleRef.Name)
 }
+
+func TestBuildCertificateForEnterprise_DNSNames(t *testing.T) {
+	tests := []struct {
+		name       string
+		cluster    *neo4jv1alpha1.Neo4jEnterpriseCluster
+		wantDNS    []string
+		notWantDNS []string
+	}{
+		{
+			name: "Certificate includes headless service DNS names",
+			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+				},
+				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
+					Topology: neo4jv1alpha1.TopologyConfiguration{
+						Primaries:   2,
+						Secondaries: 1,
+					},
+					TLS: &neo4jv1alpha1.TLSSpec{
+						Mode: "cert-manager",
+						IssuerRef: &neo4jv1alpha1.IssuerRef{
+							Name: "test-issuer",
+							Kind: "ClusterIssuer",
+						},
+					},
+				},
+			},
+			wantDNS: []string{
+				// Client service
+				"test-cluster-client",
+				"test-cluster-client.default.svc.cluster.local",
+				// Internals service
+				"test-cluster-internals",
+				"test-cluster-internals.default.svc.cluster.local",
+				// Headless service
+				"test-cluster-headless",
+				"test-cluster-headless.default.svc.cluster.local",
+				// Primary pods via headless service
+				"test-cluster-primary-0.test-cluster-headless",
+				"test-cluster-primary-0.test-cluster-headless.default.svc.cluster.local",
+				"test-cluster-primary-1.test-cluster-headless",
+				"test-cluster-primary-1.test-cluster-headless.default.svc.cluster.local",
+				// Secondary pod via headless service
+				"test-cluster-secondary-0.test-cluster-headless",
+				"test-cluster-secondary-0.test-cluster-headless.default.svc.cluster.local",
+				// Primary pods via internals service
+				"test-cluster-primary-0.test-cluster-internals",
+				"test-cluster-primary-0.test-cluster-internals.default.svc.cluster.local",
+				// Secondary pod via internals service
+				"test-cluster-secondary-0.test-cluster-internals",
+				"test-cluster-secondary-0.test-cluster-internals.default.svc.cluster.local",
+			},
+		},
+		{
+			name: "No certificate when TLS disabled",
+			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+				},
+				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
+					Topology: neo4jv1alpha1.TopologyConfiguration{
+						Primaries: 1,
+					},
+				},
+			},
+			wantDNS: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cert := resources.BuildCertificateForEnterprise(tt.cluster)
+			if tt.wantDNS == nil {
+				assert.Nil(t, cert)
+				return
+			}
+
+			assert.NotNil(t, cert)
+			for _, dns := range tt.wantDNS {
+				assert.Contains(t, cert.Spec.DNSNames, dns, "Certificate should include DNS name: %s", dns)
+			}
+		})
+	}
+}

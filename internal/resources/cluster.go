@@ -381,6 +381,11 @@ func BuildCertificateForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster
 		fmt.Sprintf("%s-internals.%s", cluster.Name, cluster.Namespace),
 		fmt.Sprintf("%s-internals.%s.svc", cluster.Name, cluster.Namespace),
 		fmt.Sprintf("%s-internals.%s.svc.cluster.local", cluster.Name, cluster.Namespace),
+		// Add headless service DNS names
+		fmt.Sprintf("%s-headless", cluster.Name),
+		fmt.Sprintf("%s-headless.%s", cluster.Name, cluster.Namespace),
+		fmt.Sprintf("%s-headless.%s.svc", cluster.Name, cluster.Namespace),
+		fmt.Sprintf("%s-headless.%s.svc.cluster.local", cluster.Name, cluster.Namespace),
 	}
 
 	// Add individual StatefulSet pods
@@ -392,6 +397,11 @@ func BuildCertificateForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster
 			fmt.Sprintf("%s.%s-internals.%s", podName, cluster.Name, cluster.Namespace),
 			fmt.Sprintf("%s.%s-internals.%s.svc", podName, cluster.Name, cluster.Namespace),
 			fmt.Sprintf("%s.%s-internals.%s.svc.cluster.local", podName, cluster.Name, cluster.Namespace),
+			// Add headless service DNS names for pod
+			fmt.Sprintf("%s.%s-headless", podName, cluster.Name),
+			fmt.Sprintf("%s.%s-headless.%s", podName, cluster.Name, cluster.Namespace),
+			fmt.Sprintf("%s.%s-headless.%s.svc", podName, cluster.Name, cluster.Namespace),
+			fmt.Sprintf("%s.%s-headless.%s.svc.cluster.local", podName, cluster.Name, cluster.Namespace),
 		)
 	}
 
@@ -403,6 +413,11 @@ func BuildCertificateForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster
 			fmt.Sprintf("%s.%s-internals.%s", podName, cluster.Name, cluster.Namespace),
 			fmt.Sprintf("%s.%s-internals.%s.svc", podName, cluster.Name, cluster.Namespace),
 			fmt.Sprintf("%s.%s-internals.%s.svc.cluster.local", podName, cluster.Name, cluster.Namespace),
+			// Add headless service DNS names for pod
+			fmt.Sprintf("%s.%s-headless", podName, cluster.Name),
+			fmt.Sprintf("%s.%s-headless.%s", podName, cluster.Name, cluster.Namespace),
+			fmt.Sprintf("%s.%s-headless.%s.svc", podName, cluster.Name, cluster.Namespace),
+			fmt.Sprintf("%s.%s-headless.%s.svc.cluster.local", podName, cluster.Name, cluster.Namespace),
 		)
 	}
 

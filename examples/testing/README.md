@@ -7,7 +7,6 @@ This directory contains example configurations used for testing and development 
 - **neo4j-2025-cluster.yaml**: Example cluster using Neo4j 2025.x (CalVer) for testing V2_ONLY discovery configuration
 - **neo4j-526-cluster.yaml**: Example cluster using Neo4j 5.26 (SemVer) for testing V2_ONLY discovery configuration
 - **test-1primary-1secondary-cluster.yaml**: Minimal cluster topology for testing cluster formation
-- **helm-test-values.yaml**: Values file for testing with Neo4j Helm charts
 
 ## Usage
 

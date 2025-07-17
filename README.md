@@ -113,7 +113,7 @@ Complete CRD documentation for all custom resources:
 ### 🏗️ Core Capabilities
 - **Dual Deployment Modes**: Choose between clustered (Neo4jEnterpriseCluster) or standalone (Neo4jEnterpriseStandalone) deployments
 - **Enterprise Clusters**: Deploy Neo4j Enterprise with clustering support (minimum 1 primary + 1 secondary or multiple primaries)
-- **Standalone Deployments**: Single-node Neo4j instances running in single mode for development and testing
+- **Standalone Deployments**: Single-node Neo4j instances using unified clustering for development and testing
 - **High Availability**: Multi-replica clusters with automatic leader election and V2_ONLY discovery
 - **Persistent Storage**: Configurable storage classes and volume management
 - **Rolling Updates**: Zero-downtime Neo4j version upgrades
