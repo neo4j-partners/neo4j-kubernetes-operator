@@ -219,7 +219,7 @@ PRs must pass all checks. Use conventional commits (feat:, fix:, docs:).
 
 **Neo4jEnterpriseCluster** (Clustered Deployments):
 - **Minimum Topology**: Requires either 1 primary + 1 secondary OR 2+ primaries
-- **RAFT Enabled**: Uses `internal.dbms.single_raft_enabled=true` for seamless scaling
+- **Unified Clustering**: Uses standard clustering infrastructure (no special single-raft mode)
 - **V2_ONLY Discovery**: Uses `dbms.cluster.discovery.version=V2_ONLY` for Neo4j 5.26+
 - **Scalable by Design**: Can be scaled up/down while respecting minimum topology requirements
 
@@ -242,23 +242,13 @@ PRs must pass all checks. Use conventional commits (feat:, fix:, docs:).
 
 The operator automatically detects the Neo4j version from the image tag and applies the correct parameters. This is implemented in `internal/resources/cluster.go` via the `getKubernetesDiscoveryParameter()` function.
 
-### Automatic Scaling Transitions
-
-The operator supports automatic scaling from single-primary to multi-node clusters:
-
-- **Detection**: Controller detects topology changes from 1 primary to multiple primaries
-- **Restart Logic**: Automatically restarts existing pods with multi-node configuration
-- **Configuration Update**: Applies proper Kubernetes discovery settings for cluster formation
-- **Implementation**: See `neo4jenterprisecluster_controller.go` functions:
-  - `detectSingleNodeToMultiNodeScaling()`
-  - `handleSingleNodeToMultiNodeScaling()`
 
 ### Unified Configuration Approach
 
 **Important**: The operator uses a unified clustering approach for all deployment types:
 
 - **No Special Single-Node Mode**: All deployments use clustering infrastructure, even standalone single-node deployments
-- **RAFT Enabled**: All deployments use `internal.dbms.single_raft_enabled=true` for consistency
+- **Standard Clustering**: Uses Neo4j's standard clustering without special single-raft configurations
 - **Different Scaling Capabilities**:
   - Neo4jEnterpriseCluster: Supports scaling up/down while respecting topology constraints
   - Neo4jEnterpriseStandalone: Fixed at 1 replica, does not support scaling
@@ -398,6 +388,108 @@ All documentation should reference the [Configuration Best Practices Guide](docs
 - Migration guidance from 4.x to 5.x
 - Examples with correct settings
 - Version-specific considerations
+
+## Neo4j Kubernetes Discovery Architecture
+
+### Service Discovery Fix (2025-07-17)
+
+**Problem**: Neo4j Kubernetes discovery was finding multiple services (headless + internals) with the same pod endpoints, causing confusion in cluster formation.
+
+**Root Cause**: Both headless and internals services were being discovered because they both had endpoints matching the discovery label selector `neo4j.com/service-type=internals`.
+
+**Solution**: Modified service architecture to ensure only headless service is discovered:
+
+1. **Discovery Label Selector**: Changed from `neo4j.com/service-type=internals` to `neo4j.com/clustering=true`
+2. **Service Labels**:
+   - Headless service: Has `neo4j.com/clustering=true` (discoverable)
+   - Internals service: No clustering label (not discoverable)
+3. **DNS Resolution**: Headless service resolves to individual pod IPs (required for cluster formation)
+
+**Key Configuration**:
+```yaml
+# Discovery configuration
+dbms.cluster.discovery.resolver_type=K8S
+dbms.kubernetes.label_selector=neo4j.com/cluster=<name>,neo4j.com/clustering=true
+dbms.kubernetes.discovery.v2.service_port_name=tcp-discovery
+dbms.cluster.discovery.version=V2_ONLY
+```
+
+**Service Architecture**:
+- **Headless Service**: ClusterIP=None, has `neo4j.com/clustering=true`, used for discovery
+- **Internals Service**: ClusterIP, no clustering label, used for client connections
+- **Client Service**: ClusterIP, for external client connections
+
+**Verification**:
+```bash
+# Check discovered services
+kubectl logs <pod> | grep "Resolved endpoints"
+# Should show: [<cluster>-headless.default.svc.cluster.local:5000]
+
+# Check DNS resolution
+kubectl exec <pod> -- getent hosts <cluster>-headless.default.svc.cluster.local
+# Should return individual pod IPs
+```
+
+**Important**: Neo4j requires headless services for discovery because they resolve to individual pod IPs, not service VIPs. ClusterIP services return a single VIP which prevents proper cluster formation.
+
+## CRITICAL FIX: Neo4j V2_ONLY Discovery Configuration (2025-07-17)
+
+### **Issue Summary**
+Neo4j Enterprise Cluster formation was failing due to incorrect discovery port configuration in V2_ONLY mode. Pods would start successfully but remain as independent single-node clusters instead of forming a unified cluster.
+
+### **Root Cause**
+- **V2_ONLY Mode**: Neo4j V2_ONLY discovery mode disables the discovery port (6000) entirely
+- **Port Mismatch**: Configuration was using `tcp-tx` port (6000) instead of `tcp-discovery` port (5000)
+- **Discovery Failure**: Since port 6000 is disabled in V2_ONLY mode, cluster discovery was failing
+
+### **Solution Implementation**
+**Key Configuration Changes:**
+```yaml
+# CORRECT - Neo4j 5.26.x
+dbms.kubernetes.discovery.v2.service_port_name=tcp-discovery  # Port 5000
+dbms.cluster.discovery.version=V2_ONLY
+
+# CORRECT - Neo4j 2025.x
+dbms.kubernetes.discovery.service_port_name=tcp-discovery     # Port 5000
+# V2_ONLY is default, no explicit setting needed
+```
+
+**Service Port Mapping:**
+- `tcp-discovery`: Port 5000 (cluster communication) - USED by V2_ONLY
+- `tcp-tx`: Port 6000 (discovery) - DISABLED in V2_ONLY mode
+
+### **Version-Specific Behavior**
+1. **Neo4j 5.26.x**: Requires explicit `V2_ONLY` setting, uses `v2.service_port_name`
+2. **Neo4j 2025.x**: V2_ONLY is default, uses `service_port_name` (no v2 prefix)
+3. **Both versions**: Must use `tcp-discovery` port for cluster formation
+
+### **Verification Steps**
+```bash
+# Check discovery logs
+kubectl logs <pod> | grep "Resolved endpoints"
+# Should show: tcp-discovery and port 5000
+
+# Verify cluster formation
+kubectl exec <pod> -- cypher-shell -u neo4j -p <password> "SHOW SERVERS"
+# Should show both primary and secondary pods
+
+# Test connectivity
+kubectl exec <pod> -- timeout 2 bash -c "</dev/tcp/localhost/5000"
+# Should return success (port open)
+```
+
+### **Implementation Files**
+- `internal/resources/cluster.go`: `getKubernetesDiscoveryParameter()` function
+- `internal/resources/cluster.go`: Service port definitions
+- `examples/clusters/minimal-cluster.yaml`: Example configurations
+
+### **Test Results**
+- ✅ **5.26.x**: Cluster formation working with 1 primary + 1 secondary
+- ✅ **2025.x**: Configuration correctly implemented (uses same tcp-discovery port)
+- ✅ **Service Discovery**: Headless service properly resolves to pod IPs
+- ✅ **Database Operations**: Can create/query data through cluster
+
+**CRITICAL**: This fix is essential for Neo4j 5.26+ cluster formation. Without it, all cluster deployments will fail to form properly.
 
 ## Reports
 

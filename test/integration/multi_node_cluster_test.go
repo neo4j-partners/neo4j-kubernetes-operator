@@ -132,6 +132,21 @@ var _ = Describe("Multi-Node Cluster Formation Integration Tests", func() {
 					return fmt.Errorf("startup script does not contain proper label selector")
 				}
 
+				// CRITICAL: Check for V2_ONLY discovery configuration fix
+				// This ensures the fix for Neo4j cluster formation is working
+				if !containsString(startupScript, "dbms.kubernetes.discovery.v2.service_port_name=tcp-discovery") {
+					return fmt.Errorf("startup script does not contain V2_ONLY discovery fix (tcp-discovery port)")
+				}
+
+				if !containsString(startupScript, "dbms.cluster.discovery.version=V2_ONLY") {
+					return fmt.Errorf("startup script does not contain V2_ONLY discovery mode")
+				}
+
+				// Verify that the wrong port configuration is NOT used
+				if containsString(startupScript, "service_port_name=tcp-tx") {
+					return fmt.Errorf("startup script incorrectly uses tcp-tx port (should use tcp-discovery)")
+				}
+
 				return nil
 			}, time.Minute*2, time.Second*5).Should(Succeed())
 
@@ -361,6 +376,73 @@ var _ = Describe("Multi-Node Cluster Formation Integration Tests", func() {
 
 				return nil
 			}, time.Minute*2, time.Second*5).Should(Succeed())
+		})
+	})
+
+	Context("V2_ONLY Discovery Configuration (Critical Fix)", func() {
+		It("should use tcp-discovery port for Neo4j 2025.x cluster", func() {
+			clusterName = "v2only-2025-test"
+			cluster = &neo4jv1alpha1.Neo4jEnterpriseCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterName,
+					Namespace: namespace.Name,
+				},
+				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
+					Image: neo4jv1alpha1.ImageSpec{
+						Repo: "neo4j",
+						Tag:  "2025.02.0-enterprise", // Test 2025.x version
+					},
+					Topology: neo4jv1alpha1.TopologyConfiguration{
+						Primaries:   1,
+						Secondaries: 1,
+					},
+					Storage: neo4jv1alpha1.StorageSpec{
+						ClassName: "standard",
+						Size:      "1Gi",
+					},
+				},
+			}
+
+			By("Creating Neo4j 2025.x cluster")
+			Expect(k8sClient.Create(ctx, cluster)).Should(Succeed())
+
+			By("Waiting for ConfigMap to be created with 2025.x discovery configuration")
+			configMapKey := types.NamespacedName{
+				Name:      clusterName + "-config",
+				Namespace: namespace.Name,
+			}
+
+			Eventually(func() error {
+				configMap := &corev1.ConfigMap{}
+				if err := k8sClient.Get(ctx, configMapKey, configMap); err != nil {
+					return err
+				}
+
+				startupScript := configMap.Data["startup.sh"]
+				if startupScript == "" {
+					return fmt.Errorf("startup script is empty")
+				}
+
+				// Check for 2025.x specific discovery configuration
+				if !containsString(startupScript, "dbms.kubernetes.discovery.service_port_name=tcp-discovery") {
+					return fmt.Errorf("startup script does not contain 2025.x discovery configuration")
+				}
+
+				// V2_ONLY should NOT be set explicitly for 2025.x (it's default)
+				if containsString(startupScript, "dbms.cluster.discovery.version=V2_ONLY") {
+					return fmt.Errorf("startup script incorrectly sets V2_ONLY for 2025.x (should be default)")
+				}
+
+				// Verify that the wrong port configuration is NOT used
+				if containsString(startupScript, "service_port_name=tcp-tx") {
+					return fmt.Errorf("startup script incorrectly uses tcp-tx port (should use tcp-discovery)")
+				}
+
+				return nil
+			}, time.Minute*2, time.Second*5).Should(Succeed())
+
+			By("Cleaning up the cluster")
+			Expect(k8sClient.Delete(ctx, cluster)).Should(Succeed())
 		})
 	})
 })

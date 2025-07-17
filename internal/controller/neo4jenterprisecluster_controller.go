@@ -19,7 +19,6 @@ package controller
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -183,21 +182,9 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 		return r.handleRollingUpgrade(ctx, cluster)
 	}
 
-	// Check if this is a single-node to multi-node scaling scenario
-	if needsSingleNodeToMultiNodeTransition, err := r.detectSingleNodeToMultiNodeScaling(ctx, cluster); err != nil {
-		logger.Error(err, "Failed to detect scaling scenario")
-		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
-	} else if needsSingleNodeToMultiNodeTransition {
-		logger.Info("Single-node to multi-node scaling detected, handling transition")
-		if result, err := r.handleSingleNodeToMultiNodeScaling(ctx, cluster); err != nil {
-			return result, err
-		} else if result.RequeueAfter > 0 || result.Requeue {
-			// If the scaling transition needs to requeue, return here
-			return result, nil
-		}
-		// Otherwise, continue with normal reconciliation in this cycle
-		logger.Info("Scaling transition completed, continuing with normal reconciliation")
-	}
+	// Neo4jEnterpriseCluster is always multi-node from the start
+	// (minimum 1 primary + 1 secondary OR 2+ primaries)
+	// No need for single-node to multi-node transition logic
 
 	// Only set to "Initializing" if cluster is not already Ready
 	if cluster.Status.Phase != "Ready" {
@@ -264,9 +251,8 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 
 	// Create Services
 	services := []*corev1.Service{
-		resources.BuildHeadlessServiceForEnterprise(cluster),          // Keep for backward compatibility
-		resources.BuildPrimaryHeadlessServiceForEnterprise(cluster),   // Primary-specific for K8S discovery
-		resources.BuildSecondaryHeadlessServiceForEnterprise(cluster), // Secondary-specific for K8S discovery (if needed)
+		resources.BuildHeadlessServiceForEnterprise(cluster),  // Headless service for StatefulSet
+		resources.BuildInternalsServiceForEnterprise(cluster), // Internals service for discovery
 		resources.BuildClientServiceForEnterprise(cluster),
 	}
 
@@ -1382,122 +1368,6 @@ func (pc *PluginController) uninstallPlugin(ctx context.Context, cluster *neo4jv
 
 	logger.Info("Plugin uninstallation completed", "plugin", plugin.Name)
 	return nil
-}
-
-// detectSingleNodeToMultiNodeScaling detects if we're scaling from 1 primary to multiple primaries
-func (r *Neo4jEnterpriseClusterReconciler) detectSingleNodeToMultiNodeScaling(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) (bool, error) {
-	logger := log.FromContext(ctx)
-
-	// Only relevant if current spec has multiple primaries or any secondaries
-	if cluster.Spec.Topology.Primaries <= 1 && cluster.Spec.Topology.Secondaries == 0 {
-		return false, nil
-	}
-
-	// Check if this is a generation update (indicating a spec change)
-	if cluster.Generation <= 1 {
-		return false, nil
-	}
-
-	// Get the current StatefulSet to see the current replica count
-	primaryStsName := fmt.Sprintf("%s-primary", cluster.Name)
-	currentSts := &appsv1.StatefulSet{}
-	err := r.Get(ctx, types.NamespacedName{Name: primaryStsName, Namespace: cluster.Namespace}, currentSts)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			// StatefulSet doesn't exist yet, not a scaling scenario
-			return false, nil
-		}
-		return false, fmt.Errorf("failed to get current primary StatefulSet: %w", err)
-	}
-
-	// Check if current StatefulSet has exactly 1 replica but spec wants more primaries or any secondaries
-	currentReplicas := int32(1) // Default if nil
-	if currentSts.Spec.Replicas != nil {
-		currentReplicas = *currentSts.Spec.Replicas
-	}
-
-	// Detect single-node to multi-node transition
-	isSingleNodeToMultiNode := currentReplicas == 1 && (cluster.Spec.Topology.Primaries > 1 || cluster.Spec.Topology.Secondaries > 0)
-
-	if isSingleNodeToMultiNode {
-		logger.Info("Detected single-node to multi-node scaling",
-			"currentPrimaryReplicas", currentReplicas,
-			"desiredPrimaries", cluster.Spec.Topology.Primaries,
-			"desiredSecondaries", cluster.Spec.Topology.Secondaries)
-	}
-
-	return isSingleNodeToMultiNode, nil
-}
-
-// handleSingleNodeToMultiNodeScaling handles the transition from single-node to multi-node cluster
-func (r *Neo4jEnterpriseClusterReconciler) handleSingleNodeToMultiNodeScaling(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) (ctrl.Result, error) {
-	logger := log.FromContext(ctx)
-
-	// Update status to indicate scaling is in progress
-	_ = r.updateClusterStatus(ctx, cluster, "Scaling", "Transitioning from single-node to multi-node cluster")
-	r.Recorder.Event(cluster, "Normal", "ScalingTransition", "Starting single-node to multi-node transition")
-
-	// Step 1: Update ConfigMap first to ensure all pods get the new configuration
-	if err := r.ConfigMapManager.ReconcileConfigMap(ctx, cluster); err != nil {
-		logger.Error(err, "Failed to update ConfigMap for scaling transition")
-		_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Failed to update ConfigMap for scaling: %v", err))
-		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
-	}
-
-	// Step 2: Restart all existing pods to apply new cluster configuration
-	// List all pods for this cluster
-	podList := &corev1.PodList{}
-	labelSelector := client.MatchingLabels{
-		"app.kubernetes.io/instance": cluster.Name,
-		"neo4j.com/role":             "primary",
-	}
-
-	if err := r.List(ctx, podList, client.InNamespace(cluster.Namespace), labelSelector); err != nil {
-		logger.Error(err, "Failed to list cluster pods for restart")
-		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
-	}
-
-	// Check if any pods need restart (haven't been restarted recently)
-	var podsToRestart []corev1.Pod
-	for _, pod := range podList.Items {
-		// Check if pod was restarted recently (within last 60 seconds) to avoid restart loops
-		if time.Since(pod.CreationTimestamp.Time) >= 60*time.Second {
-			podsToRestart = append(podsToRestart, pod)
-		} else {
-			logger.Info("Pod was recently created, skipping restart", "pod", pod.Name, "age", time.Since(pod.CreationTimestamp.Time))
-		}
-	}
-
-	if len(podsToRestart) > 0 {
-		// Restart bootstrap pod first, then others
-		var podToRestart *corev1.Pod
-		for i, pod := range podsToRestart {
-			if strings.HasSuffix(pod.Name, "-0") {
-				podToRestart = &podsToRestart[i]
-				break
-			}
-		}
-		// If no bootstrap pod to restart, restart the first one
-		if podToRestart == nil {
-			podToRestart = &podsToRestart[0]
-		}
-
-		logger.Info("Restarting pod to apply new cluster configuration", "pod", podToRestart.Name)
-		if err := r.Delete(ctx, podToRestart); err != nil {
-			logger.Error(err, "Failed to delete pod for restart", "pod", podToRestart.Name)
-			return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
-		}
-		r.Recorder.Event(cluster, "Normal", "PodRestart", fmt.Sprintf("Restarted pod %s to apply cluster configuration", podToRestart.Name))
-		// Return here to let the pod restart complete before continuing
-		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
-	}
-
-	// Step 3: Continue with normal reconciliation to create/update StatefulSets
-	// The normal reconciliation flow will handle creating the additional pods
-	logger.Info("Pod restarts completed or not needed, proceeding with normal reconciliation")
-
-	// Don't return here - continue with normal reconciliation in this cycle
-	return ctrl.Result{}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

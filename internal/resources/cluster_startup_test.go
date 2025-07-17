@@ -20,27 +20,6 @@ func TestBuildConfigMapForEnterprise_ClusterFormation(t *testing.T) {
 		expectedJoining   string
 	}{
 		{
-			name: "single_primary_cluster",
-			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "single-primary",
-					Namespace: "default",
-				},
-				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
-					Image: neo4jv1alpha1.ImageSpec{
-						Repo: "neo4j",
-						Tag:  "5.26-enterprise", // Test version-specific config
-					},
-					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Primaries:   1,
-						Secondaries: 0,
-					},
-				},
-			},
-			expectedBootstrap: "Starting Neo4j Enterprise in cluster mode",
-			expectedJoining:   "", // Single-primary uses RAFT-enabled single mode
-		},
-		{
 			name: "two_node_cluster",
 			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
 				ObjectMeta: metav1.ObjectMeta{
@@ -58,7 +37,7 @@ func TestBuildConfigMapForEnterprise_ClusterFormation(t *testing.T) {
 					},
 				},
 			},
-			expectedBootstrap: "MIN_PRIMARIES=2",
+			expectedBootstrap: "MIN_PRIMARIES=${TOTAL_PRIMARIES}",
 			expectedJoining:   "dbms.cluster.minimum_initial_system_primaries_count=${MIN_PRIMARIES}",
 		},
 		{
@@ -79,7 +58,7 @@ func TestBuildConfigMapForEnterprise_ClusterFormation(t *testing.T) {
 					},
 				},
 			},
-			expectedBootstrap: "MIN_PRIMARIES=$((TOTAL_PRIMARIES / 2 + 1))",
+			expectedBootstrap: "MIN_PRIMARIES=${TOTAL_PRIMARIES}",
 			expectedJoining:   "dbms.cluster.minimum_initial_system_primaries_count=${MIN_PRIMARIES}",
 		},
 		{
@@ -101,7 +80,7 @@ func TestBuildConfigMapForEnterprise_ClusterFormation(t *testing.T) {
 				},
 			},
 			expectedBootstrap: "dbms.cluster.discovery.version=V2_ONLY",
-			expectedJoining:   "dbms.kubernetes.discovery.v2.service_port_name=discovery",
+			expectedJoining:   "dbms.kubernetes.discovery.v2.service_port_name=tcp-discovery",
 		},
 		{
 			name: "version_specific_discovery_2025",
@@ -121,8 +100,29 @@ func TestBuildConfigMapForEnterprise_ClusterFormation(t *testing.T) {
 					},
 				},
 			},
-			expectedBootstrap: "dbms.kubernetes.discovery.service_port_name=discovery",
-			expectedJoining:   "dbms.kubernetes.discovery.service_port_name=discovery",
+			expectedBootstrap: "dbms.kubernetes.discovery.service_port_name=tcp-discovery",
+			expectedJoining:   "dbms.kubernetes.discovery.service_port_name=tcp-discovery",
+		},
+		{
+			name: "critical_v2_only_discovery_fix",
+			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "v2-only-test",
+					Namespace: "default",
+				},
+				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
+					Image: neo4jv1alpha1.ImageSpec{
+						Repo: "neo4j",
+						Tag:  "5.26-enterprise", // Must use V2_ONLY mode
+					},
+					Topology: neo4jv1alpha1.TopologyConfiguration{
+						Primaries:   1,
+						Secondaries: 1,
+					},
+				},
+			},
+			expectedBootstrap: "dbms.kubernetes.discovery.v2.service_port_name=tcp-discovery",
+			expectedJoining:   "dbms.cluster.discovery.version=V2_ONLY",
 		},
 	}
 
@@ -154,27 +154,15 @@ func TestBuildConfigMapForEnterprise_ClusterFormation(t *testing.T) {
 			_, configExists := configMap.Data["neo4j.conf"]
 			assert.True(t, configExists, "neo4j.conf should exist in ConfigMap")
 
-			// For single-node clusters, verify single RAFT mode
-			if tt.cluster.Spec.Topology.Primaries == 1 && tt.cluster.Spec.Topology.Secondaries == 0 {
-				assert.Contains(t, startupScript, "internal.dbms.single_raft_enabled=true",
-					"single-node clusters should use single RAFT mode")
-			}
-
 			// For multi-node clusters, verify unified bootstrap approach
 			if tt.cluster.Spec.Topology.Primaries > 1 {
 				// Verify unified bootstrap approach
 				assert.Contains(t, startupScript, "Using unified bootstrap discovery approach",
 					"multi-node clusters should use unified bootstrap approach")
 
-				// Verify minimum primaries logic based on cluster size
-				if tt.cluster.Spec.Topology.Primaries == 2 {
-					assert.Contains(t, startupScript, "MIN_PRIMARIES=2",
-						"2-node clusters should require both nodes for bootstrap")
-				} else if tt.cluster.Spec.Topology.Primaries >= 3 {
-					expectedQuorum := fmt.Sprintf("MIN_PRIMARIES=$((TOTAL_PRIMARIES / 2 + 1))")
-					assert.Contains(t, startupScript, expectedQuorum,
-						"3+ node clusters should use quorum logic")
-				}
+				// Verify minimum primaries logic - unified approach
+				assert.Contains(t, startupScript, "MIN_PRIMARIES=${TOTAL_PRIMARIES}",
+					"clusters should use unified MIN_PRIMARIES=${TOTAL_PRIMARIES}")
 
 				// Verify Kubernetes discovery configuration
 				expectedK8sDiscoveryConfig := []string{
@@ -183,10 +171,11 @@ func TestBuildConfigMapForEnterprise_ClusterFormation(t *testing.T) {
 				}
 
 				// Add version-specific service port name
+				// CRITICAL: Must use tcp-discovery for V2_ONLY mode (both 5.26.x and 2025.x)
 				if tt.cluster.Spec.Image.Tag != "" && strings.HasPrefix(tt.cluster.Spec.Image.Tag, "2025") {
-					expectedK8sDiscoveryConfig = append(expectedK8sDiscoveryConfig, "dbms.kubernetes.discovery.service_port_name=discovery")
+					expectedK8sDiscoveryConfig = append(expectedK8sDiscoveryConfig, "dbms.kubernetes.discovery.service_port_name=tcp-discovery")
 				} else {
-					expectedK8sDiscoveryConfig = append(expectedK8sDiscoveryConfig, "dbms.kubernetes.discovery.v2.service_port_name=discovery")
+					expectedK8sDiscoveryConfig = append(expectedK8sDiscoveryConfig, "dbms.kubernetes.discovery.v2.service_port_name=tcp-discovery")
 				}
 
 				for _, config := range expectedK8sDiscoveryConfig {
@@ -202,6 +191,89 @@ func TestBuildConfigMapForEnterprise_ClusterFormation(t *testing.T) {
 				assert.NotContains(t, startupScript, "dbms.cluster.discovery.v2.endpoints=",
 					"startup script should not contain static endpoint configuration")
 			}
+		})
+	}
+}
+
+// TestV2OnlyDiscoveryConfiguration tests the critical fix for Neo4j V2_ONLY discovery configuration
+// This test ensures that the discovery configuration uses tcp-discovery port (5000) instead of tcp-tx port (6000)
+// for V2_ONLY mode, which is essential for cluster formation in Neo4j 5.26+ and 2025.x
+func TestV2OnlyDiscoveryConfiguration(t *testing.T) {
+	tests := []struct {
+		name                  string
+		imageTag              string
+		expectedPortName      string
+		expectedV2OnlyPresent bool
+		expectedParameterName string
+	}{
+		{
+			name:                  "neo4j_5_26_uses_tcp_discovery",
+			imageTag:              "5.26-enterprise",
+			expectedPortName:      "tcp-discovery",
+			expectedV2OnlyPresent: true,
+			expectedParameterName: "dbms.kubernetes.discovery.v2.service_port_name",
+		},
+		{
+			name:                  "neo4j_5_27_uses_tcp_discovery",
+			imageTag:              "5.27-enterprise",
+			expectedPortName:      "tcp-discovery",
+			expectedV2OnlyPresent: true,
+			expectedParameterName: "dbms.kubernetes.discovery.v2.service_port_name",
+		},
+		{
+			name:                  "neo4j_2025_uses_tcp_discovery",
+			imageTag:              "2025.02.0-enterprise",
+			expectedPortName:      "tcp-discovery",
+			expectedV2OnlyPresent: false, // V2_ONLY is default in 2025.x
+			expectedParameterName: "dbms.kubernetes.discovery.service_port_name",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cluster := &neo4jv1alpha1.Neo4jEnterpriseCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+				},
+				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
+					Image: neo4jv1alpha1.ImageSpec{
+						Repo: "neo4j",
+						Tag:  tt.imageTag,
+					},
+					Topology: neo4jv1alpha1.TopologyConfiguration{
+						Primaries:   1,
+						Secondaries: 1,
+					},
+				},
+			}
+
+			configMap := resources.BuildConfigMapForEnterprise(cluster)
+			startupScript := configMap.Data["startup.sh"]
+
+			// Verify the correct service port name is used
+			expectedConfig := fmt.Sprintf("%s=%s", tt.expectedParameterName, tt.expectedPortName)
+			assert.Contains(t, startupScript, expectedConfig,
+				"startup script should use tcp-discovery port for V2_ONLY mode")
+
+			// Verify V2_ONLY setting is correct
+			if tt.expectedV2OnlyPresent {
+				assert.Contains(t, startupScript, "dbms.cluster.discovery.version=V2_ONLY",
+					"5.26+ should explicitly set V2_ONLY mode")
+			} else {
+				assert.NotContains(t, startupScript, "dbms.cluster.discovery.version=V2_ONLY",
+					"2025.x should not set V2_ONLY (it's default)")
+			}
+
+			// Verify tcp-tx port is NOT used (the bug we fixed)
+			assert.NotContains(t, startupScript, "service_port_name=tcp-tx",
+				"should not use tcp-tx port for V2_ONLY mode")
+			assert.NotContains(t, startupScript, "service_port_name=discovery",
+				"should not use legacy discovery port name")
+
+			// Verify cluster port is correctly referenced in advertised address
+			assert.Contains(t, startupScript, "server.cluster.advertised_address=${HOSTNAME_FQDN}:5000",
+				"cluster communication should use port 5000")
 		})
 	}
 }

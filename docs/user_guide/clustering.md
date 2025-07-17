@@ -41,20 +41,25 @@ The operator automatically uses **Kubernetes Discovery** (recommended) for all c
 
 3. **Configures Neo4j automatically** with version-specific settings:
 
-   **For Neo4j 5.26+ (SemVer)**:
+   **For Neo4j 5.26+ (SemVer) - CRITICAL V2_ONLY Configuration**:
    ```properties
    dbms.cluster.discovery.resolver_type=K8S
-   dbms.kubernetes.label_selector=neo4j.com/cluster={cluster-name}
-   dbms.kubernetes.discovery.v2.service_port_name=discovery
+   dbms.kubernetes.label_selector=neo4j.com/cluster={cluster-name},neo4j.com/clustering=true
+   dbms.kubernetes.discovery.v2.service_port_name=tcp-discovery
    dbms.cluster.discovery.version=V2_ONLY
    ```
 
    **For Neo4j 2025.x+ (CalVer)**:
    ```properties
    dbms.cluster.discovery.resolver_type=K8S
-   dbms.kubernetes.label_selector=neo4j.com/cluster={cluster-name}
-   dbms.kubernetes.discovery.service_port_name=discovery
+   dbms.kubernetes.label_selector=neo4j.com/cluster={cluster-name},neo4j.com/clustering=true
+   dbms.kubernetes.discovery.service_port_name=tcp-discovery
+   # V2_ONLY is default in 2025.x, no explicit setting needed
    ```
+
+   > **⚠️ CRITICAL**: The operator uses `tcp-discovery` port (5000) for V2_ONLY discovery mode, not `tcp-tx` port (6000).
+   > V2_ONLY mode disables the discovery port (6000) and only uses the cluster communication port (5000).
+   > This is essential for proper cluster formation in Neo4j 5.26+ and 2025.x.
 
 ### Discovery Method Enforcement
 

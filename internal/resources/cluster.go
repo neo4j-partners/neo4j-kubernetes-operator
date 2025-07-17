@@ -125,9 +125,10 @@ func buildStatefulSetForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster
 			Labels:    getLabelsForEnterprise(cluster, role),
 		},
 		Spec: appsv1.StatefulSetSpec{
-			Replicas:       &replicas,
-			ServiceName:    fmt.Sprintf("%s-headless", cluster.Name),
-			UpdateStrategy: updateStrategy,
+			Replicas:            &replicas,
+			ServiceName:         fmt.Sprintf("%s-headless", cluster.Name),
+			PodManagementPolicy: appsv1.ParallelPodManagement, // Allow pods to start simultaneously for cluster formation
+			UpdateStrategy:      updateStrategy,
 			Selector: &metav1.LabelSelector{
 				MatchLabels: getLabelsForEnterprise(cluster, role),
 			},
@@ -147,17 +148,36 @@ func buildStatefulSetForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster
 	}
 }
 
-// BuildHeadlessServiceForEnterprise creates a headless service for cluster discovery
+// BuildHeadlessServiceForEnterprise creates a headless service for StatefulSet pod identity
 func BuildHeadlessServiceForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) *corev1.Service {
+	labels := getLabelsForEnterprise(cluster, "")
+
+	// Create selector without service-type label for headless service
+	// This prevents the headless service from being discovered by Neo4j K8s discovery
+	selector := make(map[string]string)
+	for k, v := range labels {
+		if k != "neo4j.com/service-type" {
+			selector[k] = v
+		}
+	}
+
+	// Remove service-type from both labels and selector to prevent discovery
+	delete(labels, "neo4j.com/service-type")
+	delete(selector, "neo4j.com/service-type")
+
+	// Add clustering label for discovery - this allows Neo4j to discover the headless service
+	labels["neo4j.com/clustering"] = "true"
+
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s-headless", cluster.Name),
 			Namespace: cluster.Namespace,
-			Labels:    getLabelsForEnterprise(cluster, ""),
+			Labels:    labels,
 		},
 		Spec: corev1.ServiceSpec{
-			ClusterIP: "None",
-			Selector:  getLabelsForEnterprise(cluster, ""),
+			ClusterIP:                "None",   // Headless service for StatefulSet
+			Selector:                 selector, // Use selector without service-type
+			PublishNotReadyAddresses: true,
 			Ports: []corev1.ServicePort{
 				{
 					Name:       "bolt",
@@ -172,13 +192,13 @@ func BuildHeadlessServiceForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseClu
 					Protocol:   corev1.ProtocolTCP,
 				},
 				{
-					Name:       "cluster",
+					Name:       "tcp-discovery",
 					Port:       ClusterPort,
 					TargetPort: intstr.FromInt(ClusterPort),
 					Protocol:   corev1.ProtocolTCP,
 				},
 				{
-					Name:       "discovery",
+					Name:       "tcp-tx",
 					Port:       DiscoveryPort,
 					TargetPort: intstr.FromInt(DiscoveryPort),
 					Protocol:   corev1.ProtocolTCP,
@@ -206,24 +226,28 @@ func BuildHeadlessServiceForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseClu
 	}
 }
 
-// BuildPrimaryHeadlessServiceForEnterprise creates a headless service for primary cluster discovery
-func BuildPrimaryHeadlessServiceForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) *corev1.Service {
+// BuildInternalsServiceForEnterprise creates an internals service for cluster discovery
+// This is NOT a headless service as per Neo4j Helm charts best practice
+// "headless services have been seen to introduce latency whenever a cluster member restarts"
+func BuildInternalsServiceForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) *corev1.Service {
+	// Add specific labels for discovery
+	labels := getLabelsForEnterprise(cluster, "")
+	labels["neo4j.com/service-type"] = "internals"
+	// Don't add clustering label to internals service - only headless service should be discovered
+
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s-primary-headless", cluster.Name),
+			Name:      fmt.Sprintf("%s-internals", cluster.Name),
 			Namespace: cluster.Namespace,
-			Labels:    getLabelsForEnterprise(cluster, "primary"),
+			Labels:    labels,
 		},
 		Spec: corev1.ServiceSpec{
-			ClusterIP: "None",
-			Selector:  getLabelsForEnterprise(cluster, "primary"),
+			// Regular ClusterIP service (not headless) for discovery
+			// This follows Neo4j Helm chart pattern to avoid latency issues
+			Type:                     corev1.ServiceTypeClusterIP,
+			Selector:                 getLabelsForEnterprise(cluster, ""),
+			PublishNotReadyAddresses: true, // Required for Neo4j discovery during startup
 			Ports: []corev1.ServicePort{
-				{
-					Name:       "discovery",
-					Port:       DiscoveryPort,
-					TargetPort: intstr.FromInt(DiscoveryPort),
-					Protocol:   corev1.ProtocolTCP,
-				},
 				{
 					Name:       "bolt",
 					Port:       BoltPort,
@@ -237,9 +261,15 @@ func BuildPrimaryHeadlessServiceForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterp
 					Protocol:   corev1.ProtocolTCP,
 				},
 				{
-					Name:       "cluster",
+					Name:       "tcp-discovery",
 					Port:       ClusterPort,
 					TargetPort: intstr.FromInt(ClusterPort),
+					Protocol:   corev1.ProtocolTCP,
+				},
+				{
+					Name:       "tcp-tx",
+					Port:       DiscoveryPort,
+					TargetPort: intstr.FromInt(DiscoveryPort),
 					Protocol:   corev1.ProtocolTCP,
 				},
 				{
@@ -258,57 +288,6 @@ func BuildPrimaryHeadlessServiceForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterp
 					Name:       "transaction",
 					Port:       TransactionPort,
 					TargetPort: intstr.FromInt(TransactionPort),
-					Protocol:   corev1.ProtocolTCP,
-				},
-			},
-		},
-	}
-}
-
-// BuildSecondaryHeadlessServiceForEnterprise creates a headless service for secondary cluster discovery
-func BuildSecondaryHeadlessServiceForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) *corev1.Service {
-	if cluster.Spec.Topology.Secondaries == 0 {
-		return nil
-	}
-
-	return &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s-secondary-headless", cluster.Name),
-			Namespace: cluster.Namespace,
-			Labels:    getLabelsForEnterprise(cluster, "secondary"),
-		},
-		Spec: corev1.ServiceSpec{
-			ClusterIP: "None",
-			Selector:  getLabelsForEnterprise(cluster, "secondary"),
-			Ports: []corev1.ServicePort{
-				{
-					Name:       "discovery",
-					Port:       DiscoveryPort,
-					TargetPort: intstr.FromInt(DiscoveryPort),
-					Protocol:   corev1.ProtocolTCP,
-				},
-				{
-					Name:       "bolt",
-					Port:       BoltPort,
-					TargetPort: intstr.FromInt(BoltPort),
-					Protocol:   corev1.ProtocolTCP,
-				},
-				{
-					Name:       "http",
-					Port:       HTTPPort,
-					TargetPort: intstr.FromInt(HTTPPort),
-					Protocol:   corev1.ProtocolTCP,
-				},
-				{
-					Name:       "cluster",
-					Port:       ClusterPort,
-					TargetPort: intstr.FromInt(ClusterPort),
-					Protocol:   corev1.ProtocolTCP,
-				},
-				{
-					Name:       "routing",
-					Port:       RoutingPort,
-					TargetPort: intstr.FromInt(RoutingPort),
 					Protocol:   corev1.ProtocolTCP,
 				},
 			},
@@ -398,10 +377,10 @@ func BuildCertificateForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster
 		fmt.Sprintf("%s-client.%s", cluster.Name, cluster.Namespace),
 		fmt.Sprintf("%s-client.%s.svc", cluster.Name, cluster.Namespace),
 		fmt.Sprintf("%s-client.%s.svc.cluster.local", cluster.Name, cluster.Namespace),
-		fmt.Sprintf("%s-headless", cluster.Name),
-		fmt.Sprintf("%s-headless.%s", cluster.Name, cluster.Namespace),
-		fmt.Sprintf("%s-headless.%s.svc", cluster.Name, cluster.Namespace),
-		fmt.Sprintf("%s-headless.%s.svc.cluster.local", cluster.Name, cluster.Namespace),
+		fmt.Sprintf("%s-internals", cluster.Name),
+		fmt.Sprintf("%s-internals.%s", cluster.Name, cluster.Namespace),
+		fmt.Sprintf("%s-internals.%s.svc", cluster.Name, cluster.Namespace),
+		fmt.Sprintf("%s-internals.%s.svc.cluster.local", cluster.Name, cluster.Namespace),
 	}
 
 	// Add individual StatefulSet pods
@@ -409,10 +388,10 @@ func BuildCertificateForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster
 		podName := fmt.Sprintf("%s-primary-%d", cluster.Name, i)
 		dnsNames = append(dnsNames,
 			podName,
-			fmt.Sprintf("%s.%s-headless", podName, cluster.Name),
-			fmt.Sprintf("%s.%s-headless.%s", podName, cluster.Name, cluster.Namespace),
-			fmt.Sprintf("%s.%s-headless.%s.svc", podName, cluster.Name, cluster.Namespace),
-			fmt.Sprintf("%s.%s-headless.%s.svc.cluster.local", podName, cluster.Name, cluster.Namespace),
+			fmt.Sprintf("%s.%s-internals", podName, cluster.Name),
+			fmt.Sprintf("%s.%s-internals.%s", podName, cluster.Name, cluster.Namespace),
+			fmt.Sprintf("%s.%s-internals.%s.svc", podName, cluster.Name, cluster.Namespace),
+			fmt.Sprintf("%s.%s-internals.%s.svc.cluster.local", podName, cluster.Name, cluster.Namespace),
 		)
 	}
 
@@ -420,10 +399,10 @@ func BuildCertificateForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster
 		podName := fmt.Sprintf("%s-secondary-%d", cluster.Name, i)
 		dnsNames = append(dnsNames,
 			podName,
-			fmt.Sprintf("%s.%s-headless", podName, cluster.Name),
-			fmt.Sprintf("%s.%s-headless.%s", podName, cluster.Name, cluster.Namespace),
-			fmt.Sprintf("%s.%s-headless.%s.svc", podName, cluster.Name, cluster.Namespace),
-			fmt.Sprintf("%s.%s-headless.%s.svc.cluster.local", podName, cluster.Name, cluster.Namespace),
+			fmt.Sprintf("%s.%s-internals", podName, cluster.Name),
+			fmt.Sprintf("%s.%s-internals.%s", podName, cluster.Name, cluster.Namespace),
+			fmt.Sprintf("%s.%s-internals.%s.svc", podName, cluster.Name, cluster.Namespace),
+			fmt.Sprintf("%s.%s-internals.%s.svc.cluster.local", podName, cluster.Name, cluster.Namespace),
 		)
 	}
 
@@ -718,6 +697,7 @@ func getLabelsForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, role 
 		"app.kubernetes.io/part-of":    "neo4j-cluster",
 		"app.kubernetes.io/managed-by": "neo4j-operator",
 		"neo4j.com/cluster":            cluster.Name,
+		"neo4j.com/service-type":       "internals",
 	}
 
 	if role != "" {
@@ -816,12 +796,12 @@ func BuildPodSpecForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, ro
 				Protocol:      corev1.ProtocolTCP,
 			},
 			{
-				Name:          "cluster",
+				Name:          "tcp-discovery",
 				ContainerPort: ClusterPort,
 				Protocol:      corev1.ProtocolTCP,
 			},
 			{
-				Name:          "discovery",
+				Name:          "tcp-tx",
 				ContainerPort: DiscoveryPort,
 				Protocol:      corev1.ProtocolTCP,
 			},
@@ -1060,7 +1040,7 @@ db.format=block
 # Enterprise clustering configuration for Neo4j 5.x
 # Note: advertised addresses will be set dynamically by startup script
 server.cluster.listen_address=0.0.0.0:5000
-server.discovery.listen_address=0.0.0.0:6000
+# server.discovery.listen_address=0.0.0.0:6000 - ignored in V2_ONLY mode
 server.routing.listen_address=0.0.0.0:7688
 server.cluster.raft.listen_address=0.0.0.0:7000
 
@@ -1144,6 +1124,15 @@ func isNeo4jVersion526OrHigher(imageTag string) bool {
 }
 
 // getKubernetesDiscoveryParameter returns the correct Kubernetes discovery parameter based on Neo4j version
+//
+// CRITICAL: This function implements the fix for Neo4j V2_ONLY discovery configuration.
+// V2_ONLY mode disables the discovery port (6000) and only uses the cluster port (5000).
+// Therefore, we must use 'tcp-discovery' port name, not 'tcp-tx'.
+//
+// Version-specific behavior:
+// - Neo4j 5.26.x: Uses dbms.kubernetes.discovery.v2.service_port_name=tcp-discovery + V2_ONLY
+// - Neo4j 2025.x: Uses dbms.kubernetes.discovery.service_port_name=tcp-discovery (V2_ONLY is default)
+// - Both versions: Must use tcp-discovery port (5000) for cluster formation
 func getKubernetesDiscoveryParameter(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) string {
 	// Extract version from image tag
 	imageTag := cluster.Spec.Image.Tag
@@ -1152,9 +1141,11 @@ func getKubernetesDiscoveryParameter(cluster *neo4jv1alpha1.Neo4jEnterpriseClust
 	// For Neo4j 2025.x+ (calver): use dbms.kubernetes.discovery.service_port_name
 	if strings.HasPrefix(imageTag, "5.") {
 		// For Neo4j 5.26+, always use V2_ONLY discovery
+		// CRITICAL: Must use tcp-discovery (port 5000) not tcp-tx (port 6000)
+		// because V2_ONLY mode disables the discovery port (6000)
 		if isNeo4jVersion526OrHigher(imageTag) {
-			return `dbms.cluster.discovery.version=V2_ONLY
-dbms.kubernetes.discovery.v2.service_port_name=discovery
+			return `dbms.kubernetes.discovery.v2.service_port_name=tcp-discovery
+dbms.cluster.discovery.version=V2_ONLY
 dbms.kubernetes.cluster_domain=cluster.local`
 		}
 		// For other 5.x versions (pre-5.26) - not supported by this operator
@@ -1163,13 +1154,15 @@ dbms.cluster.discovery.version=V2_ONLY
 dbms.kubernetes.cluster_domain=cluster.local`
 	} else if strings.HasPrefix(imageTag, "2025.") || strings.Contains(imageTag, "2025") {
 		// For Neo4j 2025.x+ (calver), use the new parameter name
-		return `dbms.kubernetes.discovery.service_port_name=discovery
+		// V2_ONLY is default in 2025.x, so don't set it explicitly
+		// CRITICAL: Must use tcp-discovery (port 5000) - same as 5.26.x
+		return `dbms.kubernetes.discovery.service_port_name=tcp-discovery
 dbms.kubernetes.cluster_domain=cluster.local`
 	}
 
 	// Default to 5.26+ configuration for maximum compatibility
-	return `dbms.cluster.discovery.version=V2_ONLY
-dbms.kubernetes.discovery.v2.service_port_name=discovery
+	return `dbms.kubernetes.discovery.v2.service_port_name=tcp-discovery
+dbms.cluster.discovery.version=V2_ONLY
 dbms.kubernetes.cluster_domain=cluster.local`
 }
 
@@ -1209,7 +1202,7 @@ cat >> /tmp/neo4j-config/neo4j.conf << EOF
 # Neo4j 5.x advertised addresses with FQDN
 server.default_advertised_address=${HOSTNAME_FQDN}
 server.cluster.advertised_address=${HOSTNAME_FQDN}:5000
-server.discovery.advertised_address=${HOSTNAME_FQDN}:6000
+# server.discovery.advertised_address=${HOSTNAME_FQDN}:6000 - ignored in V2_ONLY mode
 server.routing.advertised_address=${HOSTNAME_FQDN}:7688
 server.cluster.raft.advertised_address=${HOSTNAME_FQDN}:7000
 EOF
@@ -1221,46 +1214,29 @@ TOTAL_SECONDARIES=` + fmt.Sprintf("%d", cluster.Spec.Topology.Secondaries) + `
 echo "Cluster topology: ${TOTAL_PRIMARIES} primaries, ${TOTAL_SECONDARIES} secondaries"
 echo "Pod ordinal: ${POD_ORDINAL}"
 
-# Determine clustering strategy based on initial topology
-if [ "$TOTAL_PRIMARIES" = "1" ] && [ "$TOTAL_SECONDARIES" = "0" ]; then
-    echo "Single-node cluster: using internal.dbms.single_raft_enabled=true"
-    # Single-node cluster with single RAFT - can scale later
-    cat >> /tmp/neo4j-config/neo4j.conf << EOF
+# Neo4jEnterpriseCluster always uses multi-node clustering
+# Minimum topology: 1 primary + 1 secondary OR 2+ primaries
+echo "Multi-node cluster: using Kubernetes discovery with pod sequencing"
 
-# Single-node cluster settings (scalable to multi-node)
-internal.dbms.single_raft_enabled=true
-dbms.cluster.minimum_initial_system_primaries_count=1
-initial.dbms.default_primaries_count=1
-EOF
-else
-    echo "Multi-node cluster: using Kubernetes discovery with pod sequencing"
+# Use Kubernetes service discovery with label selectors (correct approach)
+echo "Configuring Kubernetes service discovery with label selectors"
 
-    # Use Kubernetes service discovery with label selectors (correct approach)
-    echo "Configuring Kubernetes service discovery with label selectors"
+# Unified approach: Use bootstrap discovery with timeout for cluster formation
+echo "Using unified bootstrap discovery approach for cluster formation"
 
-    # Unified approach: Use bootstrap discovery with timeout for cluster formation
-    echo "Using unified bootstrap discovery approach for cluster formation"
+# Set minimum primaries to ensure cluster coordination
+# All primaries must be present before cluster can form
+# This prevents individual pods from starting as single-node clusters
+MIN_PRIMARIES=${TOTAL_PRIMARIES}
 
-    # Set minimum primaries to ensure cluster coordination
-    # For 2-node clusters, require both nodes to start cluster formation
-    # For 3+ nodes, require quorum
-    if [ "$TOTAL_PRIMARIES" -eq "2" ]; then
-        MIN_PRIMARIES=2
-    elif [ "$TOTAL_PRIMARIES" -gt "2" ]; then
-        MIN_PRIMARIES=$((TOTAL_PRIMARIES / 2 + 1))
-    else
-        MIN_PRIMARIES=1
-    fi
+echo "Setting minimum primaries for bootstrap: ${MIN_PRIMARIES}"
 
-    echo "Setting minimum primaries for bootstrap: ${MIN_PRIMARIES}"
-
-    # All pods use identical configuration for coordinated cluster formation
-    cat >> /tmp/neo4j-config/neo4j.conf << EOF
+# All pods use identical configuration for coordinated cluster formation
+cat >> /tmp/neo4j-config/neo4j.conf << EOF
 
 # Multi-node cluster using Kubernetes service discovery (Neo4j 5.26+ standard pattern)
 dbms.cluster.discovery.resolver_type=K8S
-dbms.kubernetes.label_selector=neo4j.com/cluster=` + cluster.Name + `
-dbms.kubernetes.discovery.v2.service_port_name=discovery
+dbms.kubernetes.label_selector=neo4j.com/cluster=` + cluster.Name + `,neo4j.com/clustering=true
 ` + kubernetesDiscoveryParam + `
 
 # Unified cluster formation - use minimum required for bootstrap, grow to target
@@ -1269,11 +1245,11 @@ initial.dbms.default_primaries_count=` + fmt.Sprintf("%d", cluster.Spec.Topology
 initial.dbms.default_secondaries_count=` + fmt.Sprintf("%d", cluster.Spec.Topology.Secondaries) + `
 initial.dbms.automatically_enable_free_servers=true
 
-# Cluster formation optimization for Neo4j 5.26+
-dbms.cluster.catchup.tx_log_fallback_enabled=true
-dbms.cluster.leader_election.timeout=15s
+# Cluster formation optimization
+dbms.cluster.raft.binding_timeout=1d
+dbms.cluster.raft.membership.join_timeout=10m
+dbms.routing.default_router=SERVER
 EOF
-fi
 
 
 # Set NEO4J config directory

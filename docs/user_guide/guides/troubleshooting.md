@@ -209,11 +209,25 @@ kubectl logs <cluster-name>-1
 
 **Solutions:**
 
-1. **Check Discovery Configuration:**
-   ```yaml
-   # V2_ONLY discovery is automatically configured for 5.26+
-   # No manual configuration needed
+1. **🔧 CRITICAL FIX: V2_ONLY Discovery Configuration**
+
+   **Issue**: Neo4j 5.26+ and 2025.x use V2_ONLY discovery mode which disables the discovery port (6000) and only uses the cluster port (5000).
+
+   **Verification**: Check that the operator is using the correct configuration:
+   ```bash
+   # Check ConfigMap for correct discovery configuration
+   kubectl get configmap <cluster-name>-config -o yaml | grep -A 5 -B 5 "tcp-discovery"
+
+   # Should show (Neo4j 5.26+):
+   # dbms.kubernetes.discovery.v2.service_port_name=tcp-discovery
+   # dbms.cluster.discovery.version=V2_ONLY
+
+   # Should show (Neo4j 2025.x):
+   # dbms.kubernetes.discovery.service_port_name=tcp-discovery
+   # (V2_ONLY is default, not explicitly set)
    ```
+
+   **Fix**: Ensure operator version includes the V2_ONLY discovery fix. If using older version, upgrade to latest.
 
 2. **Verify Cluster Topology:**
    ```bash
@@ -223,8 +237,17 @@ kubectl logs <cluster-name>-1
 
 3. **Check Inter-Pod Communication:**
    ```bash
-   # Test DNS resolution
-   kubectl exec -it <pod-name> -- nslookup <cluster-name>-discovery
+   # Test DNS resolution to headless service
+   kubectl exec -it <pod-name> -- nslookup <cluster-name>-headless
+
+   # Test cluster port connectivity (5000)
+   kubectl exec -it <pod-name> -- timeout 2 bash -c "</dev/tcp/localhost/5000"
+   ```
+
+4. **Verify Discovery Labels:**
+   ```bash
+   # Check that only headless service has clustering label
+   kubectl get svc -l neo4j.com/cluster=<cluster-name> -o yaml | grep -A 3 -B 3 "neo4j.com/clustering"
    ```
 
 #### Problem: Scaling Issues

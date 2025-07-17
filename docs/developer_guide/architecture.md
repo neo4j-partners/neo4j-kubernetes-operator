@@ -55,7 +55,8 @@ The operator defines a set of CRDs to represent Neo4j resources. The Go type def
 #### Neo4jEnterpriseCluster
 - **Purpose**: Manages clustered Neo4j Enterprise deployments requiring high availability
 - **Minimum Topology**: Enforces 1 primary + 1 secondary OR 2+ primaries
-- **Discovery Mode**: Automatically configures V2_ONLY discovery for Neo4j 5.26+
+- **Discovery Mode**: Automatically configures V2_ONLY discovery for Neo4j 5.26+ and 2025.x
+- **CRITICAL**: Uses `tcp-discovery` port (5000) for V2_ONLY discovery, not `tcp-tx` port (6000)
 - **Scaling**: Supports horizontal scaling with topology validation
 
 #### Neo4jEnterpriseStandalone
@@ -116,7 +117,10 @@ The operator includes intelligent resource management capabilities:
 - **Debounce Mechanism**: Reduces configuration churn and restart loops
 - **Content Normalization**: Ensures consistent configuration formatting
 - **Dual CRD Support**: Handles configuration for both clustered and standalone deployments
-- **Discovery Configuration**: Automatically configures V2_ONLY discovery for Neo4j 5.26+
+- **V2_ONLY Discovery Fix**: Automatically configures correct discovery port for Neo4j 5.26+ and 2025.x
+  - Neo4j 5.26.x: `dbms.kubernetes.discovery.v2.service_port_name=tcp-discovery`
+  - Neo4j 2025.x: `dbms.kubernetes.discovery.service_port_name=tcp-discovery`
+  - Implementation: `internal/resources/cluster.go:getKubernetesDiscoveryParameter()`
 - **Mode Setting**: Automatically sets appropriate `dbms.mode` based on deployment type
 
 ## RBAC and Security
@@ -186,7 +190,11 @@ The operator supports Neo4j 5.26+ and 2025.x+ versions. Key configuration consid
 
 The operator automatically manages:
 - Cluster discovery settings (`dbms.cluster.discovery.resolver_type: "K8S"`)
-- Discovery version (`dbms.cluster.discovery.version: "V2_ONLY"` for 5.26+)
+- Discovery version (`dbms.cluster.discovery.version: "V2_ONLY"` for 5.26+, default for 2025.x)
+- **CRITICAL V2_ONLY Discovery Fix**: Correct port configuration for cluster formation
+  - Neo4j 5.26.x: `dbms.kubernetes.discovery.v2.service_port_name=tcp-discovery`
+  - Neo4j 2025.x: `dbms.kubernetes.discovery.service_port_name=tcp-discovery`
+  - Uses port 5000 (cluster) not port 6000 (discovery - disabled in V2_ONLY)
 - Kubernetes-specific endpoints and advertised addresses
 - Network bindings for pods
 

@@ -60,6 +60,10 @@ tls.key
 kubeconfig*
 .kubeconfig
 
+# Test YAML files in root (should be in examples/testing)
+test-*.yaml
+*-test.yaml
+
 # Local development overrides
 docker-compose.override.yml
 .env

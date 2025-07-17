@@ -53,25 +53,44 @@ config:
 
 ## Clustering Configuration
 
-### ✅ Correct (Neo4j 5.26+)
+### 🔧 CRITICAL: V2_ONLY Discovery Configuration
+
+**Neo4j 5.26+ and 2025.x use V2_ONLY discovery mode which requires specific port configuration.**
+
+### ✅ Correct (Automatically configured by operator)
+
+**Neo4j 5.26+ (Semver)**:
+```yaml
+# The operator automatically configures these settings:
+dbms.cluster.discovery.resolver_type: "K8S"
+dbms.kubernetes.discovery.v2.service_port_name: "tcp-discovery"  # Port 5000
+dbms.cluster.discovery.version: "V2_ONLY"
+```
+
+**Neo4j 2025.x+ (Calver)**:
+```yaml
+# The operator automatically configures these settings:
+dbms.cluster.discovery.resolver_type: "K8S"
+dbms.kubernetes.discovery.service_port_name: "tcp-discovery"     # Port 5000
+# V2_ONLY is default in 2025.x, no explicit setting needed
+```
+
+### ❌ Deprecated/Incorrect
 ```yaml
 config:
-  # Discovery configuration (automatically set by operator)
-  dbms.cluster.discovery.resolver_type: "K8S"
-  dbms.cluster.discovery.version: "V2_ONLY"
+  # These settings will cause cluster formation to fail:
+  dbms.kubernetes.discovery.v2.service_port_name: "tcp-tx"      # Wrong port!
+  dbms.kubernetes.discovery.service_port_name: "discovery"      # Legacy name
+  dbms.cluster.discovery.type: "K8S"                           # Deprecated
 
   # Database format
-  db.format: "block"  # Recommended for all deployments
+  db.format: "standard"                                        # Deprecated since 5.23
+  db.format: "high_limit"                                     # Deprecated since 5.23
+  server.groups: "group1"                                     # Deprecated - use initial.server.tags
 ```
 
-### ❌ Deprecated
-```yaml
-config:
-  dbms.cluster.discovery.type: "K8S"    # Deprecated - use resolver_type
-  db.format: "standard"                  # Deprecated since 5.23
-  db.format: "high_limit"               # Deprecated since 5.23
-  server.groups: "group1"               # Deprecated - use initial.server.tags
-```
+> **⚠️ IMPORTANT**: V2_ONLY mode disables the discovery port (6000) and only uses the cluster port (5000).
+> Using `tcp-tx` instead of `tcp-discovery` will cause cluster formation to fail.
 
 ## Common Configuration Patterns
 
