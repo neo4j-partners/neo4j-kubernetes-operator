@@ -252,8 +252,9 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 	// Create Services
 	services := []*corev1.Service{
 		resources.BuildHeadlessServiceForEnterprise(cluster),  // Headless service for StatefulSet
-		resources.BuildInternalsServiceForEnterprise(cluster), // Internals service for discovery
-		resources.BuildClientServiceForEnterprise(cluster),
+		resources.BuildDiscoveryServiceForEnterprise(cluster), // Discovery service for Neo4j K8s discovery
+		resources.BuildInternalsServiceForEnterprise(cluster), // Internals service for client connections
+		resources.BuildClientServiceForEnterprise(cluster),    // Client service for external access
 	}
 
 	// Filter out nil services (e.g., secondary service when secondaries = 0)

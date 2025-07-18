@@ -118,11 +118,16 @@ func buildStatefulSetForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster
 		}
 	}
 
+	// Get labels but remove clustering label from StatefulSet
+	// Only pods should have the clustering label, not the StatefulSet itself
+	statefulSetLabels := getLabelsForEnterprise(cluster, role)
+	delete(statefulSetLabels, "neo4j.com/clustering")
+
 	return &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s-%s", cluster.Name, role),
 			Namespace: cluster.Namespace,
-			Labels:    getLabelsForEnterprise(cluster, role),
+			Labels:    statefulSetLabels,
 		},
 		Spec: appsv1.StatefulSetSpec{
 			Replicas:            &replicas,
@@ -152,21 +157,13 @@ func buildStatefulSetForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster
 func BuildHeadlessServiceForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) *corev1.Service {
 	labels := getLabelsForEnterprise(cluster, "")
 
-	// Create selector without service-type label for headless service
-	// This prevents the headless service from being discovered by Neo4j K8s discovery
-	selector := make(map[string]string)
-	for k, v := range labels {
-		if k != "neo4j.com/service-type" {
-			selector[k] = v
-		}
-	}
-
-	// Remove service-type from both labels and selector to prevent discovery
+	// Remove clustering label - StatefulSet headless service doesn't need it
+	delete(labels, "neo4j.com/clustering")
 	delete(labels, "neo4j.com/service-type")
-	delete(selector, "neo4j.com/service-type")
 
-	// Add clustering label for discovery - this allows Neo4j to discover the headless service
-	labels["neo4j.com/clustering"] = "true"
+	// Create selector for all cluster pods
+	selector := make(map[string]string)
+	selector["neo4j.com/cluster"] = cluster.Name
 
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
@@ -226,6 +223,47 @@ func BuildHeadlessServiceForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseClu
 	}
 }
 
+// BuildDiscoveryServiceForEnterprise creates a ClusterIP service specifically for Neo4j K8s discovery
+// This service has the clustering label so Neo4j can discover it, and being a regular ClusterIP service,
+// it has endpoints that list all pod IPs, which Neo4j's K8s discovery can query
+func BuildDiscoveryServiceForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) *corev1.Service {
+	// Minimal labels - just what's needed for discovery
+	labels := map[string]string{
+		"app.kubernetes.io/name":       "neo4j",
+		"app.kubernetes.io/instance":   cluster.Name,
+		"app.kubernetes.io/managed-by": "neo4j-operator",
+		"neo4j.com/cluster":            cluster.Name,
+		"neo4j.com/clustering":         "true", // Critical: This label is required for Neo4j K8s discovery
+	}
+
+	// Selector to match pods with clustering label
+	selector := map[string]string{
+		"neo4j.com/cluster":    cluster.Name,
+		"neo4j.com/clustering": "true",
+	}
+
+	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-discovery", cluster.Name),
+			Namespace: cluster.Namespace,
+			Labels:    labels,
+		},
+		Spec: corev1.ServiceSpec{
+			Type:                     corev1.ServiceTypeClusterIP, // Regular ClusterIP service
+			Selector:                 selector,
+			PublishNotReadyAddresses: true, // Allow discovery during startup
+			Ports: []corev1.ServicePort{
+				{
+					Name:       "tcp-discovery",
+					Port:       ClusterPort,
+					TargetPort: intstr.FromInt(ClusterPort),
+					Protocol:   corev1.ProtocolTCP,
+				},
+			},
+		},
+	}
+}
+
 // BuildInternalsServiceForEnterprise creates an internals service for cluster discovery
 // This is NOT a headless service as per Neo4j Helm charts best practice
 // "headless services have been seen to introduce latency whenever a cluster member restarts"
@@ -233,7 +271,9 @@ func BuildInternalsServiceForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCl
 	// Add specific labels for discovery
 	labels := getLabelsForEnterprise(cluster, "")
 	labels["neo4j.com/service-type"] = "internals"
-	// Don't add clustering label to internals service - only headless service should be discovered
+	// IMPORTANT: Remove clustering label from ALL services
+	// Only pods should have the clustering label for direct discovery
+	delete(labels, "neo4j.com/clustering")
 
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
@@ -244,8 +284,10 @@ func BuildInternalsServiceForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCl
 		Spec: corev1.ServiceSpec{
 			// Regular ClusterIP service (not headless) for discovery
 			// This follows Neo4j Helm chart pattern to avoid latency issues
-			Type:                     corev1.ServiceTypeClusterIP,
-			Selector:                 getLabelsForEnterprise(cluster, ""),
+			Type: corev1.ServiceTypeClusterIP,
+			Selector: map[string]string{
+				"neo4j.com/cluster": cluster.Name,
+			},
 			PublishNotReadyAddresses: true, // Required for Neo4j discovery during startup
 			Ports: []corev1.ServicePort{
 				{
@@ -332,16 +374,23 @@ func BuildClientServiceForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseClust
 		annotations = cluster.Spec.Service.Annotations
 	}
 
+	labels := getLabelsForEnterprise(cluster, "client")
+	// Remove clustering label from client service
+	delete(labels, "neo4j.com/clustering")
+
+	selector := make(map[string]string)
+	selector["neo4j.com/cluster"] = cluster.Name
+
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        fmt.Sprintf("%s-client", cluster.Name),
 			Namespace:   cluster.Namespace,
-			Labels:      getLabelsForEnterprise(cluster, "client"),
+			Labels:      labels,
 			Annotations: annotations,
 		},
 		Spec: corev1.ServiceSpec{
 			Type:     serviceType,
-			Selector: getLabelsForEnterprise(cluster, ""),
+			Selector: selector,
 			Ports:    ports,
 		},
 	}
@@ -583,7 +632,7 @@ func BuildDiscoveryRoleForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseClust
 		Rules: []rbacv1.PolicyRule{
 			{
 				APIGroups: []string{""},
-				Resources: []string{"services"},
+				Resources: []string{"services", "endpoints"},
 				Verbs:     []string{"get", "list", "watch"},
 			},
 		},
@@ -712,6 +761,7 @@ func getLabelsForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, role 
 		"app.kubernetes.io/part-of":    "neo4j-cluster",
 		"app.kubernetes.io/managed-by": "neo4j-operator",
 		"neo4j.com/cluster":            cluster.Name,
+		"neo4j.com/clustering":         "true",
 		"neo4j.com/service-type":       "internals",
 	}
 
@@ -728,6 +778,10 @@ func BuildPodSpecForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, ro
 		{
 			Name:  "NEO4J_EDITION",
 			Value: "enterprise",
+		},
+		{
+			Name:  "NEO4J_ACCEPT_LICENSE_AGREEMENT",
+			Value: "yes",
 		},
 		{
 			Name: "DB_USERNAME",

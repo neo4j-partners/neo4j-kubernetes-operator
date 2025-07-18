@@ -19,6 +19,29 @@ A Neo4j Enterprise cluster consists of:
 
 The operator automatically uses **Kubernetes Discovery** (recommended) for all clusters as described in the [Neo4j Operations Manual](https://neo4j.com/docs/operations-manual/current/clustering/setup/discovery/).
 
+### How Neo4j Kubernetes Discovery Works
+
+The operator implements Neo4j's Kubernetes discovery mechanism with the following architecture:
+
+1. **Discovery Service**: A dedicated ClusterIP service labeled with `neo4j.com/clustering=true`
+2. **Service Discovery**: Neo4j queries the Kubernetes API to find services matching the label selector
+3. **Endpoint Resolution**: Neo4j uses the discovered service to query endpoints and find individual pod IPs
+4. **Cluster Formation**: Pods connect directly to each other using their resolved IPs
+
+**Important**: When checking logs, you'll see Neo4j report discovering a service hostname like:
+```
+Resolved endpoints... to '[my-cluster-discovery.default.svc.cluster.local:5000]'
+```
+This is **expected behavior**. Neo4j discovers the service first, then internally queries its endpoints to get pod IPs.
+
+### RBAC Requirements
+
+The discovery mechanism requires specific permissions:
+- **Services**: To discover the labeled service
+- **Endpoints**: To resolve individual pod IPs from the service
+
+The operator automatically creates these permissions in the discovery role.
+
 ### Kubernetes Discovery (Automatic)
 
 **The operator automatically configures Kubernetes API-based discovery for all clusters.** This provides:
@@ -32,7 +55,7 @@ The operator automatically uses **Kubernetes Discovery** (recommended) for all c
 
 1. **Creates RBAC resources**:
    - ServiceAccount: `{cluster-name}-discovery`
-   - Role: `{cluster-name}-discovery` (with permissions to list services)
+   - Role: `{cluster-name}-discovery` (with permissions to list services and endpoints)
    - RoleBinding: `{cluster-name}-discovery`
 
 2. **Creates role-specific services**:
@@ -308,10 +331,13 @@ spec:
    - Check RBAC resources were created: `kubectl get serviceaccount,role,rolebinding -l neo4j.com/cluster={cluster-name}`
 
 2. **Discovery Issues**
-   - Verify automatic discovery services exist: `kubectl get service {cluster-name}-primary-headless`
-   - Check discovery service account permissions: `kubectl describe role {cluster-name}-discovery`
-   - Ensure network policies allow cluster communication on port 6000
+   - Verify discovery service exists: `kubectl get service {cluster-name}-discovery`
+   - Check discovery service has clustering label: `kubectl get service {cluster-name}-discovery -o jsonpath='{.metadata.labels.neo4j\.com/clustering}'`
+   - Verify discovery role has endpoints permission: `kubectl get role {cluster-name}-discovery -o yaml | grep endpoints`
+   - Check discovery logs show service hostname (this is EXPECTED): `kubectl logs {cluster-name}-primary-0 | grep "Resolved endpoints"`
    - Verify pod has correct ServiceAccount: `kubectl get pod {cluster-name}-primary-0 -o jsonpath='{.spec.serviceAccountName}'`
+
+   **Note**: Neo4j's K8s discovery returns service hostnames (e.g., `{cluster-name}-discovery.default.svc.cluster.local:5000`) in logs. This is expected behavior - Neo4j internally queries the service endpoints to discover individual pods.
 
 3. **Quorum Loss**
    - Check primary node health
