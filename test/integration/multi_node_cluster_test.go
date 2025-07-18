@@ -36,8 +36,6 @@ var _ = Describe("Multi-Node Cluster Formation Integration Tests", func() {
 		namespace   *corev1.Namespace
 		clusterName string
 		cluster     *neo4jv1alpha1.Neo4jEnterpriseCluster
-		timeout     = time.Second * 120
-		interval    = time.Second * 2
 	)
 
 	BeforeEach(func() {
