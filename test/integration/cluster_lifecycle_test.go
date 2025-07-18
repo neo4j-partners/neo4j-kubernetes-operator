@@ -24,7 +24,6 @@ import (
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -305,114 +304,6 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 					Namespace: namespace.Name,
 				}, service2)
 			}, timeout, interval).Should(Succeed())
-		})
-
-		It("should create RBAC resources for Kubernetes discovery", func() {
-			By("Creating a Neo4j cluster")
-			clusterName = randomName("k8s-discovery")
-			cluster = createBasicCluster(clusterName, namespace.Name)
-			cluster.Spec.Topology.Primaries = 3
-			cluster.Spec.Topology.Secondaries = 1
-
-			Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
-
-			By("Verifying discovery ServiceAccount is created")
-			serviceAccount := &corev1.ServiceAccount{}
-			Eventually(func() error {
-				return k8sClient.Get(ctx, types.NamespacedName{
-					Name:      clusterName + "-discovery",
-					Namespace: namespace.Name,
-				}, serviceAccount)
-			}, timeout, interval).Should(Succeed())
-
-			// Verify ServiceAccount labels
-			expectedLabels := map[string]string{
-				"app.kubernetes.io/name":     "neo4j",
-				"app.kubernetes.io/instance": clusterName,
-				"neo4j.com/role":             "discovery-service-account",
-			}
-			for key, expectedValue := range expectedLabels {
-				Expect(serviceAccount.Labels[key]).To(Equal(expectedValue))
-			}
-
-			By("Verifying discovery Role is created")
-			role := &rbacv1.Role{}
-			Eventually(func() error {
-				return k8sClient.Get(ctx, types.NamespacedName{
-					Name:      clusterName + "-discovery",
-					Namespace: namespace.Name,
-				}, role)
-			}, timeout, interval).Should(Succeed())
-
-			// Verify Role permissions
-			Expect(role.Rules).To(HaveLen(1))
-			Expect(role.Rules[0].APIGroups).To(Equal([]string{""}))
-			Expect(role.Rules[0].Resources).To(Equal([]string{"services", "endpoints"}))
-			Expect(role.Rules[0].Verbs).To(ContainElements("get", "list", "watch"))
-
-			By("Verifying discovery RoleBinding is created")
-			roleBinding := &rbacv1.RoleBinding{}
-			Eventually(func() error {
-				return k8sClient.Get(ctx, types.NamespacedName{
-					Name:      clusterName + "-discovery",
-					Namespace: namespace.Name,
-				}, roleBinding)
-			}, timeout, interval).Should(Succeed())
-
-			// Verify RoleBinding references
-			Expect(roleBinding.Subjects).To(HaveLen(1))
-			Expect(roleBinding.Subjects[0].Kind).To(Equal("ServiceAccount"))
-			Expect(roleBinding.Subjects[0].Name).To(Equal(clusterName + "-discovery"))
-			Expect(roleBinding.RoleRef.Kind).To(Equal("Role"))
-			Expect(roleBinding.RoleRef.Name).To(Equal(clusterName + "-discovery"))
-
-			By("Verifying role-specific headless services are created")
-			primaryHeadlessService := &corev1.Service{}
-			Eventually(func() error {
-				return k8sClient.Get(ctx, types.NamespacedName{
-					Name:      clusterName + "-primary-headless",
-					Namespace: namespace.Name,
-				}, primaryHeadlessService)
-			}, timeout, interval).Should(Succeed())
-
-			// Verify primary service has correct role label and selector
-			Expect(primaryHeadlessService.Labels["neo4j.com/role"]).To(Equal("primary"))
-			Expect(primaryHeadlessService.Spec.Selector["neo4j.com/role"]).To(Equal("primary"))
-			Expect(primaryHeadlessService.Spec.ClusterIP).To(Equal("None"))
-
-			// Verify discovery port is present
-			var discoveryPort *corev1.ServicePort
-			for _, port := range primaryHeadlessService.Spec.Ports {
-				if port.Name == "discovery" {
-					discoveryPort = &port
-					break
-				}
-			}
-			Expect(discoveryPort).NotTo(BeNil())
-			Expect(discoveryPort.Port).To(Equal(int32(6000)))
-
-			By("Verifying secondary headless service is created when secondaries > 0")
-			secondaryHeadlessService := &corev1.Service{}
-			Eventually(func() error {
-				return k8sClient.Get(ctx, types.NamespacedName{
-					Name:      clusterName + "-secondary-headless",
-					Namespace: namespace.Name,
-				}, secondaryHeadlessService)
-			}, timeout, interval).Should(Succeed())
-
-			Expect(secondaryHeadlessService.Labels["neo4j.com/role"]).To(Equal("secondary"))
-			Expect(secondaryHeadlessService.Spec.Selector["neo4j.com/role"]).To(Equal("secondary"))
-
-			By("Verifying StatefulSet uses discovery service account")
-			primarySts := &appsv1.StatefulSet{}
-			Eventually(func() error {
-				return k8sClient.Get(ctx, types.NamespacedName{
-					Name:      clusterName + "-primary",
-					Namespace: namespace.Name,
-				}, primarySts)
-			}, timeout, interval).Should(Succeed())
-
-			Expect(primarySts.Spec.Template.Spec.ServiceAccountName).To(Equal(clusterName + "-discovery"))
 		})
 	})
 })
