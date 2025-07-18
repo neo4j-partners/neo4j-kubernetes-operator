@@ -491,6 +491,75 @@ kubectl exec <pod> -- timeout 2 bash -c "</dev/tcp/localhost/5000"
 
 **CRITICAL**: This fix is essential for Neo4j 5.26+ cluster formation. Without it, all cluster deployments will fail to form properly.
 
+## CRITICAL MILESTONE: Neo4j Kubernetes Discovery Architecture (2025-07-18)
+
+### **Issue Summary**
+Neo4j cluster formation was investigated due to discovery returning service hostname instead of individual pod endpoints. This behavior was found to be **by design** and correct.
+
+### **Key Discoveries**
+1. **Neo4j K8s Discovery Behavior**:
+   - Returns service DNS names (e.g., `test-cluster-discovery.default.svc.cluster.local:5000`)
+   - This is EXPECTED behavior, not a bug
+   - Neo4j internally uses this to query endpoints and discover pods
+
+2. **RBAC Requirements**:
+   - Discovery ServiceAccount MUST have `endpoints` permission in addition to `services`
+   - Operator must have `endpoints` permission to grant it to discovery roles
+   - Without endpoints access, Neo4j cannot resolve individual pods
+
+3. **Service Architecture**:
+   - Single shared discovery service with `neo4j.com/clustering=true` label
+   - No per-pod services needed (matches Neo4j Helm chart pattern)
+   - Discovery service is ClusterIP (not headless) - deliberate choice for stability
+
+### **Implementation Details**
+```go
+// internal/resources/cluster.go - Discovery Role
+Rules: []rbacv1.PolicyRule{
+    {
+        APIGroups: []string{""},
+        Resources: []string{"services", "endpoints"},  // CRITICAL: endpoints permission required
+        Verbs:     []string{"get", "list", "watch"},
+    },
+},
+```
+
+```yaml
+# config/rbac/role.yaml - Operator permissions
+- apiGroups:
+  - ""
+  resources:
+  - endpoints  # CRITICAL: Operator needs this to grant it
+  - services
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+```
+
+### **Verification**
+```bash
+# Check discovery returns service hostname (EXPECTED)
+kubectl logs <pod> | grep "Resolved endpoints"
+# Output: '[test-cluster-discovery.default.svc.cluster.local:5000]'
+
+# Verify cluster formation works
+kubectl exec <pod> -- cypher-shell -u neo4j -p <password> "SHOW SERVERS"
+# Shows all cluster members with their FQDNs
+```
+
+### **DO NOT CHANGE**
+1. Keep discovery service as ClusterIP (not headless)
+2. Keep single shared discovery service (not per-pod)
+3. Keep endpoints permission in discovery role
+4. Keep service hostname return behavior (it's correct)
+
+**IMPORTANT**: This architecture matches Neo4j Helm charts and is the correct implementation. The discovery returning service hostname is by design - Neo4j uses this to query endpoints internally.
+
 ## Reports
 
 All reports that Claude generates should go into the reports directory. The reports can be reviewed by Claude to determine changes that were made.

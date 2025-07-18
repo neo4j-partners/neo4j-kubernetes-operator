@@ -198,6 +198,32 @@ The operator automatically manages:
 - Kubernetes-specific endpoints and advertised addresses
 - Network bindings for pods
 
+### Kubernetes Discovery Mechanism
+
+Neo4j's Kubernetes discovery (`resolver_type=K8S`) works as follows:
+
+1. **Service Discovery**: Neo4j queries the Kubernetes API to find services matching the configured label selector
+2. **Endpoint Resolution**: For each matching service, Neo4j retrieves the Endpoints resource to get individual pod IPs
+3. **Cluster Formation**: Neo4j uses these pod IPs to establish direct connections between cluster members
+
+**Important Discovery Behavior**: When Neo4j discovers services, it logs the service hostname (e.g., `my-cluster-discovery.default.svc.cluster.local:5000`). This is **expected behavior** - Neo4j discovers the service first, then internally queries its endpoints to resolve individual pod IPs.
+
+**Service Architecture**:
+- **Discovery Service**: ClusterIP service with `neo4j.com/clustering=true` label
+- **Shared Services**: No per-pod services needed (matches Neo4j Helm chart pattern)
+- **ClusterIP Type**: Discovery service is regular ClusterIP, not headless (deliberate for stability)
+
+**RBAC Requirements**: The discovery ServiceAccount needs permissions to:
+- `get`, `list`, `watch` services (to find matching services)
+- `get`, `list`, `watch` endpoints (to resolve pod IPs behind services) **[CRITICAL]**
+
+Without endpoints permission, Neo4j can discover services but cannot resolve individual pods, preventing cluster formation.
+
+The operator automatically creates these RBAC resources for each cluster, including:
+- ServiceAccount: `{cluster-name}-discovery`
+- Role: `{cluster-name}-discovery` with services and endpoints permissions
+- RoleBinding: `{cluster-name}-discovery`
+
 ### Configuration Validation
 
 The validation framework (`internal/validation/`) ensures:

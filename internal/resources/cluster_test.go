@@ -268,7 +268,7 @@ func TestBuildDiscoveryRoleForEnterprise(t *testing.T) {
 	require.Len(t, role.Rules, 1, "should have one policy rule")
 	rule := role.Rules[0]
 	assert.Equal(t, []string{""}, rule.APIGroups)
-	assert.Equal(t, []string{"services"}, rule.Resources)
+	assert.Equal(t, []string{"services", "endpoints"}, rule.Resources)
 	assert.Equal(t, []string{"get", "list", "watch"}, rule.Verbs)
 }
 
