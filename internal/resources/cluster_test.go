@@ -5,6 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -204,6 +205,9 @@ func TestBuildStatefulSetForEnterprise_WithFeatures(t *testing.T) {
 	assert.Len(t, podSpec.InitContainers, 1, "should have init container for plugin")
 	assert.Len(t, podSpec.Containers, 2, "should have main container + exporter")
 
+	// Test pod management policy
+	assert.Equal(t, appsv1.ParallelPodManagement, sts.Spec.PodManagementPolicy, "should use parallel pod management")
+
 	// Test Prometheus annotations
 	annotations := sts.Spec.Template.Annotations
 	assert.Equal(t, "true", annotations["prometheus.io/scrape"])
@@ -302,6 +306,43 @@ func TestBuildDiscoveryRoleBindingForEnterprise(t *testing.T) {
 	assert.Equal(t, "rbac.authorization.k8s.io", roleBinding.RoleRef.APIGroup)
 	assert.Equal(t, "Role", roleBinding.RoleRef.Kind)
 	assert.Equal(t, "test-cluster-discovery", roleBinding.RoleRef.Name)
+}
+
+func TestBuildStatefulSetForEnterprise_ParallelManagement(t *testing.T) {
+	cluster := &neo4jv1alpha1.Neo4jEnterpriseCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+		},
+		Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
+			Image: neo4jv1alpha1.ImageSpec{
+				Repo: "neo4j",
+				Tag:  "5.26.0-enterprise",
+			},
+			Topology: neo4jv1alpha1.TopologyConfiguration{
+				Primaries:   3,
+				Secondaries: 2,
+			},
+			Storage: neo4jv1alpha1.StorageSpec{
+				ClassName: "standard",
+				Size:      "10Gi",
+			},
+		},
+	}
+
+	// Test primary StatefulSet
+	primarySts := resources.BuildPrimaryStatefulSetForEnterprise(cluster)
+	assert.Equal(t, appsv1.ParallelPodManagement, primarySts.Spec.PodManagementPolicy, "primary StatefulSet should use parallel pod management")
+
+	// Test secondary StatefulSet
+	secondarySts := resources.BuildSecondaryStatefulSetForEnterprise(cluster)
+	assert.Equal(t, appsv1.ParallelPodManagement, secondarySts.Spec.PodManagementPolicy, "secondary StatefulSet should use parallel pod management")
+
+	// Test that minimum primaries is set to 1 in the startup script
+	podSpec := resources.BuildPodSpecForEnterprise(cluster, "primary", "neo4j-admin-secret")
+	startupScript := podSpec.Containers[0].Command[2]
+	assert.Contains(t, startupScript, "MIN_PRIMARIES=1", "startup script should set MIN_PRIMARIES to 1")
+	assert.Contains(t, startupScript, "dbms.cluster.minimum_initial_system_primaries_count=${MIN_PRIMARIES}", "should use MIN_PRIMARIES in Neo4j config")
 }
 
 func TestBuildCertificateForEnterprise_DNSNames(t *testing.T) {
