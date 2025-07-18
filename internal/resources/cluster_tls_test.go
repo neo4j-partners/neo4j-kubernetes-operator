@@ -33,6 +33,10 @@ func TestBuildConfigMapForEnterprise_TLSConfiguration(t *testing.T) {
 					Kind: "ClusterIssuer",
 				},
 			},
+			Storage: neo4jv1alpha1.StorageSpec{
+				ClassName: "standard",
+				Size:      "10Gi",
+			},
 		},
 	}
 
@@ -91,6 +95,10 @@ func TestBuildStatefulSetForEnterprise_TLSClusterFormation(t *testing.T) {
 					Name: "ca-cluster-issuer",
 					Kind: "ClusterIssuer",
 				},
+			},
+			Storage: neo4jv1alpha1.StorageSpec{
+				ClassName: "standard",
+				Size:      "10Gi",
 			},
 		},
 	}
