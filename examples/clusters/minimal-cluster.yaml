@@ -38,8 +38,15 @@ spec:
       cpu: "2"          # Maximum CPU cores
 
   # TLS disabled for simplicity (enable for production)
+  # Note: TLS clusters work reliably with the operator's optimizations
   tls:
     mode: disabled
+  # To enable TLS:
+  # tls:
+  #   mode: cert-manager
+  #   issuerRef:
+  #     name: ca-cluster-issuer
+  #     kind: ClusterIssuer
 
   # Required environment variables
   env:

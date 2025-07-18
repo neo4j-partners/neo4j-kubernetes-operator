@@ -38,7 +38,28 @@ kubectl port-forward svc/<standalone-name>-service 7474:7474 7687:7687
 
 ## Common Issues and Solutions
 
-### 1. Deployment Validation Errors
+### 1. Split-Brain Scenarios
+
+#### Problem: Cluster nodes form multiple independent clusters
+This is most common with TLS-enabled clusters where nodes fail to join during initial formation.
+
+**Quick Check**:
+```bash
+# Check each node's view of the cluster
+for i in 0 1 2; do
+  kubectl exec <cluster>-primary-$i -- cypher-shell -u neo4j -p <password> "SHOW SERVERS" | wc -l
+done
+```
+
+**Solution**: See the comprehensive [Split-Brain Recovery Guide](../troubleshooting/split-brain-recovery.md) or use the [Quick Reference](../quick-reference/split-brain-recovery-quick-ref.md).
+
+**Quick Fix**:
+```bash
+# Restart minority cluster nodes
+kubectl delete pod <cluster>-primary-1 <cluster>-secondary-1
+```
+
+### 2. Deployment Validation Errors
 
 #### Problem: Single-Node Cluster Not Allowed
 ```
@@ -461,6 +482,29 @@ kubectl logs -n cert-manager deployment/cert-manager
    ```bash
    kubectl get secret <tls-secret> -o yaml
    ```
+
+3. **TLS Cluster Formation Issues:**
+
+   TLS-enabled clusters are prone to split-brain during initial formation. If you see partial cluster formation:
+
+   ```bash
+   # Check for split clusters
+   kubectl exec <cluster>-primary-0 -- cypher-shell -u neo4j -p <password> "SHOW SERVERS"
+   kubectl exec <cluster>-primary-1 -- cypher-shell -u neo4j -p <password> "SHOW SERVERS"
+   ```
+
+   **Prevention:**
+   ```yaml
+   spec:
+     config:
+       # Increase discovery timeouts for TLS clusters
+       dbms.cluster.discovery.v2.initial_timeout: "10s"
+       dbms.cluster.discovery.v2.retry_timeout: "20s"
+       # Note: Do NOT override dbms.cluster.raft.membership.join_timeout
+       # The operator sets it to 10m which is optimal
+   ```
+
+   See [Split-Brain Recovery Guide](../troubleshooting/split-brain-recovery.md) for detailed recovery procedures.
 
 ## Advanced Troubleshooting
 

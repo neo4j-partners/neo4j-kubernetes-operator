@@ -37,7 +37,7 @@ func TestBuildConfigMapForEnterprise_ClusterFormation(t *testing.T) {
 					},
 				},
 			},
-			expectedBootstrap: "MIN_PRIMARIES=${TOTAL_PRIMARIES}",
+			expectedBootstrap: "MIN_PRIMARIES=1",
 			expectedJoining:   "dbms.cluster.minimum_initial_system_primaries_count=${MIN_PRIMARIES}",
 		},
 		{
@@ -58,7 +58,7 @@ func TestBuildConfigMapForEnterprise_ClusterFormation(t *testing.T) {
 					},
 				},
 			},
-			expectedBootstrap: "MIN_PRIMARIES=${TOTAL_PRIMARIES}",
+			expectedBootstrap: "MIN_PRIMARIES=1",
 			expectedJoining:   "dbms.cluster.minimum_initial_system_primaries_count=${MIN_PRIMARIES}",
 		},
 		{
@@ -161,8 +161,8 @@ func TestBuildConfigMapForEnterprise_ClusterFormation(t *testing.T) {
 					"multi-node clusters should use unified bootstrap approach")
 
 				// Verify minimum primaries logic - unified approach
-				assert.Contains(t, startupScript, "MIN_PRIMARIES=${TOTAL_PRIMARIES}",
-					"clusters should use unified MIN_PRIMARIES=${TOTAL_PRIMARIES}")
+				assert.Contains(t, startupScript, "MIN_PRIMARIES=1",
+					"clusters should use MIN_PRIMARIES=1 for flexible formation")
 
 				// Verify Kubernetes discovery configuration
 				expectedK8sDiscoveryConfig := []string{

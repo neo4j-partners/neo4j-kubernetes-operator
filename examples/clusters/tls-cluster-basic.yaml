@@ -1,0 +1,48 @@
+# TLS-enabled Neo4j Enterprise Cluster
+# This example shows optimal configuration for TLS clusters
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: tls-enabled-cluster
+  namespace: default
+spec:
+  # Neo4j Enterprise 5.26+
+  image:
+    repo: "neo4j"
+    tag: "5.26.0-enterprise"
+    pullPolicy: "IfNotPresent"
+
+  # Cluster topology
+  topology:
+    primaries: 3
+    secondaries: 2
+
+  # Storage
+  storage:
+    className: "standard"
+    size: "10Gi"
+
+  # Authentication
+  auth:
+    adminSecret: "neo4j-admin-secret"
+
+  # TLS Configuration
+  tls:
+    mode: cert-manager
+    issuerRef:
+      name: ca-cluster-issuer
+      kind: ClusterIssuer
+
+  # Custom configuration for better TLS cluster formation
+  config:
+    # Increase discovery timeouts for TLS
+    dbms.cluster.discovery.v2.initial_timeout: "10s"
+    dbms.cluster.discovery.v2.retry_timeout: "20s"
+
+    # Enable detailed logging for troubleshooting
+    dbms.logs.debug.level: "INFO"
+
+    # Note: The operator already sets optimal values for:
+    # - dbms.cluster.raft.membership.join_timeout=10m
+    # - dbms.cluster.raft.binding_timeout=1d
+    # These should not be overridden unless absolutely necessary

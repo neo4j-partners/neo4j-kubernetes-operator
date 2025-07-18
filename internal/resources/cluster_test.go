@@ -338,9 +338,9 @@ func TestBuildStatefulSetForEnterprise_ParallelManagement(t *testing.T) {
 	secondarySts := resources.BuildSecondaryStatefulSetForEnterprise(cluster)
 	assert.Equal(t, appsv1.ParallelPodManagement, secondarySts.Spec.PodManagementPolicy, "secondary StatefulSet should use parallel pod management")
 
-	// Test that minimum primaries is set to 1 in the startup script
-	podSpec := resources.BuildPodSpecForEnterprise(cluster, "primary", "neo4j-admin-secret")
-	startupScript := podSpec.Containers[0].Command[2]
+	// Test that minimum primaries is set to 1 in the ConfigMap startup script
+	configMap := resources.BuildConfigMapForEnterprise(cluster)
+	startupScript := configMap.Data["startup.sh"]
 	assert.Contains(t, startupScript, "MIN_PRIMARIES=1", "startup script should set MIN_PRIMARIES to 1")
 	assert.Contains(t, startupScript, "dbms.cluster.minimum_initial_system_primaries_count=${MIN_PRIMARIES}", "should use MIN_PRIMARIES in Neo4j config")
 }

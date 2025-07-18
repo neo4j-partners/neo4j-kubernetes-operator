@@ -599,3 +599,77 @@ PublishNotReadyAddresses: true, // Pods discoverable before ready
 ## Reports
 
 All reports that Claude generates should go into the reports directory. The reports can be reviewed by Claude to determine changes that were made.
+
+## Split-Brain Recovery Documentation
+
+**Status**: Completed (2025-07-18)
+
+The operator currently does NOT automatically detect or recover from split-brain scenarios. Manual intervention is required.
+
+**Documentation Created**:
+1. **Comprehensive Guide**: `docs/user_guide/troubleshooting/split-brain-recovery.md`
+   - Complete identification and recovery procedures
+   - Multiple recovery methods with risk assessment
+   - TLS-specific considerations and workarounds
+   - Prevention strategies and monitoring scripts
+
+2. **Quick Reference**: `docs/user_guide/quick-reference/split-brain-recovery-quick-ref.md`
+   - Emergency procedures for quick resolution
+   - Command snippets for common scenarios
+   - TLS cluster special handling
+
+3. **Troubleshooting Integration**: Updated main troubleshooting guide to reference split-brain as #1 issue
+
+**Key Points**:
+- Split-brain is more common with TLS-enabled clusters
+- Manual recovery methods range from targeted pod restarts to full scale down/up
+- Prevention involves timeout adjustments and resource allocation
+- Future enhancement: Implement automatic detection and recovery (see `docs/developer_guide/split-brain-recovery-proposal.md`)
+
+## TLS Cluster Formation Solution
+
+**Status**: Completed (2025-07-18)
+
+Successfully resolved TLS cluster formation issues through multiple optimizations.
+
+### Problem
+TLS-enabled clusters experienced split-brain scenarios where nodes formed multiple independent clusters instead of joining together.
+
+### Solution Implemented
+
+1. **Parallel Pod Management** (CRITICAL)
+   - Changed from `OrderedReadyPodManagement` to `ParallelPodManagement`
+   - Location: `internal/resources/cluster.go` line 135
+   - All pods start simultaneously for faster and more reliable formation
+
+2. **Trust All for Cluster SSL**
+   - Added `dbms.ssl.policy.cluster.trust_all=true` to cluster SSL policy
+   - Allows nodes to trust each other's certificates during formation
+   - Essential for TLS cluster handshake success
+
+3. **Endpoints RBAC Permission**
+   - Added endpoints permission via kubebuilder marker
+   - Required for Neo4j Kubernetes discovery to resolve pod IPs
+   - Location: `internal/controller/neo4jenterprisecluster_controller.go`
+
+4. **Configuration Maintained**
+   - `MIN_PRIMARIES=1` - Already optimal for flexible formation
+   - `dbms.cluster.raft.membership.join_timeout=10m` - Do NOT reduce
+   - `dbms.cluster.raft.binding_timeout=1d` - Very generous timeout
+
+### Results
+- **Before fixes**: Complete split-brain (5 separate single-node clusters)
+- **Partial fixes**: Improved to 2 clusters (3+2 nodes)
+- **All fixes applied**: 100% success - single unified cluster with all nodes
+
+### Documentation Updates
+1. **User Guide**: Created comprehensive TLS configuration guide at `docs/user_guide/configuration/tls.md`
+2. **Architecture**: Updated with TLS-specific cluster formation details
+3. **Examples**: Added production TLS cluster examples with best practices
+4. **Tests**: Added TLS-specific tests validating trust_all configuration
+
+### Key Learnings
+- Parallel pod startup is essential for TLS clusters
+- Certificate trust must be established early (trust_all=true)
+- Standard timeouts (10m join, 1d binding) work well - don't reduce them
+- Endpoints RBAC is critical for discovery to work properly

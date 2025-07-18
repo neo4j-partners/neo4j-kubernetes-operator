@@ -225,9 +225,16 @@ The operator implements an optimized cluster formation strategy that achieves 10
 - **Simplified Logic**: No complex timing or sequencing required
 
 **Implementation Details**:
-- StatefulSets use `PodManagementPolicy: ParallelPodManagement`
+- StatefulSets use `PodManagementPolicy: ParallelPodManagement` (line 135 in `cluster.go`)
 - Startup script sets `MIN_PRIMARIES=1` and `dbms.cluster.minimum_initial_system_primaries_count=${MIN_PRIMARIES}`
 - Discovery service has `PublishNotReadyAddresses: true` for early pod discovery
+- Raft timeouts: `dbms.cluster.raft.membership.join_timeout=10m` and `dbms.cluster.raft.binding_timeout=1d`
+
+**TLS-Specific Optimizations**:
+- **Trust All for Cluster SSL**: `dbms.ssl.policy.cluster.trust_all=true` prevents certificate validation issues during formation
+- **Maintained Parallel Startup**: TLS doesn't change the pod management policy
+- **No Special Delays**: TLS handshakes complete within normal formation timeouts
+- **RBAC for Endpoints**: Operator has endpoints permission for proper discovery
 
 **Service Architecture**:
 - **Discovery Service**: ClusterIP service with `neo4j.com/clustering=true` label

@@ -118,6 +118,16 @@ The operator uses an **optimized parallel cluster formation approach** that enab
 - **Reliable cluster formation** - Eliminates split-brain scenarios common with other approaches
 - **Simplified operations** - No complex sequencing or timing dependencies
 
+### TLS-Enabled Clusters
+
+TLS-enabled clusters use the same parallel formation approach with additional optimizations:
+
+- **Automatic trust configuration**: The operator sets `dbms.ssl.policy.cluster.trust_all=true` for intra-cluster communication
+- **Parallel startup maintained**: TLS doesn't change the pod startup behavior
+- **Reliable formation**: With proper configuration, TLS clusters form as reliably as non-TLS clusters
+
+For detailed TLS configuration, see the [TLS Configuration Guide](configuration/tls.md).
+
 ### Cluster Formation Strategy
 
 The operator uses a unified clustering approach for all deployments:

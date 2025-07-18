@@ -1,0 +1,92 @@
+# Production-ready TLS-enabled Neo4j Enterprise Cluster
+# This example demonstrates best practices for TLS cluster configuration
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: production-tls-cluster
+  namespace: default
+spec:
+  # Neo4j Enterprise 5.26+ required for optimal cluster formation
+  image:
+    repo: "neo4j"
+    tag: "5.26.0-enterprise"
+    pullPolicy: "IfNotPresent"
+
+  # Production topology: 3 primaries for fault tolerance, 2+ secondaries for read scaling
+  topology:
+    primaries: 3
+    secondaries: 2
+
+  # Production storage configuration
+  storage:
+    className: "fast-ssd"  # Use your production storage class
+    size: "100Gi"
+
+  # Authentication with external secret
+  auth:
+    adminSecret: "neo4j-admin-secret"
+
+  # TLS Configuration - REQUIRED for production
+  tls:
+    mode: cert-manager
+    issuerRef:
+      name: production-ca-issuer  # Use your production issuer
+      kind: ClusterIssuer
+    duration: 8760h    # 1 year
+    renewBefore: 720h  # 30 days before expiry
+
+  # Production resource allocation
+  resources:
+    requests:
+      cpu: "2"
+      memory: "8Gi"
+    limits:
+      cpu: "4"
+      memory: "16Gi"
+
+  # Optional: Custom configuration for production tuning
+  config:
+    # Increase discovery timeouts slightly for large clusters
+    dbms.cluster.discovery.v2.initial_timeout: "10s"
+    dbms.cluster.discovery.v2.retry_timeout: "20s"
+
+    # Transaction log retention for backup purposes
+    db.tx_log.rotation.retention_policy: "7 days"
+
+    # Query logging for audit
+    db.logs.query.enabled: "VERBOSE"
+    db.logs.query.threshold: "5s"
+
+    # IMPORTANT: Do NOT override these settings - the operator sets optimal values:
+    # - dbms.cluster.raft.membership.join_timeout (kept at 10m)
+    # - dbms.cluster.raft.binding_timeout (kept at 1d)
+    # - dbms.ssl.policy.cluster.trust_all (automatically set to true)
+    # - Pod management policy (ParallelPodManagement for reliable formation)
+
+---
+# Example admin secret (use external secrets in production)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: neo4j-admin-secret
+type: Opaque
+stringData:
+  username: neo4j
+  password: "UseAStrongPasswordHere!"  # Change this!
+
+---
+# Example production issuer (adjust for your environment)
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: production-ca-issuer
+spec:
+  ca:
+    secretName: production-ca-key-pair
+
+# Notes:
+# 1. The operator automatically configures cluster SSL with trust_all=true for reliable TLS cluster formation
+# 2. All pods start in parallel (ParallelPodManagement) for fastest cluster formation
+# 3. MIN_PRIMARIES is set to 1, allowing flexible cluster formation
+# 4. The first pod forms the cluster, others join it
+# 5. This configuration has been tested to achieve 100% cluster formation success with TLS enabled

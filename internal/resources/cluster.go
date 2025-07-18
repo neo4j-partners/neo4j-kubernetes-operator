@@ -132,7 +132,7 @@ func buildStatefulSetForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster
 		Spec: appsv1.StatefulSetSpec{
 			Replicas:            &replicas,
 			ServiceName:         fmt.Sprintf("%s-headless", cluster.Name),
-			PodManagementPolicy: appsv1.OrderedReadyPodManagement, // Ordered startup for controlled cluster formation
+			PodManagementPolicy: appsv1.ParallelPodManagement, // CRITICAL: Parallel startup for reliable cluster formation (especially with TLS)
 			UpdateStrategy:      updateStrategy,
 			Selector: &metav1.LabelSelector{
 				MatchLabels: getLabelsForEnterprise(cluster, role),
@@ -1147,10 +1147,13 @@ dbms.ssl.policy.https.client_auth=NONE
 dbms.ssl.policy.https.tls_versions=TLSv1.3,TLSv1.2
 
 # Cluster SSL Policy (for intra-cluster communication)
+# CRITICAL: trust_all=true is required for reliable TLS cluster formation
+# This allows nodes to trust each other's certificates during initial handshake
 dbms.ssl.policy.cluster.enabled=true
 dbms.ssl.policy.cluster.base_directory=/ssl
 dbms.ssl.policy.cluster.private_key=tls.key
 dbms.ssl.policy.cluster.public_certificate=tls.crt
+dbms.ssl.policy.cluster.trust_all=true
 dbms.ssl.policy.cluster.client_auth=NONE
 dbms.ssl.policy.cluster.tls_versions=TLSv1.3,TLSv1.2
 
@@ -1298,6 +1301,7 @@ echo "Using unified bootstrap discovery approach for cluster formation"
 # Set minimum primaries to 1 to allow flexible cluster formation
 # With Parallel pod management, all pods (primaries and secondaries) start simultaneously
 # First pod forms cluster, others join it
+# This works reliably even with TLS enabled due to trust_all=true in cluster SSL policy
 MIN_PRIMARIES=1
 
 echo "Setting minimum primaries for bootstrap: ${MIN_PRIMARIES}"
