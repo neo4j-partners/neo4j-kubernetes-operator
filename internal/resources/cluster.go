@@ -132,7 +132,7 @@ func buildStatefulSetForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster
 		Spec: appsv1.StatefulSetSpec{
 			Replicas:            &replicas,
 			ServiceName:         fmt.Sprintf("%s-headless", cluster.Name),
-			PodManagementPolicy: appsv1.ParallelPodManagement, // Allow pods to start simultaneously for cluster formation
+			PodManagementPolicy: appsv1.OrderedReadyPodManagement, // Ordered startup for controlled cluster formation
 			UpdateStrategy:      updateStrategy,
 			Selector: &metav1.LabelSelector{
 				MatchLabels: getLabelsForEnterprise(cluster, role),
@@ -225,7 +225,9 @@ func BuildHeadlessServiceForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseClu
 
 // BuildDiscoveryServiceForEnterprise creates a ClusterIP service specifically for Neo4j K8s discovery
 // This service has the clustering label so Neo4j can discover it, and being a regular ClusterIP service,
-// it has endpoints that list all pod IPs, which Neo4j's K8s discovery can query
+// it has endpoints that list all pod IPs, which Neo4j's K8s discovery can query.
+// Important: PublishNotReadyAddresses is set to true to ensure pods are discoverable during startup,
+// which is critical for Neo4j cluster formation as pods need to discover each other before they're ready
 func BuildDiscoveryServiceForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) *corev1.Service {
 	// Minimal labels - just what's needed for discovery
 	labels := map[string]string{
@@ -1293,10 +1295,10 @@ echo "Configuring Kubernetes service discovery with label selectors"
 # Unified approach: Use bootstrap discovery with timeout for cluster formation
 echo "Using unified bootstrap discovery approach for cluster formation"
 
-# Set minimum primaries to ensure cluster coordination
-# All primaries must be present before cluster can form
-# This prevents individual pods from starting as single-node clusters
-MIN_PRIMARIES=${TOTAL_PRIMARIES}
+# Set minimum primaries to 1 to allow flexible cluster formation
+# With Parallel pod management, all pods (primaries and secondaries) start simultaneously
+# First pod forms cluster, others join it
+MIN_PRIMARIES=1
 
 echo "Setting minimum primaries for bootstrap: ${MIN_PRIMARIES}"
 

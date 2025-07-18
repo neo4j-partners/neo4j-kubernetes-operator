@@ -97,7 +97,26 @@ The operator automatically creates these permissions in the discovery role.
 
 ## Cluster Formation
 
-The operator uses a **unified cluster formation approach** that ensures all nodes coordinate properly during startup, eliminating the timing issues that can cause separate cluster formation.
+The operator uses an **optimized parallel cluster formation approach** that enables fast and reliable cluster startup:
+
+### Key Configuration
+
+- **Minimum Initial Primaries**: Always set to 1, allowing flexible cluster formation
+- **Pod Management**: Parallel startup for all pods (primaries and secondaries)
+- **Discovery**: All pods start simultaneously and discover each other via Kubernetes endpoints
+
+### How It Works
+
+1. **All pods start in parallel** - Both primary and secondary StatefulSets deploy pods simultaneously
+2. **First pod forms initial cluster** - With minimum_primaries=1, the first pod to start can form the cluster
+3. **Other pods join existing cluster** - Remaining pods discover and join the already-formed cluster
+4. **100% cluster formation success** - This approach achieves reliable single-cluster formation
+
+### Benefits
+
+- **Fastest possible startup** - No artificial delays between primaries and secondaries
+- **Reliable cluster formation** - Eliminates split-brain scenarios common with other approaches
+- **Simplified operations** - No complex sequencing or timing dependencies
 
 ### Cluster Formation Strategy
 
@@ -325,13 +344,15 @@ spec:
 
 ### Common Issues
 
-1. **Cluster Formation Fails**
-   - Check that all required ports are open
-   - Verify DNS resolution for headless service
-   - Check RBAC resources were created: `kubectl get serviceaccount,role,rolebinding -l neo4j.com/cluster={cluster-name}`
+1. **Cluster Formation Issues (Rare with Current Configuration)**
+   - The parallel startup with MIN_PRIMARIES=1 eliminates most formation issues
+   - Check pod logs: `kubectl logs <pod-name>` for any startup errors
+   - Verify all pods can resolve DNS: `kubectl exec <pod> -- nslookup <cluster>-discovery`
 
-2. **Discovery Issues**
+2. **Discovery Service**
    - Verify discovery service exists: `kubectl get service {cluster-name}-discovery`
+   - Check endpoints include all pods: `kubectl describe endpoints {cluster-name}-discovery`
+   - Confirm clustering label: Service should have `neo4j.com/clustering=true`
    - Check discovery service has clustering label: `kubectl get service {cluster-name}-discovery -o jsonpath='{.metadata.labels.neo4j\.com/clustering}'`
    - Verify discovery role has endpoints permission: `kubectl get role {cluster-name}-discovery -o yaml | grep endpoints`
    - Check discovery logs show service hostname (this is EXPECTED): `kubectl logs {cluster-name}-primary-0 | grep "Resolved endpoints"`

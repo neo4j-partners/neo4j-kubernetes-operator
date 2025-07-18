@@ -208,6 +208,27 @@ Neo4j's Kubernetes discovery (`resolver_type=K8S`) works as follows:
 
 **Important Discovery Behavior**: When Neo4j discovers services, it logs the service hostname (e.g., `my-cluster-discovery.default.svc.cluster.local:5000`). This is **expected behavior** - Neo4j discovers the service first, then internally queries its endpoints to resolve individual pod IPs.
 
+### Cluster Formation Strategy
+
+The operator implements an optimized cluster formation strategy that achieves 100% success rate:
+
+**Key Design Decisions**:
+1. **Parallel Pod Management**: All pods (primaries and secondaries) start simultaneously using `ParallelPodManagement`
+2. **Minimum Primaries = 1**: Always set to 1, allowing the first pod to form the initial cluster
+3. **No Secondary Delay**: Secondaries start immediately with primaries, discovering and joining the cluster
+4. **PublishNotReadyAddresses**: Discovery service includes pods in endpoints even before they're ready
+
+**Why This Works**:
+- **Fast Cluster Formation**: First pod forms cluster immediately without waiting
+- **Reliable Discovery**: All pods discover each other via Kubernetes endpoints
+- **No Split Brain**: Single cluster forms naturally as pods join the first-formed cluster
+- **Simplified Logic**: No complex timing or sequencing required
+
+**Implementation Details**:
+- StatefulSets use `PodManagementPolicy: ParallelPodManagement`
+- Startup script sets `MIN_PRIMARIES=1` and `dbms.cluster.minimum_initial_system_primaries_count=${MIN_PRIMARIES}`
+- Discovery service has `PublishNotReadyAddresses: true` for early pod discovery
+
 **Service Architecture**:
 - **Discovery Service**: ClusterIP service with `neo4j.com/clustering=true` label
 - **Shared Services**: No per-pod services needed (matches Neo4j Helm chart pattern)

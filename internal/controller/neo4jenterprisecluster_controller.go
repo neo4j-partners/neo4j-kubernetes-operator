@@ -315,6 +315,7 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 	}
 
 	if cluster.Spec.Topology.Secondaries > 0 {
+		// Create secondary StatefulSet immediately (parallel with primaries)
 		secondarySts := resources.BuildSecondaryStatefulSetForEnterprise(cluster)
 
 		// Apply topology constraints to secondary StatefulSet
