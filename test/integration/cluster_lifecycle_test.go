@@ -347,7 +347,7 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 			// Verify Role permissions
 			Expect(role.Rules).To(HaveLen(1))
 			Expect(role.Rules[0].APIGroups).To(Equal([]string{""}))
-			Expect(role.Rules[0].Resources).To(Equal([]string{"services"}))
+			Expect(role.Rules[0].Resources).To(Equal([]string{"services", "endpoints"}))
 			Expect(role.Rules[0].Verbs).To(ContainElements("get", "list", "watch"))
 
 			By("Verifying discovery RoleBinding is created")
