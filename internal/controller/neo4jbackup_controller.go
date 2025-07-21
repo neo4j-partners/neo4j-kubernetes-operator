@@ -26,6 +26,7 @@ import (
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -73,6 +74,16 @@ func GetTestRequeueAfter() time.Duration {
 	}
 	return 30 * time.Second
 }
+
+//+kubebuilder:rbac:groups=neo4j.neo4j.com,resources=neo4jbackups,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=neo4j.neo4j.com,resources=neo4jbackups/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=neo4j.neo4j.com,resources=neo4jbackups/finalizers,verbs=update
+//+kubebuilder:rbac:groups=neo4j.neo4j.com,resources=neo4jenterpriseclusters,verbs=get;list;watch
+//+kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=batch,resources=cronjobs,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=rolebindings,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile handles the reconciliation of Neo4jBackup resources
 func (r *Neo4jBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -161,6 +172,12 @@ func (r *Neo4jBackupReconciler) handleDeletion(ctx context.Context, backup *neo4
 func (r *Neo4jBackupReconciler) handleScheduledBackup(ctx context.Context, backup *neo4jv1alpha1.Neo4jBackup, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
+	// Ensure backup RBAC resources exist in the namespace
+	if err := r.ensureBackupRBAC(ctx, backup.Namespace); err != nil {
+		logger.Error(err, "Failed to ensure backup RBAC")
+		return ctrl.Result{}, err
+	}
+
 	// Check if backup is suspended
 	if backup.Spec.Suspend {
 		r.updateBackupStatus(ctx, backup, "Suspended", "Backup schedule is suspended")
@@ -184,6 +201,12 @@ func (r *Neo4jBackupReconciler) handleScheduledBackup(ctx context.Context, backu
 
 func (r *Neo4jBackupReconciler) handleOneTimeBackup(ctx context.Context, backup *neo4jv1alpha1.Neo4jBackup, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
+
+	// Ensure backup RBAC resources exist in the namespace
+	if err := r.ensureBackupRBAC(ctx, backup.Namespace); err != nil {
+		logger.Error(err, "Failed to ensure backup RBAC")
+		return ctrl.Result{}, err
+	}
 
 	// Check if backup job already exists
 	jobName := backup.Name + "-backup"
@@ -877,6 +900,94 @@ func (r *Neo4jBackupReconciler) validateNeo4jVersion(cluster *neo4jv1alpha1.Neo4
 	}
 
 	return validation.ValidateNeo4jVersion(cluster.Spec.Image.Tag)
+}
+
+// ensureBackupRBAC ensures that the backup service account and RBAC resources exist in the namespace
+func (r *Neo4jBackupReconciler) ensureBackupRBAC(ctx context.Context, namespace string) error {
+	// Create service account if it doesn't exist
+	sa := &corev1.ServiceAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "neo4j-backup-sa",
+			Namespace: namespace,
+		},
+	}
+
+	if err := r.Get(ctx, types.NamespacedName{Name: sa.Name, Namespace: namespace}, sa); err != nil {
+		if errors.IsNotFound(err) {
+			if err := r.Create(ctx, sa); err != nil {
+				return fmt.Errorf("failed to create backup service account: %w", err)
+			}
+		} else {
+			return err
+		}
+	}
+
+	// Create role if it doesn't exist
+	role := &rbacv1.Role{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "neo4j-backup-role",
+			Namespace: namespace,
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				APIGroups: []string{""},
+				Resources: []string{"pods"},
+				Verbs:     []string{"get", "list"},
+			},
+			{
+				APIGroups: []string{""},
+				Resources: []string{"pods/exec"},
+				Verbs:     []string{"create"},
+			},
+			{
+				APIGroups: []string{""},
+				Resources: []string{"pods/log"},
+				Verbs:     []string{"get"},
+			},
+		},
+	}
+
+	if err := r.Get(ctx, types.NamespacedName{Name: role.Name, Namespace: namespace}, role); err != nil {
+		if errors.IsNotFound(err) {
+			if err := r.Create(ctx, role); err != nil {
+				return fmt.Errorf("failed to create backup role: %w", err)
+			}
+		} else {
+			return err
+		}
+	}
+
+	// Create role binding if it doesn't exist
+	roleBinding := &rbacv1.RoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "neo4j-backup-rolebinding",
+			Namespace: namespace,
+		},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: "rbac.authorization.k8s.io",
+			Kind:     "Role",
+			Name:     role.Name,
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:      "ServiceAccount",
+				Name:      sa.Name,
+				Namespace: namespace,
+			},
+		},
+	}
+
+	if err := r.Get(ctx, types.NamespacedName{Name: roleBinding.Name, Namespace: namespace}, roleBinding); err != nil {
+		if errors.IsNotFound(err) {
+			if err := r.Create(ctx, roleBinding); err != nil {
+				return fmt.Errorf("failed to create backup role binding: %w", err)
+			}
+		} else {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
