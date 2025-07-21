@@ -56,6 +56,33 @@ The backup and restore functionality requires Neo4j Enterprise version 5.26.0 or
 - **Calver**: 2025.01.0, 2025.06.1, 2026.01.0, etc.
 - **Enterprise Tags**: 5.26.0-enterprise, 2025.01.0-enterprise, etc.
 
+## Backup Architecture
+
+### How Backups Work
+
+The Neo4j Kubernetes Operator uses a **backup sidecar** architecture for reliability:
+
+1. **Backup Sidecar Container**: Every Neo4j pod includes an automatic backup sidecar
+   - Handles backup execution directly on the Neo4j node
+   - Allocated 1Gi memory to prevent OOM issues
+   - Monitors `/backup-requests` volume for backup jobs
+
+2. **Backup Job**: When you create a `Neo4jBackup` resource, the operator:
+   - Creates a Kubernetes Job that connects to the sidecar
+   - Sends backup request via shared volume
+   - Monitors backup progress and status
+
+3. **Path Management**: The backup sidecar automatically:
+   - Creates the full backup destination path before execution
+   - Handles Neo4j 5.26+ requirement that paths must exist
+   - Manages backup retention and cleanup
+
+### Important Notes
+
+- **Path Creation**: Neo4j 5.26+ and 2025.x+ require the backup destination path to exist before running the backup command. The operator handles this automatically.
+- **Memory Requirements**: The backup sidecar requires 1Gi memory for reliable operation
+- **Direct Execution**: Backups run directly on Neo4j nodes, not through kubectl
+
 ## Backup Operations
 
 ### Basic Backup Concepts

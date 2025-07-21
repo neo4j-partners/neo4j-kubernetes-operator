@@ -8,9 +8,10 @@ The Neo4j Enterprise Operator for Kubernetes provides a complete solution for de
 
 ## 📋 Requirements
 
-- **Neo4j**: Version 5.26 or higher (supports both SemVer and CalVer formats)
+- **Neo4j**: Version 5.26 or higher (supports both SemVer 5.x and CalVer 2025.x formats)
 - **Kubernetes**: Version 1.21 or higher
 - **Go**: Version 1.21+ (for development)
+- **cert-manager**: Version 1.5+ (for TLS/SSL features)
 
 ## 🚀 Quick Start
 
@@ -125,8 +126,10 @@ Complete CRD documentation for all custom resources:
 - **Network Policies**: Pod-to-pod communication security
 
 ### 🚀 Operations & Automation
-- **Automated Backups**: Scheduled backups with configurable retention
-- **Point-in-Time Recovery**: Restore clusters to specific timestamps
+- **Automated Backups**: Scheduled backups with configurable retention and backup types (FULL, DIFF, AUTO)
+- **Point-in-Time Recovery**: Restore clusters to specific timestamps with `--restore-until`
+- **Database Management**: Create databases with IF NOT EXISTS, WAIT/NOWAIT, and topology constraints
+- **Version-Aware Operations**: Automatic detection and adaptation for Neo4j 5.26.x and 2025.x
 - **Auto-scaling**: Horizontal Pod Autoscaler (HPA) integration with intelligent scaling logic
 - **Plugin Management**: Install and configure Neo4j plugins (APOC, GDS, etc.)
 - **Query Monitoring**: Performance monitoring and slow query detection

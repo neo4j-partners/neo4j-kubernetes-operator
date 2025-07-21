@@ -178,8 +178,8 @@ func GetBackupCommand(version *Version, databaseName string, backupPath string, 
 		cmd += " " + databaseName
 	}
 
-	// Add destination path
-	cmd += " " + backupPath
+	// Add destination path with --to-path flag (Neo4j 5.26+ syntax)
+	cmd += " --to-path=" + backupPath
 
 	return cmd
 }

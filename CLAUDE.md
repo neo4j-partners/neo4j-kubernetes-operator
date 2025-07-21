@@ -213,6 +213,37 @@ PRs must pass all checks. Use conventional commits (feat:, fix:, docs:).
   - Only Discovery v2 should be supported in 5.26.0 and other supported semver releases.
   - All tests, samples, documents should enforce this
 
+## Backup Sidecar Architecture
+
+Both Neo4jEnterpriseCluster and Neo4jEnterpriseStandalone deployments include an automatic backup sidecar container.
+
+### Resource Requirements (CRITICAL)
+- **Memory Limits**: 1Gi (increased from 256Mi to prevent OOMKilled containers)
+- **Memory Requests**: 512Mi
+- **CPU Limits**: 500m
+- **CPU Requests**: 200m
+
+### Features
+- **Automatic deployment**: Added to all enterprise pods (cluster and standalone)
+- **Neo4j 5.26+ support**: Uses correct `--to-path` command syntax
+- **Version-aware configuration**: Handles both SemVer (5.x) and CalVer (2025.x) formats
+- **Backup port**: Neo4j port 6362 automatically configured
+- **Retention management**: Automatic cleanup based on retention policies
+- **Path creation**: Automatically creates backup path before execution (required by Neo4j 5.26+)
+
+### Testing
+```bash
+# Test backup sidecar functionality
+kubectl exec <pod> -c backup-sidecar -- \
+  sh -c 'echo "{\"path\":\"/data/backups/test-$(date +%Y%m%d-%H%M%S)\",\"type\":\"FULL\"}" > /backup-requests/backup.request'
+
+# Check backup status
+kubectl exec <pod> -c backup-sidecar -- cat /backup-requests/backup.status
+# Should return: 0 (success)
+```
+
+**Note**: Neo4j 5.26+ and 2025.x+ require the backup destination path to exist. The operator automatically handles this by creating the path before running the backup command.
+
 ### Deployment Configuration Approach
 
 **Important**: The operator now uses two distinct deployment modes:

@@ -1,0 +1,300 @@
+# End-to-End Neo4j Deployment Example
+# This example demonstrates a complete production-ready deployment with:
+# - Neo4j Enterprise Cluster with TLS
+# - Database creation with topology constraints
+# - Automated backups to cloud storage
+# - Monitoring and alerting setup
+
+---
+# Namespace for the deployment
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: neo4j-production
+---
+# Admin credentials secret
+apiVersion: v1
+kind: Secret
+metadata:
+  name: neo4j-admin-secret
+  namespace: neo4j-production
+type: Opaque
+stringData:
+  username: neo4j
+  password: changeme-to-secure-password
+---
+# Backup credentials for S3
+apiVersion: v1
+kind: Secret
+metadata:
+  name: s3-backup-credentials
+  namespace: neo4j-production
+type: Opaque
+stringData:
+  AWS_ACCESS_KEY_ID: your-access-key
+  AWS_SECRET_ACCESS_KEY: your-secret-key
+  AWS_DEFAULT_REGION: us-east-1
+---
+# Neo4j Enterprise Cluster
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: production-cluster
+  namespace: neo4j-production
+spec:
+  edition: enterprise
+  image:
+    repo: neo4j
+    tag: "5.26.0-enterprise"  # or "2025.01.0-enterprise" for CalVer
+
+  # High availability topology
+  topology:
+    primaries: 3
+    secondaries: 2
+    placement:
+      topologyKey: topology.kubernetes.io/zone
+      mode: preferred
+    availabilityZones:
+      - us-east-1a
+      - us-east-1b
+      - us-east-1c
+
+  # TLS configuration
+  tls:
+    mode: cert-manager
+    issuerRef:
+      name: letsencrypt-prod
+      kind: ClusterIssuer
+
+  # Authentication
+  auth:
+    adminSecret: neo4j-admin-secret
+    provider: native
+    passwordPolicy:
+      minLength: 12
+      requireDigit: true
+      requireSymbol: true
+
+  # Storage configuration
+  storage:
+    className: fast-ssd
+    size: 100Gi
+
+  # Resource allocation
+  resources:
+    requests:
+      cpu: "2"
+      memory: "8Gi"
+    limits:
+      cpu: "4"
+      memory: "16Gi"
+
+  # JVM and Neo4j configuration
+  configMap:
+    data:
+      # JVM settings
+      server.memory.heap.initial_size: "4G"
+      server.memory.heap.max_size: "4G"
+      server.memory.pagecache.size: "8G"
+
+      # Query performance
+      db.query.timeout: "300s"
+      db.transaction.timeout: "300s"
+
+      # Clustering settings
+      dbms.cluster.minimum_initial_system_primaries_count: "2"
+      dbms.cluster.discovery.log_level: "INFO"
+
+  # Monitoring
+  monitoring:
+    enabled: true
+    endpoints:
+      metrics: true
+      logs: true
+    serviceMonitor:
+      enabled: true
+      interval: 30s
+
+  # Auto-scaling configuration
+  autoScaling:
+    enabled: true
+    primaries:
+      minReplicas: 3
+      maxReplicas: 5
+      metrics:
+        - type: cpu
+          targetPercentage: 70
+        - type: memory
+          targetPercentage: 80
+    secondaries:
+      minReplicas: 2
+      maxReplicas: 4
+      metrics:
+        - type: cpu
+          targetPercentage: 80
+---
+# Create main database with topology constraints
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jDatabase
+metadata:
+  name: main-database
+  namespace: neo4j-production
+spec:
+  clusterRef: production-cluster
+  name: maindb
+  wait: true
+  ifNotExists: true
+
+  # Topology distribution
+  topology:
+    primaries: 3
+    secondaries: 2
+
+  # Database options
+  options:
+    txLogEnrichment: "FULL"
+
+  # Initial schema and indexes
+  initialData:
+    source: cypher
+    cypherStatements:
+      - "CREATE CONSTRAINT user_email_unique IF NOT EXISTS ON (u:User) ASSERT u.email IS UNIQUE"
+      - "CREATE INDEX user_created_index IF NOT EXISTS FOR (u:User) ON (u.createdAt)"
+      - "CREATE INDEX product_name_index IF NOT EXISTS FOR (p:Product) ON (p.name)"
+---
+# Analytics database (Neo4j 2025.x with Cypher 25)
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jDatabase
+metadata:
+  name: analytics-database
+  namespace: neo4j-production
+spec:
+  clusterRef: production-cluster
+  name: analytics
+  wait: true
+  ifNotExists: true
+
+  # For Neo4j 2025.x - use modern Cypher
+  defaultCypherLanguage: "25"
+
+  topology:
+    primaries: 2
+    secondaries: 1
+---
+# Automated daily backups
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jBackup
+metadata:
+  name: daily-backup
+  namespace: neo4j-production
+spec:
+  target:
+    kind: Cluster
+    name: production-cluster
+    namespace: neo4j-production
+
+  # Daily at 2 AM UTC
+  schedule:
+    cron: "0 2 * * *"
+
+  # S3 storage
+  storage:
+    type: s3
+    bucket: my-neo4j-backups
+    path: "production/daily"
+    cloud:
+      credentialsSecret: s3-backup-credentials
+      region: us-east-1
+
+  # Backup options
+  options:
+    backupType: "AUTO"  # Automatically choose FULL or DIFF
+    compress: true
+    pageCache: "2G"     # Dedicated page cache for backup
+
+  # Retention policy
+  retention:
+    maxAge: "30d"
+    maxCount: 30
+    deletePolicy: Delete
+---
+# Weekly full backup
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jBackup
+metadata:
+  name: weekly-full-backup
+  namespace: neo4j-production
+spec:
+  target:
+    kind: Cluster
+    name: production-cluster
+    namespace: neo4j-production
+
+  # Weekly on Sunday at 3 AM UTC
+  schedule:
+    cron: "0 3 * * 0"
+
+  storage:
+    type: s3
+    bucket: my-neo4j-backups
+    path: "production/weekly"
+    cloud:
+      credentialsSecret: s3-backup-credentials
+      region: us-east-1
+
+  options:
+    backupType: "FULL"  # Force full backup
+    compress: true
+
+  retention:
+    maxAge: "90d"
+    maxCount: 12
+---
+# Install APOC plugin
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jPlugin
+metadata:
+  name: apoc-plugin
+  namespace: neo4j-production
+spec:
+  targetClusters:
+    - production-cluster
+  pluginType: apoc
+  source:
+    type: official
+  config:
+    apoc.export.file.enabled: "true"
+    apoc.import.file.enabled: "true"
+    apoc.trigger.enabled: "true"
+---
+# Monitoring service
+apiVersion: v1
+kind: Service
+metadata:
+  name: neo4j-metrics
+  namespace: neo4j-production
+  labels:
+    app: neo4j
+    monitoring: prometheus
+spec:
+  selector:
+    neo4j.com/cluster: production-cluster
+  ports:
+    - name: metrics
+      port: 2004
+      targetPort: 2004
+---
+# ServiceMonitor for Prometheus Operator
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: neo4j-cluster-monitor
+  namespace: neo4j-production
+spec:
+  selector:
+    matchLabels:
+      app: neo4j
+  endpoints:
+    - port: metrics
+      interval: 30s
+      path: /metrics

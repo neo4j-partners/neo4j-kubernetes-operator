@@ -23,7 +23,7 @@ The `Neo4jBackup` spec defines the configuration for backup operations.
 | `schedule` | `string` | ❌ | Cron expression for scheduled backups (e.g., "0 2 * * *") |
 | `cloud` | [`CloudBlock`](#cloudblock) | ❌ | Cloud provider configuration for cloud storage backends |
 | `retention` | [`RetentionPolicy`](#retentionpolicy) | ❌ | Backup retention and cleanup policy |
-| `options` | [`BackupOptions`](#backupoptions) | ❌ | Additional backup configuration options |
+| `options` | [`BackupOptions`](#backupoptions) | ❌ | Additional backup configuration options including backup type |
 | `suspend` | `boolean` | ❌ | Suspend scheduled backups (default: false) |
 
 ### BackupTarget
@@ -151,14 +151,21 @@ retention:
 
 ### BackupOptions
 
-Additional backup configuration options.
+Additional backup configuration options for Neo4j 5.26+ and 2025.x.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `compress` | `boolean` | ❌ | Enable backup compression (default: false) |
+| `backupType` | `string` | ❌ | Type of backup. Valid values: "FULL", "DIFF", "AUTO" (default: "AUTO") |
+| `compress` | `boolean` | ❌ | Enable backup compression (default: true) |
+| `pageCache` | `string` | ❌ | Page cache size for backup operation (e.g., "2G") |
 | `encryption` | [`EncryptionSpec`](#encryptionspec) | ❌ | Backup encryption configuration |
-| `verify` | `boolean` | ❌ | Verify backup integrity after creation (default: false) |
+| `verifyBackup` | `boolean` | ❌ | Verify backup integrity after creation (default: false) |
 | `additionalArgs` | `[]string` | ❌ | Additional arguments passed to neo4j-admin backup command |
+
+**Backup Types:**
+- **FULL**: Complete backup of all data
+- **DIFF**: Incremental backup (requires previous backup)
+- **AUTO**: Automatically choose between FULL and DIFF based on existing backups
 
 ### EncryptionSpec
 
@@ -299,6 +306,22 @@ kubectl get neo4jbackup production-backup -o jsonpath='{.status.history[*]}'
 # Monitor backup job logs
 kubectl logs job/production-backup-backup
 ```
+
+## Version-Specific Features
+
+### Neo4j 5.26.x
+- Uses `neo4j-admin database backup` command syntax
+- Supports `--include-metadata=all` for cluster backups
+- Automatic backup from secondary servers when available
+- Correct parameters: `--type`, `--compress`, `--pagecache`
+
+### Neo4j 2025.x
+- Same backup command structure as 5.26.x
+- Enhanced metadata options
+- Future support for `--source-database` parameter
+
+### Automatic Secondary Backup
+When the target cluster has secondary servers, the operator automatically configures backups to run from a secondary server using the `--from` parameter. This reduces load on primary servers during backup operations.
 
 ## Version Requirements
 

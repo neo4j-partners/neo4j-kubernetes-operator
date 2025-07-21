@@ -270,6 +270,42 @@ kubectl get serviceaccount neo4j-operator -o yaml
      apiGroup: rbac.authorization.k8s.io
    ```
 
+#### Problem: Backup Path Does Not Exist (Pre-Operator Fix)
+```
+Status: Failed
+Message: org.neo4j.cli.CommandFailedException: Path '/data/backups/test-backup' does not exist
+```
+
+**Note:** This issue has been fixed in the latest operator version. The backup sidecar now automatically creates the backup path before executing the backup command.
+
+**If you encounter this with an older operator version:**
+
+**Diagnosis:**
+```bash
+# Check operator version
+kubectl get deployment -n neo4j-operator neo4j-operator-controller-manager -o jsonpath='{.spec.template.spec.containers[0].image}'
+
+# Check backup sidecar logs
+kubectl logs <neo4j-pod> -c backup-sidecar
+```
+
+**Solutions:**
+1. **Upgrade to Latest Operator:**
+   - The latest operator version automatically creates backup paths
+   - Neo4j 5.26+ and 2025.x+ require paths to exist
+
+2. **Temporary Workaround (if upgrade not possible):**
+   ```bash
+   # Manually create backup directory in pod
+   kubectl exec <neo4j-pod> -c backup-sidecar -- mkdir -p /data/backups/<backup-name>
+   ```
+
+3. **Verify Fix in New Version:**
+   ```bash
+   # Check that backup sidecar includes mkdir command
+   kubectl get pod <neo4j-pod> -o jsonpath='{.spec.containers[?(@.name=="backup-sidecar")].command}' | grep "mkdir -p"
+   ```
+
 #### Problem: Backup Times Out
 ```
 Status: Failed

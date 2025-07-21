@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -241,40 +242,60 @@ func (r *Neo4jBackupReconciler) handleExistingBackupJob(ctx context.Context, bac
 
 func (r *Neo4jBackupReconciler) createBackupJob(ctx context.Context, backup *neo4jv1alpha1.Neo4jBackup, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) (*batchv1.Job, error) {
 	jobName := backup.Name + "-backup"
+	logger := log.FromContext(ctx)
 
-	// Build backup command
-	backupCmd, err := r.buildBackupCommand(backup, cluster)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build backup command: %w", err)
+	// Choose a pod to run the backup (prefer secondary if available)
+	var targetPod string
+	if backup.Spec.Target.Kind == "Cluster" && cluster.Spec.Topology.Secondaries > 0 {
+		// Get a secondary pod to backup from
+		podList := &corev1.PodList{}
+		labelSelector := client.MatchingLabels{
+			"neo4j.com/cluster": cluster.Name,
+			"neo4j.com/role":    "secondary",
+		}
+
+		if err := r.List(ctx, podList, client.InNamespace(cluster.Namespace), labelSelector); err == nil && len(podList.Items) > 0 {
+			targetPod = podList.Items[0].Name
+			logger.Info("Using secondary pod for backup", "pod", targetPod)
+		}
 	}
 
-	// Build environment variables
-	env := []corev1.EnvVar{}
+	// Fall back to primary if no secondary found
+	if targetPod == "" {
+		podList := &corev1.PodList{}
+		labelSelector := client.MatchingLabels{
+			"neo4j.com/cluster": cluster.Name,
+			"neo4j.com/role":    "primary",
+		}
 
-	// Add admin password environment variable if auth is configured
-	if cluster.Spec.Auth != nil && cluster.Spec.Auth.AdminSecret != "" {
-		env = append(env, corev1.EnvVar{
-			Name: "NEO4J_ADMIN_PASSWORD",
-			ValueFrom: &corev1.EnvVarSource{
-				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{
-						Name: cluster.Spec.Auth.AdminSecret,
-					},
-					Key: "password",
-				},
-			},
-		})
+		if err := r.List(ctx, podList, client.InNamespace(cluster.Namespace), labelSelector); err == nil && len(podList.Items) > 0 {
+			targetPod = podList.Items[0].Name
+			logger.Info("Using primary pod for backup", "pod", targetPod)
+		} else {
+			return nil, fmt.Errorf("no suitable pods found for backup")
+		}
 	}
 
-	// Add cloud storage environment variables
-	if backup.Spec.Storage.Type == "s3" || backup.Spec.Storage.Type == "gcs" || backup.Spec.Storage.Type == "azure" {
-		env = append(env, corev1.EnvVar{
-			Name:  "BACKUP_BUCKET",
-			Value: backup.Spec.Storage.Bucket,
-		})
+	// Build backup request for sidecar
+	backupName := fmt.Sprintf("%s-%s", backup.Name, time.Now().Format("20060102-150405"))
+	backupPath := fmt.Sprintf("/data/backups/%s", backupName)
+
+	backupRequest := map[string]interface{}{
+		"path": backupPath,
+		"type": "FULL",
 	}
 
-	// Create job spec
+	if backup.Spec.Options != nil && backup.Spec.Options.BackupType != "" {
+		backupRequest["type"] = backup.Spec.Options.BackupType
+	}
+
+	if backup.Spec.Target.Kind == "Database" {
+		backupRequest["database"] = backup.Spec.Target.Name
+	}
+
+	requestJSON, _ := json.Marshal(backupRequest)
+
+	// Create job that triggers backup via sidecar
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
@@ -290,14 +311,45 @@ func (r *Neo4jBackupReconciler) createBackupJob(ctx context.Context, backup *neo
 			BackoffLimit: func(i int32) *int32 { return &i }(3),
 			Template: corev1.PodTemplateSpec{
 				Spec: corev1.PodSpec{
-					RestartPolicy: corev1.RestartPolicyNever,
+					RestartPolicy:      corev1.RestartPolicyNever,
+					ServiceAccountName: "neo4j-backup-sa", // Needs pod/exec permission
 					Containers: []corev1.Container{
 						{
-							Name:         "neo4j-backup",
-							Image:        fmt.Sprintf("%s:%s", cluster.Spec.Image.Repo, cluster.Spec.Image.Tag),
-							Command:      []string{"/bin/sh"},
-							Args:         []string{"-c", backupCmd},
-							Env:          env,
+							Name:    "backup-trigger",
+							Image:   "bitnami/kubectl:latest",
+							Command: []string{"/bin/sh"},
+							Args: []string{"-c", fmt.Sprintf(`
+								# Check disk space before backup
+								DISK_USAGE=$(kubectl exec -n %s %s -c backup-sidecar -- df /data | tail -1 | awk '{print $5}' | sed 's/%%//')
+								if [ $DISK_USAGE -gt 90 ]; then
+									echo "ERROR: Insufficient disk space. Usage: $DISK_USAGE%%"
+									exit 1
+								fi
+								echo "Disk usage: $DISK_USAGE%% - proceeding with backup"
+
+								# Create backup request file in sidecar
+								kubectl exec -n %s %s -c backup-sidecar -- sh -c "echo '%s' > /backup-requests/backup.request"
+
+								# Wait for backup to complete
+								echo "Waiting for backup to start..."
+								sleep 10
+
+								# Check backup status
+								for i in {1..60}; do
+									STATUS=$(kubectl exec -n %s %s -c backup-sidecar -- cat /backup-requests/backup.status 2>/dev/null || echo "pending")
+									if [ "$STATUS" = "0" ]; then
+										echo "Backup completed successfully"
+										exit 0
+									elif [ "$STATUS" != "pending" ]; then
+										echo "Backup failed with status: $STATUS"
+										exit 1
+									fi
+									echo "Backup still running..."
+									sleep 5
+								done
+								echo "Backup timed out"
+								exit 1
+							`, cluster.Namespace, targetPod, cluster.Namespace, targetPod, string(requestJSON), cluster.Namespace, targetPod)},
 							VolumeMounts: r.buildVolumeMounts(backup),
 						},
 					},
@@ -322,6 +374,7 @@ func (r *Neo4jBackupReconciler) createBackupJob(ctx context.Context, backup *neo
 
 func (r *Neo4jBackupReconciler) createBackupCronJob(ctx context.Context, backup *neo4jv1alpha1.Neo4jBackup, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) (*batchv1.CronJob, error) {
 	cronJobName := backup.Name + "-backup-cron"
+	logger := log.FromContext(ctx)
 
 	// Check if CronJob already exists
 	existingCronJob := &batchv1.CronJob{}
@@ -336,39 +389,39 @@ func (r *Neo4jBackupReconciler) createBackupCronJob(ctx context.Context, backup 
 		return nil, err
 	}
 
-	// Build backup command
-	backupCmd, err := r.buildBackupCommand(backup, cluster)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build backup command: %w", err)
+	// Choose a pod to run the backup (prefer secondary if available)
+	var targetPod string
+	if backup.Spec.Target.Kind == "Cluster" && cluster.Spec.Topology.Secondaries > 0 {
+		// Get a secondary pod to backup from
+		podList := &corev1.PodList{}
+		labelSelector := client.MatchingLabels{
+			"neo4j.com/cluster": cluster.Name,
+			"neo4j.com/role":    "secondary",
+		}
+
+		if err := r.List(ctx, podList, client.InNamespace(cluster.Namespace), labelSelector); err == nil && len(podList.Items) > 0 {
+			targetPod = podList.Items[0].Name
+			logger.Info("Using secondary pod for scheduled backup", "pod", targetPod)
+		}
 	}
 
-	// Build environment variables
-	env := []corev1.EnvVar{}
+	// Fall back to primary if no secondary found
+	if targetPod == "" {
+		podList := &corev1.PodList{}
+		labelSelector := client.MatchingLabels{
+			"neo4j.com/cluster": cluster.Name,
+			"neo4j.com/role":    "primary",
+		}
 
-	// Add admin password environment variable if auth is configured
-	if cluster.Spec.Auth != nil && cluster.Spec.Auth.AdminSecret != "" {
-		env = append(env, corev1.EnvVar{
-			Name: "NEO4J_ADMIN_PASSWORD",
-			ValueFrom: &corev1.EnvVarSource{
-				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{
-						Name: cluster.Spec.Auth.AdminSecret,
-					},
-					Key: "password",
-				},
-			},
-		})
+		if err := r.List(ctx, podList, client.InNamespace(cluster.Namespace), labelSelector); err == nil && len(podList.Items) > 0 {
+			targetPod = podList.Items[0].Name
+			logger.Info("Using primary pod for scheduled backup", "pod", targetPod)
+		} else {
+			return nil, fmt.Errorf("no suitable pods found for backup")
+		}
 	}
 
-	// Add cloud storage environment variables
-	if backup.Spec.Storage.Type == "s3" || backup.Spec.Storage.Type == "gcs" || backup.Spec.Storage.Type == "azure" {
-		env = append(env, corev1.EnvVar{
-			Name:  "BACKUP_BUCKET",
-			Value: backup.Spec.Storage.Bucket,
-		})
-	}
-
-	// Create CronJob spec
+	// Create CronJob spec using sidecar pattern
 	cronJob := &batchv1.CronJob{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cronJobName,
@@ -387,14 +440,56 @@ func (r *Neo4jBackupReconciler) createBackupCronJob(ctx context.Context, backup 
 					BackoffLimit: func(i int32) *int32 { return &i }(3),
 					Template: corev1.PodTemplateSpec{
 						Spec: corev1.PodSpec{
-							RestartPolicy: corev1.RestartPolicyNever,
+							RestartPolicy:      corev1.RestartPolicyNever,
+							ServiceAccountName: "neo4j-backup-sa", // Needs pod/exec permission
 							Containers: []corev1.Container{
 								{
-									Name:         "neo4j-backup",
-									Image:        fmt.Sprintf("%s:%s", cluster.Spec.Image.Repo, cluster.Spec.Image.Tag),
-									Command:      []string{"/bin/sh"},
-									Args:         []string{"-c", backupCmd},
-									Env:          env,
+									Name:    "backup-trigger",
+									Image:   "bitnami/kubectl:latest",
+									Command: []string{"/bin/sh"},
+									Args: []string{"-c", fmt.Sprintf(`
+										# Generate backup name with timestamp
+										BACKUP_NAME="%s-$(date +%%Y%%m%%d-%%H%%M%%S)"
+										BACKUP_PATH="/data/backups/$BACKUP_NAME"
+
+										# Build backup request JSON
+										BACKUP_REQUEST='{"path":"'$BACKUP_PATH'","type":"%s"'
+
+										# Add database if specified
+										if [ "%s" = "Database" ]; then
+											BACKUP_REQUEST=$BACKUP_REQUEST',"database":"%s"'
+										fi
+
+										BACKUP_REQUEST=$BACKUP_REQUEST'}'
+
+										# Create backup request file in sidecar
+										kubectl exec -n %s %s -c backup-sidecar -- sh -c "echo '$BACKUP_REQUEST' > /backup-requests/backup.request"
+
+										# Wait for backup to complete
+										echo "Waiting for backup to start..."
+										sleep 10
+
+										# Check backup status
+										for i in $(seq 1 60); do
+											STATUS=$(kubectl exec -n %s %s -c backup-sidecar -- cat /backup-requests/backup.status 2>/dev/null || echo "pending")
+											if [ "$STATUS" = "0" ]; then
+												echo "Backup completed successfully"
+												exit 0
+											elif [ "$STATUS" != "pending" ]; then
+												echo "Backup failed with status: $STATUS"
+												exit 1
+											fi
+											echo "Backup still running..."
+											sleep 5
+										done
+										echo "Backup timed out"
+										exit 1
+									`, backup.Name,
+										getBackupType(backup),
+										backup.Spec.Target.Kind,
+										backup.Spec.Target.Name,
+										cluster.Namespace, targetPod,
+										cluster.Namespace, targetPod)},
 									VolumeMounts: r.buildVolumeMounts(backup),
 								},
 							},
@@ -417,6 +512,14 @@ func (r *Neo4jBackupReconciler) createBackupCronJob(ctx context.Context, backup 
 	}
 
 	return cronJob, nil
+}
+
+// Helper function to get backup type
+func getBackupType(backup *neo4jv1alpha1.Neo4jBackup) string {
+	if backup.Spec.Options != nil && backup.Spec.Options.BackupType != "" {
+		return backup.Spec.Options.BackupType
+	}
+	return "FULL"
 }
 
 func (r *Neo4jBackupReconciler) buildBackupCommand(backup *neo4jv1alpha1.Neo4jBackup, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) (string, error) {
@@ -464,9 +567,9 @@ func (r *Neo4jBackupReconciler) buildBackupCommand(backup *neo4jv1alpha1.Neo4jBa
 
 	// Add backup from secondary servers if in cluster
 	if backup.Spec.Target.Kind == "Cluster" && cluster.Spec.Topology.Secondaries > 0 {
-		// Build list of secondary servers to backup from
-		// This would need to be determined at runtime in the job
-		cmd = fmt.Sprintf("BACKUP_FROM=$(kubectl get pods -l neo4j.com/cluster=%s,neo4j.com/server-group=secondary -o jsonpath='{.items[0].metadata.name}'):6362; %s --from=$BACKUP_FROM", cluster.Name, cmd)
+		// Use environment variable set by the controller
+		// The env var will be set only if secondary pods are available
+		cmd = fmt.Sprintf("[ -n \"$BACKUP_FROM_SERVER\" ] && %s --from=$BACKUP_FROM_SERVER || %s", cmd, cmd)
 	}
 
 	// Handle retention policy (these are environment variables for our cleanup logic)
@@ -489,6 +592,9 @@ func (r *Neo4jBackupReconciler) buildBackupCommand(backup *neo4jv1alpha1.Neo4jBa
 			cmd += " " + arg
 		}
 	}
+
+	// Pre-backup: Create backup directory
+	cmd = fmt.Sprintf("mkdir -p %s && %s", backupPath, cmd)
 
 	// Post-backup: For cloud storage, copy backup to destination
 	if backup.Spec.Storage.Type != "pvc" {
