@@ -79,7 +79,7 @@ var _ = Describe("Backup Sidecar Path Creation", func() {
 						ClassName: "standard",
 						Size:      "1Gi",
 					},
-					Auth: neo4jv1alpha1.AuthSpec{
+					Auth: &neo4jv1alpha1.AuthSpec{
 						AdminSecret: adminSecret.Name,
 					},
 				},
@@ -159,7 +159,7 @@ var _ = Describe("Backup Sidecar Path Creation", func() {
 						ClassName: "standard",
 						Size:      "1Gi",
 					},
-					Auth: neo4jv1alpha1.AuthSpec{
+					Auth: &neo4jv1alpha1.AuthSpec{
 						AdminSecret: adminSecret.Name,
 					},
 				},
@@ -240,7 +240,7 @@ var _ = Describe("Backup Sidecar Path Creation", func() {
 						ClassName: "standard",
 						Size:      "1Gi",
 					},
-					Auth: neo4jv1alpha1.AuthSpec{
+					Auth: &neo4jv1alpha1.AuthSpec{
 						AdminSecret: adminSecret.Name,
 					},
 				},
