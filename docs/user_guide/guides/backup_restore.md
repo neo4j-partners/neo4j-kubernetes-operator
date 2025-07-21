@@ -77,11 +77,17 @@ The Neo4j Kubernetes Operator uses a **backup sidecar** architecture for reliabi
    - Handles Neo4j 5.26+ requirement that paths must exist
    - Manages backup retention and cleanup
 
+4. **RBAC Management**: The operator automatically:
+   - Creates necessary service accounts in each namespace
+   - Sets up roles with pod/exec permissions for backup jobs
+   - Manages role bindings for secure backup execution
+
 ### Important Notes
 
 - **Path Creation**: Neo4j 5.26+ and 2025.x+ require the backup destination path to exist before running the backup command. The operator handles this automatically.
 - **Memory Requirements**: The backup sidecar requires 1Gi memory for reliable operation
 - **Direct Execution**: Backups run directly on Neo4j nodes, not through kubectl
+- **RBAC**: No manual RBAC setup required - the operator creates all necessary permissions automatically
 
 ## Backup Operations
 
@@ -685,7 +691,7 @@ kubectl get events --field-selector involvedObject.name=restore-operation
 
 ### Security Best Practices
 
-1. **RBAC**: Use appropriate Kubernetes RBAC for backup/restore operations
+1. **RBAC**: The operator automatically manages RBAC for backup operations. No manual configuration needed.
 2. **Secrets Management**: Store encryption keys and credentials in Kubernetes secrets
 3. **Network Policies**: Implement network policies to restrict backup traffic
 4. **Audit Logging**: Enable audit logging for backup and restore operations

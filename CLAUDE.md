@@ -230,6 +230,7 @@ Both Neo4jEnterpriseCluster and Neo4jEnterpriseStandalone deployments include an
 - **Backup port**: Neo4j port 6362 automatically configured
 - **Retention management**: Automatic cleanup based on retention policies
 - **Path creation**: Automatically creates backup path before execution (required by Neo4j 5.26+)
+- **RBAC management**: Automatically creates service accounts, roles, and role bindings in target namespaces
 
 ### Testing
 ```bash
