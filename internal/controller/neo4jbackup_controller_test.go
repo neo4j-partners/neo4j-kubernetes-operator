@@ -25,6 +25,8 @@ import (
 	. "github.com/onsi/gomega"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -42,6 +44,7 @@ var _ = Describe("Neo4jBackup Controller", func() {
 		ctx           context.Context
 		backup        *neo4jv1alpha1.Neo4jBackup
 		cluster       *neo4jv1alpha1.Neo4jEnterpriseCluster
+		adminSecret   *corev1.Secret
 		backupName    string
 		clusterName   string
 		namespaceName string
@@ -56,6 +59,23 @@ var _ = Describe("Neo4jBackup Controller", func() {
 		backupName = fmt.Sprintf("test-backup-%d", time.Now().UnixNano())
 		clusterName = fmt.Sprintf("test-cluster-%d", time.Now().UnixNano())
 		namespaceName = "default"
+
+		// Create admin secret first (if it doesn't exist)
+		adminSecret = &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "neo4j-admin-secret",
+				Namespace: namespaceName,
+			},
+			Type: corev1.SecretTypeOpaque,
+			Data: map[string][]byte{
+				"username": []byte("neo4j"),
+				"password": []byte("testpassword"),
+			},
+		}
+		err := k8sClient.Create(ctx, adminSecret)
+		if err != nil && !errors.IsAlreadyExists(err) {
+			Expect(err).NotTo(HaveOccurred())
+		}
 
 		// Create cluster first
 		cluster = &neo4jv1alpha1.Neo4jEnterpriseCluster{
@@ -84,8 +104,17 @@ var _ = Describe("Neo4jBackup Controller", func() {
 		}
 		Expect(k8sClient.Create(ctx, cluster)).Should(Succeed())
 
+		// Wait for cluster to be created and then patch its status
+		Eventually(func() error {
+			return k8sClient.Get(ctx, types.NamespacedName{
+				Name:      clusterName,
+				Namespace: namespaceName,
+			}, cluster)
+		}, timeout, interval).Should(Succeed())
+
 		// Patch cluster status to Ready so backup controller proceeds
 		patch := client.MergeFrom(cluster.DeepCopy())
+		cluster.Status.Phase = "Ready"
 		cluster.Status.Conditions = []metav1.Condition{{
 			Type:               "Ready",
 			Status:             metav1.ConditionTrue,
@@ -108,8 +137,8 @@ var _ = Describe("Neo4jBackup Controller", func() {
 				Storage: neo4jv1alpha1.StorageLocation{
 					Type: "pvc",
 					PVC: &neo4jv1alpha1.PVCSpec{
-						Size:             "10Gi",
-						StorageClassName: "standard",
+						Name: "test-backup-pvc",
+						Size: "10Gi",
 					},
 				},
 			},
@@ -130,10 +159,82 @@ var _ = Describe("Neo4jBackup Controller", func() {
 				fmt.Printf("Warning: Failed to delete cluster during cleanup: %v\n", err)
 			}
 		}
+		if adminSecret != nil {
+			if err := k8sClient.Delete(ctx, adminSecret, client.PropagationPolicy(metav1.DeletePropagationForeground)); err != nil && !errors.IsNotFound(err) {
+				// Log the error but don't fail the test cleanup
+				fmt.Printf("Warning: Failed to delete admin secret during cleanup: %v\n", err)
+			}
+		}
 	})
 
 	Context("When creating a PVC backup", func() {
+		It("Should create backup RBAC resources automatically", func() {
+			By("Creating the backup resource")
+			Expect(k8sClient.Create(ctx, backup)).Should(Succeed())
+
+			By("Verifying backup RBAC resources were created")
+			// Check service account
+			sa := &corev1.ServiceAccount{}
+			Eventually(func() error {
+				return k8sClient.Get(ctx, types.NamespacedName{
+					Name:      "neo4j-backup-sa",
+					Namespace: namespaceName,
+				}, sa)
+			}, timeout, interval).Should(Succeed())
+
+			// Check role
+			role := &rbacv1.Role{}
+			Eventually(func() error {
+				return k8sClient.Get(ctx, types.NamespacedName{
+					Name:      "neo4j-backup-role",
+					Namespace: namespaceName,
+				}, role)
+			}, timeout, interval).Should(Succeed())
+
+			// Verify role has correct permissions
+			Expect(role.Rules).To(HaveLen(3))
+			Expect(role.Rules[0].APIGroups).To(Equal([]string{""}))
+			Expect(role.Rules[0].Resources).To(Equal([]string{"pods"}))
+			Expect(role.Rules[0].Verbs).To(ConsistOf("get", "list"))
+
+			// Check role binding
+			rb := &rbacv1.RoleBinding{}
+			Eventually(func() error {
+				return k8sClient.Get(ctx, types.NamespacedName{
+					Name:      "neo4j-backup-rolebinding",
+					Namespace: namespaceName,
+				}, rb)
+			}, timeout, interval).Should(Succeed())
+
+			// Verify role binding references correct resources
+			Expect(rb.RoleRef.Name).To(Equal("neo4j-backup-role"))
+			Expect(rb.Subjects).To(HaveLen(1))
+			Expect(rb.Subjects[0].Name).To(Equal("neo4j-backup-sa"))
+		})
+
 		It("Should create backup job successfully", func() {
+			By("Creating a mock pod for backup")
+			mockPod := &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterName + "-0",
+					Namespace: namespaceName,
+					Labels: map[string]string{
+						"neo4j.com/cluster": clusterName,
+						"neo4j.com/role":    "primary",
+					},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{
+						Name:  "neo4j",
+						Image: "neo4j:5.26-enterprise",
+					}},
+				},
+				Status: corev1.PodStatus{
+					Phase: corev1.PodRunning,
+				},
+			}
+			Expect(k8sClient.Create(ctx, mockPod)).Should(Succeed())
+
 			By("Creating the backup resource")
 			Expect(k8sClient.Create(ctx, backup)).Should(Succeed())
 
@@ -149,6 +250,12 @@ var _ = Describe("Neo4jBackup Controller", func() {
 			By("Checking Job specifications")
 			Expect(job.Spec.Template.Spec.Containers).To(HaveLen(1))
 			Expect(job.Spec.Template.Spec.Containers[0].Image).To(ContainSubstring("neo4j"))
+
+			By("Verifying job uses backup service account")
+			Expect(job.Spec.Template.Spec.ServiceAccountName).To(Equal("neo4j-backup-sa"))
+
+			// Clean up mock pod
+			Expect(k8sClient.Delete(ctx, mockPod)).Should(Succeed())
 		})
 
 		It("Should handle scheduled backups", func() {
