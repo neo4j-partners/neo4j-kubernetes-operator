@@ -52,6 +52,23 @@ var _ = Describe("Neo4jEnterpriseStandalone Controller", func() {
 		standaloneName = fmt.Sprintf("test-standalone-%d", time.Now().UnixNano())
 		namespaceName = "default"
 
+		// Create admin secret (if it doesn't exist)
+		adminSecret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "neo4j-admin-secret",
+				Namespace: namespaceName,
+			},
+			Type: corev1.SecretTypeOpaque,
+			Data: map[string][]byte{
+				"username": []byte("neo4j"),
+				"password": []byte("testpassword"),
+			},
+		}
+		err := k8sClient.Create(ctx, adminSecret)
+		if err != nil && !errors.IsAlreadyExists(err) {
+			Expect(err).NotTo(HaveOccurred())
+		}
+
 		// Create basic standalone spec
 		standalone = &neo4jv1alpha1.Neo4jEnterpriseStandalone{
 			ObjectMeta: metav1.ObjectMeta{
@@ -73,6 +90,9 @@ var _ = Describe("Neo4jEnterpriseStandalone Controller", func() {
 						Name:  "NEO4J_ACCEPT_LICENSE_AGREEMENT",
 						Value: "eval",
 					},
+				},
+				Auth: &neo4jv1alpha1.AuthSpec{
+					AdminSecret: "neo4j-admin-secret",
 				},
 			},
 		}

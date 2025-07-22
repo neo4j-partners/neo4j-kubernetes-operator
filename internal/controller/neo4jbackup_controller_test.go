@@ -235,6 +235,14 @@ var _ = Describe("Neo4jBackup Controller", func() {
 			}
 			Expect(k8sClient.Create(ctx, mockPod)).Should(Succeed())
 
+			// Wait for pod to be available
+			Eventually(func() error {
+				return k8sClient.Get(ctx, types.NamespacedName{
+					Name:      mockPod.Name,
+					Namespace: mockPod.Namespace,
+				}, &corev1.Pod{})
+			}, timeout, interval).Should(Succeed())
+
 			By("Creating the backup resource")
 			Expect(k8sClient.Create(ctx, backup)).Should(Succeed())
 

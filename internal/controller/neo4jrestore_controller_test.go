@@ -7,12 +7,13 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1"
-	corev1 "k8s.io/api/core/v1"
 )
 
 var _ = Describe("Neo4jRestore Controller", func() {
@@ -70,7 +71,7 @@ var _ = Describe("Neo4jRestore Controller", func() {
 		}
 		Expect(k8sClient.Create(ctx, cluster)).Should(Succeed())
 
-		// Create admin secret
+		// Create admin secret (if it doesn't exist)
 		secret := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "neo4j-admin-secret",
@@ -80,7 +81,10 @@ var _ = Describe("Neo4jRestore Controller", func() {
 				"NEO4J_AUTH": []byte("neo4j/testpassword123"),
 			},
 		}
-		Expect(k8sClient.Create(ctx, secret)).Should(Succeed())
+		err := k8sClient.Create(ctx, secret)
+		if err != nil && !errors.IsAlreadyExists(err) {
+			Expect(err).NotTo(HaveOccurred())
+		}
 
 		// Patch cluster status to Ready so restore controller proceeds
 		patch := client.MergeFrom(cluster.DeepCopy())
