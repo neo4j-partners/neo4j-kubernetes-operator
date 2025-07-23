@@ -26,7 +26,6 @@ import (
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -62,17 +61,21 @@ var _ = Describe("Neo4jEnterpriseStandalone Integration Tests", func() {
 		// Clean up standalone resource if it was created
 		if standalone != nil {
 			By("Cleaning up standalone resource")
-			// Remove finalizers if any
-			if len(standalone.GetFinalizers()) > 0 {
-				standalone.SetFinalizers([]string{})
-				_ = k8sClient.Update(ctx, standalone)
-			}
-			// Delete the resource
-			err := k8sClient.Delete(ctx, standalone)
-			if err != nil && !errors.IsNotFound(err) {
-				By(fmt.Sprintf("Failed to delete standalone: %v", err))
+			cleanupResource(standalone, namespace.Name, "Neo4jEnterpriseStandalone")
+		}
+
+		// Force cleanup of PVCs to free storage resources
+		By("Cleaning up PVCs")
+		pvcList := &corev1.PersistentVolumeClaimList{}
+		if err := k8sClient.List(ctx, pvcList, client.InNamespace(namespace.Name)); err == nil {
+			for _, pvc := range pvcList.Items {
+				By(fmt.Sprintf("Deleting PVC: %s", pvc.Name))
+				_ = k8sClient.Delete(ctx, &pvc)
 			}
 		}
+
+		// Give a moment for resources to be freed
+		time.Sleep(2 * time.Second)
 
 		// Note: Namespace cleanup is handled by the test suite cleanup
 		// which removes all test namespaces and their resources
@@ -89,21 +92,22 @@ var _ = Describe("Neo4jEnterpriseStandalone Integration Tests", func() {
 				Spec: neo4jv1alpha1.Neo4jEnterpriseStandaloneSpec{
 					Edition: "enterprise",
 					Image: neo4jv1alpha1.ImageSpec{
-						Repo: "neo4j",
-						Tag:  "5.26-enterprise",
+						Repo:       "neo4j",
+						Tag:        "5.26-enterprise",
+						PullPolicy: "IfNotPresent",
 					},
 					Storage: neo4jv1alpha1.StorageSpec{
 						ClassName: "standard",
-						Size:      "2Gi",
+						Size:      "500Mi",
 					},
 					Resources: &corev1.ResourceRequirements{
 						Requests: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("500m"),
-							corev1.ResourceMemory: resource.MustParse("1Gi"),
+							corev1.ResourceCPU:    resource.MustParse("100m"),
+							corev1.ResourceMemory: resource.MustParse("512Mi"),
 						},
 						Limits: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("1"),
-							corev1.ResourceMemory: resource.MustParse("2Gi"),
+							corev1.ResourceCPU:    resource.MustParse("500m"),
+							corev1.ResourceMemory: resource.MustParse("1Gi"),
 						},
 					},
 					Env: []corev1.EnvVar{
@@ -217,6 +221,39 @@ var _ = Describe("Neo4jEnterpriseStandalone Integration Tests", func() {
 				}
 
 				pod := podList.Items[0]
+
+				// Log pod status for debugging in CI
+				GinkgoWriter.Printf("Pod %s status: Phase=%s, Reason=%s, Message=%s\n",
+					pod.Name, pod.Status.Phase, pod.Status.Reason, pod.Status.Message)
+
+				// Check for pending pods with more details
+				if pod.Status.Phase == corev1.PodPending {
+					// Check scheduling issues
+					for _, condition := range pod.Status.Conditions {
+						if condition.Type == corev1.PodScheduled && condition.Status == corev1.ConditionFalse {
+							GinkgoWriter.Printf("Pod not scheduled: %s - %s\n", condition.Reason, condition.Message)
+						}
+					}
+
+					// Check container statuses
+					for _, cs := range pod.Status.ContainerStatuses {
+						if cs.State.Waiting != nil {
+							GinkgoWriter.Printf("Container %s waiting: %s - %s\n",
+								cs.Name, cs.State.Waiting.Reason, cs.State.Waiting.Message)
+						}
+					}
+
+					// Check events
+					eventList := &corev1.EventList{}
+					if err := k8sClient.List(ctx, eventList, client.InNamespace(namespace.Name)); err == nil {
+						for _, event := range eventList.Items {
+							if event.InvolvedObject.Name == pod.Name {
+								GinkgoWriter.Printf("Pod event: %s - %s\n", event.Reason, event.Message)
+							}
+						}
+					}
+				}
+
 				for _, condition := range pod.Status.Conditions {
 					if condition.Type == corev1.PodReady && condition.Status == corev1.ConditionTrue {
 						return nil
@@ -261,21 +298,22 @@ var _ = Describe("Neo4jEnterpriseStandalone Integration Tests", func() {
 				Spec: neo4jv1alpha1.Neo4jEnterpriseStandaloneSpec{
 					Edition: "enterprise",
 					Image: neo4jv1alpha1.ImageSpec{
-						Repo: "neo4j",
-						Tag:  "5.26-enterprise",
+						Repo:       "neo4j",
+						Tag:        "5.26-enterprise",
+						PullPolicy: "IfNotPresent",
 					},
 					Storage: neo4jv1alpha1.StorageSpec{
 						ClassName: "standard",
-						Size:      "2Gi",
+						Size:      "500Mi",
 					},
 					Resources: &corev1.ResourceRequirements{
 						Requests: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("500m"),
-							corev1.ResourceMemory: resource.MustParse("1Gi"),
+							corev1.ResourceCPU:    resource.MustParse("100m"),
+							corev1.ResourceMemory: resource.MustParse("512Mi"),
 						},
 						Limits: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("1"),
-							corev1.ResourceMemory: resource.MustParse("2Gi"),
+							corev1.ResourceCPU:    resource.MustParse("500m"),
+							corev1.ResourceMemory: resource.MustParse("1Gi"),
 						},
 					},
 					Config: map[string]string{
@@ -348,21 +386,22 @@ var _ = Describe("Neo4jEnterpriseStandalone Integration Tests", func() {
 				Spec: neo4jv1alpha1.Neo4jEnterpriseStandaloneSpec{
 					Edition: "enterprise",
 					Image: neo4jv1alpha1.ImageSpec{
-						Repo: "neo4j",
-						Tag:  "5.26-enterprise",
+						Repo:       "neo4j",
+						Tag:        "5.26-enterprise",
+						PullPolicy: "IfNotPresent",
 					},
 					Storage: neo4jv1alpha1.StorageSpec{
 						ClassName: "standard",
-						Size:      "2Gi",
+						Size:      "500Mi",
 					},
 					Resources: &corev1.ResourceRequirements{
 						Requests: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("500m"),
-							corev1.ResourceMemory: resource.MustParse("1Gi"),
+							corev1.ResourceCPU:    resource.MustParse("100m"),
+							corev1.ResourceMemory: resource.MustParse("512Mi"),
 						},
 						Limits: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("1"),
-							corev1.ResourceMemory: resource.MustParse("2Gi"),
+							corev1.ResourceCPU:    resource.MustParse("500m"),
+							corev1.ResourceMemory: resource.MustParse("1Gi"),
 						},
 					},
 					TLS: &neo4jv1alpha1.TLSSpec{
@@ -428,21 +467,22 @@ var _ = Describe("Neo4jEnterpriseStandalone Integration Tests", func() {
 				Spec: neo4jv1alpha1.Neo4jEnterpriseStandaloneSpec{
 					Edition: "enterprise",
 					Image: neo4jv1alpha1.ImageSpec{
-						Repo: "neo4j",
-						Tag:  "5.26-enterprise",
+						Repo:       "neo4j",
+						Tag:        "5.26-enterprise",
+						PullPolicy: "IfNotPresent",
 					},
 					Storage: neo4jv1alpha1.StorageSpec{
 						ClassName: "standard",
-						Size:      "2Gi",
+						Size:      "500Mi",
 					},
 					Resources: &corev1.ResourceRequirements{
 						Requests: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("500m"),
-							corev1.ResourceMemory: resource.MustParse("1Gi"),
+							corev1.ResourceCPU:    resource.MustParse("100m"),
+							corev1.ResourceMemory: resource.MustParse("512Mi"),
 						},
 						Limits: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("1"),
-							corev1.ResourceMemory: resource.MustParse("2Gi"),
+							corev1.ResourceCPU:    resource.MustParse("500m"),
+							corev1.ResourceMemory: resource.MustParse("1Gi"),
 						},
 					},
 					TLS: &neo4jv1alpha1.TLSSpec{
