@@ -19,5 +19,4 @@ Below are some of the most important fields you will use to configure your clust
 *   `spec.backups`: Configure automated backups, including the schedule and storage location (S3, GCS, etc.).
 *   `spec.monitoring`: Enable and configure monitoring, primarily through the Prometheus exporter.
 *   `spec.plugins`: A list of plugins to install into the Neo4j cluster, such as APOC and GDS.
-*   `spec.autoScaling`: Configure the operator to automatically scale your cluster up or down based on metrics like CPU and memory.
 *   `spec.multiCluster`: For advanced use cases, this allows you to configure deployments across multiple Kubernetes clusters.

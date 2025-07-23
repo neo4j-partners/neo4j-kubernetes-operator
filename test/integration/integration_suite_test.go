@@ -117,6 +117,10 @@ var _ = BeforeSuite(func() {
 	By("Installing CRDs if missing")
 	installCRDsIfMissing()
 
+	// Wait for operator to be ready
+	By("Waiting for operator to be ready")
+	waitForOperatorReady()
+
 	isSetup = true
 	By("Integration test setup completed successfully")
 })
@@ -168,6 +172,43 @@ func createTestNamespace(name string) string {
 	}
 
 	return uniqueName
+}
+
+// waitForOperatorReady waits for the operator deployment to be ready
+func waitForOperatorReady() {
+	By("Checking if operator deployment exists")
+
+	// Check if the operator is deployed
+	deployment := &appsv1.Deployment{}
+	err := k8sClient.Get(ctx, types.NamespacedName{
+		Name:      "neo4j-operator-controller-manager",
+		Namespace: "neo4j-operator-system",
+	}, deployment)
+
+	if err != nil {
+		if errors.IsNotFound(err) {
+			By("Operator not deployed, skipping wait (assuming running locally)")
+			return
+		}
+		Expect(err).NotTo(HaveOccurred(), "Failed to check operator deployment")
+	}
+
+	By("Waiting for operator deployment to be ready")
+	Eventually(func() bool {
+		err := k8sClient.Get(ctx, types.NamespacedName{
+			Name:      "neo4j-operator-controller-manager",
+			Namespace: "neo4j-operator-system",
+		}, deployment)
+		if err != nil {
+			return false
+		}
+
+		// Check if deployment is ready
+		return deployment.Status.ReadyReplicas == *deployment.Spec.Replicas &&
+			deployment.Status.ReadyReplicas > 0
+	}, 2*time.Minute, 5*time.Second).Should(BeTrue(), "Operator deployment should be ready")
+
+	By("Operator is ready")
 }
 
 // cleanupTestNamespaces removes all test namespaces

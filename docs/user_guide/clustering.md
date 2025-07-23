@@ -4,7 +4,7 @@ This document describes how to configure and manage Neo4j Enterprise clusters us
 
 ## Overview
 
-The Neo4j Kubernetes Operator supports Neo4j 5.26+ Enterprise clustering with multiple discovery mechanisms and advanced features like auto-scaling, read replicas, and multi-zone deployments.
+The Neo4j Kubernetes Operator supports Neo4j 5.26+ Enterprise clustering with multiple discovery mechanisms and advanced features like read replicas and multi-zone deployments.
 
 ## Cluster Architecture
 
@@ -47,7 +47,7 @@ The operator automatically creates these permissions in the discovery role.
 **The operator automatically configures Kubernetes API-based discovery for all clusters.** This provides:
 
 - **Dynamic service discovery** via Kubernetes API
-- **Automatic adaptation** to scaling operations
+- **Automatic adaptation** to cluster topology changes
 - **Native cloud-native integration**
 - **Reduced operator complexity**
 
@@ -90,7 +90,7 @@ The operator automatically creates these permissions in the discovery role.
 
 - ✅ **Consistent behavior** across all deployments
 - ✅ **Cloud-native integration** with Kubernetes API
-- ✅ **Automatic scaling support** without manual endpoint management
+- ✅ **Dynamic cluster management** without manual endpoint management
 - ✅ **Simplified operations** with zero discovery configuration
 
 **Note**: While you can specify discovery settings in `spec.config`, the operator will always override them with Kubernetes discovery during pod startup to maintain operational consistency.
@@ -214,38 +214,6 @@ kubectl get pods -l app.kubernetes.io/instance=my-cluster
 
 ## Advanced Configuration
 
-### Auto-Scaling
-
-Enable auto-scaling for both primary and secondary nodes:
-
-```yaml
-spec:
-  autoScaling:
-    enabled: true
-    primaries:
-      enabled: true
-      minReplicas: 3
-      maxReplicas: 7
-      allowQuorumBreak: false
-      quorumProtection:
-        enabled: true
-        minHealthyPrimaries: 2
-      metrics:
-        - type: cpu
-          target: "70%"
-          weight: "1.0"
-        - type: memory
-          target: "80%"
-          weight: "1.0"
-    secondaries:
-      enabled: true
-      minReplicas: 2
-      maxReplicas: 10
-      zoneAware:
-        enabled: true
-        minReplicasPerZone: 1
-        maxZoneSkew: 2
-```
 
 ### Multi-Zone Deployment
 
@@ -373,7 +341,6 @@ spec:
 3. **Quorum Loss**
    - Check primary node health
    - Verify minimum cluster size configuration
-   - Review auto-scaling settings
 
 ### Debug Commands
 
@@ -391,7 +358,7 @@ kubectl logs my-cluster-primary-0 -c neo4j
 ## Best Practices
 
 1. **Use odd numbers of primaries (3, 5, 7)** for optimal fault tolerance. Even numbers are allowed but generate warnings about potential split-brain scenarios.
-2. **Enable auto-scaling** for production workloads
+2. **Configure proper resource limits** based on workload
 3. **Use multi-zone deployment** for high availability
 4. **Configure proper resource limits** based on workload
 5. **Enable TLS** for secure cluster communication

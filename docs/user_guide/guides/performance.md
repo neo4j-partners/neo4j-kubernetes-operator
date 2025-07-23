@@ -59,17 +59,6 @@ For advanced use cases, you can tune the JVM settings for your Neo4j pods using 
         value: "2G"
 ```
 
-## Autoscaling
-
-The operator supports autoscaling to automatically adjust the size of your cluster based on the workload. This is a powerful feature for managing performance and cost in dynamic environments. You can configure autoscaling based on CPU and memory utilization.
-
-### Enhanced Scaling Features
-- **Intelligent Scaling Logic**: Considers both resource utilization and Neo4j-specific metrics
-- **Scaling Status Management**: Detailed status tracking for scaling operations
-- **Safe Scaling**: Prevents unsafe scaling operations that could impact cluster stability
-
-See the [API Reference](../../api_reference/neo4jenterprisecluster.md) for more details on the `autoScaling` spec.
-
 ## Performance Monitoring
 
 The operator includes built-in performance monitoring capabilities:
@@ -90,7 +79,7 @@ The operator includes built-in performance monitoring capabilities:
 1. **Set appropriate resource limits**: Ensure containers have sufficient CPU and memory
 2. **Use persistent storage**: Configure appropriate storage classes for your workload
 3. **Enable monitoring**: Monitor both Kubernetes and Neo4j metrics
-4. **Configure autoscaling**: Use HPA for dynamic workload management
+4. **Plan capacity**: Monitor trends and scale manually as needed
 
 ### For Development Environments
 1. **Use smaller resource allocations**: Optimize for development machine resources

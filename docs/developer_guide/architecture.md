@@ -26,7 +26,6 @@ The main controller (`internal/controller/neo4jenterprisecluster_controller.go`)
 
 #### Core Components
 - **ConfigMap Manager** (`internal/controller/configmap_manager.go`): Handles Neo4j configuration with hash-based change detection
-- **Scaling Status Manager** (`internal/controller/scaling_status_manager.go`): Manages autoscaling status and operations
 - **Topology Scheduler**: Handles pod placement and anti-affinity rules
 - **Cluster Topology Validator**: Enforces minimum cluster topology requirements (1 primary + 1 secondary OR 2+ primaries)
 
@@ -68,7 +67,6 @@ The operator defines a set of CRDs to represent Neo4j resources. The Go type def
 ### Enhanced CRD Features
 - **Resource Validation**: Built-in validation for resource limits and Neo4j configuration
 - **Status Conditions**: Comprehensive status reporting with detailed conditions
-- **Autoscaling Support**: HPA integration with Neo4j-specific metrics (cluster only)
 - **Topology Validation**: Prevents invalid cluster configurations
 
 ## Validation Framework
@@ -159,7 +157,6 @@ The operator supports multiple startup modes for different environments:
 - **Storage Classes**: Persistent volume integration
 
 ### Kubernetes Integration
-- **HPA Integration**: Horizontal Pod Autoscaler support
 - **Network Policies**: Pod-to-pod communication security
 - **Service Mesh**: Istio/Linkerd compatibility
 - **Ingress Controllers**: External traffic routing

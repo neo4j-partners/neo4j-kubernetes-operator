@@ -55,3 +55,4 @@ Complete deployment examples demonstrating real-world scenarios:
 *   **Cypher Language**: Support for Cypher 25 in Neo4j 2025.x
 *   **Backup Improvements**: FULL/DIFF/AUTO backup types, backup from secondaries
 *   **Point-in-Time Recovery**: Restore to specific timestamps with `--restore-until`
+*   **Backup Sidecar**: Automatic backup capabilities added to all pods

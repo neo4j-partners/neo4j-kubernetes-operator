@@ -85,3 +85,4 @@ quality-summary.md
 /test/artifacts/
 .dev-config
 test-output.log
+integration-test-output.log

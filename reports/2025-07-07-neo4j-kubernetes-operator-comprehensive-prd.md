@@ -1,5 +1,7 @@
 # Neo4j Kubernetes Operator - Comprehensive Product Requirements Document (PRD)
 
+**Last Updated**: 2025-07-23
+
 ## Executive Summary
 
 The Neo4j Kubernetes Operator is a sophisticated, production-ready solution for deploying, managing, and scaling Neo4j Enterprise clusters (v5.26+) in Kubernetes environments. Built with the Kubebuilder framework, it provides cloud-native operations for Neo4j graph databases with enterprise-grade features including high availability, automated backups, intelligent scaling, and comprehensive monitoring.
@@ -41,23 +43,26 @@ Deliver a robust, scalable, and secure platform for Neo4j Enterprise that abstra
 ### 2.1 Core Components
 
 #### 2.1.1 Custom Resource Definitions (CRDs)
-- **Neo4jEnterpriseCluster**: Primary cluster management resource
-- **Neo4jBackup**: Automated backup management
+- **Neo4jEnterpriseCluster**: Primary cluster management resource for high availability deployments
+- **Neo4jEnterpriseStandalone**: Single-node deployments for development/testing
+- **Neo4jBackup**: Automated backup management with cloud storage integration
 - **Neo4jRestore**: Advanced restore operations including PITR
-- **Neo4jDatabase**: Individual database lifecycle management
+- **Neo4jDatabase**: Individual database lifecycle management with IF NOT EXISTS and topology support
 - **Neo4jPlugin**: Plugin ecosystem management
 
 #### 2.1.2 Controller Architecture
-- **Enterprise Cluster Controller**: Central orchestration for cluster lifecycle
-- **Backup Controller**: Comprehensive backup operations with cloud storage
+- **Enterprise Cluster Controller**: Central orchestration for cluster lifecycle with V2_ONLY discovery
+- **Enterprise Standalone Controller**: Management of single-node deployments
+- **Backup Controller**: Comprehensive backup operations with cloud storage and backup sidecar
 - **Restore Controller**: Sophisticated restore with point-in-time recovery
-- **Database Controller**: Individual database management
+- **Database Controller**: Individual database management with WAIT/NOWAIT options
 - **Plugin Controller**: Plugin installation and management
 
 #### 2.1.3 Advanced Components
-- **AutoScaler**: Multi-metric intelligent scaling for both primary and secondary nodes
 - **Rolling Upgrade Orchestrator**: Zero-downtime upgrades with health validation
 - **Topology Scheduler**: Zone-aware placement and distribution
+- **Backup Sidecar**: Automatic backup capabilities added to all pods
+- **Query Monitoring**: Real-time query performance analysis and management
 - **Cache Manager**: Memory-efficient resource management
 - **ConfigMap Manager**: Intelligent configuration management with debouncing
 
@@ -83,17 +88,18 @@ Deliver a robust, scalable, and secure platform for Neo4j Enterprise that abstra
 ### 3.1 Core Cluster Management
 
 #### 3.1.1 Cluster Deployment
-- **Topology Configuration**: Support for 1-7 primary nodes (odd numbers for quorum)
-- **Secondary Replicas**: Up to 20 read replicas for horizontal scaling
+- **Topology Configuration**: Minimum 1 primary + 1 secondary OR 2+ primaries for clusters
+- **Standalone Deployment**: Single-node deployment option for development/testing
+- **Secondary Replicas**: Configurable read replicas for horizontal scaling
 - **High Availability**: Multi-zone deployment with intelligent placement
 - **Resource Management**: Configurable CPU, memory, and storage requirements
 - **Version Management**: Strict enforcement of Neo4j 5.26+ (SemVer and CalVer)
+- **Discovery Mode**: V2_ONLY discovery for reliable cluster formation
 
 #### 3.1.2 Scaling Operations
-- **Horizontal Scaling**: Automatic scaling based on multiple metrics
+- **Manual Horizontal Scaling**: Adjust cluster size by changing topology configuration
 - **Vertical Scaling**: Resource limit adjustments
-- **Zone-Aware Scaling**: Distribution across availability zones
-- **Quorum Protection**: Ensures odd number of primary nodes for cluster health
+- **Zone-Aware Distribution**: Proper distribution across availability zones
 
 #### 3.1.3 Upgrade Management
 - **Rolling Upgrades**: Zero-downtime version upgrades
@@ -125,8 +131,10 @@ Deliver a robust, scalable, and secure platform for Neo4j Enterprise that abstra
 
 #### 3.3.1 Backup Operations
 - **Automated Backups**: Scheduled backups with cron expressions
+- **Backup Sidecar**: Automatic backup capabilities in all pods with RBAC auto-creation
 - **Multiple Storage Options**: PVC, S3, GCS, Azure Blob storage
-- **Backup Types**: Full cluster backups and individual database backups
+- **Backup Types**: FULL, DIFF, AUTO backup types with Neo4j 5.26+ support
+- **Secondary Backups**: Option to backup from secondary nodes
 - **Compression and Encryption**: Configurable backup optimization
 - **Retention Policies**: Automatic cleanup based on age and count
 
@@ -156,7 +164,9 @@ Deliver a robust, scalable, and secure platform for Neo4j Enterprise that abstra
 #### 3.5.1 Metrics Collection
 - **Prometheus Integration**: Native metrics export
 - **Custom Metrics**: Application-specific performance indicators
-- **Query Performance**: Slow query detection and analysis
+- **Query Monitoring**: Real-time query performance with sampling and thresholds
+- **Slow Query Detection**: Automatic detection and logging of slow queries
+- **Long-Running Query Management**: Option to kill queries exceeding thresholds
 - **Resource Utilization**: CPU, memory, storage, and network monitoring
 
 #### 3.5.2 Alerting and Notifications
@@ -353,43 +363,75 @@ Deliver a robust, scalable, and secure platform for Neo4j Enterprise that abstra
 
 ---
 
-## 8. Roadmap and Future Enhancements
+## 8. Current Implementation Status
 
-### 8.1 Short-term (3-6 months)
+### 8.1 Fully Implemented Features
+- **Core CRDs**: All six CRDs (Cluster, Standalone, Backup, Restore, Database, Plugin) fully operational
+- **V2_ONLY Discovery**: Reliable cluster formation with correct port configuration
+- **Backup Sidecar**: Automatic backup capabilities with RBAC auto-creation
+- **TLS Support**: Full TLS with cert-manager, manual, and External Secrets integration
+- **Authentication**: Native, LDAP, JWT, and Kerberos authentication providers
+- **Query Monitoring**: Real-time query performance analysis
+- **Database Management**: IF NOT EXISTS, WAIT/NOWAIT, and topology constraints
+- **Version Support**: Neo4j 5.26+ (SemVer) and 2025.x (CalVer) compatibility
+
+### 8.2 Testing Coverage
+- **Unit Tests**: Comprehensive controller and resource builder tests
+- **Integration Tests**: Full cluster lifecycle testing with Kind
+- **E2E Tests**: Production scenario validation
+- **Webhook Tests**: Validation webhook testing with envtest
+
+### 8.3 Production Readiness
+- **API Optimization**: 99.8% reduction in Kubernetes API calls achieved
+- **Memory Efficiency**: Operator runs with <100MB memory footprint
+- **Error Handling**: Comprehensive error handling and recovery
+- **Documentation**: Complete user and developer documentation
+
+### 8.4 Known Limitations
+- **Split-brain Recovery**: Manual intervention required (proposal exists but not implemented)
+- **Cross-region Clusters**: Single-region deployment only
+- **Operator HA**: Single operator instance (no leader election)
+
+---
+
+## 9. Roadmap and Future Enhancements
+
+### 9.1 Short-term (3-6 months)
 - **Performance Optimization**: Further API call reduction
 - **Security Enhancements**: Advanced security features
 - **Monitoring Improvements**: Enhanced observability
 - **Documentation**: Complete API reference documentation
 
-### 8.2 Medium-term (6-12 months)
+### 9.2 Medium-term (6-12 months)
+- **Split-brain Recovery**: Automatic detection and recovery implementation
+- **Operator HA**: Leader election for operator high availability
 - **Multi-Cluster Management**: Cross-cluster operations
-- **Advanced Scaling**: Predictive scaling algorithms
 - **Disaster Recovery**: Cross-region backup strategies
 - **Integration Enhancements**: Service mesh integration
 
-### 8.3 Long-term (12+ months)
-- **Machine Learning**: AI-powered optimization
+### 9.3 Long-term (12+ months)
 - **Edge Computing**: Lightweight deployments
 - **Global Distribution**: Multi-region clusters
 - **Advanced Analytics**: Built-in analytics capabilities
+- **GraphQL Integration**: Native GraphQL API support
 
 ---
 
-## 9. Risk Assessment
+## 10. Risk Assessment
 
-### 9.1 Technical Risks
+### 10.1 Technical Risks
 - **Kubernetes API Changes**: Mitigation through comprehensive testing
 - **Neo4j Version Compatibility**: Strict version enforcement
 - **Resource Exhaustion**: Intelligent resource management
 - **Network Partitions**: Robust failure handling
 
-### 9.2 Operational Risks
+### 10.2 Operational Risks
 - **Upgrade Failures**: Comprehensive rollback mechanisms
 - **Data Loss**: Multiple backup strategies
 - **Security Vulnerabilities**: Regular security audits
 - **Performance Degradation**: Continuous performance monitoring
 
-### 9.3 Business Risks
+### 10.3 Business Risks
 - **Competitive Pressure**: Continuous innovation
 - **Community Adoption**: Strong community engagement
 - **Enterprise Requirements**: Regular feedback cycles
@@ -397,7 +439,7 @@ Deliver a robust, scalable, and secure platform for Neo4j Enterprise that abstra
 
 ---
 
-## 10. Conclusion
+## 11. Conclusion
 
 The Neo4j Kubernetes Operator represents a mature, production-ready solution for deploying and managing Neo4j Enterprise clusters in Kubernetes environments. With its comprehensive feature set, robust architecture, and excellent documentation, it addresses the complex requirements of modern graph database operations while maintaining the operational excellence expected in cloud-native environments.
 

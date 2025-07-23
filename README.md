@@ -6,12 +6,14 @@
 
 The Neo4j Enterprise Operator for Kubernetes provides a complete solution for deploying, managing, and scaling Neo4j Enterprise instances (v5.26+) in Kubernetes environments. Built with the Kubebuilder framework, it supports both clustered and standalone deployments for cloud-native graph database operations.
 
+> ⚠️ **ALPHA SOFTWARE WARNING**: This operator is currently in **alpha stage**. There may be breaking changes at any time due to ongoing development. For production use or evaluation, please use the [latest alpha release](https://github.com/neo4j-labs/neo4j-kubernetes-operator/releases/latest) rather than the main branch code.
+
 ## 📋 Requirements
 
 - **Neo4j**: Version 5.26 or higher (supports both SemVer 5.x and CalVer 2025.x formats)
 - **Kubernetes**: Version 1.21 or higher
 - **Go**: Version 1.21+ (for development)
-- **cert-manager**: Version 1.5+ (for TLS/SSL features)
+- **cert-manager**: Version 1.5+ (tested with v1.18.2, required for TLS/SSL features)
 
 ## 🚀 Quick Start
 
@@ -36,12 +38,16 @@ If you're new to Kubernetes, start here:
 
    **For single-node development** (non-clustered):
    ```bash
-   kubectl apply -f https://github.com/neo4j-labs/neo4j-kubernetes-operator/raw/main/examples/standalone/single-node-standalone.yaml
+   # Download the example from the latest release
+   curl -L https://github.com/neo4j-labs/neo4j-kubernetes-operator/releases/latest/download/examples-standalone-single-node.yaml -o standalone.yaml
+   kubectl apply -f standalone.yaml
    ```
 
    **For clustered deployment** (production):
    ```bash
-   kubectl apply -f https://github.com/neo4j-labs/neo4j-kubernetes-operator/raw/main/examples/clusters/minimal-cluster.yaml
+   # Download the example from the latest release
+   curl -L https://github.com/neo4j-labs/neo4j-kubernetes-operator/releases/latest/download/examples-cluster-minimal.yaml -o cluster.yaml
+   kubectl apply -f cluster.yaml
    ```
 
 4. **Access your Neo4j instance**:
@@ -59,10 +65,13 @@ If you're new to Kubernetes, start here:
 Jump right in with advanced configurations:
 
 ```bash
-# Install the operator
+# Install the operator from the latest release
 kubectl apply -f https://github.com/neo4j-labs/neo4j-kubernetes-operator/releases/latest/download/neo4j-kubernetes-operator.yaml
 
 # Deploy production cluster with high availability
+# First, clone the release or download specific example files
+git clone --branch $(curl -s https://api.github.com/repos/neo4j-labs/neo4j-kubernetes-operator/releases/latest | grep tag_name | cut -d '"' -f 4) https://github.com/neo4j-labs/neo4j-kubernetes-operator.git
+cd neo4j-kubernetes-operator
 kubectl apply -f examples/clusters/multi-primary-cluster.yaml
 ```
 
@@ -130,7 +139,6 @@ Complete CRD documentation for all custom resources:
 - **Point-in-Time Recovery**: Restore clusters to specific timestamps with `--restore-until`
 - **Database Management**: Create databases with IF NOT EXISTS, WAIT/NOWAIT, and topology constraints
 - **Version-Aware Operations**: Automatic detection and adaptation for Neo4j 5.26.x and 2025.x
-- **Auto-scaling**: Horizontal Pod Autoscaler (HPA) integration with intelligent scaling logic
 - **Plugin Management**: Install and configure Neo4j plugins (APOC, GDS, etc.)
 - **Query Monitoring**: Performance monitoring and slow query detection
 

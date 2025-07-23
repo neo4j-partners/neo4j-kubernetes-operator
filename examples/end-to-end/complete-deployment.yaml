@@ -114,24 +114,6 @@ spec:
     serviceMonitor:
       enabled: true
       interval: 30s
-
-  # Auto-scaling configuration
-  autoScaling:
-    enabled: true
-    primaries:
-      minReplicas: 3
-      maxReplicas: 5
-      metrics:
-        - type: cpu
-          targetPercentage: 70
-        - type: memory
-          targetPercentage: 80
-    secondaries:
-      minReplicas: 2
-      maxReplicas: 4
-      metrics:
-        - type: cpu
-          targetPercentage: 80
 ---
 # Create main database with topology constraints
 apiVersion: neo4j.neo4j.com/v1alpha1

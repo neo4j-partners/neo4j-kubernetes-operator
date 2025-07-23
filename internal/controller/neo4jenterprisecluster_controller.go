@@ -336,16 +336,6 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 		}
 	}
 
-	// Handle Auto-scaling for primaries and secondaries
-	if cluster.Spec.AutoScaling != nil && cluster.Spec.AutoScaling.Enabled {
-		autoScaler := NewAutoScaler(r.Client)
-		if err := autoScaler.ReconcileAutoScaling(ctx, cluster); err != nil {
-			logger.Error(err, "Failed to reconcile auto-scaling")
-			_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Auto-scaling failed: %v", err))
-			return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
-		}
-	}
-
 	// Handle Query Performance Monitoring
 	if cluster.Spec.QueryMonitoring != nil && cluster.Spec.QueryMonitoring.Enabled {
 		queryMonitor := NewQueryMonitor(r.Client, r.Scheme)

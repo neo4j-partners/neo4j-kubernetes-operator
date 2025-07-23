@@ -512,7 +512,7 @@ After completing your migration:
 1. **Update monitoring** dashboards and alerts
 2. **Update documentation** and runbooks
 3. **Train your team** on the new CRD structure
-4. **Consider auto-scaling** for cluster deployments
+4. **Consider proper resource configuration** for cluster deployments
 5. **Implement proper backup** strategies for your deployment type
 
 For more information, see:

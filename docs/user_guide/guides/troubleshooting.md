@@ -310,9 +310,6 @@ kubectl logs <cluster-name>-1
 
 #### Problem: Scaling Issues
 ```bash
-# Check autoscaler events
-kubectl describe hpa <cluster-name>
-
 # Check scaling validation
 kubectl get events | grep -i scale
 ```
