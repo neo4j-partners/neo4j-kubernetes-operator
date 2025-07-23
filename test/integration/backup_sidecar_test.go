@@ -105,21 +105,22 @@ var _ = Describe("Backup Sidecar Path Creation", func() {
 				Spec: neo4jv1alpha1.Neo4jEnterpriseStandaloneSpec{
 					Edition: "enterprise",
 					Image: neo4jv1alpha1.ImageSpec{
-						Repo: "neo4j",
-						Tag:  "5.26.0-enterprise",
+						Repo:       "neo4j",
+						Tag:        "5.26.0-enterprise",
+						PullPolicy: "IfNotPresent",
 					},
 					Storage: neo4jv1alpha1.StorageSpec{
 						ClassName: "standard",
-						Size:      "1Gi",
+						Size:      "500Mi",
 					},
 					Resources: &corev1.ResourceRequirements{
 						Requests: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("500m"),
-							corev1.ResourceMemory: resource.MustParse("1Gi"),
+							corev1.ResourceCPU:    resource.MustParse("100m"),
+							corev1.ResourceMemory: resource.MustParse("512Mi"),
 						},
 						Limits: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("1"),
-							corev1.ResourceMemory: resource.MustParse("2Gi"),
+							corev1.ResourceCPU:    resource.MustParse("500m"),
+							corev1.ResourceMemory: resource.MustParse("1Gi"),
 						},
 					},
 					Auth: &neo4jv1alpha1.AuthSpec{
@@ -135,8 +136,12 @@ var _ = Describe("Backup Sidecar Path Creation", func() {
 			}
 			Expect(k8sClient.Create(ctx, standalone)).To(Succeed())
 			defer func() {
-				Expect(k8sClient.Delete(ctx, standalone)).To(Succeed())
+				// Clean up standalone with finalizer removal if needed
+				cleanupResource(standalone, testNamespace, "Neo4jEnterpriseStandalone")
 			}()
+
+			// Log that we created the standalone
+			GinkgoWriter.Printf("Created standalone %s in namespace %s\n", standalone.Name, testNamespace)
 
 			By("Waiting for standalone to be ready")
 			standaloneKey := types.NamespacedName{
@@ -147,8 +152,27 @@ var _ = Describe("Backup Sidecar Path Creation", func() {
 			Eventually(func() bool {
 				var foundStandalone neo4jv1alpha1.Neo4jEnterpriseStandalone
 				if err := k8sClient.Get(ctx, standaloneKey, &foundStandalone); err != nil {
+					GinkgoWriter.Printf("Failed to get standalone: %v\n", err)
 					return false
 				}
+
+				// Log status for debugging
+				GinkgoWriter.Printf("Standalone %s status: Ready=%v, Phase=%s, Message=%s\n",
+					foundStandalone.Name, foundStandalone.Status.Ready,
+					foundStandalone.Status.Phase, foundStandalone.Status.Message)
+
+				// Check if resources are being created
+				configMapKey := types.NamespacedName{
+					Name:      fmt.Sprintf("%s-config", standalone.Name),
+					Namespace: testNamespace,
+				}
+				configMap := &corev1.ConfigMap{}
+				if err := k8sClient.Get(ctx, configMapKey, configMap); err != nil {
+					GinkgoWriter.Printf("ConfigMap not found: %v\n", err)
+				} else {
+					GinkgoWriter.Printf("ConfigMap exists\n")
+				}
+
 				return foundStandalone.Status.Ready
 			}, timeout, interval).Should(BeTrue())
 
@@ -207,16 +231,16 @@ var _ = Describe("Backup Sidecar Path Creation", func() {
 					},
 					Storage: neo4jv1alpha1.StorageSpec{
 						ClassName: "standard",
-						Size:      "1Gi",
+						Size:      "500Mi",
 					},
 					Resources: &corev1.ResourceRequirements{
 						Requests: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("500m"),
-							corev1.ResourceMemory: resource.MustParse("1Gi"),
+							corev1.ResourceCPU:    resource.MustParse("100m"),
+							corev1.ResourceMemory: resource.MustParse("512Mi"),
 						},
 						Limits: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("1"),
-							corev1.ResourceMemory: resource.MustParse("2Gi"),
+							corev1.ResourceCPU:    resource.MustParse("500m"),
+							corev1.ResourceMemory: resource.MustParse("1Gi"),
 						},
 					},
 					Auth: &neo4jv1alpha1.AuthSpec{

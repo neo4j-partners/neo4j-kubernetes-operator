@@ -56,7 +56,7 @@ var namespaceMutex sync.Mutex
 
 // Test configuration variables
 var timeout = 5 * time.Minute
-var interval = 10 * time.Second
+var interval = 5 * time.Second
 
 // List of required CRDs for integration tests
 var requiredCRDs = []string{
@@ -80,6 +80,8 @@ var _ = BeforeSuite(func() {
 	if isSetup {
 		return
 	}
+
+	fmt.Println("=== INTEGRATION TEST BEFORESUITE STARTING ===")
 
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
@@ -207,6 +209,19 @@ func waitForOperatorReady() {
 		return deployment.Status.ReadyReplicas == *deployment.Spec.Replicas &&
 			deployment.Status.ReadyReplicas > 0
 	}, 2*time.Minute, 5*time.Second).Should(BeTrue(), "Operator deployment should be ready")
+
+	// Also verify that a pod is actually running
+	By("Verifying operator pod is running")
+	podList := &corev1.PodList{}
+	err = k8sClient.List(ctx, podList,
+		client.InNamespace("neo4j-operator-system"),
+		client.MatchingLabels{"control-plane": "controller-manager"})
+	Expect(err).NotTo(HaveOccurred(), "Failed to list operator pods")
+	Expect(podList.Items).NotTo(BeEmpty(), "No operator pods found")
+
+	// Wait a bit more to ensure operator is fully initialized
+	By("Waiting for operator to fully initialize")
+	time.Sleep(10 * time.Second)
 
 	By("Operator is ready")
 }
