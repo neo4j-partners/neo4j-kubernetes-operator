@@ -56,6 +56,41 @@ The backup and restore functionality requires Neo4j Enterprise version 5.26.0 or
 - **Calver**: 2025.01.0, 2025.06.1, 2026.01.0, etc.
 - **Enterprise Tags**: 5.26.0-enterprise, 2025.01.0-enterprise, etc.
 
+## Backup Architecture
+
+### How Backups Work
+
+The Neo4j Kubernetes Operator uses a **backup sidecar** architecture for reliability:
+
+1. **Backup Sidecar Container**: Every Neo4j pod includes an automatic backup sidecar
+   - Handles backup execution directly on the Neo4j node
+   - Allocated 1Gi memory to prevent OOM issues
+   - Monitors `/backup-requests` volume for backup jobs
+
+2. **Backup Job**: When you create a `Neo4jBackup` resource, the operator:
+   - Creates a Kubernetes Job that connects to the sidecar
+   - Sends backup request via shared volume
+   - Monitors backup progress and status
+
+3. **Path Management**: The backup sidecar automatically:
+   - Creates the full backup destination path before execution
+   - Handles Neo4j 5.26+ requirement that paths must exist
+   - Manages backup retention and cleanup
+
+4. **RBAC Management**: The operator automatically:
+   - Creates necessary service accounts in each namespace
+   - Sets up roles with `pods/exec` and `pods/log` permissions for backup jobs
+   - Manages role bindings for secure backup execution
+   - **No manual RBAC configuration required** - all permissions are handled automatically
+
+### Important Notes
+
+- **Path Creation**: Neo4j 5.26+ and 2025.x+ require the backup destination path to exist before running the backup command. The operator handles this automatically.
+- **Memory Requirements**: The backup sidecar requires 1Gi memory for reliable operation
+- **Direct Execution**: Backups run directly on Neo4j nodes, not through kubectl
+- **RBAC**: Starting with the latest version, the operator automatically creates all necessary RBAC resources. No manual role or binding creation is needed.
+- **Permissions**: The operator grants backup jobs the ability to execute commands in pods (`pods/exec`) and read pod logs (`pods/log`)
+
 ## Backup Operations
 
 ### Basic Backup Concepts
@@ -658,7 +693,7 @@ kubectl get events --field-selector involvedObject.name=restore-operation
 
 ### Security Best Practices
 
-1. **RBAC**: Use appropriate Kubernetes RBAC for backup/restore operations
+1. **RBAC**: The operator automatically manages RBAC for backup operations. No manual configuration needed.
 2. **Secrets Management**: Store encryption keys and credentials in Kubernetes secrets
 3. **Network Policies**: Implement network policies to restrict backup traffic
 4. **Audit Logging**: Enable audit logging for backup and restore operations

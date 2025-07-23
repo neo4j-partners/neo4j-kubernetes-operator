@@ -1,0 +1,31 @@
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jRestore
+metadata:
+  name: restore-orders
+  namespace: default
+spec:
+  clusterRef: my-neo4j-cluster
+  databaseName: orders
+  # Force restore with overwrite-destination
+  force: true
+  source:
+    type: backup
+    backupRef: full-backup
+    # Optional: restore to specific point in time
+    pointInTime: "2024-01-15T10:30:00Z"
+  options:
+    # Additional validation
+    verifyBackup: true
+    additionalArgs:
+      - "--expand-commands"  # Show detailed progress
+  # Optional hooks
+  preRestoreHooks:
+    - type: script
+      script: |
+        echo "Stopping database before restore..."
+        # Database will be automatically stopped by controller
+  postRestoreHooks:
+    - type: script
+      script: |
+        echo "Restore completed, starting database..."
+        # Database will be automatically started by controller

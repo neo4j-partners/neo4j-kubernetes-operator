@@ -99,8 +99,17 @@ spec:
                     items:
                       type: string
                     type: array
+                  backupType:
+                    default: AUTO
+                    description: Backup type
+                    enum:
+                    - FULL
+                    - DIFF
+                    - AUTO
+                    type: string
                   compress:
-                    description: Compress the backup
+                    default: true
+                    description: 'Compress the backup (default: true)'
                     type: boolean
                   encryption:
                     description: Encryption configuration
@@ -119,6 +128,10 @@ spec:
                         description: Secret containing encryption key
                         type: string
                     type: object
+                  pageCache:
+                    description: Page cache size for backup operation (e.g., "4G")
+                    pattern: ^[0-9]+[KMG]?$
+                    type: string
                   verify:
                     description: Verify backup integrity after creation
                     type: boolean

@@ -429,6 +429,11 @@ func (r *Neo4jEnterpriseStandaloneReconciler) createStatefulSet(standalone *neo4
 									ContainerPort: 7687,
 									Protocol:      corev1.ProtocolTCP,
 								},
+								{
+									Name:          "backup",
+									ContainerPort: 6362,
+									Protocol:      corev1.ProtocolTCP,
+								},
 							},
 							Env:          r.buildEnvVars(standalone),
 							VolumeMounts: r.buildVolumeMounts(standalone),
@@ -439,6 +444,7 @@ func (r *Neo4jEnterpriseStandaloneReconciler) createStatefulSet(standalone *neo4
 								return corev1.ResourceRequirements{}
 							}(),
 						},
+						r.buildBackupSidecarContainer(standalone),
 					},
 					Volumes:      r.buildVolumes(standalone),
 					NodeSelector: standalone.Spec.NodeSelector,
@@ -561,6 +567,44 @@ func (r *Neo4jEnterpriseStandaloneReconciler) cleanupResources(ctx context.Conte
 func (r *Neo4jEnterpriseStandaloneReconciler) buildEnvVars(standalone *neo4jv1alpha1.Neo4jEnterpriseStandalone) []corev1.EnvVar {
 	envVars := []corev1.EnvVar{}
 
+	// Add essential Neo4j environment variables
+	envVars = append(envVars, corev1.EnvVar{
+		Name:  "NEO4J_EDITION",
+		Value: "enterprise",
+	})
+	envVars = append(envVars, corev1.EnvVar{
+		Name:  "NEO4J_ACCEPT_LICENSE_AGREEMENT",
+		Value: "yes",
+	})
+
+	// Add auth credentials from secret if specified
+	if standalone.Spec.Auth != nil && standalone.Spec.Auth.AdminSecret != "" {
+		envVars = append(envVars,
+			corev1.EnvVar{
+				Name: "DB_USERNAME",
+				ValueFrom: &corev1.EnvVarSource{
+					SecretKeyRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: standalone.Spec.Auth.AdminSecret,
+						},
+						Key: "username",
+					},
+				},
+			},
+			corev1.EnvVar{
+				Name: "DB_PASSWORD",
+				ValueFrom: &corev1.EnvVarSource{
+					SecretKeyRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: standalone.Spec.Auth.AdminSecret,
+						},
+						Key: "password",
+					},
+				},
+			},
+		)
+	}
+
 	// Add user-provided environment variables
 	envVars = append(envVars, standalone.Spec.Env...)
 
@@ -629,6 +673,14 @@ func (r *Neo4jEnterpriseStandaloneReconciler) buildVolumes(standalone *neo4jv1al
 		})
 	}
 
+	// Add backup requests volume for backup sidecar
+	volumes = append(volumes, corev1.Volume{
+		Name: "backup-requests",
+		VolumeSource: corev1.VolumeSource{
+			EmptyDir: &corev1.EmptyDirVolumeSource{},
+		},
+	})
+
 	return volumes
 }
 
@@ -685,6 +737,139 @@ func (r *Neo4jEnterpriseStandaloneReconciler) createTLSCertificate(standalone *n
 				fmt.Sprintf("%s-service.%s", standalone.Name, standalone.Namespace),
 				fmt.Sprintf("%s-service.%s.svc", standalone.Name, standalone.Namespace),
 				fmt.Sprintf("%s-service.%s.svc.cluster.local", standalone.Name, standalone.Namespace),
+			},
+		},
+	}
+}
+
+// buildBackupSidecarContainer creates the backup sidecar container for standalone deployments
+func (r *Neo4jEnterpriseStandaloneReconciler) buildBackupSidecarContainer(standalone *neo4jv1alpha1.Neo4jEnterpriseStandalone) corev1.Container {
+	return corev1.Container{
+		Name:            "backup-sidecar",
+		Image:           fmt.Sprintf("%s:%s", standalone.Spec.Image.Repo, standalone.Spec.Image.Tag),
+		ImagePullPolicy: corev1.PullPolicy(standalone.Spec.Image.PullPolicy),
+		Command: []string{
+			"/bin/bash",
+			"-c",
+			`# Install jq if not available
+which jq >/dev/null 2>&1 || apt-get update && apt-get install -y jq
+
+# Function to clean old backups
+cleanup_old_backups() {
+	local backup_dir="/data/backups"
+	local max_age_days="${BACKUP_RETENTION_DAYS:-7}"
+	local max_count="${BACKUP_RETENTION_COUNT:-10}"
+
+	if [ -d "$backup_dir" ]; then
+		echo "Cleaning backups older than $max_age_days days..."
+		find "$backup_dir" -maxdepth 1 -type d -mtime +$max_age_days -exec rm -rf {} \; 2>/dev/null || true
+
+		# Keep only the most recent backups if count exceeds max
+		backup_count=$(find "$backup_dir" -maxdepth 1 -type d | wc -l)
+		if [ $backup_count -gt $max_count ]; then
+			echo "Keeping only $max_count most recent backups..."
+			find "$backup_dir" -maxdepth 1 -type d -printf '%T@ %p\n' | \
+				sort -n | head -n -$max_count | cut -d' ' -f2- | \
+				xargs -r rm -rf
+		fi
+
+		# Check disk usage
+		df -h /data | tail -1
+	fi
+}
+
+while true; do
+	if [ -f /backup-requests/backup.request ]; then
+		echo "Backup request found, starting backup..."
+		REQUEST=$(cat /backup-requests/backup.request)
+		BACKUP_PATH=$(echo $REQUEST | jq -r .path)
+		BACKUP_TYPE=$(echo $REQUEST | jq -r '.type // "FULL"')
+		DATABASE=$(echo $REQUEST | jq -r '.database // empty')
+
+		# Clean up old backups before starting new one
+		cleanup_old_backups
+
+		# Create backup directory - Neo4j 5.26+ requires the full path to exist
+		mkdir -p $BACKUP_PATH
+
+		# Execute backup
+		# Note: neo4j-admin in 5.x uses configuration from NEO4J_CONF directory
+		export NEO4J_CONF=/var/lib/neo4j/conf
+
+		if [ -z "$DATABASE" ]; then
+			echo "Starting full standalone backup to $BACKUP_PATH with type $BACKUP_TYPE"
+			neo4j-admin database backup --include-metadata=all --to-path=$BACKUP_PATH --type=$BACKUP_TYPE --verbose
+		else
+			echo "Starting database backup for $DATABASE to $BACKUP_PATH with type $BACKUP_TYPE"
+			neo4j-admin database backup $DATABASE --to-path=$BACKUP_PATH --type=$BACKUP_TYPE --verbose
+		fi
+
+		# Save exit status
+		BACKUP_STATUS=$?
+		echo $BACKUP_STATUS > /backup-requests/backup.status
+
+		if [ $BACKUP_STATUS -eq 0 ]; then
+			echo "Backup completed successfully"
+			# Clean up again after successful backup
+			cleanup_old_backups
+		else
+			echo "Backup failed with status $BACKUP_STATUS"
+		fi
+
+		# Clean up request file
+		rm -f /backup-requests/backup.request
+	fi
+	sleep 5
+done`,
+		},
+		VolumeMounts: []corev1.VolumeMount{
+			{
+				Name:      "neo4j-data",
+				MountPath: "/data",
+			},
+			{
+				Name:      "backup-requests",
+				MountPath: "/backup-requests",
+			},
+			{
+				Name:      "neo4j-config",
+				MountPath: "/var/lib/neo4j/conf",
+			},
+		},
+		Env: append([]corev1.EnvVar{
+			{
+				Name:  "BACKUP_RETENTION_DAYS",
+				Value: "7", // Default: keep backups for 7 days
+			},
+			{
+				Name:  "BACKUP_RETENTION_COUNT",
+				Value: "10", // Default: keep maximum 10 backups
+			},
+			{
+				Name:  "NEO4J_CONF",
+				Value: "/var/lib/neo4j/conf",
+			},
+			{
+				Name:  "NEO4J_HOME",
+				Value: "/var/lib/neo4j",
+			},
+			{
+				Name:  "NEO4J_EDITION",
+				Value: "enterprise",
+			},
+			{
+				Name:  "NEO4J_ACCEPT_LICENSE_AGREEMENT",
+				Value: "yes",
+			},
+		}, r.buildEnvVars(standalone)...), // Append the main container environment variables
+		Resources: corev1.ResourceRequirements{
+			Limits: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("500m"),
+				corev1.ResourceMemory: resource.MustParse("1Gi"),
+			},
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("200m"),
+				corev1.ResourceMemory: resource.MustParse("512Mi"),
 			},
 		},
 	}

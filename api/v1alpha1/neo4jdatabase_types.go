@@ -38,6 +38,32 @@ type Neo4jDatabaseSpec struct {
 
 	// Initial data import configuration
 	InitialData *InitialDataSpec `json:"initialData,omitempty"`
+
+	// Wait for database creation to complete
+	// +kubebuilder:default=true
+	Wait bool `json:"wait,omitempty"`
+
+	// Create database only if it doesn't exist
+	// +kubebuilder:default=true
+	IfNotExists bool `json:"ifNotExists,omitempty"`
+
+	// Database topology specification for clusters
+	Topology *DatabaseTopology `json:"topology,omitempty"`
+
+	// Default Cypher language version (Neo4j 2025.x only)
+	// +kubebuilder:validation:Enum="5";"25"
+	DefaultCypherLanguage string `json:"defaultCypherLanguage,omitempty"`
+}
+
+// DatabaseTopology defines database distribution in a cluster
+type DatabaseTopology struct {
+	// Number of primaries for this database
+	// +kubebuilder:validation:Minimum=1
+	Primaries int32 `json:"primaries,omitempty"`
+
+	// Number of secondaries for this database
+	// +kubebuilder:validation:Minimum=0
+	Secondaries int32 `json:"secondaries,omitempty"`
 }
 
 // InitialDataSpec defines initial data import configuration
@@ -84,6 +110,12 @@ type Neo4jDatabaseStatus struct {
 
 	// LastBackupTime shows when the last backup was taken
 	LastBackupTime *metav1.Time `json:"lastBackupTime,omitempty"`
+
+	// Current state of the database (online, offline, started, stopped)
+	State string `json:"state,omitempty"`
+
+	// Servers hosting this database (for topology tracking)
+	Servers []string `json:"servers,omitempty"`
 }
 
 // +kubebuilder:object:root=true

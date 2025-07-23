@@ -55,6 +55,16 @@ spec:
               clusterRef:
                 description: Reference to the Neo4j cluster
                 type: string
+              defaultCypherLanguage:
+                description: Default Cypher language version (Neo4j 2025.x only)
+                enum:
+                - "5"
+                - "25"
+                type: string
+              ifNotExists:
+                default: true
+                description: Create database only if it doesn't exist
+                type: boolean
               initialData:
                 description: Initial data import configuration
                 properties:
@@ -150,6 +160,24 @@ spec:
                   type: string
                 description: Database creation options
                 type: object
+              topology:
+                description: Database topology specification for clusters
+                properties:
+                  primaries:
+                    description: Number of primaries for this database
+                    format: int32
+                    minimum: 1
+                    type: integer
+                  secondaries:
+                    description: Number of secondaries for this database
+                    format: int32
+                    minimum: 0
+                    type: integer
+                type: object
+              wait:
+                default: true
+                description: Wait for database creation to complete
+                type: boolean
             required:
             - clusterRef
             - name
@@ -238,8 +266,17 @@ spec:
               phase:
                 description: Phase represents the current phase of the database
                 type: string
+              servers:
+                description: Servers hosting this database (for topology tracking)
+                items:
+                  type: string
+                type: array
               size:
                 description: Size shows the current database size
+                type: string
+              state:
+                description: Current state of the database (online, offline, started,
+                  stopped)
                 type: string
             type: object
         type: object

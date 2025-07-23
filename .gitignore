@@ -75,7 +75,7 @@ docker-compose.override.yml
 /bundle.Dockerfile
 
 # Generated reports and coverage
-/reports/
+# Note: /reports/ is tracked in git for documentation purposes
 /coverage/
 /test-results/
 *.html

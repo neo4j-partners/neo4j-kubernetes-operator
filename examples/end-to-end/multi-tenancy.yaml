@@ -1,0 +1,507 @@
+# Multi-Tenancy Example
+# This example demonstrates:
+# - Multiple databases per cluster for different tenants
+# - Resource isolation and quotas
+# - Tenant-specific backups
+# - Access control and security
+
+---
+# Shared infrastructure namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: neo4j-multi-tenant
+  labels:
+    purpose: multi-tenancy
+---
+# Admin credentials for cluster management
+apiVersion: v1
+kind: Secret
+metadata:
+  name: cluster-admin-secret
+  namespace: neo4j-multi-tenant
+type: Opaque
+stringData:
+  username: neo4j
+  password: secure-admin-password
+---
+# Tenant credentials
+apiVersion: v1
+kind: Secret
+metadata:
+  name: tenant-a-secret
+  namespace: neo4j-multi-tenant
+type: Opaque
+stringData:
+  username: tenant_a_admin
+  password: tenantA123!
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: tenant-b-secret
+  namespace: neo4j-multi-tenant
+type: Opaque
+stringData:
+  username: tenant_b_admin
+  password: tenantB123!
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: tenant-c-secret
+  namespace: neo4j-multi-tenant
+type: Opaque
+stringData:
+  username: tenant_c_admin
+  password: tenantC123!
+---
+# Multi-tenant Neo4j Cluster
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: multi-tenant-cluster
+  namespace: neo4j-multi-tenant
+spec:
+  edition: enterprise
+  image:
+    repo: neo4j
+    tag: "5.26.0-enterprise"
+
+  # Larger cluster to handle multiple tenants
+  topology:
+    primaries: 3
+    secondaries: 2
+
+  # Resource allocation for multi-tenancy
+  resources:
+    requests:
+      cpu: "4"
+      memory: "16Gi"
+    limits:
+      cpu: "8"
+      memory: "32Gi"
+
+  storage:
+    className: fast-ssd
+    size: 200Gi
+
+  auth:
+    adminSecret: cluster-admin-secret
+    provider: native
+
+  # Multi-tenant configuration
+  configMap:
+    data:
+      # Memory allocation
+      server.memory.heap.initial_size: "8G"
+      server.memory.heap.max_size: "8G"
+      server.memory.pagecache.size: "16G"
+
+      # Transaction isolation
+      db.transaction.timeout: "120s"
+      db.transaction.concurrent.maximum: "1000"
+
+      # Query management
+      db.query.timeout: "300s"
+      dbms.routing_ttl: "300s"
+
+      # Enable database management
+      dbms.max_databases: "50"
+---
+# TENANT A: E-commerce Platform
+---
+# Tenant A main database
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jDatabase
+metadata:
+  name: tenant-a-production
+  namespace: neo4j-multi-tenant
+  labels:
+    tenant: tenant-a
+    environment: production
+spec:
+  clusterRef: multi-tenant-cluster
+  name: tenant_a_prod
+  wait: true
+  ifNotExists: true
+
+  # Dedicated resources for tenant A
+  topology:
+    primaries: 2
+    secondaries: 1
+
+  options:
+    # Transaction log retention for compliance
+    txLogEnrichment: "FULL"
+    txLogRetention: "7 days"
+
+  # E-commerce schema
+  initialData:
+    source: cypher
+    cypherStatements:
+      - "CREATE CONSTRAINT tenant_a_user_id IF NOT EXISTS ON (u:User) ASSERT u.userId IS UNIQUE"
+      - "CREATE CONSTRAINT tenant_a_product_sku IF NOT EXISTS ON (p:Product) ASSERT p.sku IS UNIQUE"
+      - "CREATE CONSTRAINT tenant_a_order_id IF NOT EXISTS ON (o:Order) ASSERT o.orderId IS UNIQUE"
+      - "CREATE INDEX tenant_a_user_email IF NOT EXISTS FOR (u:User) ON (u.email)"
+      - "CREATE INDEX tenant_a_product_category IF NOT EXISTS FOR (p:Product) ON (p.category)"
+---
+# Tenant A staging database
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jDatabase
+metadata:
+  name: tenant-a-staging
+  namespace: neo4j-multi-tenant
+  labels:
+    tenant: tenant-a
+    environment: staging
+spec:
+  clusterRef: multi-tenant-cluster
+  name: tenant_a_staging
+  wait: true
+  ifNotExists: true
+
+  topology:
+    primaries: 1
+    secondaries: 1
+---
+# TENANT B: Social Network
+---
+# Tenant B database with graph-specific optimizations
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jDatabase
+metadata:
+  name: tenant-b-production
+  namespace: neo4j-multi-tenant
+  labels:
+    tenant: tenant-b
+    environment: production
+spec:
+  clusterRef: multi-tenant-cluster
+  name: tenant_b_social
+  wait: true
+  ifNotExists: true
+
+  topology:
+    primaries: 2
+    secondaries: 2  # More secondaries for read-heavy workload
+
+  options:
+    # Optimized for graph traversals
+    dbms.memory.transaction.max: "2g"
+    dbms.memory.transaction.global_max: "4g"
+
+  # Social network schema
+  initialData:
+    source: cypher
+    cypherStatements:
+      - "CREATE CONSTRAINT tenant_b_user_id IF NOT EXISTS ON (u:Person) ASSERT u.personId IS UNIQUE"
+      - "CREATE CONSTRAINT tenant_b_post_id IF NOT EXISTS ON (p:Post) ASSERT p.postId IS UNIQUE"
+      - "CREATE INDEX tenant_b_person_name IF NOT EXISTS FOR (p:Person) ON (p.name)"
+      - "CREATE INDEX tenant_b_post_timestamp IF NOT EXISTS FOR (p:Post) ON (p.timestamp)"
+      - "CREATE INDEX tenant_b_friendship IF NOT EXISTS FOR ()-[f:FRIENDS_WITH]-() ON (f.since)"
+---
+# TENANT C: Analytics Platform (Neo4j 2025.x)
+---
+# Tenant C using Neo4j 2025.x features
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jDatabase
+metadata:
+  name: tenant-c-analytics
+  namespace: neo4j-multi-tenant
+  labels:
+    tenant: tenant-c
+    environment: production
+spec:
+  clusterRef: multi-tenant-cluster
+  name: tenant_c_analytics
+  wait: true
+  ifNotExists: true
+
+  # Use modern Cypher for analytics
+  defaultCypherLanguage: "25"
+
+  topology:
+    primaries: 3  # More primaries for parallel analytics
+    secondaries: 1
+
+  options:
+    # Analytics optimizations
+    db.query.timeout: "3600s"  # 1 hour for complex analytics
+    dbms.query.cache_size: "2000"
+
+  # Analytics schema
+  initialData:
+    source: cypher
+    cypherStatements:
+      - "CREATE CONSTRAINT tenant_c_metric_id IF NOT EXISTS ON (m:Metric) ASSERT m.metricId IS UNIQUE"
+      - "CREATE INDEX tenant_c_metric_timestamp IF NOT EXISTS FOR (m:Metric) ON (m.timestamp)"
+      - "CREATE INDEX tenant_c_metric_type IF NOT EXISTS FOR (m:Metric) ON (m.type)"
+---
+# Tenant-specific backup configurations
+---
+# Tenant A daily backups
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jBackup
+metadata:
+  name: tenant-a-backup
+  namespace: neo4j-multi-tenant
+  labels:
+    tenant: tenant-a
+spec:
+  target:
+    kind: Database
+    name: tenant_a_prod
+    namespace: neo4j-multi-tenant
+
+  schedule:
+    cron: "0 1 * * *"  # Daily at 1 AM
+
+  storage:
+    type: s3
+    bucket: tenant-backups
+    path: "tenant-a/daily"
+    cloud:
+      credentialsSecret: tenant-a-s3-credentials
+
+  retention:
+    maxAge: "30d"
+    maxCount: 30
+---
+# Tenant B hourly backups (high-frequency social data)
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jBackup
+metadata:
+  name: tenant-b-backup
+  namespace: neo4j-multi-tenant
+  labels:
+    tenant: tenant-b
+spec:
+  target:
+    kind: Database
+    name: tenant_b_social
+    namespace: neo4j-multi-tenant
+
+  schedule:
+    cron: "0 * * * *"  # Hourly
+
+  storage:
+    type: s3
+    bucket: tenant-backups
+    path: "tenant-b/hourly"
+    cloud:
+      credentialsSecret: tenant-b-s3-credentials
+
+  options:
+    backupType: "DIFF"  # Differential for frequent backups
+    compress: true
+
+  retention:
+    maxAge: "7d"
+    maxCount: 168  # 7 days of hourly backups
+---
+# Tenant C weekly full backups (analytics workload)
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jBackup
+metadata:
+  name: tenant-c-backup
+  namespace: neo4j-multi-tenant
+  labels:
+    tenant: tenant-c
+spec:
+  target:
+    kind: Database
+    name: tenant_c_analytics
+    namespace: neo4j-multi-tenant
+
+  schedule:
+    cron: "0 3 * * 0"  # Weekly on Sunday at 3 AM
+
+  storage:
+    type: s3
+    bucket: tenant-backups
+    path: "tenant-c/weekly"
+    cloud:
+      credentialsSecret: tenant-c-s3-credentials
+
+  options:
+    backupType: "FULL"
+    pageCache: "4G"  # Large cache for big analytics DB
+
+  retention:
+    maxAge: "90d"
+    maxCount: 12
+---
+# Resource Quotas per Tenant
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: tenant-a-quota
+  namespace: neo4j-multi-tenant
+spec:
+  hard:
+    requests.cpu: "4"
+    requests.memory: "16Gi"
+    persistentvolumeclaims: "5"
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: tenant-b-quota
+  namespace: neo4j-multi-tenant
+spec:
+  hard:
+    requests.cpu: "6"
+    requests.memory: "24Gi"
+    persistentvolumeclaims: "8"
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: tenant-c-quota
+  namespace: neo4j-multi-tenant
+spec:
+  hard:
+    requests.cpu: "8"
+    requests.memory: "32Gi"
+    persistentvolumeclaims: "10"
+---
+# Monitoring per Tenant
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tenant-metrics
+  namespace: neo4j-multi-tenant
+  labels:
+    app: neo4j
+    monitoring: prometheus
+spec:
+  selector:
+    neo4j.com/cluster: multi-tenant-cluster
+  ports:
+    - name: metrics
+      port: 2004
+      targetPort: 2004
+---
+# ServiceMonitor with tenant labels
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: multi-tenant-monitor
+  namespace: neo4j-multi-tenant
+spec:
+  selector:
+    matchLabels:
+      app: neo4j
+  endpoints:
+    - port: metrics
+      interval: 30s
+      path: /metrics
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_label_tenant]
+          targetLabel: tenant
+        - sourceLabels: [__meta_kubernetes_pod_label_database]
+          targetLabel: database
+---
+# Network Policies for Tenant Isolation
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: tenant-a-network-policy
+  namespace: neo4j-multi-tenant
+spec:
+  podSelector:
+    matchLabels:
+      tenant: tenant-a
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              tenant: tenant-a
+        - namespaceSelector:
+            matchLabels:
+              name: tenant-a-apps
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: neo4j
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 53  # DNS
+---
+# Tenant Management Scripts
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tenant-management
+  namespace: neo4j-multi-tenant
+data:
+  create-tenant.sh: |
+    #!/bin/bash
+    # Script to onboard new tenant
+
+    TENANT_ID=$1
+    TENANT_NAME=$2
+    DB_SIZE=$3  # small, medium, large
+
+    # Determine topology based on size
+    case $DB_SIZE in
+      small)
+        PRIMARIES=1
+        SECONDARIES=1
+        ;;
+      medium)
+        PRIMARIES=2
+        SECONDARIES=1
+        ;;
+      large)
+        PRIMARIES=3
+        SECONDARIES=2
+        ;;
+    esac
+
+    # Create tenant database
+    kubectl apply -f - <<EOF
+    apiVersion: neo4j.neo4j.com/v1alpha1
+    kind: Neo4jDatabase
+    metadata:
+      name: ${TENANT_ID}-database
+      namespace: neo4j-multi-tenant
+      labels:
+        tenant: ${TENANT_ID}
+    spec:
+      clusterRef: multi-tenant-cluster
+      name: ${TENANT_ID}_db
+      wait: true
+      ifNotExists: true
+      topology:
+        primaries: ${PRIMARIES}
+        secondaries: ${SECONDARIES}
+    EOF
+
+    echo "Tenant ${TENANT_NAME} (${TENANT_ID}) created with ${DB_SIZE} configuration"
+
+  monitor-tenants.sh: |
+    #!/bin/bash
+    # Monitor tenant resource usage
+
+    echo "=== Tenant Database Status ==="
+    kubectl get neo4jdatabase -n neo4j-multi-tenant -L tenant
+
+    echo -e "\n=== Tenant Resource Usage ==="
+    for tenant in tenant-a tenant-b tenant-c; do
+      echo "Tenant: $tenant"
+      kubectl exec -n neo4j-multi-tenant multi-tenant-cluster-0 -- \
+        cypher-shell -u neo4j -p $ADMIN_PASSWORD \
+        "SHOW DATABASE ${tenant}_* YIELD name, currentStatus, store"
+    done

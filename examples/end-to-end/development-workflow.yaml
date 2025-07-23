@@ -1,0 +1,439 @@
+# Development Workflow Example
+# This example demonstrates a complete development workflow:
+# - Local development setup
+# - Database migrations
+# - Testing with sample data
+# - CI/CD integration
+
+---
+# STEP 1: Local Development Environment
+---
+# Developer namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: neo4j-dev
+  labels:
+    environment: development
+---
+# Simple admin credentials for dev
+apiVersion: v1
+kind: Secret
+metadata:
+  name: dev-admin-secret
+  namespace: neo4j-dev
+type: Opaque
+stringData:
+  username: neo4j
+  password: developer123
+---
+# Lightweight standalone instance for development
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jEnterpriseStandalone
+metadata:
+  name: dev-instance
+  namespace: neo4j-dev
+spec:
+  edition: enterprise
+  image:
+    repo: neo4j
+    tag: "5.26.0-enterprise"
+
+  # Minimal resources for development
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "2Gi"
+    limits:
+      cpu: "1"
+      memory: "4Gi"
+
+  # Small storage
+  storage:
+    className: standard
+    size: 10Gi
+
+  auth:
+    adminSecret: dev-admin-secret
+
+  # Development-friendly settings
+  configMap:
+    data:
+      # Enable all APOC procedures
+      dbms.security.procedures.unrestricted: "apoc.*"
+      # Disable query timeout for debugging
+      db.query.timeout: "0"
+      # Enable query logging
+      db.logs.query.enabled: "VERBOSE"
+      db.logs.query.threshold: "0"
+---
+# STEP 2: Development Database with Schema
+---
+# Create development database
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jDatabase
+metadata:
+  name: dev-database
+  namespace: neo4j-dev
+spec:
+  clusterRef: dev-instance
+  name: devdb
+  wait: true
+  ifNotExists: true
+
+  # Development schema
+  initialData:
+    source: cypher
+    cypherStatements:
+      # User management
+      - "CREATE CONSTRAINT user_id IF NOT EXISTS ON (u:User) ASSERT u.id IS UNIQUE"
+      - "CREATE CONSTRAINT user_email IF NOT EXISTS ON (u:User) ASSERT u.email IS UNIQUE"
+      - "CREATE INDEX user_name IF NOT EXISTS FOR (u:User) ON (u.name)"
+
+      # Product catalog
+      - "CREATE CONSTRAINT product_id IF NOT EXISTS ON (p:Product) ASSERT p.id IS UNIQUE"
+      - "CREATE INDEX product_category IF NOT EXISTS FOR (p:Product) ON (p.category)"
+      - "CREATE INDEX product_price IF NOT EXISTS FOR (p:Product) ON (p.price)"
+
+      # Orders
+      - "CREATE CONSTRAINT order_id IF NOT EXISTS ON (o:Order) ASSERT o.id IS UNIQUE"
+      - "CREATE INDEX order_date IF NOT EXISTS FOR (o:Order) ON (o.orderDate)"
+      - "CREATE INDEX order_status IF NOT EXISTS FOR (o:Order) ON (o.status)"
+---
+# STEP 3: Load Sample Data
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: load-sample-data
+  namespace: neo4j-dev
+spec:
+  template:
+    spec:
+      containers:
+        - name: data-loader
+          image: neo4j/neo4j-admin:5.26.0-enterprise
+          env:
+            - name: NEO4J_URI
+              value: "bolt://dev-instance-neo4j-service:7687"
+            - name: NEO4J_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: dev-admin-secret
+                  key: username
+            - name: NEO4J_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: dev-admin-secret
+                  key: password
+          command:
+            - /bin/bash
+            - -c
+            - |
+              # Wait for database to be ready
+              until cypher-shell -a $NEO4J_URI -u $NEO4J_USERNAME -p $NEO4J_PASSWORD "RETURN 1"; do
+                echo "Waiting for Neo4j..."
+                sleep 5
+              done
+
+              # Load sample users
+              cypher-shell -a $NEO4J_URI -u $NEO4J_USERNAME -p $NEO4J_PASSWORD --database=devdb <<'EOF'
+              UNWIND range(1, 100) AS id
+              CREATE (u:User {
+                id: id,
+                email: 'user' + id + '@example.com',
+                name: 'User ' + id,
+                createdAt: datetime() - duration({days: toInteger(rand() * 365)})
+              });
+              EOF
+
+              # Load sample products
+              cypher-shell -a $NEO4J_URI -u $NEO4J_USERNAME -p $NEO4J_PASSWORD --database=devdb <<'EOF'
+              UNWIND [
+                {id: 1, name: 'Laptop', category: 'Electronics', price: 999.99},
+                {id: 2, name: 'Mouse', category: 'Electronics', price: 29.99},
+                {id: 3, name: 'Keyboard', category: 'Electronics', price: 79.99},
+                {id: 4, name: 'Monitor', category: 'Electronics', price: 299.99},
+                {id: 5, name: 'Desk', category: 'Furniture', price: 199.99}
+              ] AS product
+              CREATE (p:Product {
+                id: product.id,
+                name: product.name,
+                category: product.category,
+                price: product.price,
+                inStock: toInteger(rand() * 100)
+              });
+              EOF
+
+              # Create relationships
+              cypher-shell -a $NEO4J_URI -u $NEO4J_USERNAME -p $NEO4J_PASSWORD --database=devdb <<'EOF'
+              MATCH (u:User), (p:Product)
+              WHERE rand() < 0.1
+              CREATE (u)-[:VIEWED {timestamp: datetime()}]->(p);
+
+              MATCH (u:User), (p:Product)
+              WHERE rand() < 0.05
+              CREATE (u)-[:PURCHASED {
+                orderId: randomUUID(),
+                orderDate: datetime() - duration({days: toInteger(rand() * 30)}),
+                quantity: toInteger(rand() * 3) + 1
+              }]->(p);
+              EOF
+
+              echo "Sample data loaded successfully"
+          restartPolicy: Never
+---
+# STEP 4: Database Migration Example
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: schema-migration-v2
+  namespace: neo4j-dev
+spec:
+  template:
+    spec:
+      containers:
+        - name: migrator
+          image: neo4j/neo4j-admin:5.26.0-enterprise
+          env:
+            - name: NEO4J_URI
+              value: "bolt://dev-instance-neo4j-service:7687"
+            - name: NEO4J_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: dev-admin-secret
+                  key: username
+            - name: NEO4J_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: dev-admin-secret
+                  key: password
+          command:
+            - /bin/bash
+            - -c
+            - |
+              # Migration script
+              echo "Running schema migration v2..."
+
+              # Add new properties
+              cypher-shell -a $NEO4J_URI -u $NEO4J_USERNAME -p $NEO4J_PASSWORD --database=devdb <<'EOF'
+              // Add loyalty points to users
+              MATCH (u:User)
+              WHERE NOT EXISTS(u.loyaltyPoints)
+              SET u.loyaltyPoints = 0;
+
+              // Add ratings to products
+              MATCH (p:Product)
+              WHERE NOT EXISTS(p.rating)
+              SET p.rating = 0.0, p.reviewCount = 0;
+
+              // Create Review nodes
+              CREATE CONSTRAINT review_id IF NOT EXISTS ON (r:Review) ASSERT r.id IS UNIQUE;
+              CREATE INDEX review_rating IF NOT EXISTS FOR (r:Review) ON (r.rating);
+              EOF
+
+              echo "Migration completed successfully"
+          restartPolicy: Never
+---
+# STEP 5: Integration Test Database
+---
+# Separate database for integration tests
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jDatabase
+metadata:
+  name: test-database
+  namespace: neo4j-dev
+spec:
+  clusterRef: dev-instance
+  name: testdb
+  wait: false  # NOWAIT for faster test setup
+  ifNotExists: true
+---
+# STEP 6: CI/CD Pipeline Integration
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ci-scripts
+  namespace: neo4j-dev
+data:
+  run-tests.sh: |
+    #!/bin/bash
+    # CI test script
+
+    NEO4J_URI="bolt://dev-instance-neo4j-service:7687"
+    TEST_DB="testdb"
+
+    echo "=== Running Neo4j Integration Tests ==="
+
+    # Clean test database
+    cypher-shell -a $NEO4J_URI -u $NEO4J_USERNAME -p $NEO4J_PASSWORD <<EOF
+    CREATE OR REPLACE DATABASE $TEST_DB WAIT;
+    EOF
+
+    # Run test queries
+    echo "Test 1: User creation"
+    cypher-shell -a $NEO4J_URI -u $NEO4J_USERNAME -p $NEO4J_PASSWORD --database=$TEST_DB <<EOF
+    CREATE (u:User {id: 'test-1', email: 'test@example.com'})
+    RETURN u.id;
+    EOF
+
+    echo "Test 2: Product search"
+    cypher-shell -a $NEO4J_URI -u $NEO4J_USERNAME -p $NEO4J_PASSWORD --database=$TEST_DB <<EOF
+    CREATE INDEX IF NOT EXISTS FOR (p:Product) ON (p.name);
+    CREATE (:Product {id: 'p1', name: 'Test Product', price: 99.99});
+    MATCH (p:Product) WHERE p.name CONTAINS 'Test' RETURN p;
+    EOF
+
+    echo "Test 3: Relationship traversal"
+    cypher-shell -a $NEO4J_URI -u $NEO4J_USERNAME -p $NEO4J_PASSWORD --database=$TEST_DB <<EOF
+    MATCH (u:User {id: 'test-1'})
+    MATCH (p:Product {id: 'p1'})
+    CREATE (u)-[:PURCHASED {quantity: 2}]->(p);
+
+    MATCH (u:User)-[r:PURCHASED]->(p:Product)
+    RETURN u.id, r.quantity, p.name;
+    EOF
+
+    echo "=== All tests passed ==="
+---
+# STEP 7: Performance Testing Setup
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: performance-test
+  namespace: neo4j-dev
+spec:
+  template:
+    spec:
+      containers:
+        - name: perf-test
+          image: neo4j/neo4j-admin:5.26.0-enterprise
+          env:
+            - name: NEO4J_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: dev-admin-secret
+                  key: username
+            - name: NEO4J_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: dev-admin-secret
+                  key: password
+          command:
+            - /bin/bash
+            - -c
+            - |
+              # Generate performance test data
+              echo "Generating performance test dataset..."
+
+              cypher-shell -a bolt://dev-instance-neo4j-service:7687 \
+                -u $NEO4J_USERNAME -p $NEO4J_PASSWORD --database=devdb <<'EOF'
+
+              // Create 10,000 users
+              UNWIND range(1, 10000) AS id
+              CREATE (u:User {
+                id: 'perf-user-' + id,
+                email: 'perfuser' + id + '@example.com',
+                name: 'Performance User ' + id
+              });
+
+              // Create 1,000 products
+              UNWIND range(1, 1000) AS id
+              CREATE (p:Product {
+                id: 'perf-product-' + id,
+                name: 'Product ' + id,
+                category: CASE id % 5
+                  WHEN 0 THEN 'Electronics'
+                  WHEN 1 THEN 'Books'
+                  WHEN 2 THEN 'Clothing'
+                  WHEN 3 THEN 'Home'
+                  ELSE 'Other'
+                END,
+                price: round(rand() * 1000, 2)
+              });
+
+              // Create random relationships
+              MATCH (u:User) WHERE u.id STARTS WITH 'perf-user-'
+              WITH u, toInteger(rand() * 10) + 1 AS numProducts
+              MATCH (p:Product) WHERE p.id STARTS WITH 'perf-product-'
+              WITH u, p, rand() AS r ORDER BY r LIMIT numProducts
+              CREATE (u)-[:VIEWED {timestamp: datetime()}]->(p);
+              EOF
+
+              echo "Running performance queries..."
+
+              # Test query performance
+              time cypher-shell -a bolt://dev-instance-neo4j-service:7687 \
+                -u $NEO4J_USERNAME -p $NEO4J_PASSWORD --database=devdb \
+                "MATCH (u:User)-[:VIEWED]->(p:Product) WHERE p.category = 'Electronics' RETURN count(*)"
+
+              time cypher-shell -a bolt://dev-instance-neo4j-service:7687 \
+                -u $NEO4J_USERNAME -p $NEO4J_PASSWORD --database=devdb \
+                "MATCH (u:User)-[:VIEWED]->(p:Product) WITH u, count(p) as views WHERE views > 5 RETURN count(u)"
+          restartPolicy: Never
+---
+# STEP 8: Development Tools Service
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: neo4j-browser-dev
+  namespace: neo4j-dev
+spec:
+  type: NodePort
+  selector:
+    neo4j.com/instance: dev-instance
+  ports:
+    - name: browser
+      port: 7474
+      targetPort: 7474
+      nodePort: 30474
+    - name: bolt
+      port: 7687
+      targetPort: 7687
+      nodePort: 30687
+---
+# Developer access instructions
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dev-access-info
+  namespace: neo4j-dev
+data:
+  README.md: |
+    # Neo4j Development Environment
+
+    ## Access Neo4j Browser
+    - URL: http://localhost:30474 (or http://<node-ip>:30474)
+    - Username: neo4j
+    - Password: developer123
+
+    ## Bolt Connection
+    - URI: bolt://localhost:30687
+    - Use for application development
+
+    ## Available Databases
+    - devdb: Main development database with schema
+    - testdb: Clean database for integration tests
+    - system: System database (do not modify)
+
+    ## Useful Commands
+
+    ### Port forwarding (alternative access)
+    ```bash
+    kubectl port-forward -n neo4j-dev svc/dev-instance-neo4j-service 7474:7474 7687:7687
+    ```
+
+    ### View logs
+    ```bash
+    kubectl logs -n neo4j-dev neo4jenterprisestandalone/dev-instance
+    ```
+
+    ### Run Cypher queries
+    ```bash
+    kubectl exec -n neo4j-dev dev-instance-0 -- cypher-shell \
+      -u neo4j -p developer123 -d devdb "MATCH (n) RETURN count(n)"
+    ```

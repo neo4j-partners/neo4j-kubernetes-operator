@@ -1,0 +1,27 @@
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jBackup
+metadata:
+  name: full-backup
+  namespace: default
+spec:
+  clusterRef: my-neo4j-cluster
+  target:
+    kind: Cluster  # Backup all databases
+  schedule:
+    cron: "0 2 * * *"  # Daily at 2 AM
+  options:
+    # Backup type - FULL, DIFF, or AUTO
+    backupType: "FULL"
+    compress: true
+    # Page cache for backup operation
+    pageCache: "4G"
+  storage:
+    type: pvc
+    pvc:
+      name: backup-pvc
+      storageClassName: fast-ssd
+      size: 100Gi
+  retention:
+    maxAge: "7d"
+    maxCount: 7
+    deletePolicy: Delete

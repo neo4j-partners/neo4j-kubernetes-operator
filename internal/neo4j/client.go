@@ -448,16 +448,20 @@ func (c *Client) GetConnectionPoolMetrics() *ConnectionPoolMetrics {
 	return &metrics
 }
 
-// CreateDatabase creates a new database
-func (c *Client) CreateDatabase(ctx context.Context, databaseName string, options map[string]string) error {
+// CreateDatabase creates a new database with proper Neo4j 5.26+ syntax
+func (c *Client) CreateDatabase(ctx context.Context, databaseName string, options map[string]string, wait bool, ifNotExists bool) error {
 	session := c.driver.NewSession(ctx, neo4j.SessionConfig{
 		AccessMode:   neo4j.AccessModeWrite,
 		DatabaseName: "system",
 	})
 	defer session.Close(ctx)
 
-	// Build CREATE DATABASE query
+	// Build CREATE DATABASE query with IF NOT EXISTS
 	query := fmt.Sprintf("CREATE DATABASE `%s`", databaseName)
+
+	if ifNotExists {
+		query = fmt.Sprintf("CREATE DATABASE `%s` IF NOT EXISTS", databaseName)
+	}
 
 	// Add options if provided
 	if len(options) > 0 {
@@ -468,12 +472,221 @@ func (c *Client) CreateDatabase(ctx context.Context, databaseName string, option
 		query += " OPTIONS {" + strings.Join(optionParts, ", ") + "}"
 	}
 
+	// Add WAIT or NOWAIT
+	if wait {
+		query += " WAIT"
+	} else {
+		query += " NOWAIT"
+	}
+
 	_, err := session.Run(ctx, query, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create database %s: %w", databaseName, err)
 	}
 
 	return nil
+}
+
+// CreateDatabaseWithTopology creates a database with specific topology constraints
+func (c *Client) CreateDatabaseWithTopology(ctx context.Context, databaseName string, primaries, secondaries int32, options map[string]string, wait bool, ifNotExists bool, cypherVersion string) error {
+	session := c.driver.NewSession(ctx, neo4j.SessionConfig{
+		AccessMode:   neo4j.AccessModeWrite,
+		DatabaseName: "system",
+	})
+	defer session.Close(ctx)
+
+	// Build CREATE DATABASE query
+	query := fmt.Sprintf("CREATE DATABASE `%s`", databaseName)
+
+	if ifNotExists {
+		query = fmt.Sprintf("CREATE DATABASE `%s` IF NOT EXISTS", databaseName)
+	}
+
+	// Add Cypher language version for Neo4j 2025.x
+	if cypherVersion != "" {
+		query += fmt.Sprintf(" DEFAULT LANGUAGE CYPHER %s", cypherVersion)
+	}
+
+	// Add topology if specified
+	if primaries > 0 || secondaries > 0 {
+		topologyParts := []string{}
+		if primaries > 0 {
+			if primaries == 1 {
+				topologyParts = append(topologyParts, "1 PRIMARY")
+			} else {
+				topologyParts = append(topologyParts, fmt.Sprintf("%d PRIMARIES", primaries))
+			}
+		}
+		if secondaries > 0 {
+			if secondaries == 1 {
+				topologyParts = append(topologyParts, "1 SECONDARY")
+			} else {
+				topologyParts = append(topologyParts, fmt.Sprintf("%d SECONDARIES", secondaries))
+			}
+		}
+		if len(topologyParts) > 0 {
+			query += " TOPOLOGY " + strings.Join(topologyParts, " ")
+		}
+	}
+
+	// Add options if provided
+	if len(options) > 0 {
+		var optionParts []string
+		for key, value := range options {
+			optionParts = append(optionParts, fmt.Sprintf("%s: '%s'", key, value))
+		}
+		query += " OPTIONS {" + strings.Join(optionParts, ", ") + "}"
+	}
+
+	// Add WAIT or NOWAIT
+	if wait {
+		query += " WAIT"
+	} else {
+		query += " NOWAIT"
+	}
+
+	_, err := session.Run(ctx, query, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create database %s with topology: %w", databaseName, err)
+	}
+
+	return nil
+}
+
+// StartDatabase starts a stopped database
+func (c *Client) StartDatabase(ctx context.Context, databaseName string, wait bool) error {
+	session := c.driver.NewSession(ctx, neo4j.SessionConfig{
+		AccessMode:   neo4j.AccessModeWrite,
+		DatabaseName: "system",
+	})
+	defer session.Close(ctx)
+
+	query := fmt.Sprintf("START DATABASE `%s`", databaseName)
+	if wait {
+		query += " WAIT"
+	} else {
+		query += " NOWAIT"
+	}
+
+	_, err := session.Run(ctx, query, nil)
+	if err != nil {
+		return fmt.Errorf("failed to start database %s: %w", databaseName, err)
+	}
+
+	return nil
+}
+
+// StopDatabase stops a running database
+func (c *Client) StopDatabase(ctx context.Context, databaseName string, wait bool) error {
+	session := c.driver.NewSession(ctx, neo4j.SessionConfig{
+		AccessMode:   neo4j.AccessModeWrite,
+		DatabaseName: "system",
+	})
+	defer session.Close(ctx)
+
+	query := fmt.Sprintf("STOP DATABASE `%s`", databaseName)
+	if wait {
+		query += " WAIT"
+	} else {
+		query += " NOWAIT"
+	}
+
+	_, err := session.Run(ctx, query, nil)
+	if err != nil {
+		return fmt.Errorf("failed to stop database %s: %w", databaseName, err)
+	}
+
+	return nil
+}
+
+// AlterDatabase alters database properties
+func (c *Client) AlterDatabase(ctx context.Context, databaseName string, options map[string]string, wait bool) error {
+	session := c.driver.NewSession(ctx, neo4j.SessionConfig{
+		AccessMode:   neo4j.AccessModeWrite,
+		DatabaseName: "system",
+	})
+	defer session.Close(ctx)
+
+	query := fmt.Sprintf("ALTER DATABASE `%s`", databaseName)
+
+	// Add options if provided
+	if len(options) > 0 {
+		var optionParts []string
+		for key, value := range options {
+			optionParts = append(optionParts, fmt.Sprintf("%s: '%s'", key, value))
+		}
+		query += " SET OPTIONS {" + strings.Join(optionParts, ", ") + "}"
+	}
+
+	// Add WAIT or NOWAIT
+	if wait {
+		query += " WAIT"
+	} else {
+		query += " NOWAIT"
+	}
+
+	_, err := session.Run(ctx, query, nil)
+	if err != nil {
+		return fmt.Errorf("failed to alter database %s: %w", databaseName, err)
+	}
+
+	return nil
+}
+
+// GetDatabaseState returns the current state of a database
+func (c *Client) GetDatabaseState(ctx context.Context, databaseName string) (string, error) {
+	databases, err := c.GetDatabases(ctx)
+	if err != nil {
+		return "", fmt.Errorf("failed to get database state: %w", err)
+	}
+
+	for _, db := range databases {
+		if db.Name == databaseName {
+			return db.Status, nil
+		}
+	}
+
+	return "", fmt.Errorf("database %s not found", databaseName)
+}
+
+// GetDatabaseServers returns the servers hosting a specific database
+func (c *Client) GetDatabaseServers(ctx context.Context, databaseName string) ([]string, error) {
+	session := c.driver.NewSession(ctx, neo4j.SessionConfig{
+		AccessMode:   neo4j.AccessModeRead,
+		DatabaseName: "system",
+	})
+	defer session.Close(ctx)
+
+	query := `
+		SHOW DATABASES
+		YIELD name, address
+		WHERE name = $databaseName
+		RETURN collect(address) as servers
+	`
+
+	result, err := session.Run(ctx, query, map[string]interface{}{
+		"databaseName": databaseName,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get database servers: %w", err)
+	}
+
+	if result.Next(ctx) {
+		record := result.Record()
+		if servers, found := record.Get("servers"); found {
+			if serverList, ok := servers.([]interface{}); ok {
+				var serverAddresses []string
+				for _, addr := range serverList {
+					if addrStr, ok := addr.(string); ok {
+						serverAddresses = append(serverAddresses, addrStr)
+					}
+				}
+				return serverAddresses, nil
+			}
+		}
+	}
+
+	return []string{}, nil
 }
 
 // DropDatabase drops a database

@@ -59,7 +59,44 @@ done
 kubectl delete pod <cluster>-primary-1 <cluster>-secondary-1
 ```
 
-### 2. Deployment Validation Errors
+### 2. Test Environment Issues
+
+#### Problem: Integration tests failing with namespace termination issues
+Test namespaces get stuck in "Terminating" state due to resources with finalizers.
+
+**Solution**: Ensure proper cleanup in test code:
+```go
+// Always remove finalizers before deletion
+if len(resource.GetFinalizers()) > 0 {
+    resource.SetFinalizers([]string{})
+    _ = k8sClient.Update(ctx, resource)
+}
+_ = k8sClient.Delete(ctx, resource)
+```
+
+#### Problem: Backup sidecar test timeout
+Test waits for wrong readiness field on standalone deployments.
+
+**Solution**: Check the correct status field:
+```go
+// For standalone deployments
+return standalone.Status.Ready  // NOT Status.Conditions
+
+// Correct pod label selector
+client.MatchingLabels{"app": standalone.Name}
+```
+
+#### Problem: Operator not deployed in test cluster
+Integration tests fail because operator is not running.
+
+**Solution**: Deploy operator before running tests:
+```bash
+kubectl config use-context kind-neo4j-operator-test
+make deploy IMG=neo4j-operator:dev
+make test-integration
+```
+
+### 3. Deployment Validation Errors
 
 #### Problem: Single-Node Cluster Not Allowed
 ```
@@ -423,7 +460,38 @@ kubectl exec -it <pod-name> -- neo4j-admin check-consistency
    kubectl apply -f restore-from-backup.yaml
    ```
 
-### 8. Security Issues
+### 8. Backup and Restore Issues
+
+#### Problem: Backup failing with permission denied
+Backup jobs fail with "permission denied" or "cannot exec into pod" errors.
+
+**Solution**: The operator now automatically creates RBAC resources. If you're upgrading:
+```bash
+# Ensure operator has latest permissions
+kubectl apply -f https://github.com/neo4j-labs/neo4j-kubernetes-operator/releases/latest/download/neo4j-kubernetes-operator.yaml
+
+# Check operator has pods/exec and pods/log permissions
+kubectl describe clusterrole neo4j-operator-manager-role | grep -E "pods/exec|pods/log"
+```
+
+**Note**: Starting with the latest version, the operator automatically creates:
+- Service accounts for backup jobs
+- Roles with `pods/exec` and `pods/log` permissions
+- Role bindings for secure backup execution
+
+#### Problem: Backup path not found
+Neo4j 5.26+ requires backup destination path to exist.
+
+**Solution**: The operator's backup sidecar automatically creates paths. Check sidecar is running:
+```bash
+# Check backup sidecar is present
+kubectl get pod <neo4j-pod> -o yaml | grep backup-sidecar
+
+# Check sidecar logs
+kubectl logs <neo4j-pod> -c backup-sidecar
+```
+
+### 9. Security Issues
 
 #### Problem: Authentication Failures
 ```bash

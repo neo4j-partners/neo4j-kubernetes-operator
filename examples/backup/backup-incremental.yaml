@@ -1,0 +1,29 @@
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jBackup
+metadata:
+  name: incremental-backup
+  namespace: default
+spec:
+  clusterRef: my-neo4j-cluster
+  target:
+    kind: Database
+    name: orders  # Backup specific database
+  schedule:
+    cron: "0 */6 * * *"  # Every 6 hours
+  options:
+    # AUTO will create FULL backup if no previous backup exists
+    # Otherwise creates DIFF (incremental) backup
+    backupType: "AUTO"
+    compress: true
+    pageCache: "2G"
+  storage:
+    type: s3
+    s3:
+      bucket: my-neo4j-backups
+      path: "incremental/orders"
+      # Credentials from secret
+      credentialsSecret: aws-backup-credentials
+      region: us-east-1
+  retention:
+    maxAge: "3d"
+    maxCount: 12  # Keep last 12 incremental backups

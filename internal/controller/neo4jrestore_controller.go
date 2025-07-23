@@ -436,22 +436,32 @@ func (r *Neo4jRestoreReconciler) buildRestoreCommand(ctx context.Context, restor
 		return r.buildPITRRestoreCommand(ctx, restore)
 	}
 
-	// Build the neo4j-admin restore command with Neo4j 5.26+ enhancements
-	cmd = fmt.Sprintf("neo4j-admin restore --from=%s --database=%s", backupPath, restore.Spec.DatabaseName)
+	// Get cluster to extract version
+	clusterKey := types.NamespacedName{Name: restore.Spec.TargetCluster, Namespace: restore.Namespace}
+	cluster := &neo4jv1alpha1.Neo4jEnterpriseCluster{}
+	if err := r.Get(ctx, clusterKey, cluster); err != nil {
+		return "", fmt.Errorf("failed to get cluster: %w", err)
+	}
 
-	// Add force flag if specified
+	// Extract Neo4j version from cluster image
+	imageTag := fmt.Sprintf("%s:%s", cluster.Spec.Image.Repo, cluster.Spec.Image.Tag)
+	version, err := neo4j.GetImageVersion(imageTag)
+	if err != nil {
+		// Default to 5.26 behavior if we can't parse version
+		version = &neo4j.Version{Major: 5, Minor: 26, Patch: 0}
+	}
+
+	// Build the neo4j-admin restore command with correct Neo4j 5.26+ syntax
+	cmd = neo4j.GetRestoreCommand(version, restore.Spec.DatabaseName, backupPath)
+
+	// Add --overwrite-destination flag if force is specified (replaces --force)
 	if restore.Spec.Force {
-		cmd += " --force"
+		cmd += " --overwrite-destination=true"
 	}
 
-	// Add verification before restore for Neo4j 5.26+
-	if restore.Spec.Options != nil && restore.Spec.Options.VerifyBackup {
-		cmd = fmt.Sprintf("neo4j-admin inspect-backup --from=%s && %s", backupPath, cmd)
-	}
-
-	// Add point-in-time restore if specified (even for non-PITR source types)
+	// Add point-in-time restore if specified
 	if restore.Spec.Source.PointInTime != nil {
-		cmd += fmt.Sprintf(" --to-time=%s", restore.Spec.Source.PointInTime.Format("2006-01-02T15:04:05Z"))
+		cmd += fmt.Sprintf(" --restore-until=\"%s\"", restore.Spec.Source.PointInTime.Format("2006-01-02T15:04:05"))
 	}
 
 	// Add additional arguments if specified
@@ -495,12 +505,27 @@ func (r *Neo4jRestoreReconciler) buildPITRRestoreCommand(ctx context.Context, re
 			cmd = fmt.Sprintf("neo4j-admin inspect-backup --from=%s && ", baseBackupPath)
 		}
 
-		// Restore base backup
-		cmd += fmt.Sprintf("neo4j-admin restore --from=%s --database=%s", baseBackupPath, restore.Spec.DatabaseName)
+		// Get cluster to extract version
+		clusterKey := types.NamespacedName{Name: restore.Spec.TargetCluster, Namespace: restore.Namespace}
+		cluster := &neo4jv1alpha1.Neo4jEnterpriseCluster{}
+		if err := r.Get(ctx, clusterKey, cluster); err != nil {
+			return "", fmt.Errorf("failed to get cluster: %w", err)
+		}
 
-		// Add force flag if specified
+		// Extract Neo4j version from cluster image
+		imageTag := fmt.Sprintf("%s:%s", cluster.Spec.Image.Repo, cluster.Spec.Image.Tag)
+		version, err := neo4j.GetImageVersion(imageTag)
+		if err != nil {
+			// Default to 5.26 behavior if we can't parse version
+			version = &neo4j.Version{Major: 5, Minor: 26, Patch: 0}
+		}
+
+		// Restore base backup with correct syntax
+		cmd += neo4j.GetRestoreCommand(version, restore.Spec.DatabaseName, baseBackupPath)
+
+		// Add --overwrite-destination flag if force is specified
 		if restore.Spec.Force {
-			cmd += " --force"
+			cmd += " --overwrite-destination=true"
 		}
 	}
 

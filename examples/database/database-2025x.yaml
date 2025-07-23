@@ -1,0 +1,19 @@
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jDatabase
+metadata:
+  name: modern-database
+  namespace: default
+spec:
+  clusterRef: my-neo4j-cluster
+  name: modern
+  # Neo4j 2025.x specific - set default Cypher language version
+  defaultCypherLanguage: "25"
+  wait: true
+  ifNotExists: true
+  # Simple topology
+  topology:
+    primaries: 1
+    secondaries: 0
+  options:
+    # Neo4j 2025.x supports new options
+    existingDataBehavior: "use"

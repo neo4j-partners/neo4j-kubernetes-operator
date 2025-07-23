@@ -22,7 +22,7 @@ The `Neo4jRestore` spec defines the configuration for restore operations.
 | `source` | [`RestoreSource`](#restoresource) | ✅ | Source of the backup to restore |
 | `databaseName` | `string` | ✅ | Name of the database to restore |
 | `options` | [`RestoreOptionsSpec`](#restoreoptionsspec) | ❌ | Additional restore configuration options |
-| `force` | `boolean` | ❌ | Force restore even if database exists (default: false) |
+| `force` | `boolean` | ❌ | Force restore with --overwrite-destination (default: false) |
 | `stopCluster` | `boolean` | ❌ | Stop cluster before restore (default: false) |
 | `timeout` | `string` | ❌ | Timeout for restore operation (e.g., "2h", "30m") |
 
@@ -36,7 +36,7 @@ Defines the source of the backup to restore from.
 | `backupRef` | `string` | ❌ | Reference to Neo4jBackup resource (when type="backup") |
 | `storage` | [`StorageLocation`](#storagelocation) | ❌ | Direct storage location (when type="storage") |
 | `backupPath` | `string` | ❌ | Specific backup path within storage |
-| `pointInTime` | `*metav1.Time` | ❌ | Point in time for restore (for PITR) |
+| `pointInTime` | `string` | ❌ | Point in time for restore using --restore-until (RFC3339 format) |
 | `pitr` | [`PITRConfig`](#pitrconfig) | ❌ | Point-in-time recovery configuration (when type="pitr") |
 
 **Examples:**
@@ -370,6 +370,30 @@ kubectl logs job/pitr-restore-production-restore
 
 # Check restore statistics
 kubectl get neo4jrestore pitr-restore-production -o jsonpath='{.status.stats}'
+```
+
+## Version-Specific Features
+
+### Neo4j 5.26.x
+- Uses `neo4j-admin database restore` command syntax
+- **Correct parameters**:
+  - `--from-path` (not `--from`)
+  - `--overwrite-destination` (not `--force`)
+  - `--restore-until` for PITR
+- Automatic database state management (stop/start)
+
+### Neo4j 2025.x
+- Same restore command structure as 5.26.x
+- Enhanced metadata restoration options
+- Additional validation features
+
+### Point-in-Time Recovery (PITR)
+The operator supports PITR using the `--restore-until` parameter. Specify the target timestamp in RFC3339 format:
+```yaml
+source:
+  type: backup
+  backupRef: full-backup
+  pointInTime: "2025-01-20T14:30:00Z"
 ```
 
 ## Version Requirements

@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -176,23 +175,91 @@ func cleanupTestNamespaces() {
 	By("Cleaning up test namespaces")
 
 	// List all namespaces with test-run label
-	cmd := exec.Command("kubectl", "get", "namespaces", "-l", "test-run="+testRunID, "-o", "jsonpath={.items[*].metadata.name}")
-	output, err := cmd.Output()
+	namespaceList := &corev1.NamespaceList{}
+	err := k8sClient.List(ctx, namespaceList, client.MatchingLabels{"test-run": testRunID})
 	if err != nil {
-		By("No test namespaces found to clean up")
+		By(fmt.Sprintf("Error listing test namespaces: %v", err))
 		return
 	}
 
-	namespaces := strings.Fields(string(output))
-	for _, namespace := range namespaces {
-		if namespace != "" {
-			By(fmt.Sprintf("Deleting test namespace: %s", namespace))
-			cmd := exec.Command("kubectl", "delete", "namespace", namespace, "--ignore-not-found=true")
-			cmd.Stdout = GinkgoWriter
-			cmd.Stderr = GinkgoWriter
-			cmd.Run()
+	for _, namespace := range namespaceList.Items {
+		By(fmt.Sprintf("Cleaning up namespace: %s", namespace.Name))
+
+		// Clean up custom resources in the namespace first
+		cleanupCustomResourcesInNamespace(namespace.Name)
+
+		// Delete the namespace
+		By(fmt.Sprintf("Deleting test namespace: %s", namespace.Name))
+		err := k8sClient.Delete(ctx, &namespace)
+		if err != nil && !errors.IsNotFound(err) {
+			By(fmt.Sprintf("Error deleting namespace %s: %v", namespace.Name, err))
 		}
 	}
+}
+
+// cleanupCustomResourcesInNamespace removes all custom resources from a namespace
+func cleanupCustomResourcesInNamespace(namespace string) {
+	// Clean up Neo4j Backups
+	backupList := &neo4jv1alpha1.Neo4jBackupList{}
+	if err := k8sClient.List(ctx, backupList, client.InNamespace(namespace)); err == nil {
+		for _, item := range backupList.Items {
+			cleanupResource(&item, namespace, "Neo4jBackup")
+		}
+	}
+
+	// Clean up Neo4j Databases
+	dbList := &neo4jv1alpha1.Neo4jDatabaseList{}
+	if err := k8sClient.List(ctx, dbList, client.InNamespace(namespace)); err == nil {
+		for _, item := range dbList.Items {
+			cleanupResource(&item, namespace, "Neo4jDatabase")
+		}
+	}
+
+	// Clean up Neo4j Enterprise Clusters
+	clusterList := &neo4jv1alpha1.Neo4jEnterpriseClusterList{}
+	if err := k8sClient.List(ctx, clusterList, client.InNamespace(namespace)); err == nil {
+		for _, item := range clusterList.Items {
+			cleanupResource(&item, namespace, "Neo4jEnterpriseCluster")
+		}
+	}
+
+	// Clean up Neo4j Enterprise Standalones
+	standaloneList := &neo4jv1alpha1.Neo4jEnterpriseStandaloneList{}
+	if err := k8sClient.List(ctx, standaloneList, client.InNamespace(namespace)); err == nil {
+		for _, item := range standaloneList.Items {
+			cleanupResource(&item, namespace, "Neo4jEnterpriseStandalone")
+		}
+	}
+
+	// Clean up Neo4j Restores
+	restoreList := &neo4jv1alpha1.Neo4jRestoreList{}
+	if err := k8sClient.List(ctx, restoreList, client.InNamespace(namespace)); err == nil {
+		for _, item := range restoreList.Items {
+			cleanupResource(&item, namespace, "Neo4jRestore")
+		}
+	}
+
+	// Clean up Neo4j Plugins
+	pluginList := &neo4jv1alpha1.Neo4jPluginList{}
+	if err := k8sClient.List(ctx, pluginList, client.InNamespace(namespace)); err == nil {
+		for _, item := range pluginList.Items {
+			cleanupResource(&item, namespace, "Neo4jPlugin")
+		}
+	}
+}
+
+// cleanupResource removes finalizers and deletes a resource
+func cleanupResource(obj client.Object, namespace, resourceType string) {
+	// Remove finalizers if present
+	if len(obj.GetFinalizers()) > 0 {
+		By(fmt.Sprintf("Removing finalizers from %s %s/%s", resourceType, namespace, obj.GetName()))
+		obj.SetFinalizers([]string{})
+		_ = k8sClient.Update(ctx, obj)
+	}
+
+	// Delete the resource
+	By(fmt.Sprintf("Deleting %s %s/%s", resourceType, namespace, obj.GetName()))
+	_ = k8sClient.Delete(ctx, obj)
 }
 
 // Helper functions for test utilities

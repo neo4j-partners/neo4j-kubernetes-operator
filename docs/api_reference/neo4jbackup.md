@@ -23,7 +23,7 @@ The `Neo4jBackup` spec defines the configuration for backup operations.
 | `schedule` | `string` | ❌ | Cron expression for scheduled backups (e.g., "0 2 * * *") |
 | `cloud` | [`CloudBlock`](#cloudblock) | ❌ | Cloud provider configuration for cloud storage backends |
 | `retention` | [`RetentionPolicy`](#retentionpolicy) | ❌ | Backup retention and cleanup policy |
-| `options` | [`BackupOptions`](#backupoptions) | ❌ | Additional backup configuration options |
+| `options` | [`BackupOptions`](#backupoptions) | ❌ | Additional backup configuration options including backup type |
 | `suspend` | `boolean` | ❌ | Suspend scheduled backups (default: false) |
 
 ### BackupTarget
@@ -151,14 +151,21 @@ retention:
 
 ### BackupOptions
 
-Additional backup configuration options.
+Additional backup configuration options for Neo4j 5.26+ and 2025.x.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `compress` | `boolean` | ❌ | Enable backup compression (default: false) |
+| `backupType` | `string` | ❌ | Type of backup. Valid values: "FULL", "DIFF", "AUTO" (default: "AUTO") |
+| `compress` | `boolean` | ❌ | Enable backup compression (default: true) |
+| `pageCache` | `string` | ❌ | Page cache size for backup operation (e.g., "2G") |
 | `encryption` | [`EncryptionSpec`](#encryptionspec) | ❌ | Backup encryption configuration |
-| `verify` | `boolean` | ❌ | Verify backup integrity after creation (default: false) |
+| `verifyBackup` | `boolean` | ❌ | Verify backup integrity after creation (default: false) |
 | `additionalArgs` | `[]string` | ❌ | Additional arguments passed to neo4j-admin backup command |
+
+**Backup Types:**
+- **FULL**: Complete backup of all data
+- **DIFF**: Incremental backup (requires previous backup)
+- **AUTO**: Automatically choose between FULL and DIFF based on existing backups
 
 ### EncryptionSpec
 
@@ -300,11 +307,52 @@ kubectl get neo4jbackup production-backup -o jsonpath='{.status.history[*]}'
 kubectl logs job/production-backup-backup
 ```
 
+## Version-Specific Features
+
+### Neo4j 5.26.x
+- Uses `neo4j-admin database backup` command syntax
+- Supports `--include-metadata=all` for cluster backups
+- Automatic backup from secondary servers when available
+- Correct parameters: `--type`, `--compress`, `--pagecache`
+
+### Neo4j 2025.x
+- Same backup command structure as 5.26.x
+- Enhanced metadata options
+- Future support for `--source-database` parameter
+
+### Automatic Secondary Backup
+When the target cluster has secondary servers, the operator automatically configures backups to run from a secondary server using the `--from` parameter. This reduces load on primary servers during backup operations.
+
+## RBAC and Permissions
+
+The Neo4j Operator automatically manages all RBAC resources required for backup operations:
+
+### Automatic RBAC Creation
+
+When you create a `Neo4jBackup` resource, the operator automatically:
+
+1. **Creates a ServiceAccount** for the backup job
+2. **Creates a Role** with the following permissions:
+   - `pods/exec` - Required to execute backup commands in the Neo4j pods
+   - `pods/log` - Required to read logs from backup operations
+3. **Creates a RoleBinding** to grant the ServiceAccount the necessary permissions
+
+**Important**: No manual RBAC configuration is required. The operator handles all permission management automatically.
+
+### Required Operator Permissions
+
+The operator itself requires the following cluster-level permissions to manage backup RBAC:
+- Create, update, and delete ServiceAccounts
+- Create, update, and delete Roles and RoleBindings
+- Grant `pods/exec` and `pods/log` permissions to backup jobs
+
+These permissions are included in the operator's ClusterRole when installed from the official manifests.
+
 ## Version Requirements
 
 - **Neo4j Version**: 5.26.0+ (semver) or 2025.01.0+ (calver)
 - **Kubernetes**: 1.19+
-- **Neo4j Operator**: Latest version with backup support
+- **Neo4j Operator**: Latest version with automatic RBAC support
 
 ## Related Resources
 

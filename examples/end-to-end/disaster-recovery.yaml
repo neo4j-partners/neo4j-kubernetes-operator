@@ -1,0 +1,317 @@
+# Disaster Recovery Example
+# This example demonstrates:
+# - Taking a backup before maintenance
+# - Performing a full restore
+# - Point-in-time recovery
+# - Cross-region restore
+
+---
+# SCENARIO 1: Pre-maintenance Backup
+---
+# Take a manual backup before maintenance window
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jBackup
+metadata:
+  name: pre-maintenance-backup
+  namespace: neo4j-production
+spec:
+  target:
+    kind: Cluster
+    name: production-cluster
+    namespace: neo4j-production
+
+  # One-time backup (no schedule)
+  storage:
+    type: pvc
+    pvc:
+      name: maintenance-backup-pvc
+      size: 50Gi
+      storageClassName: fast-ssd
+
+  options:
+    backupType: "FULL"
+    compress: true
+    verifyBackup: true  # Verify integrity after backup
+
+  # Add metadata for tracking
+  metadata:
+    labels:
+      purpose: maintenance
+      timestamp: "2025-01-20-1400"
+    annotations:
+      description: "Pre-maintenance backup before Neo4j upgrade"
+      operator: "admin@company.com"
+---
+# SCENARIO 2: Full Database Restore
+---
+# Restore entire cluster from backup
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jRestore
+metadata:
+  name: full-cluster-restore
+  namespace: neo4j-production
+spec:
+  targetCluster: production-cluster
+
+  # Restore all databases
+  databaseName: "*"
+
+  source:
+    type: backup
+    backupRef: pre-maintenance-backup
+
+  # Force overwrite existing data
+  force: true
+
+  options:
+    verifyBackup: true
+    additionalArgs:
+      - "--expand-commands"  # Show detailed progress
+
+  # Pre-restore validation
+  preRestoreHooks:
+    - type: script
+      script: |
+        #!/bin/bash
+        echo "Starting full cluster restore..."
+        echo "Target cluster: production-cluster"
+        echo "Source backup: pre-maintenance-backup"
+
+        # Verify cluster is ready for restore
+        kubectl get neo4jenterprisecluster production-cluster -n neo4j-production
+---
+# SCENARIO 3: Point-in-Time Recovery
+---
+# Restore to specific point in time
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jRestore
+metadata:
+  name: pitr-restore
+  namespace: neo4j-production
+spec:
+  targetCluster: production-cluster
+  databaseName: maindb
+
+  source:
+    type: backup
+    backupRef: daily-backup-20250119
+    # Restore to specific timestamp
+    pointInTime: "2025-01-19T14:30:00Z"
+
+  # Create as new database to compare
+  options:
+    targetDatabaseName: "maindb_pitr_recovery"
+    verifyBackup: true
+
+  postRestoreHooks:
+    - type: script
+      script: |
+        echo "PITR restore completed"
+        echo "Original database: maindb"
+        echo "Recovered database: maindb_pitr_recovery"
+        echo "Point in time: 2025-01-19T14:30:00Z"
+---
+# SCENARIO 4: Cross-Region Disaster Recovery
+---
+# Source region backup configuration
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jBackup
+metadata:
+  name: cross-region-backup
+  namespace: neo4j-production
+spec:
+  target:
+    kind: Cluster
+    name: production-cluster
+    namespace: neo4j-production
+
+  # Backup to S3 with cross-region replication
+  storage:
+    type: s3
+    bucket: neo4j-dr-backups
+    path: "us-east-1/production"
+    cloud:
+      credentialsSecret: s3-dr-credentials
+      region: us-east-1
+
+  schedule:
+    cron: "0 */4 * * *"  # Every 4 hours
+
+  options:
+    backupType: "AUTO"
+    compress: true
+    encryption:
+      enabled: true
+      kmsKeyId: "arn:aws:kms:us-east-1:123456789:key/xxxxx"
+---
+# Target region restore configuration
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jRestore
+metadata:
+  name: cross-region-restore
+  namespace: neo4j-dr
+spec:
+  # Restore to DR cluster in different region
+  targetCluster: dr-cluster
+  databaseName: "*"
+
+  source:
+    type: s3
+    bucket: neo4j-dr-backups
+    path: "us-east-1/production/backup-20250120-0800"
+    cloud:
+      credentialsSecret: s3-dr-credentials
+      region: us-west-2  # DR region
+
+  force: true
+
+  options:
+    verifyBackup: true
+    parallelRestore: true  # Speed up large restores
+
+  postRestoreHooks:
+    - type: script
+      script: |
+        echo "Cross-region restore completed"
+        echo "Source region: us-east-1"
+        echo "Target region: us-west-2"
+
+        # Verify databases are online
+        kubectl exec -n neo4j-dr dr-cluster-0 -- cypher-shell \
+          -u neo4j -p $NEO4J_PASSWORD \
+          "SHOW DATABASES"
+---
+# SCENARIO 5: Selective Database Restore
+---
+# Restore only specific database
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jRestore
+metadata:
+  name: selective-restore
+  namespace: neo4j-production
+spec:
+  targetCluster: production-cluster
+
+  # Restore only analytics database
+  databaseName: analytics
+
+  source:
+    type: backup
+    backupRef: weekly-full-backup-20250114
+
+  # Don't overwrite, create as new
+  force: false
+  options:
+    targetDatabaseName: "analytics_restored"
+
+  # Validation queries after restore
+  postRestoreHooks:
+    - type: cypher
+      database: analytics_restored
+      queries:
+        - "MATCH (n) RETURN count(n) as nodeCount"
+        - "MATCH ()-[r]->() RETURN count(r) as relationshipCount"
+---
+# SCENARIO 6: Backup Validation Job
+---
+# Regular backup validation to ensure recoverability
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: backup-validation
+  namespace: neo4j-production
+spec:
+  schedule: "0 6 * * 1"  # Weekly on Monday at 6 AM
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: validator
+              image: neo4j/neo4j-admin:5.26.0-enterprise
+              command:
+                - /bin/bash
+                - -c
+                - |
+                  # List recent backups
+                  echo "=== Recent Backups ==="
+                  kubectl get neo4jbackup -n neo4j-production
+
+                  # Get latest backup
+                  LATEST_BACKUP=$(kubectl get neo4jbackup -n neo4j-production \
+                    -o jsonpath='{.items[?(@.status.phase=="Completed")].metadata.name}' | \
+                    awk '{print $NF}')
+
+                  echo "Latest backup: $LATEST_BACKUP"
+
+                  # Create test restore
+                  cat <<EOF | kubectl apply -f -
+                  apiVersion: neo4j.neo4j.com/v1alpha1
+                  kind: Neo4jRestore
+                  metadata:
+                    name: validation-restore-$(date +%s)
+                    namespace: neo4j-production
+                  spec:
+                    targetCluster: test-restore-cluster
+                    databaseName: "*"
+                    source:
+                      type: backup
+                      backupRef: $LATEST_BACKUP
+                    options:
+                      verifyBackup: true
+                      dryRun: true  # Validation only
+                  EOF
+          restartPolicy: OnFailure
+---
+# SCENARIO 7: Automated Failover Configuration
+---
+# Configure automatic failover with backup/restore
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: failover-config
+  namespace: neo4j-production
+data:
+  failover.sh: |
+    #!/bin/bash
+    # Automated failover script
+
+    PRIMARY_CLUSTER="production-cluster"
+    DR_CLUSTER="dr-cluster"
+    NAMESPACE="neo4j-production"
+
+    # Check primary cluster health
+    PRIMARY_READY=$(kubectl get neo4jenterprisecluster $PRIMARY_CLUSTER \
+      -n $NAMESPACE -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}')
+
+    if [ "$PRIMARY_READY" != "True" ]; then
+      echo "Primary cluster unhealthy, initiating failover..."
+
+      # Find latest backup
+      LATEST_BACKUP=$(kubectl get neo4jbackup -n $NAMESPACE \
+        --sort-by=.metadata.creationTimestamp \
+        -o jsonpath='{.items[-1].metadata.name}')
+
+      # Create restore to DR cluster
+      kubectl apply -f - <<EOF
+      apiVersion: neo4j.neo4j.com/v1alpha1
+      kind: Neo4jRestore
+      metadata:
+        name: failover-restore-$(date +%s)
+        namespace: $NAMESPACE
+      spec:
+        targetCluster: $DR_CLUSTER
+        databaseName: "*"
+        source:
+          type: backup
+          backupRef: $LATEST_BACKUP
+        force: true
+        options:
+          priority: high
+    EOF
+
+      # Update DNS/Load balancer to point to DR
+      # ... DNS update logic ...
+
+      echo "Failover initiated to DR cluster"
+    fi

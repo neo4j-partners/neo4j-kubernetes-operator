@@ -1,0 +1,25 @@
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jDatabase
+metadata:
+  name: orders-database
+  namespace: default
+spec:
+  clusterRef: my-neo4j-cluster
+  name: orders
+  # Wait for database creation to complete
+  wait: true
+  # Create only if it doesn't exist
+  ifNotExists: true
+  # Database topology for cluster distribution
+  topology:
+    primaries: 2
+    secondaries: 1
+  # Database options
+  options:
+    txLogEnrichment: "FULL"
+  # Initial data import
+  initialData:
+    source: cypher
+    cypherStatements:
+      - "CREATE CONSTRAINT order_id_unique IF NOT EXISTS ON (o:Order) ASSERT o.orderId IS UNIQUE"
+      - "CREATE INDEX order_date_index IF NOT EXISTS FOR (o:Order) ON (o.orderDate)"

@@ -19,12 +19,15 @@ package integration_test
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
@@ -56,7 +59,22 @@ var _ = Describe("Neo4jEnterpriseStandalone Integration Tests", func() {
 	})
 
 	AfterEach(func() {
-		// Cleanup will be handled by the test suite cleanup
+		// Clean up standalone resource if it was created
+		if standalone != nil {
+			By("Cleaning up standalone resource")
+			// Remove finalizers if any
+			if len(standalone.GetFinalizers()) > 0 {
+				standalone.SetFinalizers([]string{})
+				_ = k8sClient.Update(ctx, standalone)
+			}
+			// Delete the resource
+			err := k8sClient.Delete(ctx, standalone)
+			if err != nil && !errors.IsNotFound(err) {
+				By(fmt.Sprintf("Failed to delete standalone: %v", err))
+			}
+		}
+
+		// Note: Namespace cleanup is handled by the test suite cleanup
 		// which removes all test namespaces and their resources
 	})
 
@@ -77,6 +95,16 @@ var _ = Describe("Neo4jEnterpriseStandalone Integration Tests", func() {
 					Storage: neo4jv1alpha1.StorageSpec{
 						ClassName: "standard",
 						Size:      "2Gi",
+					},
+					Resources: &corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("500m"),
+							corev1.ResourceMemory: resource.MustParse("1Gi"),
+						},
+						Limits: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("1"),
+							corev1.ResourceMemory: resource.MustParse("2Gi"),
+						},
 					},
 					Env: []corev1.EnvVar{
 						{
@@ -109,12 +137,12 @@ var _ = Describe("Neo4jEnterpriseStandalone Integration Tests", func() {
 				}
 
 				// Verify no deprecated dbms.mode configuration
-				if containsString(neo4jConf, "dbms.mode=SINGLE") {
+				if strings.Contains(neo4jConf, "dbms.mode=SINGLE") {
 					return fmt.Errorf("ConfigMap should not contain deprecated dbms.mode=SINGLE")
 				}
 
 				// Verify basic server configuration is present
-				if !containsString(neo4jConf, "# Neo4j Standalone Configuration") {
+				if !strings.Contains(neo4jConf, "# Neo4j Standalone Configuration") {
 					return fmt.Errorf("ConfigMap should contain configuration header")
 				}
 
@@ -240,6 +268,16 @@ var _ = Describe("Neo4jEnterpriseStandalone Integration Tests", func() {
 						ClassName: "standard",
 						Size:      "2Gi",
 					},
+					Resources: &corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("500m"),
+							corev1.ResourceMemory: resource.MustParse("1Gi"),
+						},
+						Limits: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("1"),
+							corev1.ResourceMemory: resource.MustParse("2Gi"),
+						},
+					},
 					Config: map[string]string{
 						"server.memory.heap.initial_size": "1G",
 						"server.memory.heap.max_size":     "2G",
@@ -276,7 +314,7 @@ var _ = Describe("Neo4jEnterpriseStandalone Integration Tests", func() {
 				}
 
 				// Verify no deprecated dbms.mode configuration
-				if containsString(neo4jConf, "dbms.mode=SINGLE") {
+				if strings.Contains(neo4jConf, "dbms.mode=SINGLE") {
 					return fmt.Errorf("ConfigMap should not contain deprecated dbms.mode=SINGLE")
 				}
 
@@ -289,7 +327,7 @@ var _ = Describe("Neo4jEnterpriseStandalone Integration Tests", func() {
 				}
 
 				for _, config := range customConfigs {
-					if !containsString(neo4jConf, config) {
+					if !strings.Contains(neo4jConf, config) {
 						return fmt.Errorf("ConfigMap does not contain custom configuration: %s", config)
 					}
 				}
@@ -316,6 +354,16 @@ var _ = Describe("Neo4jEnterpriseStandalone Integration Tests", func() {
 					Storage: neo4jv1alpha1.StorageSpec{
 						ClassName: "standard",
 						Size:      "2Gi",
+					},
+					Resources: &corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("500m"),
+							corev1.ResourceMemory: resource.MustParse("1Gi"),
+						},
+						Limits: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("1"),
+							corev1.ResourceMemory: resource.MustParse("2Gi"),
+						},
 					},
 					TLS: &neo4jv1alpha1.TLSSpec{
 						Mode: "disabled",
@@ -350,17 +398,17 @@ var _ = Describe("Neo4jEnterpriseStandalone Integration Tests", func() {
 				}
 
 				// Verify TLS is disabled (no SSL policies configured)
-				if containsString(neo4jConf, "dbms.ssl.policy") {
+				if strings.Contains(neo4jConf, "dbms.ssl.policy") {
 					return fmt.Errorf("ConfigMap should not contain SSL policy configuration when TLS is disabled")
 				}
 
 				// Verify HTTPS is not explicitly enabled
-				if containsString(neo4jConf, "server.https.enabled=true") {
+				if strings.Contains(neo4jConf, "server.https.enabled=true") {
 					return fmt.Errorf("ConfigMap should not enable HTTPS when TLS is disabled")
 				}
 
 				// Verify Bolt TLS level is not set to REQUIRED
-				if containsString(neo4jConf, "server.bolt.tls_level=REQUIRED") {
+				if strings.Contains(neo4jConf, "server.bolt.tls_level=REQUIRED") {
 					return fmt.Errorf("ConfigMap should not require Bolt TLS when TLS is disabled")
 				}
 
@@ -386,6 +434,16 @@ var _ = Describe("Neo4jEnterpriseStandalone Integration Tests", func() {
 					Storage: neo4jv1alpha1.StorageSpec{
 						ClassName: "standard",
 						Size:      "2Gi",
+					},
+					Resources: &corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("500m"),
+							corev1.ResourceMemory: resource.MustParse("1Gi"),
+						},
+						Limits: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("1"),
+							corev1.ResourceMemory: resource.MustParse("2Gi"),
+						},
 					},
 					TLS: &neo4jv1alpha1.TLSSpec{
 						Mode: "cert-manager",
@@ -451,7 +509,7 @@ var _ = Describe("Neo4jEnterpriseStandalone Integration Tests", func() {
 				}
 
 				for _, config := range expectedTLSConfigs {
-					if !containsString(neo4jConf, config) {
+					if !strings.Contains(neo4jConf, config) {
 						return fmt.Errorf("ConfigMap does not contain TLS configuration: %s", config)
 					}
 				}

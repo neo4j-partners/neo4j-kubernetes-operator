@@ -219,7 +219,7 @@ var _ = Describe("Neo4j Client", func() {
 
 		It("Should handle database operations", func() {
 			By("Creating database")
-			err := neo4jClient.CreateDatabase(ctx, "testdb", map[string]string{})
+			err := neo4jClient.CreateDatabase(ctx, "testdb", map[string]string{}, true, true)
 			Expect(err).To(HaveOccurred()) // Expected to fail without real Neo4j
 
 			By("Dropping database")

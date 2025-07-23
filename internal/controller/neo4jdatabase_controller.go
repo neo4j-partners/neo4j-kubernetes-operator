@@ -236,6 +236,8 @@ func (r *Neo4jDatabaseReconciler) handleDeletion(ctx context.Context, database *
 }
 
 func (r *Neo4jDatabaseReconciler) ensureDatabase(ctx context.Context, client *neo4j.Client, database *neo4jv1alpha1.Neo4jDatabase) error {
+	logger := log.FromContext(ctx)
+
 	// Check if database exists
 	exists, err := client.DatabaseExists(ctx, database.Spec.Name)
 	if err != nil {
@@ -243,9 +245,61 @@ func (r *Neo4jDatabaseReconciler) ensureDatabase(ctx context.Context, client *ne
 	}
 
 	if !exists {
-		// Create database with options
-		if err := client.CreateDatabase(ctx, database.Spec.Name, database.Spec.Options); err != nil {
+		// Create database with topology if specified
+		if database.Spec.Topology != nil {
+			logger.Info("Creating database with topology",
+				"database", database.Spec.Name,
+				"primaries", database.Spec.Topology.Primaries,
+				"secondaries", database.Spec.Topology.Secondaries)
+
+			err = client.CreateDatabaseWithTopology(
+				ctx,
+				database.Spec.Name,
+				database.Spec.Topology.Primaries,
+				database.Spec.Topology.Secondaries,
+				database.Spec.Options,
+				database.Spec.Wait,
+				database.Spec.IfNotExists,
+				database.Spec.DefaultCypherLanguage,
+			)
+		} else {
+			// Create database without topology
+			logger.Info("Creating database",
+				"database", database.Spec.Name,
+				"wait", database.Spec.Wait,
+				"ifNotExists", database.Spec.IfNotExists)
+
+			err = client.CreateDatabase(
+				ctx,
+				database.Spec.Name,
+				database.Spec.Options,
+				database.Spec.Wait,
+				database.Spec.IfNotExists,
+			)
+		}
+
+		if err != nil {
 			return fmt.Errorf("failed to create database: %w", err)
+		}
+
+		logger.Info("Database created successfully", "database", database.Spec.Name)
+	} else {
+		logger.Info("Database already exists", "database", database.Spec.Name)
+
+		// Check and update database state in status
+		state, err := client.GetDatabaseState(ctx, database.Spec.Name)
+		if err != nil {
+			logger.Error(err, "Failed to get database state")
+		} else {
+			database.Status.State = state
+		}
+
+		// Get servers hosting the database
+		servers, err := client.GetDatabaseServers(ctx, database.Spec.Name)
+		if err != nil {
+			logger.Error(err, "Failed to get database servers")
+		} else {
+			database.Status.Servers = servers
 		}
 	}
 

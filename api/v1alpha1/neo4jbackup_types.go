@@ -79,7 +79,8 @@ type RetentionPolicy struct {
 
 // BackupOptions defines backup-specific options
 type BackupOptions struct {
-	// Compress the backup
+	// Compress the backup (default: true)
+	// +kubebuilder:default=true
 	Compress bool `json:"compress,omitempty"`
 
 	// Encryption configuration
@@ -87,6 +88,15 @@ type BackupOptions struct {
 
 	// Verify backup integrity after creation
 	Verify bool `json:"verify,omitempty"`
+
+	// Backup type
+	// +kubebuilder:validation:Enum=FULL;DIFF;AUTO
+	// +kubebuilder:default=AUTO
+	BackupType string `json:"backupType,omitempty"`
+
+	// Page cache size for backup operation (e.g., "4G")
+	// +kubebuilder:validation:Pattern="^[0-9]+[KMG]?$"
+	PageCache string `json:"pageCache,omitempty"`
 
 	// Additional neo4j-admin backup arguments
 	AdditionalArgs []string `json:"additionalArgs,omitempty"`

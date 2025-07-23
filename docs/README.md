@@ -31,7 +31,27 @@ The [Developer Guide](developer_guide) is for contributors and developers who wa
 The [API Reference](api_reference) contains detailed information about the operator's Custom Resource Definitions (CRDs).
 
 *   **[Neo4jEnterpriseCluster](api_reference/neo4jenterprisecluster.md)**
+*   **[Neo4jEnterpriseStandalone](api_reference/neo4jenterprisestandalone.md)**
 *   **[Neo4jBackup](api_reference/neo4jbackup.md)**
 *   **[Neo4jRestore](api_reference/neo4jrestore.md)**
-*   **[Neo4jDatabase](api_reference/neo4jdatabase.md)**
+*   **[Neo4jDatabase](api_reference/neo4jdatabase.md)** - Enhanced with IF NOT EXISTS, WAIT/NOWAIT, and topology support
 *   **[Neo4jPlugin](api_reference/neo4jplugin.md)**
+
+## 🚀 End-to-End Examples
+
+Complete deployment examples demonstrating real-world scenarios:
+
+*   **[Complete Production Deployment](../examples/end-to-end/complete-deployment.yaml)** - Full production setup with TLS, monitoring, and automated backups
+*   **[Disaster Recovery](../examples/end-to-end/disaster-recovery.yaml)** - Backup strategies, PITR, and cross-region recovery
+*   **[Development Workflow](../examples/end-to-end/development-workflow.yaml)** - Local development, migrations, and CI/CD integration
+*   **[Multi-Tenancy](../examples/end-to-end/multi-tenancy.yaml)** - Shared clusters with tenant isolation
+
+## 🆕 What's New
+
+### Neo4j 5.26+ and 2025.x Support
+*   **Database Management**: Create databases with `IF NOT EXISTS`, `WAIT`/`NOWAIT` options
+*   **Topology Constraints**: Specify primary/secondary distribution for databases
+*   **Version Detection**: Automatic adaptation for Neo4j 5.26.x (SemVer) and 2025.x (CalVer)
+*   **Cypher Language**: Support for Cypher 25 in Neo4j 2025.x
+*   **Backup Improvements**: FULL/DIFF/AUTO backup types, backup from secondaries
+*   **Point-in-Time Recovery**: Restore to specific timestamps with `--restore-until`
