@@ -578,7 +578,7 @@ func (r *Neo4jEnterpriseStandaloneReconciler) buildEnvVars(standalone *neo4jv1al
 	})
 
 	// Add auth credentials from secret if specified
-	if standalone.Spec.Auth.AdminSecret != "" {
+	if standalone.Spec.Auth != nil && standalone.Spec.Auth.AdminSecret != "" {
 		envVars = append(envVars,
 			corev1.EnvVar{
 				Name: "DB_USERNAME",

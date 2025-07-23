@@ -85,18 +85,18 @@ var _ = Describe("Version Detection Integration Tests", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			backupCmd := neo4j.GetBackupCommand(version526, "mydb", "/backups/mydb", false)
-			Expect(backupCmd).To(Equal("neo4j-admin database backup mydb /backups/mydb"))
+			Expect(backupCmd).To(Equal("neo4j-admin database backup mydb --to-path=/backups/mydb"))
 
 			By("Testing Neo4j 2025.x backup command")
 			version2025, err := neo4j.GetImageVersion("neo4j:2025.01.0")
 			Expect(err).NotTo(HaveOccurred())
 
 			backupCmd2025 := neo4j.GetBackupCommand(version2025, "mydb", "/backups/mydb", false)
-			Expect(backupCmd2025).To(Equal("neo4j-admin database backup mydb /backups/mydb"))
+			Expect(backupCmd2025).To(Equal("neo4j-admin database backup mydb --to-path=/backups/mydb"))
 
 			By("Testing backup all databases")
 			backupAllCmd := neo4j.GetBackupCommand(version526, "", "/backups/all", true)
-			Expect(backupAllCmd).To(Equal("neo4j-admin database backup --include-metadata=all /backups/all"))
+			Expect(backupAllCmd).To(Equal("neo4j-admin database backup --include-metadata=all --to-path=/backups/all"))
 		})
 
 		It("Should generate correct restore commands for different versions", func() {

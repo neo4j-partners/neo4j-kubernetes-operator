@@ -120,9 +120,16 @@ func TestBuildPodSpecForEnterprise_WithQueryMonitoring(t *testing.T) {
 	podSpec := resources.BuildPodSpecForEnterprise(cluster, "primary", "neo4j-admin-secret")
 
 	// Test that Prometheus exporter sidecar is added
-	require.Len(t, podSpec.Containers, 2, "should have 2 containers (main + exporter)")
+	require.Len(t, podSpec.Containers, 3, "should have 3 containers (main + backup + exporter)")
 
-	exporterContainer := podSpec.Containers[1]
+	// Find the exporter container (it should be the last one)
+	var exporterContainer corev1.Container
+	for _, c := range podSpec.Containers {
+		if c.Name == "prometheus-exporter" {
+			exporterContainer = c
+			break
+		}
+	}
 	assert.Equal(t, "prometheus-exporter", exporterContainer.Name)
 	assert.Equal(t, "neo4j/prometheus-exporter:4.0.0", exporterContainer.Image)
 	assert.Contains(t, exporterContainer.Args[0], "bolt://localhost:7687")
@@ -160,8 +167,10 @@ func TestBuildPodSpecForEnterprise_WithoutFeatures(t *testing.T) {
 	// Test that no init containers are added when no plugins
 	assert.Len(t, podSpec.InitContainers, 0, "should have no init containers when no plugins")
 
-	// Test that only main container is present when query monitoring is disabled
-	assert.Len(t, podSpec.Containers, 1, "should have only main container when query monitoring is disabled")
+	// Test that main container and backup sidecar are present when query monitoring is disabled
+	assert.Len(t, podSpec.Containers, 2, "should have main container and backup sidecar when query monitoring is disabled")
+	assert.Equal(t, "neo4j", podSpec.Containers[0].Name)
+	assert.Equal(t, "backup-sidecar", podSpec.Containers[1].Name)
 }
 
 func TestBuildStatefulSetForEnterprise_WithFeatures(t *testing.T) {
@@ -203,7 +212,7 @@ func TestBuildStatefulSetForEnterprise_WithFeatures(t *testing.T) {
 	// Test that pod template has the features
 	podSpec := sts.Spec.Template.Spec
 	assert.Len(t, podSpec.InitContainers, 1, "should have init container for plugin")
-	assert.Len(t, podSpec.Containers, 2, "should have main container + exporter")
+	assert.Len(t, podSpec.Containers, 3, "should have main container + backup + exporter")
 
 	// Test pod management policy
 	assert.Equal(t, appsv1.ParallelPodManagement, sts.Spec.PodManagementPolicy, "should use parallel pod management")

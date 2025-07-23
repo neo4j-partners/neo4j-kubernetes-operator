@@ -69,11 +69,12 @@ var _ = Describe("Backup RBAC Automatic Creation", func() {
 				},
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 					Image: neo4jv1alpha1.ImageSpec{
-						Tag: "5.26.0-enterprise",
+						Repo: "neo4j",
+						Tag:  "5.26.0-enterprise",
 					},
 					Topology: neo4jv1alpha1.TopologyConfiguration{
 						Primaries:   1,
-						Secondaries: 0,
+						Secondaries: 1,
 					},
 					Storage: neo4jv1alpha1.StorageSpec{
 						Size:      "10Gi",
@@ -82,6 +83,10 @@ var _ = Describe("Backup RBAC Automatic Creation", func() {
 					Resources: &corev1.ResourceRequirements{
 						Requests: corev1.ResourceList{
 							corev1.ResourceCPU:    resource.MustParse("500m"),
+							corev1.ResourceMemory: resource.MustParse("2Gi"),
+						},
+						Limits: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("1"),
 							corev1.ResourceMemory: resource.MustParse("2Gi"),
 						},
 					},
@@ -317,20 +322,34 @@ var _ = Describe("Backup RBAC Automatic Creation", func() {
 
 		AfterEach(func() {
 			By("Cleaning up resources")
-			// Delete backups
+			// Delete backups with finalizer removal
 			backupList := &neo4jv1alpha1.Neo4jBackupList{}
-			Expect(k8sClient.List(ctx, backupList, client.InNamespace(testNamespace))).Should(Succeed())
-			for _, backup := range backupList.Items {
-				Expect(k8sClient.Delete(ctx, &backup)).Should(Succeed())
+			if err := k8sClient.List(ctx, backupList, client.InNamespace(testNamespace)); err == nil {
+				for i := range backupList.Items {
+					backup := &backupList.Items[i]
+					if len(backup.GetFinalizers()) > 0 {
+						backup.SetFinalizers([]string{})
+						_ = k8sClient.Update(ctx, backup)
+					}
+					_ = k8sClient.Delete(ctx, backup)
+				}
 			}
 
-			// Delete cluster
-			Expect(k8sClient.Delete(ctx, cluster)).Should(Succeed())
+			// Delete cluster with finalizer removal
+			if cluster != nil {
+				if len(cluster.GetFinalizers()) > 0 {
+					cluster.SetFinalizers([]string{})
+					_ = k8sClient.Update(ctx, cluster)
+				}
+				_ = k8sClient.Delete(ctx, cluster)
+			}
 
 			// Delete secret
-			Expect(k8sClient.Delete(ctx, adminSecret)).Should(Succeed())
+			if adminSecret != nil {
+				_ = k8sClient.Delete(ctx, adminSecret)
+			}
 
-			// Note: RBAC resources will be cleaned up by namespace deletion
+			// Note: RBAC resources and namespace will be cleaned up by test suite cleanup
 		})
 	})
 })

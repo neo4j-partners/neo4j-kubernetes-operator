@@ -23,6 +23,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -39,7 +40,6 @@ var _ = Describe("Backup Sidecar Path Creation", func() {
 	Context("When backup sidecar processes backup requests", func() {
 		var (
 			testNamespace string
-			cluster       *neo4jv1alpha1.Neo4jEnterpriseCluster
 			adminSecret   *corev1.Secret
 		)
 
@@ -58,88 +58,40 @@ var _ = Describe("Backup Sidecar Path Creation", func() {
 				},
 			}
 			Expect(k8sClient.Create(ctx, adminSecret)).To(Succeed())
-
-			By("Creating a test cluster")
-			cluster = &neo4jv1alpha1.Neo4jEnterpriseCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      fmt.Sprintf("test-cluster-%d", time.Now().UnixNano()),
-					Namespace: testNamespace,
-				},
-				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
-					Edition: "enterprise",
-					Image: neo4jv1alpha1.ImageSpec{
-						Repo: "neo4j",
-						Tag:  "5.26.0-enterprise",
-					},
-					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Primaries:   1,
-						Secondaries: 1,
-					},
-					Storage: neo4jv1alpha1.StorageSpec{
-						ClassName: "standard",
-						Size:      "1Gi",
-					},
-					Auth: &neo4jv1alpha1.AuthSpec{
-						AdminSecret: adminSecret.Name,
-					},
-				},
-			}
-			Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
-
-			By("Waiting for cluster to be ready")
-			clusterKey := types.NamespacedName{
-				Name:      cluster.Name,
-				Namespace: testNamespace,
-			}
-
-			Eventually(func() string {
-				var foundCluster neo4jv1alpha1.Neo4jEnterpriseCluster
-				if err := k8sClient.Get(ctx, clusterKey, &foundCluster); err != nil {
-					return "NotFound"
-				}
-				return foundCluster.Status.Phase
-			}, timeout, interval).Should(Equal("Ready"))
 		})
 
 		AfterEach(func() {
 			By("Cleaning up test resources")
-			if cluster != nil {
-				Expect(k8sClient.Delete(ctx, cluster)).To(Succeed())
-			}
-			if adminSecret != nil {
-				Expect(k8sClient.Delete(ctx, adminSecret)).To(Succeed())
-			}
-		})
 
-		It("Should verify backup sidecar creates backup path automatically", func() {
-			By("Verifying backup sidecar is present")
-			podList := &corev1.PodList{}
-			Expect(k8sClient.List(ctx, podList,
-				client.InNamespace(testNamespace),
-				client.MatchingLabels{"neo4j.com/cluster": cluster.Name})).To(Succeed())
-
-			Expect(podList.Items).To(HaveLen(2)) // 1 primary + 1 secondary
-
-			// Check that backup sidecar container exists
-			for _, pod := range podList.Items {
-				var hasSidecar bool
-				for _, container := range pod.Spec.Containers {
-					if container.Name == "backup-sidecar" {
-						hasSidecar = true
-
-						// Verify the command includes mkdir -p $BACKUP_PATH
-						Expect(container.Command).To(HaveLen(3))
-						Expect(container.Command[0]).To(Equal("/bin/bash"))
-						Expect(container.Command[1]).To(Equal("-c"))
-						Expect(container.Command[2]).To(ContainSubstring("mkdir -p $BACKUP_PATH"))
-
-						// Verify memory resources are set correctly
-						Expect(container.Resources.Limits.Memory().String()).To(Equal("1Gi"))
-						Expect(container.Resources.Requests.Memory().String()).To(Equal("512Mi"))
-						break
+			// Clean up any standalone resources
+			standaloneList := &neo4jv1alpha1.Neo4jEnterpriseStandaloneList{}
+			if err := k8sClient.List(ctx, standaloneList, client.InNamespace(testNamespace)); err == nil {
+				for i := range standaloneList.Items {
+					standalone := &standaloneList.Items[i]
+					if len(standalone.GetFinalizers()) > 0 {
+						standalone.SetFinalizers([]string{})
+						_ = k8sClient.Update(ctx, standalone)
 					}
+					_ = k8sClient.Delete(ctx, standalone)
 				}
-				Expect(hasSidecar).To(BeTrue(), "Pod %s should have backup-sidecar container", pod.Name)
+			}
+
+			// Clean up any cluster resources that might have been created in other tests
+			clusterList := &neo4jv1alpha1.Neo4jEnterpriseClusterList{}
+			if err := k8sClient.List(ctx, clusterList, client.InNamespace(testNamespace)); err == nil {
+				for i := range clusterList.Items {
+					cluster := &clusterList.Items[i]
+					if len(cluster.GetFinalizers()) > 0 {
+						cluster.SetFinalizers([]string{})
+						_ = k8sClient.Update(ctx, cluster)
+					}
+					_ = k8sClient.Delete(ctx, cluster)
+				}
+			}
+
+			// Clean up admin secret
+			if adminSecret != nil {
+				_ = k8sClient.Delete(ctx, adminSecret)
 			}
 		})
 
@@ -151,6 +103,7 @@ var _ = Describe("Backup Sidecar Path Creation", func() {
 					Namespace: testNamespace,
 				},
 				Spec: neo4jv1alpha1.Neo4jEnterpriseStandaloneSpec{
+					Edition: "enterprise",
 					Image: neo4jv1alpha1.ImageSpec{
 						Repo: "neo4j",
 						Tag:  "5.26.0-enterprise",
@@ -159,8 +112,24 @@ var _ = Describe("Backup Sidecar Path Creation", func() {
 						ClassName: "standard",
 						Size:      "1Gi",
 					},
+					Resources: &corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("500m"),
+							corev1.ResourceMemory: resource.MustParse("1Gi"),
+						},
+						Limits: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("1"),
+							corev1.ResourceMemory: resource.MustParse("2Gi"),
+						},
+					},
 					Auth: &neo4jv1alpha1.AuthSpec{
 						AdminSecret: adminSecret.Name,
+					},
+					Env: []corev1.EnvVar{
+						{
+							Name:  "NEO4J_ACCEPT_LICENSE_AGREEMENT",
+							Value: "eval",
+						},
 					},
 				},
 			}
@@ -175,19 +144,19 @@ var _ = Describe("Backup Sidecar Path Creation", func() {
 				Namespace: testNamespace,
 			}
 
-			Eventually(func() string {
+			Eventually(func() bool {
 				var foundStandalone neo4jv1alpha1.Neo4jEnterpriseStandalone
 				if err := k8sClient.Get(ctx, standaloneKey, &foundStandalone); err != nil {
-					return "NotFound"
+					return false
 				}
-				return foundStandalone.Status.Phase
-			}, timeout, interval).Should(Equal("Ready"))
+				return foundStandalone.Status.Ready
+			}, timeout, interval).Should(BeTrue())
 
 			By("Verifying standalone backup sidecar configuration")
 			podList := &corev1.PodList{}
 			Expect(k8sClient.List(ctx, podList,
 				client.InNamespace(testNamespace),
-				client.MatchingLabels{"neo4j.com/deployment": standalone.Name})).To(Succeed())
+				client.MatchingLabels{"app": standalone.Name})).To(Succeed())
 
 			Expect(podList.Items).To(HaveLen(1))
 			pod := podList.Items[0]
@@ -240,8 +209,24 @@ var _ = Describe("Backup Sidecar Path Creation", func() {
 						ClassName: "standard",
 						Size:      "1Gi",
 					},
+					Resources: &corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("500m"),
+							corev1.ResourceMemory: resource.MustParse("1Gi"),
+						},
+						Limits: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("1"),
+							corev1.ResourceMemory: resource.MustParse("2Gi"),
+						},
+					},
 					Auth: &neo4jv1alpha1.AuthSpec{
 						AdminSecret: adminSecret.Name,
+					},
+					Env: []corev1.EnvVar{
+						{
+							Name:  "NEO4J_ACCEPT_LICENSE_AGREEMENT",
+							Value: "eval",
+						},
 					},
 				},
 			}

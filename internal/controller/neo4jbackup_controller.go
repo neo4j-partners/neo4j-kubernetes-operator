@@ -84,6 +84,8 @@ func GetTestRequeueAfter() time.Duration {
 //+kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=rolebindings,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups="",resources=pods/exec,verbs=create;get
+//+kubebuilder:rbac:groups="",resources=pods/log,verbs=get
 
 // Reconcile handles the reconciliation of Neo4jBackup resources
 func (r *Neo4jBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {

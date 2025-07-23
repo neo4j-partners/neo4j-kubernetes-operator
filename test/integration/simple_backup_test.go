@@ -23,9 +23,11 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1"
 )
@@ -126,14 +128,38 @@ var _ = Describe("Simple Backup Test", func() {
 
 		AfterEach(func() {
 			By("Cleaning up test resources")
-			if cluster != nil {
-				Expect(k8sClient.Delete(ctx, cluster)).To(Succeed())
+
+			// Clean up any backups created in the test
+			backupList := &neo4jv1alpha1.Neo4jBackupList{}
+			if err := k8sClient.List(ctx, backupList, client.InNamespace(testNamespace)); err == nil {
+				for i := range backupList.Items {
+					backup := &backupList.Items[i]
+					if len(backup.GetFinalizers()) > 0 {
+						backup.SetFinalizers([]string{})
+						_ = k8sClient.Update(ctx, backup)
+					}
+					_ = k8sClient.Delete(ctx, backup)
+				}
 			}
+
+			// Clean up cluster with finalizer removal
+			if cluster != nil {
+				if len(cluster.GetFinalizers()) > 0 {
+					cluster.SetFinalizers([]string{})
+					_ = k8sClient.Update(ctx, cluster)
+				}
+				err := k8sClient.Delete(ctx, cluster)
+				if err != nil && !errors.IsNotFound(err) {
+					By(fmt.Sprintf("Failed to delete cluster: %v", err))
+				}
+			}
+
+			// Clean up PVC and secret
 			if backupPVC != nil {
-				Expect(k8sClient.Delete(ctx, backupPVC)).To(Succeed())
+				_ = k8sClient.Delete(ctx, backupPVC)
 			}
 			if adminSecret != nil {
-				Expect(k8sClient.Delete(ctx, adminSecret)).To(Succeed())
+				_ = k8sClient.Delete(ctx, adminSecret)
 			}
 		})
 

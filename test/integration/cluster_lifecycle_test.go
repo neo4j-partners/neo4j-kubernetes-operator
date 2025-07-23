@@ -24,6 +24,7 @@ import (
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -58,7 +59,23 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 	})
 
 	AfterEach(func() {
-		// Cleanup will be handled by the test suite cleanup
+		// Clean up cluster resource if it was created
+		if cluster != nil {
+			By("Cleaning up cluster resource")
+			// Remove finalizers if any
+			if len(cluster.GetFinalizers()) > 0 {
+				cluster.SetFinalizers([]string{})
+				_ = k8sClient.Update(ctx, cluster)
+			}
+			// Delete the resource
+			err := k8sClient.Delete(ctx, cluster)
+			if err != nil && !errors.IsNotFound(err) {
+				By(fmt.Sprintf("Failed to delete cluster: %v", err))
+			}
+		}
+
+		// Note: Namespace cleanup is handled by the test suite cleanup
+		// which removes all test namespaces and their resources
 	})
 
 	Context("End-to-end cluster lifecycle", func() {
@@ -221,7 +238,7 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 					},
 					Topology: neo4jv1alpha1.TopologyConfiguration{
 						Primaries:   3,
-						Secondaries: 0,
+						Secondaries: 1,
 					},
 					Storage: neo4jv1alpha1.StorageSpec{
 						ClassName: "standard",
