@@ -180,29 +180,51 @@ wait_for_pods() {
 show_cluster_status() {
     local cluster_name=$1
     local namespace=$2
+    local resource_type=${3:-"cluster"} # Default to cluster
 
     echo
-    log_section "Cluster Status: ${cluster_name}"
+    log_section "Status: ${cluster_name}"
 
-    # Cluster resource
-    echo -e "${CYAN}Neo4j Enterprise Cluster:${NC}"
-    log_command "kubectl get neo4jenterprisecluster ${cluster_name} -n ${namespace} -o wide"
-    kubectl get neo4jenterprisecluster "${cluster_name}" -n "${namespace}" -o wide 2>/dev/null || echo "  Cluster not found"
+    # Show appropriate resource type
+    if [[ "${resource_type}" == "standalone" ]]; then
+        echo -e "${CYAN}Neo4j Enterprise Standalone:${NC}"
+        log_command "kubectl get neo4jenterprisestandalone ${cluster_name} -n ${namespace} -o wide"
+        kubectl get neo4jenterprisestandalone "${cluster_name}" -n "${namespace}" -o wide 2>/dev/null || echo "  Standalone not found"
+    else
+        echo -e "${CYAN}Neo4j Enterprise Cluster:${NC}"
+        log_command "kubectl get neo4jenterprisecluster ${cluster_name} -n ${namespace} -o wide"
+        kubectl get neo4jenterprisecluster "${cluster_name}" -n "${namespace}" -o wide 2>/dev/null || echo "  Cluster not found"
+    fi
 
     echo
     echo -e "${CYAN}Pods:${NC}"
-    log_command "kubectl get pods -l 'neo4j.com/cluster=${cluster_name}' -n ${namespace} -o wide"
-    kubectl get pods -l "neo4j.com/cluster=${cluster_name}" -n "${namespace}" -o wide 2>/dev/null || echo "  No pods found"
+    if [[ "${resource_type}" == "standalone" ]]; then
+        log_command "kubectl get pods -l 'app=${cluster_name}' -n ${namespace} -o wide"
+        kubectl get pods -l "app=${cluster_name}" -n "${namespace}" -o wide 2>/dev/null || echo "  No pods found"
+    else
+        log_command "kubectl get pods -l 'neo4j.com/cluster=${cluster_name}' -n ${namespace} -o wide"
+        kubectl get pods -l "neo4j.com/cluster=${cluster_name}" -n "${namespace}" -o wide 2>/dev/null || echo "  No pods found"
+    fi
 
     echo
     echo -e "${CYAN}Services:${NC}"
-    log_command "kubectl get services -l 'neo4j.com/cluster=${cluster_name}' -n ${namespace}"
-    kubectl get services -l "neo4j.com/cluster=${cluster_name}" -n "${namespace}" 2>/dev/null || echo "  No services found"
+    if [[ "${resource_type}" == "standalone" ]]; then
+        log_command "kubectl get services -l 'app=${cluster_name}' -n ${namespace}"
+        kubectl get services -l "app=${cluster_name}" -n "${namespace}" 2>/dev/null || echo "  No services found"
+    else
+        log_command "kubectl get services -l 'neo4j.com/cluster=${cluster_name}' -n ${namespace}"
+        kubectl get services -l "neo4j.com/cluster=${cluster_name}" -n "${namespace}" 2>/dev/null || echo "  No services found"
+    fi
 
     echo
     echo -e "${CYAN}Persistent Volume Claims:${NC}"
-    log_command "kubectl get pvc -l 'neo4j.com/cluster=${cluster_name}' -n ${namespace}"
-    kubectl get pvc -l "neo4j.com/cluster=${cluster_name}" -n "${namespace}" 2>/dev/null || echo "  No PVCs found"
+    if [[ "${resource_type}" == "standalone" ]]; then
+        log_command "kubectl get pvc -l 'app=${cluster_name}' -n ${namespace}"
+        kubectl get pvc -l "app=${cluster_name}" -n "${namespace}" 2>/dev/null || echo "  No PVCs found"
+    else
+        log_command "kubectl get pvc -l 'neo4j.com/cluster=${cluster_name}' -n ${namespace}"
+        kubectl get pvc -l "neo4j.com/cluster=${cluster_name}" -n "${namespace}" 2>/dev/null || echo "  No PVCs found"
+    fi
 
     if kubectl get certificates -n "${namespace}" --no-headers 2>/dev/null | grep -q "${cluster_name}"; then
         echo
@@ -217,10 +239,17 @@ show_connection_info() {
     local cluster_name=$1
     local namespace=$2
     local has_tls=${3:-false}
+    local resource_type=${4:-"cluster"}
 
     log_section "Connection Information"
 
-    local client_service="${cluster_name}-client"
+    # Standalone uses different service naming
+    local client_service
+    if [[ "${resource_type}" == "standalone" ]]; then
+        client_service="${cluster_name}-service"
+    else
+        client_service="${cluster_name}-client"
+    fi
     local bolt_port="7687"
     local http_port="7474"
     local https_port="7473"
@@ -257,9 +286,10 @@ show_connection_info() {
 cleanup_existing() {
     log_section "Cleaning Up Existing Resources"
 
-    log_info "Removing any existing demo clusters..."
-    log_command "kubectl delete neo4jenterprisecluster ${CLUSTER_NAME_SINGLE} ${CLUSTER_NAME_MULTI} -n ${DEMO_NAMESPACE} --ignore-not-found=true"
-    kubectl delete neo4jenterprisecluster "${CLUSTER_NAME_SINGLE}" -n "${DEMO_NAMESPACE}" --ignore-not-found=true &
+    log_info "Removing any existing demo resources..."
+    log_command "kubectl delete neo4jenterprisestandalone ${CLUSTER_NAME_SINGLE} -n ${DEMO_NAMESPACE} --ignore-not-found=true"
+    log_command "kubectl delete neo4jenterprisecluster ${CLUSTER_NAME_MULTI} -n ${DEMO_NAMESPACE} --ignore-not-found=true"
+    kubectl delete neo4jenterprisestandalone "${CLUSTER_NAME_SINGLE}" -n "${DEMO_NAMESPACE}" --ignore-not-found=true &
     kubectl delete neo4jenterprisecluster "${CLUSTER_NAME_MULTI}" -n "${DEMO_NAMESPACE}" --ignore-not-found=true &
     wait
 
@@ -292,34 +322,34 @@ create_admin_secret() {
 
 # Deploy single node cluster
 deploy_single_node() {
-    log_header "DEMO PART 1: Single-Node Neo4j Cluster"
+    log_header "DEMO PART 1: Single-Node Neo4j Standalone"
 
-    log_demo "We'll start with a simple single-node Neo4j cluster for development and testing."
+    log_demo "We'll start with a simple single-node Neo4j standalone deployment for development and testing."
     log_demo "This configuration is perfect for:"
     log_demo "  • Development environments"
     log_demo "  • Testing and prototyping"
     log_demo "  • Small workloads"
     log_demo "  • Learning Neo4j"
 
-    confirm "Ready to deploy the single-node cluster?"
+    confirm "Ready to deploy the single-node standalone?"
 
-    log_section "Deploying Single-Node Cluster"
+    log_section "Deploying Single-Node Standalone"
 
-    log_manifest "Creating single-node cluster manifest:"
-    log_info "This manifest will create a Neo4j Enterprise cluster with:"
-    log_info "  • 1 primary node (no clustering)"
+    log_manifest "Creating single-node standalone manifest:"
+    log_info "This manifest will create a Neo4j Enterprise Standalone with:"
+    log_info "  • Single Neo4j instance (no clustering)"
     log_info "  • TLS disabled for simplicity"
     log_info "  • Standard resource allocation"
-    log_info "  • 10Gi storage per node"
+    log_info "  • 10Gi storage"
     echo
 
-    # Create single-node cluster manifest
-    local manifest=$(cat << 'EOF'
+    # Create single-node standalone manifest
+    local manifest=$(cat << EOF
 apiVersion: neo4j.neo4j.com/v1alpha1
-kind: Neo4jEnterpriseCluster
+kind: Neo4jEnterpriseStandalone
 metadata:
   name: neo4j-single
-  namespace: default
+  namespace: ${DEMO_NAMESPACE}
 spec:
   image:
     repo: neo4j
@@ -337,19 +367,14 @@ spec:
   auth:
     adminSecret: neo4j-admin-secret
 
-  # Single-node topology
-  topology:
-    primaries: 1
-    secondaries: 0
-
   # Resource allocation
   resources:
     requests:
+      cpu: "200m"
+      memory: "1Gi"
+    limits:
       cpu: "500m"
       memory: "2Gi"
-    limits:
-      cpu: "1"
-      memory: "4Gi"
 
   # Storage configuration
   storage:
@@ -360,11 +385,12 @@ spec:
   tls:
     mode: disabled
 
-  # Basic configuration for single-node
+  # Basic configuration for standalone
   config:
-    dbms.mode: "SINGLE"
     dbms.logs.query.enabled: "INFO"
     metrics.enabled: "true"
+    server.memory.heap.initial_size: "512M"
+    server.memory.heap.max_size: "1G"
 EOF
 )
 
@@ -376,25 +402,25 @@ EOF
     log_command "kubectl apply -f -"
     echo "${manifest}" | kubectl apply -f -
 
-    log_success "Single-node cluster manifest applied!"
+    log_success "Single-node standalone manifest applied!"
 
     log_info "The operator is now creating the following resources:"
     log_info "  • StatefulSet with 1 replica"
-    log_info "  • Client and headless services"
+    log_info "  • Service for client connections"
     log_info "  • ConfigMap with Neo4j configuration"
     log_info "  • PersistentVolumeClaim for data storage"
 
     # Wait for deployment
     show_progress $PAUSE_MEDIUM "Waiting for cluster initialization"
 
-    log_info "Monitoring cluster deployment progress..."
-    wait_for_pods "neo4j.com/cluster=${CLUSTER_NAME_SINGLE}" "${DEMO_NAMESPACE}" 180 1
+    log_info "Monitoring standalone deployment progress..."
+    wait_for_pods "app=${CLUSTER_NAME_SINGLE}" "${DEMO_NAMESPACE}" 180 1
 
-    show_cluster_status "${CLUSTER_NAME_SINGLE}" "${DEMO_NAMESPACE}"
-    show_connection_info "${CLUSTER_NAME_SINGLE}" "${DEMO_NAMESPACE}" false
+    show_cluster_status "${CLUSTER_NAME_SINGLE}" "${DEMO_NAMESPACE}" "standalone"
+    show_connection_info "${CLUSTER_NAME_SINGLE}" "${DEMO_NAMESPACE}" false "standalone"
 
-    log_success "Single-node cluster is ready!"
-    log_demo "The cluster is now running with a single member using unified clustering infrastructure"
+    log_success "Single-node standalone is ready!"
+    log_demo "Neo4j is now running as a standalone instance (no clustering)"
     log_demo "This provides a simplified deployment suitable for development and testing"
 
     confirm "Ready to proceed to the multi-node TLS-enabled cluster demo?"
@@ -419,18 +445,18 @@ deploy_multi_node_tls() {
     log_info "This manifest will create a Neo4j Enterprise cluster with:"
     log_info "  • 3 primary nodes (HA clustering)"
     log_info "  • TLS enabled using cert-manager"
-    log_info "  • Production resource allocation"
-    log_info "  • 20Gi storage per node"
+    log_info "  • Optimized resource allocation for Kind"
+    log_info "  • 10Gi storage per node"
     log_info "  • Automatic certificate management"
     echo
 
     # Create TLS-enabled cluster manifest
-    local manifest=$(cat << 'EOF'
+    local manifest=$(cat << EOF
 apiVersion: neo4j.neo4j.com/v1alpha1
 kind: Neo4jEnterpriseCluster
 metadata:
   name: neo4j-cluster
-  namespace: default
+  namespace: ${DEMO_NAMESPACE}
 spec:
   image:
     repo: neo4j
@@ -456,16 +482,16 @@ spec:
   # Production resource allocation
   resources:
     requests:
-      cpu: "1"
-      memory: "4Gi"
+      cpu: "300m"
+      memory: "1Gi"
     limits:
-      cpu: "2"
-      memory: "8Gi"
+      cpu: "1"
+      memory: "2Gi"
 
   # Storage configuration
   storage:
     className: standard
-    size: "20Gi"
+    size: "10Gi"
 
   # TLS configuration using cert-manager
   tls:
@@ -481,7 +507,7 @@ spec:
 
   # Production configuration
   config:
-    dbms.cluster.minimum_initial_system_primaries_count: "3"
+    dbms.cluster.discovery.version: "V2_ONLY"
     dbms.logs.query.enabled: "INFO"
     dbms.transaction.timeout: "60s"
     metrics.enabled: "true"
@@ -599,10 +625,11 @@ show_demo_summary() {
 
     log_demo "We successfully demonstrated the Neo4j Kubernetes Operator capabilities:"
     echo
-    echo -e "${GREEN}✓ Single-Node Cluster${NC}"
+    echo -e "${GREEN}✓ Single-Node Standalone${NC}"
     echo "  • Perfect for development and testing"
     echo "  • Simple deployment and management"
     echo "  • Resource efficient"
+    echo "  • No clustering overhead"
     echo
     echo -e "${GREEN}✓ Multi-Node TLS Cluster${NC}"
     echo "  • Production-ready high availability"
@@ -611,13 +638,14 @@ show_demo_summary() {
     echo "  • Horizontal scaling capabilities"
     echo
 
-    log_section "Active Clusters"
-    log_command "kubectl get neo4jenterprisecluster -n ${DEMO_NAMESPACE} -o wide"
-    kubectl get neo4jenterprisecluster -n "${DEMO_NAMESPACE}" -o wide
+    log_section "Active Resources"
+    log_command "kubectl get neo4jenterprisestandalone,neo4jenterprisecluster -n ${DEMO_NAMESPACE} -o wide"
+    kubectl get neo4jenterprisestandalone,neo4jenterprisecluster -n "${DEMO_NAMESPACE}" -o wide
 
     log_section "Cleanup"
-    log_info "To clean up the demo clusters:"
-    echo "  kubectl delete neo4jenterprisecluster ${CLUSTER_NAME_SINGLE} ${CLUSTER_NAME_MULTI} -n ${DEMO_NAMESPACE}"
+    log_info "To clean up the demo resources:"
+    echo "  kubectl delete neo4jenterprisestandalone ${CLUSTER_NAME_SINGLE} -n ${DEMO_NAMESPACE}"
+    echo "  kubectl delete neo4jenterprisecluster ${CLUSTER_NAME_MULTI} -n ${DEMO_NAMESPACE}"
     echo
 
     log_success "Demo completed successfully! 🎉"
