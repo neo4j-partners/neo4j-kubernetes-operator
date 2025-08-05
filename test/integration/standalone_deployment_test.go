@@ -107,7 +107,7 @@ var _ = Describe("Neo4jEnterpriseStandalone Integration Tests", func() {
 						},
 						Limits: corev1.ResourceList{
 							corev1.ResourceCPU:    resource.MustParse("200m"),
-							corev1.ResourceMemory: resource.MustParse("512Mi"),
+							corev1.ResourceMemory: resource.MustParse("1Gi"), // Neo4j Enterprise minimum requirement
 						},
 					},
 					Env: []corev1.EnvVar{
@@ -313,7 +313,7 @@ var _ = Describe("Neo4jEnterpriseStandalone Integration Tests", func() {
 						},
 						Limits: corev1.ResourceList{
 							corev1.ResourceCPU:    resource.MustParse("200m"),
-							corev1.ResourceMemory: resource.MustParse("512Mi"),
+							corev1.ResourceMemory: resource.MustParse("1Gi"), // Neo4j Enterprise minimum requirement
 						},
 					},
 					Config: map[string]string{
@@ -401,7 +401,7 @@ var _ = Describe("Neo4jEnterpriseStandalone Integration Tests", func() {
 						},
 						Limits: corev1.ResourceList{
 							corev1.ResourceCPU:    resource.MustParse("200m"),
-							corev1.ResourceMemory: resource.MustParse("512Mi"),
+							corev1.ResourceMemory: resource.MustParse("1Gi"), // Neo4j Enterprise minimum requirement
 						},
 					},
 					TLS: &neo4jv1alpha1.TLSSpec{
@@ -482,7 +482,7 @@ var _ = Describe("Neo4jEnterpriseStandalone Integration Tests", func() {
 						},
 						Limits: corev1.ResourceList{
 							corev1.ResourceCPU:    resource.MustParse("200m"),
-							corev1.ResourceMemory: resource.MustParse("512Mi"),
+							corev1.ResourceMemory: resource.MustParse("1Gi"), // Neo4j Enterprise minimum requirement
 						},
 					},
 					TLS: &neo4jv1alpha1.TLSSpec{

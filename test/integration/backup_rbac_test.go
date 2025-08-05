@@ -87,7 +87,7 @@ var _ = Describe("Backup RBAC Automatic Creation", func() {
 						},
 						Limits: corev1.ResourceList{
 							corev1.ResourceCPU:    resource.MustParse("200m"), // Reduced for CI constraints
-							corev1.ResourceMemory: resource.MustParse("512Mi"),
+							corev1.ResourceMemory: resource.MustParse("1Gi"),  // Neo4j Enterprise minimum requirement
 						},
 					},
 					Auth: &neo4jv1alpha1.AuthSpec{
