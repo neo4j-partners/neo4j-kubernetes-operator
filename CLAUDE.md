@@ -241,6 +241,29 @@ spec:
 - **Result**: 100% success rate (was failing with split-brain)
 - **Key**: Don't reduce timeouts, ensure endpoints RBAC
 
+### Neo4j Configuration & Cluster Formation (Updated 2025-08-05)
+- **Discovery Service Architecture**: V2_ONLY mode correctly uses discovery service hostname, not individual endpoints
+- **Port Configuration**: Always use `tcp-discovery` (port 5000) for K8s discovery, not `tcp-tx` (port 6000)
+- **Minimum Primaries**: Set to 1 (`dbms.cluster.minimum_initial_system_primaries_count=1`) for flexible cluster formation
+- **FQDN Addressing**: All advertised addresses use FQDN format via headless service
+- **Service Setup**:
+  - **Discovery Service**: ClusterIP with `tcp-discovery:5000`, selector includes `neo4j.com/clustering=true`
+  - **Headless Service**: For pod-to-pod communication with all cluster ports
+  - **Client Service**: ClusterIP for external access (bolt/http)
+  - **Internals Service**: ClusterIP for operator management access
+- **Key Success Factor**: Service-based discovery more reliable than endpoint-based for Neo4j in K8s
+
+### Critical Neo4j Settings for Clusters (Added 2025-08-05)
+These settings are automatically configured by the operator:
+- `dbms.cluster.discovery.resolver_type=K8S`
+- `dbms.kubernetes.discovery.v2.service_port_name=tcp-discovery` (5.x)
+- `dbms.kubernetes.discovery.service_port_name=tcp-discovery` (2025.x)
+- `dbms.cluster.discovery.version=V2_ONLY` (5.x only, default in 2025.x)
+- `initial.dbms.automatically_enable_free_servers=true`
+- `dbms.cluster.minimum_initial_system_primaries_count=1`
+
+**Variable Substitution**: `${MIN_PRIMARIES}` and `${HOSTNAME_FQDN}` are substituted in startup script
+
 
 ## Reports
 
