@@ -77,17 +77,17 @@ var _ = Describe("Backup RBAC Automatic Creation", func() {
 						Secondaries: 1,
 					},
 					Storage: neo4jv1alpha1.StorageSpec{
-						Size:      "10Gi",
+						Size:      "1Gi",
 						ClassName: "standard",
 					},
 					Resources: &corev1.ResourceRequirements{
 						Requests: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("500m"),
-							corev1.ResourceMemory: resource.MustParse("2Gi"),
+							corev1.ResourceCPU:    resource.MustParse("50m"), // Reduced for CI constraints
+							corev1.ResourceMemory: resource.MustParse("256Mi"),
 						},
 						Limits: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("1"),
-							corev1.ResourceMemory: resource.MustParse("2Gi"),
+							corev1.ResourceCPU:    resource.MustParse("200m"), // Reduced for CI constraints
+							corev1.ResourceMemory: resource.MustParse("512Mi"),
 						},
 					},
 					Auth: &neo4jv1alpha1.AuthSpec{

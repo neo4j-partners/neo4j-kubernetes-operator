@@ -115,12 +115,12 @@ var _ = Describe("Backup Sidecar Path Creation", func() {
 					},
 					Resources: &corev1.ResourceRequirements{
 						Requests: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("100m"),
-							corev1.ResourceMemory: resource.MustParse("512Mi"),
+							corev1.ResourceCPU:    resource.MustParse("50m"), // Reduced for CI constraints
+							corev1.ResourceMemory: resource.MustParse("256Mi"),
 						},
 						Limits: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("500m"),
-							corev1.ResourceMemory: resource.MustParse("1Gi"),
+							corev1.ResourceCPU:    resource.MustParse("200m"), // Reduced for CI constraints
+							corev1.ResourceMemory: resource.MustParse("256Mi"),
 						},
 					},
 					Auth: &neo4jv1alpha1.AuthSpec{
@@ -235,12 +235,12 @@ var _ = Describe("Backup Sidecar Path Creation", func() {
 					},
 					Resources: &corev1.ResourceRequirements{
 						Requests: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("100m"),
-							corev1.ResourceMemory: resource.MustParse("512Mi"),
+							corev1.ResourceCPU:    resource.MustParse("50m"), // Reduced for CI constraints
+							corev1.ResourceMemory: resource.MustParse("256Mi"),
 						},
 						Limits: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("500m"),
-							corev1.ResourceMemory: resource.MustParse("1Gi"),
+							corev1.ResourceCPU:    resource.MustParse("200m"), // Reduced for CI constraints
+							corev1.ResourceMemory: resource.MustParse("256Mi"),
 						},
 					},
 					Auth: &neo4jv1alpha1.AuthSpec{

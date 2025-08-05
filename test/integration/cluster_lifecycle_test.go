@@ -103,7 +103,7 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 					},
 					Storage: neo4jv1alpha1.StorageSpec{
 						ClassName: "standard",
-						Size:      "10Gi",
+						Size:      "1Gi",
 					},
 				},
 			}

@@ -405,7 +405,7 @@ func createBasicCluster(name, namespace string) *neo4jv1alpha1.Neo4jEnterpriseCl
 			},
 			Storage: neo4jv1alpha1.StorageSpec{
 				ClassName: "standard",
-				Size:      "10Gi",
+				Size:      "1Gi",
 			},
 		},
 	}
@@ -426,7 +426,7 @@ func createBasicStandalone(name, namespace string) *neo4jv1alpha1.Neo4jEnterpris
 			},
 			Storage: neo4jv1alpha1.StorageSpec{
 				ClassName: "standard",
-				Size:      "10Gi",
+				Size:      "1Gi",
 			},
 		},
 	}

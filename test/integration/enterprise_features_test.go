@@ -80,7 +80,7 @@ var _ = Describe("Enterprise Features Integration Tests", func() {
 					},
 					Storage: neo4jv1alpha1.StorageSpec{
 						ClassName: "standard",
-						Size:      "10Gi",
+						Size:      "1Gi",
 					},
 					Auth: &neo4jv1alpha1.AuthSpec{
 						AdminSecret: "neo4j-admin-secret",
@@ -146,7 +146,7 @@ var _ = Describe("Enterprise Features Integration Tests", func() {
 					},
 					Storage: neo4jv1alpha1.StorageSpec{
 						ClassName: "standard",
-						Size:      "10Gi",
+						Size:      "1Gi",
 					},
 					QueryMonitoring: &neo4jv1alpha1.QueryMonitoringSpec{
 						Enabled:              true,
