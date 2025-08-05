@@ -33,7 +33,7 @@ import (
 
 var _ = Describe("Backup Sidecar Path Creation", func() {
 	const (
-		timeout  = time.Second * 180
+		timeout  = time.Second * 300 // 5 minutes to account for image pulls in CI
 		interval = time.Second * 5
 	)
 
