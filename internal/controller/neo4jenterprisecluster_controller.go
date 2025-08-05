@@ -42,6 +42,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1"
+	"github.com/neo4j-labs/neo4j-kubernetes-operator/internal/metrics"
 	neo4jclient "github.com/neo4j-labs/neo4j-kubernetes-operator/internal/neo4j"
 	"github.com/neo4j-labs/neo4j-kubernetes-operator/internal/resources"
 	"github.com/neo4j-labs/neo4j-kubernetes-operator/internal/validation"
@@ -441,7 +442,57 @@ func (r *Neo4jEnterpriseClusterReconciler) cleanupPVCs(ctx context.Context, clus
 	return nil
 }
 
+// CreateOrUpdateResource is exported for testing
+func (r *Neo4jEnterpriseClusterReconciler) CreateOrUpdateResource(ctx context.Context, obj client.Object, owner client.Object) error {
+	return r.createOrUpdateResource(ctx, obj, owner)
+}
+
 func (r *Neo4jEnterpriseClusterReconciler) createOrUpdateResource(ctx context.Context, obj client.Object, owner client.Object) error {
+	logger := log.FromContext(ctx)
+
+	// Initialize metrics
+	conflictMetrics := metrics.NewConflictMetrics()
+	startTime := time.Now()
+
+	// Use retry logic to handle resource version conflicts
+	retryCount := 0
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		if retryCount > 0 {
+			logger.Info("Retrying resource update due to conflict",
+				"resource", fmt.Sprintf("%T", obj),
+				"name", obj.GetName(),
+				"retryCount", retryCount)
+			// Record conflict metric
+			conflictMetrics.RecordConflict(fmt.Sprintf("%T", obj), obj.GetNamespace())
+		}
+		retryCount++
+		return r.createOrUpdateResourceInternal(ctx, obj, owner)
+	})
+
+	// Record metrics if we had conflicts
+	if retryCount > 1 {
+		retryDuration := time.Since(startTime)
+		conflictMetrics.RecordConflictRetry(fmt.Sprintf("%T", obj), obj.GetNamespace(), retryCount-1, retryDuration)
+
+		if err != nil && errors.IsConflict(err) {
+			logger.Error(err, "Failed to update resource after retries due to conflict",
+				"resource", fmt.Sprintf("%T", obj),
+				"name", obj.GetName(),
+				"finalRetryCount", retryCount)
+		} else {
+			logger.Info("Successfully updated resource after conflict resolution",
+				"resource", fmt.Sprintf("%T", obj),
+				"name", obj.GetName(),
+				"totalRetries", retryCount-1,
+				"duration", retryDuration)
+		}
+	}
+
+	return err
+}
+
+// createOrUpdateResourceInternal performs the actual create or update operation
+func (r *Neo4jEnterpriseClusterReconciler) createOrUpdateResourceInternal(ctx context.Context, obj client.Object, owner client.Object) error {
 	// Set owner reference
 	if err := controllerutil.SetControllerReference(owner, obj, r.Scheme); err != nil {
 		return err

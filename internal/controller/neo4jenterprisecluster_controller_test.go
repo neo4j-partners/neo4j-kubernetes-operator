@@ -26,11 +26,15 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1"
+	"github.com/neo4j-labs/neo4j-kubernetes-operator/internal/controller"
 )
 
 var _ = Describe("Neo4jEnterpriseCluster Controller", func() {
@@ -157,3 +161,192 @@ var _ = Describe("Neo4jEnterpriseCluster Controller", func() {
 		})
 	})
 })
+
+// Unit tests for resource version conflict retry logic
+var _ = Describe("Neo4jEnterpriseClusterReconciler Resource Version Conflict Handling", func() {
+	var (
+		ctx        context.Context
+		reconciler *controller.Neo4jEnterpriseClusterReconciler
+		cluster    *neo4jv1alpha1.Neo4jEnterpriseCluster
+		sts        *appsv1.StatefulSet
+	)
+
+	BeforeEach(func() {
+		ctx = context.Background()
+
+		// Create test cluster
+		cluster = &neo4jv1alpha1.Neo4jEnterpriseCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-cluster",
+				Namespace: "default",
+			},
+			Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
+				Image: neo4jv1alpha1.ImageSpec{
+					Repo: "neo4j",
+					Tag:  "5.26-enterprise",
+				},
+				Topology: neo4jv1alpha1.TopologyConfiguration{
+					Primaries:   3,
+					Secondaries: 0,
+				},
+			},
+		}
+
+		// Create test StatefulSet
+		sts = &appsv1.StatefulSet{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-sts",
+				Namespace: "default",
+			},
+			Spec: appsv1.StatefulSetSpec{
+				Replicas: int32Ptr(3),
+				Selector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{"app": "neo4j"},
+				},
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: map[string]string{"app": "neo4j"},
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:  "neo4j",
+								Image: "neo4j:5.26-enterprise",
+							},
+						},
+					},
+				},
+			},
+		}
+	})
+
+	Context("when testing retry logic with mock client", func() {
+		It("should retry on resource version conflicts and eventually succeed", func() {
+			// Create a mock client that fails twice then succeeds
+			mockClient := &mockConflictClient{
+				failCount:      2,
+				currentAttempt: 0,
+			}
+
+			reconciler = &controller.Neo4jEnterpriseClusterReconciler{
+				Client:       mockClient,
+				Scheme:       k8sClient.Scheme(),
+				RequeueAfter: 30 * time.Second,
+			}
+
+			// This should succeed after 2 retries
+			err := reconciler.CreateOrUpdateResource(ctx, sts, cluster)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(mockClient.currentAttempt).To(Equal(3)) // 2 failures + 1 success
+		})
+
+		It("should fail after max retries exceeded", func() {
+			// Create a mock client that always fails
+			mockClient := &mockConflictClient{
+				failCount:      100, // Always fail
+				currentAttempt: 0,
+			}
+
+			reconciler = &controller.Neo4jEnterpriseClusterReconciler{
+				Client:       mockClient,
+				Scheme:       k8sClient.Scheme(),
+				RequeueAfter: 30 * time.Second,
+			}
+
+			// This should fail after max retries
+			err := reconciler.CreateOrUpdateResource(ctx, sts, cluster)
+			Expect(err).To(HaveOccurred())
+			Expect(errors.IsConflict(err)).To(BeTrue())
+			// Default retry count is 5, so should attempt 5 times
+			Expect(mockClient.currentAttempt).To(BeNumerically(">=", 5))
+		})
+	})
+})
+
+// Helper functions and mocks
+
+func int32Ptr(i int32) *int32 {
+	return &i
+}
+
+// mockConflictClient simulates resource version conflicts
+type mockConflictClient struct {
+	failCount      int
+	currentAttempt int
+}
+
+func (m *mockConflictClient) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+	// Return NotFound for first attempt, then return the object for updates
+	if m.currentAttempt == 0 {
+		return errors.NewNotFound(schema.GroupResource{Group: "apps", Resource: "statefulsets"}, key.Name)
+	}
+	// For subsequent attempts, simulate an existing object
+	if sts, ok := obj.(*appsv1.StatefulSet); ok {
+		sts.SetResourceVersion("test-version")
+	}
+	return nil
+}
+
+func (m *mockConflictClient) List(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
+	return nil // Not implemented for this test
+}
+
+func (m *mockConflictClient) Create(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
+	m.currentAttempt++
+	if m.currentAttempt <= m.failCount {
+		return errors.NewConflict(
+			schema.GroupResource{Group: "apps", Resource: "statefulsets"},
+			obj.GetName(),
+			nil,
+		)
+	}
+	return nil // Success
+}
+
+func (m *mockConflictClient) Delete(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
+	return nil // Not implemented for this test
+}
+
+func (m *mockConflictClient) Update(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+	m.currentAttempt++
+	if m.currentAttempt <= m.failCount {
+		return errors.NewConflict(
+			schema.GroupResource{Group: "apps", Resource: "statefulsets"},
+			obj.GetName(),
+			nil,
+		)
+	}
+	return nil // Success
+}
+
+func (m *mockConflictClient) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+	return nil // Not implemented for this test
+}
+
+func (m *mockConflictClient) DeleteAllOf(ctx context.Context, obj client.Object, opts ...client.DeleteAllOfOption) error {
+	return nil // Not implemented for this test
+}
+
+func (m *mockConflictClient) Status() client.StatusWriter {
+	return nil // Not implemented for this test
+}
+
+func (m *mockConflictClient) Scheme() *runtime.Scheme {
+	return k8sClient.Scheme()
+}
+
+func (m *mockConflictClient) RESTMapper() meta.RESTMapper {
+	return nil // Not implemented for this test
+}
+
+func (m *mockConflictClient) SubResource(subResource string) client.SubResourceClient {
+	return nil // Not implemented for this test
+}
+
+func (m *mockConflictClient) GroupVersionKindFor(obj runtime.Object) (schema.GroupVersionKind, error) {
+	return schema.GroupVersionKind{}, nil // Not implemented for this test
+}
+
+func (m *mockConflictClient) IsObjectNamespaced(obj runtime.Object) (bool, error) {
+	return true, nil // Not implemented for this test
+}
