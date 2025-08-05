@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -205,25 +206,18 @@ func (r *Neo4jEnterpriseStandaloneReconciler) reconcileConfigMap(ctx context.Con
 		return fmt.Errorf("failed to set owner reference: %w", err)
 	}
 
-	// Create or update ConfigMap
-	existing := &corev1.ConfigMap{}
-	if err := r.Get(ctx, types.NamespacedName{Name: configMap.Name, Namespace: configMap.Namespace}, existing); err != nil {
-		if errors.IsNotFound(err) {
-			logger.Info("Creating ConfigMap", "name", configMap.Name)
-			if err := r.Create(ctx, configMap); err != nil {
-				return fmt.Errorf("failed to create ConfigMap: %w", err)
-			}
-		} else {
-			return fmt.Errorf("failed to get ConfigMap: %w", err)
-		}
-	} else {
-		// Update existing ConfigMap
-		existing.Data = configMap.Data
-		logger.Info("Updating ConfigMap", "name", configMap.Name)
-		if err := r.Update(ctx, existing); err != nil {
-			return fmt.Errorf("failed to update ConfigMap: %w", err)
-		}
+	// Create or update ConfigMap with retry logic to handle resource version conflicts
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		_, err := controllerutil.CreateOrUpdate(ctx, r.Client, configMap, func() error {
+			// ConfigMap updates for standalone deployments
+			return nil
+		})
+		return err
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create or update ConfigMap: %w", err)
 	}
+	logger.Info("Successfully created or updated ConfigMap", "name", configMap.Name)
 
 	return nil
 }
@@ -240,26 +234,18 @@ func (r *Neo4jEnterpriseStandaloneReconciler) reconcileService(ctx context.Conte
 		return fmt.Errorf("failed to set owner reference: %w", err)
 	}
 
-	// Create or update Service
-	existing := &corev1.Service{}
-	if err := r.Get(ctx, types.NamespacedName{Name: service.Name, Namespace: service.Namespace}, existing); err != nil {
-		if errors.IsNotFound(err) {
-			logger.Info("Creating Service", "name", service.Name)
-			if err := r.Create(ctx, service); err != nil {
-				return fmt.Errorf("failed to create Service: %w", err)
-			}
-		} else {
-			return fmt.Errorf("failed to get Service: %w", err)
-		}
-	} else {
-		// Update existing Service
-		existing.Spec.Ports = service.Spec.Ports
-		existing.Spec.Selector = service.Spec.Selector
-		logger.Info("Updating Service", "name", service.Name)
-		if err := r.Update(ctx, existing); err != nil {
-			return fmt.Errorf("failed to update Service: %w", err)
-		}
+	// Create or update Service with retry logic to handle resource version conflicts
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		_, err := controllerutil.CreateOrUpdate(ctx, r.Client, service, func() error {
+			// Service updates for standalone deployments
+			return nil
+		})
+		return err
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create or update Service: %w", err)
 	}
+	logger.Info("Successfully created or updated Service", "name", service.Name)
 
 	return nil
 }
@@ -276,25 +262,18 @@ func (r *Neo4jEnterpriseStandaloneReconciler) reconcileStatefulSet(ctx context.C
 		return fmt.Errorf("failed to set owner reference: %w", err)
 	}
 
-	// Create or update StatefulSet
-	existing := &appsv1.StatefulSet{}
-	if err := r.Get(ctx, types.NamespacedName{Name: statefulSet.Name, Namespace: statefulSet.Namespace}, existing); err != nil {
-		if errors.IsNotFound(err) {
-			logger.Info("Creating StatefulSet", "name", statefulSet.Name)
-			if err := r.Create(ctx, statefulSet); err != nil {
-				return fmt.Errorf("failed to create StatefulSet: %w", err)
-			}
-		} else {
-			return fmt.Errorf("failed to get StatefulSet: %w", err)
-		}
-	} else {
-		// Update existing StatefulSet
-		existing.Spec = statefulSet.Spec
-		logger.Info("Updating StatefulSet", "name", statefulSet.Name)
-		if err := r.Update(ctx, existing); err != nil {
-			return fmt.Errorf("failed to update StatefulSet: %w", err)
-		}
+	// Create or update StatefulSet with retry logic to handle resource version conflicts
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		_, err := controllerutil.CreateOrUpdate(ctx, r.Client, statefulSet, func() error {
+			// StatefulSet template updates for standalone deployments
+			return nil
+		})
+		return err
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create or update StatefulSet: %w", err)
 	}
+	logger.Info("Successfully created or updated StatefulSet", "name", statefulSet.Name)
 
 	return nil
 }
