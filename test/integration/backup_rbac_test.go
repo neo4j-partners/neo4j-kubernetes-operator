@@ -33,7 +33,7 @@ import (
 
 var _ = Describe("Backup RBAC Automatic Creation", func() {
 	const (
-		timeout  = time.Second * 60
+		timeout  = time.Second * 300 // 5 minutes to account for image pulls in CI
 		interval = time.Second * 2
 	)
 
