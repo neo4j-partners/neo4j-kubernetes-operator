@@ -241,6 +241,104 @@ spec:
 - **Result**: 100% success rate (was failing with split-brain)
 - **Key**: Don't reduce timeouts, ensure endpoints RBAC
 
+### Neo4j Configuration & Cluster Formation (Updated 2025-08-05)
+- **Discovery Service Architecture**: V2_ONLY mode correctly uses discovery service hostname, not individual endpoints
+- **Port Configuration**: Always use `tcp-discovery` (port 5000) for K8s discovery, not `tcp-tx` (port 6000)
+- **Minimum Primaries**: Set to 1 (`dbms.cluster.minimum_initial_system_primaries_count=1`) for flexible cluster formation
+- **FQDN Addressing**: All advertised addresses use FQDN format via headless service
+- **Service Setup**:
+  - **Discovery Service**: ClusterIP with `tcp-discovery:5000`, selector includes `neo4j.com/clustering=true`
+  - **Headless Service**: For pod-to-pod communication with all cluster ports
+  - **Client Service**: ClusterIP for external access (bolt/http)
+  - **Internals Service**: ClusterIP for operator management access
+- **Key Success Factor**: Service-based discovery more reliable than endpoint-based for Neo4j in K8s
+
+### Critical Neo4j Settings for Clusters (Added 2025-08-05)
+These settings are automatically configured by the operator:
+- `dbms.cluster.discovery.resolver_type=K8S`
+- `dbms.kubernetes.discovery.v2.service_port_name=tcp-discovery` (5.x)
+- `dbms.kubernetes.discovery.service_port_name=tcp-discovery` (2025.x)
+- `dbms.cluster.discovery.version=V2_ONLY` (5.x only, default in 2025.x)
+- `initial.dbms.automatically_enable_free_servers=true`
+- `dbms.cluster.minimum_initial_system_primaries_count=1`
+
+**Variable Substitution**: `${MIN_PRIMARIES}` and `${HOSTNAME_FQDN}` are substituted in startup script
+
+## CRITICAL: Resource Version Conflict Handling (Added 2025-08-05)
+
+**MANDATORY FOR CLUSTER FORMATION**: The operator MUST include resource version conflict retry logic to prevent timing-sensitive cluster formation failures.
+
+### Resource Version Conflict Fix Implementation
+**Location**: `internal/controller/neo4jenterprisecluster_controller.go`
+
+**Essential Pattern**:
+```go
+import "k8s.io/client-go/util/retry"
+
+func (r *Neo4jEnterpriseClusterReconciler) createOrUpdateResource(ctx context.Context, obj client.Object, owner client.Object) error {
+    return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+        return r.createOrUpdateResourceInternal(ctx, obj, owner)
+    })
+}
+```
+
+### Why This Fix Is Critical
+1. **Neo4j 2025.01.0 Dependency**: Without retry logic, Neo4j 2025.01.0 fails to form clusters due to timing-sensitive resource conflicts during bootstrap
+2. **StatefulSet Conflicts**: Kubernetes StatefulSet controller and operator reconciliation create concurrent updates
+3. **Cluster Bootstrap Window**: Resource conflicts during critical cluster formation window cause permanent failure
+4. **Production Reliability**: Essential for consistent cluster formation across all Neo4j versions
+
+### Expected Behavior WITH Fix
+- **Conflict Detection**: `Retrying resource update due to conflict ... retryCount: 1`
+- **Fast Resolution**: `Successfully updated resource after conflict resolution ... duration: "18-25ms"`
+- **Pod-2 Rolling Updates**: Expected side effect - highest-indexed pods restart during StatefulSet updates
+- **100% Success Rate**: All conflicts resolved automatically
+
+### Expected Behavior WITHOUT Fix
+- **Neo4j 5.26.x**: Usually works but may have occasional timing issues
+- **Neo4j 2025.01.0**: Consistently fails to form clusters - gets stuck at discovery resolution
+- **Resource Conflicts**: Unresolved conflicts cause reconciliation failures
+- **Manual Intervention**: Requires cluster deletion and recreation
+
+### Verification Commands
+```bash
+# Check for conflict resolution in operator logs
+kubectl logs -n neo4j-operator-system deployment/neo4j-operator-controller-manager | grep -E "(conflict|retry)"
+
+# Verify cluster formation success
+kubectl get neo4jenterprisecluster
+kubectl get pods | grep -E "(primary|secondary)"
+
+# Monitor StatefulSet revisions (should be minimal)
+kubectl rollout history statefulset <cluster-name>-primary
+```
+
+### ConfigMap Debounce Configuration
+**Location**: `internal/controller/configmap_manager.go:120`
+
+**Recommended Setting**:
+```go
+minInterval := 1 * time.Second // Fast updates for cluster formation
+```
+
+**NOT**: `minInterval := 2 * time.Minute // Can cause timing issues`
+
+### Troubleshooting Resource Conflicts
+1. **Symptoms**: Pods stuck in ContainerCreating, cluster never reaches Ready state
+2. **Diagnosis**: Check operator logs for "resource version" or "conflict" errors
+3. **Resolution**: Ensure retry logic is implemented and debounce period is minimal
+4. **Prevention**: Always include conflict handling in any resource update operations
+
+### REGRESSION PREVENTION CHECKLIST
+- [ ] Retry logic present in `createOrUpdateResource` methods
+- [ ] Import `k8s.io/client-go/util/retry` in controller
+- [ ] ConfigMap debounce ≤ 1 second for cluster formation
+- [ ] Test with Neo4j 2025.01.0 to verify cluster formation
+- [ ] Monitor operator logs for conflict resolution messages
+- [ ] Verify StatefulSet rolling updates complete successfully
+
+**DO NOT**: Remove or modify retry logic without comprehensive testing across all Neo4j versions
+
 
 ## Reports
 

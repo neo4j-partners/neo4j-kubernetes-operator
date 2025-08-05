@@ -183,6 +183,36 @@ var (
 		},
 		[]string{LabelClusterName, LabelNamespace, LabelOperation, LabelResult},
 	)
+
+	// Resource version conflict metrics
+	resourceVersionConflicts = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Subsystem: subsystem,
+			Name:      "resource_version_conflicts_total",
+			Help:      "Total number of resource version conflicts encountered",
+		},
+		[]string{"resource_type", LabelNamespace},
+	)
+
+	conflictRetryAttempts = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Subsystem: subsystem,
+			Name:      "conflict_retry_attempts",
+			Help:      "Number of retry attempts needed to resolve resource version conflicts",
+			Buckets:   []float64{1, 2, 3, 4, 5, 10},
+		},
+		[]string{"resource_type", LabelNamespace},
+	)
+
+	conflictRetryDuration = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Subsystem: subsystem,
+			Name:      "conflict_retry_duration_seconds",
+			Help:      "Time spent retrying due to resource version conflicts",
+			Buckets:   []float64{0.01, 0.05, 0.1, 0.5, 1.0, 2.0, 5.0},
+		},
+		[]string{"resource_type", LabelNamespace},
+	)
 )
 
 func init() {
@@ -200,6 +230,10 @@ func init() {
 		cypherTotal,
 		cypherDuration,
 		securityOperationTotal,
+		// Resource version conflict metrics
+		resourceVersionConflicts,
+		conflictRetryAttempts,
+		conflictRetryDuration,
 		// New feature metrics
 		disasterRecoveryStatus,
 		failoverTotal,
@@ -646,4 +680,23 @@ func (m *ManualScalingMetrics) SetManualScalingEnabled(enabled bool) {
 		value = 1
 	}
 	manualScalerEnabled.WithLabelValues(m.clusterName, m.namespace).Set(value)
+}
+
+// ConflictMetrics provides methods for recording resource version conflict metrics
+type ConflictMetrics struct{}
+
+// NewConflictMetrics creates a new ConflictMetrics instance
+func NewConflictMetrics() *ConflictMetrics {
+	return &ConflictMetrics{}
+}
+
+// RecordConflict records a resource version conflict
+func (m *ConflictMetrics) RecordConflict(resourceType, namespace string) {
+	resourceVersionConflicts.WithLabelValues(resourceType, namespace).Inc()
+}
+
+// RecordConflictRetry records retry attempts and duration for conflict resolution
+func (m *ConflictMetrics) RecordConflictRetry(resourceType, namespace string, attempts int, duration time.Duration) {
+	conflictRetryAttempts.WithLabelValues(resourceType, namespace).Observe(float64(attempts))
+	conflictRetryDuration.WithLabelValues(resourceType, namespace).Observe(duration.Seconds())
 }

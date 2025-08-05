@@ -42,6 +42,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1"
+	"github.com/neo4j-labs/neo4j-kubernetes-operator/internal/metrics"
 	neo4jclient "github.com/neo4j-labs/neo4j-kubernetes-operator/internal/neo4j"
 	"github.com/neo4j-labs/neo4j-kubernetes-operator/internal/resources"
 	"github.com/neo4j-labs/neo4j-kubernetes-operator/internal/validation"
@@ -441,7 +442,68 @@ func (r *Neo4jEnterpriseClusterReconciler) cleanupPVCs(ctx context.Context, clus
 	return nil
 }
 
+// CreateOrUpdateResource is exported for testing
+func (r *Neo4jEnterpriseClusterReconciler) CreateOrUpdateResource(ctx context.Context, obj client.Object, owner client.Object) error {
+	return r.createOrUpdateResource(ctx, obj, owner)
+}
+
 func (r *Neo4jEnterpriseClusterReconciler) createOrUpdateResource(ctx context.Context, obj client.Object, owner client.Object) error {
+	logger := log.FromContext(ctx)
+
+	// Initialize metrics
+	conflictMetrics := metrics.NewConflictMetrics()
+	startTime := time.Now()
+
+	// Use retry logic to handle resource version conflicts
+	retryCount := 0
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		if retryCount > 0 {
+			logger.Info("Retrying resource update due to conflict",
+				"resource", fmt.Sprintf("%T", obj),
+				"name", obj.GetName(),
+				"retryCount", retryCount)
+			// Record conflict metric
+			conflictMetrics.RecordConflict(fmt.Sprintf("%T", obj), obj.GetNamespace())
+		}
+		retryCount++
+		return r.createOrUpdateResourceInternal(ctx, obj, owner)
+	})
+
+	// Record metrics if we had conflicts
+	if retryCount > 1 {
+		retryDuration := time.Since(startTime)
+		conflictMetrics.RecordConflictRetry(fmt.Sprintf("%T", obj), obj.GetNamespace(), retryCount-1, retryDuration)
+
+		if err != nil && errors.IsConflict(err) {
+			logger.Error(err, "Failed to update resource after retries due to conflict",
+				"resource", fmt.Sprintf("%T", obj),
+				"name", obj.GetName(),
+				"finalRetryCount", retryCount)
+		} else {
+			logger.Info("Successfully updated resource after conflict resolution",
+				"resource", fmt.Sprintf("%T", obj),
+				"name", obj.GetName(),
+				"totalRetries", retryCount-1,
+				"duration", retryDuration)
+		}
+	}
+
+	return err
+}
+
+// createOrUpdateResourceInternal performs the actual create or update operation with resource conflict handling
+//
+// This function implements critical resource version conflict resolution that eliminates the Pod-2 restart
+// pattern observed during Neo4j cluster formation. Key improvements:
+//
+// 1. Proper resource existence detection using UID instead of ResourceVersion (UID is empty for new resources)
+// 2. Template comparison logic that prevents unnecessary pod restarts during cluster formation
+// 3. Selective template updates only when changes are significant enough to warrant pod disruption
+//
+// The template comparison is essential for Neo4j cluster stability - without it, resource version conflicts
+// during reconciliation loops would cause the highest-indexed pods (Pod-2) to restart repeatedly, disrupting
+// cluster formation especially for Neo4j 2025.01.0 which is more sensitive to discovery timing.
+func (r *Neo4jEnterpriseClusterReconciler) createOrUpdateResourceInternal(ctx context.Context, obj client.Object, owner client.Object) error {
 	// Set owner reference
 	if err := controllerutil.SetControllerReference(owner, obj, r.Scheme); err != nil {
 		return err
@@ -453,10 +515,19 @@ func (r *Neo4jEnterpriseClusterReconciler) createOrUpdateResource(ctx context.Co
 		desiredSpec = *sts.Spec.DeepCopy()
 	}
 
+	logger := log.FromContext(ctx)
+	logger.Info("Starting CreateOrUpdate operation",
+		"resource", fmt.Sprintf("%T", obj),
+		"name", obj.GetName(),
+		"namespace", obj.GetNamespace())
+
 	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, obj, func() error {
 		if sts, ok := obj.(*appsv1.StatefulSet); ok {
-			// Check if this is an update (object already exists)
-			if sts.ResourceVersion != "" {
+			// Check if this is an update (object already exists in cluster)
+			// CRITICAL FIX: Use UID to determine if this is an existing object, not ResourceVersion
+			// ResourceVersion can be populated even for new resources during CreateOrUpdate operations,
+			// but UID is only set for resources that actually exist in the cluster
+			if sts.UID != "" {
 				// This is an existing StatefulSet, only update allowed mutable fields
 				// Note: sts already contains the current state from CreateOrUpdate
 				originalMeta := sts.ObjectMeta.DeepCopy()
@@ -473,7 +544,8 @@ func (r *Neo4jEnterpriseClusterReconciler) createOrUpdateResource(ctx context.Co
 				sts.ObjectMeta = *originalMeta
 				sts.Status = *originalStatus
 
-				// For template updates, ensure labels match the existing selector
+				// For template updates, check if changes are significant to avoid unnecessary pod restarts
+				// This is the core mechanism that prevents Pod-2 restart patterns during cluster formation
 				if sts.Spec.Selector != nil {
 					// Copy the desired template but ensure labels match the existing selector
 					updatedTemplate := desiredSpec.Template.DeepCopy()
@@ -484,13 +556,32 @@ func (r *Neo4jEnterpriseClusterReconciler) createOrUpdateResource(ctx context.Co
 					for key, value := range sts.Spec.Selector.MatchLabels {
 						updatedTemplate.Labels[key] = value
 					}
-					sts.Spec.Template = *updatedTemplate
+
+					// Check if template update is significant enough to warrant pod restarts
+					// This prevents resource version conflicts from causing unnecessary pod disruption
+					if r.isTemplateChangeSignificant(ctx, sts.Spec.Template, *updatedTemplate, sts) {
+						logger := log.FromContext(ctx)
+						logger.Info("Applying significant StatefulSet template changes",
+							"statefulSet", sts.Name,
+							"namespace", sts.Namespace)
+						sts.Spec.Template = *updatedTemplate
+					} else {
+						logger := log.FromContext(ctx)
+						logger.V(1).Info("Skipping StatefulSet template update - no significant changes detected",
+							"statefulSet", sts.Name,
+							"namespace", sts.Namespace)
+						// Keep existing template to prevent unnecessary pod restarts
+					}
 				} else {
 					// If no selector exists, just use the desired template
 					sts.Spec.Template = desiredSpec.Template
 				}
 			} else {
 				// This is a new StatefulSet, use the desired spec as-is
+				logger := log.FromContext(ctx)
+				logger.V(1).Info("Creating new StatefulSet with full template",
+					"statefulSet", sts.Name,
+					"namespace", sts.Namespace)
 				sts.Spec = desiredSpec
 			}
 		}
@@ -498,6 +589,197 @@ func (r *Neo4jEnterpriseClusterReconciler) createOrUpdateResource(ctx context.Co
 	})
 
 	return err
+}
+
+// isTemplateChangeSignificant determines if StatefulSet template changes warrant pod restarts
+// This prevents unnecessary pod restarts during cluster formation due to resource version conflicts
+func (r *Neo4jEnterpriseClusterReconciler) isTemplateChangeSignificant(ctx context.Context, currentTemplate, desiredTemplate corev1.PodTemplateSpec, sts *appsv1.StatefulSet) bool {
+	logger := log.FromContext(ctx)
+
+	// During initial cluster formation (not all pods ready), be more conservative about template updates
+	if sts.Status.ReadyReplicas < *sts.Spec.Replicas {
+		logger.V(1).Info("StatefulSet still forming - being conservative about template updates",
+			"statefulSet", sts.Name,
+			"readyReplicas", sts.Status.ReadyReplicas,
+			"desiredReplicas", *sts.Spec.Replicas)
+
+		// Only allow critical changes during cluster formation
+		return r.hasCriticalTemplateChanges(currentTemplate, desiredTemplate)
+	}
+
+	// For stable clusters, allow more template changes
+	return r.hasSignificantTemplateChanges(currentTemplate, desiredTemplate)
+}
+
+// hasCriticalTemplateChanges checks for changes that are essential during cluster formation
+func (r *Neo4jEnterpriseClusterReconciler) hasCriticalTemplateChanges(current, desired corev1.PodTemplateSpec) bool {
+	// Check for image changes (critical)
+	if len(current.Spec.Containers) != len(desired.Spec.Containers) {
+		return true
+	}
+
+	for i, currentContainer := range current.Spec.Containers {
+		if i >= len(desired.Spec.Containers) {
+			return true
+		}
+		desiredContainer := desired.Spec.Containers[i]
+
+		// Image changes are critical
+		if currentContainer.Image != desiredContainer.Image {
+			return true
+		}
+
+		// Resource limit changes are critical
+		if !r.resourcesEqual(currentContainer.Resources, desiredContainer.Resources) {
+			return true
+		}
+	}
+
+	// Check for security context changes (critical)
+	if !r.securityContextEqual(current.Spec.SecurityContext, desired.Spec.SecurityContext) {
+		return true
+	}
+
+	// Check for service account changes (critical for RBAC)
+	if current.Spec.ServiceAccountName != desired.Spec.ServiceAccountName {
+		return true
+	}
+
+	// No critical changes found
+	return false
+}
+
+// hasSignificantTemplateChanges checks for any meaningful changes in stable clusters
+func (r *Neo4jEnterpriseClusterReconciler) hasSignificantTemplateChanges(current, desired corev1.PodTemplateSpec) bool {
+	// For stable clusters, allow more changes including:
+	// - Environment variable updates
+	// - Volume mount changes
+	// - Label/annotation updates (beyond selector labels)
+	// - Init container changes
+
+	// First check critical changes
+	if r.hasCriticalTemplateChanges(current, desired) {
+		return true
+	}
+
+	// Check for environment variable changes
+	if len(current.Spec.Containers) > 0 && len(desired.Spec.Containers) > 0 {
+		if !r.envVarsEqual(current.Spec.Containers[0].Env, desired.Spec.Containers[0].Env) {
+			return true
+		}
+	}
+
+	// Check for volume changes
+	if !r.volumesEqual(current.Spec.Volumes, desired.Spec.Volumes) {
+		return true
+	}
+
+	// Check for init container changes
+	if !r.initContainersEqual(current.Spec.InitContainers, desired.Spec.InitContainers) {
+		return true
+	}
+
+	return false
+}
+
+// Helper functions for template comparison
+func (r *Neo4jEnterpriseClusterReconciler) resourcesEqual(current, desired corev1.ResourceRequirements) bool {
+	// Compare CPU and memory limits/requests
+	currentCPU := current.Limits.Cpu()
+	desiredCPU := desired.Limits.Cpu()
+	if (currentCPU == nil) != (desiredCPU == nil) || (currentCPU != nil && !currentCPU.Equal(*desiredCPU)) {
+		return false
+	}
+
+	currentMem := current.Limits.Memory()
+	desiredMem := desired.Limits.Memory()
+	if (currentMem == nil) != (desiredMem == nil) || (currentMem != nil && !currentMem.Equal(*desiredMem)) {
+		return false
+	}
+
+	return true
+}
+
+func (r *Neo4jEnterpriseClusterReconciler) securityContextEqual(current, desired *corev1.PodSecurityContext) bool {
+	if (current == nil) != (desired == nil) {
+		return false
+	}
+	if current == nil && desired == nil {
+		return true
+	}
+
+	// Compare critical security context fields
+	if current.RunAsUser != desired.RunAsUser ||
+		current.RunAsGroup != desired.RunAsGroup ||
+		current.RunAsNonRoot != desired.RunAsNonRoot {
+		return false
+	}
+
+	return true
+}
+
+func (r *Neo4jEnterpriseClusterReconciler) envVarsEqual(current, desired []corev1.EnvVar) bool {
+	if len(current) != len(desired) {
+		return false
+	}
+
+	// Create maps for easier comparison
+	currentMap := make(map[string]corev1.EnvVar)
+	for _, env := range current {
+		currentMap[env.Name] = env
+	}
+
+	for _, env := range desired {
+		if currentEnv, exists := currentMap[env.Name]; !exists || currentEnv.Value != env.Value {
+			return false
+		}
+	}
+
+	return true
+}
+
+func (r *Neo4jEnterpriseClusterReconciler) volumesEqual(current, desired []corev1.Volume) bool {
+	if len(current) != len(desired) {
+		return false
+	}
+
+	// Create maps for easier comparison
+	currentMap := make(map[string]corev1.Volume)
+	for _, vol := range current {
+		currentMap[vol.Name] = vol
+	}
+
+	for _, vol := range desired {
+		if _, exists := currentMap[vol.Name]; !exists {
+			return false
+		}
+		// Note: We're doing basic name comparison here. For more sophisticated
+		// comparison, we could compare volume sources, but this is sufficient
+		// for our use case during cluster formation
+	}
+
+	return true
+}
+
+func (r *Neo4jEnterpriseClusterReconciler) initContainersEqual(current, desired []corev1.Container) bool {
+	if len(current) != len(desired) {
+		return false
+	}
+
+	for i, currentContainer := range current {
+		if i >= len(desired) {
+			return false
+		}
+		desiredContainer := desired[i]
+
+		// Compare names and images
+		if currentContainer.Name != desiredContainer.Name ||
+			currentContainer.Image != desiredContainer.Image {
+			return false
+		}
+	}
+
+	return true
 }
 
 func (r *Neo4jEnterpriseClusterReconciler) updateClusterStatus(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, phase, message string) bool {

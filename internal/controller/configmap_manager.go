@@ -117,7 +117,7 @@ func (cm *ConfigMapManager) ReconcileConfigMap(ctx context.Context, cluster *neo
 		lastUpdate, exists := cm.lastUpdateTime[clusterKey]
 		cm.mu.RUnlock()
 
-		minInterval := 2 * time.Minute // Minimum 2 minutes between updates
+		minInterval := 1 * time.Second // Disable debounce for testing
 		if exists && time.Since(lastUpdate) < minInterval {
 			logger.Info("Skipping ConfigMap update due to debounce period",
 				"cluster", cluster.Name,
