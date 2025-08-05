@@ -349,9 +349,10 @@ minInterval := 1 * time.Second // Fast updates for cluster formation
 
 ### Integration Test Configuration
 - **Timeouts**: All integration tests use 300-second timeout for CI compatibility
-- **Resources**: Minimal CPU (50m-200m) and memory (256Mi-512Mi) for CI constraints
+- **Resources**: Minimal CPU (50m-200m), memory limits at 1Gi (Neo4j Enterprise minimum requirement)
 - **Storage**: Reduced storage sizes (500Mi-1Gi) to avoid PVC scheduling issues
 - **Image Pull**: Tests account for image pull delays in CI environments
+- **Memory Validation**: Neo4j Enterprise validates minimum 1Gi memory at startup
 
 ### Template Comparison Fix (Critical)
 **Issue**: Original logic used `sts.ResourceVersion != ""` to check if StatefulSet exists
@@ -369,7 +370,7 @@ minInterval := 1 * time.Second // Fast updates for cluster formation
 1. **Resource Conflicts**: Always use `retry.RetryOnConflict` with `controllerutil.CreateOrUpdate`
 2. **Template Comparison**: Use `UID != ""` to check resource existence, not `ResourceVersion != ""`
 3. **Test Timeouts**: Use 300-second timeout for all integration tests
-4. **Resource Requirements**: Keep CPU ≤ 200m and memory ≤ 512Mi for CI compatibility
+4. **Resource Requirements**: Keep CPU ≤ 200m, memory limits must be ≥ 1Gi for Neo4j Enterprise
 5. **Cluster Formation**: Verify using `SHOW SERVERS` command, not just status checks
 
 ## Reports
