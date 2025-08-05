@@ -133,6 +133,12 @@ make webhook-test
 - Webhooks require cert-manager
 - Use envtest for controller unit tests
 - Neo4j client uses Bolt protocol
+- Integration tests use 300-second timeouts for CI compatibility
+
+**Test Troubleshooting**:
+- If tests timeout: Check image pull delays in CI - tests use 5-minute timeout
+- If pod scheduling fails: Check resource constraints - tests use minimal CPU/memory
+- If cluster formation fails: Check discovery service and endpoints RBAC permissions
 
 ### Development Environment
 
@@ -339,6 +345,32 @@ minInterval := 1 * time.Second // Fast updates for cluster formation
 
 **DO NOT**: Remove or modify retry logic without comprehensive testing across all Neo4j versions
 
+## Configuration Validation
+
+### Integration Test Configuration
+- **Timeouts**: All integration tests use 300-second timeout for CI compatibility
+- **Resources**: Minimal CPU (50m-200m) and memory (256Mi-512Mi) for CI constraints
+- **Storage**: Reduced storage sizes (500Mi-1Gi) to avoid PVC scheduling issues
+- **Image Pull**: Tests account for image pull delays in CI environments
+
+### Template Comparison Fix (Critical)
+**Issue**: Original logic used `sts.ResourceVersion != ""` to check if StatefulSet exists
+**Problem**: ResourceVersion is populated even for new resources, preventing initial creation
+**Solution**: Use `sts.UID != ""` which correctly identifies existing vs new resources
+**Impact**: Enables immediate StatefulSet creation instead of being blocked by template comparison
+
+### CI Environment Considerations
+- **Resource Limits**: GitHub Actions runners have limited CPU/memory
+- **Storage Classes**: Use 'standard' storage class for compatibility
+- **Pod Scheduling**: Avoid resource requests that exceed node capacity
+- **Network Policies**: Ensure cert-manager can issue certificates
+
+### Regression Prevention Checklist
+1. **Resource Conflicts**: Always use `retry.RetryOnConflict` with `controllerutil.CreateOrUpdate`
+2. **Template Comparison**: Use `UID != ""` to check resource existence, not `ResourceVersion != ""`
+3. **Test Timeouts**: Use 300-second timeout for all integration tests
+4. **Resource Requirements**: Keep CPU ≤ 200m and memory ≤ 512Mi for CI compatibility
+5. **Cluster Formation**: Verify using `SHOW SERVERS` command, not just status checks
 
 ## Reports
 
