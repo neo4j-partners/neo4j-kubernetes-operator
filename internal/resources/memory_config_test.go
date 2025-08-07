@@ -358,19 +358,19 @@ func TestMemoryConfigConstraints(t *testing.T) {
 func TestMemoryConfigForDifferentTopologies(t *testing.T) {
 	tests := []struct {
 		name         string
-		primaries    int32
+		servers      int32
 		memoryLimit  string
 		expectedHeap string
 	}{
 		{
-			name:         "single node",
-			primaries:    1,
+			name:         "small cluster",
+			servers:      2,
 			memoryLimit:  "4Gi",
 			expectedHeap: "2G",
 		},
 		{
-			name:         "multi node cluster",
-			primaries:    3,
+			name:         "multi server cluster",
+			servers:      5,
 			memoryLimit:  "4Gi",
 			expectedHeap: "2G",
 		},
@@ -384,7 +384,7 @@ func TestMemoryConfigForDifferentTopologies(t *testing.T) {
 				},
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Primaries: tt.primaries,
+						Servers: tt.servers,
 					},
 					Resources: &corev1.ResourceRequirements{
 						Limits: corev1.ResourceList{

@@ -174,16 +174,16 @@ func (v *MemoryValidator) validateMemoryAllocation(cluster *neo4jv1alpha1.Neo4jE
 	}
 
 	// Check if memory is sufficient for cluster size
-	totalNodes := cluster.Spec.Topology.Primaries + cluster.Spec.Topology.Secondaries
-	if totalNodes > 3 {
+	totalServers := cluster.Spec.Topology.Servers
+	if totalServers > 3 {
 		// For larger clusters (>3 nodes), require at least 2GB per node for basic operation
 		minMemoryForClusterSize := int64(2 * 1024 * 1024 * 1024) // 2GB minimum for larger clusters
 		if containerMemoryBytes < minMemoryForClusterSize {
 			allErrs = append(allErrs, field.Invalid(
 				field.NewPath("spec", "resources", "limits", "memory"),
 				v.formatMemorySize(containerMemoryBytes),
-				fmt.Sprintf("insufficient memory for cluster size (%d nodes). Current: %s, Required minimum: %s",
-					totalNodes, v.formatMemorySize(containerMemoryBytes), v.formatMemorySize(minMemoryForClusterSize)),
+				fmt.Sprintf("insufficient memory for cluster size (%d servers). Current: %s, Required minimum: %s",
+					totalServers, v.formatMemorySize(containerMemoryBytes), v.formatMemorySize(minMemoryForClusterSize)),
 			))
 		}
 	}

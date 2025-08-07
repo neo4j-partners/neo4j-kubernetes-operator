@@ -1,5 +1,6 @@
 # NodePort Service Example for Neo4j Enterprise Cluster
 # This example shows how to expose a Neo4j cluster using NodePort services
+# Uses server-based architecture with 4 servers that self-organize
 # Suitable for on-premises or development environments
 
 apiVersion: v1
@@ -25,8 +26,7 @@ spec:
     pullPolicy: IfNotPresent
 
   topology:
-    primaries: 3
-    secondaries: 1
+    servers: 4        # Four servers for flexible database topologies
 
   storage:
     className: standard

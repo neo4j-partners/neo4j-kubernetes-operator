@@ -40,8 +40,7 @@ func TestMemoryValidator_Validate(t *testing.T) {
 			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Primaries:   3,
-						Secondaries: 0,
+						Servers: 3,
 					},
 					Resources: &corev1.ResourceRequirements{
 						Limits: corev1.ResourceList{
@@ -61,8 +60,7 @@ func TestMemoryValidator_Validate(t *testing.T) {
 			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Primaries:   3,
-						Secondaries: 0,
+						Servers: 3,
 					},
 					Resources: &corev1.ResourceRequirements{
 						Limits: corev1.ResourceList{
@@ -83,8 +81,7 @@ func TestMemoryValidator_Validate(t *testing.T) {
 			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Primaries:   5,
-						Secondaries: 2,
+						Servers: 7, // 5 + 2
 					},
 					Resources: &corev1.ResourceRequirements{
 						Limits: corev1.ResourceList{
@@ -101,8 +98,7 @@ func TestMemoryValidator_Validate(t *testing.T) {
 			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Primaries:   3,
-						Secondaries: 0,
+						Servers: 3,
 					},
 					Resources: &corev1.ResourceRequirements{
 						Limits: corev1.ResourceList{
@@ -122,8 +118,7 @@ func TestMemoryValidator_Validate(t *testing.T) {
 			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Primaries:   1,
-						Secondaries: 0,
+						Servers: 1, // Invalid - needs at least 2
 					},
 				},
 			},

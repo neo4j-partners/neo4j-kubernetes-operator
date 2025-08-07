@@ -184,13 +184,13 @@ func (v *ClusterValidator) validateClusterUpdate(ctx context.Context, oldCluster
 		allErrs = append(allErrs, v.resourceValidator.ValidateScaling(ctx, newCluster, newCluster.Spec.Topology)...)
 	}
 
-	// Prevent downgrading primary count below 1
-	if newCluster.Spec.Topology.Primaries < oldCluster.Spec.Topology.Primaries {
-		if newCluster.Spec.Topology.Primaries < 1 {
+	// Prevent downgrading server count below minimum
+	if newCluster.Spec.Topology.Servers < oldCluster.Spec.Topology.Servers {
+		if newCluster.Spec.Topology.Servers < 2 {
 			allErrs = append(allErrs, field.Invalid(
-				field.NewPath("spec", "topology", "primaries"),
-				newCluster.Spec.Topology.Primaries,
-				"cannot reduce primaries below 1",
+				field.NewPath("spec", "topology", "servers"),
+				newCluster.Spec.Topology.Servers,
+				"cannot reduce servers below 2",
 			))
 		}
 	}
@@ -210,11 +210,9 @@ func (v *ClusterValidator) validateClusterUpdate(ctx context.Context, oldCluster
 	return allErrs
 }
 
-// isScalingUp checks if the cluster is scaling up (increasing pod count)
+// isScalingUp checks if the cluster is scaling up (increasing server count)
 func (v *ClusterValidator) isScalingUp(oldCluster, newCluster *neo4jv1alpha1.Neo4jEnterpriseCluster) bool {
-	oldTotalPods := oldCluster.Spec.Topology.Primaries + oldCluster.Spec.Topology.Secondaries
-	newTotalPods := newCluster.Spec.Topology.Primaries + newCluster.Spec.Topology.Secondaries
-	return newTotalPods > oldTotalPods
+	return newCluster.Spec.Topology.Servers > oldCluster.Spec.Topology.Servers
 }
 
 // ValidateCreateWithWarnings validates a Neo4jEnterpriseCluster for creation and returns warnings

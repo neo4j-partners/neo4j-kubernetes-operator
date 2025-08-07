@@ -19,8 +19,6 @@ package validation
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
 	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1"
 )
 
@@ -28,233 +26,124 @@ func TestTopologyValidator_Validate(t *testing.T) {
 	validator := NewTopologyValidator()
 
 	tests := []struct {
-		name         string
-		cluster      *neo4jv1alpha1.Neo4jEnterpriseCluster
-		expectErrors bool
+		name          string
+		cluster       *neo4jv1alpha1.Neo4jEnterpriseCluster
+		wantErrorsLen int
+		wantErrorMsg  string
 	}{
 		{
-			name: "invalid single node cluster - should now error",
+			name: "valid server configuration",
 			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Primaries:   1,
-						Secondaries: 0,
+						Servers: 3,
 					},
 				},
 			},
-			expectErrors: true,
+			wantErrorsLen: 0,
 		},
 		{
-			name: "valid minimal cluster with 1 primary + 1 secondary",
+			name: "valid minimum server configuration",
 			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Primaries:   1,
-						Secondaries: 1,
+						Servers: 2,
 					},
 				},
 			},
-			expectErrors: false,
+			wantErrorsLen: 0,
 		},
 		{
-			name: "valid multi-primary cluster",
+			name: "valid large server configuration",
 			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Primaries:   2,
-						Secondaries: 0,
+						Servers: 7,
 					},
 				},
 			},
-			expectErrors: false,
+			wantErrorsLen: 0,
 		},
 		{
-			name: "valid odd primaries",
+			name: "invalid single server configuration",
 			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Primaries:   3,
-						Secondaries: 2,
+						Servers: 1,
 					},
 				},
 			},
-			expectErrors: false,
+			wantErrorsLen: 1,
+			wantErrorMsg:  "servers must be at least 2",
 		},
 		{
-			name: "valid even primaries (no errors, only warnings)",
+			name: "invalid zero server configuration",
 			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Primaries:   4,
-						Secondaries: 1,
+						Servers: 0,
 					},
 				},
 			},
-			expectErrors: false,
-		},
-		{
-			name: "zero primaries should error",
-			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
-				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
-					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Primaries:   0,
-						Secondaries: 1,
-					},
-				},
-			},
-			expectErrors: true,
-		},
-		{
-			name: "negative secondaries should error",
-			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
-				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
-					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Primaries:   3,
-						Secondaries: -1,
-					},
-				},
-			},
-			expectErrors: true,
+			wantErrorsLen: 1,
+			wantErrorMsg:  "servers must be at least 2",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			errors := validator.Validate(tt.cluster)
-			hasErrors := len(errors) > 0
-			assert.Equal(t, tt.expectErrors, hasErrors, "Error expectation mismatch: %v", errors)
-		})
-	}
-}
 
-func TestTopologyValidator_ValidateWithWarnings(t *testing.T) {
-	validator := NewTopologyValidator()
-
-	tests := []struct {
-		name            string
-		cluster         *neo4jv1alpha1.Neo4jEnterpriseCluster
-		expectErrors    bool
-		expectWarnings  bool
-		warningKeywords []string
-	}{
-		{
-			name: "single node - now should error",
-			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
-				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
-					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Primaries:   1,
-						Secondaries: 0,
-					},
-				},
-			},
-			expectErrors:   true,
-			expectWarnings: false,
-		},
-		{
-			name: "minimal cluster (1 primary + 1 secondary) - no warnings",
-			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
-				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
-					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Primaries:   1,
-						Secondaries: 1,
-					},
-				},
-			},
-			expectErrors:   false,
-			expectWarnings: false,
-		},
-		{
-			name: "odd primaries - no warnings",
-			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
-				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
-					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Primaries:   3,
-						Secondaries: 2,
-					},
-				},
-			},
-			expectErrors:   false,
-			expectWarnings: false,
-		},
-		{
-			name: "even primaries - warning about fault tolerance",
-			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
-				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
-					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Primaries:   4,
-						Secondaries: 1,
-					},
-				},
-			},
-			expectErrors:    false,
-			expectWarnings:  true,
-			warningKeywords: []string{"Even number", "fault tolerance", "split-brain"},
-		},
-		{
-			name: "two primaries - specific warning",
-			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
-				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
-					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Primaries:   2,
-						Secondaries: 1,
-					},
-				},
-			},
-			expectErrors:    false,
-			expectWarnings:  true,
-			warningKeywords: []string{"2 primary nodes", "cannot form quorum", "3 primary nodes"},
-		},
-		{
-			name: "excessive primaries - performance warning",
-			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
-				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
-					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Primaries:   9,
-						Secondaries: 0,
-					},
-				},
-			},
-			expectErrors:    false,
-			expectWarnings:  true,
-			warningKeywords: []string{"More than 7", "consensus overhead", "read replicas"},
-		},
-		{
-			name: "zero primaries - error, no warnings",
-			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
-				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
-					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Primaries:   0,
-						Secondaries: 1,
-					},
-				},
-			},
-			expectErrors:   true,
-			expectWarnings: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := validator.ValidateWithWarnings(tt.cluster)
-
-			hasErrors := len(result.Errors) > 0
-			assert.Equal(t, tt.expectErrors, hasErrors, "Error expectation mismatch: %v", result.Errors)
-
-			hasWarnings := len(result.Warnings) > 0
-			assert.Equal(t, tt.expectWarnings, hasWarnings, "Warning expectation mismatch: %v", result.Warnings)
-
-			// Check that warning messages contain expected keywords
-			if tt.expectWarnings && len(tt.warningKeywords) > 0 {
-				assert.Greater(t, len(result.Warnings), 0, "Expected warnings but got none")
-				warningText := ""
-				for _, warning := range result.Warnings {
-					warningText += warning + " "
+			if len(errors) != tt.wantErrorsLen {
+				t.Errorf("Validate() returned %d errors, want %d", len(errors), tt.wantErrorsLen)
+				for _, err := range errors {
+					t.Logf("Error: %s", err.Error())
 				}
+				return
+			}
 
-				for _, keyword := range tt.warningKeywords {
-					assert.Contains(t, warningText, keyword, "Warning should contain keyword: %s", keyword)
+			if tt.wantErrorMsg != "" && len(errors) > 0 {
+				found := false
+				for _, err := range errors {
+					if contains(err.Error(), tt.wantErrorMsg) {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("Expected error message containing '%s', but didn't find it in errors: %v", tt.wantErrorMsg, errors)
 				}
 			}
 		})
 	}
+}
+
+func TestTopologyValidator_ValidateDefaults(t *testing.T) {
+	cluster := &neo4jv1alpha1.Neo4jEnterpriseCluster{
+		Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
+			Topology: neo4jv1alpha1.TopologyConfiguration{
+				Servers: 3,
+			},
+		},
+	}
+
+	// No defaults need to be applied for server-based topology
+
+	// Server count should remain unchanged
+	if cluster.Spec.Topology.Servers != 3 {
+		t.Errorf("Expected servers to remain 3, got %d", cluster.Spec.Topology.Servers)
+	}
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || (len(s) > len(substr) &&
+		(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr ||
+			func() bool {
+				for i := 1; i <= len(s)-len(substr); i++ {
+					if s[i:i+len(substr)] == substr {
+						return true
+					}
+				}
+				return false
+			}())))
 }

@@ -87,17 +87,13 @@ const (
 	CertManagerMode = "cert-manager"
 )
 
-// BuildPrimaryStatefulSetForEnterprise creates a StatefulSet for Neo4j primary nodes
-func BuildPrimaryStatefulSetForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) *appsv1.StatefulSet {
-	return buildStatefulSetForEnterprise(cluster, "primary", cluster.Spec.Topology.Primaries)
+// BuildServerStatefulSetForEnterprise creates a StatefulSet for Neo4j servers
+// Servers self-organize and can host databases in primary or secondary mode
+func BuildServerStatefulSetForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) *appsv1.StatefulSet {
+	return buildStatefulSetForEnterprise(cluster, "server", cluster.Spec.Topology.Servers)
 }
 
-// BuildSecondaryStatefulSetForEnterprise creates a StatefulSet for Neo4j secondary nodes
-func BuildSecondaryStatefulSetForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) *appsv1.StatefulSet {
-	return buildStatefulSetForEnterprise(cluster, "secondary", cluster.Spec.Topology.Secondaries)
-}
-
-// buildStatefulSetForEnterprise is a helper function to create StatefulSets for both primary and secondary nodes
+// buildStatefulSetForEnterprise is a helper function to create StatefulSet for Neo4j servers
 func buildStatefulSetForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, role string, replicas int32) *appsv1.StatefulSet {
 	adminSecret := DefaultAdminSecret
 
@@ -106,7 +102,6 @@ func buildStatefulSetForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster
 		Type: appsv1.RollingUpdateStatefulSetStrategyType,
 		RollingUpdate: &appsv1.RollingUpdateStatefulSetStrategy{
 			// Start with maxUnavailable = 0 to prevent concurrent updates
-			// Secondaries can be updated more aggressively, but we use the same strategy for simplicity
 			Partition: nil, // Will be set during rolling upgrade orchestration
 		},
 	}
@@ -469,25 +464,9 @@ func BuildCertificateForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster
 		fmt.Sprintf("%s-headless.%s.svc.cluster.local", cluster.Name, cluster.Namespace),
 	}
 
-	// Add individual StatefulSet pods
-	for i := int32(0); i < cluster.Spec.Topology.Primaries; i++ {
-		podName := fmt.Sprintf("%s-primary-%d", cluster.Name, i)
-		dnsNames = append(dnsNames,
-			podName,
-			fmt.Sprintf("%s.%s-internals", podName, cluster.Name),
-			fmt.Sprintf("%s.%s-internals.%s", podName, cluster.Name, cluster.Namespace),
-			fmt.Sprintf("%s.%s-internals.%s.svc", podName, cluster.Name, cluster.Namespace),
-			fmt.Sprintf("%s.%s-internals.%s.svc.cluster.local", podName, cluster.Name, cluster.Namespace),
-			// Add headless service DNS names for pod
-			fmt.Sprintf("%s.%s-headless", podName, cluster.Name),
-			fmt.Sprintf("%s.%s-headless.%s", podName, cluster.Name, cluster.Namespace),
-			fmt.Sprintf("%s.%s-headless.%s.svc", podName, cluster.Name, cluster.Namespace),
-			fmt.Sprintf("%s.%s-headless.%s.svc.cluster.local", podName, cluster.Name, cluster.Namespace),
-		)
-	}
-
-	for i := int32(0); i < cluster.Spec.Topology.Secondaries; i++ {
-		podName := fmt.Sprintf("%s-secondary-%d", cluster.Name, i)
+	// Add individual StatefulSet pods (servers)
+	for i := int32(0); i < cluster.Spec.Topology.Servers; i++ {
+		podName := fmt.Sprintf("%s-server-%d", cluster.Name, i)
 		dnsNames = append(dnsNames,
 			podName,
 			fmt.Sprintf("%s.%s-internals", podName, cluster.Name),
@@ -1456,29 +1435,26 @@ server.cluster.raft.advertised_address=${HOSTNAME_FQDN}:7000
 EOF
 
 # Cluster configuration based on topology
-TOTAL_PRIMARIES=` + fmt.Sprintf("%d", cluster.Spec.Topology.Primaries) + `
-TOTAL_SECONDARIES=` + fmt.Sprintf("%d", cluster.Spec.Topology.Secondaries) + `
+TOTAL_SERVERS=` + fmt.Sprintf("%d", cluster.Spec.Topology.Servers) + `
 
-echo "Cluster topology: ${TOTAL_PRIMARIES} primaries, ${TOTAL_SECONDARIES} secondaries"
+echo "Cluster topology: ${TOTAL_SERVERS} servers"
 echo "Pod ordinal: ${POD_ORDINAL}"
 
-# Neo4jEnterpriseCluster always uses multi-node clustering
-# Minimum topology: 1 primary + 1 secondary OR 2+ primaries
-echo "Multi-node cluster: using Kubernetes discovery with pod sequencing"
+# Neo4jEnterpriseCluster uses server-based clustering
+# Minimum: 2 servers (servers self-organize for database hosting)
+echo "Multi-server cluster: using Kubernetes discovery"
 
-# Use Kubernetes service discovery with label selectors (correct approach)
+# Use Kubernetes service discovery with label selectors
 echo "Configuring Kubernetes service discovery with label selectors"
 
 # Unified approach: Use bootstrap discovery with timeout for cluster formation
 echo "Using unified bootstrap discovery approach for cluster formation"
 
-# Set minimum primaries to 1 to allow flexible cluster formation
-# With Parallel pod management, all pods (primaries and secondaries) start simultaneously
-# First pod forms cluster, others join it
+# Set minimum servers for proper cluster formation
+# With Parallel pod management, all server pods start simultaneously
+# All servers coordinate to establish primary/secondary roles automatically
 # This works reliably even with TLS enabled due to trust_all=true in cluster SSL policy
-MIN_PRIMARIES=1
-
-echo "Setting minimum primaries for bootstrap: ${MIN_PRIMARIES}"
+# Servers self-organize, use fixed minimum of 1 for bootstrap
 
 # All pods use identical configuration for coordinated cluster formation
 cat >> /tmp/neo4j-config/neo4j.conf << EOF
@@ -1488,10 +1464,9 @@ dbms.cluster.discovery.resolver_type=K8S
 dbms.kubernetes.label_selector=neo4j.com/cluster=` + cluster.Name + `,neo4j.com/clustering=true
 ` + kubernetesDiscoveryParam + `
 
-# Unified cluster formation - use minimum required for bootstrap, grow to target
-dbms.cluster.minimum_initial_system_primaries_count=${MIN_PRIMARIES}
-initial.dbms.default_primaries_count=` + fmt.Sprintf("%d", cluster.Spec.Topology.Primaries) + `
-initial.dbms.default_secondaries_count=` + fmt.Sprintf("%d", cluster.Spec.Topology.Secondaries) + `
+# Cluster formation - minimum servers always 1 for bootstrap
+# Servers self-organize into primary/secondary roles, don't pre-assign roles
+dbms.cluster.minimum_initial_system_primaries_count=1
 initial.dbms.automatically_enable_free_servers=true
 
 # Cluster formation optimization
@@ -1500,6 +1475,8 @@ dbms.cluster.raft.membership.join_timeout=10m
 dbms.routing.default_router=SERVER
 EOF
 
+# Add server mode constraint if specified
+` + buildServerModeConstraintConfig(cluster) + `
 
 # Set NEO4J config directory
 export NEO4J_CONF=/tmp/neo4j-config
@@ -1507,6 +1484,20 @@ export NEO4J_CONF=/tmp/neo4j-config
 # Start Neo4j
 exec /startup/docker-entrypoint.sh neo4j
 `
+}
+
+// buildServerModeConstraintConfig generates server mode constraint configuration
+func buildServerModeConstraintConfig(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) string {
+	if cluster.Spec.Topology.ServerModeConstraint != "" && cluster.Spec.Topology.ServerModeConstraint != "NONE" {
+		return fmt.Sprintf(`
+# Server mode constraint configuration
+cat >> /tmp/neo4j-config/neo4j.conf << EOF
+# Constrain all servers to %s mode
+initial.server.mode_constraint=%s
+EOF
+`, cluster.Spec.Topology.ServerModeConstraint, cluster.Spec.Topology.ServerModeConstraint)
+	}
+	return ""
 }
 
 func buildHealthScript(_ *neo4jv1alpha1.Neo4jEnterpriseCluster) string {
@@ -1529,7 +1520,7 @@ fi
 # If HTTP not responding, check if we're in cluster formation process
 if grep -q "Resolved endpoints" /logs/neo4j.log 2>/dev/null || \
    grep -q "Starting.*cluster" /logs/neo4j.log 2>/dev/null || \
-   grep -q "Waiting for.*primaries" /logs/neo4j.log 2>/dev/null || \
+   grep -q "Waiting for.*servers" /logs/neo4j.log 2>/dev/null || \
    grep -q "minimum_initial_system_primaries_count" /logs/neo4j.log 2>/dev/null || \
    grep -q "cluster formation barrier" /logs/neo4j.log 2>/dev/null; then
     echo "Neo4j in cluster formation process - allowing more time"

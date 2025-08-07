@@ -783,7 +783,7 @@ func (r *Neo4jRestoreReconciler) waitForClusterReady(ctx context.Context, cluste
 				continue
 			}
 
-			expectedReplicas := int(cluster.Spec.Topology.Primaries + cluster.Spec.Topology.Secondaries)
+			expectedReplicas := int(cluster.Spec.Topology.Servers)
 			if len(pods.Items) != expectedReplicas {
 				logger.Info("Waiting for all pods to be created", "current", len(pods.Items), "expected", expectedReplicas)
 				continue

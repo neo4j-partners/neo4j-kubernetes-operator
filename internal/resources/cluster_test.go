@@ -21,7 +21,7 @@ func TestBuildPodSpecForEnterprise_WithPlugins(t *testing.T) {
 				Tag:  "5.26-enterprise",
 			},
 			Topology: neo4jv1alpha1.TopologyConfiguration{
-				Primaries: 3,
+				Servers: 3,
 			},
 			Storage: neo4jv1alpha1.StorageSpec{
 				ClassName: "fast-ssd",
@@ -56,7 +56,7 @@ func TestBuildPodSpecForEnterprise_WithPlugins(t *testing.T) {
 		},
 	}
 
-	podSpec := resources.BuildPodSpecForEnterprise(cluster, "primary", "neo4j-admin-secret")
+	podSpec := resources.BuildPodSpecForEnterprise(cluster, "server", "neo4j-admin-secret")
 
 	// Test that plugins volume is added
 	var pluginsVolume *corev1.Volume
@@ -105,7 +105,7 @@ func TestBuildPodSpecForEnterprise_WithQueryMonitoring(t *testing.T) {
 				Tag:  "5.26-enterprise",
 			},
 			Topology: neo4jv1alpha1.TopologyConfiguration{
-				Primaries: 3,
+				Servers: 3,
 			},
 			Storage: neo4jv1alpha1.StorageSpec{
 				ClassName: "fast-ssd",
@@ -117,7 +117,7 @@ func TestBuildPodSpecForEnterprise_WithQueryMonitoring(t *testing.T) {
 		},
 	}
 
-	podSpec := resources.BuildPodSpecForEnterprise(cluster, "primary", "neo4j-admin-secret")
+	podSpec := resources.BuildPodSpecForEnterprise(cluster, "server", "neo4j-admin-secret")
 
 	// Test that Prometheus exporter sidecar is added
 	require.Len(t, podSpec.Containers, 3, "should have 3 containers (main + backup + exporter)")
@@ -153,7 +153,7 @@ func TestBuildPodSpecForEnterprise_WithoutFeatures(t *testing.T) {
 				Tag:  "5.26-enterprise",
 			},
 			Topology: neo4jv1alpha1.TopologyConfiguration{
-				Primaries: 3,
+				Servers: 3,
 			},
 			Storage: neo4jv1alpha1.StorageSpec{
 				ClassName: "fast-ssd",
@@ -162,7 +162,7 @@ func TestBuildPodSpecForEnterprise_WithoutFeatures(t *testing.T) {
 		},
 	}
 
-	podSpec := resources.BuildPodSpecForEnterprise(cluster, "primary", "neo4j-admin-secret")
+	podSpec := resources.BuildPodSpecForEnterprise(cluster, "server", "neo4j-admin-secret")
 
 	// Test that no init containers are added when no plugins
 	assert.Len(t, podSpec.InitContainers, 0, "should have no init containers when no plugins")
@@ -181,7 +181,7 @@ func TestBuildStatefulSetForEnterprise_WithFeatures(t *testing.T) {
 				Tag:  "5.26-enterprise",
 			},
 			Topology: neo4jv1alpha1.TopologyConfiguration{
-				Primaries: 3,
+				Servers: 3,
 			},
 			Storage: neo4jv1alpha1.StorageSpec{
 				ClassName: "fast-ssd",
@@ -203,10 +203,10 @@ func TestBuildStatefulSetForEnterprise_WithFeatures(t *testing.T) {
 		},
 	}
 
-	sts := resources.BuildPrimaryStatefulSetForEnterprise(cluster)
+	sts := resources.BuildServerStatefulSetForEnterprise(cluster)
 
 	// Test StatefulSet metadata
-	assert.Equal(t, cluster.Name+"-primary", sts.Name)
+	assert.Equal(t, cluster.Name+"-server", sts.Name)
 	assert.Equal(t, cluster.Namespace, sts.Namespace)
 
 	// Test that pod template has the features
@@ -232,7 +232,7 @@ func TestBuildDiscoveryServiceAccountForEnterprise(t *testing.T) {
 		},
 		Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 			Topology: neo4jv1alpha1.TopologyConfiguration{
-				Primaries: 3,
+				Servers: 3,
 			},
 		},
 	}
@@ -266,7 +266,7 @@ func TestBuildDiscoveryRoleForEnterprise(t *testing.T) {
 		},
 		Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 			Topology: neo4jv1alpha1.TopologyConfiguration{
-				Primaries: 3,
+				Servers: 3,
 			},
 		},
 	}
@@ -293,7 +293,7 @@ func TestBuildDiscoveryRoleBindingForEnterprise(t *testing.T) {
 		},
 		Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 			Topology: neo4jv1alpha1.TopologyConfiguration{
-				Primaries: 3,
+				Servers: 3,
 			},
 		},
 	}
@@ -329,8 +329,7 @@ func TestBuildStatefulSetForEnterprise_ParallelManagement(t *testing.T) {
 				Tag:  "5.26.0-enterprise",
 			},
 			Topology: neo4jv1alpha1.TopologyConfiguration{
-				Primaries:   3,
-				Secondaries: 2,
+				Servers: 3,
 			},
 			Storage: neo4jv1alpha1.StorageSpec{
 				ClassName: "standard",
@@ -339,19 +338,15 @@ func TestBuildStatefulSetForEnterprise_ParallelManagement(t *testing.T) {
 		},
 	}
 
-	// Test primary StatefulSet
-	primarySts := resources.BuildPrimaryStatefulSetForEnterprise(cluster)
-	assert.Equal(t, appsv1.ParallelPodManagement, primarySts.Spec.PodManagementPolicy, "primary StatefulSet should use parallel pod management")
+	// Test server StatefulSet
+	serverSts := resources.BuildServerStatefulSetForEnterprise(cluster)
+	assert.Equal(t, appsv1.ParallelPodManagement, serverSts.Spec.PodManagementPolicy, "server StatefulSet should use parallel pod management")
 
-	// Test secondary StatefulSet
-	secondarySts := resources.BuildSecondaryStatefulSetForEnterprise(cluster)
-	assert.Equal(t, appsv1.ParallelPodManagement, secondarySts.Spec.PodManagementPolicy, "secondary StatefulSet should use parallel pod management")
-
-	// Test that minimum primaries is set to 1 in the ConfigMap startup script
+	// Test that server configuration is set correctly in the ConfigMap startup script
 	configMap := resources.BuildConfigMapForEnterprise(cluster)
 	startupScript := configMap.Data["startup.sh"]
-	assert.Contains(t, startupScript, "MIN_PRIMARIES=1", "startup script should set MIN_PRIMARIES to 1")
-	assert.Contains(t, startupScript, "dbms.cluster.minimum_initial_system_primaries_count=${MIN_PRIMARIES}", "should use MIN_PRIMARIES in Neo4j config")
+	assert.Contains(t, startupScript, "TOTAL_SERVERS=3", "startup script should set TOTAL_SERVERS")
+	assert.Contains(t, startupScript, "dbms.cluster.minimum_initial_system_primaries_count=1", "should use fixed minimum for server bootstrap")
 }
 
 func TestBuildCertificateForEnterprise_DNSNames(t *testing.T) {
@@ -370,8 +365,7 @@ func TestBuildCertificateForEnterprise_DNSNames(t *testing.T) {
 				},
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Primaries:   2,
-						Secondaries: 1,
+						Servers: 3,
 					},
 					TLS: &neo4jv1alpha1.TLSSpec{
 						Mode: "cert-manager",
@@ -392,20 +386,20 @@ func TestBuildCertificateForEnterprise_DNSNames(t *testing.T) {
 				// Headless service
 				"test-cluster-headless",
 				"test-cluster-headless.default.svc.cluster.local",
-				// Primary pods via headless service
-				"test-cluster-primary-0.test-cluster-headless",
-				"test-cluster-primary-0.test-cluster-headless.default.svc.cluster.local",
-				"test-cluster-primary-1.test-cluster-headless",
-				"test-cluster-primary-1.test-cluster-headless.default.svc.cluster.local",
-				// Secondary pod via headless service
-				"test-cluster-secondary-0.test-cluster-headless",
-				"test-cluster-secondary-0.test-cluster-headless.default.svc.cluster.local",
-				// Primary pods via internals service
-				"test-cluster-primary-0.test-cluster-internals",
-				"test-cluster-primary-0.test-cluster-internals.default.svc.cluster.local",
-				// Secondary pod via internals service
-				"test-cluster-secondary-0.test-cluster-internals",
-				"test-cluster-secondary-0.test-cluster-internals.default.svc.cluster.local",
+				// Server pods via headless service
+				"test-cluster-server-0.test-cluster-headless",
+				"test-cluster-server-0.test-cluster-headless.default.svc.cluster.local",
+				"test-cluster-server-1.test-cluster-headless",
+				"test-cluster-server-1.test-cluster-headless.default.svc.cluster.local",
+				"test-cluster-server-2.test-cluster-headless",
+				"test-cluster-server-2.test-cluster-headless.default.svc.cluster.local",
+				// Server pods via internals service
+				"test-cluster-server-0.test-cluster-internals",
+				"test-cluster-server-0.test-cluster-internals.default.svc.cluster.local",
+				"test-cluster-server-1.test-cluster-internals",
+				"test-cluster-server-1.test-cluster-internals.default.svc.cluster.local",
+				"test-cluster-server-2.test-cluster-internals",
+				"test-cluster-server-2.test-cluster-internals.default.svc.cluster.local",
 			},
 		},
 		{
@@ -417,7 +411,7 @@ func TestBuildCertificateForEnterprise_DNSNames(t *testing.T) {
 				},
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Primaries: 1,
+						Servers: 2,
 					},
 				},
 			},

@@ -143,8 +143,8 @@ func (ts *TopologyScheduler) buildTopologySpreadConstraints(cluster *neo4jv1alph
 		whenUnsatisfiable = corev1.ScheduleAnyway
 	}
 
-	// Primary servers constraint
-	if cluster.Spec.Topology.Primaries > 0 {
+	// Server constraint (all servers in the new architecture)
+	if cluster.Spec.Topology.Servers > 0 {
 		constraints = append(constraints, corev1.TopologySpreadConstraint{
 			MaxSkew:           maxSkew,
 			TopologyKey:       topologyKey,
@@ -159,8 +159,8 @@ func (ts *TopologyScheduler) buildTopologySpreadConstraints(cluster *neo4jv1alph
 		})
 	}
 
-	// Secondary servers constraint
-	if cluster.Spec.Topology.Secondaries > 0 {
+	// Secondary servers constraint (disabled in server architecture)
+	if false { // No secondaries in server architecture
 		constraints = append(constraints, corev1.TopologySpreadConstraint{
 			MaxSkew:           maxSkew,
 			TopologyKey:       topologyKey,
@@ -258,25 +258,25 @@ func (ts *TopologyScheduler) validateTopologyConfiguration(cluster *neo4jv1alpha
 		return fmt.Errorf("placement cannot be nil")
 	}
 
-	totalReplicas := cluster.Spec.Topology.Primaries + cluster.Spec.Topology.Secondaries
+	totalReplicas := cluster.Spec.Topology.Servers + 0 // No secondaries in server architecture
 	numZones := int32(len(placement.AvailabilityZones))
 
 	// Validate primary count
-	if cluster.Spec.Topology.Primaries < 1 {
-		return fmt.Errorf("primaries must be at least 1, got %d", cluster.Spec.Topology.Primaries)
+	if cluster.Spec.Topology.Servers < 1 {
+		return fmt.Errorf("primaries must be at least 1, got %d", cluster.Spec.Topology.Servers)
 	}
 
 	// Validate odd number of primaries for quorum
-	if cluster.Spec.Topology.Primaries%2 == 0 {
-		log.Log.Info("Warning: Even number of primaries may cause split-brain scenarios",
-			"primaries", cluster.Spec.Topology.Primaries,
+	if cluster.Spec.Topology.Servers%2 == 0 {
+		log.Log.Info("Warning: Even number of servers may cause split-brain scenarios in database allocation",
+			"servers", cluster.Spec.Topology.Servers,
 			"cluster", cluster.Name)
 	}
 
 	// Validate that we have enough zones for distribution
-	if placement.EnforceDistribution && cluster.Spec.Topology.Primaries > numZones {
-		return fmt.Errorf("cannot enforce distribution: %d primaries require at least %d availability zones, but only %d are available",
-			cluster.Spec.Topology.Primaries, numZones, numZones)
+	if placement.EnforceDistribution && cluster.Spec.Topology.Servers > numZones {
+		return fmt.Errorf("cannot enforce distribution: %d servers require at least %d availability zones, but only %d are available",
+			cluster.Spec.Topology.Servers, cluster.Spec.Topology.Servers, numZones)
 	}
 
 	// Validate minimum zones for high availability

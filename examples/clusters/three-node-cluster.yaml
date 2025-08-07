@@ -1,6 +1,6 @@
-# Three-node Neo4j Enterprise cluster example
-# This creates a highly available Neo4j cluster with 3 primary nodes
-# Suitable for production workloads requiring high availability
+# Three-server Neo4j Enterprise cluster example
+# This creates a highly available Neo4j cluster with 3 servers
+# Servers self-organize to host databases with configurable topologies
 
 apiVersion: neo4j.neo4j.com/v1alpha1
 kind: Neo4jEnterpriseCluster
@@ -17,11 +17,10 @@ spec:
     tag: "5.26-enterprise"  # Neo4j 5.26+ required
     pullPolicy: IfNotPresent
 
-  # Three-node cluster topology for high availability
-  # Provides fault tolerance and quorum-based decisions
+  # Three-server cluster topology for high availability
+  # Servers self-organize to host databases with different topologies
   topology:
-    primaries: 3      # 3 primaries for quorum (must be odd)
-    secondaries: 0    # Optional read replicas
+    servers: 3        # 3 servers for optimal fault tolerance
 
   # Storage configuration
   storage:
@@ -73,11 +72,10 @@ spec:
 # 2. For TLS mode, cert-manager and ClusterIssuer are automatically set up:
 #    Development clusters include a self-signed ClusterIssuer (ca-cluster-issuer)
 #
-# 3. Expected deployment time: 3-5 minutes total
-#    - Pods start sequentially (StatefulSet behavior)
-#    - pod-0 starts first and forms cluster (0-2 mins)
-#    - pod-1 joins cluster (2-4 mins)
-#    - pod-2 joins cluster (4-6 mins)
+# 3. Expected deployment time: 2-3 minutes total
+#    - All server pods start in parallel (ParallelPodManagement)
+#    - Servers discover each other and form cluster
+#    - Databases can then be created with specific topologies
 #
 # 4. Monitor deployment progress:
 #    kubectl get pods -l app.kubernetes.io/name=neo4j -w

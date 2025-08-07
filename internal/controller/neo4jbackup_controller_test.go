@@ -90,8 +90,7 @@ var _ = Describe("Neo4jBackup Controller", func() {
 					Tag:  "5.26-enterprise",
 				},
 				Topology: neo4jv1alpha1.TopologyConfiguration{
-					Primaries:   3,
-					Secondaries: 2,
+					Servers: 5, // 3 + 2 total servers
 				},
 				Storage: neo4jv1alpha1.StorageSpec{
 					ClassName: "standard",

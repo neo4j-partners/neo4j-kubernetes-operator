@@ -400,8 +400,7 @@ func createBasicCluster(name, namespace string) *neo4jv1alpha1.Neo4jEnterpriseCl
 				Tag:  "5.26-enterprise",
 			},
 			Topology: neo4jv1alpha1.TopologyConfiguration{
-				Primaries:   1,
-				Secondaries: 1, // Minimum cluster topology
+				Servers: 2, // Minimum cluster topology
 			},
 			Storage: neo4jv1alpha1.StorageSpec{
 				ClassName: "standard",

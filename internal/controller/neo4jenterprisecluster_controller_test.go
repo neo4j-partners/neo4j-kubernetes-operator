@@ -68,8 +68,7 @@ var _ = Describe("Neo4jEnterpriseCluster Controller", func() {
 					Tag:  "5.26-enterprise",
 				},
 				Topology: neo4jv1alpha1.TopologyConfiguration{
-					Primaries:   3,
-					Secondaries: 2,
+					Servers: 5, // 3 + 2 total servers
 				},
 				Storage: neo4jv1alpha1.StorageSpec{
 					ClassName: "standard",
@@ -140,11 +139,11 @@ var _ = Describe("Neo4jEnterpriseCluster Controller", func() {
 
 			By("Waiting for StatefulSets to be created by the controller")
 			Eventually(func() bool {
-				primarySts := &appsv1.StatefulSet{}
+				serverSts := &appsv1.StatefulSet{}
 				err := k8sClient.Get(ctx, types.NamespacedName{
-					Name:      clusterName + "-primary",
+					Name:      clusterName + "-server",
 					Namespace: namespaceName,
-				}, primarySts)
+				}, serverSts)
 				return err == nil
 			}, timeout, interval).Should(BeTrue())
 
@@ -186,8 +185,7 @@ var _ = Describe("Neo4jEnterpriseClusterReconciler Resource Version Conflict Han
 					Tag:  "5.26-enterprise",
 				},
 				Topology: neo4jv1alpha1.TopologyConfiguration{
-					Primaries:   3,
-					Secondaries: 0,
+					Servers: 3, // 3 + 0 total servers
 				},
 			},
 		}

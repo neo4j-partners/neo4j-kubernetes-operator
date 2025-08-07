@@ -43,34 +43,26 @@ func (v *TopologyValidator) Validate(cluster *neo4jv1alpha1.Neo4jEnterpriseClust
 	var allErrs field.ErrorList
 	topologyPath := field.NewPath("spec", "topology")
 
-	// Validate primaries - enforce minimum clustering requirements
-	if cluster.Spec.Topology.Primaries < 1 {
+	// Validate servers - enforce minimum clustering requirements
+	// Neo4j clusters require at least 2 servers
+	if cluster.Spec.Topology.Servers < 2 {
 		allErrs = append(allErrs, field.Invalid(
-			topologyPath.Child("primaries"),
-			cluster.Spec.Topology.Primaries,
-			"primaries must be at least 1",
+			topologyPath.Child("servers"),
+			cluster.Spec.Topology.Servers,
+			"servers must be at least 2 for clustering. For single-node deployments, use Neo4jEnterpriseStandalone instead",
 		))
 	}
 
-	// Validate secondaries
-	if cluster.Spec.Topology.Secondaries < 0 {
-		allErrs = append(allErrs, field.Invalid(
-			topologyPath.Child("secondaries"),
-			cluster.Spec.Topology.Secondaries,
-			"secondaries cannot be negative",
-		))
-	}
-
-	// Enforce minimum cluster topology requirements
-	// Neo4jEnterpriseCluster must have either:
-	// 1. One primary AND at least one secondary (1+1 minimum)
-	// 2. Multiple primaries (2+ primaries, any number of secondaries)
-	if cluster.Spec.Topology.Primaries == 1 && cluster.Spec.Topology.Secondaries == 0 {
-		allErrs = append(allErrs, field.Invalid(
-			topologyPath,
-			fmt.Sprintf("primaries=%d, secondaries=%d", cluster.Spec.Topology.Primaries, cluster.Spec.Topology.Secondaries),
-			"Neo4jEnterpriseCluster requires minimum cluster topology: either 1 primary + 1 secondary, or multiple primaries. For single-node deployments, use Neo4jEnterpriseStandalone instead",
-		))
+	// Validate server mode constraint if specified
+	if cluster.Spec.Topology.ServerModeConstraint != "" {
+		validModes := map[string]bool{"NONE": true, "PRIMARY": true, "SECONDARY": true}
+		if !validModes[cluster.Spec.Topology.ServerModeConstraint] {
+			allErrs = append(allErrs, field.Invalid(
+				topologyPath.Child("serverModeConstraint"),
+				cluster.Spec.Topology.ServerModeConstraint,
+				"serverModeConstraint must be one of: NONE, PRIMARY, SECONDARY",
+			))
+		}
 	}
 
 	return allErrs
@@ -83,31 +75,40 @@ func (v *TopologyValidator) ValidateWithWarnings(cluster *neo4jv1alpha1.Neo4jEnt
 		Warnings: []string{},
 	}
 
-	// Check for even number of primaries (generate warning) - but skip for 0 primaries as that's an error case
-	if cluster.Spec.Topology.Primaries > 0 && cluster.Spec.Topology.Primaries%2 == 0 {
+	// Check for even number of servers (generate warning for cluster consensus)
+	if cluster.Spec.Topology.Servers > 0 && cluster.Spec.Topology.Servers%2 == 0 {
 		result.Warnings = append(result.Warnings,
-			fmt.Sprintf("Even number of primary nodes (%d) reduces fault tolerance. "+
-				"In a split-brain scenario, the cluster may become unavailable. "+
-				"Consider using an odd number (3, 5, or 7) for optimal fault tolerance.",
-				cluster.Spec.Topology.Primaries))
+			fmt.Sprintf("Even number of servers (%d) may reduce fault tolerance when databases specify odd-numbered server allocations. "+
+				"Consider using an odd number of servers for optimal fault tolerance.",
+				cluster.Spec.Topology.Servers))
 	}
 
-	// Check for 2 primaries specifically (additional warning)
-	if cluster.Spec.Topology.Primaries == 2 {
+	// Check for 2 servers specifically (additional warning)
+	if cluster.Spec.Topology.Servers == 2 {
 		result.Warnings = append(result.Warnings,
-			"2 primary nodes provide limited fault tolerance. "+
-				"If one node fails, the remaining node cannot form quorum. "+
-				"Consider using 3 primary nodes for production deployments. "+
-				"Note: The operator uses coordinated cluster formation that requires both nodes to start together.")
+			"2 servers provide limited fault tolerance. "+
+				"If one server fails, databases may lose quorum. "+
+				"Consider using 3 or more servers for production deployments.")
 	}
 
-	// Check for suboptimal primary counts
-	if cluster.Spec.Topology.Primaries > 7 {
+	// Check for too many servers
+	if cluster.Spec.Topology.Servers > 10 {
 		result.Warnings = append(result.Warnings,
-			fmt.Sprintf("More than 7 primary nodes (%d) may impact cluster performance "+
-				"due to increased consensus overhead. "+
-				"Consider using read replicas instead for scaling read capacity.",
-				cluster.Spec.Topology.Primaries))
+			fmt.Sprintf("More than 10 servers (%d) may impact cluster performance "+
+				"due to increased coordination overhead. "+
+				"Consider the actual database topology needs when scaling servers.",
+				cluster.Spec.Topology.Servers))
+	}
+
+	// Warn about server mode constraints
+	if cluster.Spec.Topology.ServerModeConstraint == "PRIMARY" {
+		result.Warnings = append(result.Warnings,
+			"All servers are constrained to PRIMARY mode. "+
+				"This prevents databases from using secondary replicas for read scaling.")
+	} else if cluster.Spec.Topology.ServerModeConstraint == "SECONDARY" {
+		result.Warnings = append(result.Warnings,
+			"All servers are constrained to SECONDARY mode. "+
+				"Ensure other servers in the cluster can host primary database instances.")
 	}
 
 	return result

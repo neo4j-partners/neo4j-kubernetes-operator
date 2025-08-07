@@ -25,8 +25,7 @@ func TestNeo4jEnterpriseClusterSpec_BasicValidation(t *testing.T) {
 					Tag:  "5.26.0-enterprise",
 				},
 				Topology: TopologyConfiguration{
-					Primaries:   1,
-					Secondaries: 0,
+					Servers: 2,
 				},
 				Storage: StorageSpec{
 					Size:      "10Gi",
@@ -44,8 +43,7 @@ func TestNeo4jEnterpriseClusterSpec_BasicValidation(t *testing.T) {
 					Tag:  "5.26.0-enterprise",
 				},
 				Topology: TopologyConfiguration{
-					Primaries:   1,
-					Secondaries: 0,
+					Servers: 2,
 				},
 				Storage: StorageSpec{
 					Size:      "10Gi",
@@ -118,24 +116,21 @@ func TestTopologyConfiguration_BasicValidation(t *testing.T) {
 		{
 			name: "valid single primary",
 			topology: TopologyConfiguration{
-				Primaries:   1,
-				Secondaries: 0,
+				Servers: 2,
 			},
 			valid: true,
 		},
 		{
 			name: "valid cluster with secondaries",
 			topology: TopologyConfiguration{
-				Primaries:   3,
-				Secondaries: 2,
+				Servers: 5,
 			},
 			valid: true,
 		},
 		{
 			name: "invalid zero primaries",
 			topology: TopologyConfiguration{
-				Primaries:   0,
-				Secondaries: 1,
+				Servers: 1,
 			},
 			valid: false,
 		},
@@ -144,10 +139,9 @@ func TestTopologyConfiguration_BasicValidation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.valid {
-				assert.True(t, tt.topology.Primaries > 0)
-				assert.True(t, tt.topology.Secondaries >= 0)
+				assert.True(t, tt.topology.Servers >= 2)
 			} else {
-				assert.True(t, tt.topology.Primaries <= 0 || tt.topology.Secondaries < 0)
+				assert.True(t, tt.topology.Servers < 2)
 			}
 		})
 	}
@@ -229,8 +223,7 @@ func TestNeo4jEnterpriseCluster_ResourceRequirements(t *testing.T) {
 						Tag:  "5.26.0-enterprise",
 					},
 					Topology: TopologyConfiguration{
-						Primaries:   1,
-						Secondaries: 0,
+						Servers: 2,
 					},
 					Storage: StorageSpec{
 						Size:      "10Gi",
@@ -261,8 +254,7 @@ func TestNeo4jEnterpriseCluster_StatusConditions(t *testing.T) {
 				Tag:  "5.26.0-enterprise",
 			},
 			Topology: TopologyConfiguration{
-				Primaries:   1,
-				Secondaries: 0,
+				Servers: 2,
 			},
 			Storage: StorageSpec{
 				Size:      "10Gi",
@@ -307,8 +299,7 @@ func TestDeepCopyMethods(t *testing.T) {
 				Tag:  "5.26.0-enterprise",
 			},
 			Topology: TopologyConfiguration{
-				Primaries:   1,
-				Secondaries: 0,
+				Servers: 2,
 			},
 			Storage: StorageSpec{
 				Size:      "10Gi",

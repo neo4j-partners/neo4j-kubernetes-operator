@@ -30,23 +30,20 @@ kubectl create secret generic neo4j-admin-secret \
 Choose an example and deploy:
 
 ```bash
-# Single-node for development/testing
-kubectl apply -f examples/clusters/single-node.yaml
+# Minimal cluster (2 servers for high availability)
+kubectl apply -f examples/clusters/minimal-cluster.yaml
 
-# Three-node cluster for production (with TLS)
+# Three-server cluster for production (with TLS)
 kubectl apply -f examples/clusters/three-node-cluster.yaml
 
-# Three-node cluster for testing (TLS disabled)
+# Three-server cluster for testing (TLS disabled)
 kubectl apply -f examples/clusters/three-node-simple.yaml
 
-# Cluster with read replicas for read scaling
-kubectl apply -f examples/clusters/cluster-with-read-replicas.yaml
+# Six-server cluster for large deployments
+kubectl apply -f examples/clusters/six-server-cluster.yaml
 
-# Kubernetes discovery example (automatic discovery configuration)
-kubectl apply -f examples/clusters/k8s-discovery-cluster.yaml
-
-# Two primary nodes (⚠️ NOT recommended for production)
-kubectl apply -f examples/clusters/two-primary-cluster.yaml
+# Two-server cluster (minimum for high availability)
+kubectl apply -f examples/clusters/two-server-cluster.yaml
 
 # Four primary nodes (⚠️ Consider 3+1 read replica instead)
 kubectl apply -f examples/clusters/four-primary-cluster.yaml

@@ -554,8 +554,8 @@ kubectl logs -n cert-manager deployment/cert-manager
 
    ```bash
    # Check for split clusters
-   kubectl exec <cluster>-primary-0 -- cypher-shell -u neo4j -p <password> "SHOW SERVERS"
-   kubectl exec <cluster>-primary-1 -- cypher-shell -u neo4j -p <password> "SHOW SERVERS"
+   kubectl exec <cluster>-server-0 -- cypher-shell -u neo4j -p <password> "SHOW SERVERS"
+   kubectl exec <cluster>-server-1 -- cypher-shell -u neo4j -p <password> "SHOW SERVERS"
    ```
 
    **Prevention:**
