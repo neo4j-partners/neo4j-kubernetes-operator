@@ -35,6 +35,7 @@ import (
 
 	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1"
 	"github.com/neo4j-labs/neo4j-kubernetes-operator/internal/neo4j"
+	"github.com/neo4j-labs/neo4j-kubernetes-operator/internal/validation"
 )
 
 // Neo4jDatabaseReconciler reconciles a Neo4jDatabase object
@@ -44,6 +45,7 @@ type Neo4jDatabaseReconciler struct {
 	Recorder                record.EventRecorder
 	MaxConcurrentReconciles int
 	RequeueAfter            time.Duration
+	DatabaseValidator       *validation.DatabaseValidator
 }
 
 const (
@@ -87,6 +89,30 @@ func (r *Neo4jDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{Requeue: true}, nil
 	}
 
+	// Validate database configuration
+	if r.DatabaseValidator != nil {
+		validationResult := r.DatabaseValidator.Validate(ctx, database)
+
+		// Log and record warnings
+		for _, warning := range validationResult.Warnings {
+			logger.Info("Database validation warning", "warning", warning)
+			r.Recorder.Eventf(database, "Warning", "ValidationWarning", warning)
+		}
+
+		// Handle validation errors
+		if len(validationResult.Errors) > 0 {
+			errMessages := make([]string, len(validationResult.Errors))
+			for i, err := range validationResult.Errors {
+				errMessages[i] = err.Error()
+			}
+			message := fmt.Sprintf("Database validation failed: %v", errMessages)
+			logger.Error(nil, message)
+			r.updateDatabaseStatus(ctx, database, metav1.ConditionFalse, "ValidationFailed", message)
+			r.Recorder.Eventf(database, "Warning", "ValidationFailed", message)
+			return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
+		}
+	}
+
 	// Get referenced cluster
 	cluster := &neo4jv1alpha1.Neo4jEnterpriseCluster{}
 	clusterKey := types.NamespacedName{
@@ -126,7 +152,7 @@ func (r *Neo4jDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		}
 	}()
 
-	// Ensure database exists
+	// Ensure database exists (with seed URI support)
 	if err := r.ensureDatabase(ctx, neo4jClient, database); err != nil {
 		logger.Error(err, "Failed to ensure database")
 		r.updateDatabaseStatus(ctx, database, metav1.ConditionFalse, "CreationFailed",
@@ -136,8 +162,8 @@ func (r *Neo4jDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 	}
 
-	// Import initial data if specified
-	if database.Spec.InitialData != nil && database.Status.DataImported == nil {
+	// Import initial data if specified (skip if using seed URI since data comes from the seed)
+	if database.Spec.InitialData != nil && database.Spec.SeedURI == "" && database.Status.DataImported == nil {
 		if err := r.importInitialData(ctx, neo4jClient, database); err != nil {
 			logger.Error(err, "Failed to import initial data")
 			r.updateDatabaseStatus(ctx, database, metav1.ConditionFalse, "DataImportFailed",
@@ -155,6 +181,15 @@ func (r *Neo4jDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			return ctrl.Result{}, err
 		}
 		r.Recorder.Event(database, "Normal", "DataImported", "Initial data imported successfully")
+	} else if database.Spec.SeedURI != "" && database.Status.DataImported == nil {
+		// Mark data as imported for seed URI databases (data comes from the seed)
+		imported := true
+		database.Status.DataImported = &imported
+		if err := r.Status().Update(ctx, database); err != nil {
+			logger.Error(err, "Failed to update data import status for seeded database")
+			return ctrl.Result{}, err
+		}
+		r.Recorder.Event(database, "Normal", "DataSeeded", "Database seeded from URI successfully")
 	}
 
 	// Update status to ready
@@ -245,44 +280,99 @@ func (r *Neo4jDatabaseReconciler) ensureDatabase(ctx context.Context, client *ne
 	}
 
 	if !exists {
-		// Create database with topology if specified
-		if database.Spec.Topology != nil {
-			logger.Info("Creating database with topology",
-				"database", database.Spec.Name,
-				"primaries", database.Spec.Topology.Primaries,
-				"secondaries", database.Spec.Topology.Secondaries)
+		// Prepare cloud credentials if using seed URI with explicit credentials
+		if database.Spec.SeedURI != "" && database.Spec.SeedCredentials != nil {
+			if err := client.PrepareCloudCredentials(ctx, r.Client, database); err != nil {
+				return fmt.Errorf("failed to prepare cloud credentials: %w", err)
+			}
+		}
 
-			err = client.CreateDatabaseWithTopology(
-				ctx,
-				database.Spec.Name,
-				database.Spec.Topology.Primaries,
-				database.Spec.Topology.Secondaries,
-				database.Spec.Options,
-				database.Spec.Wait,
-				database.Spec.IfNotExists,
-				database.Spec.DefaultCypherLanguage,
-			)
+		// Determine which creation method to use based on seed URI
+		if database.Spec.SeedURI != "" {
+			// Create database from seed URI
+			if database.Spec.Topology != nil {
+				logger.Info("Creating database from seed URI with topology",
+					"database", database.Spec.Name,
+					"seedURI", database.Spec.SeedURI,
+					"primaries", database.Spec.Topology.Primaries,
+					"secondaries", database.Spec.Topology.Secondaries)
+
+				err = client.CreateDatabaseFromSeedURIWithTopology(
+					ctx,
+					database.Spec.Name,
+					database.Spec.SeedURI,
+					database.Spec.Topology.Primaries,
+					database.Spec.Topology.Secondaries,
+					database.Spec.SeedConfig,
+					database.Spec.Options,
+					database.Spec.Wait,
+					database.Spec.IfNotExists,
+					database.Spec.DefaultCypherLanguage,
+				)
+			} else {
+				logger.Info("Creating database from seed URI",
+					"database", database.Spec.Name,
+					"seedURI", database.Spec.SeedURI)
+
+				err = client.CreateDatabaseFromSeedURI(
+					ctx,
+					database.Spec.Name,
+					database.Spec.SeedURI,
+					database.Spec.SeedConfig,
+					database.Spec.Options,
+					database.Spec.Wait,
+					database.Spec.IfNotExists,
+					database.Spec.DefaultCypherLanguage,
+				)
+			}
 		} else {
-			// Create database without topology
-			logger.Info("Creating database",
-				"database", database.Spec.Name,
-				"wait", database.Spec.Wait,
-				"ifNotExists", database.Spec.IfNotExists)
+			// Standard database creation without seed URI
+			if database.Spec.Topology != nil {
+				logger.Info("Creating database with topology",
+					"database", database.Spec.Name,
+					"primaries", database.Spec.Topology.Primaries,
+					"secondaries", database.Spec.Topology.Secondaries)
 
-			err = client.CreateDatabase(
-				ctx,
-				database.Spec.Name,
-				database.Spec.Options,
-				database.Spec.Wait,
-				database.Spec.IfNotExists,
-			)
+				err = client.CreateDatabaseWithTopology(
+					ctx,
+					database.Spec.Name,
+					database.Spec.Topology.Primaries,
+					database.Spec.Topology.Secondaries,
+					database.Spec.Options,
+					database.Spec.Wait,
+					database.Spec.IfNotExists,
+					database.Spec.DefaultCypherLanguage,
+				)
+			} else {
+				// Create database without topology
+				logger.Info("Creating database",
+					"database", database.Spec.Name,
+					"wait", database.Spec.Wait,
+					"ifNotExists", database.Spec.IfNotExists)
+
+				err = client.CreateDatabase(
+					ctx,
+					database.Spec.Name,
+					database.Spec.Options,
+					database.Spec.Wait,
+					database.Spec.IfNotExists,
+				)
+			}
 		}
 
 		if err != nil {
 			return fmt.Errorf("failed to create database: %w", err)
 		}
 
-		logger.Info("Database created successfully", "database", database.Spec.Name)
+		// Record appropriate success event based on creation method
+		if database.Spec.SeedURI != "" {
+			r.Recorder.Eventf(database, "Normal", "DatabaseCreatedFromSeed",
+				"Database %s created successfully from seed URI", database.Spec.Name)
+			logger.Info("Database created successfully from seed URI",
+				"database", database.Spec.Name, "seedURI", database.Spec.SeedURI)
+		} else {
+			logger.Info("Database created successfully", "database", database.Spec.Name)
+		}
 	} else {
 		logger.Info("Database already exists", "database", database.Spec.Name)
 

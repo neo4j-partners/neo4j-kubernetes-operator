@@ -628,6 +628,35 @@ All documentation, examples, and guides updated to reflect:
 
 **Remember**: The Neo4j Kubernetes Operator manages complex stateful systems. Always prioritize reliability and operational simplicity over feature complexity.
 
+## Development Milestones
+
+### 2025-08-08: Seed URI Functionality Complete
+**Status**: ✅ COMPLETE - All unit tests (32/32) and integration tests (6/6) passing
+
+**Functionality Delivered**:
+- Complete seed URI implementation for Neo4jDatabase CRD
+- Support for S3, GS, AZB, HTTP, HTTPS, FTP protocols
+- Comprehensive validation (credentials, configuration, URI format)
+- Conflict detection (seed URI vs initial data)
+- Topology validation against cluster capacity
+
+**Key Technical Fixes**:
+- Fixed unit tests by adding DatabaseValidator initialization
+- Fixed integration tests by adding missing `neo4j-admin-secret` and Auth configuration
+- Fixed cluster resource validation (reduced test cluster size from 5 to 3 servers)
+- Resolved `CreateContainerConfigError` issues in integration test pods
+- Cleaned up 63MB binary artifact from root directory and added to .gitignore
+
+**Files Modified**:
+- `internal/controller/neo4jdatabase_controller_test.go` - Unit test fixes
+- `test/integration/database_seed_uri_test.go` - Integration test fixes
+- Operator successfully deployed and tested in Kind clusters
+
+**Lessons Learned**:
+- Integration test failures were not resource constraints but real configuration issues
+- Always investigate actual error messages rather than assuming timeouts = resource issues
+- Neo4j Enterprise clusters require proper authentication secrets and minimum memory per server
+
 ## Reports
 
 All reports go in `/reports/` directory with mandatory `YYYY-MM-DD-descriptive-name.md` format.

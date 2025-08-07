@@ -1,0 +1,118 @@
+# Example: Creating a Neo4j database from HTTP/HTTPS/FTP using seed URI
+# This example demonstrates various HTTP-based seed sources
+
+# Optional: HTTP basic authentication credentials
+apiVersion: v1
+kind: Secret
+metadata:
+  name: http-backup-credentials
+  namespace: default
+type: Opaque
+data:
+  # Base64 encoded HTTP credentials
+  USERNAME: YWRtaW4=   # EXAMPLE ONLY# admin
+  PASSWORD: cGFzc3dvcmQ=   # EXAMPLE ONLY# password
+  # Optional: Custom authentication header
+  AUTH_HEADER: QmVhcmVyIG15LXRva2Vu   # EXAMPLE ONLY - Replace with real credentials# Bearer my-token
+---
+# Database from HTTPS URL with authentication
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jDatabase
+metadata:
+  name: test-database-from-https
+  namespace: default
+spec:
+  clusterRef: test-cluster
+  name: testdb
+
+  # HTTPS seed URI - could be from internal backup service
+  seedURI: "https://backup-service.internal.company.com/neo4j/backups/testdb-latest.backup"
+
+  # HTTP authentication credentials
+  seedCredentials:
+    secretRef: http-backup-credentials
+
+  # Simple topology for testing
+  topology:
+    primaries: 1
+    secondaries: 1
+
+  # Basic seed configuration
+  seedConfig:
+    config:
+      compression: "gzip"
+      validation: "strict"
+
+  wait: true
+  ifNotExists: true
+  defaultCypherLanguage: "25"
+
+---
+# Database from HTTP URL without authentication (public backup)
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jDatabase
+metadata:
+  name: demo-database-from-http
+  namespace: default
+spec:
+  clusterRef: demo-cluster
+  name: demo
+
+  # HTTP seed URI - public demo database
+  seedURI: "http://demo-data.neo4j.com/databases/movie-graph.backup"
+
+  # No credentials needed for public URL
+  # seedCredentials: null
+
+  # Single node for demo
+  topology:
+    primaries: 1
+    secondaries: 0
+
+  # No point-in-time recovery for demo
+  seedConfig:
+    config:
+      compression: "none"
+      validation: "lenient"
+
+  wait: true
+  ifNotExists: true
+
+---
+# Database from FTP server
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jDatabase
+metadata:
+  name: archive-database-from-ftp
+  namespace: default
+spec:
+  clusterRef: archive-cluster
+  name: archive
+
+  # FTP seed URI
+  seedURI: "ftp://ftp.company.com/neo4j-archives/historical-data-2024.backup"
+
+  # FTP credentials
+  seedCredentials:
+    secretRef: http-backup-credentials # Same username/password format
+
+  # Larger topology for archive processing
+  topology:
+    primaries: 1
+    secondaries: 3
+
+  # Configuration for large archive restore
+  seedConfig:
+    config:
+      compression: "lz4"
+      validation: "lenient"
+      bufferSize: "256MB"
+
+  # Archive-optimized settings
+  options:
+    "dbms.memory.heap.initial_size": "2g"
+    "dbms.memory.heap.max_size": "8g"
+    "dbms.memory.pagecache.size": "4g"
+
+  wait: true
+  ifNotExists: true

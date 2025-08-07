@@ -1,0 +1,63 @@
+# Example: Creating a Neo4j database from an S3 backup using seed URI
+# This example demonstrates using explicit credentials stored in a Kubernetes secret
+apiVersion: v1
+kind: Secret
+metadata:
+  name: s3-backup-credentials
+  namespace: default
+type: Opaque
+data:
+  # Base64 encoded credentials - replace with your actual values
+  AWS_ACCESS_KEY_ID: dGVzdC1hY2Nlc3Mta2V5   # EXAMPLE ONLY - Replace with real credentials# test-access-key
+  AWS_SECRET_ACCESS_KEY: dGVzdC1zZWNyZXQta2V5   # EXAMPLE ONLY - Replace with real credentials# test-secret-key
+  AWS_REGION: dXMtd2VzdC0y # us-west-2
+  # Optional: AWS_SESSION_TOKEN for temporary credentials
+---
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jDatabase
+metadata:
+  name: sales-database-from-s3
+  namespace: default
+spec:
+  # Reference to the Neo4j Enterprise cluster
+  clusterRef: production-cluster
+
+  # Database name in Neo4j
+  name: sales
+
+  # Seed URI pointing to S3 backup
+  seedURI: "s3://my-neo4j-backups/sales-database-2025-01-15.backup"
+
+  # Database topology - distribute across multiple servers
+  topology:
+    primaries: 2
+    secondaries: 1
+
+  # Seed configuration for advanced options
+  seedConfig:
+    # Point-in-time recovery (Neo4j 2025.x only)
+    restoreUntil: "2025-01-15T10:30:00Z"
+
+    # CloudSeedProvider configuration
+    config:
+      compression: "gzip"
+      validation: "strict"
+      bufferSize: "64MB"
+
+  # Explicit credentials reference
+  seedCredentials:
+    secretRef: s3-backup-credentials
+
+  # Database options
+  options:
+    "dbms.memory.heap.initial_size": "512m"
+    "dbms.memory.heap.max_size": "1g"
+
+  # Wait for database to be online before considering creation complete
+  wait: true
+
+  # Use IF NOT EXISTS to avoid errors if database already exists
+  ifNotExists: true
+
+  # Use Cypher language version 25 for latest features
+  defaultCypherLanguage: "25"
