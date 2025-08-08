@@ -177,9 +177,9 @@ func TestBuildConfigMapForEnterprise_ClusterFormation(t *testing.T) {
 
 			// For multi-server clusters, verify unified bootstrap approach
 			if tt.cluster.Spec.Topology.Servers > 1 {
-				// Verify unified bootstrap approach
-				assert.Contains(t, startupScript, "Using unified bootstrap discovery approach",
-					"multi-server clusters should use unified bootstrap approach")
+				// Verify parallel cluster formation approach
+				assert.Contains(t, startupScript, "Starting parallel cluster formation - all servers coordinate bootstrap",
+					"multi-server clusters should use parallel cluster formation approach")
 
 				// Verify minimum servers logic - always 1 for cluster formation
 				assert.Contains(t, startupScript, "dbms.cluster.minimum_initial_system_primaries_count=1",
