@@ -32,7 +32,7 @@ import (
 
 var _ = Describe("Database Validation Integration Tests", func() {
 	const (
-		timeout  = time.Second * 300
+		timeout  = time.Second * 600 // Increased to 10 minutes for cluster formation + database creation
 		interval = time.Second * 5
 	)
 

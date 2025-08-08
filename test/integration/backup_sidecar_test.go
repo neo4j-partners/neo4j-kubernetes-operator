@@ -33,7 +33,7 @@ import (
 
 var _ = Describe("Backup Sidecar Path Creation", func() {
 	const (
-		timeout  = time.Second * 300 // 5 minutes to account for image pulls in CI
+		timeout  = time.Second * 600 // Increased to 10 minutes for cluster formation + backup operations
 		interval = time.Second * 5
 	)
 

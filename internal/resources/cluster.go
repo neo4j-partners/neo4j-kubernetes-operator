@@ -1479,11 +1479,45 @@ echo "Multi-server cluster: using Kubernetes discovery"
 # Use Kubernetes service discovery with label selectors
 echo "Configuring Kubernetes service discovery with label selectors"
 
-# Unified approach: Use bootstrap discovery with timeout for cluster formation
-echo "Using unified bootstrap discovery approach for cluster formation"
+# Wait for discovery service to be ready before starting Neo4j
+echo "Waiting for discovery service to be ready..."
+DISCOVERY_SERVICE="` + cluster.Name + `-discovery.` + cluster.Namespace + `.svc.cluster.local"
+MAX_WAIT=60
+WAIT_SECONDS=0
+while [ $WAIT_SECONDS -lt $MAX_WAIT ]; do
+    if nslookup $DISCOVERY_SERVICE >/dev/null 2>&1; then
+        echo "Discovery service $DISCOVERY_SERVICE is ready"
+        break
+    fi
+    echo "Discovery service not ready yet, waiting... (${WAIT_SECONDS}s/${MAX_WAIT}s)"
+    sleep 2
+    WAIT_SECONDS=$((WAIT_SECONDS + 2))
+done
+
+if [ $WAIT_SECONDS -ge $MAX_WAIT ]; then
+    echo "Warning: Discovery service not ready after ${MAX_WAIT}s, proceeding anyway"
+fi
+
+# Wait for service to be reachable
+echo "Checking discovery service readiness..."
+ENDPOINT_CHECK_COUNT=0
+MAX_ENDPOINT_CHECKS=10
+while [ $ENDPOINT_CHECK_COUNT -lt $MAX_ENDPOINT_CHECKS ]; do
+    # Check if the service DNS resolves (indicates service exists)
+    if getent hosts $DISCOVERY_SERVICE >/dev/null 2>&1; then
+        echo "Discovery service is reachable, proceeding"
+        break
+    fi
+    echo "Discovery service not reachable, waiting... (${ENDPOINT_CHECK_COUNT}/${MAX_ENDPOINT_CHECKS})"
+    sleep 3
+    ENDPOINT_CHECK_COUNT=$((ENDPOINT_CHECK_COUNT + 1))
+done
+
+# Use parallel bootstrap discovery with coordination for cluster formation
+echo "Starting parallel cluster formation - all servers coordinate bootstrap"
 
 # Set minimum servers for proper cluster formation
-# With Parallel pod management, all server pods start simultaneously
+# With Parallel pod management, all server pods start simultaneously (with small stagger)
 # All servers coordinate to establish primary/secondary roles automatically
 # This works reliably even with TLS enabled due to trust_all=true in cluster SSL policy
 # Servers self-organize, use fixed minimum of 1 for bootstrap
@@ -1505,6 +1539,9 @@ initial.dbms.automatically_enable_free_servers=true
 dbms.cluster.raft.binding_timeout=1d
 dbms.cluster.raft.membership.join_timeout=10m
 dbms.routing.default_router=SERVER
+
+# Discovery resolution timeout to handle service propagation delays
+internal.dbms.cluster.discovery.resolution_timeout=1d
 EOF
 
 # Add server mode constraint if specified

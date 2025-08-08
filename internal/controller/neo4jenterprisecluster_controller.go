@@ -348,8 +348,21 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 		}
 	}
 
-	// Update status to "Ready" only if it changed
-	statusChanged := r.updateClusterStatus(ctx, cluster, "Ready", "Cluster is ready")
+	// Verify Neo4j cluster formation before marking as Ready
+	clusterFormed, formationMessage, err := r.verifyNeo4jClusterFormation(ctx, cluster)
+	if err != nil {
+		logger.Error(err, "Failed to verify cluster formation")
+		_ = r.updateClusterStatus(ctx, cluster, "Forming", fmt.Sprintf("Verifying cluster formation: %v", err))
+		return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
+	}
+
+	if !clusterFormed {
+		_ = r.updateClusterStatus(ctx, cluster, "Forming", formationMessage)
+		return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
+	}
+
+	// Update status to "Ready" only if cluster formation is verified
+	statusChanged := r.updateClusterStatus(ctx, cluster, "Ready", "Neo4j cluster is fully formed and ready")
 
 	// Only create event if status actually changed
 	if statusChanged {
@@ -1002,6 +1015,91 @@ func (r *Neo4jEnterpriseClusterReconciler) createNeo4jClient(ctx context.Context
 	}
 
 	return neo4jClient, nil
+}
+
+// verifyNeo4jClusterFormation checks if Neo4j cluster formation is complete
+func (r *Neo4jEnterpriseClusterReconciler) verifyNeo4jClusterFormation(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) (bool, string, error) {
+	logger := log.FromContext(ctx)
+
+	// Skip verification for single-server clusters (always formed)
+	expectedServers := int(cluster.Spec.Topology.Servers)
+	if expectedServers == 1 {
+		return true, "Single server cluster - formation complete", nil
+	}
+
+	// Create Neo4j client to check cluster status
+	neo4jClient, err := r.createNeo4jClient(ctx, cluster)
+	if err != nil {
+		// If we can't connect to Neo4j yet, cluster is still forming
+		return false, "Waiting for Neo4j to accept connections", nil
+	}
+	defer func() {
+		if closeErr := neo4jClient.Close(); closeErr != nil {
+			logger.Error(closeErr, "Failed to close Neo4j client")
+		}
+	}()
+
+	// Check cluster formation using SHOW SERVERS with stability verification
+	for attempt := 1; attempt <= 3; attempt++ {
+		servers, err := neo4jClient.GetServerList(ctx)
+		if err != nil {
+			logger.Info("Cluster formation check failed", "attempt", attempt, "error", err)
+			if attempt == 3 {
+				// Final attempt failed
+				return false, fmt.Sprintf("Cannot query server list after 3 attempts: %v", err), nil
+			}
+			// Wait 2 seconds before retry
+			select {
+			case <-ctx.Done():
+				return false, "Context cancelled during cluster formation check", nil
+			case <-time.After(2 * time.Second):
+				continue
+			}
+		}
+
+		// Count available servers
+		availableServers := 0
+		for _, server := range servers {
+			if server.State == "Enabled" && server.Health == "Available" {
+				availableServers++
+			}
+		}
+
+		logger.Info("Cluster formation status",
+			"attempt", attempt,
+			"expectedServers", expectedServers,
+			"availableServers", availableServers,
+			"totalServers", len(servers))
+
+		// Check if we have the expected number of servers
+		if availableServers >= expectedServers {
+			// Add a small stability delay to ensure service is consistently available
+			if attempt == 1 {
+				select {
+				case <-ctx.Done():
+					return false, "Context cancelled during stability check", nil
+				case <-time.After(3 * time.Second):
+					// Continue to verify stability
+					continue
+				}
+			}
+			// Cluster formation is complete and stable
+			return true, fmt.Sprintf("Cluster formation complete and stable: %d/%d servers available", availableServers, expectedServers), nil
+		}
+
+		// Not enough servers, wait before retry
+		if attempt < 3 {
+			select {
+			case <-ctx.Done():
+				return false, "Context cancelled during cluster formation wait", nil
+			case <-time.After(5 * time.Second):
+				continue
+			}
+		}
+	}
+
+	// Should not reach here, but handle gracefully
+	return false, "Cluster formation verification incomplete", nil
 }
 
 // reconcilePlugins handles plugin installation and management

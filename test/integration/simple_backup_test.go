@@ -34,7 +34,7 @@ import (
 
 var _ = Describe("Simple Backup Test", func() {
 	const (
-		timeout  = time.Second * 180
+		timeout  = time.Second * 600 // Increased to 10 minutes for cluster formation + backup operations
 		interval = time.Second * 5
 	)
 

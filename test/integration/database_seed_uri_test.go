@@ -32,7 +32,7 @@ import (
 
 var _ = Describe("Neo4jDatabase Seed URI Integration Tests", func() {
 	const (
-		timeout  = time.Second * 300 // Extended timeout for integration tests
+		timeout  = time.Second * 600 // Increased to 10 minutes for cluster formation + database creation
 		interval = time.Second * 2
 	)
 

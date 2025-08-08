@@ -1271,6 +1271,62 @@ func (c *Client) ExecuteQuery(ctx context.Context, query string) (string, error)
 	return "", nil
 }
 
+// ServerInfo represents information about a Neo4j server in the cluster
+type ServerInfo struct {
+	Name    string
+	Address string
+	State   string
+	Health  string
+	Hosting []string
+}
+
+// GetServerList retrieves the list of servers in the Neo4j cluster
+func (c *Client) GetServerList(ctx context.Context) ([]ServerInfo, error) {
+	session := c.driver.NewSession(ctx, neo4j.SessionConfig{
+		AccessMode:   neo4j.AccessModeRead,
+		DatabaseName: "system",
+	})
+	defer session.Close(ctx)
+
+	result, err := session.Run(ctx, "SHOW SERVERS", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute SHOW SERVERS: %w", err)
+	}
+
+	var servers []ServerInfo
+	for result.Next(ctx) {
+		record := result.Record()
+
+		// Extract server information from record
+		// SHOW SERVERS returns: name, address, state, health, hosting
+		if len(record.Values) >= 5 {
+			server := ServerInfo{
+				Name:    fmt.Sprintf("%v", record.Values[0]),
+				Address: fmt.Sprintf("%v", record.Values[1]),
+				State:   fmt.Sprintf("%v", record.Values[2]),
+				Health:  fmt.Sprintf("%v", record.Values[3]),
+			}
+
+			// Parse hosting databases (array of strings)
+			if hostingValue := record.Values[4]; hostingValue != nil {
+				if hostingList, ok := hostingValue.([]interface{}); ok {
+					for _, db := range hostingList {
+						server.Hosting = append(server.Hosting, fmt.Sprintf("%v", db))
+					}
+				}
+			}
+
+			servers = append(servers, server)
+		}
+	}
+
+	if err = result.Err(); err != nil {
+		return nil, fmt.Errorf("error reading SHOW SERVERS results: %w", err)
+	}
+
+	return servers, nil
+}
+
 // GetLoadedComponents returns a list of loaded Neo4j components/plugins
 func (c *Client) GetLoadedComponents(ctx context.Context) ([]ComponentInfo, error) {
 	var components []ComponentInfo
