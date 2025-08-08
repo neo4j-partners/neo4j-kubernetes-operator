@@ -1,6 +1,6 @@
-# Neo4j cluster with read replicas example
-# This creates a cluster with 3 primaries and 2 read replicas
-# Ideal for read-heavy workloads requiring horizontal read scaling
+# Neo4j cluster example for read-heavy workloads
+# This creates a cluster with 5 servers
+# Databases can be configured with read replicas for horizontal scaling
 
 apiVersion: neo4j.neo4j.com/v1alpha1
 kind: Neo4jEnterpriseCluster
@@ -15,10 +15,10 @@ spec:
     tag: "5.26-enterprise"
     pullPolicy: IfNotPresent
 
-  # Cluster with read replicas for read scaling
+  # 5-server cluster for read scaling workloads
+  # Databases can use different topologies (e.g., 3 primaries + 2 secondaries)
   topology:
-    primaries: 3      # Core cluster for writes and consistency
-    secondaries: 2    # Read replicas for scaling read operations
+    servers: 5        # More servers allow flexible database topologies
 
   storage:
     className: standard

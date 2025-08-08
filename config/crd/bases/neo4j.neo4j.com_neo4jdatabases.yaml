@@ -56,7 +56,12 @@ spec:
                 description: Reference to the Neo4j cluster
                 type: string
               defaultCypherLanguage:
-                description: Default Cypher language version (Neo4j 2025.x only)
+                description: |-
+                  Default Cypher language version (Neo4j 2025.x only)
+
+                  Specifies the default Cypher language version for this database.
+                  - "5": Cypher 5 (backward compatibility)
+                  - "25": Cypher 25 (recommended for new databases)
                 enum:
                 - "5"
                 - "25"
@@ -160,16 +165,121 @@ spec:
                   type: string
                 description: Database creation options
                 type: object
+              seedConfig:
+                description: Seed configuration for advanced seeding options
+                properties:
+                  config:
+                    additionalProperties:
+                      type: string
+                    description: |-
+                      Additional seed provider configuration options
+
+                      Common configuration options:
+                      - "compression": "gzip" | "lz4" | "none"
+                      - "validation": "strict" | "lenient"
+                      - "bufferSize": Buffer size for seed operations
+
+                      Cloud-specific options:
+                      - S3: "region", "endpoint", "pathStyleAccess"
+                      - GCS: "project", "location"
+                      - Azure: "endpoint", "containerName"
+                    type: object
+                  restoreUntil:
+                    description: |-
+                      Restore until specific point in time (Neo4j 2025.x only)
+
+                      Supports two formats:
+                      - RFC3339 timestamp: "2025-01-15T10:30:00Z"
+                      - Transaction ID: "txId:12345"
+
+                      This allows point-in-time recovery when creating database from backup.
+                      Only available with Neo4j 2025.x and CloudSeedProvider.
+                    type: string
+                type: object
+              seedCredentials:
+                description: Seed credentials for URI access when system-wide auth
+                  is not available
+                properties:
+                  secretRef:
+                    description: |-
+                      Kubernetes secret containing seed URI credentials
+
+                      Expected secret keys by URI scheme:
+
+                      S3 (s3://):
+                      - AWS_ACCESS_KEY_ID: AWS access key
+                      - AWS_SECRET_ACCESS_KEY: AWS secret key
+                      - AWS_SESSION_TOKEN: (optional) session token
+                      - AWS_REGION: (optional) AWS region override
+
+                      Google Cloud Storage (gs://):
+                      - GOOGLE_APPLICATION_CREDENTIALS: Service account JSON key
+                      - GOOGLE_CLOUD_PROJECT: (optional) project ID override
+
+                      Azure Blob Storage (azb://):
+                      - AZURE_STORAGE_ACCOUNT: Storage account name
+                      - AZURE_STORAGE_KEY: Storage account key
+                      - AZURE_STORAGE_SAS_TOKEN: (alternative) SAS token
+
+                      HTTP/HTTPS/FTP:
+                      - USERNAME: (optional) authentication username
+                      - PASSWORD: (optional) authentication password
+                      - AUTH_HEADER: (optional) custom authorization header
+                    type: string
+                type: object
+              seedURI:
+                description: |-
+                  Seed URI for database creation from existing backup/dump
+
+                  This creates the database from an existing Neo4j backup or dump file
+                  located at the specified URI. The seeding occurs during database creation,
+                  before any initial data import.
+
+                  Supported URI schemes (via Neo4j CloudSeedProvider):
+                  - Amazon S3: s3://bucket/path/backup.backup
+                  - Google Cloud Storage: gs://bucket/path/backup.backup
+                  - Azure Blob Storage: azb://container/path/backup.backup
+                  - HTTP/HTTPS: https://server/path/backup.backup
+                  - FTP: ftp://server/path/backup.backup
+
+                  Cloud authentication is configured system-wide via:
+                  - S3: IAM roles, AWS credentials, or service account annotations
+                  - GCS: Service account keys or workload identity
+                  - Azure: Managed identity or service principal
+
+                  Example: "s3://prod-backups/daily-backup-2025-01-15.backup"
+                type: string
               topology:
-                description: Database topology specification for clusters
+                description: |-
+                  Database topology specification for clusters
+
+                  This defines how the database is distributed across the available cluster servers.
+                  The cluster provides server infrastructure (e.g., 5 servers), and this topology
+                  specifies how many of those servers should act as primaries vs secondaries
+                  for this specific database.
+
+                  Multiple databases can have different topologies within the same cluster:
+                  - Cluster: 5 servers
+                  - Database A: 3 primaries, 1 secondary (uses 4 servers)
+                  - Database B: 2 primaries, 0 secondaries (uses 2 servers)
+
+                  Servers self-organize into primary/secondary roles at the database level.
                 properties:
                   primaries:
-                    description: Number of primaries for this database
+                    description: |-
+                      Number of primary replicas for this database
+
+                      Primaries handle both read and write operations for the database.
+                      At least 1 primary is required for database operation.
                     format: int32
                     minimum: 1
                     type: integer
                   secondaries:
-                    description: Number of secondaries for this database
+                    description: |-
+                      Number of secondary replicas for this database
+
+                      Secondaries provide read-only access for horizontal scaling.
+                      Secondaries are optional but improve read performance and availability.
                     format: int32
                     minimum: 0
                     type: integer
@@ -267,7 +377,12 @@ spec:
                 description: Phase represents the current phase of the database
                 type: string
               servers:
-                description: Servers hosting this database (for topology tracking)
+                description: |-
+                  Servers hosting this database (for topology tracking)
+
+                  Lists which cluster servers are currently hosting this database.
+                  This shows the actual distribution of database replicas across
+                  the available cluster server infrastructure.
                 items:
                   type: string
                 type: array

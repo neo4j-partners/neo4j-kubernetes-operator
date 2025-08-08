@@ -76,7 +76,7 @@ var _ = Describe("Enterprise Features Integration Tests", func() {
 						Tag:  "5.26-enterprise",
 					},
 					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Primaries: 3,
+						Servers: 3,
 					},
 					Storage: neo4jv1alpha1.StorageSpec{
 						ClassName: "standard",
@@ -142,7 +142,7 @@ var _ = Describe("Enterprise Features Integration Tests", func() {
 						Tag:  "5.26-enterprise",
 					},
 					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Primaries: 3,
+						Servers: 3,
 					},
 					Storage: neo4jv1alpha1.StorageSpec{
 						ClassName: "standard",

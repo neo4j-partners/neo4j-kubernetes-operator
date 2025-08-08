@@ -531,50 +531,46 @@ type UpgradeStatus struct {
 	LastError string `json:"lastError,omitempty"`
 }
 
-// UpgradeProgress tracks upgrade progress across different node types
+// UpgradeProgress tracks upgrade progress across servers
 type UpgradeProgress struct {
-	// Total number of nodes to upgrade
+	// Total number of servers to upgrade
 	Total int32 `json:"total,omitempty"`
 
-	// Number of nodes successfully upgraded
+	// Number of servers successfully upgraded
 	Upgraded int32 `json:"upgraded,omitempty"`
 
-	// Number of nodes currently being upgraded
+	// Number of servers currently being upgraded
 	InProgress int32 `json:"inProgress,omitempty"`
 
-	// Number of nodes pending upgrade
+	// Number of servers pending upgrade
 	Pending int32 `json:"pending,omitempty"`
 
-	// Primary nodes upgrade progress
-	Primaries *NodeUpgradeProgress `json:"primaries,omitempty"`
-
-	// Secondary nodes upgrade progress
-	Secondaries *NodeUpgradeProgress `json:"secondaries,omitempty"`
+	// Server upgrade details
+	Servers *NodeUpgradeProgress `json:"servers,omitempty"`
 }
 
-// NodeUpgradeProgress tracks upgrade progress for a specific node type
+// NodeUpgradeProgress tracks upgrade progress for servers
 type NodeUpgradeProgress struct {
-	// Total number of nodes of this type
+	// Total number of servers
 	Total int32 `json:"total,omitempty"`
 
-	// Number of nodes successfully upgraded
+	// Number of servers successfully upgraded
 	Upgraded int32 `json:"upgraded,omitempty"`
 
-	// Number of nodes currently being upgraded
+	// Number of servers currently being upgraded
 	InProgress int32 `json:"inProgress,omitempty"`
 
-	// Number of nodes pending upgrade
+	// Number of servers pending upgrade
 	Pending int32 `json:"pending,omitempty"`
 
-	// Current leader node (for primaries)
+	// Current leader server
 	CurrentLeader string `json:"currentLeader,omitempty"`
 }
 
 // ReplicaStatus shows replica information
 type ReplicaStatus struct {
-	Primaries   int32 `json:"primaries,omitempty"`
-	Secondaries int32 `json:"secondaries,omitempty"`
-	Ready       int32 `json:"ready,omitempty"`
+	Servers int32 `json:"servers,omitempty"`
+	Ready   int32 `json:"ready,omitempty"`
 }
 
 // EndpointStatus provides connection endpoints
@@ -715,18 +711,19 @@ type PodAntiAffinityConfig struct {
 
 // TopologyConfiguration defines cluster topology requirements
 type TopologyConfiguration struct {
-	// Primaries specifies the number of primary (core) servers
+	// Servers specifies the number of Neo4j servers in the cluster
+	// Servers self-organize and can host databases in primary or secondary mode
 	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Minimum=1
-	// +kubebuilder:validation:Maximum=7
-	// Note: Odd numbers (1,3,5,7) are recommended for optimal fault tolerance
-	Primaries int32 `json:"primaries"`
-
-	// Secondaries specifies the number of secondary (read replica) servers
-	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Minimum=2
 	// +kubebuilder:validation:Maximum=20
+	Servers int32 `json:"servers"`
+
+	// ServerModeConstraint optionally constrains all servers to a specific mode
+	// Valid values: "PRIMARY", "SECONDARY", "NONE" (default: "NONE")
+	// +kubebuilder:validation:Enum=NONE;PRIMARY;SECONDARY
+	// +kubebuilder:default=NONE
 	// +optional
-	Secondaries int32 `json:"secondaries,omitempty"`
+	ServerModeConstraint string `json:"serverModeConstraint,omitempty"`
 
 	// Placement defines how instances should be distributed across the cluster
 	// +optional
@@ -736,15 +733,14 @@ type TopologyConfiguration struct {
 	// +optional
 	AvailabilityZones []string `json:"availabilityZones,omitempty"`
 
-	// EnforceDistribution ensures primaries are distributed across topology domains
+	// EnforceDistribution ensures servers are distributed across topology domains
 	// +optional
 	EnforceDistribution bool `json:"enforceDistribution,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:printcolumn:name="Primaries",type=integer,JSONPath=`.spec.topology.primaries`
-// +kubebuilder:printcolumn:name="Secondaries",type=integer,JSONPath=`.spec.topology.secondaries`
+// +kubebuilder:printcolumn:name="Servers",type=integer,JSONPath=`.spec.topology.servers`
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].status`
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`

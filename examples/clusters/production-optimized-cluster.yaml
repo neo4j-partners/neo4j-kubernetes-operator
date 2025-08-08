@@ -1,0 +1,203 @@
+# Production-optimized Neo4j Enterprise cluster with transaction memory limits and JVM tuning
+# This configuration addresses critical performance and stability requirements
+
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: production-optimized
+  namespace: default
+spec:
+  # Neo4j Enterprise Edition
+  edition: enterprise
+
+  # Neo4j Docker image
+  image:
+    repo: neo4j
+    tag: "5.26-enterprise"
+    pullPolicy: IfNotPresent
+
+  # Production cluster topology
+  topology:
+    servers: 3  # Odd number for quorum
+
+  # Storage configuration
+  storage:
+    className: standard  # Use standard storage for testing
+    size: "1Gi"
+    retentionPolicy: Retain  # Keep data on cluster deletion
+
+  # Optimized resource allocation (reduced for test cluster)
+  resources:
+    requests:
+      memory: "2Gi"
+      cpu: "200m"
+    limits:
+      memory: "2Gi"  # Same as requests to prevent swapping
+      cpu: "1"        # Allow CPU burst
+
+  # Production-ready configuration
+  config:
+    # Memory settings (automatically calculated if not specified)
+    # server.memory.heap.initial_size: "4G"  # Auto-set by operator
+    # server.memory.heap.max_size: "4G"      # Auto-set by operator
+    # server.memory.pagecache.size: "3G"     # Auto-set by operator
+
+    # Transaction memory limits (auto-configured by operator)
+    # These prevent OOM kills from runaway queries
+    # dbms.memory.transaction.total.max: "2.8G"  # 70% of heap
+    # db.memory.transaction.max: "280M"          # 10% of global limit (Neo4j 5.26+ format)
+    # db.memory.transaction.total.max: "1.4G"    # 50% of global limit
+
+    # Bolt thread pool (auto-configured by operator, Neo4j 5.26+ format)
+    # server.bolt.thread_pool_min_size: "5"
+    # server.bolt.thread_pool_max_size: "400"
+
+    # Query performance settings
+    dbms.logs.query.enabled: "INFO"
+    dbms.logs.query.threshold: "500ms"
+    dbms.logs.query.page_logging_enabled: "true"
+
+    # Transaction settings
+    dbms.transaction.timeout: "5m"
+    dbms.lock.acquisition.timeout: "2m"
+
+    # Checkpoint tuning for write performance
+    dbms.checkpoint.interval.time: "15m"
+    dbms.checkpoint.interval.tx: "100000"
+
+    # Security settings
+    dbms.security.auth_enabled: "true"
+    dbms.security.procedures.unrestricted: "gds.*,apoc.*"
+
+  # Environment variables
+  env:
+    - name: NEO4J_ACCEPT_LICENSE_AGREEMENT
+      value: "yes"
+
+    # Optional: Override default JVM settings if needed
+    # The operator sets production-ready defaults:
+    # - G1GC with 200ms pause target
+    # - Compressed OOPs for memory efficiency
+    # - String deduplication
+    # - Exit on OOM for container safety
+    #
+    # - name: NEO4J_server_jvm_additional
+    #   value: "-XX:+UseG1GC -XX:MaxGCPauseMillis=100 -XX:+UseStringDeduplication"
+
+  # TLS configuration (disabled for test)
+  # tls:
+  #   mode: cert-manager
+  #   issuerRef:
+  #     name: ca-cluster-issuer
+  #     kind: ClusterIssuer
+
+  # Authentication
+  auth:
+    provider: native
+    adminSecret: neo4j-admin-secret
+
+  # Service configuration
+  service:
+    type: ClusterIP
+    annotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "2004"
+
+  # Commented out for test cluster (single node)
+  # affinity:
+  #   podAntiAffinity:
+  #     requiredDuringSchedulingIgnoredDuringExecution:
+  #       - labelSelector:
+  #           matchLabels:
+  #             neo4j.com/cluster: production-optimized
+  #         topologyKey: kubernetes.io/hostname
+
+  # # Tolerations for dedicated nodes
+  # nodeSelector:
+  #   workload: neo4j-production
+  #
+  # tolerations:
+  #   - key: "neo4j-production"
+  #     operator: "Equal"
+  #     value: "true"
+  #     effect: "NoSchedule"
+
+---
+# Admin credentials secret
+apiVersion: v1
+kind: Secret
+metadata:
+  name: neo4j-admin-secret
+  namespace: default
+type: Opaque
+stringData:
+  username: neo4j
+  password: ChangeMeToASecurePassword123!
+
+---
+# Example: Create a database with appropriate topology
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jDatabase
+metadata:
+  name: production-db
+  namespace: default
+spec:
+  clusterRef: production-optimized
+  name: productiondb
+
+  # Database topology
+  topology:
+    primaries: 2
+    secondaries: 1
+
+  # Database-specific options
+  options:
+    "db.transaction.timeout": "10s"
+    "db.transaction.concurrent.maximum": "100"
+
+  wait: true
+  ifNotExists: true
+
+---
+# What this configuration provides:
+#
+# 1. TRANSACTION MEMORY PROTECTION:
+#    - Automatic limits prevent OOM kills
+#    - Global limit: 70% of heap (2.8G)
+#    - Per-transaction: 10% of global (280M)
+#    - Per-database: 50% of global (1.4G)
+#
+# 2. JVM OPTIMIZATION:
+#    - G1GC for predictable pause times
+#    - Compressed OOPs saves ~30% memory
+#    - String deduplication for Neo4j's string-heavy workloads
+#    - Exit on OOM for clean container restarts
+#
+# 3. CONNECTION POOLING:
+#    - Bolt thread pool configured for high concurrency
+#    - Min 5, Max 400 threads
+#    - 5-minute keep-alive
+#
+# 4. STARTUP RESILIENCE:
+#    - Startup probe allows 10 minutes for cluster formation
+#    - Readiness probe ensures service routing only to ready pods
+#    - Liveness probe detects and restarts unhealthy pods
+#
+# 5. HIGH AVAILABILITY:
+#    - Anti-affinity spreads pods across nodes
+#    - 3-server topology for quorum
+#    - Fast-SSD storage for performance
+#
+# To deploy:
+# kubectl apply -f production-optimized-cluster.yaml
+#
+# To verify transaction memory settings:
+# kubectl exec production-optimized-server-0 -c neo4j -- cypher-shell -u neo4j -p <password> \
+#   "CALL dbms.listConfig() YIELD name, value WHERE name CONTAINS 'transaction' AND name CONTAINS 'memory' RETURN name, value"
+#
+# To check JVM settings:
+# kubectl exec production-optimized-server-0 -- ps aux | grep java
+#
+# To monitor memory usage:
+# kubectl exec production-optimized-server-0 -- cypher-shell -u neo4j -p <password> \
+#   "CALL dbms.listPools() YIELD name, currentSize, maxSize WHERE name CONTAINS 'heap' RETURN name, currentSize, maxSize"

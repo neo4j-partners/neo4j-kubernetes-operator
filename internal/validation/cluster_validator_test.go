@@ -55,8 +55,7 @@ func TestClusterValidator_ValidateCreate(t *testing.T) {
 						Size:      "100Gi",
 					},
 					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Primaries:   3,
-						Secondaries: 1,
+						Servers: 4,
 					},
 				},
 			},
@@ -77,8 +76,7 @@ func TestClusterValidator_ValidateCreate(t *testing.T) {
 						Size:      "100Gi",
 					},
 					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Primaries:   3,
-						Secondaries: 1,
+						Servers: 4,
 					},
 				},
 			},
@@ -99,15 +97,14 @@ func TestClusterValidator_ValidateCreate(t *testing.T) {
 						Size:      "100Gi",
 					},
 					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Primaries:   3,
-						Secondaries: 1,
+						Servers: 4,
 					},
 				},
 			},
 			wantErr: true,
 		},
 		{
-			name: "valid topology with even primaries (warnings only)",
+			name: "valid topology with even servers (warnings only)",
 			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 					Edition: "enterprise",
@@ -121,8 +118,7 @@ func TestClusterValidator_ValidateCreate(t *testing.T) {
 						Size:      "100Gi",
 					},
 					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Primaries:   4,
-						Secondaries: 1,
+						Servers: 5, // 4 + 1 total servers
 					},
 				},
 			},
@@ -159,8 +155,7 @@ func TestClusterValidator_ApplyDefaults(t *testing.T) {
 				Size:      "100Gi",
 			},
 			Topology: neo4jv1alpha1.TopologyConfiguration{
-				Primaries:   2, // No longer adjusted - even numbers are allowed
-				Secondaries: 1,
+				Servers: 2, // 2 servers
 			},
 		},
 	}
@@ -176,8 +171,8 @@ func TestClusterValidator_ApplyDefaults(t *testing.T) {
 		t.Errorf("Expected image pull policy to be defaulted to 'IfNotPresent', got %s", cluster.Spec.Image.PullPolicy)
 	}
 
-	if cluster.Spec.Topology.Primaries != 2 {
-		t.Errorf("Expected primaries to remain unchanged at 2, got %d", cluster.Spec.Topology.Primaries)
+	if cluster.Spec.Topology.Servers != 2 {
+		t.Errorf("Expected servers to remain unchanged at 2, got %d", cluster.Spec.Topology.Servers)
 	}
 
 	if cluster.Spec.TLS == nil || cluster.Spec.TLS.Mode != "disabled" {

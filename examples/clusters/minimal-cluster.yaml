@@ -1,6 +1,6 @@
 # Minimal Neo4j Enterprise cluster example
-# This creates a cluster with minimum topology: 1 primary + 1 secondary
-# Uses unified clustering approach with RAFT enabled for full cluster capabilities
+# This creates a cluster with minimum 2 servers that self-organize
+# Servers can host databases with different primary/secondary topologies
 
 apiVersion: neo4j.neo4j.com/v1alpha1
 kind: Neo4jEnterpriseCluster
@@ -17,11 +17,12 @@ spec:
     tag: "5.26-enterprise"  # Neo4j 5.26+ required
     pullPolicy: IfNotPresent
 
-  # Minimal cluster topology: 1 primary + 1 secondary (minimum required)
-  # Uses unified clustering approach with V2_ONLY discovery for 5.26+
+  # Minimal cluster topology: 2 servers (minimum required for clustering)
+  # Servers self-organize and can host databases with different topologies
   topology:
-    primaries: 1      # Single primary with clustering enabled
-    secondaries: 1    # One read replica for minimum cluster topology
+    servers: 2        # Minimum servers for clustering
+    # Optional: Constrain all servers to a specific mode (PRIMARY, SECONDARY, or NONE)
+    # serverModeConstraint: NONE
 
   # Storage configuration
   storage:

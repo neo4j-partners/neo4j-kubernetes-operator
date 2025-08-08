@@ -48,21 +48,80 @@ type Neo4jDatabaseSpec struct {
 	IfNotExists bool `json:"ifNotExists,omitempty"`
 
 	// Database topology specification for clusters
+	//
+	// This defines how the database is distributed across the available cluster servers.
+	// The cluster provides server infrastructure (e.g., 5 servers), and this topology
+	// specifies how many of those servers should act as primaries vs secondaries
+	// for this specific database.
+	//
+	// Multiple databases can have different topologies within the same cluster:
+	// - Cluster: 5 servers
+	// - Database A: 3 primaries, 1 secondary (uses 4 servers)
+	// - Database B: 2 primaries, 0 secondaries (uses 2 servers)
+	//
+	// Servers self-organize into primary/secondary roles at the database level.
 	Topology *DatabaseTopology `json:"topology,omitempty"`
 
 	// Default Cypher language version (Neo4j 2025.x only)
 	// +kubebuilder:validation:Enum="5";"25"
+	//
+	// Specifies the default Cypher language version for this database.
+	// - "5": Cypher 5 (backward compatibility)
+	// - "25": Cypher 25 (recommended for new databases)
 	DefaultCypherLanguage string `json:"defaultCypherLanguage,omitempty"`
+
+	// Seed URI for database creation from existing backup/dump
+	//
+	// This creates the database from an existing Neo4j backup or dump file
+	// located at the specified URI. The seeding occurs during database creation,
+	// before any initial data import.
+	//
+	// Supported URI schemes (via Neo4j CloudSeedProvider):
+	// - Amazon S3: s3://bucket/path/backup.backup
+	// - Google Cloud Storage: gs://bucket/path/backup.backup
+	// - Azure Blob Storage: azb://container/path/backup.backup
+	// - HTTP/HTTPS: https://server/path/backup.backup
+	// - FTP: ftp://server/path/backup.backup
+	//
+	// Cloud authentication is configured system-wide via:
+	// - S3: IAM roles, AWS credentials, or service account annotations
+	// - GCS: Service account keys or workload identity
+	// - Azure: Managed identity or service principal
+	//
+	// Example: "s3://prod-backups/daily-backup-2025-01-15.backup"
+	SeedURI string `json:"seedURI,omitempty"`
+
+	// Seed configuration for advanced seeding options
+	SeedConfig *SeedConfiguration `json:"seedConfig,omitempty"`
+
+	// Seed credentials for URI access when system-wide auth is not available
+	SeedCredentials *SeedCredentials `json:"seedCredentials,omitempty"`
 }
 
 // DatabaseTopology defines database distribution in a cluster
+//
+// IMPORTANT: This is database-level topology, not cluster infrastructure topology.
+// The cluster has servers (infrastructure), databases have primaries/secondaries (data distribution).
+//
+// Example with 5-server cluster:
+// - Database "users": 3 primaries, 1 secondary (uses 4 of the 5 servers)
+// - Database "logs":  2 primaries, 0 secondaries (uses 2 of the 5 servers)
+// - Database "cache": 1 primary, 3 secondaries (uses 4 of the 5 servers)
+//
+// Constraint: primaries + secondaries <= cluster.spec.topology.servers
 type DatabaseTopology struct {
-	// Number of primaries for this database
+	// Number of primary replicas for this database
 	// +kubebuilder:validation:Minimum=1
+	//
+	// Primaries handle both read and write operations for the database.
+	// At least 1 primary is required for database operation.
 	Primaries int32 `json:"primaries,omitempty"`
 
-	// Number of secondaries for this database
+	// Number of secondary replicas for this database
 	// +kubebuilder:validation:Minimum=0
+	//
+	// Secondaries provide read-only access for horizontal scaling.
+	// Secondaries are optional but improve read performance and availability.
 	Secondaries int32 `json:"secondaries,omitempty"`
 }
 
@@ -83,6 +142,63 @@ type InitialDataSpec struct {
 
 	// Storage location for data files
 	Storage *StorageLocation `json:"storage,omitempty"`
+}
+
+// SeedConfiguration defines advanced seeding options for Neo4j database creation
+type SeedConfiguration struct {
+	// Restore until specific point in time (Neo4j 2025.x only)
+	//
+	// Supports two formats:
+	// - RFC3339 timestamp: "2025-01-15T10:30:00Z"
+	// - Transaction ID: "txId:12345"
+	//
+	// This allows point-in-time recovery when creating database from backup.
+	// Only available with Neo4j 2025.x and CloudSeedProvider.
+	RestoreUntil string `json:"restoreUntil,omitempty"`
+
+	// Additional seed provider configuration options
+	//
+	// Common configuration options:
+	// - "compression": "gzip" | "lz4" | "none"
+	// - "validation": "strict" | "lenient"
+	// - "bufferSize": Buffer size for seed operations
+	//
+	// Cloud-specific options:
+	// - S3: "region", "endpoint", "pathStyleAccess"
+	// - GCS: "project", "location"
+	// - Azure: "endpoint", "containerName"
+	Config map[string]string `json:"config,omitempty"`
+}
+
+// SeedCredentials defines authentication for accessing seed URIs
+//
+// Used when system-wide cloud authentication (IAM roles, workload identity)
+// is not available or when using HTTP/FTP endpoints requiring authentication.
+type SeedCredentials struct {
+	// Kubernetes secret containing seed URI credentials
+	//
+	// Expected secret keys by URI scheme:
+	//
+	// S3 (s3://):
+	// - AWS_ACCESS_KEY_ID: AWS access key
+	// - AWS_SECRET_ACCESS_KEY: AWS secret key
+	// - AWS_SESSION_TOKEN: (optional) session token
+	// - AWS_REGION: (optional) AWS region override
+	//
+	// Google Cloud Storage (gs://):
+	// - GOOGLE_APPLICATION_CREDENTIALS: Service account JSON key
+	// - GOOGLE_CLOUD_PROJECT: (optional) project ID override
+	//
+	// Azure Blob Storage (azb://):
+	// - AZURE_STORAGE_ACCOUNT: Storage account name
+	// - AZURE_STORAGE_KEY: Storage account key
+	// - AZURE_STORAGE_SAS_TOKEN: (alternative) SAS token
+	//
+	// HTTP/HTTPS/FTP:
+	// - USERNAME: (optional) authentication username
+	// - PASSWORD: (optional) authentication password
+	// - AUTH_HEADER: (optional) custom authorization header
+	SecretRef string `json:"secretRef,omitempty"`
 }
 
 // Neo4jDatabaseStatus defines the observed state of Neo4jDatabase
@@ -115,6 +231,10 @@ type Neo4jDatabaseStatus struct {
 	State string `json:"state,omitempty"`
 
 	// Servers hosting this database (for topology tracking)
+	//
+	// Lists which cluster servers are currently hosting this database.
+	// This shows the actual distribution of database replicas across
+	// the available cluster server infrastructure.
 	Servers []string `json:"servers,omitempty"`
 }
 

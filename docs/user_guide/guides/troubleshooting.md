@@ -10,10 +10,12 @@ This guide provides comprehensive troubleshooting information for the Neo4j Kube
 # Check deployment status
 kubectl get neo4jenterprisecluster
 kubectl get neo4jenterprisestandalone
+kubectl get neo4jdatabase
 
 # View detailed information
 kubectl describe neo4jenterprisecluster <cluster-name>
 kubectl describe neo4jenterprisestandalone <standalone-name>
+kubectl describe neo4jdatabase <database-name>
 
 # Check pod status
 kubectl get pods -l app.kubernetes.io/name=neo4j
@@ -554,8 +556,8 @@ kubectl logs -n cert-manager deployment/cert-manager
 
    ```bash
    # Check for split clusters
-   kubectl exec <cluster>-primary-0 -- cypher-shell -u neo4j -p <password> "SHOW SERVERS"
-   kubectl exec <cluster>-primary-1 -- cypher-shell -u neo4j -p <password> "SHOW SERVERS"
+   kubectl exec <cluster>-server-0 -- cypher-shell -u neo4j -p <password> "SHOW SERVERS"
+   kubectl exec <cluster>-server-1 -- cypher-shell -u neo4j -p <password> "SHOW SERVERS"
    ```
 
    **Prevention:**
@@ -570,6 +572,170 @@ kubectl logs -n cert-manager deployment/cert-manager
    ```
 
    See [Split-Brain Recovery Guide](../troubleshooting/split-brain-recovery.md) for detailed recovery procedures.
+
+### 10. Database Creation Issues
+
+#### Problem: Neo4jDatabase Creation Fails
+```bash
+# Check database status
+kubectl get neo4jdatabase <database-name> -o yaml
+kubectl describe neo4jdatabase <database-name>
+
+# Check events specific to the database
+kubectl get events --field-selector involvedObject.name=<database-name>
+```
+
+**Common causes and solutions:**
+
+1. **Cluster Not Ready:**
+   ```yaml
+   # Error: Referenced cluster my-cluster not found
+   # Solution: Ensure cluster exists and is ready
+   spec:
+     clusterRef: existing-cluster-name  # Must match actual cluster
+   ```
+
+2. **Topology Exceeds Cluster Capacity:**
+   ```yaml
+   # Error: database topology requires 5 servers but cluster only has 3 servers available
+   # Solution: Adjust topology to fit cluster capacity
+   spec:
+     topology:
+       primaries: 2     # Reduce from 3
+       secondaries: 1   # Reduce from 2
+   ```
+
+3. **Invalid Configuration Conflicts:**
+   ```yaml
+   # Error: seedURI and initialData cannot be specified together
+   # Solution: Choose one data source method
+   spec:
+     seedURI: "s3://my-backups/db.backup"
+     # initialData: null  # Remove this section
+   ```
+
+#### Problem: Seed URI Database Creation Fails
+```bash
+# Check validation errors
+kubectl describe neo4jdatabase <database-name>
+
+# Check operator logs for seed URI specific errors
+kubectl logs -n neo4j-operator deployment/neo4j-operator-controller-manager | grep -i seed
+```
+
+**Common seed URI issues:**
+
+1. **Authentication Failures:**
+   ```bash
+   # Check credentials secret exists
+   kubectl get secret <credentials-secret> -o yaml
+
+   # Verify required keys for your URI scheme
+   # S3: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+   # GCS: GOOGLE_APPLICATION_CREDENTIALS
+   # Azure: AZURE_STORAGE_ACCOUNT + (AZURE_STORAGE_KEY or AZURE_STORAGE_SAS_TOKEN)
+   ```
+
+2. **URI Access Issues:**
+   ```bash
+   # Test URI access from a pod
+   kubectl run test-pod --rm -it --image=amazon/aws-cli \
+     -- aws s3 ls s3://my-bucket/backup.backup
+
+   # For GCS
+   kubectl run test-pod --rm -it --image=google/cloud-sdk:slim \
+     -- gsutil ls gs://my-bucket/backup.backup
+   ```
+
+3. **Invalid URI Format:**
+   ```yaml
+   # Error: URI must specify a host
+   # Bad: s3:///path/backup.backup
+   # Good: s3://bucket-name/path/backup.backup
+
+   # Error: URI must specify a path to the backup file
+   # Bad: s3://bucket-name/
+   # Good: s3://bucket-name/backup.backup
+   ```
+
+4. **Point-in-Time Recovery Issues:**
+   ```yaml
+   # Warning: Point-in-time recovery (restoreUntil) is only available with Neo4j 2025.x
+   # Solution: Only use restoreUntil with Neo4j 2025.x clusters
+   seedConfig:
+     restoreUntil: "2025-01-15T10:30:00Z"  # Neo4j 2025.x only
+   ```
+
+5. **Performance Issues with Seed URI:**
+   ```yaml
+   # Warning: Using dump file format. For better performance with large databases, consider using Neo4j backup format (.backup) instead.
+   # Solution: Use .backup format for large datasets
+   seedURI: "s3://my-backups/database.backup"  # Instead of .dump
+
+   # Optimize seed configuration for better performance
+   seedConfig:
+     config:
+       compression: "lz4"      # Faster than gzip
+       bufferSize: "256MB"     # Larger buffer for big files
+       validation: "lenient"   # Skip intensive validation
+   ```
+
+#### Problem: Database Stuck in Creating State
+```bash
+# Check database status conditions
+kubectl get neo4jdatabase <database-name> -o jsonpath='{.status.conditions[*].message}'
+
+# Monitor database creation progress
+kubectl get events -w --field-selector involvedObject.name=<database-name>
+```
+
+**Solutions:**
+
+1. **Check Cluster Connectivity:**
+   ```bash
+   # Ensure operator can connect to Neo4j cluster
+   kubectl logs -n neo4j-operator deployment/neo4j-operator-controller-manager | grep -i "connection failed"
+   ```
+
+2. **Large Backup Restoration:**
+   ```bash
+   # Monitor restoration progress (seed URI databases)
+   kubectl logs <cluster-pod> | grep -i "restore\|seed"
+
+   # For large backups, restoration may take significant time
+   # Ensure adequate pod resources
+   ```
+
+3. **Network Connectivity Issues:**
+   ```bash
+   # For seed URI, test network access from Neo4j pods
+   kubectl exec -it <cluster-pod> -- curl -I <your-backup-url>
+   ```
+
+#### Problem: Database Ready But No Data
+```bash
+# Connect to database and check
+kubectl exec -it <cluster-pod> -- cypher-shell -u neo4j -p <password> -d <database-name> "MATCH (n) RETURN count(n)"
+```
+
+**Solutions:**
+
+1. **Initial Data Not Applied:**
+   ```bash
+   # Check if initial data import completed
+   kubectl get neo4jdatabase <database-name> -o jsonpath='{.status.dataImported}'
+
+   # Check for import errors in operator logs
+   kubectl logs -n neo4j-operator deployment/neo4j-operator-controller-manager | grep -i "initial data\|import"
+   ```
+
+2. **Seed URI Data Not Restored:**
+   ```bash
+   # Check if seed restoration completed
+   kubectl get events --field-selector involvedObject.name=<database-name> | grep -i "DataSeeded"
+
+   # Verify seed URI is accessible and contains data
+   ```
 
 ## Advanced Troubleshooting
 

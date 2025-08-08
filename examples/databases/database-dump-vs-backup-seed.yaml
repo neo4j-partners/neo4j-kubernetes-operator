@@ -1,0 +1,108 @@
+# Example: Comparing Neo4j dump vs backup file formats for seed URIs
+# This demonstrates the difference between .dump and .backup formats
+
+# Database created from dump file (slower but more portable)
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jDatabase
+metadata:
+  name: imported-from-dump
+  namespace: default
+spec:
+  clusterRef: test-cluster
+  name: from-dump
+
+  # Seed from dump file - more portable but slower for large datasets
+  seedURI: "s3://my-backups/database-export.dump"
+
+  topology:
+    primaries: 1
+    secondaries: 1
+
+  # Configuration optimized for dump file import
+  seedConfig:
+    config:
+      # Dump files are typically uncompressed
+      compression: "none"
+      # Use lenient validation for dump imports
+      validation: "lenient"
+      # Smaller buffer for dump processing
+      bufferSize: "32MB"
+
+  wait: true
+  ifNotExists: true
+
+  # Note: This will generate a warning about dump file performance
+  # Warning: "Using dump file format. For better performance with large databases,
+  #          consider using Neo4j backup format (.backup) instead."
+
+---
+# Database created from backup file (faster and more efficient)
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jDatabase
+metadata:
+  name: restored-from-backup
+  namespace: default
+spec:
+  clusterRef: production-cluster
+  name: from-backup
+
+  # Seed from backup file - faster and more efficient for large datasets
+  seedURI: "s3://my-backups/database-backup.backup"
+
+  topology:
+    primaries: 2
+    secondaries: 2
+
+  # Configuration optimized for backup file restore
+  seedConfig:
+    # Point-in-time recovery available with backup files
+    restoreUntil: "2025-01-15T12:00:00Z"
+
+    config:
+      # Backup files support compression
+      compression: "gzip"
+      # Strict validation for production restores
+      validation: "strict"
+      # Larger buffer for backup processing
+      bufferSize: "128MB"
+
+  # Production-grade resource allocation
+  options:
+    "dbms.memory.heap.initial_size": "2g"
+    "dbms.memory.heap.max_size": "8g"
+    "dbms.memory.pagecache.size": "4g"
+    "dbms.memory.transaction.total.max": "2g"
+
+  wait: true
+  ifNotExists: true
+  defaultCypherLanguage: "25"
+
+---
+# Performance comparison documentation
+#
+# DUMP FORMAT (.dump):
+# - Pros:
+#   * Cross-version compatibility
+#   * Human-readable format
+#   * Works with community edition sources
+# - Cons:
+#   * Slower import for large datasets
+#   * No point-in-time recovery
+#   * No compression support
+#   * Single-threaded processing
+#
+# BACKUP FORMAT (.backup):
+# - Pros:
+#   * Much faster restore performance
+#   * Supports point-in-time recovery (Neo4j 2025.x)
+#   * Compression support (gzip, lz4)
+#   * Multi-threaded processing
+#   * Incremental backup support
+# - Cons:
+#   * Version-specific format
+#   * Requires Neo4j Enterprise for creation
+#   * Less portable between different Neo4j versions
+#
+# RECOMMENDATION:
+# - Use .backup format for production workloads and large datasets
+# - Use .dump format for development, testing, or cross-version migrations

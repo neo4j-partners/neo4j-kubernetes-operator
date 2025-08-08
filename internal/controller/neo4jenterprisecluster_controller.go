@@ -311,42 +311,22 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 		}
 	}
 
-	// Create StatefulSets
-	primarySts := resources.BuildPrimaryStatefulSetForEnterprise(cluster)
+	// Create StatefulSet for servers (servers self-organize)
+	serverSts := resources.BuildServerStatefulSetForEnterprise(cluster)
 
-	// Apply topology constraints to primary StatefulSet
+	// Apply topology constraints to server StatefulSet
 	if r.TopologyScheduler != nil && topologyPlacement != nil {
-		if err := r.TopologyScheduler.ApplyTopologyConstraints(ctx, primarySts, cluster, topologyPlacement); err != nil {
-			logger.Error(err, "Failed to apply topology constraints to primary StatefulSet")
+		if err := r.TopologyScheduler.ApplyTopologyConstraints(ctx, serverSts, cluster, topologyPlacement); err != nil {
+			logger.Error(err, "Failed to apply topology constraints to server StatefulSet")
 			_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Failed to apply topology constraints: %v", err))
 			return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 		}
 	}
 
-	if err := r.createOrUpdateResource(ctx, primarySts, cluster); err != nil {
-		logger.Error(err, "Failed to create primary StatefulSet")
-		_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Failed to create primary StatefulSet: %v", err))
+	if err := r.createOrUpdateResource(ctx, serverSts, cluster); err != nil {
+		logger.Error(err, "Failed to create server StatefulSet")
+		_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Failed to create server StatefulSet: %v", err))
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
-	}
-
-	if cluster.Spec.Topology.Secondaries > 0 {
-		// Create secondary StatefulSet immediately (parallel with primaries)
-		secondarySts := resources.BuildSecondaryStatefulSetForEnterprise(cluster)
-
-		// Apply topology constraints to secondary StatefulSet
-		if r.TopologyScheduler != nil && topologyPlacement != nil {
-			if err := r.TopologyScheduler.ApplyTopologyConstraints(ctx, secondarySts, cluster, topologyPlacement); err != nil {
-				logger.Error(err, "Failed to apply topology constraints to secondary StatefulSet")
-				_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Failed to apply topology constraints: %v", err))
-				return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
-			}
-		}
-
-		if err := r.createOrUpdateResource(ctx, secondarySts, cluster); err != nil {
-			logger.Error(err, "Failed to create secondary StatefulSet")
-			_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Failed to create secondary StatefulSet: %v", err))
-			return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
-		}
 	}
 
 	// Handle Query Performance Monitoring

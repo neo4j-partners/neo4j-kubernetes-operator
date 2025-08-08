@@ -1,25 +1,63 @@
+# Example: Database with Custom Topology Distribution
+#
+# This example shows how to create a database with a specific topology
+# that distributes across available cluster servers.
+#
+# TOPOLOGY CONCEPTS:
+# - Cluster Topology: Infrastructure servers (e.g., 5 servers in the cluster)
+# - Database Topology: How this database uses those servers (e.g., 2 primaries + 1 secondary = 3 servers used)
+#
+# REQUIREMENTS:
+# - Cluster must have at least 3 servers available (2 primaries + 1 secondary)
+# - Referenced cluster "my-neo4j-cluster" must exist and be ready
+#
+# DISTRIBUTION:
+# - 2 servers will host primary replicas (read/write)
+# - 1 server will host secondary replica (read-only)
+# - Remaining cluster servers can be used by other databases
+
 apiVersion: neo4j.neo4j.com/v1alpha1
 kind: Neo4jDatabase
 metadata:
   name: orders-database
   namespace: default
 spec:
+  # Reference to Neo4j Enterprise Cluster
   clusterRef: my-neo4j-cluster
+
+  # Database name as it appears in Neo4j
   name: orders
-  # Wait for database creation to complete
+
+  # Wait for database creation to complete before marking as ready
   wait: true
-  # Create only if it doesn't exist
+
+  # Create only if it doesn't exist (avoids errors on reapply)
   ifNotExists: true
-  # Database topology for cluster distribution
+
+  # Database topology: Distribution across cluster servers
+  #
+  # This specifies how the "orders" database should be distributed
+  # across the available servers in "my-neo4j-cluster".
+  #
+  # Example: If cluster has 5 servers, this database will use 3 of them
+  # (2 primaries + 1 secondary), leaving 2 servers for other databases.
   topology:
-    primaries: 2
-    secondaries: 1
-  # Database options
+    primaries: 2    # 2 servers handle read/write for this database
+    secondaries: 1  # 1 server provides read-only access for scaling
+
+  # Database-specific configuration options
   options:
-    txLogEnrichment: "FULL"
-  # Initial data import
+    txLogEnrichment: "FULL"  # Enhanced transaction logging
+
+  # Initial data import after database creation
   initialData:
     source: cypher
     cypherStatements:
       - "CREATE CONSTRAINT order_id_unique IF NOT EXISTS ON (o:Order) ASSERT o.orderId IS UNIQUE"
       - "CREATE INDEX order_date_index IF NOT EXISTS FOR (o:Order) ON (o.orderDate)"
+
+---
+# Create the admin secret required by the cluster
+# kubectl create secret generic neo4j-admin-secret \
+#   --from-literal=username=neo4j \
+#   --from-literal=password=your-secure-password

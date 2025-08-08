@@ -436,14 +436,12 @@ func TestResourceMonitor_ValidateScalingCapacity(t *testing.T) {
 				},
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Primaries:   3,
-						Secondaries: 2,
+						Servers: 3,
 					},
 				},
 			},
 			targetTopology: neo4jv1alpha1.TopologyConfiguration{
-				Primaries:   2,
-				Secondaries: 1,
+				Servers: 3,
 			},
 			nodes: []corev1.Node{
 				{
@@ -472,8 +470,7 @@ func TestResourceMonitor_ValidateScalingCapacity(t *testing.T) {
 				},
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Primaries:   1,
-						Secondaries: 1,
+						Servers: 3,
 					},
 					Resources: &corev1.ResourceRequirements{
 						Requests: corev1.ResourceList{
@@ -484,8 +481,7 @@ func TestResourceMonitor_ValidateScalingCapacity(t *testing.T) {
 				},
 			},
 			targetTopology: neo4jv1alpha1.TopologyConfiguration{
-				Primaries:   2,
-				Secondaries: 2,
+				Servers: 5, // Scale up from 3 to 5 servers
 			},
 			nodes: []corev1.Node{
 				{

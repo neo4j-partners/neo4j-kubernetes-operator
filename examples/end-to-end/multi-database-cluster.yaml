@@ -1,0 +1,209 @@
+# Complete Example: 5-Server Cluster with Multiple Database Topologies
+#
+# This example demonstrates the separation between cluster infrastructure topology
+# and database-level topology distribution. It shows how multiple databases
+# can have different topologies within the same cluster.
+#
+# ARCHITECTURE OVERVIEW:
+# - Cluster Infrastructure: 5 servers providing the foundation
+# - Database Distribution: Each database uses servers differently
+# - Server Self-Organization: Servers adapt to each database's topology needs
+#
+# DEPLOYMENT ORDER:
+# 1. Deploy admin secret
+# 2. Deploy Neo4j Enterprise Cluster (5 servers)
+# 3. Wait for cluster to be ready
+# 4. Deploy databases with different topologies
+
+---
+# Neo4j Enterprise Cluster: 5-Server Infrastructure
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: multi-db-cluster
+  namespace: default
+spec:
+  edition: enterprise
+
+  image:
+    repo: neo4j
+    tag: "5.26-enterprise"
+    pullPolicy: IfNotPresent
+
+  # Cluster Infrastructure Topology: 5 servers
+  # These servers provide the infrastructure foundation.
+  # Individual databases will specify how they use these servers.
+  topology:
+    servers: 5  # Infrastructure capacity: 5 servers available
+
+  storage:
+    className: standard
+    size: "10Gi"
+
+  resources:
+    requests:
+      memory: "2Gi"
+      cpu: "500m"
+    limits:
+      memory: "4Gi"
+      cpu: "2"
+
+  # TLS disabled for simplicity
+  tls:
+    mode: disabled
+
+  env:
+    - name: NEO4J_ACCEPT_LICENSE_AGREEMENT
+      value: "yes"
+
+---
+# Database 1: Primary Application Database
+# Uses 3 servers: 2 primaries + 1 secondary
+# Optimized for balanced read/write performance
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jDatabase
+metadata:
+  name: application-db
+  namespace: default
+spec:
+  clusterRef: multi-db-cluster
+  name: application
+  wait: true
+  ifNotExists: true
+
+  # Database Topology: Uses 3 of the 5 cluster servers
+  # - 2 servers act as primaries (read/write)
+  # - 1 server acts as secondary (read-only)
+  # - Leaves 2 servers available for other databases
+  topology:
+    primaries: 2
+    secondaries: 1
+
+  options:
+    txLogEnrichment: "FULL"
+
+  initialData:
+    source: cypher
+    cypherStatements:
+      - "CREATE CONSTRAINT user_id_unique IF NOT EXISTS ON (u:User) ASSERT u.userId IS UNIQUE"
+      - "CREATE INDEX user_email_index IF NOT EXISTS FOR (u:User) ON (u.email)"
+
+---
+# Database 2: Analytics Database
+# Uses 4 servers: 1 primary + 3 secondaries
+# Optimized for read-heavy analytical workloads
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jDatabase
+metadata:
+  name: analytics-db
+  namespace: default
+spec:
+  clusterRef: multi-db-cluster
+  name: analytics
+  wait: true
+  ifNotExists: true
+
+  # Database Topology: Uses 4 of the 5 cluster servers
+  # - 1 server acts as primary (minimal write load)
+  # - 3 servers act as secondaries (horizontal read scaling)
+  # - Optimized for read-heavy analytical queries
+  topology:
+    primaries: 1
+    secondaries: 3
+
+  options:
+    queryTimeout: "300s"  # Longer timeout for analytical queries
+
+  initialData:
+    source: cypher
+    cypherStatements:
+      - "CREATE INDEX analytics_timestamp_index IF NOT EXISTS FOR (e:Event) ON (e.timestamp)"
+      - "CREATE INDEX analytics_user_index IF NOT EXISTS FOR (e:Event) ON (e.userId)"
+
+---
+# Database 3: Cache Database
+# Uses 2 servers: 2 primaries + 0 secondaries
+# Optimized for high-performance caching with write distribution
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jDatabase
+metadata:
+  name: cache-db
+  namespace: default
+spec:
+  clusterRef: multi-db-cluster
+  name: cache
+  wait: true
+  ifNotExists: true
+
+  # Database Topology: Uses 2 of the 5 cluster servers
+  # - 2 servers act as primaries (distributed writes)
+  # - No secondaries (cache doesn't need read replicas)
+  # - Fast write distribution across primaries
+  topology:
+    primaries: 2
+    secondaries: 0
+
+  options:
+    transactionTimeout: "30s"  # Fast cache operations
+
+---
+# Database 4: Session Store
+# Uses 1 server: 1 primary + 0 secondaries
+# Minimal topology for simple session storage
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jDatabase
+metadata:
+  name: session-db
+  namespace: default
+spec:
+  clusterRef: multi-db-cluster
+  name: sessions
+  wait: true
+  ifNotExists: true
+
+  # Database Topology: Uses 1 of the 5 cluster servers
+  # - 1 server acts as primary (simple session storage)
+  # - No secondaries needed for session data
+  # - Minimal resource usage
+  topology:
+    primaries: 1
+    secondaries: 0
+
+---
+# DEPLOYMENT COMMANDS:
+#
+# 1. Create admin secret:
+# kubectl create secret generic neo4j-admin-secret \
+#   --from-literal=username=neo4j \
+#   --from-literal=password=your-secure-password
+#
+# 2. Deploy cluster and databases:
+# kubectl apply -f multi-database-cluster.yaml
+#
+# 3. Check cluster status:
+# kubectl get neo4jenterprisecluster multi-db-cluster
+#
+# 4. Check database status:
+# kubectl get neo4jdatabase
+#
+# 5. Access Neo4j Browser:
+# kubectl port-forward svc/multi-db-cluster-client 7474:7474
+# open http://localhost:7474
+#
+# TOPOLOGY SUMMARY:
+#
+# Cluster Infrastructure: 5 servers total
+# ├── application-db: 2 primaries + 1 secondary = 3 servers
+# ├── analytics-db:   1 primary + 3 secondaries = 4 servers
+# ├── cache-db:       2 primaries + 0 secondaries = 2 servers
+# └── session-db:     1 primary + 0 secondaries = 1 server
+#
+# Note: Databases can overlap servers. The above shows maximum
+# potential server usage. Neo4j efficiently manages the actual
+# server allocation based on topology constraints and availability.
+#
+# VALIDATION:
+# - All database topologies are within cluster capacity (≤ 5 servers)
+# - Each database has ≥ 1 primary for operation
+# - Different topologies optimize for different use cases
+# - Demonstrates flexible server utilization patterns

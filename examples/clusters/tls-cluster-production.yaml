@@ -1,5 +1,5 @@
 # Production-ready TLS-enabled Neo4j Enterprise Cluster
-# This example demonstrates best practices for TLS cluster configuration
+# This example demonstrates best practices for TLS cluster configuration with server-based architecture
 apiVersion: neo4j.neo4j.com/v1alpha1
 kind: Neo4jEnterpriseCluster
 metadata:
@@ -12,10 +12,9 @@ spec:
     tag: "5.26.0-enterprise"
     pullPolicy: "IfNotPresent"
 
-  # Production topology: 3 primaries for fault tolerance, 2+ secondaries for read scaling
+  # Production server-based topology: 5 servers that self-organize
   topology:
-    primaries: 3
-    secondaries: 2
+    servers: 5        # Five servers for flexible database topologies
 
   # Production storage configuration
   storage:

@@ -1,0 +1,12 @@
+title = "Neo4j Kubernetes Operator Gitleaks Configuration"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Global allowlist for example files and test fixtures"
+paths = [
+    '''examples/.*\.yaml$''',
+    '''docs/.*\.md$''',
+    '''test/.*\.go$'''
+]

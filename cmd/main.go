@@ -367,10 +367,11 @@ func setupProductionControllers(mgr ctrl.Manager) error {
 		{
 			name: "Neo4jDatabase",
 			controller: &controller.Neo4jDatabaseReconciler{
-				Client:       mgr.GetClient(),
-				Scheme:       mgr.GetScheme(),
-				Recorder:     mgr.GetEventRecorderFor("neo4j-database-controller"),
-				RequeueAfter: controller.GetTestRequeueAfter(),
+				Client:            mgr.GetClient(),
+				Scheme:            mgr.GetScheme(),
+				Recorder:          mgr.GetEventRecorderFor("neo4j-database-controller"),
+				RequeueAfter:      controller.GetTestRequeueAfter(),
+				DatabaseValidator: validation.NewDatabaseValidator(mgr.GetClient()),
 			},
 		},
 		{
@@ -437,10 +438,11 @@ func setupDevelopmentControllers(mgr ctrl.Manager, controllers []string) error {
 		},
 		"database": func() (interface{ SetupWithManager(ctrl.Manager) error }, string) {
 			return &controller.Neo4jDatabaseReconciler{
-				Client:       mgr.GetClient(),
-				Scheme:       mgr.GetScheme(),
-				Recorder:     mgr.GetEventRecorderFor("neo4j-database-controller"),
-				RequeueAfter: controller.GetTestRequeueAfter(),
+				Client:            mgr.GetClient(),
+				Scheme:            mgr.GetScheme(),
+				Recorder:          mgr.GetEventRecorderFor("neo4j-database-controller"),
+				RequeueAfter:      controller.GetTestRequeueAfter(),
+				DatabaseValidator: validation.NewDatabaseValidator(mgr.GetClient()),
 			}, "Neo4jDatabase"
 		},
 		"backup": func() (interface{ SetupWithManager(ctrl.Manager) error }, string) {

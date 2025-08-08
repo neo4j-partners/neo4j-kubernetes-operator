@@ -89,8 +89,7 @@ var _ = Describe("Multi-Node Cluster Formation Integration Tests", func() {
 						Tag:  "5.26-enterprise",
 					},
 					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Primaries:   1,
-						Secondaries: 1, // Minimum cluster topology
+						Servers: 2, // Minimum cluster topology
 					},
 					Storage: neo4jv1alpha1.StorageSpec{
 						ClassName: "standard",
@@ -133,40 +132,21 @@ var _ = Describe("Multi-Node Cluster Formation Integration Tests", func() {
 				return nil
 			}, time.Minute*2, time.Second*5).Should(Succeed())
 
-			By("Waiting for both StatefulSets to be created")
-			// Primary StatefulSet
-			primaryStatefulSetKey := types.NamespacedName{
-				Name:      clusterName + "-primary",
+			By("Waiting for Server StatefulSet to be created")
+			// Server StatefulSet (unified architecture)
+			serverStatefulSetKey := types.NamespacedName{
+				Name:      clusterName + "-server",
 				Namespace: namespace.Name,
 			}
 
 			Eventually(func() error {
 				statefulSet := &appsv1.StatefulSet{}
-				if err := k8sClient.Get(ctx, primaryStatefulSetKey, statefulSet); err != nil {
+				if err := k8sClient.Get(ctx, serverStatefulSetKey, statefulSet); err != nil {
 					return err
 				}
 
-				if statefulSet.Spec.Replicas == nil || *statefulSet.Spec.Replicas != 1 {
-					return fmt.Errorf("Primary StatefulSet should have 1 replica, got %v", statefulSet.Spec.Replicas)
-				}
-
-				return nil
-			}, time.Minute*2, time.Second*5).Should(Succeed())
-
-			// Secondary StatefulSet
-			secondaryStatefulSetKey := types.NamespacedName{
-				Name:      clusterName + "-secondary",
-				Namespace: namespace.Name,
-			}
-
-			Eventually(func() error {
-				statefulSet := &appsv1.StatefulSet{}
-				if err := k8sClient.Get(ctx, secondaryStatefulSetKey, statefulSet); err != nil {
-					return err
-				}
-
-				if statefulSet.Spec.Replicas == nil || *statefulSet.Spec.Replicas != 1 {
-					return fmt.Errorf("Secondary StatefulSet should have 1 replica, got %v", statefulSet.Spec.Replicas)
+				if statefulSet.Spec.Replicas == nil || *statefulSet.Spec.Replicas != 2 {
+					return fmt.Errorf("Server StatefulSet should have 2 replicas, got %v", statefulSet.Spec.Replicas)
 				}
 
 				return nil
@@ -174,26 +154,15 @@ var _ = Describe("Multi-Node Cluster Formation Integration Tests", func() {
 
 			By("Verifying pods are created for minimal cluster")
 			Eventually(func() error {
-				// Check primary pods
-				primaryPods := &corev1.PodList{}
-				if err := k8sClient.List(ctx, primaryPods, client.InNamespace(namespace.Name),
-					client.MatchingLabels{"neo4j.com/role": "primary"}); err != nil {
+				// Check server pods (unified architecture)
+				serverPods := &corev1.PodList{}
+				if err := k8sClient.List(ctx, serverPods, client.InNamespace(namespace.Name),
+					client.MatchingLabels{"app.kubernetes.io/name": "neo4j", "app.kubernetes.io/instance": clusterName}); err != nil {
 					return err
 				}
 
-				if len(primaryPods.Items) != 1 {
-					return fmt.Errorf("expected 1 primary pod, got %d", len(primaryPods.Items))
-				}
-
-				// Check secondary pods
-				secondaryPods := &corev1.PodList{}
-				if err := k8sClient.List(ctx, secondaryPods, client.InNamespace(namespace.Name),
-					client.MatchingLabels{"neo4j.com/role": "secondary"}); err != nil {
-					return err
-				}
-
-				if len(secondaryPods.Items) != 1 {
-					return fmt.Errorf("expected 1 secondary pod, got %d", len(secondaryPods.Items))
+				if len(serverPods.Items) != 2 {
+					return fmt.Errorf("expected 2 server pods, got %d", len(serverPods.Items))
 				}
 
 				return nil
@@ -215,8 +184,7 @@ var _ = Describe("Multi-Node Cluster Formation Integration Tests", func() {
 						Tag:  "2025.02.0-enterprise", // Test 2025.x version
 					},
 					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Primaries:   1,
-						Secondaries: 1,
+						Servers: 2, // 1 + 1 total servers
 					},
 					Storage: neo4jv1alpha1.StorageSpec{
 						ClassName: "standard",

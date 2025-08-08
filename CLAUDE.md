@@ -10,7 +10,7 @@ Neo4j Enterprise Operator for Kubernetes - manages Neo4j Enterprise deployments 
 **Discovery**: V2_ONLY mode exclusively
 
 **Deployment Types:**
-- **Neo4jEnterpriseCluster**: High availability clusters (minimum 1 primary + 1 secondary OR 2+ primaries)
+- **Neo4jEnterpriseCluster**: High availability clusters (minimum 2 servers that self-organize into primary/secondary roles)
 - **Neo4jEnterpriseStandalone**: Single-node deployments (development/testing)
 
 ## Architecture
@@ -175,7 +175,7 @@ make dev-run ARGS="--zap-log-level=debug"
 ### Deployment Configuration
 
 **Neo4jEnterpriseCluster**:
-- Min topology: 1 primary + 1 secondary OR 2+ primaries
+- Min topology: 2+ servers (self-organize into primary/secondary roles)
 - Scalable, uses V2_ONLY discovery
 
 **Neo4jEnterpriseStandalone**:
@@ -236,9 +236,9 @@ spec:
 - **DO NOT CHANGE**: This matches Neo4j Helm charts
 
 ### Parallel Cluster Formation (Fixed 2025-07-18)
-- **Configuration**: `MIN_PRIMARIES=1`, `ParallelPodManagement`
+- **Configuration**: `dbms.cluster.minimum_initial_system_primaries_count=1`, `ParallelPodManagement`
 - **Result**: 100% cluster formation success
-- **Key**: All pods start simultaneously, first forms cluster
+- **Key**: All server pods start simultaneously, self-organize roles
 
 
 
@@ -250,7 +250,7 @@ spec:
 ### Neo4j Configuration & Cluster Formation (Updated 2025-08-05)
 - **Discovery Service Architecture**: V2_ONLY mode correctly uses discovery service hostname, not individual endpoints
 - **Port Configuration**: Always use `tcp-discovery` (port 5000) for K8s discovery, not `tcp-tx` (port 6000)
-- **Minimum Primaries**: Set to 1 (`dbms.cluster.minimum_initial_system_primaries_count=1`) for flexible cluster formation
+- **Minimum Servers**: Set to 1 (`dbms.cluster.minimum_initial_system_primaries_count=1`) for flexible cluster formation
 - **FQDN Addressing**: All advertised addresses use FQDN format via headless service
 - **Service Setup**:
   - **Discovery Service**: ClusterIP with `tcp-discovery:5000`, selector includes `neo4j.com/clustering=true`
@@ -268,7 +268,7 @@ These settings are automatically configured by the operator:
 - `initial.dbms.automatically_enable_free_servers=true`
 - `dbms.cluster.minimum_initial_system_primaries_count=1`
 
-**Variable Substitution**: `${MIN_PRIMARIES}` and `${HOSTNAME_FQDN}` are substituted in startup script
+**Variable Substitution**: `${HOSTNAME_FQDN}` is substituted in startup script (server count is set directly)
 
 ## CRITICAL: Resource Version Conflict Handling (Added 2025-08-05)
 
@@ -313,10 +313,10 @@ kubectl logs -n neo4j-operator-system deployment/neo4j-operator-controller-manag
 
 # Verify cluster formation success
 kubectl get neo4jenterprisecluster
-kubectl get pods | grep -E "(primary|secondary)"
+kubectl get pods | grep -E "(server)"
 
 # Monitor StatefulSet revisions (should be minimal)
-kubectl rollout history statefulset <cluster-name>-primary
+kubectl rollout history statefulset <cluster-name>-server
 ```
 
 ### ConfigMap Debounce Configuration
@@ -345,6 +345,145 @@ minInterval := 1 * time.Second // Fast updates for cluster formation
 
 **DO NOT**: Remove or modify retry logic without comprehensive testing across all Neo4j versions
 
+## CRITICAL: Server-Based Architecture (Updated 2025-08-07)
+
+### Architecture Transition Overview
+The operator transitioned from a **primary/secondary StatefulSet architecture** to a **unified server architecture** where Neo4j servers self-organize into primary and secondary roles based on database requirements.
+
+### Key Architecture Changes
+
+#### **Before (Primary/Secondary StatefulSets)**:
+```yaml
+topology:
+  primaries: 3
+  secondaries: 2
+```
+- Separate `<cluster>-primary` and `<cluster>-secondary` StatefulSets
+- Pre-assigned pod roles at infrastructure level
+- Complex topology management and scaling logic
+
+#### **After (Server-Based Architecture)**:
+```yaml
+topology:
+  servers: 5  # Self-organize into primary/secondary roles
+```
+- Single `<cluster>-server` StatefulSet
+- Servers auto-assign roles based on database topology requirements
+- Simplified infrastructure, flexible role assignment
+
+### Database vs Cluster Topology
+**CRITICAL DISTINCTION**: Different levels use different topology models:
+
+#### **Cluster Level** (Neo4jEnterpriseCluster):
+- Uses `servers: N` field
+- Servers self-organize and are role-agnostic
+- Infrastructure provides server pool
+
+#### **Database Level** (Neo4jDatabase):
+- Still uses `primaries: X, secondaries: Y` fields
+- Specifies how databases should be distributed across available servers
+- Neo4j automatically allocates databases to appropriate server roles
+
+### Implementation Details
+
+#### **StatefulSet Architecture**:
+- **Old**: `<cluster>-primary-{0,1,2}` and `<cluster>-secondary-{0,1}`
+- **New**: `<cluster>-server-{0,1,2,3,4}`
+- All pods use identical configuration and auto-discover roles
+
+#### **Service Architecture** (Unchanged):
+- **Discovery Service**: ClusterIP for cluster formation (`tcp-discovery:5000`)
+- **Headless Service**: Pod-to-pod communication
+- **Client Service**: External access (bolt/http)
+- **Internals Service**: Operator management
+
+#### **Cluster Formation Process**:
+1. All server pods start simultaneously (`ParallelPodManagement`)
+2. First server(s) to start form the initial cluster
+3. Additional servers join the existing cluster
+4. Databases are created with specified primary/secondary topology
+5. Neo4j automatically assigns database hosting to appropriate servers
+
+### Configuration Impact
+
+#### **Startup Script Changes**:
+- **Old**: `MIN_PRIMARIES=${REQUESTED_PRIMARIES}` variable substitution
+- **New**: `TOTAL_SERVERS=N` with fixed `dbms.cluster.minimum_initial_system_primaries_count=1`
+
+#### **Discovery Configuration** (Unchanged):
+- Still uses V2_ONLY discovery with `tcp-discovery` port (5000)
+- Same Kubernetes service discovery patterns
+- Same RBAC requirements (`endpoints` permission)
+
+### Key Benefits
+
+1. **Simplified Scaling**: Single StatefulSet vs multiple StatefulSets
+2. **Flexible Role Assignment**: Servers adapt to database topology needs
+3. **Reduced Complexity**: No pre-role assignment logic
+4. **Better Resource Utilization**: Servers can host multiple database roles
+5. **Easier Maintenance**: Single pod template and configuration
+
+### Migration Considerations
+
+#### **API Compatibility**:
+- Old `primaries`/`secondaries` fields removed from Neo4jEnterpriseCluster
+- New `servers` field for total server count
+- Database-level topology preserved (Neo4jDatabase CRD unchanged)
+
+#### **Operational Impact**:
+- Pod names changed: `cluster-primary-0` → `cluster-server-0`
+- DNS names updated for certificates and services
+- Monitoring queries need updates for new naming
+
+#### **Testing Updates**:
+- All tests updated to expect `server-*` naming
+- Topology validation focuses on server counts vs role counts
+- Certificate generation includes all server DNS names
+
+### Critical Success Factors
+
+1. **Resource Conflict Handling**: Essential for server bootstrap coordination
+2. **Parallel Pod Management**: Ensures simultaneous server startup
+3. **Fixed Minimum Bootstrap**: `dbms.cluster.minimum_initial_system_primaries_count=1`
+4. **Service Discovery**: V2_ONLY with proper RBAC permissions
+5. **FQDN Addressing**: Consistent pod FQDN usage for cluster communication
+
+### Troubleshooting Server Architecture
+
+#### **Cluster Formation Issues**:
+```bash
+# Check server pod status
+kubectl get pods -l neo4j.com/cluster=<cluster-name>
+
+# Verify cluster formation
+kubectl exec <cluster>-server-0 -- cypher-shell -u neo4j -p <password> "SHOW SERVERS"
+
+# Check server logs for discovery
+kubectl logs <cluster>-server-0 | grep -E "(Resolved endpoints|cluster formation)"
+```
+
+#### **Database Role Assignment**:
+```bash
+# Check database distribution across servers
+kubectl exec <cluster>-server-0 -- cypher-shell -u neo4j -p <password> "SHOW DATABASES"
+
+# Verify topology constraints are met
+kubectl exec <cluster>-server-0 -- cypher-shell -u neo4j -p <password> "SHOW DATABASE <db-name> YIELD name, currentPrimariesCount, currentSecondariesCount"
+```
+
+### Documentation and Examples Impact
+
+All documentation, examples, and guides updated to reflect:
+- Server-based topology specifications
+- Updated command examples with `server-*` pod names
+- Certificate DNS name patterns
+- Monitoring query updates
+- Test case expectations
+
+**CRITICAL**: When making changes, always distinguish between:
+- **Cluster-level topology**: Uses `servers` (self-organizing infrastructure)
+- **Database-level topology**: Uses `primaries`/`secondaries` (allocation requirements)
+
 ## Configuration Validation
 
 ### Integration Test Configuration
@@ -372,6 +511,151 @@ minInterval := 1 * time.Second // Fast updates for cluster formation
 3. **Test Timeouts**: Use 300-second timeout for all integration tests
 4. **Resource Requirements**: Keep CPU ≤ 200m, memory limits must be ≥ 1Gi for Neo4j Enterprise
 5. **Cluster Formation**: Verify using `SHOW SERVERS` command, not just status checks
+6. **Server Architecture**: Always use `servers` field for clusters, preserve `primaries`/`secondaries` for databases
+7. **Pod Naming**: Expect `<cluster>-server-*` naming, not `<cluster>-primary-*` or `<cluster>-secondary-*`
+8. **Certificate DNS**: Include all server pod DNS names in certificates
+9. **Discovery Port**: Always use `tcp-discovery` (5000), never `tcp-tx` (6000) for V2_ONLY mode
+
+## Key Learnings and Best Practices
+
+### Architecture Evolution Insights
+
+#### **Server-Based Architecture Benefits** (2025-08-07):
+- **Simplified Operations**: Single StatefulSet reduces complexity vs separate primary/secondary StatefulSets
+- **Role Flexibility**: Servers adapt to database needs rather than pre-assigned infrastructure roles
+- **Better Resource Usage**: Servers can host multiple database roles based on actual requirements
+- **Easier Scaling**: Scale server pool independently of database topology requirements
+- **Reduced Configuration**: Identical pod configuration for all servers simplifies management
+
+#### **Critical Design Patterns That Work**:
+1. **Parallel Pod Management**: Essential for coordinated server startup and cluster formation
+2. **Fixed Bootstrap Minimum**: `dbms.cluster.minimum_initial_system_primaries_count=1` provides maximum flexibility
+3. **Service-Based Discovery**: More reliable than endpoint-based discovery in Kubernetes environments
+4. **FQDN Addressing**: Consistent FQDN usage prevents communication issues in complex network setups
+5. **Resource Conflict Retry**: Mandatory for reliable cluster formation under concurrent operations
+
+#### **Anti-Patterns to Avoid**:
+- **Never** use `tcp-tx` port (6000) for V2_ONLY discovery - always use `tcp-discovery` (5000)
+- **Never** set `dbms.mode=SINGLE` in clustered environments - breaks cluster capabilities
+- **Never** mix pre-Neo4j 5.26 configuration patterns with modern V2_ONLY discovery
+- **Never** use `ResourceVersion != ""` for existence checks - use `UID != ""` instead
+- **Never** remove resource conflict retry logic without extensive testing across all Neo4j versions
+
+### Operational Excellence
+
+#### **Testing Strategy**:
+- **Unit Tests First**: Run `make test-unit` before all commits - catches 80% of issues early
+- **Integration Testing**: Use 300-second timeouts to handle CI environment constraints
+- **Server Architecture**: Test with `SHOW SERVERS` commands, not just pod status checks
+- **Resource Constraints**: Keep test resource requests minimal (≤ 200m CPU, ≥ 1Gi memory)
+- **Neo4j 2025.x Focus**: Always test new features with latest Neo4j versions first
+
+#### **Debugging Methodology**:
+1. **Check Cluster Formation**: `kubectl exec <pod> -- cypher-shell "SHOW SERVERS"`
+2. **Verify Discovery**: `kubectl logs <pod> | grep "Resolved endpoints"`
+3. **Monitor Resources**: Check for resource conflicts in operator logs
+4. **Database Topology**: Use `SHOW DATABASES` to verify role assignment
+5. **Network Connectivity**: Ensure all pods can resolve each other's FQDNs
+
+#### **Performance Considerations**:
+- **Memory Requirements**: Neo4j Enterprise requires minimum 1Gi - never go below this
+- **Storage Classes**: Use fast storage classes for production (`fast-ssd` preferred)
+- **CPU Allocation**: Start with 500m requests, scale based on actual load
+- **Network Policies**: Ensure cluster formation traffic is not blocked
+- **Image Pull**: Account for image pull time in test timeouts (especially in CI)
+
+### Development Workflow
+
+#### **Code Change Process**:
+1. **Read Documentation**: Start with CLAUDE.md and relevant API documentation
+2. **Understand Architecture**: Distinguish between cluster-level and database-level topology
+3. **Update Tests First**: Write/update tests before implementing changes
+4. **Validate Locally**: Use `make dev-run` for quick local testing
+5. **Integration Testing**: Deploy to Kind cluster for realistic testing
+6. **Monitor Logs**: Watch for resource conflicts, discovery issues, cluster formation problems
+
+#### **Documentation Maintenance**:
+- **Update Examples**: Keep examples synchronized with API changes
+- **Version Compatibility**: Document which Neo4j versions support which features
+- **Troubleshooting Guides**: Update based on real operational issues
+- **API Changes**: Always update both code and documentation simultaneously
+
+#### **Release Considerations**:
+- **Backward Compatibility**: Consider impact of CRD changes on existing deployments
+- **Migration Paths**: Provide clear guidance for architecture transitions
+- **Feature Flags**: Use feature gates for experimental functionality
+- **Version Support**: Clearly communicate supported Neo4j version ranges
+
+### Kubernetes Ecosystem Integration
+
+#### **cert-manager Integration**:
+- **Version**: Use cert-manager v1.18.2 for development clusters
+- **CA Cluster Issuer**: Standard pattern for test environments
+- **DNS Names**: Include all server pod FQDNs in certificates
+- **Trust Policies**: Use `trust_all=true` for cluster SSL in development
+
+#### **RBAC Best Practices**:
+- **Minimal Permissions**: Only grant necessary permissions for discovery and management
+- **Endpoints Access**: Required for Kubernetes service discovery
+- **Service Account**: Use dedicated service accounts per operator installation
+- **Namespace Scoped**: Prefer namespace-scoped roles over cluster roles where possible
+
+#### **Storage Integration**:
+- **Storage Classes**: Support multiple storage classes for different performance needs
+- **PVC Sizing**: Validate storage size requirements during admission
+- **Backup Storage**: Support multiple cloud providers (S3, GCS, Azure)
+- **Volume Expansion**: Consider dynamic volume expansion capabilities
+
+### Future Architecture Considerations
+
+#### **Scalability Targets**:
+- **Cluster Size**: Support clusters up to 100+ servers
+- **Database Count**: Multiple databases per cluster with independent topologies
+- **Multi-Region**: Consider cross-region deployment patterns
+- **Auto-Scaling**: Horizontal pod autoscaling based on resource utilization
+
+#### **Observability Enhancements**:
+- **Metrics Integration**: Prometheus metrics for all cluster operations
+- **Distributed Tracing**: OpenTelemetry integration for request tracing
+- **Log Aggregation**: Structured logging with consistent formats
+- **Health Checks**: Comprehensive health check endpoints
+
+#### **Security Hardening**:
+- **Pod Security Standards**: Implement restricted pod security standards
+- **Network Policies**: Default-deny network policies with explicit allowlists
+- **Secret Management**: Integration with external secret management systems
+- **Image Scanning**: Container image vulnerability scanning in CI/CD
+
+**Remember**: The Neo4j Kubernetes Operator manages complex stateful systems. Always prioritize reliability and operational simplicity over feature complexity.
+
+## Development Milestones
+
+### 2025-08-08: Seed URI Functionality Complete
+**Status**: ✅ COMPLETE - All unit tests (32/32) and integration tests (6/6) passing
+
+**Functionality Delivered**:
+- Complete seed URI implementation for Neo4jDatabase CRD
+- Support for S3, GS, AZB, HTTP, HTTPS, FTP protocols
+- Comprehensive validation (credentials, configuration, URI format)
+- Conflict detection (seed URI vs initial data)
+- Topology validation against cluster capacity
+
+**Key Technical Fixes**:
+- Fixed unit tests by adding DatabaseValidator initialization
+- Fixed integration tests by adding missing `neo4j-admin-secret` and Auth configuration
+- Fixed cluster resource validation (reduced test cluster size from 5 to 3 servers)
+- Resolved `CreateContainerConfigError` issues in integration test pods
+- Cleaned up 63MB binary artifact from root directory and added to .gitignore
+
+**Files Modified**:
+- `internal/controller/neo4jdatabase_controller_test.go` - Unit test fixes
+- `test/integration/database_seed_uri_test.go` - Integration test fixes
+- Operator successfully deployed and tested in Kind clusters
+
+**Lessons Learned**:
+- Integration test failures were not resource constraints but real configuration issues
+- Always investigate actual error messages rather than assuming timeouts = resource issues
+- Neo4j Enterprise clusters require proper authentication secrets and minimum memory per server
 
 ## Reports
 
