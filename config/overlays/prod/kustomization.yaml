@@ -1,0 +1,29 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Base configuration
+resources:
+- ../../default
+
+# Production-specific image (using base defaults)
+images:
+- name: controller
+  newName: ghcr.io/neo4j-labs/neo4j-kubernetes-operator
+  newTag: latest
+
+# Production-specific patches
+patches:
+- patch: |-
+    - op: add
+      path: /spec/template/spec/containers/0/resources
+      value:
+        requests:
+          cpu: 100m
+          memory: 64Mi
+        limits:
+          cpu: 500m
+          memory: 128Mi
+  target:
+    kind: Deployment
+    name: controller-manager
+namespace: neo4j-operator-system
