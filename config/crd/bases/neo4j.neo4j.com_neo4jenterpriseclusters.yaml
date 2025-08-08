@@ -15,11 +15,8 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .spec.topology.primaries
-      name: Primaries
-      type: integer
-    - jsonPath: .spec.topology.secondaries
-      name: Secondaries
+    - jsonPath: .spec.topology.servers
+      name: Servers
       type: integer
     - jsonPath: .status.conditions[?(@.type=="Ready")].status
       name: Ready
@@ -1913,7 +1910,7 @@ spec:
                       type: string
                     type: array
                   enforceDistribution:
-                    description: EnforceDistribution ensures primaries are distributed
+                    description: EnforceDistribution ensures servers are distributed
                       across topology domains
                     type: boolean
                   placement:
@@ -1972,23 +1969,26 @@ spec:
                             type: string
                         type: object
                     type: object
-                  primaries:
+                  serverModeConstraint:
+                    default: NONE
                     description: |-
-                      Primaries specifies the number of primary (core) servers
-                      Note: Odd numbers (1,3,5,7) are recommended for optimal fault tolerance
-                    format: int32
-                    maximum: 7
-                    minimum: 1
-                    type: integer
-                  secondaries:
-                    description: Secondaries specifies the number of secondary (read
-                      replica) servers
+                      ServerModeConstraint optionally constrains all servers to a specific mode
+                      Valid values: "PRIMARY", "SECONDARY", "NONE" (default: "NONE")
+                    enum:
+                    - NONE
+                    - PRIMARY
+                    - SECONDARY
+                    type: string
+                  servers:
+                    description: |-
+                      Servers specifies the number of Neo4j servers in the cluster
+                      Servers self-organize and can host databases in primary or secondary mode
                     format: int32
                     maximum: 20
-                    minimum: 0
+                    minimum: 2
                     type: integer
                 required:
-                - primaries
+                - servers
                 type: object
               ui:
                 description: UISpec defines Web UI configuration
@@ -2240,13 +2240,10 @@ spec:
               replicas:
                 description: Replicas shows the current number of replicas
                 properties:
-                  primaries:
-                    format: int32
-                    type: integer
                   ready:
                     format: int32
                     type: integer
-                  secondaries:
+                  servers:
                     format: int32
                     type: integer
                 type: object
@@ -2283,65 +2280,42 @@ spec:
                     description: Progress shows upgrade progress statistics
                     properties:
                       inProgress:
-                        description: Number of nodes currently being upgraded
+                        description: Number of servers currently being upgraded
                         format: int32
                         type: integer
                       pending:
-                        description: Number of nodes pending upgrade
+                        description: Number of servers pending upgrade
                         format: int32
                         type: integer
-                      primaries:
-                        description: Primary nodes upgrade progress
+                      servers:
+                        description: Server upgrade details
                         properties:
                           currentLeader:
-                            description: Current leader node (for primaries)
+                            description: Current leader server
                             type: string
                           inProgress:
-                            description: Number of nodes currently being upgraded
+                            description: Number of servers currently being upgraded
                             format: int32
                             type: integer
                           pending:
-                            description: Number of nodes pending upgrade
+                            description: Number of servers pending upgrade
                             format: int32
                             type: integer
                           total:
-                            description: Total number of nodes of this type
+                            description: Total number of servers
                             format: int32
                             type: integer
                           upgraded:
-                            description: Number of nodes successfully upgraded
-                            format: int32
-                            type: integer
-                        type: object
-                      secondaries:
-                        description: Secondary nodes upgrade progress
-                        properties:
-                          currentLeader:
-                            description: Current leader node (for primaries)
-                            type: string
-                          inProgress:
-                            description: Number of nodes currently being upgraded
-                            format: int32
-                            type: integer
-                          pending:
-                            description: Number of nodes pending upgrade
-                            format: int32
-                            type: integer
-                          total:
-                            description: Total number of nodes of this type
-                            format: int32
-                            type: integer
-                          upgraded:
-                            description: Number of nodes successfully upgraded
+                            description: Number of servers successfully upgraded
                             format: int32
                             type: integer
                         type: object
                       total:
-                        description: Total number of nodes to upgrade
+                        description: Total number of servers to upgrade
                         format: int32
                         type: integer
                       upgraded:
-                        description: Number of nodes successfully upgraded
+                        description: Number of servers successfully upgraded
                         format: int32
                         type: integer
                     type: object

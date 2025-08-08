@@ -326,10 +326,10 @@ Consider using read replicas instead for scaling read capacity.
 kubectl describe neo4jenterprisecluster my-cluster
 
 # Check individual node logs
-kubectl logs my-cluster-primary-0
+kubectl logs my-cluster-server-0
 
-# Verify network connectivity
-kubectl exec -it my-cluster-primary-0 -- neo4j-admin check-consistency
+# Verify database consistency
+kubectl exec -it my-cluster-server-0 -- neo4j-admin check-consistency
 ```
 
 ### Recovery Procedures

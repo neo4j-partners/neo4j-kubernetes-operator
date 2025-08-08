@@ -10,10 +10,11 @@ The Neo4j Kubernetes Operator supports Neo4j 5.26+ Enterprise clustering with mu
 
 A Neo4j Enterprise cluster consists of:
 
-- **Primary nodes**: Core cluster members that participate in consensus and handle write operations
-- **Secondary nodes**: Read replicas that handle read operations and provide high availability
+- **Servers**: Neo4j server instances that self-organize into primary and secondary roles automatically
 - **Discovery service**: Enables cluster members to find each other
 - **Routing service**: Routes client connections to appropriate cluster members
+
+**Server Self-Organization**: In the server-based architecture, you deploy a number of servers and Neo4j automatically assigns primary and secondary roles based on database requirements and cluster state.
 
 ## Discovery Methods
 
@@ -58,9 +59,10 @@ The operator automatically creates these permissions in the discovery role.
    - Role: `{cluster-name}-discovery` (with permissions to list services and endpoints)
    - RoleBinding: `{cluster-name}-discovery`
 
-2. **Creates role-specific services**:
-   - Primary headless service: `{cluster-name}-primary-headless`
-   - Secondary headless service: `{cluster-name}-secondary-headless` (when secondaries > 0)
+2. **Creates server services**:
+   - Server headless service: `{cluster-name}-headless` (for all servers)
+   - Server discovery service: `{cluster-name}-discovery`
+   - Client service: `{cluster-name}-client` (for external access)
 
 3. **Configures Neo4j automatically** with version-specific settings:
 
@@ -102,15 +104,17 @@ The operator uses an **optimized parallel cluster formation approach** that enab
 ### Key Configuration
 
 - **Minimum Initial Primaries**: Always set to 1, allowing flexible cluster formation
-- **Pod Management**: Parallel startup for all pods (primaries and secondaries)
-- **Discovery**: All pods start simultaneously and discover each other via Kubernetes endpoints
+- **Pod Management**: Parallel startup for all server pods
+- **Discovery**: All server pods start simultaneously and discover each other via Kubernetes endpoints
+- **Server Self-Organization**: Servers automatically organize into primary and secondary roles based on database needs
 
 ### How It Works
 
-1. **All pods start in parallel** - Both primary and secondary StatefulSets deploy pods simultaneously
-2. **First pod forms initial cluster** - With minimum_primaries=1, the first pod to start can form the cluster
-3. **Other pods join existing cluster** - Remaining pods discover and join the already-formed cluster
-4. **100% cluster formation success** - This approach achieves reliable single-cluster formation
+1. **All server pods start in parallel** - Single server StatefulSet deploys all pods simultaneously
+2. **First server forms initial cluster** - With minimum_primaries=1, the first server to start can form the cluster
+3. **Other servers join existing cluster** - Remaining servers discover and join the already-formed cluster
+4. **Servers self-organize** - Neo4j automatically assigns primary and secondary roles as needed
+5. **100% cluster formation success** - This approach achieves reliable single-cluster formation
 
 ### Benefits
 
@@ -148,9 +152,9 @@ The operator uses a unified approach where all primaries must be present for ini
 
 | Cluster Size | Formation Requirement | Rationale |
 |--------------|----------------------|-----------|
-| 1 primary | 1 node required | Single-node cluster |
-| 2 primaries | 2 nodes required | Prevents split-brain |
-| 3+ primaries | All nodes required | Ensures consistent initial state |
+| 2 servers | 2 servers required | Minimum cluster size |
+| 3 servers | 3 servers required | Odd number for optimal fault tolerance |
+| 4+ servers | All servers required | Ensures consistent initial state |
 
 This approach ensures that clusters form with a complete and consistent initial membership.
 
@@ -164,7 +168,7 @@ This approach ensures that clusters form with a complete and consistent initial 
 
 ### Important Considerations
 
-- **Complete Membership**: All configured primary nodes must be available for initial cluster formation
+- **Complete Membership**: All configured server nodes must be available for initial cluster formation
 - **Startup Time**: Cluster formation typically completes within 2-3 minutes
 - **Pod Readiness**: Pods are marked ready only after successful cluster formation
 - **Scaling**: After initial formation, clusters can be scaled following Neo4j's online scaling procedures
@@ -184,8 +188,7 @@ spec:
     repo: neo4j
     tag: 5.26-enterprise
   topology:
-    primaries: 3
-    secondaries: 0
+    servers: 3  # 3 servers will self-organize into appropriate roles
   storage:
     className: standard
     size: 10Gi
@@ -222,8 +225,7 @@ Configure topology spread and anti-affinity for high availability:
 ```yaml
 spec:
   topology:
-    primaries: 3
-    secondaries: 2
+    servers: 5  # 5 servers will self-organize into appropriate roles
     placement:
       antiAffinity:
         enabled: true
@@ -295,11 +297,8 @@ kubectl logs -l app.kubernetes.io/instance=my-cluster
 ### Scale Up/Down
 
 ```bash
-# Scale primaries by editing the resource
-kubectl patch neo4jenterprisecluster my-cluster --type='merge' -p='{"spec":{"topology":{"primaries":5}}}'
-
-# Scale secondaries
-kubectl patch neo4jenterprisecluster my-cluster --type='merge' -p='{"spec":{"topology":{"secondaries":4}}}'
+# Scale servers by editing the resource
+kubectl patch neo4jenterprisecluster my-cluster --type='merge' -p='{"spec":{"topology":{"servers":7}}}'
 
 # Or edit the resource directly
 kubectl edit neo4jenterprisecluster my-cluster
@@ -335,8 +334,8 @@ spec:
    - Confirm clustering label: Service should have `neo4j.com/clustering=true`
    - Check discovery service has clustering label: `kubectl get service {cluster-name}-discovery -o jsonpath='{.metadata.labels.neo4j\.com/clustering}'`
    - Verify discovery role has endpoints permission: `kubectl get role {cluster-name}-discovery -o yaml | grep endpoints`
-   - Check discovery logs show service hostname (this is EXPECTED): `kubectl logs {cluster-name}-primary-0 | grep "Resolved endpoints"`
-   - Verify pod has correct ServiceAccount: `kubectl get pod {cluster-name}-primary-0 -o jsonpath='{.spec.serviceAccountName}'`
+   - Check discovery logs show service hostname (this is EXPECTED): `kubectl logs {cluster-name}-server-0 | grep "Resolved endpoints"`
+   - Verify pod has correct ServiceAccount: `kubectl get pod {cluster-name}-server-0 -o jsonpath='{.spec.serviceAccountName}'`
 
    **Note**: Neo4j's K8s discovery returns service hostnames (e.g., `{cluster-name}-discovery.default.svc.cluster.local:5000`) in logs. This is expected behavior - Neo4j internally queries the service endpoints to discover individual pods.
 
@@ -348,18 +347,18 @@ spec:
 
 ```bash
 # Check cluster member status
-kubectl exec -it my-cluster-primary-0 -- cypher-shell -u neo4j -p password "CALL dbms.cluster.overview()"
+kubectl exec -it my-cluster-server-0 -- cypher-shell -u neo4j -p password "SHOW SERVERS"
 
-# Check discovery service
-kubectl exec -it my-cluster-primary-0 -- cypher-shell -u neo4j -p password "CALL dbms.cluster.discovery()"
+# Check database allocation
+kubectl exec -it my-cluster-server-0 -- cypher-shell -u neo4j -p password "SHOW DATABASES"
 
 # View cluster logs
-kubectl logs my-cluster-primary-0 -c neo4j
+kubectl logs my-cluster-server-0 -c neo4j
 ```
 
 ## Best Practices
 
-1. **Use odd numbers of primaries (3, 5, 7)** for optimal fault tolerance. Even numbers are allowed but generate warnings about potential split-brain scenarios.
+1. **Use odd numbers of servers (3, 5, 7)** for optimal fault tolerance. Even numbers are allowed but may have less optimal quorum behavior.
 2. **Configure proper resource limits** based on workload
 3. **Use multi-zone deployment** for high availability
 4. **Configure proper resource limits** based on workload

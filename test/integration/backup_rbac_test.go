@@ -73,8 +73,7 @@ var _ = Describe("Backup RBAC Automatic Creation", func() {
 						Tag:  "5.26.0-enterprise",
 					},
 					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Primaries:   1,
-						Secondaries: 1,
+						Servers: 2,
 					},
 					Storage: neo4jv1alpha1.StorageSpec{
 						Size:      "1Gi",

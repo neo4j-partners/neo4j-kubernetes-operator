@@ -1,5 +1,5 @@
-# Three-node Neo4j Enterprise cluster (TLS disabled for testing)
-# This creates a highly available Neo4j cluster with 3 primary nodes
+# Three-server Neo4j Enterprise cluster (TLS disabled for testing)
+# This creates a highly available Neo4j cluster with 3 servers that self-organize
 # Ideal for testing, development, or environments without cert-manager
 
 apiVersion: neo4j.neo4j.com/v1alpha1
@@ -17,11 +17,10 @@ spec:
     tag: "5.26-enterprise"  # Neo4j 5.26+ required
     pullPolicy: IfNotPresent
 
-  # Three-node cluster topology for high availability
-  # Provides fault tolerance and quorum-based decisions
+  # Three-server cluster topology for high availability
+  # Servers self-organize for optimal fault tolerance
   topology:
-    primaries: 3      # 3 primaries for quorum (must be odd)
-    secondaries: 0    # Optional read replicas
+    servers: 3        # Three servers for optimal cluster operations
 
   # Storage configuration
   storage:

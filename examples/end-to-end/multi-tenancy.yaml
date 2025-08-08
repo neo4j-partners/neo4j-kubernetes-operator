@@ -68,10 +68,9 @@ spec:
     repo: neo4j
     tag: "5.26.0-enterprise"
 
-  # Larger cluster to handle multiple tenants
+  # Larger server cluster to handle multiple tenants
   topology:
-    primaries: 3
-    secondaries: 2
+    servers: 5  # 5 servers will self-organize to support multiple database topologies
 
   # Resource allocation for multi-tenancy
   resources:

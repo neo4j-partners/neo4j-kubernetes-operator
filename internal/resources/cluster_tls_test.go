@@ -23,8 +23,7 @@ func TestBuildConfigMapForEnterprise_TLSConfiguration(t *testing.T) {
 				Tag:  "5.26.0-enterprise",
 			},
 			Topology: neo4jv1alpha1.TopologyConfiguration{
-				Primaries:   3,
-				Secondaries: 2,
+				Servers: 5, // 3 + 2 total servers
 			},
 			TLS: &neo4jv1alpha1.TLSSpec{
 				Mode: "cert-manager",
@@ -70,7 +69,7 @@ func TestBuildConfigMapForEnterprise_TLSConfiguration(t *testing.T) {
 
 	// Test startup script for parallel pod management compatibility
 	startupScript := configMap.Data["startup.sh"]
-	assert.Contains(t, startupScript, "MIN_PRIMARIES=1", "should use MIN_PRIMARIES=1 for TLS clusters")
+	assert.Contains(t, startupScript, "dbms.cluster.minimum_initial_system_primaries_count=1", "should use fixed minimum of 1 for server bootstrap")
 	assert.Contains(t, startupScript, "This works reliably even with TLS enabled", "should have TLS cluster formation comment")
 }
 
@@ -86,8 +85,7 @@ func TestBuildStatefulSetForEnterprise_TLSClusterFormation(t *testing.T) {
 				Tag:  "5.26.0-enterprise",
 			},
 			Topology: neo4jv1alpha1.TopologyConfiguration{
-				Primaries:   3,
-				Secondaries: 2,
+				Servers: 5, // 3 + 2 total servers
 			},
 			TLS: &neo4jv1alpha1.TLSSpec{
 				Mode: "cert-manager",
@@ -104,11 +102,7 @@ func TestBuildStatefulSetForEnterprise_TLSClusterFormation(t *testing.T) {
 	}
 
 	// Test that TLS clusters use parallel pod management
-	primarySts := resources.BuildPrimaryStatefulSetForEnterprise(cluster)
-	assert.Equal(t, primarySts.Spec.PodManagementPolicy, appsv1.ParallelPodManagement,
+	serverSts := resources.BuildServerStatefulSetForEnterprise(cluster)
+	assert.Equal(t, serverSts.Spec.PodManagementPolicy, appsv1.ParallelPodManagement,
 		"TLS clusters must use ParallelPodManagement for reliable formation")
-
-	secondarySts := resources.BuildSecondaryStatefulSetForEnterprise(cluster)
-	assert.Equal(t, secondarySts.Spec.PodManagementPolicy, appsv1.ParallelPodManagement,
-		"TLS secondary StatefulSet must also use ParallelPodManagement")
 }

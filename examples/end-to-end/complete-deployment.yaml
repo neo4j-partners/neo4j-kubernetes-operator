@@ -49,8 +49,7 @@ spec:
 
   # High availability topology
   topology:
-    primaries: 3
-    secondaries: 2
+    servers: 5  # 5 servers will self-organize into primary/secondary roles
     placement:
       topologyKey: topology.kubernetes.io/zone
       mode: preferred

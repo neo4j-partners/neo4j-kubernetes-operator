@@ -115,8 +115,8 @@ func (rm *ResourceMonitor) ValidateScalingCapacity(ctx context.Context, cluster 
 	}
 
 	// Calculate resources needed for new pods
-	currentPods := cluster.Spec.Topology.Primaries + cluster.Spec.Topology.Secondaries
-	targetPods := targetTopology.Primaries + targetTopology.Secondaries
+	currentPods := cluster.Spec.Topology.Servers
+	targetPods := targetTopology.Servers
 	newPods := targetPods - currentPods
 
 	if newPods <= 0 {

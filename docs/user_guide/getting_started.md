@@ -180,15 +180,65 @@ kubectl port-forward service/YOUR-CLUSTER-NAME-client 7474:7474 7687:7687
 
 You can then access the Neo4j Browser at `http://localhost:7474`.
 
+## Creating Databases
+
+Once your cluster is running, you can create and manage databases using the Neo4jDatabase CRD:
+
+### Basic Database Creation
+
+```bash
+# Create a simple database
+kubectl apply -f - <<EOF
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jDatabase
+metadata:
+  name: my-database
+spec:
+  clusterRef: minimal-cluster  # or your cluster name
+  name: mydb
+  wait: true
+  ifNotExists: true
+EOF
+```
+
+### Database from Existing Backup (Seed URI)
+
+If you have existing Neo4j backups in cloud storage, you can create databases directly from them:
+
+```bash
+# Create database from S3 backup
+kubectl apply -f - <<EOF
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jDatabase
+metadata:
+  name: restored-database
+spec:
+  clusterRef: minimal-cluster
+  name: restored-db
+  seedURI: "s3://my-backups/database.backup"
+  topology:
+    primaries: 1
+    secondaries: 1
+  wait: true
+  ifNotExists: true
+EOF
+```
+
+For detailed database management, see:
+- [Neo4jDatabase API Reference](../api_reference/neo4jdatabase.md)
+- [Database Seed URI Guide](../seed-uri-feature-guide.md)
+- [Database Examples](../../examples/databases/)
+
 ## Next Steps
 
 Now that you have Neo4j running on Kubernetes:
 
 1. **Explore the Neo4j Browser** - Create some sample data and run queries
-2. **Connect your applications** - Use the Bolt endpoint (port 7687) for programmatic access
-3. **Configure monitoring** - Set up monitoring and alerting for your deployment
-4. **Plan backups** - Implement backup strategies for data protection
-5. **Scale your deployment** - For clusters, you can scale up/down based on your needs
+2. **Create databases** - Use the Neo4jDatabase CRD to create and manage databases
+3. **Connect your applications** - Use the Bolt endpoint (port 7687) for programmatic access
+4. **Configure monitoring** - Set up monitoring and alerting for your deployment
+5. **Plan backups** - Implement backup strategies for data protection
+6. **Scale your deployment** - For clusters, you can scale up/down based on your needs
 
 For more advanced topics, see:
 - [Configuration Guide](configuration.md) - Advanced configuration options

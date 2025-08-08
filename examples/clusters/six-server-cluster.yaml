@@ -1,23 +1,22 @@
-# Four Primary Node Cluster Example
+# Six Server Neo4j Enterprise Cluster Example
 #
-# WARNING: This configuration uses 4 primary nodes (even number), which provides
-# the same fault tolerance as 3 primary nodes but with additional resource overhead.
-# Consider using 3 primary nodes + 1 read replica for better resource efficiency.
+# This configuration uses 6 servers that self-organize into roles.
+# The servers provide high availability with optimal resource utilization.
+# Databases can be created with different topologies as needed.
 #
-# CLUSTER FORMATION: The operator uses quorum-based cluster formation for 3+ primaries.
-# This cluster requires 3 out of 4 nodes (quorum) to form initially, providing better
-# fault tolerance during startup compared to 2-node clusters.
+# CLUSTER FORMATION: The operator uses server-based cluster formation.
+# Servers self-organize and databases can use different primary/secondary topologies.
+# This provides flexible database deployment options on the same cluster infrastructure.
 #
-# See: docs/user_guide/guides/fault_tolerance.md
+# See: docs/user_guide/guides/server_based_architecture.md
 #
 apiVersion: neo4j.neo4j.com/v1alpha1
 kind: Neo4jEnterpriseCluster
 metadata:
-  name: four-primary-cluster
+  name: six-server-cluster
   namespace: default
   annotations:
-    neo4j.neo4j.com/fault-tolerance-warning: "true"
-    neo4j.neo4j.com/topology-note: "4 primary nodes provide same fault tolerance as 3 but with higher resource cost"
+    neo4j.neo4j.com/topology-note: "6 servers provide flexible infrastructure for multiple database topologies"
 spec:
   # Neo4j 5.26+ Enterprise image required
   image:
@@ -25,12 +24,10 @@ spec:
     tag: "5.26.0-enterprise"
     pullPolicy: "IfNotPresent"
 
-  # WARNING: 4 primary nodes configuration
-  # This will generate a warning from the operator:
-  # - "Even number of primary nodes (4) reduces fault tolerance"
+  # Server-based cluster configuration
+  # Six servers will self-organize to host databases with configurable topologies
   topology:
-    primaries: 4      # ⚠️ Even number - same fault tolerance as 3
-    secondaries: 2    # Read replicas for scaling
+    servers: 6        # Six servers for flexible database topologies
     placement:
       topologySpread:
         enabled: true

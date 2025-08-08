@@ -12,6 +12,32 @@ import (
 	"github.com/neo4j-labs/neo4j-kubernetes-operator/internal/resources"
 )
 
+func TestBuildConfigMapForEnterprise_NoSingleRaftEnabled(t *testing.T) {
+	cluster := &neo4jv1alpha1.Neo4jEnterpriseCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+		},
+		Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
+			Image: neo4jv1alpha1.ImageSpec{
+				Repo: "neo4j",
+				Tag:  "5.26-enterprise",
+			},
+			Topology: neo4jv1alpha1.TopologyConfiguration{
+				Servers: 2,
+			},
+		},
+	}
+
+	configMap := resources.BuildConfigMapForEnterprise(cluster)
+	assert.NotNil(t, configMap)
+
+	// Check that single RAFT is NOT enabled
+	neo4jConf := configMap.Data["neo4j.conf"]
+	assert.NotContains(t, neo4jConf, "internal.dbms.single_raft_enabled=true",
+		"neo4j.conf should NOT contain internal.dbms.single_raft_enabled")
+}
+
 func TestBuildConfigMapForEnterprise_ClusterFormation(t *testing.T) {
 	tests := []struct {
 		name              string
@@ -32,13 +58,12 @@ func TestBuildConfigMapForEnterprise_ClusterFormation(t *testing.T) {
 						Tag:  "5.26-enterprise",
 					},
 					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Primaries:   2,
-						Secondaries: 0,
+						Servers: 2,
 					},
 				},
 			},
-			expectedBootstrap: "MIN_PRIMARIES=1",
-			expectedJoining:   "dbms.cluster.minimum_initial_system_primaries_count=${MIN_PRIMARIES}",
+			expectedBootstrap: "TOTAL_SERVERS=2",
+			expectedJoining:   "dbms.cluster.minimum_initial_system_primaries_count=1",
 		},
 		{
 			name: "three_node_cluster",
@@ -53,13 +78,12 @@ func TestBuildConfigMapForEnterprise_ClusterFormation(t *testing.T) {
 						Tag:  "5.26-enterprise",
 					},
 					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Primaries:   3,
-						Secondaries: 0,
+						Servers: 3,
 					},
 				},
 			},
-			expectedBootstrap: "MIN_PRIMARIES=1",
-			expectedJoining:   "dbms.cluster.minimum_initial_system_primaries_count=${MIN_PRIMARIES}",
+			expectedBootstrap: "TOTAL_SERVERS=3",
+			expectedJoining:   "dbms.cluster.minimum_initial_system_primaries_count=1",
 		},
 		{
 			name: "version_specific_discovery_5x",
@@ -74,8 +98,7 @@ func TestBuildConfigMapForEnterprise_ClusterFormation(t *testing.T) {
 						Tag:  "5.26-enterprise", // Neo4j 5.x should use specific parameters
 					},
 					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Primaries:   2,
-						Secondaries: 0,
+						Servers: 2,
 					},
 				},
 			},
@@ -95,8 +118,7 @@ func TestBuildConfigMapForEnterprise_ClusterFormation(t *testing.T) {
 						Tag:  "2025.01-enterprise", // Neo4j 2025.x should use different parameters
 					},
 					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Primaries:   2,
-						Secondaries: 0,
+						Servers: 2,
 					},
 				},
 			},
@@ -116,8 +138,7 @@ func TestBuildConfigMapForEnterprise_ClusterFormation(t *testing.T) {
 						Tag:  "5.26-enterprise", // Must use V2_ONLY mode
 					},
 					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Primaries:   1,
-						Secondaries: 1,
+						Servers: 2,
 					},
 				},
 			},
@@ -154,15 +175,15 @@ func TestBuildConfigMapForEnterprise_ClusterFormation(t *testing.T) {
 			_, configExists := configMap.Data["neo4j.conf"]
 			assert.True(t, configExists, "neo4j.conf should exist in ConfigMap")
 
-			// For multi-node clusters, verify unified bootstrap approach
-			if tt.cluster.Spec.Topology.Primaries > 1 {
+			// For multi-server clusters, verify unified bootstrap approach
+			if tt.cluster.Spec.Topology.Servers > 1 {
 				// Verify unified bootstrap approach
 				assert.Contains(t, startupScript, "Using unified bootstrap discovery approach",
-					"multi-node clusters should use unified bootstrap approach")
+					"multi-server clusters should use unified bootstrap approach")
 
-				// Verify minimum primaries logic - unified approach
-				assert.Contains(t, startupScript, "MIN_PRIMARIES=1",
-					"clusters should use MIN_PRIMARIES=1 for flexible formation")
+				// Verify minimum servers logic - always 1 for cluster formation
+				assert.Contains(t, startupScript, "dbms.cluster.minimum_initial_system_primaries_count=1",
+					"should use fixed minimum of 1 for server bootstrap")
 
 				// Verify Kubernetes discovery configuration
 				expectedK8sDiscoveryConfig := []string{
@@ -242,8 +263,7 @@ func TestV2OnlyDiscoveryConfiguration(t *testing.T) {
 						Tag:  tt.imageTag,
 					},
 					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Primaries:   1,
-						Secondaries: 1,
+						Servers: 2,
 					},
 				},
 			}
@@ -286,7 +306,7 @@ func TestBuildConfigMapForEnterprise_HealthScript(t *testing.T) {
 		},
 		Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 			Topology: neo4jv1alpha1.TopologyConfiguration{
-				Primaries: 3,
+				Servers: 3,
 			},
 		},
 	}

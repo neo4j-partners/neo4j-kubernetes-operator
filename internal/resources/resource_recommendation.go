@@ -49,7 +49,7 @@ func NewResourceRecommender() *ResourceRecommender {
 
 // RecommendResourcesForTopology calculates optimal resources for a given cluster topology
 func (r *ResourceRecommender) RecommendResourcesForTopology(topology neo4jv1alpha1.TopologyConfiguration, currentResources *corev1.ResourceRequirements) *ResourceRecommendation {
-	totalPods := topology.Primaries + topology.Secondaries
+	totalPods := topology.Servers
 
 	// Base recommendations on cluster size and configuration
 	recommendation := &ResourceRecommendation{
@@ -222,24 +222,24 @@ func (r *ResourceRecommender) calculateOptimalNeo4jMemory(containerMemoryBytes i
 
 // addTopologySpecificTips adds tips specific to the cluster topology
 func (r *ResourceRecommender) addTopologySpecificTips(recommendation *ResourceRecommendation, topology neo4jv1alpha1.TopologyConfiguration) {
-	if topology.Primaries == 1 && topology.Secondaries == 0 {
+	if topology.Servers < 2 {
 		recommendation.OptimizationTips = append(recommendation.OptimizationTips,
-			"Single-node deployment: No high availability or horizontal scaling")
+			"Single server: Use Neo4jEnterpriseStandalone for single-node deployments")
 	}
 
-	if topology.Primaries%2 == 0 && topology.Primaries > 1 {
+	if topology.Servers%2 == 0 {
 		recommendation.OptimizationTips = append(recommendation.OptimizationTips,
-			"Warning: Even number of primaries can cause split-brain issues - use odd numbers")
+			"Even number of servers may reduce fault tolerance when databases specify odd-numbered allocations - consider odd server counts")
 	}
 
-	if topology.Secondaries > topology.Primaries {
+	if topology.Servers == 2 {
 		recommendation.OptimizationTips = append(recommendation.OptimizationTips,
-			"More secondaries than primaries may indicate read-heavy workload optimization")
+			"Two servers provide limited fault tolerance - consider 3+ servers for production")
 	}
 
-	if topology.Primaries >= 5 {
+	if topology.Servers >= 8 {
 		recommendation.OptimizationTips = append(recommendation.OptimizationTips,
-			"Large primary count increases consensus overhead - ensure fast networking")
+			"Large server count increases coordination overhead - ensure fast networking")
 	}
 }
 

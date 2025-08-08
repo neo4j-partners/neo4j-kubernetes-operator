@@ -271,7 +271,7 @@ func (r *Neo4jBackupReconciler) createBackupJob(ctx context.Context, backup *neo
 
 	// Choose a pod to run the backup (prefer secondary if available)
 	var targetPod string
-	if backup.Spec.Target.Kind == "Cluster" && cluster.Spec.Topology.Secondaries > 0 {
+	if backup.Spec.Target.Kind == "Cluster" && false { // No secondaries in new server architecture
 		// Get a secondary pod to backup from
 		podList := &corev1.PodList{}
 		labelSelector := client.MatchingLabels{
@@ -416,7 +416,7 @@ func (r *Neo4jBackupReconciler) createBackupCronJob(ctx context.Context, backup 
 
 	// Choose a pod to run the backup (prefer secondary if available)
 	var targetPod string
-	if backup.Spec.Target.Kind == "Cluster" && cluster.Spec.Topology.Secondaries > 0 {
+	if backup.Spec.Target.Kind == "Cluster" && false { // No secondaries in new server architecture
 		// Get a secondary pod to backup from
 		podList := &corev1.PodList{}
 		labelSelector := client.MatchingLabels{
@@ -591,7 +591,7 @@ func (r *Neo4jBackupReconciler) buildBackupCommand(backup *neo4jv1alpha1.Neo4jBa
 	}
 
 	// Add backup from secondary servers if in cluster
-	if backup.Spec.Target.Kind == "Cluster" && cluster.Spec.Topology.Secondaries > 0 {
+	if backup.Spec.Target.Kind == "Cluster" && false { // No secondaries in new server architecture
 		// Use environment variable set by the controller
 		// The env var will be set only if secondary pods are available
 		cmd = fmt.Sprintf("[ -n \"$BACKUP_FROM_SERVER\" ] && %s --from=$BACKUP_FROM_SERVER || %s", cmd, cmd)

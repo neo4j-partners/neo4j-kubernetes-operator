@@ -10,8 +10,7 @@ spec:
     tag: "5.26-enterprise"
     pullPolicy: IfNotPresent
   topology:
-    primaries: 1
-    secondaries: 1
+    servers: 2        # Two servers for minimal TLS testing
   storage:
     className: standard
     size: "10Gi"

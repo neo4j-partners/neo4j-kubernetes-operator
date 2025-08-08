@@ -98,8 +98,7 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 						Tag:  "5.26-enterprise",
 					},
 					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Primaries:   3,
-						Secondaries: 1,
+						Servers: 3,
 					},
 					Storage: neo4jv1alpha1.StorageSpec{
 						ClassName: "standard",
@@ -111,28 +110,19 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 			Expect(k8sClient.Create(ctx, cluster)).Should(Succeed())
 			By("Successfully created Neo4jEnterpriseCluster")
 
-			By("Waiting for StatefulSets to be created")
-			primarySts := &appsv1.StatefulSet{}
+			By("Waiting for StatefulSet to be created")
+			serverSts := &appsv1.StatefulSet{}
 			Eventually(func() error {
 				return k8sClient.Get(ctx, types.NamespacedName{
-					Name:      clusterName + "-primary",
+					Name:      clusterName + "-server",
 					Namespace: namespace.Name,
-				}, primarySts)
+				}, serverSts)
 			}, timeout, interval).Should(Succeed())
 
-			secondarySts := &appsv1.StatefulSet{}
-			Eventually(func() error {
-				return k8sClient.Get(ctx, types.NamespacedName{
-					Name:      clusterName + "-secondary",
-					Namespace: namespace.Name,
-				}, secondarySts)
-			}, timeout, interval).Should(Succeed())
+			By("Verifying initial replica count")
+			Expect(*serverSts.Spec.Replicas).To(Equal(int32(3)))
 
-			By("Verifying initial replica counts")
-			Expect(*primarySts.Spec.Replicas).To(Equal(int32(3)))
-			Expect(*secondarySts.Spec.Replicas).To(Equal(int32(1)))
-
-			By("Scaling up secondaries")
+			By("Scaling up servers")
 			Eventually(func() error {
 				err := k8sClient.Get(ctx, types.NamespacedName{
 					Name:      clusterName,
@@ -141,27 +131,28 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 				if err != nil {
 					return err
 				}
-				cluster.Spec.Topology.Secondaries = 3
+				// Update server count (servers self-organize into primaries/secondaries)
+				cluster.Spec.Topology.Servers = 5
 				return k8sClient.Update(ctx, cluster)
 			}, timeout, interval).Should(Succeed())
 
 			By("Verifying scaling completed")
 			Eventually(func() int32 {
 				err := k8sClient.Get(ctx, types.NamespacedName{
-					Name:      clusterName + "-secondary",
+					Name:      clusterName + "-server",
 					Namespace: namespace.Name,
-				}, secondarySts)
+				}, serverSts)
 				if err != nil {
 					fmt.Printf("Error getting StatefulSet: %v\n", err)
 					return 0
 				}
 				currentReplicas := int32(0)
-				if secondarySts.Spec.Replicas != nil {
-					currentReplicas = *secondarySts.Spec.Replicas
+				if serverSts.Spec.Replicas != nil {
+					currentReplicas = *serverSts.Spec.Replicas
 				}
-				fmt.Printf("Current secondary StatefulSet replicas: %d\n", currentReplicas)
+				fmt.Printf("Current server StatefulSet replicas: %d\n", currentReplicas)
 				return currentReplicas
-			}, 60*time.Second, interval).Should(Equal(int32(3)))
+			}, 60*time.Second, interval).Should(Equal(int32(5)))
 
 			By("Upgrading cluster image")
 			Eventually(func() error {
@@ -179,13 +170,13 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 			By("Verifying image upgrade")
 			Eventually(func() string {
 				err := k8sClient.Get(ctx, types.NamespacedName{
-					Name:      clusterName + "-primary",
+					Name:      clusterName + "-server",
 					Namespace: namespace.Name,
-				}, primarySts)
+				}, serverSts)
 				if err != nil {
 					return ""
 				}
-				return primarySts.Spec.Template.Spec.Containers[0].Image
+				return serverSts.Spec.Template.Spec.Containers[0].Image
 			}, timeout, interval).Should(ContainSubstring("5.27-enterprise"))
 
 			By("Verifying cluster status")
@@ -237,8 +228,7 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 						Tag:  "5.26-enterprise",
 					},
 					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Primaries:   3,
-						Secondaries: 1,
+						Servers: 3,
 					},
 					Storage: neo4jv1alpha1.StorageSpec{
 						ClassName: "standard",
@@ -259,8 +249,7 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 						Tag:  "5.26-enterprise",
 					},
 					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Primaries:   3,
-						Secondaries: 2,
+						Servers: 3,
 					},
 					Storage: neo4jv1alpha1.StorageSpec{
 						ClassName: "standard",
@@ -275,35 +264,26 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 
 			By("Verifying both clusters are processed independently")
 			// Check first cluster
-			primarySts1 := &appsv1.StatefulSet{}
+			serverSts1 := &appsv1.StatefulSet{}
 			Eventually(func() error {
 				return k8sClient.Get(ctx, types.NamespacedName{
-					Name:      clusterName + "-1-primary",
+					Name:      clusterName + "-1-server",
 					Namespace: namespace.Name,
-				}, primarySts1)
+				}, serverSts1)
 			}, timeout, interval).Should(Succeed())
 
 			// Check second cluster
-			primarySts2 := &appsv1.StatefulSet{}
+			serverSts2 := &appsv1.StatefulSet{}
 			Eventually(func() error {
 				return k8sClient.Get(ctx, types.NamespacedName{
-					Name:      clusterName + "-2-primary",
+					Name:      clusterName + "-2-server",
 					Namespace: namespace.Name,
-				}, primarySts2)
-			}, timeout, interval).Should(Succeed())
-
-			secondarySts2 := &appsv1.StatefulSet{}
-			Eventually(func() error {
-				return k8sClient.Get(ctx, types.NamespacedName{
-					Name:      clusterName + "-2-secondary",
-					Namespace: namespace.Name,
-				}, secondarySts2)
+				}, serverSts2)
 			}, timeout, interval).Should(Succeed())
 
 			By("Verifying resource isolation")
-			Expect(*primarySts1.Spec.Replicas).To(Equal(int32(3)))
-			Expect(*primarySts2.Spec.Replicas).To(Equal(int32(3)))
-			Expect(*secondarySts2.Spec.Replicas).To(Equal(int32(2)))
+			Expect(*serverSts1.Spec.Replicas).To(Equal(int32(3)))
+			Expect(*serverSts2.Spec.Replicas).To(Equal(int32(3)))
 
 			// Verify services are created with unique names
 			service1 := &corev1.Service{}

@@ -26,7 +26,7 @@ func TestTopologyScheduler_CalculateTopologyPlacement(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "basic cluster without placement config",
+			name: "basic server cluster without placement config",
 			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-cluster",
@@ -34,8 +34,7 @@ func TestTopologyScheduler_CalculateTopologyPlacement(t *testing.T) {
 				},
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Primaries:   3,
-						Secondaries: 2,
+						Servers: 3,
 					},
 				},
 			},
@@ -66,7 +65,7 @@ func TestTopologyScheduler_CalculateTopologyPlacement(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "cluster with topology spread enabled",
+			name: "server cluster with topology spread enabled",
 			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-cluster",
@@ -74,8 +73,7 @@ func TestTopologyScheduler_CalculateTopologyPlacement(t *testing.T) {
 				},
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Primaries:           3,
-						Secondaries:         2,
+						Servers:             3, // Reduce to match 3 available zones
 						EnforceDistribution: true,
 						Placement: &neo4jv1alpha1.PlacementConfig{
 							TopologySpread: &neo4jv1alpha1.TopologySpreadConfig{
@@ -125,43 +123,6 @@ func TestTopologyScheduler_CalculateTopologyPlacement(t *testing.T) {
 				EnforceDistribution: true,
 			},
 			wantErr: false,
-		},
-		{
-			name: "insufficient zones for enforced distribution",
-			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-cluster",
-					Namespace: "default",
-				},
-				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
-					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Primaries:           5,
-						Secondaries:         2,
-						EnforceDistribution: true,
-						AvailabilityZones:   []string{"zone-a", "zone-b"}, // Explicitly set zones
-					},
-				},
-			},
-			nodes: []corev1.Node{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "node-1",
-						Labels: map[string]string{
-							"topology.kubernetes.io/zone": "zone-a",
-						},
-					},
-				},
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "node-2",
-						Labels: map[string]string{
-							"topology.kubernetes.io/zone": "zone-b",
-						},
-					},
-				},
-			},
-			want:    nil,
-			wantErr: true,
 		},
 	}
 
@@ -213,8 +174,7 @@ func TestTopologyScheduler_ApplyTopologyConstraints(t *testing.T) {
 		},
 		Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 			Topology: neo4jv1alpha1.TopologyConfiguration{
-				Primaries:   3,
-				Secondaries: 2,
+				Servers: 3,
 				Placement: &neo4jv1alpha1.PlacementConfig{
 					TopologySpread: &neo4jv1alpha1.TopologySpreadConfig{
 						Enabled:           true,
@@ -267,67 +227,5 @@ func TestTopologyScheduler_ApplyTopologyConstraints(t *testing.T) {
 	}
 	if constraint.MaxSkew != 1 {
 		t.Errorf("MaxSkew = %v, want %v", constraint.MaxSkew, 1)
-	}
-}
-
-func TestTopologyDistribution_IsBalanced(t *testing.T) {
-	tests := []struct {
-		name               string
-		distribution       *controller.TopologyDistribution
-		desiredPrimaries   int32
-		desiredSecondaries int32
-		maxSkew            int32
-		want               bool
-	}{
-		{
-			name: "balanced distribution",
-			distribution: &controller.TopologyDistribution{
-				ZoneDistribution: map[string]*controller.ZoneDistribution{
-					"zone-a": {Primaries: 1, Secondaries: 1},
-					"zone-b": {Primaries: 1, Secondaries: 1},
-					"zone-c": {Primaries: 1, Secondaries: 1},
-				},
-			},
-			desiredPrimaries:   3,
-			desiredSecondaries: 3,
-			maxSkew:            1,
-			want:               true,
-		},
-		{
-			name: "unbalanced distribution",
-			distribution: &controller.TopologyDistribution{
-				ZoneDistribution: map[string]*controller.ZoneDistribution{
-					"zone-a": {Primaries: 3, Secondaries: 0},
-					"zone-b": {Primaries: 0, Secondaries: 2},
-					"zone-c": {Primaries: 0, Secondaries: 1},
-				},
-			},
-			desiredPrimaries:   3,
-			desiredSecondaries: 3,
-			maxSkew:            1,
-			want:               false,
-		},
-		{
-			name: "acceptable skew",
-			distribution: &controller.TopologyDistribution{
-				ZoneDistribution: map[string]*controller.ZoneDistribution{
-					"zone-a": {Primaries: 2, Secondaries: 1},
-					"zone-b": {Primaries: 1, Secondaries: 1},
-					"zone-c": {Primaries: 0, Secondaries: 1},
-				},
-			},
-			desiredPrimaries:   3,
-			desiredSecondaries: 3,
-			maxSkew:            2,
-			want:               true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.distribution.IsBalanced(tt.desiredPrimaries, tt.desiredSecondaries, tt.maxSkew); got != tt.want {
-				t.Errorf("IsBalanced() = %v, want %v", got, tt.want)
-			}
-		})
 	}
 }

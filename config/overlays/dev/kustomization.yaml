@@ -1,0 +1,27 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Base configuration
+resources:
+- ../../default
+
+# Development-specific image overrides
+images:
+- name: controller
+  newName: neo4j-operator
+  newTag: dev
+
+# Development-specific patches
+patches:
+- patch: |-
+    - op: add
+      path: /spec/template/spec/containers/0/env
+      value:
+        - name: DEVELOPMENT_MODE
+          value: "true"
+  target:
+    kind: Deployment
+    name: controller-manager
+
+# Development namespace
+namespace: neo4j-operator-dev

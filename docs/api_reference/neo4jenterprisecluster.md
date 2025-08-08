@@ -2,9 +2,7 @@
 
 This document provides a reference for the `Neo4jEnterpriseCluster` Custom Resource Definition (CRD). This resource is used for creating and managing Neo4j Enterprise clusters with high availability.
 
-**Important**: `Neo4jEnterpriseCluster` requires a minimum cluster topology of either:
-- **1 primary + 1 secondary** (minimum cluster configuration)
-- **2 or more primaries** (with any number of secondaries)
+**Important**: `Neo4jEnterpriseCluster` uses a server-based architecture where servers self-organize into primary and secondary roles automatically. The minimum cluster configuration requires **2 or more servers**.
 
 For single-node deployments, use [`Neo4jEnterpriseStandalone`](neo4jenterprisestandalone.md) instead.
 
@@ -18,7 +16,7 @@ The `Neo4jEnterpriseClusterSpec` defines the desired state of a Neo4j Enterprise
 |---|---|---|
 | `image` | [`ImageSpec`](#imagespec) | The Neo4j Docker image configuration |
 | `edition` | `string` | Neo4j edition: `"enterprise"` or `"community"` |
-| `topology` | [`TopologyConfiguration`](#topologyconfiguration) | Cluster topology (primaries/secondaries) |
+| `topology` | [`TopologyConfiguration`](#topologyconfiguration) | Cluster topology (number of servers) |
 | `storage` | [`StorageSpec`](#storagespec) | Storage configuration for data persistence |
 | `auth` | [`AuthSpec`](#authspec) | Authentication configuration |
 
@@ -98,10 +96,10 @@ The `Neo4jEnterpriseClusterSpec` defines the desired state of a Neo4j Enterprise
 
 | Field | Type | Description |
 |---|---|---|
-| `primaries` | `int32` | Number of primary nodes (minimum: 1) |
-| `secondaries` | `int32` | Number of secondary nodes (minimum: 0) |
+| `servers` | `int32` | Number of servers in the cluster (minimum: 2) |
+| `serverModeConstraint` | `string` | Optional server mode constraint: `"PRIMARY"`, `"SECONDARY"`, or empty for automatic role assignment |
 
-**Validation**: Must have either (1 primary + 1 secondary) OR (2+ primaries)
+**Validation**: Must have at least 2 servers for clustering. Servers automatically organize into primary and secondary roles based on Neo4j's cluster management.
 
 ### StorageSpec
 
@@ -192,7 +190,7 @@ The `Neo4jEnterpriseClusterSpec` defines the desired state of a Neo4j Enterprise
 | `encryption` | [`*EncryptionSpec`](#encryptionspec) | Backup encryption |
 | `includeTransactionLogs` | `bool` | Include transaction logs |
 | `backupWindow` | [`*BackupWindowSpec`](#backupwindowspec) | Backup window |
-| `fromSecondary` | `bool` | Backup from secondary nodes |
+| `fromSecondary` | `bool` | Backup from secondary nodes (servers will self-organize roles) |
 
 ### QueryMonitoringSpec
 
@@ -211,14 +209,12 @@ The `Neo4jEnterpriseClusterSpec` defines the desired state of a Neo4j Enterprise
 
 | Field | Type | Description |
 |---|---|---|
-| `primaryAffinity` | `*corev1.Affinity` | Primary node affinity |
-| `secondaryAffinity` | `*corev1.Affinity` | Secondary node affinity |
-| `primaryTolerations` | `[]corev1.Toleration` | Primary node tolerations |
-| `secondaryTolerations` | `[]corev1.Toleration` | Secondary node tolerations |
-| `primaryNodeSelector` | `map[string]string` | Primary node selector |
-| `secondaryNodeSelector` | `map[string]string` | Secondary node selector |
-| `primaryTopologySpreadConstraints` | `[]corev1.TopologySpreadConstraint` | Primary topology constraints |
-| `secondaryTopologySpreadConstraints` | `[]corev1.TopologySpreadConstraint` | Secondary topology constraints |
+| `affinity` | `*corev1.Affinity` | Server affinity rules |
+| `tolerations` | `[]corev1.Toleration` | Server tolerations |
+| `nodeSelector` | `map[string]string` | Server node selector |
+| `topologySpreadConstraints` | `[]corev1.TopologySpreadConstraint` | Server topology constraints |
+| `enforceDistribution` | `bool` | Enforce even distribution across availability zones |
+| `availabilityZones` | `[]string` | Target availability zones for server placement |
 
 ### ServiceSpec
 
@@ -304,8 +300,7 @@ spec:
     repository: neo4j
     tag: "5.26.0-enterprise"
   topology:
-    primaries: 3
-    secondaries: 1
+    servers: 3  # 3 servers will self-organize into primary/secondary roles
   storage:
     size: 10Gi
   auth:
@@ -333,8 +328,7 @@ spec:
     repository: neo4j
     tag: "5.26.0-enterprise"
   topology:
-    primaries: 3
-    secondaries: 1
+    servers: 3  # 3 servers will self-organize into primary/secondary roles
   storage:
     size: 50Gi
   auth:
@@ -381,8 +375,7 @@ spec:
     repository: neo4j
     tag: "5.26.0-enterprise"
   topology:
-    primaries: 3
-    secondaries: 2
+    servers: 5  # 5 servers will self-organize into primary/secondary roles
   storage:
     size: 20Gi
   auth:
@@ -414,8 +407,7 @@ spec:
     repository: neo4j
     tag: "5.26.0-enterprise"
   topology:
-    primaries: 3
-    secondaries: 1
+    servers: 3  # 3 servers will self-organize into primary/secondary roles
   storage:
     size: 20Gi
   auth:

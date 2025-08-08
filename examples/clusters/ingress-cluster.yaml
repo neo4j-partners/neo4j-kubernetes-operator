@@ -1,5 +1,6 @@
 # Ingress Example for Neo4j Enterprise Cluster
 # This example shows how to expose Neo4j Browser via Ingress
+# Uses server-based architecture with 5 servers that self-organize
 # Requires an Ingress controller (e.g., nginx-ingress) and cert-manager for TLS
 
 apiVersion: v1
@@ -25,8 +26,7 @@ spec:
     pullPolicy: IfNotPresent
 
   topology:
-    primaries: 3
-    secondaries: 2
+    servers: 5        # Five servers for flexible database topologies
 
   storage:
     className: standard

@@ -1,5 +1,6 @@
 # LoadBalancer Service Example for Neo4j Enterprise Cluster
 # This example shows how to expose a Neo4j cluster using a LoadBalancer service
+# Uses server-based architecture with 5 servers that self-organize
 # Suitable for cloud environments (AWS, GCP, Azure)
 
 apiVersion: v1
@@ -25,8 +26,7 @@ spec:
     pullPolicy: IfNotPresent
 
   topology:
-    primaries: 3
-    secondaries: 2
+    servers: 5        # Five servers for flexible database topologies
 
   storage:
     className: standard  # Use appropriate storage class for your cloud

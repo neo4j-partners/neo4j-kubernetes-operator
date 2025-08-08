@@ -226,8 +226,7 @@ var _ = Describe("Backup Sidecar Path Creation", func() {
 						Tag:  "2025.01.0-enterprise",
 					},
 					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Primaries:   1,
-						Secondaries: 1,
+						Servers: 2,
 					},
 					Storage: neo4jv1alpha1.StorageSpec{
 						ClassName: "standard",

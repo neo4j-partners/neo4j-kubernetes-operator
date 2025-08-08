@@ -1,0 +1,94 @@
+# Example: Creating a Neo4j database from Azure Blob Storage using seed URI
+# This example shows both storage key and SAS token authentication methods
+apiVersion: v1
+kind: Secret
+metadata:
+  name: azure-backup-credentials-key
+  namespace: default
+type: Opaque
+data:
+  # Base64 encoded Azure storage account and key
+  AZURE_STORAGE_ACCOUNT: bXlzdG9yYWdlYWNjb3VudA== # mystorageaccount
+  AZURE_STORAGE_KEY: YWJjZGVmZ2hpams=   # EXAMPLE ONLY - Replace with real credentials# abcdefghijk (base64 of storage account key)
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: azure-backup-credentials-sas
+  namespace: default
+type: Opaque
+data:
+  # Base64 encoded Azure storage account and SAS token
+  AZURE_STORAGE_ACCOUNT: bXlzdG9yYWdlYWNjb3VudA== # mystorageaccount
+  AZURE_STORAGE_SAS_TOKEN: c3Y9MjAyNS0wMS0xNQ==   # EXAMPLE ONLY - Replace with real credentials# sv=2025-01-15... (SAS token)
+---
+# Database using storage account key authentication
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jDatabase
+metadata:
+  name: customer-database-from-azure-key
+  namespace: default
+spec:
+  clusterRef: production-cluster
+  name: customers
+
+  # Azure Blob Storage seed URI
+  seedURI: "azb://mystorageaccount.blob.core.windows.net/neo4j-backups/customer-database.backup"
+
+  # Use storage account key credentials
+  seedCredentials:
+    secretRef: azure-backup-credentials-key
+
+  # Database topology for high availability
+  topology:
+    primaries: 2
+    secondaries: 2
+
+  # Seed configuration
+  seedConfig:
+    # Restore to specific timestamp
+    restoreUntil: "2025-01-15T14:30:00Z"
+
+    config:
+      compression: "gzip"
+      validation: "strict"
+      bufferSize: "128MB"
+
+  options:
+    "dbms.memory.heap.initial_size": "1g"
+    "dbms.memory.heap.max_size": "4g"
+
+  wait: true
+  ifNotExists: true
+  defaultCypherLanguage: "25"
+
+---
+# Database using SAS token authentication
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jDatabase
+metadata:
+  name: customer-database-from-azure-sas
+  namespace: default
+spec:
+  clusterRef: production-cluster
+  name: customers-sas
+
+  # Azure Blob Storage seed URI
+  seedURI: "azb://mystorageaccount.blob.core.windows.net/neo4j-backups/customer-database.backup"
+
+  # Use SAS token credentials
+  seedCredentials:
+    secretRef: azure-backup-credentials-sas
+
+  # Simple topology for development/testing
+  topology:
+    primaries: 1
+    secondaries: 1
+
+  # Minimal seed configuration
+  seedConfig:
+    config:
+      validation: "lenient"
+
+  wait: true
+  ifNotExists: true

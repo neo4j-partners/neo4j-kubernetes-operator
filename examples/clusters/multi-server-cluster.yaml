@@ -1,6 +1,6 @@
-# Multi-primary Neo4j Enterprise cluster example
-# This creates a cluster with multiple primary nodes for high availability
-# Uses unified clustering approach with V2_ONLY discovery for 5.26+
+# Multi-server Neo4j Enterprise cluster example
+# This creates a cluster with multiple servers that self-organize into primary and secondary roles
+# Uses server-based architecture with automatic role assignment
 
 apiVersion: neo4j.neo4j.com/v1alpha1
 kind: Neo4jEnterpriseCluster
@@ -17,11 +17,10 @@ spec:
     tag: "5.26-enterprise"  # Neo4j 5.26+ required
     pullPolicy: IfNotPresent
 
-  # Multi-primary topology: 3 primaries + 2 secondaries
-  # Odd number of primaries recommended for optimal fault tolerance
+  # Multi-server topology: 5 servers that self-organize into roles
+  # Odd number of servers recommended for optimal fault tolerance
   topology:
-    primaries: 3      # Three primaries for high availability
-    secondaries: 2    # Two read replicas for load distribution
+    servers: 5        # Five servers will automatically organize into primary/secondary roles
 
   # Storage configuration
   storage:

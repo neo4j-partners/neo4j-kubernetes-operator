@@ -94,8 +94,7 @@ var _ = Describe("Simple Backup Test", func() {
 						Tag:  "5.26.0-enterprise",
 					},
 					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Primaries:   1,
-						Secondaries: 1,
+						Servers: 2, // 1 + 1 total servers
 					},
 					Storage: neo4jv1alpha1.StorageSpec{
 						ClassName: "standard",

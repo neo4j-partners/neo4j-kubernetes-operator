@@ -233,8 +233,24 @@ func (cm *ConfigMapManager) triggerRollingRestartForConfigChange(ctx context.Con
 		return fmt.Errorf("failed to update primary StatefulSet: %w", err)
 	}
 
-	// Get secondary StatefulSet if it exists
-	if cluster.Spec.Topology.Secondaries > 0 {
+	// Get server StatefulSet (servers self-organize into primaries/secondaries)
+	serverSts := &appsv1.StatefulSet{}
+	serverKey := types.NamespacedName{
+		Name:      fmt.Sprintf("%s-server", cluster.Name),
+		Namespace: cluster.Namespace,
+	}
+
+	if err := cm.Get(ctx, serverKey, serverSts); err == nil {
+		// Update server StatefulSet with config hash annotation
+		if err := cm.updateStatefulSetWithConfigHash(ctx, serverSts, configHash); err != nil {
+			return fmt.Errorf("failed to update server StatefulSet: %w", err)
+		}
+	} else if !errors.IsNotFound(err) {
+		return fmt.Errorf("failed to get server StatefulSet: %w", err)
+	}
+
+	// Legacy check for secondary StatefulSet (for backward compatibility)
+	if false { // No secondaries in new architecture
 		secondarySts := &appsv1.StatefulSet{}
 		secondaryKey := types.NamespacedName{
 			Name:      fmt.Sprintf("%s-secondary", cluster.Name),
@@ -496,8 +512,7 @@ func (cm *ConfigMapManager) hasTopologyChanged(oldCluster, newCluster *neo4jv1al
 		return true
 	}
 
-	return oldCluster.Spec.Topology.Primaries != newCluster.Spec.Topology.Primaries ||
-		oldCluster.Spec.Topology.Secondaries != newCluster.Spec.Topology.Secondaries
+	return oldCluster.Spec.Topology.Servers != newCluster.Spec.Topology.Servers
 }
 
 // setOwnerReference sets the owner reference for the ConfigMap

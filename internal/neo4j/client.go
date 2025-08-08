@@ -1530,6 +1530,238 @@ func buildConnectionURIForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseClust
 	return fmt.Sprintf("%s://%s:%d", scheme, host, port)
 }
 
+// CreateDatabaseFromSeedURI creates a database from a seed URI using Neo4j CloudSeedProvider
+func (c *Client) CreateDatabaseFromSeedURI(ctx context.Context, databaseName, seedURI string, seedConfig *neo4jv1alpha1.SeedConfiguration, options map[string]string, wait bool, ifNotExists bool, cypherVersion string) error {
+	session := c.driver.NewSession(ctx, neo4j.SessionConfig{
+		AccessMode:   neo4j.AccessModeWrite,
+		DatabaseName: "system",
+	})
+	defer session.Close(ctx)
+
+	// Build CREATE DATABASE query with seed URI
+	query := fmt.Sprintf("CREATE DATABASE `%s`", databaseName)
+
+	if ifNotExists {
+		query = fmt.Sprintf("CREATE DATABASE `%s` IF NOT EXISTS", databaseName)
+	}
+
+	// Add Cypher language version for Neo4j 2025.x
+	if cypherVersion != "" {
+		query += fmt.Sprintf(" DEFAULT LANGUAGE CYPHER %s", cypherVersion)
+	}
+
+	// Add seed URI
+	query += fmt.Sprintf(" FROM '%s'", seedURI)
+
+	// Add seed configuration options
+	if seedConfig != nil {
+		seedOptions := c.buildSeedOptions(seedConfig)
+		if len(seedOptions) > 0 {
+			query += fmt.Sprintf(" SEED CONFIG %s", seedOptions)
+		}
+	}
+
+	// Add general options if provided
+	if len(options) > 0 {
+		var optionParts []string
+		for key, value := range options {
+			optionParts = append(optionParts, fmt.Sprintf("%s: '%s'", key, value))
+		}
+		query += " OPTIONS {" + strings.Join(optionParts, ", ") + "}"
+	}
+
+	// Add WAIT or NOWAIT
+	if wait {
+		query += " WAIT"
+	} else {
+		query += " NOWAIT"
+	}
+
+	_, err := session.Run(ctx, query, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create database %s from seed URI: %w", databaseName, err)
+	}
+
+	return nil
+}
+
+// CreateDatabaseFromSeedURIWithTopology creates a database with topology from a seed URI
+func (c *Client) CreateDatabaseFromSeedURIWithTopology(ctx context.Context, databaseName, seedURI string, primaries, secondaries int32, seedConfig *neo4jv1alpha1.SeedConfiguration, options map[string]string, wait bool, ifNotExists bool, cypherVersion string) error {
+	session := c.driver.NewSession(ctx, neo4j.SessionConfig{
+		AccessMode:   neo4j.AccessModeWrite,
+		DatabaseName: "system",
+	})
+	defer session.Close(ctx)
+
+	// Build CREATE DATABASE query
+	query := fmt.Sprintf("CREATE DATABASE `%s`", databaseName)
+
+	if ifNotExists {
+		query = fmt.Sprintf("CREATE DATABASE `%s` IF NOT EXISTS", databaseName)
+	}
+
+	// Add Cypher language version for Neo4j 2025.x
+	if cypherVersion != "" {
+		query += fmt.Sprintf(" DEFAULT LANGUAGE CYPHER %s", cypherVersion)
+	}
+
+	// Add topology if specified
+	if primaries > 0 || secondaries > 0 {
+		topologyParts := []string{}
+		if primaries > 0 {
+			if primaries == 1 {
+				topologyParts = append(topologyParts, "1 PRIMARY")
+			} else {
+				topologyParts = append(topologyParts, fmt.Sprintf("%d PRIMARIES", primaries))
+			}
+		}
+		if secondaries > 0 {
+			if secondaries == 1 {
+				topologyParts = append(topologyParts, "1 SECONDARY")
+			} else {
+				topologyParts = append(topologyParts, fmt.Sprintf("%d SECONDARIES", secondaries))
+			}
+		}
+		if len(topologyParts) > 0 {
+			query += " TOPOLOGY " + strings.Join(topologyParts, " ")
+		}
+	}
+
+	// Add seed URI
+	query += fmt.Sprintf(" FROM '%s'", seedURI)
+
+	// Add seed configuration options
+	if seedConfig != nil {
+		seedOptions := c.buildSeedOptions(seedConfig)
+		if len(seedOptions) > 0 {
+			query += fmt.Sprintf(" SEED CONFIG %s", seedOptions)
+		}
+	}
+
+	// Add general options if provided
+	if len(options) > 0 {
+		var optionParts []string
+		for key, value := range options {
+			optionParts = append(optionParts, fmt.Sprintf("%s: '%s'", key, value))
+		}
+		query += " OPTIONS {" + strings.Join(optionParts, ", ") + "}"
+	}
+
+	// Add WAIT or NOWAIT
+	if wait {
+		query += " WAIT"
+	} else {
+		query += " NOWAIT"
+	}
+
+	_, err := session.Run(ctx, query, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create database %s with topology from seed URI: %w", databaseName, err)
+	}
+
+	return nil
+}
+
+// buildSeedOptions builds the seed configuration options string
+func (c *Client) buildSeedOptions(seedConfig *neo4jv1alpha1.SeedConfiguration) string {
+	var parts []string
+
+	// Add restoreUntil if specified
+	if seedConfig.RestoreUntil != "" {
+		if strings.HasPrefix(seedConfig.RestoreUntil, "txId:") {
+			// Transaction ID format
+			parts = append(parts, fmt.Sprintf("restoreUntil: %s", seedConfig.RestoreUntil))
+		} else {
+			// RFC3339 timestamp format - quote it
+			parts = append(parts, fmt.Sprintf("restoreUntil: '%s'", seedConfig.RestoreUntil))
+		}
+	}
+
+	// Add custom configuration options
+	if seedConfig.Config != nil {
+		for key, value := range seedConfig.Config {
+			parts = append(parts, fmt.Sprintf("%s: '%s'", key, value))
+		}
+	}
+
+	if len(parts) > 0 {
+		return "{" + strings.Join(parts, ", ") + "}"
+	}
+
+	return ""
+}
+
+// PrepareCloudCredentials prepares cloud credentials for seed URI access
+func (c *Client) PrepareCloudCredentials(ctx context.Context, k8sClient client.Client, database *neo4jv1alpha1.Neo4jDatabase) error {
+	// This method prepares cloud credentials in the cluster for CloudSeedProvider
+	// It doesn't store credentials directly but ensures the cluster environment is configured
+
+	if database.Spec.SeedCredentials == nil {
+		// Using system-wide authentication (IAM roles, workload identity, etc.)
+		return nil
+	}
+
+	// Get the secret containing credentials
+	secret := &corev1.Secret{}
+	secretKey := types.NamespacedName{
+		Name:      database.Spec.SeedCredentials.SecretRef,
+		Namespace: database.Namespace,
+	}
+
+	if err := k8sClient.Get(ctx, secretKey, secret); err != nil {
+		return fmt.Errorf("failed to get seed credentials secret: %w", err)
+	}
+
+	// Validate that the secret contains the expected keys based on URI scheme
+	seedURI := database.Spec.SeedURI
+	if seedURI == "" {
+		return fmt.Errorf("seed URI is required when seed credentials are specified")
+	}
+
+	// Extract scheme from URI
+	schemeEnd := strings.Index(seedURI, "://")
+	if schemeEnd == -1 {
+		return fmt.Errorf("invalid seed URI format: %s", seedURI)
+	}
+	scheme := seedURI[:schemeEnd]
+
+	// Validate required keys exist for the scheme
+	return c.validateCredentialKeys(secret, scheme)
+}
+
+// validateCredentialKeys validates that the secret contains required keys for the URI scheme
+func (c *Client) validateCredentialKeys(secret *corev1.Secret, scheme string) error {
+	hasKey := func(key string) bool {
+		_, exists := secret.Data[key]
+		return exists
+	}
+
+	switch scheme {
+	case "s3":
+		if !hasKey("AWS_ACCESS_KEY_ID") || !hasKey("AWS_SECRET_ACCESS_KEY") {
+			return fmt.Errorf("S3 credentials secret must contain AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY")
+		}
+	case "gs":
+		if !hasKey("GOOGLE_APPLICATION_CREDENTIALS") {
+			return fmt.Errorf("GCS credentials secret must contain GOOGLE_APPLICATION_CREDENTIALS")
+		}
+	case "azb":
+		if !hasKey("AZURE_STORAGE_ACCOUNT") {
+			return fmt.Errorf("Azure credentials secret must contain AZURE_STORAGE_ACCOUNT")
+		}
+		if !hasKey("AZURE_STORAGE_KEY") && !hasKey("AZURE_STORAGE_SAS_TOKEN") {
+			return fmt.Errorf("Azure credentials secret must contain either AZURE_STORAGE_KEY or AZURE_STORAGE_SAS_TOKEN")
+		}
+	case "http", "https", "ftp":
+		// HTTP/FTP credentials are optional
+		break
+	default:
+		return fmt.Errorf("unsupported seed URI scheme: %s", scheme)
+	}
+
+	return nil
+}
+
 // CreateBackup creates a backup of the specified database or cluster
 func (c *Client) CreateBackup(ctx context.Context, databaseName, backupName, backupPath string, options BackupOptions) error {
 	// Validate backup path

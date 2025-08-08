@@ -175,15 +175,146 @@ The operator automatically configures many settings for optimal Kubernetes opera
 - Single-member cluster configuration
 - Appropriate network bindings
 
+## Database Configuration Best Practices
+
+### Database Creation Options
+
+The operator supports two main approaches for populating databases with initial data:
+
+#### Standard Database with Initial Data
+```yaml
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jDatabase
+metadata:
+  name: my-app-database
+spec:
+  clusterRef: production-cluster
+  name: appdb
+
+  # Initial schema and constraints
+  initialData:
+    source: cypher
+    cypherStatements:
+      - "CREATE CONSTRAINT user_email IF NOT EXISTS ON (u:User) ASSERT u.email IS UNIQUE"
+      - "CREATE INDEX user_name IF NOT EXISTS FOR (u:User) ON (u.name)"
+      - "CREATE INDEX product_category IF NOT EXISTS FOR (p:Product) ON (p.category)"
+
+  # Database topology
+  topology:
+    primaries: 2
+    secondaries: 1
+
+  wait: true
+  ifNotExists: true
+```
+
+#### Database from Seed URI (Recommended for Migrations)
+```yaml
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jDatabase
+metadata:
+  name: migrated-database
+spec:
+  clusterRef: production-cluster
+  name: migrated-db
+
+  # Create from existing backup
+  seedURI: "s3://my-neo4j-backups/production-backup.backup"
+
+  # Point-in-time recovery (Neo4j 2025.x only)
+  seedConfig:
+    restoreUntil: "2025-01-15T10:30:00Z"
+    config:
+      compression: "gzip"
+      validation: "strict"
+      bufferSize: "128MB"
+
+  # Use system-wide cloud authentication (preferred)
+  # seedCredentials: null  # Relies on IAM roles, workload identity, etc.
+
+  # Database distribution
+  topology:
+    primaries: 2
+    secondaries: 2
+
+  wait: true
+  ifNotExists: true
+  defaultCypherLanguage: "25"  # Neo4j 2025.x only
+```
+
+### Database Configuration Best Practices
+
+#### ✅ Do's
+- **Prefer seed URI for migrations**: Use `seedURI` when migrating from existing Neo4j instances
+- **Use system-wide authentication**: Rely on IAM roles, workload identity, managed identities instead of explicit credentials
+- **Choose appropriate topology**: Balance primaries and secondaries based on read/write patterns
+- **Use .backup format**: Prefer Neo4j backup format over dump format for better performance
+- **Set appropriate timeouts**: Use `wait: true` for critical databases to ensure they're ready before proceeding
+- **Use IF NOT EXISTS patterns**: Include `ifNotExists: true` and IF NOT EXISTS in Cypher statements
+- **Test restoration**: Verify seed URIs are accessible and contain expected data before production use
+
+#### ❌ Don'ts
+- **Don't combine data sources**: Never specify both `seedURI` and `initialData` - they conflict
+- **Don't use explicit credentials unnecessarily**: Avoid storing cloud credentials in secrets when system-wide auth is available
+- **Don't ignore topology validation**: Ensure database topology doesn't exceed cluster capacity
+- **Don't use .dump for large datasets**: Use .backup format for better performance with large databases
+- **Don't skip point-in-time recovery**: Use `restoreUntil` when precise restoration timing is required (Neo4j 2025.x)
+
+### Seed URI Security Best Practices
+
+#### Authentication Hierarchy (Preferred → Fallback)
+1. **System-Wide Authentication** (Most Secure):
+   - AWS: IAM roles for service accounts (IRSA), EC2 instance profiles
+   - GCP: Workload Identity, default service accounts
+   - Azure: Managed identities, service principal environment variables
+
+2. **Explicit Credentials** (When System-Wide Unavailable):
+   - Kubernetes secrets with minimal required permissions
+   - Temporary credentials with limited lifetime
+   - Regular credential rotation
+
+#### Example: System-Wide Authentication Setup
+```yaml
+# AWS IRSA example
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: neo4j-backup-reader
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT:role/Neo4jBackupReader
+---
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: production-cluster
+spec:
+  serviceAccountName: neo4j-backup-reader  # Uses IAM role
+  # ... other cluster configuration
+---
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jDatabase
+metadata:
+  name: restored-database
+spec:
+  clusterRef: production-cluster
+  seedURI: "s3://my-backups/database.backup"
+  # No explicit credentials needed - uses IAM role
+```
+
 ## Version-Specific Considerations
 
 ### Neo4j 5.26+ (Semver)
 - Discovery parameter: `dbms.kubernetes.service_port_name`
 - Discovery V2 parameter: `dbms.kubernetes.discovery.v2.service_port_name`
+- Seed URI support with CloudSeedProvider
+- No point-in-time recovery for seed URIs
 
 ### Neo4j 2025.x+ (Calver)
 - Discovery parameter: `dbms.kubernetes.discovery.service_port_name`
 - Same memory and server settings as 5.26+
+- Enhanced seed URI support with point-in-time recovery
+- `defaultCypherLanguage` field support
+- `restoreUntil` field support in `seedConfig`
 
 ## Validation
 

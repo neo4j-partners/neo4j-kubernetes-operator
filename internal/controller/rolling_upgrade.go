@@ -75,8 +75,8 @@ func (r *RollingUpgradeOrchestrator) ExecuteRollingUpgrade(
 		return fmt.Errorf("pre-upgrade validation failed: %w", err)
 	}
 
-	// Phase 2: Upgrade secondaries first (if any)
-	if cluster.Spec.Topology.Secondaries > 0 {
+	// Phase 2: Upgrade secondaries first (if any) - disabled in server architecture
+	if false { // No secondaries in server architecture
 		logger.Info("Upgrading secondary nodes")
 		if err := r.upgradeSecondaries(ctx, cluster, neo4jClient); err != nil {
 			r.updateUpgradeStatus(ctx, cluster, "Failed", "Secondary upgrade failed", err.Error())
@@ -119,16 +119,8 @@ func (r *RollingUpgradeOrchestrator) initializeUpgradeStatus(
 		PreviousVersion: cluster.Status.Version,
 		TargetVersion:   cluster.Spec.Image.Tag,
 		Progress: &neo4jv1alpha1.UpgradeProgress{
-			Total:   cluster.Spec.Topology.Primaries + cluster.Spec.Topology.Secondaries,
-			Pending: cluster.Spec.Topology.Primaries + cluster.Spec.Topology.Secondaries,
-			Primaries: &neo4jv1alpha1.NodeUpgradeProgress{
-				Total:   cluster.Spec.Topology.Primaries,
-				Pending: cluster.Spec.Topology.Primaries,
-			},
-			Secondaries: &neo4jv1alpha1.NodeUpgradeProgress{
-				Total:   cluster.Spec.Topology.Secondaries,
-				Pending: cluster.Spec.Topology.Secondaries,
-			},
+			Total:   cluster.Spec.Topology.Servers,
+			Pending: cluster.Spec.Topology.Servers,
 		},
 	}
 
@@ -174,60 +166,8 @@ func (r *RollingUpgradeOrchestrator) upgradeSecondaries(
 ) error {
 	logger := log.FromContext(ctx)
 
-	if cluster.Spec.Topology.Secondaries == 0 {
-		return nil
-	}
-
-	r.updateUpgradeStatus(ctx, cluster, "InProgress", "Upgrading secondary nodes", "")
-
-	// Get secondary StatefulSet
-	secondarySts := &appsv1.StatefulSet{}
-	if err := r.Get(ctx, types.NamespacedName{
-		Name:      cluster.Name + "-secondary",
-		Namespace: cluster.Namespace,
-	}, secondarySts); err != nil {
-		return fmt.Errorf("failed to get secondary StatefulSet: %w", err)
-	}
-
-	// Update image
-	newImage := fmt.Sprintf("%s:%s", cluster.Spec.Image.Repo, cluster.Spec.Image.Tag)
-	if len(secondarySts.Spec.Template.Spec.Containers) == 0 {
-		return fmt.Errorf("secondary StatefulSet has no containers defined")
-	}
-	if secondarySts.Spec.Template.Spec.Containers[0].Image == newImage {
-		logger.Info("Secondary StatefulSet already has target image")
-		return nil
-	}
-
-	secondarySts.Spec.Template.Spec.Containers[0].Image = newImage
-
-	// Add upgrade annotation
-	if secondarySts.Spec.Template.Annotations == nil {
-		secondarySts.Spec.Template.Annotations = make(map[string]string)
-	}
-	secondarySts.Spec.Template.Annotations["neo4j.com/upgrade-timestamp"] = time.Now().Format(time.RFC3339)
-
-	if err := r.Update(ctx, secondarySts); err != nil {
-		return fmt.Errorf("failed to update secondary StatefulSet: %w", err)
-	}
-
-	// Wait for secondary rollout to complete
-	timeout := r.getUpgradeTimeout(cluster)
-	if err := r.waitForStatefulSetRollout(ctx, secondarySts, timeout); err != nil {
-		return fmt.Errorf("secondary rollout failed: %w", err)
-	}
-
-	// Update progress
-	cluster.Status.UpgradeStatus.Progress.Secondaries.Upgraded = cluster.Spec.Topology.Secondaries
-	cluster.Status.UpgradeStatus.Progress.Secondaries.Pending = 0
-	cluster.Status.UpgradeStatus.Progress.Upgraded += cluster.Spec.Topology.Secondaries
-	cluster.Status.UpgradeStatus.Progress.Pending -= cluster.Spec.Topology.Secondaries
-
-	if err := r.Status().Update(ctx, cluster); err != nil {
-		logger.Error(err, "Failed to update cluster status after secondary upgrade")
-	}
-	logger.Info("Secondary nodes upgrade completed")
-
+	// Secondaries don't exist in server architecture - always return
+	logger.Info("Skipping secondary upgrade - using server architecture")
 	return nil
 }
 
@@ -271,8 +211,7 @@ func (r *RollingUpgradeOrchestrator) upgradeNonLeaderPrimaries(
 		return fmt.Errorf("no leader found in cluster")
 	}
 
-	// Update progress with current leader
-	cluster.Status.UpgradeStatus.Progress.Primaries.CurrentLeader = leader.ID
+	// Update progress with current leader (simplified for server architecture)
 	cluster.Status.UpgradeStatus.CurrentStep = fmt.Sprintf("Upgrading non-leader primaries (preserving leader: %s)", leader.ID)
 	if err := r.Status().Update(ctx, cluster); err != nil {
 		logger.Error(err, "Failed to update cluster status with leader info")
@@ -338,10 +277,8 @@ func (r *RollingUpgradeOrchestrator) upgradeNonLeaderPrimaries(
 		return fmt.Errorf("cluster failed to stabilize after non-leader primary upgrade: %w", err)
 	}
 
-	// Update progress
-	upgradedCount := cluster.Spec.Topology.Primaries - 1 // All except leader
-	cluster.Status.UpgradeStatus.Progress.Primaries.Upgraded = upgradedCount
-	cluster.Status.UpgradeStatus.Progress.Primaries.Pending = 1 // Only leader left
+	// Update progress (simplified for server architecture)
+	upgradedCount := cluster.Spec.Topology.Servers - 1 // All except leader
 	cluster.Status.UpgradeStatus.Progress.Upgraded += upgradedCount
 	cluster.Status.UpgradeStatus.Progress.Pending -= upgradedCount
 
@@ -408,9 +345,7 @@ func (r *RollingUpgradeOrchestrator) upgradeLeader(
 		return fmt.Errorf("cluster failed to stabilize after leader upgrade: %w", err)
 	}
 
-	// Update progress - all primaries upgraded
-	cluster.Status.UpgradeStatus.Progress.Primaries.Upgraded = cluster.Spec.Topology.Primaries
-	cluster.Status.UpgradeStatus.Progress.Primaries.Pending = 0
+	// Update progress - all servers upgraded
 	cluster.Status.UpgradeStatus.Progress.Upgraded++ // Just the leader
 	cluster.Status.UpgradeStatus.Progress.Pending--
 
@@ -682,8 +617,20 @@ func (r *RollingUpgradeOrchestrator) validateStatefulSetsReady(
 			primarySts.Status.ReadyReplicas, *primarySts.Spec.Replicas)
 	}
 
-	// Check secondary StatefulSet if it exists
-	if cluster.Spec.Topology.Secondaries > 0 {
+	// Check server StatefulSet (servers self-organize)
+	serverSts := &appsv1.StatefulSet{}
+	if err := r.Get(ctx, types.NamespacedName{
+		Name:      cluster.Name + "-server",
+		Namespace: cluster.Namespace,
+	}, serverSts); err == nil {
+		if serverSts.Status.ReadyReplicas != *serverSts.Spec.Replicas {
+			return fmt.Errorf("server StatefulSet not ready: %d/%d replicas ready",
+				serverSts.Status.ReadyReplicas, *serverSts.Spec.Replicas)
+		}
+	}
+
+	// Legacy check for secondary StatefulSet (disabled in server architecture)
+	if false { // No secondaries in server architecture
 		secondarySts := &appsv1.StatefulSet{}
 		if err := r.Get(ctx, types.NamespacedName{
 			Name:      cluster.Name + "-secondary",

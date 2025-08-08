@@ -45,8 +45,8 @@ func (v *ResourceValidator) ValidateScaling(ctx context.Context, cluster *neo4jv
 	var allErrs field.ErrorList
 
 	// Calculate total resource requirements for target topology
-	targetPods := targetTopology.Primaries + targetTopology.Secondaries
-	currentPods := cluster.Spec.Topology.Primaries + cluster.Spec.Topology.Secondaries
+	targetPods := targetTopology.Servers
+	currentPods := cluster.Spec.Topology.Servers
 
 	// Skip validation if not actually scaling up
 	if targetPods <= currentPods {

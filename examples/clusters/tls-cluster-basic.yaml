@@ -1,5 +1,5 @@
 # TLS-enabled Neo4j Enterprise Cluster
-# This example shows optimal configuration for TLS clusters
+# This example shows optimal configuration for TLS clusters with server-based architecture
 apiVersion: neo4j.neo4j.com/v1alpha1
 kind: Neo4jEnterpriseCluster
 metadata:
@@ -12,10 +12,9 @@ spec:
     tag: "5.26.0-enterprise"
     pullPolicy: "IfNotPresent"
 
-  # Cluster topology
+  # Server-based cluster topology
   topology:
-    primaries: 3
-    secondaries: 2
+    servers: 5        # Five servers for flexible database topologies
 
   # Storage
   storage:

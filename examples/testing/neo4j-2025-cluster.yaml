@@ -10,8 +10,7 @@ spec:
     tag: "2025.02.0-enterprise"
     pullPolicy: IfNotPresent
   topology:
-    primaries: 2      # Two primaries for testing
-    secondaries: 0    # No secondaries for simplicity
+    servers: 2        # Two servers for testing
   storage:
     className: standard
     size: "10Gi"

@@ -233,6 +233,23 @@ deploy-test-with-webhooks: manifests kustomize ## Deploy controller to the K8s c
 undeploy: kustomize ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
 	$(KUSTOMIZE) build config/default | $(KUBECTL) delete --ignore-not-found=$(ignore-not-found) -f -
 
+.PHONY: deploy-dev
+deploy-dev: manifests kustomize ## Deploy controller with development configuration to the K8s cluster.
+	$(KUSTOMIZE) build config/overlays/dev | $(KUBECTL) apply -f -
+
+.PHONY: deploy-prod
+deploy-prod: manifests kustomize ## Deploy controller with production configuration to the K8s cluster.
+	cd config/overlays/prod && $(KUSTOMIZE) edit set image controller=ghcr.io/neo4j-labs/neo4j-kubernetes-operator:$(VERSION)
+	$(KUSTOMIZE) build config/overlays/prod | $(KUBECTL) apply -f -
+
+.PHONY: undeploy-dev
+undeploy-dev: kustomize ## Undeploy development controller from the K8s cluster.
+	$(KUSTOMIZE) build config/overlays/dev | $(KUBECTL) delete --ignore-not-found=true -f -
+
+.PHONY: undeploy-prod
+undeploy-prod: kustomize ## Undeploy production controller from the K8s cluster.
+	$(KUSTOMIZE) build config/overlays/prod | $(KUBECTL) delete --ignore-not-found=true -f -
+
 ##@ Dependencies
 
 ## Location to install dependencies to

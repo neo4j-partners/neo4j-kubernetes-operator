@@ -1,0 +1,68 @@
+# Three Server Neo4j Enterprise Cluster Example
+#
+# This configuration uses 3 servers that self-organize into roles.
+# The servers provide good fault tolerance and flexible database topologies.
+# This configuration is suitable for development and production use.
+#
+# CLUSTER FORMATION: The operator uses server-based cluster formation.
+# Servers self-organize and databases can use different primary/secondary topologies.
+# This provides flexible database deployment options on the same cluster infrastructure.
+#
+# This configuration provides better fault tolerance than 2-server clusters.
+# See: docs/user_guide/guides/fault_tolerance.md
+#
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: three-server-cluster
+  namespace: default
+  annotations:
+    neo4j.neo4j.com/topology-note: "3 servers provide good fault tolerance and flexible database topologies"
+spec:
+  # Neo4j 5.26+ Enterprise image required
+  image:
+    repo: "neo4j"
+    tag: "5.26.0-enterprise"
+    pullPolicy: "IfNotPresent"
+
+  # Server-based cluster configuration
+  # Three servers will self-organize to host databases with configurable topologies
+  topology:
+    servers: 3        # Three servers for optimal fault tolerance
+
+  # Storage configuration
+  storage:
+    className: "standard"
+    size: "20Gi"
+
+  # Authentication
+  auth:
+    adminSecret: "neo4j-admin-secret"
+
+  # TLS configuration
+  tls:
+    mode: "cert-manager"
+    issuerRef:
+      name: "ca-cluster-issuer"
+      kind: "ClusterIssuer"
+
+  # Resource configuration
+  resources:
+    requests:
+      cpu: "1"
+      memory: "2Gi"
+    limits:
+      cpu: "2"
+      memory: "4Gi"
+
+  # Service configuration
+  service:
+    type: "ClusterIP"
+    annotations:
+      service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+
+---
+# Required admin secret - create separately with:
+# kubectl create secret generic neo4j-admin-secret \
+#   --from-literal=username=neo4j \
+#   --from-literal=password=your-secure-password

@@ -1,0 +1,83 @@
+# Example: Creating a Neo4j database from Google Cloud Storage using seed URI
+# This example demonstrates using system-wide authentication (workload identity)
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jDatabase
+metadata:
+  name: analytics-database-from-gcs
+  namespace: default
+spec:
+  # Reference to the Neo4j Enterprise cluster
+  clusterRef: analytics-cluster
+
+  # Database name in Neo4j
+  name: analytics
+
+  # Seed URI pointing to Google Cloud Storage backup
+  seedURI: "gs://my-neo4j-backups/analytics-database-backup.backup"
+
+  # Database topology - single primary for analytics workload
+  topology:
+    primaries: 1
+    secondaries: 2
+
+  # Seed configuration
+  seedConfig:
+    # Use transaction ID for point-in-time recovery
+    restoreUntil: "txId:98765"
+
+    # CloudSeedProvider configuration
+    config:
+      compression: "lz4"
+      validation: "lenient"
+
+  # No explicit credentials - using workload identity/system-wide authentication
+  # Ensure your Neo4j pods have appropriate IAM roles or service account annotations:
+  # annotations:
+  #   iam.gke.io/gcp-service-account: neo4j-backup-reader@my-project.iam.gserviceaccount.com
+
+  # Database options optimized for analytics
+  options:
+    "dbms.memory.heap.initial_size": "1g"
+    "dbms.memory.heap.max_size": "2g"
+    "dbms.memory.pagecache.size": "1g"
+
+  # Wait for database to be ready
+  wait: true
+  ifNotExists: true
+  defaultCypherLanguage: "25"
+
+---
+# Optional: Example of providing explicit GCS credentials via secret
+apiVersion: v1
+kind: Secret
+metadata:
+  name: gcs-backup-credentials
+  namespace: default
+type: Opaque
+data:
+  # Service account key file (JSON) base64 encoded
+  GOOGLE_APPLICATION_CREDENTIALS: ewogICJ0eXBlIjogInNlcnZpY2VfYWNjb3VudCIsCiAgInByb2plY3RfaWQiOiAibXktcHJvamVjdCIKfQ==   # EXAMPLE ONLY - Replace with real credentials# {"type": "service_account", "project_id": "my-project"}
+  # Optional: Explicitly specify project
+  GOOGLE_CLOUD_PROJECT: bXktcHJvamVjdA== # my-project
+---
+# Alternative configuration using explicit credentials
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jDatabase
+metadata:
+  name: analytics-database-with-explicit-creds
+  namespace: default
+spec:
+  clusterRef: analytics-cluster
+  name: analytics-explicit
+  seedURI: "gs://my-neo4j-backups/analytics-database-backup.backup"
+
+  # Reference explicit credentials secret
+  seedCredentials:
+    secretRef: gcs-backup-credentials
+
+  topology:
+    primaries: 1
+    secondaries: 2
+
+  wait: true
+  ifNotExists: true
