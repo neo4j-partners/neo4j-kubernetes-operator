@@ -19,6 +19,7 @@ package resources
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -818,7 +819,17 @@ func BuildPodSpecForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, ro
 		},
 	}
 
-	// Add custom environment variables
+	// Add JVM settings for optimal performance
+	// These are production-ready defaults that can be overridden via cluster.Spec.Env
+	jvmSettings := buildJVMSettings(cluster)
+	if jvmSettings != "" {
+		env = append(env, corev1.EnvVar{
+			Name:  "NEO4J_server_jvm_additional",
+			Value: jvmSettings,
+		})
+	}
+
+	// Add custom environment variables (can override JVM settings if needed)
 	if cluster.Spec.Env != nil {
 		env = append(env, cluster.Spec.Env...)
 	}
@@ -908,6 +919,7 @@ func BuildPodSpecForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, ro
 		},
 		ReadinessProbe: buildReadinessProbe(cluster),
 		LivenessProbe:  buildLivenessProbe(cluster),
+		StartupProbe:   buildStartupProbe(cluster),
 		Command: []string{
 			"/bin/bash",
 			"-c",
@@ -1271,6 +1283,26 @@ server.cluster.raft.listen_address=0.0.0.0:7000
 # Note: Single RAFT and cluster discovery settings are dynamically added by startup script
 `, memoryConfig.HeapInitialSize, memoryConfig.HeapMaxSize, memoryConfig.PageCacheSize)
 
+	// Add transaction memory limits for stability
+	// These prevent OOM kills from runaway queries
+	config += fmt.Sprintf(`
+# Transaction Memory Limits (prevents OOM from heavy queries)
+# Global transaction memory limit (defaults to 70%% of heap if not set)
+dbms.memory.transaction.total.max=%s
+# Maximum memory per transaction (defaults to 10%% of global limit)
+db.memory.transaction.max=%s
+# Per-database transaction memory limit (optional, defaults to global limit)
+# db.memory.transaction.total.max=%s
+
+# Bolt thread pool configuration for better connection handling
+server.bolt.thread_pool_min_size=5
+server.bolt.thread_pool_max_size=400
+server.bolt.thread_pool_keep_alive=5m
+`,
+		calculateTransactionMemoryLimit(memoryConfig.HeapMaxSize, cluster.Spec.Config),
+		calculatePerTransactionLimit(memoryConfig.HeapMaxSize, cluster.Spec.Config),
+		calculatePerDatabaseLimit(memoryConfig.HeapMaxSize, cluster.Spec.Config))
+
 	// Add TLS configuration if enabled
 	if cluster.Spec.TLS != nil && cluster.Spec.TLS.Mode == CertManagerMode {
 		config += `
@@ -1568,6 +1600,201 @@ func buildLivenessProbe(_ *neo4jv1alpha1.Neo4jEnterpriseCluster) *corev1.Probe {
 		PeriodSeconds:       60,  // Less frequent checks to avoid interrupting cluster operations
 		TimeoutSeconds:      10,
 		FailureThreshold:    3,
+	}
+}
+
+// buildJVMSettings builds optimized JVM settings for Neo4j
+func buildJVMSettings(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) string {
+	// Check if user has already set JVM settings via environment variable
+	for _, env := range cluster.Spec.Env {
+		if env.Name == "NEO4J_server_jvm_additional" {
+			// User has explicitly set JVM settings, don't override
+			return ""
+		}
+	}
+
+	// Check if user has set via config
+	if val, exists := cluster.Spec.Config["server.jvm.additional"]; exists && val != "" {
+		return val
+	}
+
+	// Build production-ready JVM settings
+	var jvmFlags []string
+
+	// Use G1GC for better pause times with large heaps
+	jvmFlags = append(jvmFlags, "-XX:+UseG1GC")
+
+	// Target max GC pause time
+	jvmFlags = append(jvmFlags, "-XX:MaxGCPauseMillis=200")
+
+	// Enable parallel reference processing for better GC performance
+	jvmFlags = append(jvmFlags, "-XX:+ParallelRefProcEnabled")
+
+	// G1GC tuning for Neo4j workloads
+	jvmFlags = append(jvmFlags, "-XX:+UnlockExperimentalVMOptions")
+	jvmFlags = append(jvmFlags, "-XX:+UnlockDiagnosticVMOptions")
+	jvmFlags = append(jvmFlags, "-XX:G1NewSizePercent=2")
+	jvmFlags = append(jvmFlags, "-XX:G1MaxNewSizePercent=10")
+
+	// Adaptive IHOP (Initiating Heap Occupancy Percent)
+	jvmFlags = append(jvmFlags, "-XX:+G1UseAdaptiveIHOP")
+	jvmFlags = append(jvmFlags, "-XX:InitiatingHeapOccupancyPercent=45")
+
+	// Enable compressed OOPs for heaps up to 32GB (saves ~30% memory)
+	// Automatically enabled for heaps < 32GB but explicit is better
+	jvmFlags = append(jvmFlags, "-XX:+UseCompressedOops")
+	jvmFlags = append(jvmFlags, "-XX:+UseCompressedClassPointers")
+
+	// String deduplication can help with Neo4j's string-heavy workloads
+	jvmFlags = append(jvmFlags, "-XX:+UseStringDeduplication")
+
+	// Exit on OOM for better container behavior
+	jvmFlags = append(jvmFlags, "-XX:+ExitOnOutOfMemoryError")
+
+	// Optional: Enable GC logging for debugging (commented out by default)
+	// jvmFlags = append(jvmFlags, "-Xlog:gc*:file=/logs/gc.log:time,uptime,level,tags:filecount=5,filesize=10m")
+
+	return strings.Join(jvmFlags, " ")
+}
+
+// buildStartupProbe creates a startup probe for initial cluster formation
+func buildStartupProbe(_ *neo4jv1alpha1.Neo4jEnterpriseCluster) *corev1.Probe {
+	return &corev1.Probe{
+		ProbeHandler: corev1.ProbeHandler{
+			Exec: &corev1.ExecAction{
+				Command: []string{
+					"/bin/bash",
+					"-c",
+					"/conf/health.sh",
+				},
+			},
+		},
+		InitialDelaySeconds: 30, // Start checking after 30 seconds
+		PeriodSeconds:       10, // Check every 10 seconds during startup
+		TimeoutSeconds:      5,
+		FailureThreshold:    60, // Allow up to 10 minutes for startup (60 * 10s)
+		SuccessThreshold:    1,
+	}
+}
+
+// calculateTransactionMemoryLimit calculates the global transaction memory limit
+// Defaults to 70% of heap to leave room for other operations
+func calculateTransactionMemoryLimit(heapSize string, config map[string]string) string {
+	// Check if user has explicitly set it
+	if val, exists := config["dbms.memory.transaction.total.max"]; exists && val != "" {
+		return val
+	}
+
+	// Parse heap size and calculate 70%
+	heapBytes := parseMemoryString(heapSize)
+	if heapBytes == 0 {
+		return "2g" // Safe default
+	}
+
+	transactionMemory := int64(float64(heapBytes) * 0.7)
+	return formatMemorySizeForNeo4j(transactionMemory)
+}
+
+// calculatePerTransactionLimit calculates the per-transaction memory limit
+// Defaults to 10% of the global transaction limit
+func calculatePerTransactionLimit(heapSize string, config map[string]string) string {
+	// Check if user has explicitly set it
+	if val, exists := config["db.memory.transaction.max"]; exists && val != "" {
+		return val
+	}
+
+	// Get the global limit first
+	globalLimit := calculateTransactionMemoryLimit(heapSize, config)
+	globalBytes := parseMemoryString(globalLimit)
+	if globalBytes == 0 {
+		return "256m" // Safe default
+	}
+
+	perTransactionMemory := int64(float64(globalBytes) * 0.1)
+	// Minimum 256MB per transaction
+	if perTransactionMemory < 256*1024*1024 {
+		perTransactionMemory = 256 * 1024 * 1024
+	}
+	return formatMemorySizeForNeo4j(perTransactionMemory)
+}
+
+// calculatePerDatabaseLimit calculates the per-database transaction memory limit
+// Defaults to 50% of global limit to allow multiple databases
+func calculatePerDatabaseLimit(heapSize string, config map[string]string) string {
+	// Check if user has explicitly set it
+	if val, exists := config["db.memory.transaction.total.max"]; exists && val != "" {
+		return val
+	}
+
+	// Get the global limit
+	globalLimit := calculateTransactionMemoryLimit(heapSize, config)
+	globalBytes := parseMemoryString(globalLimit)
+	if globalBytes == 0 {
+		return "1g" // Safe default
+	}
+
+	perDatabaseMemory := int64(float64(globalBytes) * 0.5)
+	return formatMemorySizeForNeo4j(perDatabaseMemory)
+}
+
+// parseMemoryString parses Neo4j memory string to bytes
+func parseMemoryString(memStr string) int64 {
+	if memStr == "" {
+		return 0
+	}
+
+	memStr = strings.ToLower(strings.TrimSpace(memStr))
+
+	var multiplier int64
+	var numStr string
+
+	switch {
+	case strings.HasSuffix(memStr, "g"):
+		multiplier = 1024 * 1024 * 1024
+		numStr = strings.TrimSuffix(memStr, "g")
+	case strings.HasSuffix(memStr, "m"):
+		multiplier = 1024 * 1024
+		numStr = strings.TrimSuffix(memStr, "m")
+	case strings.HasSuffix(memStr, "k"):
+		multiplier = 1024
+		numStr = strings.TrimSuffix(memStr, "k")
+	default:
+		// Try to parse as raw number (bytes)
+		if num, err := strconv.ParseInt(memStr, 10, 64); err == nil {
+			return num
+		}
+		return 0
+	}
+
+	num, err := strconv.ParseFloat(numStr, 64)
+	if err != nil {
+		return 0
+	}
+
+	return int64(num * float64(multiplier))
+}
+
+// formatMemorySizeForNeo4j formats bytes to Neo4j memory string
+func formatMemorySizeForNeo4j(bytes int64) string {
+	const (
+		GB = 1024 * 1024 * 1024
+		MB = 1024 * 1024
+		KB = 1024
+	)
+
+	switch {
+	case bytes >= GB && bytes%GB == 0:
+		return fmt.Sprintf("%dg", bytes/GB)
+	case bytes >= GB:
+		return fmt.Sprintf("%.1fg", float64(bytes)/float64(GB))
+	case bytes >= MB && bytes%MB == 0:
+		return fmt.Sprintf("%dm", bytes/MB)
+	case bytes >= MB:
+		return fmt.Sprintf("%.1fm", float64(bytes)/float64(MB))
+	case bytes >= KB:
+		return fmt.Sprintf("%dk", bytes/KB)
+	default:
+		return fmt.Sprintf("%d", bytes)
 	}
 }
 

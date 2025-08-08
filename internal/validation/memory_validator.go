@@ -58,9 +58,10 @@ func (v *MemoryValidator) Validate(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster
 	// Check Neo4j memory settings against container limits
 	neo4jHeap := cluster.Spec.Config["server.memory.heap.max_size"]
 	neo4jPageCache := cluster.Spec.Config["server.memory.pagecache.size"]
+	transactionMemory := cluster.Spec.Config["dbms.memory.transaction.total.max"]
 
-	if neo4jHeap != "" || neo4jPageCache != "" {
-		allErrs = append(allErrs, v.validateNeo4jMemorySettings(cluster, containerMemoryBytes, neo4jHeap, neo4jPageCache)...)
+	if neo4jHeap != "" || neo4jPageCache != "" || transactionMemory != "" {
+		allErrs = append(allErrs, v.validateNeo4jMemorySettings(cluster, containerMemoryBytes, neo4jHeap, neo4jPageCache, transactionMemory)...)
 	}
 
 	// Only validate memory allocation and provide recommendations if there are no critical errors
@@ -72,11 +73,11 @@ func (v *MemoryValidator) Validate(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster
 }
 
 // validateNeo4jMemorySettings validates explicit Neo4j memory configuration
-func (v *MemoryValidator) validateNeo4jMemorySettings(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, containerMemoryBytes int64, neo4jHeap, neo4jPageCache string) field.ErrorList {
+func (v *MemoryValidator) validateNeo4jMemorySettings(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, containerMemoryBytes int64, neo4jHeap, neo4jPageCache, transactionMem string) field.ErrorList {
 	var allErrs field.ErrorList
 
 	var totalNeo4jMemory int64
-	var heapBytes, pageCacheBytes int64
+	var heapBytes, pageCacheBytes, transactionBytes int64
 	var err error
 
 	if neo4jHeap != "" {
@@ -103,6 +104,31 @@ func (v *MemoryValidator) validateNeo4jMemorySettings(cluster *neo4jv1alpha1.Neo
 			return allErrs
 		}
 		totalNeo4jMemory += pageCacheBytes
+	}
+
+	// Validate transaction memory if specified
+	if transactionMem != "" {
+		transactionBytes, err = v.parseMemoryToBytes(transactionMem)
+		if err != nil {
+			allErrs = append(allErrs, field.Invalid(
+				field.NewPath("spec", "config", "dbms.memory.transaction.total.max"),
+				transactionMem,
+				fmt.Sprintf("invalid memory format: %v", err),
+			))
+			return allErrs
+		}
+
+		// Transaction memory should not exceed heap size
+		if heapBytes > 0 && transactionBytes > heapBytes {
+			allErrs = append(allErrs, field.Invalid(
+				field.NewPath("spec", "config", "dbms.memory.transaction.total.max"),
+				transactionMem,
+				fmt.Sprintf("transaction memory (%s) cannot exceed heap size (%s)",
+					v.formatMemorySize(transactionBytes), v.formatMemorySize(heapBytes)),
+			))
+		}
+
+		// Note: Transaction memory is allocated from heap, so don't add to total
 	}
 
 	// Add system memory overhead (typically 512MB-1GB)

@@ -124,6 +124,28 @@ func TestMemoryValidator_Validate(t *testing.T) {
 			},
 			wantErrorsLen: 0, // Should not error when no resources specified
 		},
+		{
+			name: "transaction memory exceeds heap size",
+			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
+				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
+					Topology: neo4jv1alpha1.TopologyConfiguration{
+						Servers: 3,
+					},
+					Resources: &corev1.ResourceRequirements{
+						Limits: corev1.ResourceList{
+							corev1.ResourceMemory: resource.MustParse("4Gi"),
+						},
+					},
+					Config: map[string]string{
+						"server.memory.heap.max_size":       "2g",
+						"server.memory.pagecache.size":      "1g",
+						"dbms.memory.transaction.total.max": "3g", // Exceeds heap size
+					},
+				},
+			},
+			wantErrorsLen: 1,
+			wantErrorMsg:  "transaction memory", // Should contain transaction memory validation
+		},
 	}
 
 	for _, tt := range tests {
