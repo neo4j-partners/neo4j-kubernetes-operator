@@ -270,6 +270,86 @@ These settings are automatically configured by the operator:
 
 **Variable Substitution**: `${HOSTNAME_FQDN}` is substituted in startup script (server count is set directly)
 
+## CRITICAL: Split-Brain Detection and Repair (Added 2025-08-09)
+
+**MANDATORY FOR PRODUCTION**: The operator includes comprehensive split-brain detection and automatic repair to prevent Neo4j cluster inconsistencies.
+
+### Split-Brain Detection System
+**Location**: `internal/controller/splitbrain_detector.go`
+
+**Key Features**:
+- **Multi-Pod Analysis**: Connects to each Neo4j server pod individually to compare cluster views
+- **Smart Detection**: Distinguishes between split-brain scenarios and normal startup/formation
+- **Automatic Repair**: Restarts orphaned pods to rejoin the main cluster
+- **Production Ready**: Includes comprehensive logging, events, and fallback mechanisms
+
+### Detection Logic
+```go
+// Integrated into cluster formation verification
+func (r *Neo4jEnterpriseClusterReconciler) verifyNeo4jClusterFormation(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) (bool, string, error) {
+    // Performs split-brain detection before marking cluster as ready
+    splitBrainDetector := NewSplitBrainDetector(r.Client)
+    analysis, err := splitBrainDetector.DetectSplitBrain(ctx, cluster)
+
+    // Automatic repair if split-brain detected
+    if analysis.IsSplitBrain && analysis.RepairAction == RepairActionRestartPods {
+        repairErr := splitBrainDetector.RepairSplitBrain(ctx, cluster, analysis)
+    }
+}
+```
+
+### Repair Actions
+1. **`RepairActionRestartPods`**: Restart specific orphaned pods (preferred - automatic)
+2. **`RepairActionRestartAll`**: Restart all pods (nuclear option - automatic)
+3. **`RepairActionWaitForming`**: Wait for natural cluster formation (monitoring)
+4. **`RepairActionInvestigate`**: Manual intervention required (alert)
+
+### Why This Fix Is Critical
+1. **Split-Brain Prevention**: Detects scenarios where servers form separate clusters instead of one unified cluster
+2. **Data Consistency**: Prevents data divergence between isolated cluster partitions
+3. **Automatic Recovery**: No manual intervention required for common split-brain scenarios
+4. **Production Reliability**: Essential for maintaining cluster integrity in production environments
+
+### Expected Behavior WITH Detection
+- **Early Detection**: `Starting split-brain detection ... expectedServers: 3`
+- **Smart Analysis**: `Split-brain analysis results ... isSplitBrain: true, orphanedPods: 1`
+- **Automatic Repair**: `Split-brain automatically repaired by restarting orphaned pods`
+- **Kubernetes Events**: `SplitBrainDetected`, `SplitBrainRepaired` events for monitoring
+
+### Expected Behavior WITHOUT Detection
+- **Silent Split-Brain**: Multiple independent clusters form without detection
+- **Data Inconsistency**: Writes to different clusters create conflicting state
+- **Database Creation Failures**: Applications fail due to insufficient cluster capacity
+- **Manual Intervention**: Requires cluster deletion and recreation
+
+### Monitoring Commands
+```bash
+# Check for split-brain events
+kubectl get events --field-selector reason=SplitBrainDetected -A
+
+# Monitor cluster formation
+kubectl logs -n neo4j-operator-system deployment/neo4j-operator-controller-manager | grep -E "(split|brain|SplitBrain)"
+
+# Verify cluster health after repair
+kubectl exec <cluster>-server-0 -- cypher-shell -u neo4j -p <password> "SHOW SERVERS"
+```
+
+### Integration Testing
+**Location**: `test/integration/splitbrain_detection_test.go`
+
+**Test Coverage**:
+- Split-brain detection during cluster startup
+- Automatic repair verification
+- Pod failure recovery scenarios
+- Event generation validation
+
+### Troubleshooting Split-Brain Issues
+1. **Symptoms**: Database creation fails with "insufficient servers" despite running pods
+2. **Detection**: Check operator logs for "Split-brain detected" messages
+3. **Verification**: Use `SHOW SERVERS` on different pods - should see same server list
+4. **Resolution**: Split-brain detector automatically restarts orphaned pods
+5. **Prevention**: Ensure proper resource allocation and stable network connectivity
+
 ## CRITICAL: Resource Version Conflict Handling (Added 2025-08-05)
 
 **MANDATORY FOR CLUSTER FORMATION**: The operator MUST include resource version conflict retry logic to prevent timing-sensitive cluster formation failures.
@@ -342,8 +422,13 @@ minInterval := 1 * time.Second // Fast updates for cluster formation
 - [ ] Test with Neo4j 2025.01.0 to verify cluster formation
 - [ ] Monitor operator logs for conflict resolution messages
 - [ ] Verify StatefulSet rolling updates complete successfully
+- [ ] Split-brain detection system active in `verifyNeo4jClusterFormation`
+- [ ] Test split-brain repair with orphaned pod scenarios
+- [ ] Verify `SplitBrainDetected` and `SplitBrainRepaired` events are generated
+- [ ] Monitor split-brain logs during cluster formation
 
 **DO NOT**: Remove or modify retry logic without comprehensive testing across all Neo4j versions
+**DO NOT**: Remove or disable split-brain detection without understanding production impact
 
 ## CRITICAL: Server-Based Architecture (Updated 2025-08-07)
 

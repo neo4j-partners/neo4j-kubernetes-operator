@@ -1017,7 +1017,7 @@ func (r *Neo4jEnterpriseClusterReconciler) createNeo4jClient(ctx context.Context
 	return neo4jClient, nil
 }
 
-// verifyNeo4jClusterFormation checks if Neo4j cluster formation is complete
+// verifyNeo4jClusterFormation checks if Neo4j cluster formation is complete and detects split-brain scenarios
 func (r *Neo4jEnterpriseClusterReconciler) verifyNeo4jClusterFormation(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) (bool, string, error) {
 	logger := log.FromContext(ctx)
 
@@ -1026,6 +1026,85 @@ func (r *Neo4jEnterpriseClusterReconciler) verifyNeo4jClusterFormation(ctx conte
 	if expectedServers == 1 {
 		return true, "Single server cluster - formation complete", nil
 	}
+
+	// First, perform split-brain detection
+	splitBrainDetector := NewSplitBrainDetector(r.Client)
+	analysis, err := splitBrainDetector.DetectSplitBrain(ctx, cluster)
+	if err != nil {
+		logger.Error(err, "Failed to perform split-brain detection")
+		// Fall back to legacy cluster formation check
+		return r.legacyClusterFormationCheck(ctx, cluster, expectedServers)
+	}
+
+	logger.Info("Split-brain analysis results",
+		"isSplitBrain", analysis.IsSplitBrain,
+		"repairAction", analysis.RepairAction,
+		"orphanedPods", len(analysis.OrphanedPods),
+		"errorMessage", analysis.ErrorMessage)
+
+	// Handle split-brain scenarios
+	if analysis.IsSplitBrain {
+		logger.Info("Split-brain detected in Neo4j cluster",
+			"orphanedPods", analysis.OrphanedPods,
+			"repairAction", analysis.RepairAction)
+
+		// Record event about split-brain detection
+		r.Recorder.Eventf(cluster, "Warning", "SplitBrainDetected",
+			"Split-brain detected: %s", analysis.ErrorMessage)
+
+		// Attempt automatic repair if configured
+		if analysis.RepairAction == RepairActionRestartPods {
+			logger.Info("Attempting automatic split-brain repair by restarting orphaned pods",
+				"orphanedPods", analysis.OrphanedPods)
+
+			repairErr := splitBrainDetector.RepairSplitBrain(ctx, cluster, analysis)
+			if repairErr != nil {
+				logger.Error(repairErr, "Failed to repair split-brain automatically")
+				r.Recorder.Eventf(cluster, "Warning", "SplitBrainRepairFailed",
+					"Automatic split-brain repair failed: %v", repairErr)
+				return false, fmt.Sprintf("Split-brain repair failed: %v", repairErr), nil
+			}
+
+			r.Recorder.Event(cluster, "Normal", "SplitBrainRepaired",
+				"Split-brain automatically repaired by restarting orphaned pods")
+
+			// After repair, cluster needs time to reform
+			return false, "Split-brain repaired, waiting for cluster reformation", nil
+		}
+
+		// For other repair actions, report but don't auto-repair
+		return false, fmt.Sprintf("Split-brain detected: %s", analysis.ErrorMessage), nil
+	}
+
+	// If no split-brain, check if cluster formation is complete
+	if analysis.RepairAction == RepairActionWaitForming {
+		return false, analysis.ErrorMessage, nil
+	}
+
+	// Verify we have the expected number of servers across all views
+	if len(analysis.ClusterViews) > 0 && analysis.LargestCluster.ConnectionError == nil {
+		availableServers := 0
+		for _, server := range analysis.LargestCluster.Servers {
+			if server.State == "Enabled" && server.Health == "Available" {
+				availableServers++
+			}
+		}
+
+		if availableServers >= expectedServers {
+			return true, fmt.Sprintf("Cluster formation complete: %d/%d servers available", availableServers, expectedServers), nil
+		} else {
+			return false, fmt.Sprintf("Cluster forming: %d/%d servers available", availableServers, expectedServers), nil
+		}
+	}
+
+	// Fall back to legacy check if split-brain detection failed
+	logger.Info("Falling back to legacy cluster formation check")
+	return r.legacyClusterFormationCheck(ctx, cluster, expectedServers)
+}
+
+// legacyClusterFormationCheck performs the original cluster formation verification
+func (r *Neo4jEnterpriseClusterReconciler) legacyClusterFormationCheck(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, expectedServers int) (bool, string, error) {
+	logger := log.FromContext(ctx)
 
 	// Create Neo4j client to check cluster status
 	neo4jClient, err := r.createNeo4jClient(ctx, cluster)

@@ -88,6 +88,23 @@ type ConnectionPoolMetrics struct {
 	LastHealthCheck    time.Time
 }
 
+// newCircuitBreaker creates a new circuit breaker with default settings
+func newCircuitBreaker() *CircuitBreaker {
+	return &CircuitBreaker{
+		maxFailures:      5,
+		resetTimeout:     30 * time.Second,
+		halfOpenMaxCalls: 3,
+		state:            CircuitClosed,
+	}
+}
+
+// newConnectionPoolMetrics creates a new connection pool metrics tracker
+func newConnectionPoolMetrics() *ConnectionPoolMetrics {
+	return &ConnectionPoolMetrics{
+		LastHealthCheck: time.Now(),
+	}
+}
+
 // Credentials holds Neo4j authentication information
 type Credentials struct {
 	Username string
@@ -111,6 +128,41 @@ type DatabaseInfo struct {
 	Home            bool
 	Role            string
 	RequestedStatus string
+}
+
+// NewClientForPod creates a Neo4j client that connects to a specific pod
+func NewClientForPod(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, k8sClient client.Client, adminSecretName, podURL string) (*Client, error) {
+	// Get credentials from secret
+	credentials, err := getCredentials(context.Background(), k8sClient, cluster.Namespace, adminSecretName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get credentials: %w", err)
+	}
+
+	// Configure driver with optimized settings for split-brain detection
+	auth := neo4j.BasicAuth(credentials.Username, credentials.Password, "")
+	config := func(c *config.Config) {
+		// Shorter timeouts for split-brain detection
+		c.MaxConnectionLifetime = 5 * time.Minute
+		c.MaxConnectionPoolSize = 5                       // Small pool for detection queries
+		c.ConnectionAcquisitionTimeout = 10 * time.Second // Faster timeout for detection
+		c.SocketConnectTimeout = 5 * time.Second          // Quick connection for health checks
+		c.SocketKeepalive = true
+		c.ConnectionLivenessCheckTimeout = 5 * time.Second
+	}
+
+	// Create driver with pod-specific URL
+	driver, err := neo4j.NewDriverWithContext(podURL, auth, config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Neo4j driver: %w", err)
+	}
+
+	return &Client{
+		driver:            driver,
+		enterpriseCluster: cluster,
+		credentials:       credentials,
+		circuitBreaker:    newCircuitBreaker(),
+		poolMetrics:       newConnectionPoolMetrics(),
+	}, nil
 }
 
 // NewClientForEnterprise creates a new optimized Neo4j client for enterprise clusters
