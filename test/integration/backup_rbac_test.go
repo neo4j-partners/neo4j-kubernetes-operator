@@ -82,7 +82,7 @@ var _ = Describe("Backup RBAC Automatic Creation", func() {
 					Resources: &corev1.ResourceRequirements{
 						Requests: corev1.ResourceList{
 							corev1.ResourceCPU:    resource.MustParse("50m"), // Reduced for CI constraints
-							corev1.ResourceMemory: resource.MustParse("256Mi"),
+							corev1.ResourceMemory: resource.MustParse("1Gi"), // Neo4j Enterprise minimum requirement
 						},
 						Limits: corev1.ResourceList{
 							corev1.ResourceCPU:    resource.MustParse("200m"), // Reduced for CI constraints
@@ -91,6 +91,15 @@ var _ = Describe("Backup RBAC Automatic Creation", func() {
 					},
 					Auth: &neo4jv1alpha1.AuthSpec{
 						AdminSecret: adminSecret.Name,
+					},
+					TLS: &neo4jv1alpha1.TLSSpec{
+						Mode: "disabled",
+					},
+					Env: []corev1.EnvVar{
+						{
+							Name:  "NEO4J_ACCEPT_LICENSE_AGREEMENT",
+							Value: "eval",
+						},
 					},
 				},
 			}
@@ -103,7 +112,15 @@ var _ = Describe("Backup RBAC Automatic Creation", func() {
 					Name:      cluster.Name,
 					Namespace: testNamespace,
 				}, &clusterStatus)
-				return err == nil && clusterStatus.Status.Phase == "Ready"
+				if err != nil {
+					return false
+				}
+				for _, condition := range clusterStatus.Status.Conditions {
+					if condition.Type == "Ready" && condition.Status == metav1.ConditionTrue {
+						return true
+					}
+				}
+				return false
 			}, timeout, interval).Should(BeTrue())
 		})
 
