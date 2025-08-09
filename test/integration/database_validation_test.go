@@ -117,19 +117,36 @@ var _ = Describe("Database Validation Integration Tests", func() {
 			return false
 		}, timeout, interval).Should(BeTrue())
 
-		By("Verifying cluster internals service is accessible")
-		// Allow additional time for cluster internals to be ready for database operations
-		Eventually(func() error {
-			// Check that we can get the cluster and it has endpoints
-			return k8sClient.Get(ctx, types.NamespacedName{
-				Name:      cluster.Name,
+		By("Verifying cluster services are accessible")
+		// Ensure service endpoints are ready before attempting database operations
+		Eventually(func() bool {
+			// Check that the client service has endpoints
+			endpoints := &corev1.Endpoints{}
+			err := k8sClient.Get(ctx, types.NamespacedName{
+				Name:      cluster.Name + "-client",
 				Namespace: cluster.Namespace,
-			}, cluster)
-		}, 60*time.Second, 5*time.Second).Should(Succeed())
+			}, endpoints)
+			if err != nil {
+				return false
+			}
+
+			// Ensure there are ready addresses
+			for _, subset := range endpoints.Subsets {
+				if len(subset.Addresses) > 0 && len(subset.Ports) > 0 {
+					// Check if bolt port is available
+					for _, port := range subset.Ports {
+						if port.Name == "bolt" && port.Port == 7687 {
+							return true
+						}
+					}
+				}
+			}
+			return false
+		}, 120*time.Second, 5*time.Second).Should(BeTrue(), "Client service endpoints should be ready")
 
 		// Additional stabilization time for Neo4j cluster internals
-		By("Allowing cluster services to fully stabilize")
-		time.Sleep(30 * time.Second)
+		By("Allowing Neo4j internal services to fully initialize")
+		time.Sleep(60 * time.Second) // Increased from 30s to ensure Neo4j is accepting connections
 	})
 
 	Context("When creating databases with topology validation", func() {
