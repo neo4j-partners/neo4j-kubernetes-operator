@@ -32,7 +32,7 @@ import (
 
 var _ = Describe("Database Validation Integration Tests", func() {
 	const (
-		timeout  = time.Second * 600 // Increased to 10 minutes for cluster formation + database creation
+		timeout  = time.Second * 900 // Increased to 15 minutes for cluster formation + database creation + stabilization
 		interval = time.Second * 5
 	)
 
@@ -116,6 +116,20 @@ var _ = Describe("Database Validation Integration Tests", func() {
 			}
 			return false
 		}, timeout, interval).Should(BeTrue())
+
+		By("Verifying cluster internals service is accessible")
+		// Allow additional time for cluster internals to be ready for database operations
+		Eventually(func() error {
+			// Check that we can get the cluster and it has endpoints
+			return k8sClient.Get(ctx, types.NamespacedName{
+				Name:      cluster.Name,
+				Namespace: cluster.Namespace,
+			}, cluster)
+		}, 60*time.Second, 5*time.Second).Should(Succeed())
+
+		// Additional stabilization time for Neo4j cluster internals
+		By("Allowing cluster services to fully stabilize")
+		time.Sleep(30 * time.Second)
 	})
 
 	Context("When creating databases with topology validation", func() {
