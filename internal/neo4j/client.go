@@ -130,9 +130,9 @@ func NewClientForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, k8sCl
 	config := func(c *config.Config) {
 		// Optimized connection pool settings
 		c.MaxConnectionLifetime = 30 * time.Minute
-		c.MaxConnectionPoolSize = 20                     // Reduced from 50 for better memory efficiency
-		c.ConnectionAcquisitionTimeout = 5 * time.Second // Reduced timeout
-		c.SocketConnectTimeout = 3 * time.Second         // Faster connection timeout
+		c.MaxConnectionPoolSize = 20                      // Reduced from 50 for better memory efficiency
+		c.ConnectionAcquisitionTimeout = 30 * time.Second // Increased for cluster startup scenarios
+		c.SocketConnectTimeout = 15 * time.Second         // Increased for Neo4j initialization time
 		c.SocketKeepalive = true
 		c.ConnectionLivenessCheckTimeout = 10 * time.Second
 
