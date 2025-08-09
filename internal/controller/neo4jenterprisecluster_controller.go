@@ -1027,7 +1027,27 @@ func (r *Neo4jEnterpriseClusterReconciler) verifyNeo4jClusterFormation(ctx conte
 		return true, "Single server cluster - formation complete", nil
 	}
 
-	// First, perform split-brain detection
+	// First, check if Neo4j is ready to accept connections using legacy check
+	// Only run split-brain detection if we can connect to Neo4j
+	canConnect := false
+	neo4jClient, err := r.createNeo4jClient(ctx, cluster)
+	if err == nil {
+		// Test the connection by trying to get server list
+		_, testErr := neo4jClient.GetServerList(ctx)
+		neo4jClient.Close()
+		if testErr == nil {
+			canConnect = true
+		}
+	}
+
+	if !canConnect {
+		// Neo4j is not ready to accept connections yet, wait for it
+		logger.Info("Neo4j not ready to accept connections, waiting...")
+		return false, "Waiting for Neo4j to accept connections", nil
+	}
+
+	// Now perform split-brain detection since Neo4j is responsive
+	logger.Info("Neo4j is responsive, performing split-brain detection")
 	splitBrainDetector := NewSplitBrainDetector(r.Client)
 	analysis, err := splitBrainDetector.DetectSplitBrain(ctx, cluster)
 	if err != nil {
