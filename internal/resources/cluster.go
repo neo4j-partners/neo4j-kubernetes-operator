@@ -19,6 +19,7 @@ package resources
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -1356,12 +1357,19 @@ server.bolt.tls_level=OPTIONAL
 			"server.memory.pagecache.size":    true,
 		}
 
-		for key, value := range cluster.Spec.Config {
-			// Skip memory settings that are already configured above
-			if excludeKeys[key] {
-				continue
+		// Sort keys to ensure deterministic order and prevent hash oscillation
+		var keys []string
+		for key := range cluster.Spec.Config {
+			if !excludeKeys[key] {
+				keys = append(keys, key)
 			}
-			config += fmt.Sprintf("%s=%s\n", key, value)
+		}
+		// Sort keys alphabetically for consistent ordering
+		sort.Strings(keys)
+
+		// Add configuration in sorted order
+		for _, key := range keys {
+			config += fmt.Sprintf("%s=%s\n", key, cluster.Spec.Config[key])
 		}
 	}
 

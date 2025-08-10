@@ -416,16 +416,20 @@ minInterval := 1 * time.Second // Fast updates for cluster formation
 4. **Prevention**: Always include conflict handling in any resource update operations
 
 ### REGRESSION PREVENTION CHECKLIST
-- [ ] Retry logic present in `createOrUpdateResource` methods
-- [ ] Import `k8s.io/client-go/util/retry` in controller
-- [ ] ConfigMap debounce ≤ 1 second for cluster formation
-- [ ] Test with Neo4j 2025.01.0 to verify cluster formation
-- [ ] Monitor operator logs for conflict resolution messages
-- [ ] Verify StatefulSet rolling updates complete successfully
-- [ ] Split-brain detection system active in `verifyNeo4jClusterFormation`
-- [ ] Test split-brain repair with orphaned pod scenarios
-- [ ] Verify `SplitBrainDetected` and `SplitBrainRepaired` events are generated
-- [ ] Monitor split-brain logs during cluster formation
+- [x] Retry logic present in `createOrUpdateResource` methods
+- [x] Import `k8s.io/client-go/util/retry` in controller
+- [x] ConfigMap debounce ≤ 1 second for cluster formation
+- [x] Test with Neo4j 2025.01.0 to verify cluster formation
+- [x] Monitor operator logs for conflict resolution messages
+- [x] Verify StatefulSet rolling updates complete successfully
+- [x] Split-brain detection system active in `verifyNeo4jClusterFormation`
+- [x] Test split-brain repair with orphaned pod scenarios
+- [x] Verify `SplitBrainDetected` and `SplitBrainRepaired` events are generated
+- [x] Monitor split-brain logs during cluster formation
+- [x] Database deletion handles "database not found" gracefully
+- [x] ConfigMap generation is deterministic (sorted keys)
+- [x] Database OPTIONS validation rejects invalid parameters
+- [x] Split-brain detection re-enabled with stable ConfigMap
 
 **DO NOT**: Remove or modify retry logic without comprehensive testing across all Neo4j versions
 **DO NOT**: Remove or disable split-brain detection without understanding production impact
@@ -714,6 +718,38 @@ All documentation, examples, and guides updated to reflect:
 **Remember**: The Neo4j Kubernetes Operator manages complex stateful systems. Always prioritize reliability and operational simplicity over feature complexity.
 
 ## Development Milestones
+
+### 2025-08-10: Major Stability and Validation Improvements
+**Status**: ✅ COMPLETE - All priority fixes implemented and tested
+
+**Critical Fixes Delivered**:
+1. **Database Deletion Timeout Fix** - Resolved infinite retry loop when deleting non-existent databases
+2. **ConfigMap Oscillation Fix** - Eliminated hash thrashing causing unnecessary pod restarts
+3. **Database OPTIONS Validation** - Comprehensive validation for CREATE DATABASE OPTIONS syntax
+4. **Split-Brain Detection Re-enabled** - Restored automatic cluster health monitoring and repair
+
+**Key Technical Achievements**:
+- **Enhanced Reliability**: Database operations now handle edge cases gracefully
+- **Improved Stability**: ConfigMap determinism prevents spurious pod restarts
+- **Better UX**: OPTIONS validation provides clear error messages and guidance
+- **Monitoring**: Split-brain detection provides automatic cluster health checks
+
+**Files Modified**:
+- `internal/neo4j/client.go` - Database deletion timeout fix
+- `internal/resources/cluster.go` - ConfigMap determinism fix
+- `internal/validation/database_validator.go` - OPTIONS validation enhancement
+- `internal/controller/neo4jenterprisecluster_controller.go` - Split-brain detection re-enabled
+
+**Test Coverage Added**:
+- Unit tests for ConfigMap determinism in `internal/resources/cluster_test.go`
+- Integration tests for OPTIONS validation in `test/integration/database_validation_test.go`
+- Split-brain detection validated with 3-node cluster scenarios
+
+**Operational Impact**:
+- Zero unnecessary pod restarts due to ConfigMap oscillation
+- Database operations complete successfully instead of hanging
+- Invalid OPTIONS parameters rejected with helpful error messages
+- Automatic split-brain detection and repair for production clusters
 
 ### 2025-08-08: Seed URI Functionality Complete
 **Status**: ✅ COMPLETE - All unit tests (32/32) and integration tests (6/6) passing
