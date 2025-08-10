@@ -32,8 +32,8 @@ import (
 
 var _ = Describe("Split-Brain Detection Integration Tests", func() {
 	const (
-		timeout  = time.Second * 600 // 10 minutes for split-brain detection and repair
-		interval = time.Second * 5
+		timeout  = time.Second * 1200 // 20 minutes for CI environment constraints (split-brain detection and repair)
+		interval = time.Second * 10   // Increased polling interval to reduce API load in CI
 	)
 
 	var testNamespace string

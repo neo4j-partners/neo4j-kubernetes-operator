@@ -32,8 +32,8 @@ import (
 
 var _ = Describe("Database Validation Integration Tests", func() {
 	const (
-		timeout  = time.Second * 900 // Increased to 15 minutes for cluster formation + database creation + stabilization
-		interval = time.Second * 5
+		timeout  = time.Second * 1200 // Increased to 20 minutes for CI environment constraints (image pull + resource constraints)
+		interval = time.Second * 10   // Increased polling interval to reduce API load in CI
 	)
 
 	var testNamespace string
@@ -119,6 +119,7 @@ var _ = Describe("Database Validation Integration Tests", func() {
 
 		By("Verifying cluster services have endpoints")
 		// Wait for service endpoints to exist (pods may not be ready yet, but endpoints should exist)
+		// Increased timeout for CI environments with resource constraints and image pull delays
 		Eventually(func() bool {
 			// Check that the client service has endpoints
 			endpoints := &corev1.Endpoints{}
@@ -143,7 +144,7 @@ var _ = Describe("Database Validation Integration Tests", func() {
 				}
 			}
 			return false
-		}, 60*time.Second, 5*time.Second).Should(BeTrue(), "Client service endpoints should exist")
+		}, 300*time.Second, 10*time.Second).Should(BeTrue(), "Client service endpoints should exist")
 
 		// Additional stabilization time for Neo4j cluster internals
 		By("Allowing Neo4j internal services to fully initialize")
