@@ -87,6 +87,9 @@ func (v *DatabaseValidator) Validate(ctx context.Context, database *neo4jv1alpha
 	// Validate seed URI configuration
 	v.validateSeedURI(ctx, database, result)
 
+	// Validate database options syntax
+	v.validateDatabaseOptions(database, result)
+
 	// Validate conflicting configurations
 	v.validateConfigurationConflicts(database, result)
 
@@ -469,6 +472,128 @@ func (v *DatabaseValidator) addSeedURIWarnings(database *neo4jv1alpha1.Neo4jData
 			"Using dump file format. For better performance with large databases, "+
 				"consider using Neo4j backup format (.backup) instead.")
 	}
+}
+
+func (v *DatabaseValidator) validateDatabaseOptions(database *neo4jv1alpha1.Neo4jDatabase, result *DatabaseValidationResult) {
+	if database.Spec.Options == nil || len(database.Spec.Options) == 0 {
+		return
+	}
+
+	optionsPath := field.NewPath("spec", "options")
+
+	for key, value := range database.Spec.Options {
+		// Validate key format - warn about dotted keys conversion
+		cleanKey := strings.Trim(key, `"`)
+		if strings.Contains(cleanKey, ".") {
+			convertedKey := strings.ReplaceAll(cleanKey, ".", "_")
+			result.Warnings = append(result.Warnings,
+				fmt.Sprintf("Database option key '%s' contains dots. "+
+					"Neo4j CREATE DATABASE OPTIONS syntax only supports simple identifiers. "+
+					"The key will be converted to '%s' during database creation.", cleanKey, convertedKey))
+		}
+
+		// Validate empty values
+		if value == "" {
+			result.Errors = append(result.Errors, field.Invalid(
+				optionsPath.Key(key),
+				value,
+				"option value cannot be empty"))
+		}
+
+		// Validate known problematic keys
+		v.validateKnownOptionKeys(key, value, optionsPath, result)
+	}
+}
+
+func (v *DatabaseValidator) validateKnownOptionKeys(key, value string, basePath *field.Path, result *DatabaseValidationResult) {
+	path := basePath.Key(key)
+
+	// Neo4j CREATE DATABASE OPTIONS only supports specific system-level options
+	// Convert dotted keys to understand the intended option
+	cleanKey := strings.Trim(key, `"`)
+	convertedKey := strings.ReplaceAll(cleanKey, ".", "_")
+
+	// Valid Neo4j CREATE DATABASE OPTIONS (as per Neo4j 5.26+ documentation)
+	validOptions := []string{
+		"seedConfig", "existingDataSeedServer", "existingData", "seedCredentials",
+		"seedURI", "existingDataSeedInstance", "existingMetadata",
+		"txLogEnrichment", "storeFormat",
+	}
+
+	// Check if this is a valid option (case-insensitive)
+	isValidOption := false
+	for _, validOption := range validOptions {
+		if strings.EqualFold(convertedKey, validOption) || strings.EqualFold(cleanKey, validOption) {
+			isValidOption = true
+			break
+		}
+	}
+
+	// If not a valid option, provide an error with guidance
+	if !isValidOption {
+		result.Errors = append(result.Errors, field.Invalid(
+			path,
+			key,
+			fmt.Sprintf("'%s' is not a valid CREATE DATABASE OPTIONS parameter. "+
+				"Valid options are: %v. "+
+				"Note: Database-level configuration should be set via ALTER DATABASE or server configuration, not CREATE DATABASE OPTIONS.",
+				cleanKey, validOptions)))
+		return
+	}
+
+	// Validate specific valid options
+	switch strings.ToLower(convertedKey) {
+	case "storeformat":
+		validFormats := []string{"standard", "high_limit", "block"}
+		if !containsSlice(validFormats, value) {
+			result.Errors = append(result.Errors, field.NotSupported(
+				path, value, validFormats))
+		}
+
+	case "txlogenrichment":
+		validValues := []string{"OFF", "DIFF"}
+		if !containsSlice(validValues, strings.ToUpper(value)) {
+			result.Errors = append(result.Errors, field.NotSupported(
+				path, strings.ToUpper(value), validValues))
+		}
+
+	case "seedconfig":
+		result.Warnings = append(result.Warnings,
+			"seedConfig in OPTIONS is deprecated. Use the seedConfig field in the Neo4jDatabase spec instead.")
+
+	case "seeduri":
+		result.Warnings = append(result.Warnings,
+			"seedURI in OPTIONS is deprecated. Use the seedURI field in the Neo4jDatabase spec instead.")
+
+	case "existingdata":
+		validValues := []string{"use", "fail"}
+		if !containsSlice(validValues, value) {
+			result.Errors = append(result.Errors, field.NotSupported(
+				path, value, validValues))
+		}
+	}
+}
+
+func (v *DatabaseValidator) isValidMemorySize(size string) bool {
+	if size == "" {
+		return false
+	}
+	// Simple validation - ends with common memory units
+	size = strings.ToLower(size)
+	return strings.HasSuffix(size, "k") || strings.HasSuffix(size, "m") ||
+		strings.HasSuffix(size, "g") || strings.HasSuffix(size, "kb") ||
+		strings.HasSuffix(size, "mb") || strings.HasSuffix(size, "gb")
+}
+
+func (v *DatabaseValidator) isValidDuration(duration string) bool {
+	if duration == "" {
+		return false
+	}
+	// Simple validation - ends with common duration units
+	duration = strings.ToLower(duration)
+	return strings.HasSuffix(duration, "s") || strings.HasSuffix(duration, "m") ||
+		strings.HasSuffix(duration, "h") || strings.HasSuffix(duration, "ms") ||
+		strings.HasSuffix(duration, "us") || strings.HasSuffix(duration, "ns")
 }
 
 func (v *DatabaseValidator) validateConfigurationConflicts(database *neo4jv1alpha1.Neo4jDatabase, result *DatabaseValidationResult) {

@@ -351,6 +351,23 @@ func (c *Client) Close() error {
 	return nil
 }
 
+// formatOptionKey formats option keys for Neo4j CREATE DATABASE OPTIONS syntax
+// Neo4j OPTIONS syntax doesn't support dotted keys - only simple identifiers
+func (c *Client) formatOptionKey(key string) string {
+	// Remove any existing quotes first
+	cleanKey := strings.Trim(key, `"`)
+
+	// Neo4j OPTIONS clause only supports simple identifiers (no dots)
+	// If the key contains dots, replace dots with underscores to make it a valid identifier
+	if strings.Contains(cleanKey, ".") {
+		validKey := strings.ReplaceAll(cleanKey, ".", "_")
+		return validKey
+	}
+
+	// For non-dotted keys, return as-is
+	return cleanKey
+}
+
 // closeSession safely closes a Neo4j session and logs any errors
 func (c *Client) closeSession(ctx context.Context, session neo4j.SessionWithContext) {
 	if err := session.Close(ctx); err != nil {
@@ -519,7 +536,9 @@ func (c *Client) CreateDatabase(ctx context.Context, databaseName string, option
 	if len(options) > 0 {
 		var optionParts []string
 		for key, value := range options {
-			optionParts = append(optionParts, fmt.Sprintf("%s: '%s'", key, value))
+			// Quote dotted keys for proper Neo4j OPTIONS syntax
+			formattedKey := c.formatOptionKey(key)
+			optionParts = append(optionParts, fmt.Sprintf("%s: '%s'", formattedKey, value))
 		}
 		query += " OPTIONS {" + strings.Join(optionParts, ", ") + "}"
 	}
@@ -585,7 +604,9 @@ func (c *Client) CreateDatabaseWithTopology(ctx context.Context, databaseName st
 	if len(options) > 0 {
 		var optionParts []string
 		for key, value := range options {
-			optionParts = append(optionParts, fmt.Sprintf("%s: '%s'", key, value))
+			// Quote dotted keys for proper Neo4j OPTIONS syntax
+			formattedKey := c.formatOptionKey(key)
+			optionParts = append(optionParts, fmt.Sprintf("%s: '%s'", formattedKey, value))
 		}
 		query += " OPTIONS {" + strings.Join(optionParts, ", ") + "}"
 	}
@@ -752,10 +773,30 @@ func (c *Client) DropDatabase(ctx context.Context, databaseName string) error {
 	query := fmt.Sprintf("DROP DATABASE `%s`", databaseName)
 	_, err := session.Run(ctx, query, nil)
 	if err != nil {
+		// Check if the error is "database not found" - this is acceptable for deletion
+		// as the desired end state is that the database doesn't exist
+		if isDatabaseNotFoundError(err) {
+			// Database already doesn't exist - this is success for deletion
+			return nil
+		}
 		return fmt.Errorf("failed to drop database %s: %w", databaseName, err)
 	}
 
 	return nil
+}
+
+// isDatabaseNotFoundError checks if the error indicates the database doesn't exist
+func isDatabaseNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	errMsg := strings.ToLower(err.Error())
+	// Check for Neo4j "Database not found" errors in various formats
+	return strings.Contains(errMsg, "database.databasenotfound") ||
+		strings.Contains(errMsg, "database not found") ||
+		strings.Contains(errMsg, "database does not exist") ||
+		strings.Contains(errMsg, "databasenotfound")
 }
 
 // CreateUser creates a new user

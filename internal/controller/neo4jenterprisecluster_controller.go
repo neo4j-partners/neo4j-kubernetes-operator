@@ -1117,7 +1117,7 @@ func (r *Neo4jEnterpriseClusterReconciler) verifyNeo4jClusterFormation(ctx conte
 		}
 	}
 
-	// Fall back to legacy check if split-brain detection failed
+	// Fall back to legacy cluster formation check if split-brain analysis was inconclusive
 	logger.Info("Falling back to legacy cluster formation check")
 	return r.legacyClusterFormationCheck(ctx, cluster, expectedServers)
 }

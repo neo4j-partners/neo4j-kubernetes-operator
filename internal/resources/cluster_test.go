@@ -558,3 +558,78 @@ func TestBuildClientServiceForEnterprise_WithEnhancedFeatures(t *testing.T) {
 		})
 	}
 }
+
+// TestConfigMapDeterminism tests that ConfigMap generation is deterministic
+// This addresses the ConfigMap oscillation issue where non-deterministic map iteration
+// caused hash changes leading to unnecessary pod restarts
+func TestConfigMapDeterminism(t *testing.T) {
+	cluster := &neo4jv1alpha1.Neo4jEnterpriseCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "default",
+		},
+		Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
+			Image: neo4jv1alpha1.ImageSpec{
+				Repo: "neo4j",
+				Tag:  "5.26.0-enterprise",
+			},
+			Topology: neo4jv1alpha1.TopologyConfiguration{
+				Servers: 3,
+			},
+			// Add configuration with multiple keys that could be iterated in different orders
+			Config: map[string]string{
+				"zebra.setting":                 "last",
+				"alpha.setting":                 "first",
+				"beta.setting":                  "second",
+				"gamma.setting":                 "third",
+				"dbms.memory.heap.initial_size": "1G",
+				"dbms.memory.heap.max_size":     "2G",
+			},
+		},
+	}
+
+	// Generate ConfigMap multiple times to ensure consistency
+	configMaps := make([]*corev1.ConfigMap, 10)
+	for i := 0; i < 10; i++ {
+		configMaps[i] = resources.BuildConfigMapForEnterprise(cluster)
+	}
+
+	// All ConfigMaps should be identical
+	baseConfigMap := configMaps[0]
+	for i := 1; i < len(configMaps); i++ {
+		assert.Equal(t, baseConfigMap.Data, configMaps[i].Data,
+			"ConfigMap data should be identical across multiple generations (iteration %d)", i)
+
+		// Specifically check that startup script is identical
+		assert.Equal(t, baseConfigMap.Data["startup.sh"], configMaps[i].Data["startup.sh"],
+			"Startup script should be identical across multiple generations (iteration %d)", i)
+	}
+
+	// Verify that configuration keys are in sorted order in the neo4j.conf
+	neo4jConf := baseConfigMap.Data["neo4j.conf"]
+
+	// Check that alpha appears before beta, beta before gamma, etc.
+	alphaIndex := assertContainsAndGetIndex(t, neo4jConf, "alpha.setting=first")
+	betaIndex := assertContainsAndGetIndex(t, neo4jConf, "beta.setting=second")
+	gammaIndex := assertContainsAndGetIndex(t, neo4jConf, "gamma.setting=third")
+	zebraIndex := assertContainsAndGetIndex(t, neo4jConf, "zebra.setting=last")
+
+	assert.Less(t, alphaIndex, betaIndex, "alpha.setting should appear before beta.setting")
+	assert.Less(t, betaIndex, gammaIndex, "beta.setting should appear before gamma.setting")
+	assert.Less(t, gammaIndex, zebraIndex, "gamma.setting should appear before zebra.setting")
+}
+
+// Helper function to assert a string contains a substring and return its index
+func assertContainsAndGetIndex(t *testing.T, haystack, needle string) int {
+	assert.Contains(t, haystack, needle)
+
+	// Find the index of the needle in haystack
+	for i := 0; i <= len(haystack)-len(needle); i++ {
+		if haystack[i:i+len(needle)] == needle {
+			return i
+		}
+	}
+
+	t.Fatalf("String '%s' should contain '%s' but index not found", haystack, needle)
+	return -1
+}
