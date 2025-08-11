@@ -776,14 +776,18 @@ func (c *Client) GetDatabaseServers(ctx context.Context, databaseName string) ([
 		RETURN collect(address) as servers
 	`
 
-	result, err := session.Run(ctx, query, map[string]interface{}{
+	// Add timeout protection for CI environment compatibility
+	timeoutCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	result, err := session.Run(timeoutCtx, query, map[string]interface{}{
 		"databaseName": databaseName,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get database servers: %w", err)
 	}
 
-	if result.Next(ctx) {
+	if result.Next(timeoutCtx) {
 		record := result.Record()
 		if servers, found := record.Get("servers"); found {
 			if serverList, ok := servers.([]interface{}); ok {
