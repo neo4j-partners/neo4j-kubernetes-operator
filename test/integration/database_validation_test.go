@@ -56,7 +56,7 @@ var _ = Describe("Database Validation Integration Tests", func() {
 		}
 		Expect(k8sClient.Create(ctx, adminSecret)).To(Succeed())
 
-		By("Creating a test cluster with 3 servers")
+		By("Creating a test cluster with 2 servers")
 		cluster = &neo4jv1alpha1.Neo4jEnterpriseCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "validation-cluster",
@@ -69,7 +69,7 @@ var _ = Describe("Database Validation Integration Tests", func() {
 					Tag:  "5.26-enterprise",
 				},
 				Topology: neo4jv1alpha1.TopologyConfiguration{
-					Servers: 3, // 3-server cluster for validation tests
+					Servers: 2, // Reduced to 2-server cluster for CI resource constraints
 				},
 				Storage: neo4jv1alpha1.StorageSpec{
 					ClassName: "standard",
@@ -144,7 +144,7 @@ var _ = Describe("Database Validation Integration Tests", func() {
 				}
 			}
 			return false
-		}, 300*time.Second, 10*time.Second).Should(BeTrue(), "Client service endpoints should exist")
+		}, 600*time.Second, 10*time.Second).Should(BeTrue(), "Client service endpoints should exist")
 
 		// Additional stabilization time for Neo4j cluster internals
 		By("Allowing Neo4j internal services to fully initialize")
@@ -153,7 +153,7 @@ var _ = Describe("Database Validation Integration Tests", func() {
 
 	Context("When creating databases with topology validation", func() {
 		It("should accept valid topology within cluster capacity", func() {
-			By("Creating database with valid topology (2 primaries + 1 secondary = 3 servers)")
+			By("Creating database with valid topology (1 primary + 1 secondary = 2 servers)")
 			database := &neo4jv1alpha1.Neo4jDatabase{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "valid-topology-db",
@@ -165,8 +165,8 @@ var _ = Describe("Database Validation Integration Tests", func() {
 					Wait:        true,
 					IfNotExists: true,
 					Topology: &neo4jv1alpha1.DatabaseTopology{
-						Primaries:   2,
-						Secondaries: 1, // Total: 3 servers (within cluster capacity)
+						Primaries:   1,
+						Secondaries: 1, // Total: 2 servers (within cluster capacity)
 					},
 				},
 			}
@@ -203,8 +203,8 @@ var _ = Describe("Database Validation Integration Tests", func() {
 					Wait:        true,
 					IfNotExists: true,
 					Topology: &neo4jv1alpha1.DatabaseTopology{
-						Primaries:   2,
-						Secondaries: 1, // Total: 3 servers (all cluster servers)
+						Primaries:   1,
+						Secondaries: 1, // Total: 2 servers (all cluster servers)
 					},
 				},
 			}
@@ -246,8 +246,8 @@ var _ = Describe("Database Validation Integration Tests", func() {
 					Wait:        true,
 					IfNotExists: true,
 					Topology: &neo4jv1alpha1.DatabaseTopology{
-						Primaries:   3,
-						Secondaries: 2, // Total: 5 servers (exceeds cluster capacity of 3)
+						Primaries:   2,
+						Secondaries: 2, // Total: 4 servers (exceeds cluster capacity of 2)
 					},
 				},
 			}
@@ -273,7 +273,7 @@ var _ = Describe("Database Validation Integration Tests", func() {
 			}, timeout, interval).Should(BeTrue())
 
 			By("Validation error should contain expected message")
-			Expect(database.Status.Conditions[0].Message).To(ContainSubstring("database topology requires 5 servers but cluster only has 3 servers available"))
+			Expect(database.Status.Conditions[0].Message).To(ContainSubstring("database topology requires 4 servers but cluster only has 2 servers available"))
 		})
 
 		It("should validate Cypher language versions", func() {
