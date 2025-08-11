@@ -33,7 +33,7 @@ func TestDatabaseValidator_ValidateTopology(t *testing.T) {
 	scheme := runtime.NewScheme()
 	_ = neo4jv1alpha1.AddToScheme(scheme)
 
-	// Create test cluster
+	// Create test clusters
 	cluster := &neo4jv1alpha1.Neo4jEnterpriseCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-cluster",
@@ -46,7 +46,19 @@ func TestDatabaseValidator_ValidateTopology(t *testing.T) {
 		},
 	}
 
-	client := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster).Build()
+	cluster2Server := &neo4jv1alpha1.Neo4jEnterpriseCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster-2server",
+			Namespace: "default",
+		},
+		Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
+			Topology: neo4jv1alpha1.TopologyConfiguration{
+				Servers: 2, // 2-server cluster for CI compatibility test
+			},
+		},
+	}
+
+	client := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster, cluster2Server).Build()
 	validator := NewDatabaseValidator(client)
 	ctx := context.Background()
 
@@ -140,6 +152,23 @@ func TestDatabaseValidator_ValidateTopology(t *testing.T) {
 			expectedErrors:       0,
 			expectedWarnings:     1,
 			shouldContainWarning: "Database topology uses all 5 cluster servers",
+		},
+		{
+			name: "uses all servers in 2-server cluster",
+			database: &neo4jv1alpha1.Neo4jDatabase{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-db-2server", Namespace: "default"},
+				Spec: neo4jv1alpha1.Neo4jDatabaseSpec{
+					ClusterRef: "test-cluster-2server",
+					Name:       "testdb2server",
+					Topology: &neo4jv1alpha1.DatabaseTopology{
+						Primaries:   1,
+						Secondaries: 1, // Total: 2 servers (all available in 2-server cluster)
+					},
+				},
+			},
+			expectedErrors:       0,
+			expectedWarnings:     1,
+			shouldContainWarning: "Database topology uses all 2 cluster servers",
 		},
 		{
 			name: "excessive secondaries ratio",

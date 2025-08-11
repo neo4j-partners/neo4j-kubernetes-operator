@@ -149,7 +149,7 @@ func (v *DatabaseValidator) addTopologyWarnings(database *neo4jv1alpha1.Neo4jDat
 	clusterServers := cluster.Spec.Topology.Servers
 
 	// Warn if database uses all available servers (no room for other databases)
-	if totalDatabaseServers == clusterServers && clusterServers > 2 {
+	if totalDatabaseServers == clusterServers && clusterServers >= 2 {
 		result.Warnings = append(result.Warnings,
 			fmt.Sprintf("Database topology uses all %d cluster servers. "+
 				"Consider using fewer servers to allow multiple databases with different topologies.",
