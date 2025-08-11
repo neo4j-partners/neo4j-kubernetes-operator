@@ -396,22 +396,23 @@ func (r *Neo4jDatabaseReconciler) ensureDatabase(ctx context.Context, client *ne
 		}
 	} else {
 		logger.Info("Database already exists", "database", database.Spec.Name)
+	}
 
-		// Check and update database state in status
-		state, err := client.GetDatabaseState(ctx, database.Spec.Name)
-		if err != nil {
-			logger.Error(err, "Failed to get database state")
-		} else {
-			database.Status.State = state
-		}
+	// Always update database state and servers after creation or verification
+	// Check and update database state in status
+	state, err := client.GetDatabaseState(ctx, database.Spec.Name)
+	if err != nil {
+		logger.Error(err, "Failed to get database state")
+	} else {
+		database.Status.State = state
+	}
 
-		// Get servers hosting the database
-		servers, err := client.GetDatabaseServers(ctx, database.Spec.Name)
-		if err != nil {
-			logger.Error(err, "Failed to get database servers")
-		} else {
-			database.Status.Servers = servers
-		}
+	// Get servers hosting the database
+	servers, err := client.GetDatabaseServers(ctx, database.Spec.Name)
+	if err != nil {
+		logger.Error(err, "Failed to get database servers")
+	} else {
+		database.Status.Servers = servers
 	}
 
 	return nil

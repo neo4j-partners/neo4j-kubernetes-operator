@@ -552,7 +552,7 @@ func (c *Client) CreateDatabase(ctx context.Context, databaseName string, option
 	}
 
 	// Use timeout protection for WAIT operations
-	err := c.executeWithWaitTimeout(ctx, session, query, nil, wait, 60)
+	err := c.executeWithWaitTimeout(ctx, session, query, nil, wait, 180)
 	if err != nil {
 		// Check if database was created despite timeout
 		if wait && errors.Is(err, context.DeadlineExceeded) {
@@ -628,7 +628,7 @@ func (c *Client) CreateDatabaseWithTopology(ctx context.Context, databaseName st
 	}
 
 	// Use timeout protection for WAIT operations
-	err := c.executeWithWaitTimeout(ctx, session, query, nil, wait, 60)
+	err := c.executeWithWaitTimeout(ctx, session, query, nil, wait, 180)
 	if err != nil {
 		// Check if database was created despite timeout
 		if wait && errors.Is(err, context.DeadlineExceeded) {
