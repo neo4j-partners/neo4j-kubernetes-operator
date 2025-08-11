@@ -84,10 +84,10 @@ var _ = Describe("Split-Brain Detection Integration Tests", func() {
 					Resources: &corev1.ResourceRequirements{
 						Requests: corev1.ResourceList{
 							corev1.ResourceCPU:    resource.MustParse("50m"),
-							corev1.ResourceMemory: resource.MustParse("800Mi"),
+							corev1.ResourceMemory: resource.MustParse("1Gi"),
 						},
 						Limits: corev1.ResourceList{
-							corev1.ResourceMemory: resource.MustParse("800Mi"),
+							corev1.ResourceMemory: resource.MustParse("1Gi"),
 						},
 					},
 					TLS: &neo4jv1alpha1.TLSSpec{
@@ -226,10 +226,10 @@ var _ = Describe("Split-Brain Detection Integration Tests", func() {
 					Resources: &corev1.ResourceRequirements{
 						Requests: corev1.ResourceList{
 							corev1.ResourceCPU:    resource.MustParse("50m"),
-							corev1.ResourceMemory: resource.MustParse("800Mi"),
+							corev1.ResourceMemory: resource.MustParse("1Gi"),
 						},
 						Limits: corev1.ResourceList{
-							corev1.ResourceMemory: resource.MustParse("800Mi"),
+							corev1.ResourceMemory: resource.MustParse("1Gi"),
 						},
 					},
 					TLS: &neo4jv1alpha1.TLSSpec{
