@@ -131,6 +131,15 @@ type DatabaseInfo struct {
 	RequestedStatus string
 }
 
+// ServerInfo represents information about a Neo4j server
+type ServerInfo struct {
+	Name    string
+	Address string
+	State   string
+	Health  string
+	Hosting []string
+}
+
 // NewClientForPod creates a Neo4j client that connects to a specific pod
 func NewClientForPod(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, k8sClient client.Client, adminSecretName, podURL string) (*Client, error) {
 	// Get credentials from secret
@@ -1405,15 +1414,6 @@ func (c *Client) ExecuteQuery(ctx context.Context, query string) (string, error)
 	}
 
 	return "", nil
-}
-
-// ServerInfo represents information about a Neo4j server in the cluster
-type ServerInfo struct {
-	Name    string
-	Address string
-	State   string
-	Health  string
-	Hosting []string
 }
 
 // GetServerList retrieves the list of servers in the Neo4j cluster
