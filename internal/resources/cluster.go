@@ -1493,7 +1493,7 @@ DISCOVERY_SERVICE="` + cluster.Name + `-discovery.` + cluster.Namespace + `.svc.
 MAX_WAIT=60
 WAIT_SECONDS=0
 while [ $WAIT_SECONDS -lt $MAX_WAIT ]; do
-    if nslookup $DISCOVERY_SERVICE >/dev/null 2>&1; then
+    if getent hosts $DISCOVERY_SERVICE >/dev/null 2>&1; then
         echo "Discovery service $DISCOVERY_SERVICE is ready"
         break
     fi

@@ -306,17 +306,31 @@ var _ = Describe("Split-Brain Detection Integration Tests", func() {
 					"neo4j.com/clustering": "true",
 				})
 				if err != nil {
+					GinkgoWriter.Printf("Error listing pods: %v\n", err)
 					return 0
 				}
 
 				runningCount := 0
 				for _, pod := range podList.Items {
-					if pod.Status.Phase == corev1.PodRunning &&
-						len(pod.Status.ContainerStatuses) > 0 &&
-						pod.Status.ContainerStatuses[0].Ready {
-						runningCount++
+					if pod.Status.Phase == corev1.PodRunning {
+						// Check that all containers in the pod are ready
+						allContainersReady := true
+						for _, containerStatus := range pod.Status.ContainerStatuses {
+							if !containerStatus.Ready {
+								allContainersReady = false
+								GinkgoWriter.Printf("Pod %s container %s not ready: %s\n",
+									pod.Name, containerStatus.Name, containerStatus.State.String())
+								break
+							}
+						}
+						if allContainersReady && len(pod.Status.ContainerStatuses) > 0 {
+							runningCount++
+						}
+					} else {
+						GinkgoWriter.Printf("Pod %s not running: phase=%s\n", pod.Name, pod.Status.Phase)
 					}
 				}
+				GinkgoWriter.Printf("Currently %d of 3 pods are running and ready\n", runningCount)
 				return runningCount
 			}, timeout, interval).Should(Equal(3), "All 3 server pods should be running and ready")
 		})
