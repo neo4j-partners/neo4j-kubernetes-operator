@@ -80,11 +80,11 @@ var _ = Describe("Database Validation Integration Tests", func() {
 				},
 				Resources: &corev1.ResourceRequirements{
 					Requests: corev1.ResourceList{
-						corev1.ResourceCPU:    resource.MustParse("100m"),  // Increased for database operations
-						corev1.ResourceMemory: resource.MustParse("1.5Gi"), // Increased for Neo4j Enterprise + database creation
+						corev1.ResourceCPU:    resource.MustParse("50m"), // Reduced for CI compatibility
+						corev1.ResourceMemory: resource.MustParse("1Gi"), // Reduced for CI resource constraints
 					},
 					Limits: corev1.ResourceList{
-						corev1.ResourceMemory: resource.MustParse("1.5Gi"), // Prevent OOM during database operations
+						corev1.ResourceMemory: resource.MustParse("1Gi"), // Prevent OOM, CI-friendly
 					},
 				},
 				TLS: &neo4jv1alpha1.TLSSpec{
