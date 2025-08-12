@@ -652,6 +652,45 @@ func (c *Client) CreateDatabaseWithTopology(ctx context.Context, databaseName st
 	return nil
 }
 
+// AlterDatabaseTopology sets database topology using ALTER DATABASE command for Neo4j 5.x
+func (c *Client) AlterDatabaseTopology(ctx context.Context, databaseName string, primaries, secondaries int32) error {
+	session := c.driver.NewSession(ctx, neo4j.SessionConfig{
+		AccessMode:   neo4j.AccessModeWrite,
+		DatabaseName: "system",
+	})
+	defer session.Close(ctx)
+
+	// Build ALTER DATABASE query with topology
+	var topologyParts []string
+	if primaries > 0 {
+		if primaries == 1 {
+			topologyParts = append(topologyParts, "1 PRIMARY")
+		} else {
+			topologyParts = append(topologyParts, fmt.Sprintf("%d PRIMARIES", primaries))
+		}
+	}
+	if secondaries > 0 {
+		if secondaries == 1 {
+			topologyParts = append(topologyParts, "1 SECONDARY")
+		} else {
+			topologyParts = append(topologyParts, fmt.Sprintf("%d SECONDARIES", secondaries))
+		}
+	}
+
+	if len(topologyParts) == 0 {
+		return nil // No topology to set
+	}
+
+	query := fmt.Sprintf("ALTER DATABASE `%s` SET TOPOLOGY %s", databaseName, strings.Join(topologyParts, " "))
+
+	_, err := session.Run(ctx, query, nil)
+	if err != nil {
+		return fmt.Errorf("failed to alter database topology: %w", err)
+	}
+
+	return nil
+}
+
 // executeWithWaitTimeout executes a Neo4j query with timeout protection for WAIT operations
 func (c *Client) executeWithWaitTimeout(ctx context.Context, session neo4j.SessionWithContext, query string, params map[string]interface{}, wait bool, timeoutSeconds int) error {
 	if wait && strings.Contains(query, " WAIT") {
