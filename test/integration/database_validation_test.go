@@ -69,7 +69,7 @@ var _ = Describe("Database Validation Integration Tests", func() {
 					Tag:  "5.26-enterprise",
 				},
 				Topology: neo4jv1alpha1.TopologyConfiguration{
-					Servers: 2, // Reduced to 2-server cluster for CI resource constraints
+					Servers: 3, // Minimum for proper database topology with quorum
 				},
 				Storage: neo4jv1alpha1.StorageSpec{
 					ClassName: "standard",
@@ -80,11 +80,11 @@ var _ = Describe("Database Validation Integration Tests", func() {
 				},
 				Resources: &corev1.ResourceRequirements{
 					Requests: corev1.ResourceList{
-						corev1.ResourceCPU:    resource.MustParse("50m"), // Reduced for CI compatibility
-						corev1.ResourceMemory: resource.MustParse("1Gi"), // Reduced for CI resource constraints
+						corev1.ResourceCPU:    resource.MustParse("100m"),  // Increased for database operations
+						corev1.ResourceMemory: resource.MustParse("1.2Gi"), // Balanced for Neo4j + database operations
 					},
 					Limits: corev1.ResourceList{
-						corev1.ResourceMemory: resource.MustParse("1Gi"), // Prevent OOM, CI-friendly
+						corev1.ResourceMemory: resource.MustParse("1.2Gi"), // Prevent OOM while being CI-friendly
 					},
 				},
 				TLS: &neo4jv1alpha1.TLSSpec{
