@@ -110,17 +110,36 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 			Expect(k8sClient.Create(ctx, cluster)).Should(Succeed())
 			By("Successfully created Neo4jEnterpriseCluster")
 
-			By("Waiting for StatefulSet to be created")
-			serverSts := &appsv1.StatefulSet{}
+			By("Waiting for individual StatefulSets to be created")
+			// NEW ARCHITECTURE: Individual StatefulSets per server (3 total)
 			Eventually(func() error {
-				return k8sClient.Get(ctx, types.NamespacedName{
-					Name:      clusterName + "-server",
-					Namespace: namespace.Name,
-				}, serverSts)
+				for i := 0; i < 3; i++ {
+					serverSts := &appsv1.StatefulSet{}
+					err := k8sClient.Get(ctx, types.NamespacedName{
+						Name:      fmt.Sprintf("%s-server-%d", clusterName, i),
+						Namespace: namespace.Name,
+					}, serverSts)
+					if err != nil {
+						return fmt.Errorf("server-%d StatefulSet not found: %v", i, err)
+					}
+					if serverSts.Spec.Replicas == nil || *serverSts.Spec.Replicas != 1 {
+						return fmt.Errorf("server-%d StatefulSet should have 1 replica, got %v", i, serverSts.Spec.Replicas)
+					}
+				}
+				return nil
 			}, timeout, interval).Should(Succeed())
 
-			By("Verifying initial replica count")
-			Expect(*serverSts.Spec.Replicas).To(Equal(int32(3)))
+			By("Verifying initial server count (individual StatefulSets created)")
+			// Verify all 3 individual StatefulSets exist
+			for i := 0; i < 3; i++ {
+				serverSts := &appsv1.StatefulSet{}
+				err := k8sClient.Get(ctx, types.NamespacedName{
+					Name:      fmt.Sprintf("%s-server-%d", clusterName, i),
+					Namespace: namespace.Name,
+				}, serverSts)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(*serverSts.Spec.Replicas).To(Equal(int32(1)))
+			}
 
 			By("Scaling up servers")
 			Eventually(func() error {
@@ -136,23 +155,22 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 				return k8sClient.Update(ctx, cluster)
 			}, timeout, interval).Should(Succeed())
 
-			By("Verifying scaling completed")
-			Eventually(func() int32 {
-				err := k8sClient.Get(ctx, types.NamespacedName{
-					Name:      clusterName + "-server",
-					Namespace: namespace.Name,
-				}, serverSts)
-				if err != nil {
-					fmt.Printf("Error getting StatefulSet: %v\n", err)
-					return 0
+			By("Verifying scaling completed - should create 5 individual StatefulSets")
+			Eventually(func() int {
+				totalStatefulSets := 0
+				for i := 0; i < 5; i++ {
+					serverSts := &appsv1.StatefulSet{}
+					err := k8sClient.Get(ctx, types.NamespacedName{
+						Name:      fmt.Sprintf("%s-server-%d", clusterName, i),
+						Namespace: namespace.Name,
+					}, serverSts)
+					if err == nil {
+						totalStatefulSets++
+					}
 				}
-				currentReplicas := int32(0)
-				if serverSts.Spec.Replicas != nil {
-					currentReplicas = *serverSts.Spec.Replicas
-				}
-				fmt.Printf("Current server StatefulSet replicas: %d\n", currentReplicas)
-				return currentReplicas
-			}, 60*time.Second, interval).Should(Equal(int32(5)))
+				fmt.Printf("Current individual StatefulSets count: %d\n", totalStatefulSets)
+				return totalStatefulSets
+			}, 60*time.Second, interval).Should(Equal(5))
 
 			By("Upgrading cluster image")
 			Eventually(func() error {
@@ -167,17 +185,24 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 				return k8sClient.Update(ctx, cluster)
 			}, timeout, interval).Should(Succeed())
 
-			By("Verifying image upgrade")
-			Eventually(func() string {
-				err := k8sClient.Get(ctx, types.NamespacedName{
-					Name:      clusterName + "-server",
-					Namespace: namespace.Name,
-				}, serverSts)
-				if err != nil {
-					return ""
+			By("Verifying image upgrade on all individual StatefulSets")
+			Eventually(func() bool {
+				// Check that all server StatefulSets have the upgraded image
+				for i := 0; i < 5; i++ {
+					serverSts := &appsv1.StatefulSet{}
+					err := k8sClient.Get(ctx, types.NamespacedName{
+						Name:      fmt.Sprintf("%s-server-%d", clusterName, i),
+						Namespace: namespace.Name,
+					}, serverSts)
+					if err != nil {
+						return false
+					}
+					if !containsString(serverSts.Spec.Template.Spec.Containers[0].Image, "5.27-enterprise") {
+						return false
+					}
 				}
-				return serverSts.Spec.Template.Spec.Containers[0].Image
-			}, timeout, interval).Should(ContainSubstring("5.27-enterprise"))
+				return true
+			}, timeout, interval).Should(BeTrue())
 
 			By("Verifying cluster status")
 			Eventually(func() bool {
@@ -263,27 +288,58 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 			Expect(k8sClient.Create(ctx, cluster2)).Should(Succeed())
 
 			By("Verifying both clusters are processed independently")
-			// Check first cluster
-			serverSts1 := &appsv1.StatefulSet{}
+			// Check first cluster - should have 3 individual StatefulSets
 			Eventually(func() error {
-				return k8sClient.Get(ctx, types.NamespacedName{
-					Name:      clusterName + "-1-server",
-					Namespace: namespace.Name,
-				}, serverSts1)
+				for i := 0; i < 3; i++ {
+					serverSts := &appsv1.StatefulSet{}
+					err := k8sClient.Get(ctx, types.NamespacedName{
+						Name:      fmt.Sprintf("%s-1-server-%d", clusterName, i),
+						Namespace: namespace.Name,
+					}, serverSts)
+					if err != nil {
+						return fmt.Errorf("cluster-1 server-%d StatefulSet not found: %v", i, err)
+					}
+				}
+				return nil
 			}, timeout, interval).Should(Succeed())
 
-			// Check second cluster
-			serverSts2 := &appsv1.StatefulSet{}
+			// Check second cluster - should have 3 individual StatefulSets
 			Eventually(func() error {
-				return k8sClient.Get(ctx, types.NamespacedName{
-					Name:      clusterName + "-2-server",
-					Namespace: namespace.Name,
-				}, serverSts2)
+				for i := 0; i < 3; i++ {
+					serverSts := &appsv1.StatefulSet{}
+					err := k8sClient.Get(ctx, types.NamespacedName{
+						Name:      fmt.Sprintf("%s-2-server-%d", clusterName, i),
+						Namespace: namespace.Name,
+					}, serverSts)
+					if err != nil {
+						return fmt.Errorf("cluster-2 server-%d StatefulSet not found: %v", i, err)
+					}
+				}
+				return nil
 			}, timeout, interval).Should(Succeed())
 
-			By("Verifying resource isolation")
-			Expect(*serverSts1.Spec.Replicas).To(Equal(int32(3)))
-			Expect(*serverSts2.Spec.Replicas).To(Equal(int32(3)))
+			By("Verifying resource isolation - each StatefulSet has 1 replica")
+			// Verify cluster 1 StatefulSets
+			for i := 0; i < 3; i++ {
+				serverSts := &appsv1.StatefulSet{}
+				err := k8sClient.Get(ctx, types.NamespacedName{
+					Name:      fmt.Sprintf("%s-1-server-%d", clusterName, i),
+					Namespace: namespace.Name,
+				}, serverSts)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(*serverSts.Spec.Replicas).To(Equal(int32(1)))
+			}
+
+			// Verify cluster 2 StatefulSets
+			for i := 0; i < 3; i++ {
+				serverSts := &appsv1.StatefulSet{}
+				err := k8sClient.Get(ctx, types.NamespacedName{
+					Name:      fmt.Sprintf("%s-2-server-%d", clusterName, i),
+					Namespace: namespace.Name,
+				}, serverSts)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(*serverSts.Spec.Replicas).To(Equal(int32(1)))
+			}
 
 			// Verify services are created with unique names
 			service1 := &corev1.Service{}
@@ -304,3 +360,5 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 		})
 	})
 })
+
+// Note: containsString helper function is defined in multi_node_cluster_test.go

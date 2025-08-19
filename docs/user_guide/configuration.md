@@ -11,7 +11,7 @@ The full CRD specification, which details every possible configuration field, ca
 Below are some of the most important fields you will use to configure your cluster. For a complete list, please consult the API reference.
 
 *   `spec.image`: The Neo4j Docker image to use. You can specify the repository, tag, and pull policy.
-*   `spec.topology`: Defines the architecture of your cluster, including the number of primary (core) and secondary (read replica) instances.
+*   `spec.topology`: Defines the architecture of your cluster, including the total number of servers that will self-organize into primary and secondary roles based on database requirements.
 *   `spec.storage`: Configures the persistent storage for the cluster, including storage class and size.
 *   `spec.auth`: Manages authentication, allowing you to specify the provider (native, LDAP, etc.) and the secret containing credentials.
 *   `spec.license`: A reference to the Kubernetes secret that holds your Neo4j Enterprise license key.

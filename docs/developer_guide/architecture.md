@@ -27,7 +27,7 @@ The main controller (`internal/controller/neo4jenterprisecluster_controller.go`)
 #### Core Components
 - **ConfigMap Manager** (`internal/controller/configmap_manager.go`): Handles Neo4j configuration with hash-based change detection
 - **Topology Scheduler**: Handles pod placement and anti-affinity rules
-- **Cluster Topology Validator**: Enforces minimum cluster topology requirements (1 primary + 1 secondary OR 2+ primaries)
+- **Cluster Topology Validator**: Enforces minimum cluster topology requirements (2+ servers)
 
 ### Neo4jEnterpriseStandalone Controller
 
@@ -53,7 +53,7 @@ The operator defines a set of CRDs to represent Neo4j resources. The Go type def
 
 #### Neo4jEnterpriseCluster
 - **Purpose**: Manages clustered Neo4j Enterprise deployments requiring high availability
-- **Minimum Topology**: Enforces 1 primary + 1 secondary OR 2+ primaries
+- **Minimum Topology**: Enforces 2+ servers that self-organize into primary/secondary roles
 - **Discovery Mode**: Automatically configures V2_ONLY discovery for Neo4j 5.26+ and 2025.x
 - **CRITICAL**: Uses `tcp-discovery` port (5000) for V2_ONLY discovery, not `tcp-tx` port (6000)
 - **Scaling**: Supports horizontal scaling with topology validation

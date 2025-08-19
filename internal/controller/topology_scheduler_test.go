@@ -228,4 +228,22 @@ func TestTopologyScheduler_ApplyTopologyConstraints(t *testing.T) {
 	if constraint.MaxSkew != 1 {
 		t.Errorf("MaxSkew = %v, want %v", constraint.MaxSkew, 1)
 	}
+
+	// CRITICAL TEST: Verify the label selector uses correct component label
+	if constraint.LabelSelector == nil {
+		t.Error("Expected LabelSelector to be set")
+	} else {
+		expectedLabels := map[string]string{
+			"app.kubernetes.io/name":      "neo4j",
+			"app.kubernetes.io/instance":  "test-cluster",
+			"app.kubernetes.io/component": "database", // MUST be "database", not "primary"
+		}
+		for key, expectedValue := range expectedLabels {
+			if actualValue, exists := constraint.LabelSelector.MatchLabels[key]; !exists {
+				t.Errorf("Expected label %s to exist in LabelSelector", key)
+			} else if actualValue != expectedValue {
+				t.Errorf("Label %s = %v, want %v", key, actualValue, expectedValue)
+			}
+		}
+	}
 }

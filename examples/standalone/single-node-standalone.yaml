@@ -68,10 +68,9 @@ spec:
     dbms.logs.query.enabled: "true"
     dbms.logs.query.threshold: "1s"
 
-  # Required environment variables
-  env:
-    - name: NEO4J_ACCEPT_LICENSE_AGREEMENT
-      value: "yes"      # Required for Neo4j Enterprise
+  # Environment variables (optional)
+  # Note: NEO4J_ACCEPT_LICENSE_AGREEMENT is managed by the operator
+  env: []
 
   # Node selector for pod scheduling
   nodeSelector:

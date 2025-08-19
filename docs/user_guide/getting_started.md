@@ -84,7 +84,7 @@ For production workloads requiring high availability and clustering:
     kubectl get pods -l app.kubernetes.io/name=neo4j -w
     ```
 
-### Option 2: Multi-Primary Cluster (Recommended for Production)
+### Option 2: Multi-Server Cluster (Recommended for Production)
 
 1.  **Create admin credentials:**
 
@@ -98,10 +98,10 @@ For production workloads requiring high availability and clustering:
 
     ```bash
     # For production (with TLS)
-    kubectl apply -f https://raw.githubusercontent.com/neo4j-labs/neo4j-kubernetes-operator/main/examples/clusters/multi-primary-cluster.yaml
+    kubectl apply -f https://raw.githubusercontent.com/neo4j-labs/neo4j-kubernetes-operator/main/examples/clusters/multi-server-cluster.yaml
 
     # For testing (TLS disabled)
-    kubectl apply -f https://raw.githubusercontent.com/neo4j-labs/neo4j-kubernetes-operator/main/examples/clusters/multi-primary-simple.yaml
+    kubectl apply -f https://raw.githubusercontent.com/neo4j-labs/neo4j-kubernetes-operator/main/examples/clusters/three-node-simple.yaml
     ```
 
 3.  **Monitor deployment (3-5 minutes expected):**
@@ -115,10 +115,10 @@ For production workloads requiring high availability and clustering:
 If you need a custom configuration, create your own manifest based on our examples:
 
 1. **Browse the examples directory:**
-   - [Minimal cluster](../../examples/clusters/minimal-cluster.yaml) - 1 primary + 1 secondary (minimum cluster topology)
-   - [Multi-primary cluster](../../examples/clusters/multi-primary-cluster.yaml) - Production HA with TLS
-   - [Multi-primary simple](../../examples/clusters/multi-primary-simple.yaml) - Testing HA (TLS disabled)
-   - [Kubernetes discovery cluster](../../examples/clusters/k8s-discovery-cluster.yaml) - Production with automatic discovery
+   - [Minimal cluster](../../examples/clusters/minimal-cluster.yaml) - 2 servers (minimum cluster topology)
+   - [Multi-server cluster](../../examples/clusters/multi-server-cluster.yaml) - Production HA with TLS
+   - [Three-node cluster](../../examples/clusters/three-node-cluster.yaml) - Three servers with TLS
+   - [Production optimized cluster](../../examples/clusters/production-optimized-cluster.yaml) - Production with advanced features
 
 2. **Copy and customize an example:**
    ```bash
@@ -141,18 +141,19 @@ The operator will now create several Kubernetes resources to bring your cluster 
 
 ### Cluster Formation Process
 
-For multi-node clusters, pods start sequentially:
+For multi-server clusters, all pods start simultaneously using ParallelPodManagement:
 
-**Minimal Cluster (1 primary + 1 secondary):**
-1. **Pod 0** (primary): Forms the initial cluster (0-2 minutes)
-2. **Pod 1** (secondary): Joins the cluster (2-3 minutes)
+**Minimal Cluster (2 servers):**
+1. **All server pods**: Start simultaneously (ParallelPodManagement)
+2. **Cluster formation**: Servers discover each other and self-organize (1-2 minutes)
+3. **Ready state**: All servers join the cluster automatically
 
-**Multi-Primary Cluster (3 primaries):**
-1. **Pod 0** (bootstrap): Forms the initial cluster (0-2 minutes)
-2. **Pod 1**: Joins the cluster (2-4 minutes)
-3. **Pod 2**: Joins the cluster (4-6 minutes)
+**Multi-Server Cluster (3+ servers):**
+1. **All server pods**: Start simultaneously for optimal formation
+2. **Self-organization**: Servers automatically assign roles based on database topology requirements
+3. **Database hosting**: Servers can host databases as primaries or secondaries as needed
 
-**Total deployment time**: 2-3 minutes for minimal clusters, 3-5 minutes for multi-primary clusters.
+**Total deployment time**: 2-3 minutes for minimal clusters, 3-5 minutes for multi-server clusters.
 
 You can monitor the progress with `kubectl get pods -w`.
 
@@ -171,8 +172,8 @@ kubectl port-forward service/standalone-neo4j-service 7474:7474 7687:7687
 # For minimal cluster
 kubectl port-forward service/minimal-cluster-client 7474:7474 7687:7687
 
-# For multi-primary cluster
-kubectl port-forward service/multi-primary-cluster-client 7474:7474 7687:7687
+# For multi-server cluster
+kubectl port-forward service/multi-server-cluster-client 7474:7474 7687:7687
 
 # For your custom cluster (replace with your cluster name)
 kubectl port-forward service/YOUR-CLUSTER-NAME-client 7474:7474 7687:7687

@@ -571,7 +571,7 @@ spec:
 To upgrade from standalone to clustered deployment:
 
 1. **Create a backup** of your standalone deployment
-2. **Deploy a new cluster** with minimum topology (1 primary + 1 secondary)
+2. **Deploy a new cluster** with minimum topology (2 servers)
 3. **Restore the backup** to the new cluster
 4. **Update application connections** to the new cluster endpoints
 5. **Delete the old standalone** deployment

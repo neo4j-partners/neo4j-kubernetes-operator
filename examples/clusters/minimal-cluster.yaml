@@ -49,16 +49,30 @@ spec:
   #     name: ca-cluster-issuer
   #     kind: ClusterIssuer
 
-  # Required environment variables
-  env:
-    - name: NEO4J_ACCEPT_LICENSE_AGREEMENT
-      value: "yes"      # Required for Neo4j Enterprise
+  # Authentication configuration
+  # IMPORTANT: The operator requires a secret for authentication
+  # Create the secret before deploying the cluster:
+  #   kubectl create secret generic neo4j-admin-secret \
+  #     --from-literal=username=neo4j \
+  #     --from-literal=password=your-secure-password
+  auth:
+    provider: native  # Default authentication provider
+    adminSecret: neo4j-admin-secret
+
+  # Additional environment variables (optional)
+  # NOTE: NEO4J_AUTH and NEO4J_ACCEPT_LICENSE_AGREEMENT are managed by the operator
+  # and should not be set manually
+  env: []
 
 ---
-# Admin credentials secret (create this before applying the cluster)
-# kubectl create secret generic neo4j-admin-secret \
-#   --from-literal=username=neo4j \
-#   --from-literal=password=your-secure-password
+# Prerequisites:
+# 1. Create admin credentials secret BEFORE applying this cluster:
+#    kubectl create secret generic neo4j-admin-secret \
+#      --from-literal=username=neo4j \
+#      --from-literal=password=your-secure-password
+#
+# 2. Apply the cluster:
+#    kubectl apply -f minimal-cluster.yaml
 #
 # NOTE: For single-node deployments without clustering, use Neo4jEnterpriseStandalone instead.
 # See examples/standalone/single-node-standalone.yaml for non-clustered deployments.

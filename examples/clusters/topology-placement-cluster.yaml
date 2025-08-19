@@ -1,0 +1,136 @@
+# Multi-zone Neo4j cluster with topology placement
+# This example shows how to deploy Neo4j across multiple availability zones
+# using topology spread constraints and anti-affinity rules
+
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: multi-zone-cluster
+  namespace: default
+spec:
+  edition: enterprise
+
+  # Neo4j Docker image configuration
+  image:
+    repo: neo4j
+    tag: "5.26-enterprise"
+    pullPolicy: IfNotPresent
+
+  # Server topology with placement constraints
+  topology:
+    servers: 3
+
+    # Topology placement configuration for multi-zone deployment
+    placement:
+      # Topology spread constraints ensure even distribution across zones
+      topologySpread:
+        enabled: true
+        topologyKey: topology.kubernetes.io/zone  # Spread across availability zones
+        maxSkew: 1                                # Maximum difference between zones
+        whenUnsatisfiable: DoNotSchedule          # Hard constraint
+        minDomains: 2                             # Require at least 2 zones
+
+      # Anti-affinity rules prevent multiple servers on same node
+      antiAffinity:
+        enabled: true
+        type: required                            # Hard anti-affinity
+        topologyKey: kubernetes.io/hostname       # Different physical nodes
+
+    # Optional: Specify zones explicitly (omit to auto-discover)
+    availabilityZones:
+      - us-west-2a
+      - us-west-2b
+      - us-west-2c
+
+    # Enforce strict distribution (fail if can't satisfy topology)
+    enforceDistribution: true
+
+  # Storage configuration
+  storage:
+    className: fast-ssd
+    size: "50Gi"
+
+  # Resource allocation for production
+  resources:
+    requests:
+      memory: "4Gi"
+      cpu: "1"
+    limits:
+      memory: "8Gi"
+      cpu: "4"
+
+  # TLS configuration for secure inter-node communication
+  tls:
+    mode: cert-manager
+    issuerRef:
+      name: ca-cluster-issuer
+      kind: ClusterIssuer
+
+  # Authentication
+  auth:
+    provider: native
+    adminSecret: neo4j-admin-secret
+
+  # Production-ready service configuration
+  service:
+    type: LoadBalancer
+    annotations:
+      service.beta.kubernetes.io/aws-load-balancer-type: nlb
+      service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+
+  # Production configuration
+  config:
+    # Memory settings optimized for multi-zone deployment
+    server.memory.heap.initial_size: "2G"
+    server.memory.heap.max_size: "4G"
+    server.memory.pagecache.size: "2G"
+
+    # Cluster formation settings
+    initial.dbms.automatically_enable_free_servers: "true"
+
+    # Security
+    dbms.security.auth_enabled: "true"
+
+    # Monitoring
+    dbms.logs.query.enabled: "true"
+    dbms.logs.query.threshold: "1s"
+
+---
+# Admin credentials secret
+apiVersion: v1
+kind: Secret
+metadata:
+  name: neo4j-admin-secret
+  namespace: default
+type: Opaque
+stringData:
+  username: neo4j
+  password: your-secure-password-here
+
+---
+# Prerequisites and Usage:
+#
+# 1. Ensure your cluster has nodes labeled with topology.kubernetes.io/zone
+#    kubectl get nodes --show-labels | grep topology.kubernetes.io/zone
+#
+# 2. Install cert-manager for TLS:
+#    kubectl apply -f https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml
+#
+# 3. Create a ClusterIssuer:
+#    kubectl apply -f - <<EOF
+#    apiVersion: cert-manager.io/v1
+#    kind: ClusterIssuer
+#    metadata:
+#      name: ca-cluster-issuer
+#    spec:
+#      ca:
+#        secretName: ca-key-pair
+#    EOF
+#
+# 4. Apply this configuration:
+#    kubectl apply -f topology-placement-cluster.yaml
+#
+# VERIFICATION:
+# - Check pod distribution: kubectl get pods -o wide -l neo4j.com/cluster=multi-zone-cluster
+# - Verify zones: kubectl get pods -l neo4j.com/cluster=multi-zone-cluster -o custom-columns=NAME:.metadata.name,NODE:.spec.nodeName,ZONE:.spec.nodeSelector
+# - Check topology constraints: kubectl describe pod <pod-name> | grep "Topology Spread Constraints"

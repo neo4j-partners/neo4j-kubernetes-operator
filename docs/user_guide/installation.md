@@ -11,7 +11,7 @@ There are two primary ways to install the Neo4j Enterprise Operator:
 This is the simplest and most direct way to install the operator. It's recommended for quick setups and development environments.
 
 ```bash
-kubectl apply -f https://github.com/neo4j-labs/neo4j-kubernetes-operator/releases/latest/download/neo4j-operator.yaml
+kubectl apply -f https://github.com/neo4j-labs/neo4j-kubernetes-operator/releases/latest/download/neo4j-kubernetes-operator.yaml
 ```
 
 This command applies the necessary Custom Resource Definitions (CRDs), the operator `Deployment`, and all the required RBAC permissions (`ServiceAccount`, `ClusterRole`, `ClusterRoleBinding`).

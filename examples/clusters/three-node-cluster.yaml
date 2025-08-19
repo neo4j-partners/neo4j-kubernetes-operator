@@ -47,10 +47,11 @@ spec:
   service:
     type: ClusterIP     # Use LoadBalancer for external access
 
-  # Required environment variables
-  env:
-    - name: NEO4J_ACCEPT_LICENSE_AGREEMENT
-      value: "yes"
+  # Authentication configuration
+  # The operator manages authentication automatically
+  auth:
+    provider: native
+    adminSecret: neo4j-admin-secret
 
   # Custom Neo4j configuration for production
   config:

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -102,7 +103,11 @@ func TestBuildStatefulSetForEnterprise_TLSClusterFormation(t *testing.T) {
 	}
 
 	// Test that TLS clusters use parallel pod management
-	serverSts := resources.BuildServerStatefulSetForEnterprise(cluster)
+	serverStatefulSets := resources.BuildServerStatefulSetsForEnterprise(cluster)
+	require.Len(t, serverStatefulSets, 5, "should create 5 StatefulSets for 5 servers")
+
+	// Test the first StatefulSet as representative
+	serverSts := serverStatefulSets[0]
 	assert.Equal(t, serverSts.Spec.PodManagementPolicy, appsv1.ParallelPodManagement,
 		"TLS clusters must use ParallelPodManagement for reliable formation")
 }

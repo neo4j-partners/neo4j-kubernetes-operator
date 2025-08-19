@@ -1,0 +1,99 @@
+# Neo4j Enterprise Cluster with Authentication Configuration
+# This example demonstrates the correct authentication setup
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: neo4j-admin-secret
+  namespace: default
+type: Opaque
+data:
+  # Base64 encoded values - these decode to:
+  # username: neo4j
+  # password: changeme123
+  username: bmVvNGo=
+  password: Y2hhbmdlbWUxMjM=
+
+---
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: auth-example-cluster
+  namespace: default
+spec:
+  # Neo4j Enterprise Edition
+  edition: enterprise
+
+  # Neo4j Docker image
+  image:
+    repo: neo4j
+    tag: "5.26-enterprise"
+    pullPolicy: IfNotPresent
+
+  # Cluster topology
+  topology:
+    servers: 3  # 3 servers for production fault tolerance
+
+  # Storage configuration
+  storage:
+    className: standard
+    size: "10Gi"
+
+  # Resource allocation
+  resources:
+    requests:
+      memory: "2Gi"
+      cpu: "500m"
+    limits:
+      memory: "4Gi"
+      cpu: "2"
+
+  # Authentication configuration
+  # The operator manages authentication through Kubernetes secrets
+  auth:
+    provider: native  # Options: native, ldap, kerberos, jwt
+    adminSecret: neo4j-admin-secret  # Reference to the secret created above
+
+  # Environment variables
+  # IMPORTANT: Do not set NEO4J_AUTH or NEO4J_ACCEPT_LICENSE_AGREEMENT here
+  # These are automatically managed by the operator
+  env:
+    # You can add other Neo4j configuration here
+    - name: NEO4J_dbms_memory_heap_max__size
+      value: "2G"
+    - name: NEO4J_dbms_memory_heap_initial__size
+      value: "1G"
+    # DO NOT add these (operator manages them):
+    # - NEO4J_AUTH
+    # - NEO4J_ACCEPT_LICENSE_AGREEMENT
+
+  # TLS configuration (optional)
+  tls:
+    mode: disabled
+
+---
+# Notes on Authentication:
+#
+# 1. The operator automatically:
+#    - Sets NEO4J_ACCEPT_LICENSE_AGREEMENT=yes for Enterprise edition
+#    - Configures NEO4J_AUTH from the provided secret
+#    - Filters out any user-provided NEO4J_AUTH or NEO4J_ACCEPT_LICENSE_AGREEMENT
+#
+# 2. Secret format:
+#    The secret must contain 'username' and 'password' keys
+#    The operator will combine them as username/password for NEO4J_AUTH
+#
+# 3. Changing passwords:
+#    To change the password after cluster creation:
+#    a. Update the secret: kubectl edit secret neo4j-admin-secret
+#    b. Restart the StatefulSet: kubectl rollout restart statefulset auth-example-cluster-server
+#
+# 4. External secrets:
+#    For production, consider using external secret operators like:
+#    - External Secrets Operator
+#    - Sealed Secrets
+#    - HashiCorp Vault
+#
+# 5. LDAP/Kerberos/JWT:
+#    For advanced authentication providers, set auth.provider and provide
+#    appropriate configuration through auth.secretRef
