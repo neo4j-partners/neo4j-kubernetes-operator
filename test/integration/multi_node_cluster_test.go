@@ -129,24 +129,52 @@ var _ = Describe("Multi-Node Cluster Formation Integration Tests", func() {
 					return fmt.Errorf("startup script does not contain Kubernetes discovery")
 				}
 
+				// Verify bootstrapping strategy configuration is present
+				if !containsString(startupScript, "internal.dbms.cluster.discovery.system_bootstrapping_strategy=$BOOTSTRAP_STRATEGY") {
+					return fmt.Errorf("startup script does not contain bootstrapping strategy configuration")
+				}
+
+				// Verify server-0 gets "me" strategy and others get "other"
+				if !containsString(startupScript, "SERVER_INDEX=\"0\"") && !containsString(startupScript, "BOOTSTRAP_STRATEGY=\"me\"") {
+					return fmt.Errorf("startup script does not contain server-0 bootstrapping strategy logic")
+				}
+
+				if !containsString(startupScript, "BOOTSTRAP_STRATEGY=\"other\"") {
+					return fmt.Errorf("startup script does not contain other servers bootstrapping strategy")
+				}
+
 				return nil
 			}, time.Minute*2, time.Second*5).Should(Succeed())
 
-			By("Waiting for Server StatefulSet to be created")
-			// Server StatefulSet (unified architecture)
-			serverStatefulSetKey := types.NamespacedName{
-				Name:      clusterName + "-server",
-				Namespace: namespace.Name,
-			}
-
+			By("Waiting for individual Server StatefulSets to be created")
+			// NEW ARCHITECTURE: Individual StatefulSets per server
 			Eventually(func() error {
-				statefulSet := &appsv1.StatefulSet{}
-				if err := k8sClient.Get(ctx, serverStatefulSetKey, statefulSet); err != nil {
-					return err
+				// Check server-0 StatefulSet
+				server0Key := types.NamespacedName{
+					Name:      clusterName + "-server-0",
+					Namespace: namespace.Name,
+				}
+				statefulSet0 := &appsv1.StatefulSet{}
+				if err := k8sClient.Get(ctx, server0Key, statefulSet0); err != nil {
+					return fmt.Errorf("server-0 StatefulSet not found: %v", err)
 				}
 
-				if statefulSet.Spec.Replicas == nil || *statefulSet.Spec.Replicas != 2 {
-					return fmt.Errorf("Server StatefulSet should have 2 replicas, got %v", statefulSet.Spec.Replicas)
+				if statefulSet0.Spec.Replicas == nil || *statefulSet0.Spec.Replicas != 1 {
+					return fmt.Errorf("server-0 StatefulSet should have 1 replica, got %v", statefulSet0.Spec.Replicas)
+				}
+
+				// Check server-1 StatefulSet
+				server1Key := types.NamespacedName{
+					Name:      clusterName + "-server-1",
+					Namespace: namespace.Name,
+				}
+				statefulSet1 := &appsv1.StatefulSet{}
+				if err := k8sClient.Get(ctx, server1Key, statefulSet1); err != nil {
+					return fmt.Errorf("server-1 StatefulSet not found: %v", err)
+				}
+
+				if statefulSet1.Spec.Replicas == nil || *statefulSet1.Spec.Replicas != 1 {
+					return fmt.Errorf("server-1 StatefulSet should have 1 replica, got %v", statefulSet1.Spec.Replicas)
 				}
 
 				return nil

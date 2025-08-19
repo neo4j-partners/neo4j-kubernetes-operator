@@ -61,8 +61,8 @@ spec:
 
 `Neo4jEnterpriseCluster` now enforces minimum topology requirements:
 
-- **Minimum**: 1 primary + 1 secondary
-- **Alternative**: 2 or more primaries (with any number of secondaries)
+- **Minimum**: 2 servers (self-organize into primary/secondary roles)
+- **Recommended**: 3+ servers for production fault tolerance
 
 **Invalid configurations** (will fail validation):
 ```yaml

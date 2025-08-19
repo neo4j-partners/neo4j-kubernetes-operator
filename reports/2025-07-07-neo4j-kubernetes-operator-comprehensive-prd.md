@@ -1,6 +1,7 @@
 # Neo4j Kubernetes Operator - Comprehensive Product Requirements Document (PRD)
 
-**Last Updated**: 2025-07-23
+**Last Updated**: 2025-08-19
+**Architecture Note**: Updated for server-based architecture (unified StatefulSet deployment)
 
 ## Executive Summary
 
@@ -88,7 +89,7 @@ Deliver a robust, scalable, and secure platform for Neo4j Enterprise that abstra
 ### 3.1 Core Cluster Management
 
 #### 3.1.1 Cluster Deployment
-- **Topology Configuration**: Minimum 1 primary + 1 secondary OR 2+ primaries for clusters
+- **Topology Configuration**: Minimum 2 servers that self-organize into primary/secondary roles for clusters
 - **Standalone Deployment**: Single-node deployment option for development/testing
 - **Secondary Replicas**: Configurable read replicas for horizontal scaling
 - **High Availability**: Multi-zone deployment with intelligent placement
@@ -182,7 +183,7 @@ Deliver a robust, scalable, and secure platform for Neo4j Enterprise that abstra
 ### 4.1 Performance Requirements
 
 #### 4.1.1 Scalability
-- **Cluster Size**: Support for up to 27 total nodes (7 primary + 20 secondary)
+- **Cluster Size**: Support for up to 20 servers (self-organize based on database requirements)
 - **Throughput**: High-performance Bolt protocol communication
 - **Latency**: Sub-second response times for management operations
 - **Concurrency**: Multiple simultaneous operations without conflicts

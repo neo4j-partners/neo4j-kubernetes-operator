@@ -27,12 +27,13 @@ If you're new to Kubernetes, start here:
    kubectl apply -f https://github.com/neo4j-labs/neo4j-kubernetes-operator/releases/latest/download/neo4j-kubernetes-operator.yaml
    ```
 
-2. **Create admin credentials**:
+2. **Create admin credentials** (Required for authentication):
    ```bash
    kubectl create secret generic neo4j-admin-secret \
      --from-literal=username=neo4j \
      --from-literal=password=your-secure-password
    ```
+   **Important**: The operator manages authentication through Kubernetes secrets. Do not set NEO4J_AUTH directly in environment variables.
 
 3. **Deploy your first Neo4j instance**:
 
@@ -72,7 +73,7 @@ kubectl apply -f https://github.com/neo4j-labs/neo4j-kubernetes-operator/release
 # First, clone the release or download specific example files
 git clone --branch $(curl -s https://api.github.com/repos/neo4j-labs/neo4j-kubernetes-operator/releases/latest | grep tag_name | cut -d '"' -f 4) https://github.com/neo4j-labs/neo4j-kubernetes-operator.git
 cd neo4j-kubernetes-operator
-kubectl apply -f examples/clusters/multi-primary-cluster.yaml
+kubectl apply -f examples/clusters/multi-server-cluster.yaml
 ```
 
 See the [Complete Installation Guide](docs/user_guide/installation.md) for all deployment options.
@@ -86,14 +87,45 @@ Ready-to-use configurations for common deployment scenarios:
 - **[LoadBalancer standalone](examples/standalone/loadbalancer-standalone.yaml)** - External access with LoadBalancer
 - **[NodePort standalone](examples/standalone/nodeport-standalone.yaml)** - External access with NodePort
 
-### Clustered Deployments (Enterprise Clustering)
-- **[Minimal cluster](examples/clusters/minimal-cluster.yaml)** - 1 primary + 1 secondary (minimum cluster topology)
-- **[Multi-primary cluster](examples/clusters/multi-primary-cluster.yaml)** - Production with high availability
-- **[Kubernetes discovery cluster](examples/clusters/k8s-discovery-cluster.yaml)** - Production with automatic discovery
+### Clustered Deployments (Enterprise Server Architecture)
+- **[Minimal cluster](examples/clusters/minimal-cluster.yaml)** - 2 servers (minimum cluster topology)
+- **[Multi-server cluster](examples/clusters/multi-server-cluster.yaml)** - Production with high availability (5+ servers)
+- **[Three-node cluster](examples/clusters/three-node-cluster.yaml)** - 3 servers with TLS for fault tolerance
+- **[Topology placement](examples/clusters/topology-placement-cluster.yaml)** - Multi-zone deployment with topology constraints
 - **[LoadBalancer cluster](examples/clusters/loadbalancer-cluster.yaml)** - External access with cloud load balancer
 - **[Ingress cluster](examples/clusters/ingress-cluster.yaml)** - HTTPS access via Ingress controller
 
 See the [examples directory](examples/) for complete documentation and additional configurations.
+
+## 🔐 Authentication
+
+The operator manages Neo4j authentication through Kubernetes secrets:
+
+1. **Secret-based Authentication**: Create a secret with `username` and `password` keys
+2. **Automatic Configuration**: The operator automatically configures NEO4J_AUTH from the secret
+3. **Managed Variables**: NEO4J_AUTH and NEO4J_ACCEPT_LICENSE_AGREEMENT are managed by the operator
+
+### Authentication Configuration
+
+```yaml
+# Create the secret
+kubectl create secret generic neo4j-admin-secret \
+  --from-literal=username=neo4j \
+  --from-literal=password=your-secure-password
+
+# Reference in your cluster specification
+spec:
+  auth:
+    provider: native  # Options: native, ldap, kerberos, jwt
+    adminSecret: neo4j-admin-secret
+```
+
+**Important Notes**:
+- Do not set NEO4J_AUTH in the `env` section - it will be ignored
+- NEO4J_ACCEPT_LICENSE_AGREEMENT is automatically set for Enterprise edition
+- For production, consider using external secret management solutions
+
+See [authentication example](examples/clusters/auth-example.yaml) for complete configuration.
 
 ## 📚 Documentation Structure
 
@@ -126,9 +158,9 @@ Complete CRD documentation for all custom resources:
 
 ### 🏗️ Core Capabilities
 - **Dual Deployment Modes**: Choose between clustered (Neo4jEnterpriseCluster) or standalone (Neo4jEnterpriseStandalone) deployments
-- **Enterprise Clusters**: Deploy Neo4j Enterprise with clustering support (minimum 1 primary + 1 secondary or multiple primaries)
-- **Standalone Deployments**: Single-node Neo4j instances using unified clustering for development and testing
-- **High Availability**: Multi-replica clusters with automatic leader election and V2_ONLY discovery
+- **Server-Based Architecture**: Enterprise clusters use unified server StatefulSets where servers self-organize into database primary/secondary roles
+- **Flexible Topology**: Specify total server count and let Neo4j automatically assign database hosting roles based on requirements
+- **High Availability**: Multi-server clusters with automatic leader election and V2_ONLY discovery
 - **Persistent Storage**: Configurable storage classes and volume management
 - **Rolling Updates**: Zero-downtime Neo4j version upgrades
 
@@ -171,14 +203,15 @@ kubectl logs -l app.kubernetes.io/name=neo4j-operator
 ## 🏃‍♂️ Common Use Cases
 
 ### Development & Testing
-- **Standalone deployments** for development environments (non-clustered)
-- **Minimal clusters** for integration testing (1 primary + 1 secondary)
+- **Standalone deployments** for development environments (single-node, non-clustered)
+- **Minimal clusters** for integration testing (2 servers self-organizing)
 - **Ephemeral deployments** for CI/CD pipelines
-- **Sample data loading** for testing scenarios
+- **Sample data loading** for testing scenarios with seed URIs
 
 ### Production Deployments
-- **High-availability clusters** across multiple availability zones
-- **Automated backup strategies** with off-site storage
+- **High-availability clusters** across multiple availability zones with topology placement
+- **Server pools** that automatically assign database hosting based on requirements
+- **Automated backup strategies** with off-site storage and automatic RBAC
 - **Performance monitoring** and alerting integration
 - **Blue-green deployments** for zero-downtime upgrades
 

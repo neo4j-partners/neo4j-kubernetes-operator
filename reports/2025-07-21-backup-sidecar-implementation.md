@@ -107,7 +107,7 @@ kubectl logs -f job/test-backup-simple-backup
 
 5. Check sidecar logs:
 ```bash
-kubectl logs test-cluster-primary-0 -c backup-sidecar
+kubectl logs test-cluster-server-0 -c backup-sidecar
 ```
 
 ## Future Enhancements

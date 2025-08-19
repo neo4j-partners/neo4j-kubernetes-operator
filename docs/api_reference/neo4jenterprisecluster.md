@@ -117,11 +117,11 @@ The `Neo4jEnterpriseClusterSpec` defines the desired state of a Neo4j Enterprise
 
 | Field | Type | Description |
 |---|---|---|
-| `provider` | `string` | Auth provider: `"secrets"`, `"ldap"`, `"oidc"`, `"jwt"`, `"kerberos"` |
-| `secret` | `string` | Auth secret name (for `"secrets"` provider) |
-| `jwt` | [`*JWTAuthSpec`](#jwtauthspec) | JWT authentication configuration |
-| `ldap` | [`*LDAPAuthSpec`](#ldapauthspec) | LDAP authentication configuration |
-| `kerberos` | [`*KerberosAuthSpec`](#kerberosauthspec) | Kerberos authentication configuration |
+| `provider` | `string` | Auth provider: `"native"`, `"ldap"`, `"jwt"`, `"kerberos"` (default: `"native"`) |
+| `adminSecret` | `string` | Secret containing admin username and password |
+| `secretRef` | `string` | Secret containing provider-specific configuration |
+| `externalSecrets` | [`*ExternalSecretsConfig`](#externalsecretsconfig) | External secrets configuration |
+| `passwordPolicy` | [`*PasswordPolicySpec`](#passwordpolicyspec) | Password policy configuration |
 
 ### JWTAuthSpec
 

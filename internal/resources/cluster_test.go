@@ -119,8 +119,8 @@ func TestBuildPodSpecForEnterprise_WithQueryMonitoring(t *testing.T) {
 
 	podSpec := resources.BuildPodSpecForEnterprise(cluster, "server", "neo4j-admin-secret")
 
-	// Test that Prometheus exporter sidecar is added
-	require.Len(t, podSpec.Containers, 3, "should have 3 containers (main + backup + exporter)")
+	// Test that Prometheus exporter sidecar is added (no backup sidecar due to centralized backup architecture)
+	require.Len(t, podSpec.Containers, 2, "should have 2 containers (main + exporter)")
 
 	// Find the exporter container (it should be the last one)
 	var exporterContainer corev1.Container
@@ -167,10 +167,9 @@ func TestBuildPodSpecForEnterprise_WithoutFeatures(t *testing.T) {
 	// Test that no init containers are added when no plugins
 	assert.Len(t, podSpec.InitContainers, 0, "should have no init containers when no plugins")
 
-	// Test that main container and backup sidecar are present when query monitoring is disabled
-	assert.Len(t, podSpec.Containers, 2, "should have main container and backup sidecar when query monitoring is disabled")
+	// Test that only main container is present when query monitoring is disabled (no backup sidecar due to centralized backup architecture)
+	assert.Len(t, podSpec.Containers, 1, "should have only main container when query monitoring is disabled")
 	assert.Equal(t, "neo4j", podSpec.Containers[0].Name)
-	assert.Equal(t, "backup-sidecar", podSpec.Containers[1].Name)
 }
 
 func TestBuildStatefulSetForEnterprise_WithFeatures(t *testing.T) {
@@ -203,16 +202,20 @@ func TestBuildStatefulSetForEnterprise_WithFeatures(t *testing.T) {
 		},
 	}
 
-	sts := resources.BuildServerStatefulSetForEnterprise(cluster)
+	statefulSets := resources.BuildServerStatefulSetsForEnterprise(cluster)
+	require.Len(t, statefulSets, 3, "should create 3 StatefulSets for 3 servers")
 
-	// Test StatefulSet metadata
-	assert.Equal(t, cluster.Name+"-server", sts.Name)
+	// Test the first StatefulSet as a representative
+	sts := statefulSets[0]
+
+	// Test StatefulSet metadata (first StatefulSet should be server-0)
+	assert.Equal(t, cluster.Name+"-server-0", sts.Name)
 	assert.Equal(t, cluster.Namespace, sts.Namespace)
 
 	// Test that pod template has the features
 	podSpec := sts.Spec.Template.Spec
 	assert.Len(t, podSpec.InitContainers, 1, "should have init container for plugin")
-	assert.Len(t, podSpec.Containers, 3, "should have main container + backup + exporter")
+	assert.Len(t, podSpec.Containers, 2, "should have main container + exporter (no backup due to centralized backup architecture)")
 
 	// Test pod management policy
 	assert.Equal(t, appsv1.ParallelPodManagement, sts.Spec.PodManagementPolicy, "should use parallel pod management")
@@ -338,8 +341,12 @@ func TestBuildStatefulSetForEnterprise_ParallelManagement(t *testing.T) {
 		},
 	}
 
-	// Test server StatefulSet
-	serverSts := resources.BuildServerStatefulSetForEnterprise(cluster)
+	// Test server StatefulSets
+	serverStatefulSets := resources.BuildServerStatefulSetsForEnterprise(cluster)
+	require.Len(t, serverStatefulSets, 3, "should create 3 StatefulSets for 3 servers")
+
+	// Test the first StatefulSet as representative
+	serverSts := serverStatefulSets[0]
 	assert.Equal(t, appsv1.ParallelPodManagement, serverSts.Spec.PodManagementPolicy, "server StatefulSet should use parallel pod management")
 
 	// Test that server configuration is set correctly in the ConfigMap startup script
@@ -632,4 +639,229 @@ func assertContainsAndGetIndex(t *testing.T, haystack, needle string) int {
 
 	t.Fatalf("String '%s' should contain '%s' but index not found", haystack, needle)
 	return -1
+}
+
+func TestValidateServerRoleHints(t *testing.T) {
+	tests := []struct {
+		name           string
+		cluster        *neo4jv1alpha1.Neo4jEnterpriseCluster
+		expectedErrors []string
+	}{
+		{
+			name: "No role hints - should pass",
+			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
+				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
+					Topology: neo4jv1alpha1.TopologyConfiguration{
+						Servers: 3,
+					},
+				},
+			},
+			expectedErrors: nil,
+		},
+		{
+			name: "Valid role hints - should pass",
+			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
+				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
+					Topology: neo4jv1alpha1.TopologyConfiguration{
+						Servers: 3,
+						ServerRoles: []neo4jv1alpha1.ServerRoleHint{
+							{ServerIndex: 0, ModeConstraint: "PRIMARY"},
+							{ServerIndex: 1, ModeConstraint: "SECONDARY"},
+							{ServerIndex: 2, ModeConstraint: "NONE"},
+						},
+					},
+				},
+			},
+			expectedErrors: nil,
+		},
+		{
+			name: "Server index out of range - should fail",
+			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
+				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
+					Topology: neo4jv1alpha1.TopologyConfiguration{
+						Servers: 3,
+						ServerRoles: []neo4jv1alpha1.ServerRoleHint{
+							{ServerIndex: 3, ModeConstraint: "PRIMARY"}, // Index 3 is out of range for 3 servers (0-2)
+						},
+					},
+				},
+			},
+			expectedErrors: []string{"server role hint index 3 is out of range (0-2)"},
+		},
+		{
+			name: "Duplicate server indices - should fail",
+			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
+				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
+					Topology: neo4jv1alpha1.TopologyConfiguration{
+						Servers: 3,
+						ServerRoles: []neo4jv1alpha1.ServerRoleHint{
+							{ServerIndex: 0, ModeConstraint: "PRIMARY"},
+							{ServerIndex: 0, ModeConstraint: "SECONDARY"}, // Duplicate index
+						},
+					},
+				},
+			},
+			expectedErrors: []string{"duplicate server role hint for server index 0"},
+		},
+		{
+			name: "All servers constrained to SECONDARY - should fail",
+			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
+				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
+					Topology: neo4jv1alpha1.TopologyConfiguration{
+						Servers: 3,
+						ServerRoles: []neo4jv1alpha1.ServerRoleHint{
+							{ServerIndex: 0, ModeConstraint: "SECONDARY"},
+							{ServerIndex: 1, ModeConstraint: "SECONDARY"},
+							{ServerIndex: 2, ModeConstraint: "SECONDARY"},
+						},
+					},
+				},
+			},
+			expectedErrors: []string{"all servers are constrained to SECONDARY mode - cluster would have no primary servers available"},
+		},
+		{
+			name: "Invalid mode constraint - should fail",
+			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
+				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
+					Topology: neo4jv1alpha1.TopologyConfiguration{
+						Servers: 3,
+						ServerRoles: []neo4jv1alpha1.ServerRoleHint{
+							{ServerIndex: 0, ModeConstraint: "INVALID"}, // Invalid mode
+						},
+					},
+				},
+			},
+			expectedErrors: []string{"invalid mode constraint 'INVALID' for server 0 (valid values: NONE, PRIMARY, SECONDARY)"},
+		},
+		{
+			name: "Multiple validation errors - should return all",
+			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
+				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
+					Topology: neo4jv1alpha1.TopologyConfiguration{
+						Servers: 2,
+						ServerRoles: []neo4jv1alpha1.ServerRoleHint{
+							{ServerIndex: 0, ModeConstraint: "PRIMARY"},
+							{ServerIndex: 0, ModeConstraint: "SECONDARY"}, // Duplicate
+							{ServerIndex: 3, ModeConstraint: "PRIMARY"},   // Out of range
+						},
+					},
+				},
+			},
+			expectedErrors: []string{
+				"server role hint index 3 is out of range (0-1)",
+				"duplicate server role hint for server index 0",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			errors := resources.ValidateServerRoleHints(tt.cluster)
+
+			if len(tt.expectedErrors) == 0 {
+				assert.Empty(t, errors, "Expected no validation errors")
+			} else {
+				assert.Len(t, errors, len(tt.expectedErrors), "Expected number of errors to match")
+				for _, expectedError := range tt.expectedErrors {
+					assert.Contains(t, errors, expectedError, "Expected error message should be present")
+				}
+			}
+		})
+	}
+}
+
+func TestBuildServerModeConstraintConfig(t *testing.T) {
+	tests := []struct {
+		name             string
+		cluster          *neo4jv1alpha1.Neo4jEnterpriseCluster
+		expectedInConfig []string
+		notInConfig      []string
+	}{
+		{
+			name: "No server mode constraint or role hints",
+			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
+				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
+					Topology: neo4jv1alpha1.TopologyConfiguration{
+						Servers: 3,
+					},
+				},
+			},
+			expectedInConfig: nil,
+			notInConfig:      []string{"initial.server.mode_constraint"},
+		},
+		{
+			name: "Global server mode constraint - PRIMARY",
+			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
+				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
+					Topology: neo4jv1alpha1.TopologyConfiguration{
+						Servers:              3,
+						ServerModeConstraint: "PRIMARY",
+					},
+				},
+			},
+			expectedInConfig: []string{
+				"initial.server.mode_constraint=PRIMARY",
+				"Constrain all servers to PRIMARY mode",
+			},
+		},
+		{
+			name: "Per-server role hints",
+			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
+				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
+					Topology: neo4jv1alpha1.TopologyConfiguration{
+						Servers: 3,
+						ServerRoles: []neo4jv1alpha1.ServerRoleHint{
+							{ServerIndex: 0, ModeConstraint: "PRIMARY"},
+							{ServerIndex: 1, ModeConstraint: "SECONDARY"},
+						},
+					},
+				},
+			},
+			expectedInConfig: []string{
+				"Per-server mode constraint configuration based on role hints",
+				"SERVER_MODE_CONSTRAINT=\"NONE\"",
+				"if [ \"$SERVER_INDEX\" = \"0\" ]; then",
+				"SERVER_MODE_CONSTRAINT=\"PRIMARY\"",
+				"if [ \"$SERVER_INDEX\" = \"1\" ]; then",
+				"SERVER_MODE_CONSTRAINT=\"SECONDARY\"",
+				"initial.server.mode_constraint=$SERVER_MODE_CONSTRAINT",
+			},
+		},
+		{
+			name: "Role hints take precedence over global constraint",
+			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
+				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
+					Topology: neo4jv1alpha1.TopologyConfiguration{
+						Servers:              3,
+						ServerModeConstraint: "SECONDARY", // This should be ignored
+						ServerRoles: []neo4jv1alpha1.ServerRoleHint{
+							{ServerIndex: 0, ModeConstraint: "PRIMARY"},
+						},
+					},
+				},
+			},
+			expectedInConfig: []string{
+				"Per-server mode constraint configuration based on role hints",
+				"SERVER_MODE_CONSTRAINT=\"PRIMARY\"",
+			},
+			notInConfig: []string{
+				"Constrain all servers to SECONDARY mode",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Build the startup script which includes the server mode constraint config
+			startupScript := resources.BuildConfigMapForEnterprise(tt.cluster).Data["startup.sh"]
+
+			for _, expected := range tt.expectedInConfig {
+				assert.Contains(t, startupScript, expected, "Expected content should be in startup script")
+			}
+
+			for _, notExpected := range tt.notInConfig {
+				assert.NotContains(t, startupScript, notExpected, "Content should not be in startup script")
+			}
+		})
+	}
 }

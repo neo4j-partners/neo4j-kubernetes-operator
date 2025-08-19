@@ -89,14 +89,44 @@ const (
 	CertManagerMode = "cert-manager"
 )
 
-// BuildServerStatefulSetForEnterprise creates a StatefulSet for Neo4j servers
-// Servers self-organize and can host databases in primary or secondary mode
+// BuildServerStatefulSetForEnterprise creates a single StatefulSet for all Neo4j servers
+// This StatefulSet has multiple replicas (one per server) that self-organize into roles
+// Replaces the previous individual StatefulSet per server approach for better management
 func BuildServerStatefulSetForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) *appsv1.StatefulSet {
-	return buildStatefulSetForEnterprise(cluster, "server", cluster.Spec.Topology.Servers)
+	// Create single StatefulSet with replicas equal to number of servers
+	sts := buildStatefulSetForEnterprise(cluster, "server", cluster.Spec.Topology.Servers)
+	return sts
 }
 
-// buildStatefulSetForEnterprise is a helper function to create StatefulSet for Neo4j servers
-func buildStatefulSetForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, role string, replicas int32) *appsv1.StatefulSet {
+// BuildServerStatefulSetsForEnterprise creates individual StatefulSets for each Neo4j server
+// DEPRECATED: Use BuildServerStatefulSetForEnterprise for unified StatefulSet approach
+// Each server has its own StatefulSet with a replica count of 1
+// First server uses bootstrapping_strategy=me, others use bootstrapping_strategy=other
+func BuildServerStatefulSetsForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) []*appsv1.StatefulSet {
+	var statefulSets []*appsv1.StatefulSet
+
+	for i := int32(0); i < cluster.Spec.Topology.Servers; i++ {
+		// Create individual StatefulSet for each server
+		sts := buildStatefulSetForEnterprise(cluster, fmt.Sprintf("server-%d", i), 1)
+		statefulSets = append(statefulSets, sts)
+	}
+
+	return statefulSets
+}
+
+// BuildBackupStatefulSet creates a single, centralized backup StatefulSet for the cluster
+// This is more efficient than having backup sidecars in each server pod
+func BuildBackupStatefulSet(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) *appsv1.StatefulSet {
+	// Only create backup StatefulSet if backups are configured
+	if cluster.Spec.Backups == nil {
+		return nil
+	}
+
+	return buildCentralizedBackupStatefulSet(cluster)
+}
+
+// buildStatefulSetForEnterprise is a helper function to create StatefulSet for individual Neo4j server
+func buildStatefulSetForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, serverName string, replicas int32) *appsv1.StatefulSet {
 	adminSecret := DefaultAdminSecret
 
 	// Configure rolling update strategy
@@ -117,12 +147,15 @@ func buildStatefulSetForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster
 
 	// Get labels but remove clustering label from StatefulSet
 	// Only pods should have the clustering label, not the StatefulSet itself
-	statefulSetLabels := getLabelsForEnterprise(cluster, role)
+	statefulSetLabels := getLabelsForEnterprise(cluster, serverName)
 	delete(statefulSetLabels, "neo4j.com/clustering")
+
+	// Add server-specific label
+	statefulSetLabels["neo4j.com/server-name"] = serverName
 
 	return &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s-%s", cluster.Name, role),
+			Name:      fmt.Sprintf("%s-%s", cluster.Name, serverName),
 			Namespace: cluster.Namespace,
 			Labels:    statefulSetLabels,
 		},
@@ -132,18 +165,21 @@ func buildStatefulSetForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster
 			PodManagementPolicy: appsv1.ParallelPodManagement, // CRITICAL: Parallel startup for reliable cluster formation (especially with TLS)
 			UpdateStrategy:      updateStrategy,
 			Selector: &metav1.LabelSelector{
-				MatchLabels: getLabelsForEnterprise(cluster, role),
+				MatchLabels: map[string]string{
+					"neo4j.com/cluster":     cluster.Name,
+					"neo4j.com/server-name": serverName,
+				},
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: getLabelsForEnterprise(cluster, role),
+					Labels: getLabelsForEnterpriseServer(cluster, serverName),
 					Annotations: map[string]string{
 						"prometheus.io/scrape": "true",
 						"prometheus.io/port":   "2004",
 						"prometheus.io/path":   "/metrics",
 					},
 				},
-				Spec: BuildPodSpecForEnterprise(cluster, role, adminSecret),
+				Spec: BuildPodSpecForEnterprise(cluster, serverName, adminSecret),
 			},
 			VolumeClaimTemplates: buildVolumeClaimTemplatesForEnterprise(cluster),
 		},
@@ -765,6 +801,26 @@ func BuildIngressForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) *n
 
 // Helper functions
 
+// getLabelsForEnterpriseServer returns labels for individual server pods
+func getLabelsForEnterpriseServer(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, serverName string) map[string]string {
+	labels := map[string]string{
+		"app.kubernetes.io/name":       "neo4j",
+		"app.kubernetes.io/instance":   cluster.Name,
+		"app.kubernetes.io/version":    cluster.Spec.Image.Tag,
+		"app.kubernetes.io/component":  "database",
+		"app.kubernetes.io/part-of":    "neo4j-cluster",
+		"app.kubernetes.io/managed-by": "neo4j-operator",
+		"neo4j.com/cluster":            cluster.Name,
+		"neo4j.com/server-name":        serverName,
+		"neo4j.com/clustering":         "true", // Required for Neo4j discovery
+		"neo4j.com/service-type":       "internals",
+	}
+
+	// Note: cluster spec doesn't have Labels field in current API
+
+	return labels
+}
+
 func getLabelsForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, role string) map[string]string {
 	labels := map[string]string{
 		"app.kubernetes.io/name":       "neo4j",
@@ -785,7 +841,249 @@ func getLabelsForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, role 
 	return labels
 }
 
-func BuildPodSpecForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, role, adminSecret string) corev1.PodSpec {
+// buildBackupSidecarStatefulSet creates a separate StatefulSet for backup sidecar
+// buildCentralizedBackupStatefulSet creates a single backup StatefulSet for the entire cluster
+func buildCentralizedBackupStatefulSet(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) *appsv1.StatefulSet {
+	adminSecret := DefaultAdminSecret
+	if cluster.Spec.Auth != nil && cluster.Spec.Auth.AdminSecret != "" {
+		adminSecret = cluster.Spec.Auth.AdminSecret
+	}
+
+	labels := getLabelsForEnterprise(cluster, "backup")
+	labels["neo4j.com/component"] = "backup"
+
+	return &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-backup", cluster.Name),
+			Namespace: cluster.Namespace,
+			Labels:    labels,
+		},
+		Spec: appsv1.StatefulSetSpec{
+			Replicas:            &[]int32{1}[0],
+			ServiceName:         fmt.Sprintf("%s-backup-headless", cluster.Name),
+			PodManagementPolicy: appsv1.OrderedReadyPodManagement,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"neo4j.com/cluster":   cluster.Name,
+					"neo4j.com/component": "backup",
+				},
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"neo4j.com/cluster":      cluster.Name,
+						"neo4j.com/component":    "backup",
+						"neo4j.com/instance":     cluster.Name,
+						"app.kubernetes.io/name": "neo4j",
+					},
+				},
+				Spec: buildCentralizedBackupPodSpec(cluster, adminSecret),
+			},
+			VolumeClaimTemplates: buildBackupVolumeClaimTemplates(cluster),
+		},
+	}
+}
+
+// buildCentralizedBackupPodSpec creates the pod spec for centralized backup
+func buildCentralizedBackupPodSpec(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, adminSecret string) corev1.PodSpec {
+	// Environment variables for centralized backup
+	env := []corev1.EnvVar{
+		{
+			Name:  "NEO4J_CLUSTER_NAME",
+			Value: cluster.Name,
+		},
+		{
+			Name:  "NEO4J_BOLT_URI",
+			Value: fmt.Sprintf("bolt://%s-client:7687", cluster.Name),
+		},
+		{
+			Name: "NEO4J_USERNAME",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: adminSecret,
+					},
+					Key: "username",
+				},
+			},
+		},
+		{
+			Name: "NEO4J_PASSWORD",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: adminSecret,
+					},
+					Key: "password",
+				},
+			},
+		},
+		{
+			Name:  "NEO4J_EDITION",
+			Value: "enterprise",
+		},
+		{
+			Name:  "NEO4J_ACCEPT_LICENSE_AGREEMENT",
+			Value: "yes",
+		},
+	}
+
+	// Build resources for centralized backup - single instance for whole cluster
+	resources := corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{
+			"cpu":    resource.MustParse("100m"),  // Lower CPU - only one instance
+			"memory": resource.MustParse("256Mi"), // Lower memory - optimized
+		},
+		Limits: corev1.ResourceList{
+			"cpu":    resource.MustParse("500m"),
+			"memory": resource.MustParse("1Gi"),
+		},
+	}
+
+	// Backup script with advanced functionality
+	backupScript := `#!/bin/bash
+set -e
+
+echo "Centralized backup service started for cluster $NEO4J_CLUSTER_NAME"
+echo "Connecting to cluster via $NEO4J_BOLT_URI"
+
+# Wait for cluster to be ready
+echo "Waiting for Neo4j cluster to be available..."
+while ! cypher-shell -a $NEO4J_BOLT_URI -u $NEO4J_USERNAME -p $NEO4J_PASSWORD "SHOW SERVERS" 2>/dev/null; do
+    echo "Cluster not ready, waiting..."
+    sleep 10
+done
+
+echo "Neo4j cluster is ready, starting backup monitoring"
+
+# Function to perform backup
+perform_backup() {
+    local backup_type=${1:-FULL}
+    local backup_name="backup-$(date +%Y%m%d_%H%M%S)"
+    local backup_path="/backups/$backup_name"
+
+    echo "Starting $backup_type backup to $backup_path"
+
+    # Create backup directory
+    mkdir -p "$backup_path"
+
+    # Perform backup using neo4j-admin
+    neo4j-admin database backup \
+        --to-path="$backup_path" \
+        --type="$backup_type" \
+        --include-metadata=all \
+        --verbose
+
+    echo "Backup completed: $backup_path"
+
+    # Clean up old backups (keep last 10)
+    cd /backups
+    ls -t | tail -n +11 | xargs -r rm -rf
+}
+
+# Monitor for backup requests and scheduled backups
+while true; do
+    # Check for manual backup requests via file system
+    if [ -f /backup-requests/backup.request ]; then
+        echo "Processing backup request"
+        backup_type=$(cat /backup-requests/backup.request | jq -r '.type // "FULL"')
+        perform_backup "$backup_type"
+        rm -f /backup-requests/backup.request
+        echo "COMPLETED" > /backup-requests/backup.status
+    fi
+
+    # Scheduled backup check (daily at 2 AM if current time matches)
+    current_hour=$(date +%H)
+    current_minute=$(date +%M)
+    if [ "$current_hour" = "02" ] && [ "$current_minute" = "00" ]; then
+        echo "Performing scheduled daily backup"
+        perform_backup "FULL"
+    fi
+
+    sleep 60
+done`
+
+	return corev1.PodSpec{
+		ServiceAccountName: getServiceAccountNameForEnterprise(cluster),
+		SecurityContext: &corev1.PodSecurityContext{
+			FSGroup: &[]int64{7474}[0], // Neo4j user group
+		},
+		Containers: []corev1.Container{
+			{
+				Name:            "backup",
+				Image:           fmt.Sprintf("%s:%s", cluster.Spec.Image.Repo, cluster.Spec.Image.Tag),
+				ImagePullPolicy: corev1.PullIfNotPresent,
+				Env:             env,
+				Resources:       resources,
+				Command:         []string{"/bin/bash", "-c"},
+				Args:            []string{backupScript},
+				VolumeMounts: []corev1.VolumeMount{
+					{
+						Name:      "backup-storage",
+						MountPath: "/backups",
+					},
+					{
+						Name:      "backup-requests",
+						MountPath: "/backup-requests",
+					},
+				},
+			},
+		},
+		Volumes: []corev1.Volume{
+			{
+				Name: "backup-requests",
+				VolumeSource: corev1.VolumeSource{
+					EmptyDir: &corev1.EmptyDirVolumeSource{},
+				},
+			},
+		},
+	}
+}
+
+// buildBackupVolumeClaimTemplates creates PVC templates for backup storage
+func buildBackupVolumeClaimTemplates(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) []corev1.PersistentVolumeClaim {
+	if cluster.Spec.Backups == nil {
+		return nil
+	}
+
+	// Use backup-specific storage or fall back to cluster storage
+	storageClassName := cluster.Spec.Storage.ClassName
+	storageSize := cluster.Spec.Storage.Size
+
+	// Check for backup-specific storage configuration in cluster storage spec
+	if cluster.Spec.Storage.BackupStorage != nil {
+		if cluster.Spec.Storage.BackupStorage.ClassName != "" {
+			storageClassName = cluster.Spec.Storage.BackupStorage.ClassName
+		}
+		if cluster.Spec.Storage.BackupStorage.Size != "" {
+			storageSize = cluster.Spec.Storage.BackupStorage.Size
+		}
+	}
+
+	pvc := corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "backup-storage",
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes: []corev1.PersistentVolumeAccessMode{
+				corev1.ReadWriteOnce,
+			},
+			Resources: corev1.VolumeResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceStorage: resource.MustParse(storageSize),
+				},
+			},
+		},
+	}
+
+	if storageClassName != "" {
+		pvc.Spec.StorageClassName = &storageClassName
+	}
+
+	return []corev1.PersistentVolumeClaim{pvc}
+}
+
+func BuildPodSpecForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, serverName, adminSecret string) corev1.PodSpec {
 	// Environment variables
 	env := []corev1.EnvVar{
 		{
@@ -830,9 +1128,27 @@ func BuildPodSpecForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, ro
 		})
 	}
 
+	// Add server-specific environment variable
+	env = append(env, corev1.EnvVar{
+		Name:  "NEO4J_SERVER_NAME",
+		Value: serverName,
+	})
+
 	// Add custom environment variables (can override JVM settings if needed)
+	// Filter out NEO4J_AUTH and NEO4J_ACCEPT_LICENSE_AGREEMENT as they are managed by the operator
 	if cluster.Spec.Env != nil {
-		env = append(env, cluster.Spec.Env...)
+		for _, e := range cluster.Spec.Env {
+			// Skip auth-related and license environment variables that are managed by the operator
+			if e.Name == "NEO4J_AUTH" {
+				// Log warning that NEO4J_AUTH is ignored
+				continue
+			}
+			if e.Name == "NEO4J_ACCEPT_LICENSE_AGREEMENT" {
+				// Skip duplicate - already set by operator
+				continue
+			}
+			env = append(env, e)
+		}
 	}
 
 	// Volume mounts
@@ -983,152 +1299,13 @@ func BuildPodSpecForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, ro
 		})
 	}
 
-	// Build backup sidecar container
-	backupSidecar := corev1.Container{
-		Name:            "backup-sidecar",
-		Image:           fmt.Sprintf("%s:%s", cluster.Spec.Image.Repo, cluster.Spec.Image.Tag),
-		ImagePullPolicy: corev1.PullPolicy(cluster.Spec.Image.PullPolicy),
-		Command: []string{
-			"/bin/bash",
-			"-c",
-			`# Install jq if not available
-which jq >/dev/null 2>&1 || apt-get update && apt-get install -y jq
-
-# Function to clean old backups
-cleanup_old_backups() {
-	local backup_dir="/data/backups"
-	local max_age_days="${BACKUP_RETENTION_DAYS:-7}"
-	local max_count="${BACKUP_RETENTION_COUNT:-10}"
-
-	if [ -d "$backup_dir" ]; then
-		echo "Cleaning backups older than $max_age_days days..."
-		find "$backup_dir" -maxdepth 1 -type d -mtime +$max_age_days -exec rm -rf {} \; 2>/dev/null || true
-
-		# Keep only the most recent backups if count exceeds max
-		backup_count=$(find "$backup_dir" -maxdepth 1 -type d | wc -l)
-		if [ $backup_count -gt $max_count ]; then
-			echo "Keeping only $max_count most recent backups..."
-			find "$backup_dir" -maxdepth 1 -type d -printf '%T@ %p\n' | \
-				sort -n | head -n -$max_count | cut -d' ' -f2- | \
-				xargs -r rm -rf
-		fi
-
-		# Check disk usage
-		df -h /data | tail -1
-	fi
-}
-
-while true; do
-	if [ -f /backup-requests/backup.request ]; then
-		echo "Backup request found, starting backup..."
-		REQUEST=$(cat /backup-requests/backup.request)
-		BACKUP_PATH=$(echo $REQUEST | jq -r .path)
-		BACKUP_TYPE=$(echo $REQUEST | jq -r '.type // "FULL"')
-		DATABASE=$(echo $REQUEST | jq -r '.database // empty')
-
-		# Clean up old backups before starting new one
-		cleanup_old_backups
-
-		# Create backup directory - Neo4j 5.26+ requires the full path to exist
-		mkdir -p $BACKUP_PATH
-
-		# Execute backup
-		# Note: neo4j-admin in 5.x uses configuration from NEO4J_CONF directory
-		export NEO4J_CONF=/var/lib/neo4j/conf
-
-		if [ -z "$DATABASE" ]; then
-			echo "Starting full cluster backup to $BACKUP_PATH with type $BACKUP_TYPE"
-			neo4j-admin database backup --include-metadata=all --to-path=$BACKUP_PATH --type=$BACKUP_TYPE --verbose
-		else
-			echo "Starting database backup for $DATABASE to $BACKUP_PATH with type $BACKUP_TYPE"
-			neo4j-admin database backup $DATABASE --to-path=$BACKUP_PATH --type=$BACKUP_TYPE --verbose
-		fi
-
-		# Save exit status
-		BACKUP_STATUS=$?
-		echo $BACKUP_STATUS > /backup-requests/backup.status
-
-		if [ $BACKUP_STATUS -eq 0 ]; then
-			echo "Backup completed successfully"
-			# Clean up again after successful backup
-			cleanup_old_backups
-		else
-			echo "Backup failed with status $BACKUP_STATUS"
-		fi
-
-		# Clean up request file
-		rm -f /backup-requests/backup.request
-	fi
-	sleep 5
-done`,
-		},
-		VolumeMounts: []corev1.VolumeMount{
-			{
-				Name:      DataVolume,
-				MountPath: "/data",
-			},
-			{
-				Name:      "backup-requests",
-				MountPath: "/backup-requests",
-			},
-			{
-				Name:      ConfigVolume,
-				MountPath: "/var/lib/neo4j/conf",
-			},
-		},
-		Env: append([]corev1.EnvVar{
-			{
-				Name:  "BACKUP_RETENTION_DAYS",
-				Value: "7", // Default: keep backups for 7 days
-			},
-			{
-				Name:  "BACKUP_RETENTION_COUNT",
-				Value: "10", // Default: keep maximum 10 backups
-			},
-			{
-				Name:  "NEO4J_CONF",
-				Value: "/var/lib/neo4j/conf",
-			},
-			{
-				Name:  "NEO4J_HOME",
-				Value: "/var/lib/neo4j",
-			},
-			{
-				Name:  "NEO4J_EDITION",
-				Value: "enterprise",
-			},
-			{
-				Name:  "NEO4J_ACCEPT_LICENSE_AGREEMENT",
-				Value: "yes",
-			},
-		}, env...), // Append the main container environment variables
-		Resources: corev1.ResourceRequirements{
-			Limits: corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("500m"),
-				corev1.ResourceMemory: resource.MustParse("1Gi"),
-			},
-			Requests: corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("200m"),
-				corev1.ResourceMemory: resource.MustParse("512Mi"),
-			},
-		},
-	}
-
-	// Add backup requests volume
-	volumes = append(volumes, corev1.Volume{
-		Name: "backup-requests",
-		VolumeSource: corev1.VolumeSource{
-			EmptyDir: &corev1.EmptyDirVolumeSource{},
-		},
-	})
-
-	// Build pod spec
+	// Build pod spec - backup is now handled by centralized StatefulSet, not sidecars
 	podSpec := corev1.PodSpec{
 		ServiceAccountName: getDiscoveryServiceAccountNameForEnterprise(cluster),
 		SecurityContext: &corev1.PodSecurityContext{
 			FSGroup: func() *int64 { gid := int64(7474); return &gid }(),
 		},
-		Containers: []corev1.Container{neo4jContainer, backupSidecar},
+		Containers: []corev1.Container{neo4jContainer}, // Only Neo4j container, no backup sidecar
 		Volumes:    volumes,
 	}
 
@@ -1446,13 +1623,15 @@ echo "Starting Neo4j Enterprise in cluster mode..."
 # Set proper NEO4J_AUTH format (username/password)
 export NEO4J_AUTH="${DB_USERNAME}/${DB_PASSWORD}"
 
-# Extract pod ordinal from hostname
-POD_ORDINAL="${HOSTNAME##*-}"
+# Extract server index from NEO4J_SERVER_NAME (format: server-N)
+SERVER_INDEX="${NEO4J_SERVER_NAME##*-}"
 
 # Set fully qualified domain name for clustering
 export HOSTNAME_FQDN="${HOSTNAME}.` + cluster.Name + `-headless.` + cluster.Namespace + `.svc.cluster.local"
 echo "Pod hostname: ${HOSTNAME}"
 echo "Pod FQDN: ${HOSTNAME_FQDN}"
+echo "Server name: ${NEO4J_SERVER_NAME}"
+echo "Server index: ${SERVER_INDEX}"
 
 # Override the HOSTNAME variable with FQDN for Neo4j configuration
 export HOSTNAME="${HOSTNAME_FQDN}"
@@ -1478,7 +1657,7 @@ EOF
 TOTAL_SERVERS=` + fmt.Sprintf("%d", cluster.Spec.Topology.Servers) + `
 
 echo "Cluster topology: ${TOTAL_SERVERS} servers"
-echo "Pod ordinal: ${POD_ORDINAL}"
+echo "Server index: ${SERVER_INDEX}"
 
 # Neo4jEnterpriseCluster uses server-based clustering
 # Minimum: 2 servers (servers self-organize for database hosting)
@@ -1530,13 +1709,25 @@ echo "Starting parallel cluster formation - all servers coordinate bootstrap"
 # This works reliably even with TLS enabled due to trust_all=true in cluster SSL policy
 # Servers self-organize, use fixed minimum of 1 for bootstrap
 
-# All pods use identical configuration for coordinated cluster formation
+# Configure bootstrapping strategy based on server index
+if [ "$SERVER_INDEX" = "0" ]; then
+    echo "Server 0: Using bootstrapping strategy 'me' (first server)"
+    BOOTSTRAP_STRATEGY="me"
+else
+    echo "Server $SERVER_INDEX: Using bootstrapping strategy 'other' (joining existing cluster)"
+    BOOTSTRAP_STRATEGY="other"
+fi
+
+# Configure cluster discovery and bootstrapping
 cat >> /tmp/neo4j-config/neo4j.conf << EOF
 
 # Multi-node cluster using Kubernetes service discovery (Neo4j 5.26+ standard pattern)
 dbms.cluster.discovery.resolver_type=K8S
 dbms.kubernetes.label_selector=neo4j.com/cluster=` + cluster.Name + `,neo4j.com/clustering=true
 ` + kubernetesDiscoveryParam + `
+
+# Bootstrapping strategy for this server
+internal.dbms.cluster.discovery.system_bootstrapping_strategy=$BOOTSTRAP_STRATEGY
 
 # Cluster formation - minimum servers always 1 for bootstrap
 # Servers self-organize into primary/secondary roles, don't pre-assign roles
@@ -1565,16 +1756,102 @@ exec /startup/docker-entrypoint.sh neo4j
 
 // buildServerModeConstraintConfig generates server mode constraint configuration
 func buildServerModeConstraintConfig(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) string {
-	if cluster.Spec.Topology.ServerModeConstraint != "" && cluster.Spec.Topology.ServerModeConstraint != "NONE" {
-		return fmt.Sprintf(`
-# Server mode constraint configuration
+	config := ""
+
+	// Check if we have per-server role hints
+	if len(cluster.Spec.Topology.ServerRoles) > 0 {
+		// Build per-server role configuration
+		config += `
+# Per-server mode constraint configuration based on role hints
+# Check if this server has a specific role hint
+SERVER_MODE_CONSTRAINT="NONE"
+`
+		// Add conditional logic for each server role hint
+		for _, roleHint := range cluster.Spec.Topology.ServerRoles {
+			config += fmt.Sprintf(`if [ "$SERVER_INDEX" = "%d" ]; then
+    SERVER_MODE_CONSTRAINT="%s"
+    echo "Server %d: Setting mode constraint to %s based on role hint"
+fi
+`, roleHint.ServerIndex, roleHint.ModeConstraint, roleHint.ServerIndex, roleHint.ModeConstraint)
+		}
+
+		config += `
+# Apply the server mode constraint if not NONE
+if [ "$SERVER_MODE_CONSTRAINT" != "NONE" ]; then
+cat >> /tmp/neo4j-config/neo4j.conf << EOF
+# Server mode constraint for this specific server
+initial.server.mode_constraint=$SERVER_MODE_CONSTRAINT
+EOF
+fi
+`
+	} else if cluster.Spec.Topology.ServerModeConstraint != "" && cluster.Spec.Topology.ServerModeConstraint != "NONE" {
+		// Fall back to global server mode constraint
+		config = fmt.Sprintf(`
+# Global server mode constraint configuration
 cat >> /tmp/neo4j-config/neo4j.conf << EOF
 # Constrain all servers to %s mode
 initial.server.mode_constraint=%s
 EOF
 `, cluster.Spec.Topology.ServerModeConstraint, cluster.Spec.Topology.ServerModeConstraint)
 	}
-	return ""
+
+	return config
+}
+
+// ValidateServerRoleHints validates server role hints configuration
+func ValidateServerRoleHints(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) []string {
+	var errors []string
+
+	if len(cluster.Spec.Topology.ServerRoles) == 0 {
+		return errors // No validation needed if no role hints specified
+	}
+
+	serverCount := cluster.Spec.Topology.Servers
+	usedIndices := make(map[int32]bool)
+
+	for _, roleHint := range cluster.Spec.Topology.ServerRoles {
+		// Check server index is within valid range
+		if roleHint.ServerIndex < 0 || roleHint.ServerIndex >= serverCount {
+			errors = append(errors, fmt.Sprintf("server role hint index %d is out of range (0-%d)", roleHint.ServerIndex, serverCount-1))
+		}
+
+		// Check for duplicate server indices
+		if usedIndices[roleHint.ServerIndex] {
+			errors = append(errors, fmt.Sprintf("duplicate server role hint for server index %d", roleHint.ServerIndex))
+		}
+		usedIndices[roleHint.ServerIndex] = true
+
+		// Validate mode constraint value (this should be caught by CRD validation, but double-check)
+		validModes := map[string]bool{"NONE": true, "PRIMARY": true, "SECONDARY": true}
+		if !validModes[roleHint.ModeConstraint] {
+			errors = append(errors, fmt.Sprintf("invalid mode constraint '%s' for server %d (valid values: NONE, PRIMARY, SECONDARY)", roleHint.ModeConstraint, roleHint.ServerIndex))
+		}
+	}
+
+	// Warn if all servers are constrained to SECONDARY (cluster would have no primaries)
+	allSecondary := true
+	allPrimary := true
+	for _, roleHint := range cluster.Spec.Topology.ServerRoles {
+		if roleHint.ModeConstraint != "SECONDARY" {
+			allSecondary = false
+		}
+		if roleHint.ModeConstraint != "PRIMARY" {
+			allPrimary = false
+		}
+	}
+
+	// Check if we have role hints for all servers
+	if int32(len(cluster.Spec.Topology.ServerRoles)) == serverCount {
+		if allSecondary {
+			errors = append(errors, "all servers are constrained to SECONDARY mode - cluster would have no primary servers available")
+		}
+		if allPrimary && serverCount > 1 {
+			// This is actually valid, but might want to warn about no dedicated secondaries
+			// Not adding this as an error since it's a valid configuration
+		}
+	}
+
+	return errors
 }
 
 func buildHealthScript(_ *neo4jv1alpha1.Neo4jEnterpriseCluster) string {

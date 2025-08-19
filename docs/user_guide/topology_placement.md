@@ -27,14 +27,13 @@ Standard Kubernetes topology labels used for placement:
 For most production deployments, distributing across availability zones is recommended:
 
 ```yaml
-apiVersion: neo4j.io/v1alpha1
+apiVersion: neo4j.neo4j.com/v1alpha1
 kind: Neo4jEnterpriseCluster
 metadata:
   name: production-cluster
 spec:
   topology:
-    primaries: 3
-    secondaries: 3
+    servers: 3  # 3 servers will self-organize into primary/secondary roles
     placement:
       topologySpread:
         enabled: true
@@ -44,19 +43,19 @@ spec:
 ```
 
 This configuration ensures:
-- Primary and secondary nodes are evenly distributed across zones
+- Server pods are evenly distributed across availability zones
 - Maximum difference of 1 pod between any two zones
 - Pods won't be scheduled if distribution requirements can't be met
+- Servers self-organize to host databases with appropriate primary/secondary topologies
 
 ### Pod Anti-Affinity
 
-To prevent multiple Neo4j pods from running on the same node:
+To prevent multiple Neo4j server pods from running on the same node:
 
 ```yaml
 spec:
   topology:
-    primaries: 3
-    secondaries: 2
+    servers: 5  # 5 servers will self-organize into primary/secondary roles
     placement:
       antiAffinity:
         enabled: true
@@ -77,8 +76,7 @@ For maximum resilience, combine zone distribution with node anti-affinity:
 ```yaml
 spec:
   topology:
-    primaries: 3
-    secondaries: 3
+    servers: 3  # 3 servers will self-organize into primary/secondary roles
     placement:
       topologySpread:
         enabled: true
@@ -98,13 +96,12 @@ Explicitly define which zones to use:
 ```yaml
 spec:
   topology:
-    primaries: 3
-    secondaries: 3
+    servers: 3  # 3 servers will self-organize into primary/secondary roles
     availabilityZones:
       - us-east-1a
       - us-east-1b
       - us-east-1c
-    enforceDistribution: true  # Ensures primaries are distributed
+    enforceDistribution: true  # Ensures servers are distributed across zones
     placement:
       topologySpread:
         enabled: true
@@ -118,8 +115,7 @@ Ensure scheduling only when sufficient domains are available:
 ```yaml
 spec:
   topology:
-    primaries: 3
-    secondaries: 3
+    servers: 6  # 6 servers will self-organize into appropriate roles
     placement:
       topologySpread:
         enabled: true
@@ -195,8 +191,7 @@ For production clusters requiring maximum availability:
 ```yaml
 spec:
   topology:
-    primaries: 3      # Odd number for quorum
-    secondaries: 3    # Match primaries for zone coverage
+    servers: 5       # 5 servers for high availability (odd number recommended)
     enforceDistribution: true
     placement:
       topologySpread:
@@ -210,6 +205,8 @@ spec:
         type: "required"
 ```
 
+Servers will automatically organize to host databases with appropriate primary/secondary topologies based on database requirements.
+
 ### Cost-Optimized
 
 For development or cost-sensitive deployments:
@@ -217,8 +214,7 @@ For development or cost-sensitive deployments:
 ```yaml
 spec:
   topology:
-    primaries: 3
-    secondaries: 1
+    servers: 3       # 3 servers for basic high availability
     placement:
       topologySpread:
         enabled: true
@@ -231,6 +227,8 @@ spec:
         type: "preferred"  # Soft constraint
 ```
 
+Servers will self-organize and databases can be created with varying topologies as needed.
+
 ### Single-Zone Development
 
 For development environments without zone requirements:
@@ -238,10 +236,11 @@ For development environments without zone requirements:
 ```yaml
 spec:
   topology:
-    primaries: 1
-    secondaries: 0
-    # No placement configuration needed
+    servers: 2       # Minimum 2 servers for clustering
+    # No placement configuration needed for single-zone
 ```
+
+For true single-node development, use Neo4jEnterpriseStandalone instead of Neo4jEnterpriseCluster.
 
 ## Troubleshooting
 
@@ -288,12 +287,13 @@ kubectl describe neo4jenterprisecluster <cluster-name>
 
 ## Best Practices
 
-1. **Use Odd Numbers for Primaries**: 3, 5, or 7 primaries provide optimal quorum behavior
-2. **Match Secondary Count to Zones**: Deploy at least one secondary per zone for read availability
-3. **Enable enforceDistribution**: Ensures primaries are distributed for quorum safety
+1. **Use Odd Numbers of Servers**: 3, 5, or 7 servers provide optimal fault tolerance for database quorum behavior
+2. **Plan for Zone Distribution**: Ensure you have enough zones to satisfy your topology spread constraints
+3. **Enable enforceDistribution**: Ensures servers are distributed across zones for maximum availability
 4. **Start with Soft Constraints**: Use `preferred` anti-affinity and `ScheduleAnyway` during initial deployment
-5. **Monitor Zone Capacity**: Ensure each zone has sufficient resources for your topology
-6. **Test Failure Scenarios**: Verify cluster behavior when zones become unavailable
+5. **Monitor Zone Capacity**: Ensure each zone has sufficient resources for your server topology
+6. **Test Failure Scenarios**: Verify cluster behavior and database availability when zones become unavailable
+7. **Consider Database Requirements**: Plan server count based on expected database topology requirements
 
 ## Examples
 
@@ -302,19 +302,18 @@ kubectl describe neo4jenterprisecluster <cluster-name>
 Complete example for a production-grade deployment:
 
 ```yaml
-apiVersion: neo4j.io/v1alpha1
+apiVersion: neo4j.neo4j.com/v1alpha1
 kind: Neo4jEnterpriseCluster
 metadata:
   name: production-neo4j
 spec:
   edition: enterprise
   image:
-    repository: neo4j
-    tag: "5.26.0-enterprise"
+    repo: neo4j
+    tag: "5.26-enterprise"
 
   topology:
-    primaries: 3
-    secondaries: 3
+    servers: 5        # 5 servers for high availability
     availabilityZones:
       - us-east-1a
       - us-east-1b
@@ -331,6 +330,18 @@ spec:
         enabled: true
         topologyKey: "kubernetes.io/hostname"
         type: "required"
+
+  # Authentication
+  auth:
+    provider: native
+    adminSecret: neo4j-admin-secret
+
+  # TLS for production
+  tls:
+    mode: cert-manager
+    issuerRef:
+      name: ca-cluster-issuer
+      kind: ClusterIssuer
 
   # Node selection for database workloads
   nodeSelector:
@@ -355,6 +366,8 @@ spec:
       memory: "16Gi"
       cpu: "4"
 ```
+
+This creates a cluster with 5 servers that will automatically organize to host databases with appropriate primary/secondary topologies.
 
 ## Migration Guide
 

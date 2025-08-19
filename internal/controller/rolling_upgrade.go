@@ -219,56 +219,57 @@ func (r *RollingUpgradeOrchestrator) upgradeNonLeaderPrimaries(
 
 	logger.Info("Upgrading non-leader primaries", "leader", leader.ID)
 
-	// Get primary StatefulSet
-	primarySts := &appsv1.StatefulSet{}
-	if err := r.Get(ctx, types.NamespacedName{
-		Name:      cluster.Name + "-primary",
-		Namespace: cluster.Namespace,
-	}, primarySts); err != nil {
-		return fmt.Errorf("failed to get primary StatefulSet: %w", err)
-	}
-
-	// Update image
-	newImage := fmt.Sprintf("%s:%s", cluster.Spec.Image.Repo, cluster.Spec.Image.Tag)
-	if len(primarySts.Spec.Template.Spec.Containers) == 0 {
-		return fmt.Errorf("primary StatefulSet has no containers defined")
-	}
-	if primarySts.Spec.Template.Spec.Containers[0].Image == newImage {
-		logger.Info("Primary StatefulSet already has target image")
-		return nil
-	}
-
-	primarySts.Spec.Template.Spec.Containers[0].Image = newImage
-
-	// Add upgrade annotation
-	if primarySts.Spec.Template.Annotations == nil {
-		primarySts.Spec.Template.Annotations = make(map[string]string)
-	}
-	primarySts.Spec.Template.Annotations["neo4j.com/upgrade-timestamp"] = time.Now().Format(time.RFC3339)
-
-	// Use partition update to upgrade non-leader primaries first
+	// Extract leader ordinal from member ID
 	leaderOrdinal := r.extractOrdinalFromMemberID(leader.ID)
-	if leaderOrdinal >= 0 {
-		// Set partition to upgrade all pods except the leader
-		// Bounds check to prevent integer overflow
-		if leaderOrdinal > math.MaxInt32 {
-			return fmt.Errorf("leader ordinal too large: %d", leaderOrdinal)
-		}
-		partition := int32(leaderOrdinal)
-		primarySts.Spec.UpdateStrategy.RollingUpdate = &appsv1.RollingUpdateStatefulSetStrategy{
-			Partition: &partition,
-		}
-		logger.Info("Setting StatefulSet partition to preserve leader", "partition", partition, "leaderOrdinal", leaderOrdinal)
+	if leaderOrdinal < 0 || leaderOrdinal >= int(cluster.Spec.Topology.Servers) {
+		return fmt.Errorf("invalid leader ordinal: %d", leaderOrdinal)
 	}
 
-	if err := r.Update(ctx, primarySts); err != nil {
-		return fmt.Errorf("failed to update primary StatefulSet: %w", err)
-	}
-
-	// Wait for non-leader primaries to be upgraded
+	// Update image for all server StatefulSets except the leader
+	newImage := fmt.Sprintf("%s:%s", cluster.Spec.Image.Repo, cluster.Spec.Image.Tag)
 	timeout := r.getUpgradeTimeout(cluster)
-	if err := r.waitForPartialStatefulSetRollout(ctx, primarySts, leaderOrdinal, timeout); err != nil {
-		return fmt.Errorf("non-leader primary rollout failed: %w", err)
+
+	for i := int32(0); i < cluster.Spec.Topology.Servers; i++ {
+		if int32(leaderOrdinal) == i {
+			continue // Skip leader, upgrade it last
+		}
+
+		serverSts := &appsv1.StatefulSet{}
+		if err := r.Get(ctx, types.NamespacedName{
+			Name:      fmt.Sprintf("%s-server-%d", cluster.Name, i),
+			Namespace: cluster.Namespace,
+		}, serverSts); err != nil {
+			return fmt.Errorf("failed to get server-%d StatefulSet: %w", i, err)
+		}
+
+		// Check if already upgraded
+		if len(serverSts.Spec.Template.Spec.Containers) == 0 {
+			return fmt.Errorf("server-%d StatefulSet has no containers defined", i)
+		}
+		if serverSts.Spec.Template.Spec.Containers[0].Image == newImage {
+			logger.Info("Server StatefulSet already has target image", "server", i)
+			continue
+		}
+
+		// Update the StatefulSet image
+		serverSts.Spec.Template.Spec.Containers[0].Image = newImage
+
+		// Add upgrade annotation
+		if serverSts.Spec.Template.Annotations == nil {
+			serverSts.Spec.Template.Annotations = make(map[string]string)
+		}
+		serverSts.Spec.Template.Annotations["neo4j.com/upgrade-timestamp"] = time.Now().Format(time.RFC3339)
+
+		if err := r.Update(ctx, serverSts); err != nil {
+			return fmt.Errorf("failed to update server-%d StatefulSet: %w", i, err)
+		}
+
+		// Wait for this server to be ready
+		if err := r.waitForStatefulSetRollout(ctx, serverSts, timeout); err != nil {
+			return fmt.Errorf("server-%d rollout failed: %w", i, err)
+		}
+
+		logger.Info("Upgraded non-leader server", "server", i)
 	}
 
 	// Verify cluster stability after non-leader upgrade
@@ -310,27 +311,40 @@ func (r *RollingUpgradeOrchestrator) upgradeLeader(
 
 	logger.Info("Upgrading leader", "leaderId", originalLeader.ID)
 
-	// Get primary StatefulSet
-	primarySts := &appsv1.StatefulSet{}
+	// Extract leader ordinal from member ID
+	leaderOrdinal := r.extractOrdinalFromMemberID(originalLeader.ID)
+	if leaderOrdinal < 0 || leaderOrdinal >= int(cluster.Spec.Topology.Servers) {
+		return fmt.Errorf("invalid leader ordinal: %d", leaderOrdinal)
+	}
+
+	// Get leader's StatefulSet
+	leaderSts := &appsv1.StatefulSet{}
 	if err := r.Get(ctx, types.NamespacedName{
-		Name:      cluster.Name + "-primary",
+		Name:      fmt.Sprintf("%s-server-%d", cluster.Name, leaderOrdinal),
 		Namespace: cluster.Namespace,
-	}, primarySts); err != nil {
-		return fmt.Errorf("failed to get primary StatefulSet: %w", err)
+	}, leaderSts); err != nil {
+		return fmt.Errorf("failed to get leader StatefulSet server-%d: %w", leaderOrdinal, err)
 	}
 
-	// Remove partition to allow leader upgrade
-	primarySts.Spec.UpdateStrategy.RollingUpdate = &appsv1.RollingUpdateStatefulSetStrategy{
-		Partition: nil,
+	// Update the leader StatefulSet image
+	newImage := fmt.Sprintf("%s:%s", cluster.Spec.Image.Repo, cluster.Spec.Image.Tag)
+	if len(leaderSts.Spec.Template.Spec.Containers) > 0 {
+		leaderSts.Spec.Template.Spec.Containers[0].Image = newImage
 	}
 
-	if err := r.Update(ctx, primarySts); err != nil {
-		return fmt.Errorf("failed to remove StatefulSet partition: %w", err)
+	// Add upgrade annotation
+	if leaderSts.Spec.Template.Annotations == nil {
+		leaderSts.Spec.Template.Annotations = make(map[string]string)
+	}
+	leaderSts.Spec.Template.Annotations["neo4j.com/upgrade-timestamp"] = time.Now().Format(time.RFC3339)
+
+	if err := r.Update(ctx, leaderSts); err != nil {
+		return fmt.Errorf("failed to update leader StatefulSet: %w", err)
 	}
 
-	// Wait for complete rollout including leader
+	// Wait for leader rollout
 	timeout := r.getUpgradeTimeout(cluster)
-	if err := r.waitForStatefulSetRollout(ctx, primarySts, timeout); err != nil {
+	if err := r.waitForStatefulSetRollout(ctx, leaderSts, timeout); err != nil {
 		return fmt.Errorf("leader rollout failed: %w", err)
 	}
 
@@ -603,45 +617,33 @@ func (r *RollingUpgradeOrchestrator) validateStatefulSetsReady(
 	ctx context.Context,
 	cluster *neo4jv1alpha1.Neo4jEnterpriseCluster,
 ) error {
-	// Check primary StatefulSet
-	primarySts := &appsv1.StatefulSet{}
-	if err := r.Get(ctx, types.NamespacedName{
-		Name:      cluster.Name + "-primary",
-		Namespace: cluster.Namespace,
-	}, primarySts); err != nil {
-		return fmt.Errorf("failed to get primary StatefulSet: %w", err)
-	}
-
-	if primarySts.Status.ReadyReplicas != *primarySts.Spec.Replicas {
-		return fmt.Errorf("primary StatefulSet not ready: %d/%d replicas ready",
-			primarySts.Status.ReadyReplicas, *primarySts.Spec.Replicas)
-	}
-
-	// Check server StatefulSet (servers self-organize)
-	serverSts := &appsv1.StatefulSet{}
-	if err := r.Get(ctx, types.NamespacedName{
-		Name:      cluster.Name + "-server",
-		Namespace: cluster.Namespace,
-	}, serverSts); err == nil {
-		if serverSts.Status.ReadyReplicas != *serverSts.Spec.Replicas {
-			return fmt.Errorf("server StatefulSet not ready: %d/%d replicas ready",
-				serverSts.Status.ReadyReplicas, *serverSts.Spec.Replicas)
-		}
-	}
-
-	// Legacy check for secondary StatefulSet (disabled in server architecture)
-	if false { // No secondaries in server architecture
-		secondarySts := &appsv1.StatefulSet{}
+	// Check each individual server StatefulSet
+	for i := int32(0); i < cluster.Spec.Topology.Servers; i++ {
+		serverSts := &appsv1.StatefulSet{}
 		if err := r.Get(ctx, types.NamespacedName{
-			Name:      cluster.Name + "-secondary",
+			Name:      fmt.Sprintf("%s-server-%d", cluster.Name, i),
 			Namespace: cluster.Namespace,
-		}, secondarySts); err != nil {
-			return fmt.Errorf("failed to get secondary StatefulSet: %w", err)
+		}, serverSts); err != nil {
+			return fmt.Errorf("failed to get server-%d StatefulSet: %w", i, err)
 		}
 
-		if secondarySts.Status.ReadyReplicas != *secondarySts.Spec.Replicas {
-			return fmt.Errorf("secondary StatefulSet not ready: %d/%d replicas ready",
-				secondarySts.Status.ReadyReplicas, *secondarySts.Spec.Replicas)
+		if serverSts.Status.ReadyReplicas != *serverSts.Spec.Replicas {
+			return fmt.Errorf("server-%d StatefulSet not ready: %d/%d replicas ready",
+				i, serverSts.Status.ReadyReplicas, *serverSts.Spec.Replicas)
+		}
+	}
+
+	// Check backup sidecar StatefulSet if configured
+	if cluster.Spec.Backups != nil {
+		backupSts := &appsv1.StatefulSet{}
+		if err := r.Get(ctx, types.NamespacedName{
+			Name:      fmt.Sprintf("%s-backup-sidecar", cluster.Name),
+			Namespace: cluster.Namespace,
+		}, backupSts); err == nil {
+			if backupSts.Status.ReadyReplicas != *backupSts.Spec.Replicas {
+				return fmt.Errorf("backup sidecar StatefulSet not ready: %d/%d replicas ready",
+					backupSts.Status.ReadyReplicas, *backupSts.Spec.Replicas)
+			}
 		}
 	}
 

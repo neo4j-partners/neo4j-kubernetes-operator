@@ -44,6 +44,7 @@ spec:
       kind: ClusterIssuer
 
   # Authentication configuration
+  # The operator manages NEO4J_AUTH and NEO4J_ACCEPT_LICENSE_AGREEMENT automatically
   auth:
     provider: native
     adminSecret: neo4j-admin-secret
@@ -62,11 +63,6 @@ spec:
             matchLabels:
               neo4j.com/cluster: multi-primary-cluster
           topologyKey: kubernetes.io/hostname
-
-  # Required environment variables
-  env:
-    - name: NEO4J_ACCEPT_LICENSE_AGREEMENT
-      value: "yes"      # Required for Neo4j Enterprise
 
   # Custom Neo4j configuration for production
   config:

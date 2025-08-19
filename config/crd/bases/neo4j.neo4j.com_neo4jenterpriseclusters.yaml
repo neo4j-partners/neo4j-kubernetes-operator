@@ -1979,6 +1979,37 @@ spec:
                     - PRIMARY
                     - SECONDARY
                     type: string
+                  serverRoles:
+                    description: |-
+                      ServerRoles allows specifying role constraints for individual servers
+                      Takes precedence over ServerModeConstraint for specified servers
+                    items:
+                      description: ServerRoleHint specifies a preferred role constraint
+                        for a specific server
+                      properties:
+                        modeConstraint:
+                          description: |-
+                            ModeConstraint specifies the preferred role constraint for this server
+                            Valid values: "PRIMARY", "SECONDARY", "NONE"
+                            - PRIMARY: Server should only host databases in primary mode
+                            - SECONDARY: Server should only host databases in secondary mode
+                            - NONE: Server can host databases in any mode (default)
+                          enum:
+                          - NONE
+                          - PRIMARY
+                          - SECONDARY
+                          type: string
+                        serverIndex:
+                          description: ServerIndex specifies which server this role
+                            hint applies to (0-based)
+                          format: int32
+                          minimum: 0
+                          type: integer
+                      required:
+                      - modeConstraint
+                      - serverIndex
+                      type: object
+                    type: array
                   servers:
                     description: |-
                       Servers specifies the number of Neo4j servers in the cluster

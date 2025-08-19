@@ -111,7 +111,7 @@ spec:
 | 1 Node Down | 3 | ✅ Met | Fully Operational |
 | 2 Nodes Down | 2 | ❌ Not Met | Read-Only Mode |
 
-**Consider Instead:** 3 primaries + 1 secondary for read scaling
+**Consider Instead:** 4 servers (allows 3 servers to host database primaries + 1 for read scaling)
 
 ---
 

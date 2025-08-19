@@ -44,10 +44,11 @@ spec:
   service:
     type: ClusterIP
 
-  # Required environment variables
-  env:
-    - name: NEO4J_ACCEPT_LICENSE_AGREEMENT
-      value: "yes"
+  # Authentication configuration
+  # The operator manages NEO4J_ACCEPT_LICENSE_AGREEMENT automatically
+  auth:
+    provider: native
+    adminSecret: neo4j-admin-secret
 
   # Custom Neo4j configuration
   config:
@@ -69,11 +70,10 @@ spec:
 # 2. Deploy the cluster:
 #    kubectl apply -f three-node-simple.yaml
 #
-# 3. Expected deployment time: 3-5 minutes total
-#    - Pods start sequentially (StatefulSet behavior)
-#    - pod-0 starts first and forms cluster (0-2 mins)
-#    - pod-1 joins cluster (2-4 mins)
-#    - pod-2 joins cluster (4-6 mins)
+# 3. Expected deployment time: 2-3 minutes total
+#    - All server pods start simultaneously (ParallelPodManagement)
+#    - Servers discover each other and self-organize
+#    - Cluster formation completes automatically
 #
 # 4. Monitor deployment progress:
 #    kubectl get pods -l app.kubernetes.io/name=neo4j -w

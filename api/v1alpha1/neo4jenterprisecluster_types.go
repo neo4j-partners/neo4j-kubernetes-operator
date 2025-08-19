@@ -725,6 +725,11 @@ type TopologyConfiguration struct {
 	// +optional
 	ServerModeConstraint string `json:"serverModeConstraint,omitempty"`
 
+	// ServerRoles allows specifying role constraints for individual servers
+	// Takes precedence over ServerModeConstraint for specified servers
+	// +optional
+	ServerRoles []ServerRoleHint `json:"serverRoles,omitempty"`
+
 	// Placement defines how instances should be distributed across the cluster
 	// +optional
 	Placement *PlacementConfig `json:"placement,omitempty"`
@@ -736,6 +741,23 @@ type TopologyConfiguration struct {
 	// EnforceDistribution ensures servers are distributed across topology domains
 	// +optional
 	EnforceDistribution bool `json:"enforceDistribution,omitempty"`
+}
+
+// ServerRoleHint specifies a preferred role constraint for a specific server
+type ServerRoleHint struct {
+	// ServerIndex specifies which server this role hint applies to (0-based)
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Minimum=0
+	ServerIndex int32 `json:"serverIndex"`
+
+	// ModeConstraint specifies the preferred role constraint for this server
+	// Valid values: "PRIMARY", "SECONDARY", "NONE"
+	// - PRIMARY: Server should only host databases in primary mode
+	// - SECONDARY: Server should only host databases in secondary mode
+	// - NONE: Server can host databases in any mode (default)
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Enum=NONE;PRIMARY;SECONDARY
+	ModeConstraint string `json:"modeConstraint"`
 }
 
 // +kubebuilder:object:root=true

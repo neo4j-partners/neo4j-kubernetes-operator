@@ -76,6 +76,7 @@ const (
 //+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 //+kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;delete
+//+kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch
 //+kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="",resources=endpoints,verbs=get;list;watch;create;update;patch;delete
@@ -167,6 +168,18 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 				_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Validation failed: %v", err))
 				return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 			}
+		}
+
+		// Validate server role hints for both create and update
+		roleHintErrors := resources.ValidateServerRoleHints(cluster)
+		if len(roleHintErrors) > 0 {
+			for _, roleError := range roleHintErrors {
+				logger.Error(fmt.Errorf("server role validation error"), roleError)
+				r.Recorder.Eventf(cluster, corev1.EventTypeWarning, "ServerRoleValidationFailed", "Server role hint validation failed: %s", roleError)
+			}
+			err := fmt.Errorf("server role validation failed: %v", roleHintErrors)
+			_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Server role validation failed: %v", roleHintErrors))
+			return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 		}
 	}
 
@@ -312,22 +325,34 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 		}
 	}
 
-	// Create StatefulSet for servers (servers self-organize)
-	serverSts := resources.BuildServerStatefulSetForEnterprise(cluster)
+	// Create single StatefulSet for all servers
+	serverStatefulSet := resources.BuildServerStatefulSetForEnterprise(cluster)
 
-	// Apply topology constraints to server StatefulSet
+	// Apply topology constraints to the server StatefulSet
 	if r.TopologyScheduler != nil && topologyPlacement != nil {
-		if err := r.TopologyScheduler.ApplyTopologyConstraints(ctx, serverSts, cluster, topologyPlacement); err != nil {
+		if err := r.TopologyScheduler.ApplyTopologyConstraints(ctx, serverStatefulSet, cluster, topologyPlacement); err != nil {
 			logger.Error(err, "Failed to apply topology constraints to server StatefulSet")
-			_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Failed to apply topology constraints: %v", err))
+			_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Failed to apply topology constraints to server StatefulSet: %v", err))
 			return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 		}
 	}
 
-	if err := r.createOrUpdateResource(ctx, serverSts, cluster); err != nil {
+	if err := r.createOrUpdateResource(ctx, serverStatefulSet, cluster); err != nil {
 		logger.Error(err, "Failed to create server StatefulSet")
 		_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Failed to create server StatefulSet: %v", err))
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
+	}
+
+	// Create centralized backup StatefulSet if backups are enabled
+	if cluster.Spec.Backups != nil {
+		backupSts := resources.BuildBackupStatefulSet(cluster)
+		if backupSts != nil {
+			if err := r.createOrUpdateResource(ctx, backupSts, cluster); err != nil {
+				logger.Error(err, "Failed to create backup StatefulSet")
+				_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Failed to create backup StatefulSet: %v", err))
+				return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
+			}
+		}
 	}
 
 	// Handle Query Performance Monitoring
@@ -929,20 +954,21 @@ func (r *Neo4jEnterpriseClusterReconciler) isUpgradeRequired(ctx context.Context
 		return false
 	}
 
-	// Check if primary StatefulSet exists and has different image
-	primarySts := &appsv1.StatefulSet{}
+	// Check if any server StatefulSet exists and has different image
+	// Check server-0 as a representative
+	serverSts := &appsv1.StatefulSet{}
 	if err := r.Get(ctx, types.NamespacedName{
-		Name:      cluster.Name + "-primary",
+		Name:      fmt.Sprintf("%s-server-0", cluster.Name),
 		Namespace: cluster.Namespace,
-	}, primarySts); err != nil {
+	}, serverSts); err != nil {
 		return false // StatefulSet doesn't exist yet
 	}
 
 	// Compare current image with desired image
-	if len(primarySts.Spec.Template.Spec.Containers) == 0 {
+	if len(serverSts.Spec.Template.Spec.Containers) == 0 {
 		return false // StatefulSet has no containers defined
 	}
-	currentImage := primarySts.Spec.Template.Spec.Containers[0].Image
+	currentImage := serverSts.Spec.Template.Spec.Containers[0].Image
 	desiredImage := fmt.Sprintf("%s:%s", cluster.Spec.Image.Repo, cluster.Spec.Image.Tag)
 
 	return currentImage != desiredImage

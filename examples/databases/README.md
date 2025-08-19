@@ -4,10 +4,10 @@ This directory contains examples for creating and managing Neo4j databases using
 
 ## Standard Database Creation
 
-### Basic Database
-- `single-node-database.yaml` - Simple database on single server
-- `multi-server-database.yaml` - Database distributed across multiple servers
-- `database-with-initial-data.yaml` - Database with initial Cypher data
+### Basic Database Examples
+- **Simple Database**: See `../database/database-with-topology.yaml` - Database with specified topology
+- **Neo4j 2025.x Database**: See `../database/database-2025x.yaml` - Database using Neo4j 2025.x features
+- **Note**: Basic database creation examples are shown in the main user guide
 
 ## Seed URI Database Creation
 

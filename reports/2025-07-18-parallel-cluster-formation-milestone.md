@@ -10,7 +10,7 @@ Successfully implemented and tested an optimized Neo4j cluster formation strateg
 
 Previous cluster formation approaches suffered from:
 - Split-brain scenarios where multiple clusters formed
-- Timing issues between primary and secondary nodes
+- Timing issues between server nodes
 - Complex sequencing logic that could fail
 - Success rates between 60-80%
 
@@ -19,15 +19,15 @@ Previous cluster formation approaches suffered from:
 ### Configuration Changes
 
 1. **Minimum Initial Primaries**: Set to 1 (always)
-   - Allows first pod to form cluster immediately
-   - Other pods join existing cluster
+   - Allows first server to form cluster immediately
+   - Other servers join existing cluster
 
 2. **Pod Management Policy**: ParallelPodManagement
-   - All pods start simultaneously
+   - All server pods start simultaneously
    - No artificial delays or sequencing
 
-3. **Secondary Timing**: Removed delay logic
-   - Secondaries start at same time as primaries
+3. **Server Timing**: Removed delay logic
+   - All servers start at same time
    - Simplified controller logic
 
 4. **Discovery Service**: Already had PublishNotReadyAddresses=true
@@ -42,8 +42,9 @@ Previous cluster formation approaches suffered from:
    - Enhanced comments documenting the approach
 
 2. **`internal/controller/neo4jenterprisecluster_controller.go`**:
-   - Removed secondary delay logic (checking primary readiness)
-   - Simplified to create secondary StatefulSet immediately
+   - Removed server delay logic
+   - Simplified to create single server StatefulSet immediately
+   - **NOTE**: Architecture later updated to unified server StatefulSet (2025-08)
 
 3. **Tests Updated**:
    - Added test for parallel pod management policy

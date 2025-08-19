@@ -49,7 +49,7 @@ This is most common with TLS-enabled clusters where nodes fail to join during in
 ```bash
 # Check each node's view of the cluster
 for i in 0 1 2; do
-  kubectl exec <cluster>-primary-$i -- cypher-shell -u neo4j -p <password> "SHOW SERVERS" | wc -l
+  kubectl exec <cluster>-server-$i -- cypher-shell -u neo4j -p <password> "SHOW SERVERS" | wc -l
 done
 ```
 
@@ -57,8 +57,8 @@ done
 
 **Quick Fix**:
 ```bash
-# Restart minority cluster nodes
-kubectl delete pod <cluster>-primary-1 <cluster>-secondary-1
+# Restart minority cluster nodes (orphaned pods)
+kubectl delete pod <cluster>-server-1 <cluster>-server-2
 ```
 
 ### 2. Test Environment Issues
@@ -102,7 +102,7 @@ make test-integration
 
 #### Problem: Single-Node Cluster Not Allowed
 ```
-Error: Neo4jEnterpriseCluster requires minimum cluster topology: either 1 primary + 1 secondary, or multiple primaries. For single-node deployments, use Neo4jEnterpriseStandalone instead
+Error: Neo4jEnterpriseCluster requires minimum 2 servers for clustering. For single-node deployments, use Neo4jEnterpriseStandalone instead
 ```
 
 **Solution**: Use the correct CRD for your deployment type:
@@ -130,8 +130,7 @@ metadata:
   name: prod-cluster
 spec:
   topology:
-    primaries: 1
-    secondaries: 1  # Minimum required
+    servers: 2  # Minimum required for clustering
   image:
     repo: neo4j
     tag: "5.26-enterprise"
