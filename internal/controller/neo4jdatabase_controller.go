@@ -172,16 +172,19 @@ func (r *Neo4jDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}()
 
 	// Ensure database exists (with seed URI support)
-	logger.Info("Starting database creation/verification", "database", database.Spec.Name, "wait", database.Spec.Wait)
+	logger.Info("Starting database creation/verification", "database", database.Spec.Name, "wait", database.Spec.Wait, "topology", database.Spec.Topology)
+	dbCreateStart := time.Now()
 	if err := r.ensureDatabase(ctx, neo4jClient, database); err != nil {
-		logger.Error(err, "Failed to ensure database", "database", database.Spec.Name)
+		duration := time.Since(dbCreateStart)
+		logger.Error(err, "Failed to ensure database", "database", database.Spec.Name, "duration", duration)
 		r.updateDatabaseStatus(ctx, database, metav1.ConditionFalse, "CreationFailed",
 			fmt.Sprintf("Failed to create database: %v", err))
 		r.Recorder.Eventf(database, "Warning", "CreationFailed",
 			"Failed to create database: %v", err)
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 	}
-	logger.Info("Database creation/verification completed successfully", "database", database.Spec.Name)
+	duration := time.Since(dbCreateStart)
+	logger.Info("Database creation/verification completed successfully", "database", database.Spec.Name, "duration", duration)
 
 	// Import initial data if specified (skip if using seed URI since data comes from the seed)
 	if database.Spec.InitialData != nil && database.Spec.SeedURI == "" && database.Status.DataImported == nil {
@@ -353,6 +356,13 @@ func (r *Neo4jDatabaseReconciler) ensureDatabase(ctx context.Context, client *ne
 					"database", database.Spec.Name,
 					"primaries", database.Spec.Topology.Primaries,
 					"secondaries", database.Spec.Topology.Secondaries)
+
+				logger.Info("Creating database with topology",
+					"database", database.Spec.Name,
+					"primaries", database.Spec.Topology.Primaries,
+					"secondaries", database.Spec.Topology.Secondaries,
+					"wait", database.Spec.Wait,
+					"timeout", "300s")
 
 				err = client.CreateDatabaseWithTopology(
 					ctx,

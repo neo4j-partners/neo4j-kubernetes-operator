@@ -561,7 +561,7 @@ func (c *Client) CreateDatabase(ctx context.Context, databaseName string, option
 	}
 
 	// Use timeout protection for WAIT operations
-	err := c.executeWithWaitTimeout(ctx, session, query, nil, wait, 180)
+	err := c.executeWithWaitTimeout(ctx, session, query, nil, wait, 300)
 	if err != nil {
 		// Check if database was created despite timeout
 		if wait && errors.Is(err, context.DeadlineExceeded) {
@@ -637,7 +637,7 @@ func (c *Client) CreateDatabaseWithTopology(ctx context.Context, databaseName st
 	}
 
 	// Use timeout protection for WAIT operations
-	err := c.executeWithWaitTimeout(ctx, session, query, nil, wait, 180)
+	err := c.executeWithWaitTimeout(ctx, session, query, nil, wait, 300)
 	if err != nil {
 		// Check if database was created despite timeout
 		if wait && errors.Is(err, context.DeadlineExceeded) {
@@ -701,16 +701,19 @@ func (c *Client) executeWithWaitTimeout(ctx context.Context, session neo4j.Sessi
 		_, err := session.Run(waitCtx, query, params)
 		if err != nil {
 			if errors.Is(err, context.DeadlineExceeded) {
-				return fmt.Errorf("operation timed out after %ds: %w", timeoutSeconds, err)
+				return fmt.Errorf("database operation timed out after %ds while executing: %s: %w", timeoutSeconds, query, err)
 			}
-			return err
+			return fmt.Errorf("database operation failed while executing: %s: %w", query, err)
 		}
 		return nil
 	}
 
 	// For non-WAIT operations, use the original context
 	_, err := session.Run(ctx, query, params)
-	return err
+	if err != nil {
+		return fmt.Errorf("database operation failed while executing: %s: %w", query, err)
+	}
+	return nil
 }
 
 // StartDatabase starts a stopped database
