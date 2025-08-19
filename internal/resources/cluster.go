@@ -1902,7 +1902,7 @@ func buildReadinessProbe(_ *neo4jv1alpha1.Neo4jEnterpriseCluster) *corev1.Probe 
 		InitialDelaySeconds: 45, // Allow time for cluster discovery and joining
 		PeriodSeconds:       15, // Less frequent checks during startup
 		TimeoutSeconds:      5,
-		FailureThreshold:    3,
+		FailureThreshold:    8, // Allow up to 2 minutes after initial delay for cluster rejoin scenarios
 	}
 }
 
