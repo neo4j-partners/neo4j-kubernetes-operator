@@ -95,6 +95,11 @@ Ready-to-use configurations for common deployment scenarios:
 - **[LoadBalancer cluster](examples/clusters/loadbalancer-cluster.yaml)** - External access with cloud load balancer
 - **[Ingress cluster](examples/clusters/ingress-cluster.yaml)** - HTTPS access via Ingress controller
 
+### Plugin Management (NEW!)
+- **[Cluster plugin example](examples/plugins/cluster-plugin-example.yaml)** - Install APOC on a Neo4jEnterpriseCluster
+- **[Standalone plugin example](examples/plugins/standalone-plugin-example.yaml)** - Install Graph Data Science on standalone
+- **[Plugin documentation](examples/plugins/README.md)** - Complete guide to plugin management
+
 See the [examples directory](examples/) for complete documentation and additional configurations.
 
 ## 🔐 Authentication
