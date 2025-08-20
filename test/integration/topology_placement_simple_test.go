@@ -11,7 +11,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
@@ -95,16 +94,7 @@ var _ = Describe("Topology Placement Simple", func() {
 						ClassName: "standard",
 						Size:      "1Gi",
 					},
-					Resources: &corev1.ResourceRequirements{
-						Requests: corev1.ResourceList{
-							corev1.ResourceMemory: resource.MustParse("1.5Gi"),
-							corev1.ResourceCPU:    resource.MustParse("100m"),
-						},
-						Limits: corev1.ResourceList{
-							corev1.ResourceMemory: resource.MustParse("1.5Gi"),
-							corev1.ResourceCPU:    resource.MustParse("500m"),
-						},
-					},
+					Resources: getCIAppropriateResourceRequirements(), // Automatically adjusts for CI vs local environments
 				},
 			}
 

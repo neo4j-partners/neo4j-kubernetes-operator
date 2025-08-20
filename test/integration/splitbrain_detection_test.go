@@ -22,7 +22,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -81,15 +80,7 @@ var _ = Describe("Split-Brain Detection Integration Tests", func() {
 					Auth: &neo4jv1alpha1.AuthSpec{
 						AdminSecret: "neo4j-admin-secret",
 					},
-					Resources: &corev1.ResourceRequirements{
-						Requests: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("25m"),   // Reduced for CI scheduling
-							corev1.ResourceMemory: resource.MustParse("1.5Gi"), // Neo4j Enterprise minimum for database operations
-						},
-						Limits: corev1.ResourceList{
-							corev1.ResourceMemory: resource.MustParse("1.5Gi"), // 3 pods × 1.5Gi = 4.5Gi total
-						},
-					},
+					Resources: getCIAppropriateResourceRequirements(), // Automatically adjusts for CI vs local environments
 					TLS: &neo4jv1alpha1.TLSSpec{
 						Mode: "disabled",
 					},
@@ -223,15 +214,7 @@ var _ = Describe("Split-Brain Detection Integration Tests", func() {
 					Auth: &neo4jv1alpha1.AuthSpec{
 						AdminSecret: "neo4j-admin-secret",
 					},
-					Resources: &corev1.ResourceRequirements{
-						Requests: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("25m"),   // Reduced for CI scheduling
-							corev1.ResourceMemory: resource.MustParse("1.5Gi"), // Neo4j Enterprise minimum for database operations
-						},
-						Limits: corev1.ResourceList{
-							corev1.ResourceMemory: resource.MustParse("1.5Gi"), // 3 pods × 1.5Gi = 4.5Gi total
-						},
-					},
+					Resources: getCIAppropriateResourceRequirements(), // Automatically adjusts for CI vs local environments
 					TLS: &neo4jv1alpha1.TLSSpec{
 						Mode: "disabled",
 					},

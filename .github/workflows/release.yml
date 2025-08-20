@@ -33,7 +33,7 @@ jobs:
     - name: Run unit tests
       run: make test-unit
 
-    - name: Build operator binary
+    - name: Validate build
       run: make build
 
     - name: Generate manifests
@@ -99,11 +99,36 @@ jobs:
       with:
         go-version: ${{ env.GO_VERSION }}
 
-    - name: Generate release manifests
+    - name: Generate release tarball and manifests
       run: |
+        TAG_NAME=${GITHUB_REF#refs/tags/}
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          TAG_NAME="${{ github.event.inputs.tag }}"
+        fi
+
+        # Clean tag name for directory
+        CLEAN_TAG=${TAG_NAME#v}
+
+        # Generate manifests
         make manifests
+
+        # Create release artifacts directory
         mkdir -p release-artifacts
+
+        # Copy CRD manifests
         cp config/crd/bases/*.yaml release-artifacts/
+
+        # Create source tarball
+        git archive --format=tar.gz --prefix=neo4j-kubernetes-operator-${CLEAN_TAG}/ ${TAG_NAME} > release-artifacts/neo4j-kubernetes-operator-${CLEAN_TAG}.tar.gz
+
+        # Create examples archive
+        tar -czf release-artifacts/examples-${CLEAN_TAG}.tar.gz examples/
+
+        # Bundle manifests for easy deployment
+        cat config/crd/bases/*.yaml > release-artifacts/neo4j-kubernetes-operator.yaml
+
+        # Create operator deployment manifest (includes CRDs + operator)
+        kubectl kustomize config/default > release-artifacts/neo4j-kubernetes-operator-complete.yaml
 
     - name: Generate release notes
       id: release-notes
@@ -124,16 +149,22 @@ jobs:
 
         ## 🔧 Installation
 
-        ### Using Helm (Recommended)
+        ### Quick Install (Complete Operator)
         \`\`\`bash
-        helm repo add neo4j https://helm.neo4j.com/neo4j-kubernetes-operator
-        helm install neo4j-operator neo4j/neo4j-kubernetes-operator
+        kubectl apply -f https://github.com/neo4j-labs/neo4j-kubernetes-operator/releases/download/$TAG_NAME/neo4j-kubernetes-operator-complete.yaml
         \`\`\`
 
-        ### Using kubectl
+        ### CRDs Only
         \`\`\`bash
-        kubectl apply -f https://github.com/neo4j-labs/neo4j-kubernetes-operator/releases/download/$TAG_NAME/crd-manifest.yaml
+        kubectl apply -f https://github.com/neo4j-labs/neo4j-kubernetes-operator/releases/download/$TAG_NAME/neo4j-kubernetes-operator.yaml
         \`\`\`
+
+        ## 📦 Release Assets
+
+        - **Source Code**: \`neo4j-kubernetes-operator-\${TAG_NAME#v}.tar.gz\` - Complete source code tarball
+        - **Examples**: \`examples-\${TAG_NAME#v}.tar.gz\` - Example configurations
+        - **Operator Manifests**: \`neo4j-kubernetes-operator-complete.yaml\` - Complete operator installation
+        - **CRD Manifests**: \`neo4j-kubernetes-operator.yaml\` - Custom Resource Definitions only
 
         ## 📋 Requirements
 
@@ -157,9 +188,6 @@ jobs:
         Please report issues at [GitHub Issues](https://github.com/neo4j-labs/neo4j-kubernetes-operator/issues)
         EOF
 
-    - name: Bundle release manifests
-      run: |
-        cat config/crd/bases/*.yaml > release-artifacts/crd-manifest.yaml
 
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v1

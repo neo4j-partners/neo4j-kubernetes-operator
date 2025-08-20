@@ -26,7 +26,6 @@ import (
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
@@ -100,16 +99,7 @@ var _ = Describe("Neo4jEnterpriseStandalone Integration Tests", func() {
 						ClassName: "standard",
 						Size:      "500Mi",
 					},
-					Resources: &corev1.ResourceRequirements{
-						Requests: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("50m"),
-							corev1.ResourceMemory: resource.MustParse("256Mi"),
-						},
-						Limits: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("200m"),
-							corev1.ResourceMemory: resource.MustParse("1Gi"), // Neo4j Enterprise minimum requirement
-						},
-					},
+					Resources: getCIAppropriateResourceRequirements(), // Automatically adjusts for CI vs local environments
 					Env: []corev1.EnvVar{
 						{
 							Name:  "NEO4J_ACCEPT_LICENSE_AGREEMENT",
@@ -306,16 +296,7 @@ var _ = Describe("Neo4jEnterpriseStandalone Integration Tests", func() {
 						ClassName: "standard",
 						Size:      "500Mi",
 					},
-					Resources: &corev1.ResourceRequirements{
-						Requests: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("50m"),
-							corev1.ResourceMemory: resource.MustParse("256Mi"),
-						},
-						Limits: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("200m"),
-							corev1.ResourceMemory: resource.MustParse("1Gi"), // Neo4j Enterprise minimum requirement
-						},
-					},
+					Resources: getCIAppropriateResourceRequirements(), // Automatically adjusts for CI vs local environments
 					Config: map[string]string{
 						"server.memory.heap.initial_size": "1G",
 						"server.memory.heap.max_size":     "2G",
@@ -394,16 +375,7 @@ var _ = Describe("Neo4jEnterpriseStandalone Integration Tests", func() {
 						ClassName: "standard",
 						Size:      "500Mi",
 					},
-					Resources: &corev1.ResourceRequirements{
-						Requests: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("50m"),
-							corev1.ResourceMemory: resource.MustParse("256Mi"),
-						},
-						Limits: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("200m"),
-							corev1.ResourceMemory: resource.MustParse("1Gi"), // Neo4j Enterprise minimum requirement
-						},
-					},
+					Resources: getCIAppropriateResourceRequirements(), // Automatically adjusts for CI vs local environments
 					TLS: &neo4jv1alpha1.TLSSpec{
 						Mode: "disabled",
 					},
@@ -489,16 +461,7 @@ var _ = Describe("Neo4jEnterpriseStandalone Integration Tests", func() {
 						ClassName: "standard",
 						Size:      "500Mi",
 					},
-					Resources: &corev1.ResourceRequirements{
-						Requests: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("50m"),
-							corev1.ResourceMemory: resource.MustParse("256Mi"),
-						},
-						Limits: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("200m"),
-							corev1.ResourceMemory: resource.MustParse("1.5Gi"), // Increased for database operations
-						},
-					},
+					Resources: getCIAppropriateResourceRequirements(), // Automatically adjusts for CI vs local environments
 					Auth: &neo4jv1alpha1.AuthSpec{
 						AdminSecret: "standalone-admin-secret",
 					},
@@ -584,16 +547,7 @@ var _ = Describe("Neo4jEnterpriseStandalone Integration Tests", func() {
 						ClassName: "standard",
 						Size:      "500Mi",
 					},
-					Resources: &corev1.ResourceRequirements{
-						Requests: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("50m"),
-							corev1.ResourceMemory: resource.MustParse("256Mi"),
-						},
-						Limits: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("200m"),
-							corev1.ResourceMemory: resource.MustParse("1Gi"), // Neo4j Enterprise minimum requirement
-						},
-					},
+					Resources: getCIAppropriateResourceRequirements(), // Automatically adjusts for CI vs local environments
 					TLS: &neo4jv1alpha1.TLSSpec{
 						Mode: "cert-manager",
 						IssuerRef: &neo4jv1alpha1.IssuerRef{
