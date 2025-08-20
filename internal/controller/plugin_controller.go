@@ -83,26 +83,32 @@ func (r *Neo4jPluginReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{Requeue: true}, nil
 	}
 
-	// Get target cluster
-	cluster, err := r.getTargetCluster(ctx, plugin)
+	// Get target deployment (cluster or standalone)
+	deployment, err := r.getTargetDeployment(ctx, plugin)
 	if err != nil {
-		logger.Error(err, "Failed to get target cluster")
-		r.updatePluginStatus(ctx, plugin, "Failed", fmt.Sprintf("Target cluster not found: %v", err))
+		logger.Error(err, "Failed to get target deployment")
+		r.updatePluginStatus(ctx, plugin, "Failed", fmt.Sprintf("Target deployment not found: %v", err))
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
+	}
+
+	if !deployment.IsReady {
+		logger.Info("Target deployment not ready, requeuing", "type", deployment.Type, "name", deployment.Name)
+		r.updatePluginStatus(ctx, plugin, "Waiting", fmt.Sprintf("Waiting for %s %s to be ready", deployment.Type, deployment.Name))
+		return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
 	}
 
 	// Update status to "Installing"
 	r.updatePluginStatus(ctx, plugin, "Installing", "Installing plugin")
 
 	// Install plugin
-	if err := r.installPlugin(ctx, plugin, cluster); err != nil {
+	if err := r.installPlugin(ctx, plugin, deployment); err != nil {
 		logger.Error(err, "Failed to install plugin")
 		r.updatePluginStatus(ctx, plugin, "Failed", fmt.Sprintf("Plugin installation failed: %v", err))
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 	}
 
 	// Configure plugin
-	if err := r.configurePlugin(ctx, plugin, cluster); err != nil {
+	if err := r.configurePlugin(ctx, plugin, deployment); err != nil {
 		logger.Error(err, "Failed to configure plugin")
 		r.updatePluginStatus(ctx, plugin, "Failed", fmt.Sprintf("Plugin configuration failed: %v", err))
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
@@ -135,27 +141,84 @@ func (r *Neo4jPluginReconciler) handleDeletion(ctx context.Context, plugin *neo4
 	return ctrl.Result{}, nil
 }
 
-func (r *Neo4jPluginReconciler) getTargetCluster(ctx context.Context, plugin *neo4jv1alpha1.Neo4jPlugin) (*neo4jv1alpha1.Neo4jEnterpriseCluster, error) {
+// DeploymentInfo holds information about the target deployment
+type DeploymentInfo struct {
+	Object    client.Object
+	Type      string // "cluster" or "standalone"
+	Name      string
+	Namespace string
+	IsReady   bool
+}
+
+func (r *Neo4jPluginReconciler) getTargetDeployment(ctx context.Context, plugin *neo4jv1alpha1.Neo4jPlugin) (*DeploymentInfo, error) {
+	// Try Neo4jEnterpriseCluster first
 	cluster := &neo4jv1alpha1.Neo4jEnterpriseCluster{}
 	if err := r.Get(ctx, types.NamespacedName{
 		Name:      plugin.Spec.ClusterRef,
 		Namespace: plugin.Namespace,
-	}, cluster); err != nil {
-		return nil, fmt.Errorf("failed to get cluster %s: %w", plugin.Spec.ClusterRef, err)
+	}, cluster); err == nil {
+		isReady := cluster.Status.Phase == "Ready"
+		return &DeploymentInfo{
+			Object:    cluster,
+			Type:      "cluster",
+			Name:      cluster.Name,
+			Namespace: cluster.Namespace,
+			IsReady:   isReady,
+		}, nil
 	}
 
-	if cluster.Status.Phase != "Ready" {
-		return nil, fmt.Errorf("cluster %s is not ready: %s", cluster.Name, cluster.Status.Phase)
+	// Try Neo4jEnterpriseStandalone
+	standalone := &neo4jv1alpha1.Neo4jEnterpriseStandalone{}
+	if err := r.Get(ctx, types.NamespacedName{
+		Name:      plugin.Spec.ClusterRef,
+		Namespace: plugin.Namespace,
+	}, standalone); err == nil {
+		isReady := standalone.Status.Phase == "Ready"
+		return &DeploymentInfo{
+			Object:    standalone,
+			Type:      "standalone",
+			Name:      standalone.Name,
+			Namespace: standalone.Namespace,
+			IsReady:   isReady,
+		}, nil
 	}
 
-	return cluster, nil
+	return nil, fmt.Errorf("target deployment %s not found (tried both Neo4jEnterpriseCluster and Neo4jEnterpriseStandalone)", plugin.Spec.ClusterRef)
 }
 
-func (r *Neo4jPluginReconciler) installPlugin(ctx context.Context, plugin *neo4jv1alpha1.Neo4jPlugin, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) error {
+// getTargetCluster is deprecated but kept for backward compatibility
+func (r *Neo4jPluginReconciler) getTargetCluster(ctx context.Context, plugin *neo4jv1alpha1.Neo4jPlugin) (*neo4jv1alpha1.Neo4jEnterpriseCluster, error) {
+	deployment, err := r.getTargetDeployment(ctx, plugin)
+	if err != nil {
+		return nil, err
+	}
+
+	if deployment.Type != "cluster" {
+		return nil, fmt.Errorf("target deployment %s is not a cluster", plugin.Spec.ClusterRef)
+	}
+
+	if !deployment.IsReady {
+		return nil, fmt.Errorf("cluster %s is not ready", deployment.Name)
+	}
+
+	return deployment.Object.(*neo4jv1alpha1.Neo4jEnterpriseCluster), nil
+}
+
+func (r *Neo4jPluginReconciler) installPlugin(ctx context.Context, plugin *neo4jv1alpha1.Neo4jPlugin, deployment *DeploymentInfo) error {
 	logger := log.FromContext(ctx)
 
-	// Create Neo4j client
-	neo4jClient, err := neo4jclient.NewClientForEnterprise(cluster, r.Client, "neo4j-admin-secret")
+	// Create Neo4j client based on deployment type
+	var neo4jClient *neo4jclient.Client
+	var err error
+
+	if deployment.Type == "cluster" {
+		cluster := deployment.Object.(*neo4jv1alpha1.Neo4jEnterpriseCluster)
+		neo4jClient, err = neo4jclient.NewClientForEnterprise(cluster, r.Client, "neo4j-admin-secret")
+	} else {
+		standalone := deployment.Object.(*neo4jv1alpha1.Neo4jEnterpriseStandalone)
+		neo4jClient, err = neo4jclient.NewClientForEnterpriseStandalone(standalone, r.Client, "neo4j-admin-secret")
+	}
+
 	if err != nil {
 		return fmt.Errorf("failed to create Neo4j client: %w", err)
 	}
@@ -168,7 +231,7 @@ func (r *Neo4jPluginReconciler) installPlugin(ctx context.Context, plugin *neo4j
 
 	// Install dependencies first
 	for _, dep := range plugin.Spec.Dependencies {
-		if err := r.installDependency(ctx, plugin, cluster, dep); err != nil {
+		if err := r.installDependency(ctx, plugin, deployment, dep); err != nil {
 			if !dep.Optional {
 				return fmt.Errorf("failed to install required dependency %s: %w", dep.Name, err)
 			}
@@ -177,7 +240,7 @@ func (r *Neo4jPluginReconciler) installPlugin(ctx context.Context, plugin *neo4j
 	}
 
 	// Install the plugin
-	if err := r.performPluginInstallation(ctx, plugin, cluster, neo4jClient); err != nil {
+	if err := r.performPluginInstallation(ctx, plugin, deployment, neo4jClient); err != nil {
 		return fmt.Errorf("failed to perform plugin installation: %w", err)
 	}
 
@@ -465,7 +528,7 @@ func (r *Neo4jPluginReconciler) downloadFromURL(ctx context.Context, plugin *neo
 	return r.waitForJobCompletion(ctx, job)
 }
 
-func (r *Neo4jPluginReconciler) installDependency(ctx context.Context, plugin *neo4jv1alpha1.Neo4jPlugin, _ *neo4jv1alpha1.Neo4jEnterpriseCluster, dep neo4jv1alpha1.PluginDependency) error {
+func (r *Neo4jPluginReconciler) installDependency(ctx context.Context, plugin *neo4jv1alpha1.Neo4jPlugin, _ *DeploymentInfo, dep neo4jv1alpha1.PluginDependency) error {
 	logger := log.FromContext(ctx)
 
 	logger.Info("Installing plugin dependency", "dependency", dep.Name, "constraint", dep.VersionConstraint)
@@ -532,22 +595,22 @@ func (r *Neo4jPluginReconciler) waitForPluginReady(ctx context.Context, plugin *
 	}
 }
 
-func (r *Neo4jPluginReconciler) performPluginInstallation(ctx context.Context, plugin *neo4jv1alpha1.Neo4jPlugin, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, neo4jClient *neo4jclient.Client) error {
+func (r *Neo4jPluginReconciler) performPluginInstallation(ctx context.Context, plugin *neo4jv1alpha1.Neo4jPlugin, deployment *DeploymentInfo, neo4jClient *neo4jclient.Client) error {
 	logger := log.FromContext(ctx)
 
-	// Copy plugin to Neo4j plugins directory
-	if err := r.copyPluginToCluster(ctx, plugin, cluster); err != nil {
-		return fmt.Errorf("failed to copy plugin to cluster: %w", err)
+	// Copy plugin to deployment plugins directory
+	if err := r.copyPluginToDeployment(ctx, plugin, deployment); err != nil {
+		return fmt.Errorf("failed to copy plugin to deployment: %w", err)
 	}
 
 	// Restart Neo4j instances to load plugin
-	if err := r.restartNeo4jInstances(ctx, cluster); err != nil {
+	if err := r.restartNeo4jInstances(ctx, deployment); err != nil {
 		return fmt.Errorf("failed to restart Neo4j instances: %w", err)
 	}
 
-	// Wait for cluster to be ready after restart
-	if err := r.waitForClusterReady(ctx, cluster); err != nil {
-		return fmt.Errorf("cluster not ready after plugin installation: %w", err)
+	// Wait for deployment to be ready after restart
+	if err := r.waitForDeploymentReady(ctx, deployment); err != nil {
+		return fmt.Errorf("deployment not ready after plugin installation: %w", err)
 	}
 
 	// Verify plugin is loaded
@@ -559,9 +622,9 @@ func (r *Neo4jPluginReconciler) performPluginInstallation(ctx context.Context, p
 	return nil
 }
 
-func (r *Neo4jPluginReconciler) copyPluginToCluster(ctx context.Context, plugin *neo4jv1alpha1.Neo4jPlugin, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) error {
+func (r *Neo4jPluginReconciler) copyPluginToDeployment(ctx context.Context, plugin *neo4jv1alpha1.Neo4jPlugin, deployment *DeploymentInfo) error {
 	logger := log.FromContext(ctx)
-	logger.Info("Copying plugin to cluster", "plugin", plugin.Spec.Name)
+	logger.Info("Copying plugin to deployment", "plugin", plugin.Spec.Name, "type", deployment.Type)
 
 	// Create an init container job to copy plugin to the plugins directory
 	job := &batchv1.Job{
@@ -570,7 +633,7 @@ func (r *Neo4jPluginReconciler) copyPluginToCluster(ctx context.Context, plugin 
 			Namespace: plugin.Namespace,
 			Labels: map[string]string{
 				"app.kubernetes.io/name":      "neo4j-plugin",
-				"app.kubernetes.io/instance":  plugin.Spec.ClusterRef,
+				"app.kubernetes.io/instance":  deployment.Name,
 				"app.kubernetes.io/component": "install",
 			},
 		},
@@ -619,7 +682,7 @@ func (r *Neo4jPluginReconciler) copyPluginToCluster(ctx context.Context, plugin 
 							Name: "neo4j-plugins",
 							VolumeSource: corev1.VolumeSource{
 								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-									ClaimName: fmt.Sprintf("%s-plugins", cluster.Name),
+									ClaimName: r.getPluginsPVCName(deployment),
 								},
 							},
 						},
@@ -633,15 +696,15 @@ func (r *Neo4jPluginReconciler) copyPluginToCluster(ctx context.Context, plugin 
 	return r.Create(ctx, job)
 }
 
-func (r *Neo4jPluginReconciler) restartNeo4jInstances(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) error {
+func (r *Neo4jPluginReconciler) restartNeo4jInstances(ctx context.Context, deployment *DeploymentInfo) error {
 	logger := log.FromContext(ctx)
-	logger.Info("Restarting Neo4j instances to load plugin")
+	logger.Info("Restarting Neo4j instances to load plugin", "type", deployment.Type)
 
-	// Get the StatefulSet for the cluster
+	// Get the StatefulSet for the deployment
 	sts := &appsv1.StatefulSet{}
 	stsKey := types.NamespacedName{
-		Name:      cluster.Name,
-		Namespace: cluster.Namespace,
+		Name:      r.getStatefulSetName(deployment),
+		Namespace: deployment.Namespace,
 	}
 
 	if err := r.Get(ctx, stsKey, sts); err != nil {
@@ -662,9 +725,9 @@ func (r *Neo4jPluginReconciler) restartNeo4jInstances(ctx context.Context, clust
 	return nil
 }
 
-func (r *Neo4jPluginReconciler) waitForClusterReady(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) error {
+func (r *Neo4jPluginReconciler) waitForDeploymentReady(ctx context.Context, deployment *DeploymentInfo) error {
 	logger := log.FromContext(ctx)
-	logger.Info("Waiting for cluster to be ready after plugin installation")
+	logger.Info("Waiting for deployment to be ready after plugin installation", "type", deployment.Type)
 
 	timeout := time.After(10 * time.Minute)
 	ticker := time.NewTicker(30 * time.Second)
@@ -677,15 +740,13 @@ func (r *Neo4jPluginReconciler) waitForClusterReady(ctx context.Context, cluster
 		case <-ticker.C:
 			// Check if all pods are ready
 			pods := &corev1.PodList{}
-			if err := r.List(ctx, pods, client.InNamespace(cluster.Namespace), client.MatchingLabels{
-				"app.kubernetes.io/name":     "neo4j",
-				"app.kubernetes.io/instance": cluster.Name,
-			}); err != nil {
+			podLabels := r.getPodLabels(deployment)
+			if err := r.List(ctx, pods, client.InNamespace(deployment.Namespace), client.MatchingLabels(podLabels)); err != nil {
 				logger.Error(err, "Failed to list pods")
 				continue
 			}
 
-			expectedReplicas := int(cluster.Spec.Topology.Servers)
+			expectedReplicas := r.getExpectedReplicas(deployment)
 			if len(pods.Items) != expectedReplicas {
 				logger.Info("Waiting for all pods to be created", "current", len(pods.Items), "expected", expectedReplicas)
 				continue
@@ -735,7 +796,7 @@ func (r *Neo4jPluginReconciler) verifyPluginLoaded(ctx context.Context, neo4jCli
 	return fmt.Errorf("plugin %s not found in loaded components", plugin.Spec.Name)
 }
 
-func (r *Neo4jPluginReconciler) configurePlugin(ctx context.Context, plugin *neo4jv1alpha1.Neo4jPlugin, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) error {
+func (r *Neo4jPluginReconciler) configurePlugin(ctx context.Context, plugin *neo4jv1alpha1.Neo4jPlugin, deployment *DeploymentInfo) error {
 	logger := log.FromContext(ctx)
 
 	if len(plugin.Spec.Config) == 0 {
@@ -743,8 +804,18 @@ func (r *Neo4jPluginReconciler) configurePlugin(ctx context.Context, plugin *neo
 		return nil
 	}
 
-	// Create Neo4j client
-	neo4jClient, err := neo4jclient.NewClientForEnterprise(cluster, r.Client, "neo4j-admin-secret")
+	// Create Neo4j client based on deployment type
+	var neo4jClient *neo4jclient.Client
+	var err error
+
+	if deployment.Type == "cluster" {
+		cluster := deployment.Object.(*neo4jv1alpha1.Neo4jEnterpriseCluster)
+		neo4jClient, err = neo4jclient.NewClientForEnterprise(cluster, r.Client, "neo4j-admin-secret")
+	} else {
+		standalone := deployment.Object.(*neo4jv1alpha1.Neo4jEnterpriseStandalone)
+		neo4jClient, err = neo4jclient.NewClientForEnterpriseStandalone(standalone, r.Client, "neo4j-admin-secret")
+	}
+
 	if err != nil {
 		return fmt.Errorf("failed to create Neo4j client: %w", err)
 	}
@@ -798,20 +869,17 @@ func (r *Neo4jPluginReconciler) applySecurityConfiguration(ctx context.Context, 
 func (r *Neo4jPluginReconciler) uninstallPlugin(ctx context.Context, plugin *neo4jv1alpha1.Neo4jPlugin) error {
 	logger := log.FromContext(ctx)
 
-	// Get target cluster
-	cluster, err := r.getTargetCluster(ctx, plugin)
+	// Get target deployment
+	deployment, err := r.getTargetDeployment(ctx, plugin)
 	if err != nil {
-		// If cluster is not found, consider plugin already uninstalled
-		if errors.IsNotFound(err) {
-			logger.Info("Target cluster not found, considering plugin uninstalled")
-			return nil
-		}
-		return fmt.Errorf("failed to get target cluster: %w", err)
+		// If deployment is not found, consider plugin already uninstalled
+		logger.Info("Target deployment not found, considering plugin uninstalled")
+		return nil
 	}
 
-	// Remove plugin from cluster
-	if err := r.removePluginFromCluster(ctx, plugin, cluster); err != nil {
-		return fmt.Errorf("failed to remove plugin from cluster: %w", err)
+	// Remove plugin from deployment
+	if err := r.removePluginFromDeployment(ctx, plugin, deployment); err != nil {
+		return fmt.Errorf("failed to remove plugin from deployment: %w", err)
 	}
 
 	// Clean up plugin dependencies
@@ -823,18 +891,18 @@ func (r *Neo4jPluginReconciler) uninstallPlugin(ctx context.Context, plugin *neo
 	return nil
 }
 
-func (r *Neo4jPluginReconciler) removePluginFromCluster(ctx context.Context, plugin *neo4jv1alpha1.Neo4jPlugin, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) error {
+func (r *Neo4jPluginReconciler) removePluginFromDeployment(ctx context.Context, plugin *neo4jv1alpha1.Neo4jPlugin, deployment *DeploymentInfo) error {
 	logger := log.FromContext(ctx)
-	logger.Info("Removing plugin from cluster", "plugin", plugin.Spec.Name)
+	logger.Info("Removing plugin from deployment", "plugin", plugin.Spec.Name, "type", deployment.Type)
 
 	// Create a Job to remove the plugin from the cluster
 	removeJob := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s-remove-plugin-%s", cluster.Name, plugin.Spec.Name),
-			Namespace: cluster.Namespace,
+			Name:      fmt.Sprintf("%s-remove-plugin-%s", deployment.Name, plugin.Spec.Name),
+			Namespace: deployment.Namespace,
 			Labels: map[string]string{
 				"app.kubernetes.io/name":      "neo4j-plugin",
-				"app.kubernetes.io/instance":  cluster.Name,
+				"app.kubernetes.io/instance":  deployment.Name,
 				"app.kubernetes.io/component": "plugin-removal",
 				"neo4j.plugin/name":           plugin.Spec.Name,
 			},
@@ -850,11 +918,11 @@ func (r *Neo4jPluginReconciler) removePluginFromCluster(ctx context.Context, plu
 							Command: []string{"sh", "-c"},
 							Args: []string{
 								fmt.Sprintf(`
-									echo "Removing plugin %s from Neo4j cluster %s"
+									echo "Removing plugin %s from Neo4j %s %s"
 									# Remove plugin jar file
 									rm -f /plugins/%s*.jar
 									echo "Plugin removal completed"
-								`, plugin.Spec.Name, cluster.Name, plugin.Spec.Name),
+								`, plugin.Spec.Name, deployment.Type, deployment.Name, plugin.Spec.Name),
 							},
 							VolumeMounts: []corev1.VolumeMount{
 								{
@@ -869,7 +937,7 @@ func (r *Neo4jPluginReconciler) removePluginFromCluster(ctx context.Context, plu
 							Name: "plugins",
 							VolumeSource: corev1.VolumeSource{
 								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-									ClaimName: cluster.Name + "-plugins",
+									ClaimName: r.getPluginsPVCName(deployment),
 								},
 							},
 						},
@@ -951,6 +1019,48 @@ func (r *Neo4jPluginReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 // Helper functions
+
+// getStatefulSetName returns the correct StatefulSet name for the deployment type
+func (r *Neo4jPluginReconciler) getStatefulSetName(deployment *DeploymentInfo) string {
+	if deployment.Type == "cluster" {
+		return deployment.Name + "-server"
+	}
+	// For standalone, the StatefulSet name is the same as the deployment name
+	return deployment.Name
+}
+
+// getPluginsPVCName returns the correct PVC name for plugins based on deployment type
+// Since plugins currently use EmptyDir, plugin installation will copy to running pods directly
+func (r *Neo4jPluginReconciler) getPluginsPVCName(deployment *DeploymentInfo) string {
+	// Since plugins use EmptyDir volumes, we'll need to copy plugins directly to pods
+	// This is a placeholder - actual implementation should copy to running pod containers
+	// For now, return a shared volume name that can be used by init containers
+	return "plugin-downloads"
+}
+
+// getPodLabels returns the appropriate pod labels for the deployment type
+func (r *Neo4jPluginReconciler) getPodLabels(deployment *DeploymentInfo) map[string]string {
+	if deployment.Type == "cluster" {
+		return map[string]string{
+			"app.kubernetes.io/name":     "neo4j",
+			"app.kubernetes.io/instance": deployment.Name,
+		}
+	}
+	// For standalone
+	return map[string]string{
+		"app": deployment.Name,
+	}
+}
+
+// getExpectedReplicas returns the expected number of replicas for the deployment
+func (r *Neo4jPluginReconciler) getExpectedReplicas(deployment *DeploymentInfo) int {
+	if deployment.Type == "cluster" {
+		cluster := deployment.Object.(*neo4jv1alpha1.Neo4jEnterpriseCluster)
+		return int(cluster.Spec.Topology.Servers)
+	}
+	// Standalone always has 1 replica
+	return 1
+}
 
 func (r *Neo4jPluginReconciler) buildRegistryEnvVars(registry *neo4jv1alpha1.PluginRegistry) []corev1.EnvVar {
 	var envVars []corev1.EnvVar

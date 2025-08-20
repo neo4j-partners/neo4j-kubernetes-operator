@@ -1,0 +1,34 @@
+# Example Neo4jPlugin for Neo4jEnterpriseCluster
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jPlugin
+metadata:
+  name: cluster-apoc-plugin
+  namespace: default
+spec:
+  # References a Neo4jEnterpriseCluster deployment
+  clusterRef: my-cluster
+
+  # Plugin configuration
+  name: apoc
+  version: "5.26.0"
+  enabled: true
+
+  # Plugin source - official Neo4j plugin repository
+  source:
+    type: official
+
+  # Plugin configuration
+  config:
+    "apoc.export.file.enabled": "true"
+    "apoc.import.file.enabled": "true"
+
+  # Security configuration
+  security:
+    allowedProcedures:
+      - "apoc.*"
+    sandbox: false
+
+  # Resource requirements for the plugin
+  resources:
+    memoryLimit: "256Mi"
+    cpuLimit: "100m"
