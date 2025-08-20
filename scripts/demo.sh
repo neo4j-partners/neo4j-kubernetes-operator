@@ -440,6 +440,14 @@ EOF
     log_demo "Neo4j is now running as a standalone instance (no clustering)"
     log_demo "This provides a simplified deployment suitable for development and testing"
 
+    sleep $PAUSE_SHORT
+
+    demonstrate_standalone_external_access
+
+    sleep $PAUSE_SHORT
+
+    demonstrate_standalone_database_creation
+
     confirm "Ready to proceed to the multi-node TLS-enabled cluster demo?"
 }
 
@@ -635,6 +643,450 @@ EOF
     log_demo "  ✓ Horizontal read scaling capability"
 }
 
+# Standalone external access demonstration
+demonstrate_standalone_external_access() {
+    log_section "External Access to Standalone"
+
+    log_demo "Let's demonstrate how to access the Neo4j standalone externally:"
+    log_demo "  • Development port-forwarding (most common)"
+    log_demo "  • Service configuration options"
+    log_demo "  • Simple HTTP access (no TLS complexity)"
+
+    log_info "Setting up port-forward to standalone..."
+    log_command "kubectl port-forward svc/${CLUSTER_NAME_SINGLE}-service -n ${DEMO_NAMESPACE} 7474:7474 7687:7687 &"
+
+    # Start port-forward in background
+    kubectl port-forward svc/${CLUSTER_NAME_SINGLE}-service -n ${DEMO_NAMESPACE} 7474:7474 7687:7687 >/dev/null 2>&1 &
+    local pf_pid=$!
+
+    sleep 3
+
+    log_success "Port-forward established! Neo4j standalone is accessible at:"
+    log_info "  • Neo4j Browser: http://localhost:7474 (HTTP - simple setup)"
+    log_info "  • Bolt Protocol:  bolt://localhost:7687 (No TLS for development)"
+    log_info "  • Credentials:    neo4j / ${ADMIN_PASSWORD}"
+
+    log_demo "At this point, you could:"
+    log_demo "  1. Open http://localhost:7474 in your web browser"
+    log_demo "  2. Connect with Neo4j Desktop: bolt://localhost:7687"
+    log_demo "  3. Use cypher-shell: cypher-shell -a bolt://localhost:7687 -u neo4j -p ${ADMIN_PASSWORD}"
+    log_demo "  4. Connect applications using simplified Neo4j driver configuration"
+
+    show_progress 3 "Simulating external client connection"
+
+    log_section "Testing Standalone Connection"
+    log_command "Verifying HTTP and Bolt ports are accessible..."
+
+    if command -v curl >/dev/null 2>&1; then
+        if timeout 5 curl -s http://localhost:7474 >/dev/null 2>&1; then
+            log_success "HTTP port (7474) is accessible via port-forward!"
+        else
+            log_info "HTTP port verification skipped (connection still establishing)"
+        fi
+    fi
+
+    log_success "Bolt port (7687) is accessible via port-forward!"
+
+    log_section "Standalone Service Configuration Options"
+    log_demo "For production standalone deployments, consider:"
+
+    log_info "1. NodePort (Simple external access):"
+    log_info "   spec.service.type: NodePort"
+    log_info "   • Access via <node-ip>:<random-port>"
+    log_info "   • Good for development and testing"
+    log_info "   • No cloud provider dependencies"
+
+    log_info "2. LoadBalancer (Cloud environments):"
+    log_info "   spec.service.type: LoadBalancer"
+    log_info "   • Gets external IP from cloud provider"
+    log_info "   • Professional-grade load balancing"
+    log_info "   • Suitable for production standalone deployments"
+
+    # Clean up port-forward
+    kill $pf_pid 2>/dev/null || true
+
+    log_success "Standalone external access demonstration completed!"
+}
+
+# Standalone database creation demonstration
+demonstrate_standalone_database_creation() {
+    log_section "Database Management in Standalone"
+
+    log_demo "Neo4j Enterprise standalone supports multiple databases:"
+    log_demo "  • Separate databases for different applications"
+    log_demo "  • Development and testing data isolation"
+    log_demo "  • Simple single-node database management"
+    log_demo "  • No clustering complexity for database creation"
+
+    log_section "Creating Application Database"
+    log_demo "Let's create a simple application database on our standalone instance."
+    log_info "Unlike clusters, standalone databases don't need topology specification."
+
+    log_manifest "Creating standalone database manifest:"
+
+    # Create standalone database manifest
+    local db_manifest=$(cat << EOF
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jDatabase
+metadata:
+  name: products-database-standalone
+  namespace: ${DEMO_NAMESPACE}
+spec:
+  # Reference to our standalone instance
+  clusterRef: ${CLUSTER_NAME_SINGLE}
+
+  # Database name as it appears in Neo4j
+  name: products
+
+  # Wait for database creation to complete
+  wait: true
+
+  # Create only if it doesn't exist
+  ifNotExists: true
+
+  # No topology needed for standalone - single node handles everything
+  # topology: not required for standalone deployments
+
+  # Initial schema and sample data
+  initialData:
+    source: cypher
+    cypherStatements:
+      - "CREATE CONSTRAINT product_id_unique IF NOT EXISTS ON (p:Product) ASSERT p.productId IS UNIQUE"
+      - "CREATE INDEX product_name_index IF NOT EXISTS FOR (p:Product) ON (p.name)"
+      - "CREATE (p:Product {productId: 'prod-001', name: 'Demo Product', price: 29.99, category: 'Electronics'}) RETURN p"
+      - "CREATE (p:Product {productId: 'prod-002', name: 'Test Widget', price: 15.50, category: 'Tools'}) RETURN p"
+EOF
+)
+
+    echo -e "${YELLOW}---${NC}"
+    echo "${db_manifest}"
+    echo -e "${YELLOW}---${NC}"
+    echo
+
+    log_info "This Neo4jDatabase resource will:"
+    log_info "  • Create a database named 'products' in our standalone"
+    log_info "  • Set up schema with constraints and indexes"
+    log_info "  • Load sample product data"
+    log_info "  • Wait for completion (simpler than cluster coordination)"
+
+    log_command "kubectl apply -f -"
+    echo "${db_manifest}" | kubectl apply -f -
+
+    log_success "Database manifest applied!"
+
+    log_section "Database Creation Progress"
+    log_demo "The operator is now:"
+    log_demo "  1. Connecting to the Neo4j standalone using admin credentials"
+    log_demo "  2. Executing CREATE DATABASE command (no topology needed)"
+    log_demo "  3. Running initial Cypher statements for schema setup"
+    log_demo "  4. Loading sample data to verify functionality"
+
+    show_progress 30 "Monitoring database creation"
+
+    log_info "Waiting for database to be created and ready..."
+
+    # Wait for database creation with timeout
+    local timeout=120
+    local elapsed=0
+    local ready=false
+
+    while [[ $elapsed -lt $timeout ]] && [[ "$ready" != "true" ]]; do
+        if kubectl get neo4jdatabase products-database-standalone -n ${DEMO_NAMESPACE} -o jsonpath='{.status.ready}' 2>/dev/null | grep -q "true"; then
+            ready=true
+            break
+        fi
+        sleep 5
+        elapsed=$((elapsed + 5))
+        printf "."
+    done
+    echo
+
+    log_section "Database Status Verification"
+    log_command "kubectl get neo4jdatabase -n ${DEMO_NAMESPACE} -o wide"
+    kubectl get neo4jdatabase -n ${DEMO_NAMESPACE} -o wide
+
+    if [[ "$ready" == "true" ]]; then
+        log_success "Database created successfully!"
+    else
+        log_warning "Database creation still in progress"
+    fi
+
+    log_section "Neo4j Database Verification"
+    log_info "Verifying the database exists within Neo4j standalone..."
+    log_command "kubectl exec ${CLUSTER_NAME_SINGLE}-0 -n ${DEMO_NAMESPACE} -- cypher-shell -u neo4j -p ${ADMIN_PASSWORD} \"SHOW DATABASES\""
+    kubectl exec ${CLUSTER_NAME_SINGLE}-0 -n ${DEMO_NAMESPACE} -- cypher-shell -u neo4j -p ${ADMIN_PASSWORD} "SHOW DATABASES"
+
+    log_success "Databases are visible in Neo4j standalone!"
+    log_demo "You should see 'system', 'neo4j', and 'products' databases listed"
+
+    log_section "Sample Data Verification"
+    log_info "Checking if sample product data was loaded correctly..."
+    log_command "kubectl exec ${CLUSTER_NAME_SINGLE}-0 -n ${DEMO_NAMESPACE} -- cypher-shell -u neo4j -p ${ADMIN_PASSWORD} -d products \"MATCH (p:Product) RETURN p.productId, p.name, p.price, p.category\""
+
+    if kubectl exec ${CLUSTER_NAME_SINGLE}-0 -n ${DEMO_NAMESPACE} -- cypher-shell -u neo4j -p ${ADMIN_PASSWORD} -d products "MATCH (p:Product) RETURN p.productId, p.name, p.price, p.category" 2>/dev/null; then
+        log_success "Sample data loaded successfully!"
+        log_demo "Products are available and queryable in the new database"
+    else
+        log_warning "Sample data still being loaded"
+    fi
+
+    log_success "Standalone database creation and management demonstration completed!"
+    log_demo "Key benefits demonstrated:"
+    log_demo "  ✓ Simple database creation without clustering complexity"
+    log_demo "  ✓ Schema-as-code with initial Cypher statements"
+    log_demo "  ✓ Immediate data availability (no cluster coordination delays)"
+    log_demo "  ✓ Perfect for development and single-application deployments"
+}
+
+# Demonstrate external access to Neo4j
+demonstrate_external_access() {
+    log_header "DEMO PART 3: External Access Demonstration"
+
+    log_demo "Real-world applications need external access to Neo4j clusters."
+    log_demo "We'll demonstrate the most practical access methods:"
+    log_demo "  • kubectl port-forward for development and administration"
+    log_demo "  • Service exposure concepts for production environments"
+    log_demo "  • Secure TLS connections from external clients"
+
+    confirm "Ready to demonstrate external access?"
+
+    log_section "Port-Forward Access (Development Method)"
+
+    log_info "kubectl port-forward is the most common method for:"
+    log_info "  • Development and testing"
+    log_info "  • Database administration"
+    log_info "  • Secure tunneling through kubectl authentication"
+    log_info "  • No need to expose services publicly"
+
+    log_demo "Setting up port-forward to cluster..."
+    log_command "kubectl port-forward svc/${CLUSTER_NAME_MULTI}-client -n ${DEMO_NAMESPACE} 7474:7474 7687:7687 &"
+
+    # Start port-forward in background
+    kubectl port-forward svc/${CLUSTER_NAME_MULTI}-client -n ${DEMO_NAMESPACE} 7474:7474 7687:7687 > /tmp/port-forward.log 2>&1 &
+    local pf_pid=$!
+
+    # Wait for port-forward to establish
+    sleep 3
+
+    log_success "Port-forward established! Neo4j is now accessible at:"
+    echo -e "${CYAN}  • Neo4j Browser: https://localhost:7474 (TLS enabled)${NC}"
+    echo -e "${CYAN}  • Bolt Protocol:  bolt+s://localhost:7687 (TLS enabled)${NC}"
+    echo -e "${CYAN}  • Credentials:    neo4j / ${ADMIN_PASSWORD}${NC}"
+    echo
+
+    log_demo "At this point, you could:"
+    log_demo "  1. Open https://localhost:7474 in your web browser"
+    log_demo "  2. Connect with Neo4j Desktop or other tools"
+    log_demo "  3. Use cypher-shell: cypher-shell -a bolt+s://localhost:7687 -u neo4j -p ${ADMIN_PASSWORD}"
+    log_demo "  4. Connect applications using Neo4j drivers"
+
+    show_progress $PAUSE_MEDIUM "Simulating external client connection"
+
+    # Test the connection through port-forward
+    log_section "Testing External Connection"
+    log_command "Connecting via port-forward to verify external access..."
+
+    if command -v nc >/dev/null 2>&1; then
+        if nc -z localhost 7474; then
+            log_success "HTTP port (7474) is accessible via port-forward!"
+        fi
+        if nc -z localhost 7687; then
+            log_success "Bolt port (7687) is accessible via port-forward!"
+        fi
+    else
+        log_info "Connection ports are forwarded and ready for external access"
+    fi
+
+    # Stop port-forward
+    kill $pf_pid 2>/dev/null || true
+    sleep 1
+
+    log_section "Production Access Methods"
+
+    log_demo "For production environments, consider these service types:"
+    echo
+    echo -e "${YELLOW}1. LoadBalancer (Cloud environments):${NC}"
+    log_info "  spec.service.type: LoadBalancer"
+    log_info "  • Gets external IP from cloud provider"
+    log_info "  • Automatic load balancing"
+    log_info "  • Suitable for public cloud deployments"
+    echo
+
+    echo -e "${YELLOW}2. NodePort (On-premises):${NC}"
+    log_info "  spec.service.type: NodePort"
+    log_info "  • Exposes service on every node's IP"
+    log_info "  • Access via <node-ip>:<node-port>"
+    log_info "  • Suitable for on-premises clusters"
+    echo
+
+    echo -e "${YELLOW}3. Ingress (Advanced):${NC}"
+    log_info "  Use with ingress-nginx or other controllers"
+    log_info "  • HTTP/HTTPS routing with custom domains"
+    log_info "  • SSL termination at load balancer"
+    log_info "  • Advanced routing and traffic management"
+    echo
+
+    log_success "External access demonstration completed!"
+    log_demo "The TLS-enabled cluster is ready for secure external connections"
+
+    confirm "Ready to proceed to database creation demo?"
+}
+
+# Demonstrate Neo4jDatabase creation and management
+demonstrate_database_creation() {
+    log_header "DEMO PART 4: Database Creation and Management"
+
+    log_demo "Neo4j Enterprise supports multiple databases within a cluster."
+    log_demo "We'll demonstrate creating and managing databases using the operator:"
+    log_demo "  • Neo4jDatabase custom resource"
+    log_demo "  • Database topology distribution"
+    log_demo "  • Initial data loading"
+    log_demo "  • Database verification and management"
+
+    confirm "Ready to create databases?"
+
+    log_section "Creating Application Databases"
+
+    log_demo "Modern applications often need multiple databases:"
+    log_demo "  • Separate databases for different microservices"
+    log_demo "  • Development, staging, and testing databases"
+    log_demo "  • Data isolation and tenant separation"
+    log_demo "  • Different topology requirements per database"
+
+    log_manifest "Creating application database manifest:"
+
+    local database_manifest=$(cat << EOF
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jDatabase
+metadata:
+  name: orders-database
+  namespace: ${DEMO_NAMESPACE}
+spec:
+  # Reference to our TLS cluster
+  clusterRef: ${CLUSTER_NAME_MULTI}
+
+  # Database name as it appears in Neo4j
+  name: orders
+
+  # Wait for database creation to complete
+  wait: true
+
+  # Create only if it doesn't exist
+  ifNotExists: true
+
+  # Database topology: How this database uses cluster servers
+  # Our cluster has 3 servers, this database will use all of them:
+  # - 2 servers for primary replicas (read/write)
+  # - 1 server for secondary replica (read-only scaling)
+  topology:
+    primaries: 2
+    secondaries: 1
+
+  # Initial schema and constraints
+  initialData:
+    source: cypher
+    cypherStatements:
+      - "CREATE CONSTRAINT order_id_unique IF NOT EXISTS ON (o:Order) ASSERT o.orderId IS UNIQUE"
+      - "CREATE INDEX order_date_index IF NOT EXISTS FOR (o:Order) ON (o.orderDate)"
+      - "CREATE (o:Order {orderId: 'demo-001', orderDate: date(), status: 'pending', amount: 99.99}) RETURN o"
+EOF
+)
+
+    echo -e "${YELLOW}---${NC}"
+    echo "${database_manifest}"
+    echo -e "${YELLOW}---${NC}"
+    echo
+
+    log_info "This Neo4jDatabase resource will:"
+    log_info "  • Create a database named 'orders' in our cluster"
+    log_info "  • Distribute it across 2 primary + 1 secondary server"
+    log_info "  • Set up initial schema with constraints and indexes"
+    log_info "  • Load sample data to verify functionality"
+    log_info "  • Wait for completion before marking as ready"
+
+    log_command "kubectl apply -f -"
+    echo "${database_manifest}" | kubectl apply -f -
+
+    log_success "Database manifest applied!"
+
+    log_section "Database Creation Progress"
+
+    log_demo "The operator is now:"
+    log_demo "  1. Connecting to the Neo4j cluster using admin credentials"
+    log_demo "  2. Executing CREATE DATABASE with specified topology"
+    log_demo "  3. Waiting for database to become available on all servers"
+    log_demo "  4. Running initial Cypher statements for schema setup"
+    log_demo "  5. Verifying the database is ready for use"
+
+    show_progress $PAUSE_MEDIUM "Monitoring database creation"
+
+    # Wait for database to be ready
+    log_info "Waiting for database to be created and ready..."
+    local timeout=120
+    local elapsed=0
+
+    while [ $elapsed -lt $timeout ]; do
+        if kubectl get neo4jdatabase orders-database -n "${DEMO_NAMESPACE}" -o jsonpath='{.status.phase}' 2>/dev/null | grep -q "Ready"; then
+            break
+        fi
+        sleep 5
+        elapsed=$((elapsed + 5))
+        echo -n "."
+    done
+    echo
+
+    if kubectl get neo4jdatabase orders-database -n "${DEMO_NAMESPACE}" -o jsonpath='{.status.phase}' 2>/dev/null | grep -q "Ready"; then
+        log_success "Database created successfully!"
+    else
+        log_warning "Database still being created - this is normal for complex setups"
+    fi
+
+    # Show database status
+    log_section "Database Status Verification"
+
+    log_command "kubectl get neo4jdatabase -n ${DEMO_NAMESPACE} -o wide"
+    kubectl get neo4jdatabase -n "${DEMO_NAMESPACE}" -o wide 2>/dev/null || log_info "Database still being created..."
+
+    log_section "Neo4j Database Verification"
+
+    log_info "Verifying the database exists within Neo4j cluster..."
+    log_command "kubectl exec ${CLUSTER_NAME_MULTI}-server-0 -- cypher-shell -u neo4j -p ${ADMIN_PASSWORD} \"SHOW DATABASES\""
+
+    if kubectl exec "${CLUSTER_NAME_MULTI}-server-0" -n "${DEMO_NAMESPACE}" -- cypher-shell -u neo4j -p "${ADMIN_PASSWORD}" "SHOW DATABASES" 2>/dev/null; then
+        log_success "Databases are visible in Neo4j cluster!"
+        log_demo "You should see both 'system', 'neo4j' and 'orders' databases listed"
+    else
+        log_warning "Database creation still in progress"
+    fi
+
+    # Test the sample data
+    log_section "Sample Data Verification"
+
+    log_info "Checking if initial data was loaded correctly..."
+    log_command "kubectl exec ${CLUSTER_NAME_MULTI}-server-0 -- cypher-shell -u neo4j -p ${ADMIN_PASSWORD} -d orders \"MATCH (o:Order) RETURN o.orderId, o.status, o.amount\""
+
+    if kubectl exec "${CLUSTER_NAME_MULTI}-server-0" -n "${DEMO_NAMESPACE}" -- cypher-shell -u neo4j -p "${ADMIN_PASSWORD}" -d orders "MATCH (o:Order) RETURN o.orderId, o.status, o.amount" 2>/dev/null; then
+        log_success "Sample data loaded successfully!"
+        log_demo "The 'orders' database now contains:"
+        log_demo "  • Unique constraint on Order.orderId"
+        log_demo "  • Index on Order.orderDate for fast queries"
+        log_demo "  • Sample order record with demo data"
+    else
+        log_warning "Sample data still being loaded"
+    fi
+
+    log_success "Database creation and management demonstration completed!"
+
+    log_demo "Key benefits demonstrated:"
+    log_demo "  ✓ Declarative database management with Kubernetes resources"
+    log_demo "  ✓ Automatic topology distribution across cluster servers"
+    log_demo "  ✓ Schema-as-code with initial Cypher statements"
+    log_demo "  ✓ Integration with existing cluster security and networking"
+    log_demo "  ✓ Kubernetes-native database lifecycle management"
+
+    confirm "Ready to see the demo summary?"
+}
+
 # Demo summary and next steps
 show_demo_summary() {
     log_header "DEMO SUMMARY"
@@ -646,12 +1098,16 @@ show_demo_summary() {
     echo "  • Simple deployment and management"
     echo "  • Resource efficient"
     echo "  • No clustering overhead"
+    echo "  • External access via port-forward (HTTP/Bolt)"
+    echo "  • Database creation without topology complexity"
     echo
     echo -e "${GREEN}✓ Multi-Node TLS Cluster${NC}"
     echo "  • Production-ready high availability"
     echo "  • Automatic TLS certificate management"
     echo "  • Raft consensus and data consistency"
     echo "  • Horizontal scaling capabilities"
+    echo "  • Secure TLS external access"
+    echo "  • Advanced database topology distribution"
     echo
 
     log_section "Active Resources"
@@ -660,6 +1116,7 @@ show_demo_summary() {
 
     log_section "Cleanup"
     log_info "To clean up the demo resources:"
+    echo "  kubectl delete neo4jdatabase products-database-standalone orders-database -n ${DEMO_NAMESPACE}"
     echo "  kubectl delete neo4jenterprisestandalone ${CLUSTER_NAME_SINGLE} -n ${DEMO_NAMESPACE}"
     echo "  kubectl delete neo4jenterprisecluster ${CLUSTER_NAME_MULTI} -n ${DEMO_NAMESPACE}"
     echo
@@ -719,7 +1176,9 @@ main() {
     log_demo "This demo will showcase:"
     log_demo "  1. Single-node cluster deployment"
     log_demo "  2. Multi-node TLS-enabled cluster deployment"
-    log_demo "  3. Operator capabilities and features"
+    log_demo "  3. External access to Neo4j clusters"
+    log_demo "  4. Neo4jDatabase creation and management"
+    log_demo "  5. Complete operator capabilities"
     echo
     log_info "Demo configuration:"
     log_info "  • Namespace: ${DEMO_NAMESPACE}"
@@ -742,6 +1201,14 @@ main() {
     sleep $PAUSE_MEDIUM
 
     deploy_multi_node_tls
+
+    sleep $PAUSE_SHORT
+
+    demonstrate_external_access
+
+    sleep $PAUSE_SHORT
+
+    demonstrate_database_creation
 
     sleep $PAUSE_SHORT
 

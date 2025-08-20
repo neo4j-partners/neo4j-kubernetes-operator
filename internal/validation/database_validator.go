@@ -56,21 +56,36 @@ func (v *DatabaseValidator) Validate(ctx context.Context, database *neo4jv1alpha
 		Warnings: []string{},
 	}
 
-	// Get referenced cluster to validate topology constraints
+	// Try to get referenced cluster first
 	cluster := &neo4jv1alpha1.Neo4jEnterpriseCluster{}
 	clusterKey := types.NamespacedName{
 		Name:      database.Spec.ClusterRef,
 		Namespace: database.Namespace,
 	}
 
-	if err := v.client.Get(ctx, clusterKey, cluster); err != nil {
-		if errors.IsNotFound(err) {
+	clusterErr := v.client.Get(ctx, clusterKey, cluster)
+
+	// If cluster not found, try to get standalone
+	var standalone *neo4jv1alpha1.Neo4jEnterpriseStandalone
+	if errors.IsNotFound(clusterErr) {
+		standalone = &neo4jv1alpha1.Neo4jEnterpriseStandalone{}
+		standaloneKey := types.NamespacedName{
+			Name:      database.Spec.ClusterRef,
+			Namespace: database.Namespace,
+		}
+
+		standaloneErr := v.client.Get(ctx, standaloneKey, standalone)
+		if errors.IsNotFound(standaloneErr) {
 			result.Errors = append(result.Errors, field.NotFound(
 				field.NewPath("spec", "clusterRef"),
 				fmt.Sprintf("Referenced cluster %s not found", database.Spec.ClusterRef)))
 			return result
+		} else if standaloneErr != nil {
+			result.Warnings = append(result.Warnings,
+				fmt.Sprintf("Cannot validate database configuration: failed to get cluster %s", database.Spec.ClusterRef))
+			return result
 		}
-		// If we can't get the cluster, we can't validate topology
+	} else if clusterErr != nil {
 		result.Warnings = append(result.Warnings,
 			fmt.Sprintf("Cannot validate database topology: failed to get cluster %s", database.Spec.ClusterRef))
 		return result
@@ -78,7 +93,11 @@ func (v *DatabaseValidator) Validate(ctx context.Context, database *neo4jv1alpha
 
 	// Validate topology if specified
 	if database.Spec.Topology != nil {
-		v.validateDatabaseTopology(database, cluster, result)
+		if standalone != nil {
+			v.validateDatabaseTopologyForStandalone(database, standalone, result)
+		} else {
+			v.validateDatabaseTopology(database, cluster, result)
+		}
 	}
 
 	// Validate Cypher language version
@@ -94,6 +113,46 @@ func (v *DatabaseValidator) Validate(ctx context.Context, database *neo4jv1alpha
 	v.validateConfigurationConflicts(database, result)
 
 	return result
+}
+
+func (v *DatabaseValidator) validateDatabaseTopologyForStandalone(database *neo4jv1alpha1.Neo4jDatabase, standalone *neo4jv1alpha1.Neo4jEnterpriseStandalone, result *DatabaseValidationResult) {
+	topologyPath := field.NewPath("spec", "topology")
+	topology := database.Spec.Topology
+
+	// For standalone deployments, topology is not needed and will be ignored
+	result.Warnings = append(result.Warnings,
+		"Database topology specification is not required for standalone deployments and will be ignored. "+
+			"Standalone instances handle all database operations on a single node.")
+
+	// However, if specified, validate for basic sanity
+	if topology.Primaries < 0 {
+		result.Errors = append(result.Errors, field.Invalid(
+			topologyPath.Child("primaries"),
+			topology.Primaries,
+			"primaries cannot be negative"))
+	}
+
+	if topology.Secondaries < 0 {
+		result.Errors = append(result.Errors, field.Invalid(
+			topologyPath.Child("secondaries"),
+			topology.Secondaries,
+			"secondaries cannot be negative"))
+	}
+
+	// At least one primary is required for any database
+	if topology.Primaries == 0 && topology.Primaries >= 0 && topology.Secondaries >= 0 {
+		result.Errors = append(result.Errors, field.Invalid(
+			topologyPath.Child("primaries"),
+			topology.Primaries,
+			"at least 1 primary is required for database operation"))
+	}
+
+	// Warn about secondaries on standalone
+	if topology.Secondaries > 0 {
+		result.Warnings = append(result.Warnings,
+			fmt.Sprintf("Database topology specifies %d secondaries, but standalone deployments cannot provide read replicas. "+
+				"All operations will be handled by the single standalone instance.", topology.Secondaries))
+	}
 }
 
 func (v *DatabaseValidator) validateDatabaseTopology(database *neo4jv1alpha1.Neo4jDatabase, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, result *DatabaseValidationResult) {

@@ -456,6 +456,115 @@ var _ = Describe("Neo4jEnterpriseStandalone Integration Tests", func() {
 		})
 	})
 
+	Context("Standalone with Database Creation", func() {
+		It("should support creating databases in standalone deployment", func() {
+			By("Creating a standalone with authentication secret")
+
+			// Create admin secret first
+			adminSecret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "standalone-admin-secret",
+					Namespace: namespace.Name,
+				},
+				Data: map[string][]byte{
+					"username": []byte("neo4j"),
+					"password": []byte("admin123"),
+				},
+			}
+			Expect(k8sClient.Create(ctx, adminSecret)).To(Succeed())
+
+			standalone = &neo4jv1alpha1.Neo4jEnterpriseStandalone{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      standaloneName,
+					Namespace: namespace.Name,
+				},
+				Spec: neo4jv1alpha1.Neo4jEnterpriseStandaloneSpec{
+					Edition: "enterprise",
+					Image: neo4jv1alpha1.ImageSpec{
+						Repo:       "neo4j",
+						Tag:        "5.26-enterprise",
+						PullPolicy: "IfNotPresent",
+					},
+					Storage: neo4jv1alpha1.StorageSpec{
+						ClassName: "standard",
+						Size:      "500Mi",
+					},
+					Resources: &corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("50m"),
+							corev1.ResourceMemory: resource.MustParse("256Mi"),
+						},
+						Limits: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("200m"),
+							corev1.ResourceMemory: resource.MustParse("1.5Gi"), // Increased for database operations
+						},
+					},
+					Auth: &neo4jv1alpha1.AuthSpec{
+						AdminSecret: "standalone-admin-secret",
+					},
+					Env: []corev1.EnvVar{
+						{
+							Name:  "NEO4J_ACCEPT_LICENSE_AGREEMENT",
+							Value: "eval",
+						},
+					},
+				},
+			}
+
+			By("Creating the standalone resource")
+			Expect(k8sClient.Create(ctx, standalone)).To(Succeed())
+
+			By("Waiting for standalone to become ready")
+			Eventually(func() error {
+				updatedStandalone := &neo4jv1alpha1.Neo4jEnterpriseStandalone{}
+				if err := k8sClient.Get(ctx, types.NamespacedName{
+					Name:      standaloneName,
+					Namespace: namespace.Name,
+				}, updatedStandalone); err != nil {
+					return err
+				}
+
+				if updatedStandalone.Status.Ready != true {
+					return fmt.Errorf("standalone not ready, current phase: %s", updatedStandalone.Status.Phase)
+				}
+
+				return nil
+			}, time.Minute*5, time.Second*10).Should(Succeed())
+
+			By("Creating a database resource that references the standalone")
+			database := &neo4jv1alpha1.Neo4jDatabase{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-database-standalone",
+					Namespace: namespace.Name,
+				},
+				Spec: neo4jv1alpha1.Neo4jDatabaseSpec{
+					ClusterRef:  standaloneName, // References standalone resource
+					Name:        "teststandalonedb",
+					Wait:        true,
+					IfNotExists: true,
+				},
+			}
+			Expect(k8sClient.Create(ctx, database)).To(Succeed())
+
+			By("Database should be accepted and validated for standalone")
+			Eventually(func() error {
+				updatedDatabase := &neo4jv1alpha1.Neo4jDatabase{}
+				if err := k8sClient.Get(ctx, types.NamespacedName{
+					Name:      database.Name,
+					Namespace: database.Namespace,
+				}, updatedDatabase); err != nil {
+					return err
+				}
+
+				// Database should exist without validation errors
+				return nil
+			}, time.Minute*2, time.Second*5).Should(Succeed())
+
+			By("Cleaning up database resource")
+			Expect(k8sClient.Delete(ctx, database)).To(Succeed())
+		})
+	})
+
 	Context("Standalone with TLS Enabled", func() {
 		It("should configure TLS enabled settings properly", func() {
 			By("Creating a standalone with TLS enabled")

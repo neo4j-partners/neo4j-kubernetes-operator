@@ -364,6 +364,59 @@ CALL dbms.cluster.role()
 -- Any causal_clustering.* configuration
 ```
 
+## CRITICAL: Neo4jDatabase Support for Standalone Deployments (Added 2025-08-20)
+
+**MANDATORY FOR PRODUCTION**: The operator now fully supports Neo4jDatabase resources with both Neo4jEnterpriseCluster AND Neo4jEnterpriseStandalone deployments.
+
+**Key Fixes Implemented**:
+- **Enhanced DatabaseValidator**: Added dual resource discovery - tries cluster first, then standalone
+- **Enhanced Database Controller**: Added standalone-specific reconciliation logic with proper client creation
+- **Enhanced Neo4j Client**: Added `NewClientForEnterpriseStandalone()` method for standalone connections
+- **Authentication Fix**: Added NEO4J_AUTH environment variable to standalone controller for automatic password setup
+
+**Why This Fix Is Critical**:
+1. **API Consistency**: Neo4jDatabase resources now work uniformly across all deployment types
+2. **Authentication Automation**: Eliminates manual password changes in standalone deployments
+3. **Production Readiness**: Enables automated database creation in both cluster and standalone environments
+4. **Developer Experience**: Consistent API behavior regardless of deployment architecture
+
+**Usage Examples**:
+```yaml
+# Database for cluster deployment
+apiVersion: neo4j.com/v1alpha1
+kind: Neo4jDatabase
+metadata:
+  name: my-cluster-database
+spec:
+  clusterRef: my-cluster  # References Neo4jEnterpriseCluster
+  name: proddb
+  topology:
+    primaries: 2
+    secondaries: 1
+
+---
+# Database for standalone deployment
+apiVersion: neo4j.com/v1alpha1
+kind: Neo4jDatabase
+metadata:
+  name: my-standalone-database
+spec:
+  clusterRef: my-standalone  # References Neo4jEnterpriseStandalone
+  name: devdb
+  ifNotExists: true
+```
+
+**Validation Logic**:
+- DatabaseValidator attempts cluster lookup first
+- If cluster not found, attempts standalone lookup
+- Applies appropriate validation rules based on deployment type
+- Provides clear error messages for missing references
+
+**Technical Implementation**:
+- Database controller detects referenced resource type automatically
+- Uses appropriate Neo4j client (cluster vs standalone)
+- Maintains backward compatibility with existing cluster deployments
+
 ## CRITICAL: Split-Brain Detection and Repair (Added 2025-08-09)
 
 **MANDATORY FOR PRODUCTION**: The operator includes comprehensive split-brain detection and automatic repair to prevent Neo4j cluster inconsistencies.
