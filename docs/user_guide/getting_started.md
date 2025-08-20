@@ -12,10 +12,18 @@ This guide will walk you through the process of deploying your first Neo4j Enter
 
 For detailed installation instructions, see the [Installation Guide](installation.md).
 
-For a quick start, you can install the operator with a single command:
+Since this is a private repository, installation requires cloning from source:
 
 ```bash
-kubectl apply -f https://github.com/neo4j-labs/neo4j-kubernetes-operator/releases/latest/download/neo4j-kubernetes-operator.yaml
+# Clone the repository and checkout latest tag
+git clone https://github.com/neo4j-labs/neo4j-kubernetes-operator.git
+cd neo4j-kubernetes-operator
+LATEST_TAG=$(git describe --tags --abbrev=0)
+git checkout $LATEST_TAG
+
+# Install CRDs and operator
+make install  # Install CRDs
+make deploy   # Deploy operator
 ```
 
 ## Choosing Your Deployment Type
@@ -40,7 +48,7 @@ For development, testing, or simple workloads that don't require high availabili
 2.  **Deploy the standalone instance:**
 
     ```bash
-    kubectl apply -f https://raw.githubusercontent.com/neo4j-labs/neo4j-kubernetes-operator/main/examples/standalone/single-node-standalone.yaml
+    kubectl apply -f examples/standalone/single-node-standalone.yaml
     ```
 
 3.  **Check deployment status:**
@@ -75,7 +83,7 @@ For production workloads requiring high availability and clustering:
 2.  **Deploy the minimal cluster:**
 
     ```bash
-    kubectl apply -f https://raw.githubusercontent.com/neo4j-labs/neo4j-kubernetes-operator/main/examples/clusters/minimal-cluster.yaml
+    kubectl apply -f examples/clusters/minimal-cluster.yaml
     ```
 
 3.  **Monitor deployment (2-3 minutes expected):**
@@ -98,10 +106,10 @@ For production workloads requiring high availability and clustering:
 
     ```bash
     # For production (with TLS)
-    kubectl apply -f https://raw.githubusercontent.com/neo4j-labs/neo4j-kubernetes-operator/main/examples/clusters/multi-server-cluster.yaml
+    kubectl apply -f examples/clusters/multi-server-cluster.yaml
 
     # For testing (TLS disabled)
-    kubectl apply -f https://raw.githubusercontent.com/neo4j-labs/neo4j-kubernetes-operator/main/examples/clusters/three-node-simple.yaml
+    kubectl apply -f examples/clusters/three-node-cluster.yaml
     ```
 
 3.  **Monitor deployment (3-5 minutes expected):**
@@ -122,7 +130,7 @@ If you need a custom configuration, create your own manifest based on our exampl
 
 2. **Copy and customize an example:**
    ```bash
-   curl -o my-cluster.yaml https://raw.githubusercontent.com/neo4j-labs/neo4j-kubernetes-operator/main/examples/clusters/minimal-cluster.yaml
+   cp examples/clusters/minimal-cluster.yaml my-cluster.yaml
    # Edit my-cluster.yaml to customize settings
    kubectl apply -f my-cluster.yaml
    ```

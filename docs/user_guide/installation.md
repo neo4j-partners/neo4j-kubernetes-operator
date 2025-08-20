@@ -1,59 +1,60 @@
 # Installation Guide
 
-This guide provides detailed instructions for installing the Neo4j Enterprise Operator for Kubernetes. The operator is distributed as release tarballs and Kubernetes manifests.
+This guide provides detailed instructions for installing the Neo4j Enterprise Operator for Kubernetes. Since this is a private repository, installation requires cloning from source.
 
 ## Quick Installation
 
-### Method 1: Direct Manifest (Recommended)
+### Method 1: Git Clone (Recommended)
 
-The fastest way to get started:
+The primary installation method using git clone:
 
 ```bash
-# Install complete operator (CRDs + operator + RBAC)
-kubectl apply -f https://github.com/neo4j-labs/neo4j-kubernetes-operator/releases/latest/download/neo4j-kubernetes-operator-complete.yaml
+# Clone the repository
+git clone https://github.com/neo4j-labs/neo4j-kubernetes-operator.git
+cd neo4j-kubernetes-operator
+
+# Checkout the latest release tag
+LATEST_TAG=$(git describe --tags --abbrev=0)
+git checkout $LATEST_TAG
+
+# Install CRDs and operator
+make install  # Install CRDs
+make deploy   # Deploy operator
 ```
 
-This single command installs:
+This installs:
 - Custom Resource Definitions (CRDs)
 - Operator Deployment
 - All required RBAC permissions
 - ServiceAccount and ClusterRole bindings
 
-### Method 2: CRDs Only
+### Method 2: Development Installation
 
-If you want to install just the CRDs (for custom operator deployments):
+For development and testing:
 
 ```bash
-kubectl apply -f https://github.com/neo4j-labs/neo4j-kubernetes-operator/releases/latest/download/neo4j-kubernetes-operator.yaml
+# Clone and setup development environment
+git clone https://github.com/neo4j-labs/neo4j-kubernetes-operator.git
+cd neo4j-kubernetes-operator
+
+# Create development cluster
+make dev-cluster
+
+# Deploy operator to development cluster
+make operator-setup
+
+# Or run operator locally (outside cluster)
+make dev-run
 ```
 
 ## Advanced Installation Methods
 
-### Method 3: From Release Tarball
+### Method 3: Custom Kustomize Configuration
 
-For customization or offline installation:
-
-```bash
-# Get the latest release version
-LATEST_RELEASE=$(curl -s https://api.github.com/repos/neo4j-labs/neo4j-kubernetes-operator/releases/latest | grep 'tag_name' | cut -d '"' -f 4)
-CLEAN_VERSION=${LATEST_RELEASE#v}  # Remove 'v' prefix
-
-# Download the source tarball
-wget https://github.com/neo4j-labs/neo4j-kubernetes-operator/releases/download/${LATEST_RELEASE}/neo4j-kubernetes-operator-${CLEAN_VERSION}.tar.gz
-
-# Extract and install
-tar -xzf neo4j-kubernetes-operator-${CLEAN_VERSION}.tar.gz
-cd neo4j-kubernetes-operator-${CLEAN_VERSION}
-
-# Install using kustomize
-kubectl apply -k config/default
-```
-
-### Method 4: Custom Kustomize Configuration
-
-After extracting the tarball, you can customize the installation:
+For customized deployments:
 
 ```bash
+# After cloning and checking out the latest tag
 # Create your own kustomization
 cat > kustomization.yaml << EOF
 apiVersion: kustomize.config.k8s.io/v1beta1
@@ -75,6 +76,18 @@ EOF
 kubectl apply -k .
 ```
 
+### Alternative Deployment Options
+
+After cloning the repository, you can use different deployment configurations:
+
+```bash
+# Production deployment (optimized resource limits)
+make deploy-prod
+
+# Development deployment (with debugging enabled)
+make deploy-dev
+
+```
 
 ## Verifying the Installation
 
@@ -106,29 +119,43 @@ neo4jplugins.neo4j.neo4j.com
 neo4jrestores.neo4j.neo4j.com
 ```
 
-## Release Assets
+## Available Make Targets
 
-Each release provides several assets:
+After cloning the repository, you have access to these make targets:
 
-| Asset | Description | Use Case |
-|-------|-------------|----------|
-| `neo4j-kubernetes-operator-{version}.tar.gz` | Complete source code tarball | Development, customization, offline installation |
-| `neo4j-kubernetes-operator-complete.yaml` | Complete operator (CRDs + Operator + RBAC) | Quick production deployment |
-| `neo4j-kubernetes-operator.yaml` | Custom Resource Definitions only | Custom operator deployments |
-| `examples-{version}.tar.gz` | Example configurations archive | Getting started, reference implementations |
-| Individual CRD files | `config/crd/bases/*.yaml` | Selective CRD installation |
+### Installation & Deployment
+| Target | Description |
+|--------|-------------|
+| `make install` | Install CRDs into your cluster |
+| `make deploy` | Deploy operator with default configuration |
+| `make deploy-dev` | Deploy with development configuration |
+| `make deploy-prod` | Deploy with production configuration |
+| `make undeploy` | Remove operator deployment |
+| `make uninstall` | Remove CRDs (also removes all Neo4j instances) |
+
+### Development & Testing
+| Target | Description |
+|--------|-------------|
+| `make dev-cluster` | Create Kind development cluster |
+| `make dev-run` | Run operator locally (outside cluster) |
+| `make operator-setup` | Deploy operator to existing cluster |
+| `make test-unit` | Run unit tests |
+| `make test-integration` | Run integration tests |
+| `make test-e2e` | Run end-to-end tests |
+
+### Code Quality
+| Target | Description |
+|--------|-------------|
+| `make fmt` | Format code |
+| `make lint` | Run linter |
+| `make vet` | Run go vet |
+| `make test-coverage` | Generate test coverage report |
 
 ## Getting Started with Examples
 
-After installing the operator, download examples:
+After installing the operator, examples are available in the local `examples/` directory:
 
 ```bash
-# Download examples
-LATEST_RELEASE=$(curl -s https://api.github.com/repos/neo4j-labs/neo4j-kubernetes-operator/releases/latest | grep 'tag_name' | cut -d '"' -f 4)
-CLEAN_VERSION=${LATEST_RELEASE#v}  # Remove 'v' prefix
-wget https://github.com/neo4j-labs/neo4j-kubernetes-operator/releases/download/${LATEST_RELEASE}/examples-${CLEAN_VERSION}.tar.gz
-tar -xzf examples-${CLEAN_VERSION}.tar.gz
-
 # Create admin secret (required for Neo4j authentication)
 kubectl create secret generic neo4j-admin-secret \
   --from-literal=username=neo4j \
@@ -140,6 +167,9 @@ kubectl apply -f examples/standalone/single-node-standalone.yaml
 # Check deployment status
 kubectl get neo4jenterprisestandalone
 kubectl get pods
+
+# Access Neo4j Browser
+kubectl port-forward svc/standalone-neo4j-service 7474:7474
 ```
 
 ## Troubleshooting Installation
@@ -152,7 +182,7 @@ kubectl get pods
 kubectl get crd | grep neo4j
 
 # If missing, install CRDs manually
-kubectl apply -f https://github.com/neo4j-labs/neo4j-kubernetes-operator/releases/latest/download/neo4j-kubernetes-operator.yaml
+make install
 ```
 
 #### 2. Operator Pod Not Starting
@@ -174,20 +204,12 @@ kubectl get clusterrole | grep neo4j-operator
 kubectl get clusterrolebinding | grep neo4j-operator
 ```
 
-#### 4. Webhook Certificate Issues
-```bash
-# Check if cert-manager is installed (required for TLS features)
-kubectl get pods -n cert-manager
-
-# If not installed, install cert-manager
-kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.18.2/cert-manager.yaml
-```
 
 ### Installation Requirements
 
 - **Kubernetes**: Version 1.21 or higher
 - **Neo4j**: Version 5.26+ (supports both SemVer 5.x and CalVer 2025.x formats)
-- **cert-manager**: Version 1.5+ (for TLS/SSL features)
+- **cert-manager**: Version 1.5+ (optional, only required for TLS-enabled Neo4j deployments)
 - **Permissions**: Cluster-admin access for CRD and RBAC installation
 
 ### Next Steps

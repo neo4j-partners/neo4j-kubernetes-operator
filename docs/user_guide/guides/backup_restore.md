@@ -13,7 +13,7 @@ kubectl create secret generic neo4j-admin-secret \
   --from-literal=username=neo4j --from-literal=password=admin123
 
 # 2. Apply a simple backup to local storage
-kubectl apply -f https://raw.githubusercontent.com/neo4j-labs/neo4j-kubernetes-operator/main/examples/backup-restore/backup-pvc-simple.yaml
+kubectl apply -f examples/backup-restore/backup-pvc-simple.yaml
 ```
 
 ### Step 2: Monitor Progress

@@ -13,52 +13,70 @@ The Neo4j Enterprise Operator for Kubernetes provides a complete solution for de
 - **Neo4j**: Version 5.26 or higher (supports both SemVer 5.x and CalVer 2025.x formats)
 - **Kubernetes**: Version 1.21 or higher
 - **Go**: Version 1.21+ (for development)
-- **cert-manager**: Version 1.5+ (tested with v1.18.2, required for TLS/SSL features)
+- **cert-manager**: Version 1.5+ (optional, only required for TLS-enabled Neo4j deployments)
 
 ## 🚀 Quick Start
 
-### For Kubernetes Beginners
+### Installation
 
-If you're new to Kubernetes, start here:
+Since this is a private repository, installation requires cloning from source:
 
-1. **Install the operator** using the latest release:
+1. **Clone the repository** and checkout the latest tag:
    ```bash
-   # Install the CRDs and operator
-   kubectl apply -f https://github.com/neo4j-labs/neo4j-kubernetes-operator/releases/latest/download/neo4j-kubernetes-operator.yaml
+   # Clone the repository
+   git clone https://github.com/neo4j-labs/neo4j-kubernetes-operator.git
+   cd neo4j-kubernetes-operator
+
+   # Checkout the latest release tag
+   LATEST_TAG=$(git describe --tags --abbrev=0)
+   git checkout $LATEST_TAG
    ```
 
-2. **Create admin credentials** (Required for authentication):
+2. **Install the operator** using make targets:
+   ```bash
+   # Install CRDs into your cluster
+   make install
+
+   # Deploy the operator to your cluster
+   make deploy
+   ```
+
+   **Alternative installation methods**:
+   ```bash
+   # Deploy with development configuration
+   make deploy-dev
+
+   # Deploy with production configuration
+   make deploy-prod
+
+   ```
+
+3. **Create admin credentials** (Required for authentication):
+
    ```bash
    kubectl create secret generic neo4j-admin-secret \
      --from-literal=username=neo4j \
      --from-literal=password=your-secure-password
    ```
+
    **Important**: The operator manages authentication through Kubernetes secrets. Do not set NEO4J_AUTH directly in environment variables.
 
-3. **Deploy your first Neo4j instance**:
-
-   **Download examples from the release**:
-   ```bash
-   # Get the latest release version
-   LATEST_RELEASE=$(curl -s https://api.github.com/repos/neo4j-labs/neo4j-kubernetes-operator/releases/latest | grep 'tag_name' | cut -d '"' -f 4)
-   CLEAN_VERSION=${LATEST_RELEASE#v}  # Remove 'v' prefix
-
-   # Download and extract examples
-   wget https://github.com/neo4j-labs/neo4j-kubernetes-operator/releases/download/${LATEST_RELEASE}/examples-${CLEAN_VERSION}.tar.gz
-   tar -xzf examples-${CLEAN_VERSION}.tar.gz
-   ```
+4. **Deploy your first Neo4j instance**:
 
    **For single-node development** (non-clustered):
+
    ```bash
    kubectl apply -f examples/standalone/single-node-standalone.yaml
    ```
 
    **For clustered deployment** (production):
+
    ```bash
    kubectl apply -f examples/clusters/minimal-cluster.yaml
    ```
 
-4. **Access your Neo4j instance**:
+5. **Access your Neo4j instance**:
+
    ```bash
    # For standalone deployment
    kubectl port-forward svc/standalone-neo4j-service 7474:7474 7687:7687
@@ -66,39 +84,53 @@ If you're new to Kubernetes, start here:
    # For cluster deployment
    kubectl port-forward svc/minimal-cluster-client 7474:7474 7687:7687
    ```
-   Open http://localhost:7474 in your browser.
 
-### For Kubernetes Experts
+   Open <http://localhost:7474> in your browser.
 
-Jump right in with advanced configurations:
+6. **Run tests** to verify installation:
+
+   ```bash
+   # Run unit tests
+   make test-unit
+
+   # Create test cluster and run integration tests
+   make test-cluster
+   make test-integration
+
+   # Run end-to-end tests
+   make test-e2e
+   ```
+
+### Cleanup
+
+To remove the operator from your cluster:
 
 ```bash
-# Method 1: Complete operator installation
-kubectl apply -f https://github.com/neo4j-labs/neo4j-kubernetes-operator/releases/latest/download/neo4j-kubernetes-operator-complete.yaml
+# Remove operator deployment
+make undeploy
 
-# Method 2: Download release tarball for customization
-LATEST_RELEASE=$(curl -s https://api.github.com/repos/neo4j-labs/neo4j-kubernetes-operator/releases/latest | grep 'tag_name' | cut -d '"' -f 4)
-CLEAN_VERSION=${LATEST_RELEASE#v}  # Remove 'v' prefix
+# Remove CRDs (this will also remove all Neo4j instances)
+make uninstall
+```
 
-# Download source tarball
-wget https://github.com/neo4j-labs/neo4j-kubernetes-operator/releases/download/${LATEST_RELEASE}/neo4j-kubernetes-operator-${CLEAN_VERSION}.tar.gz
-tar -xzf neo4j-kubernetes-operator-${CLEAN_VERSION}.tar.gz
-cd neo4j-kubernetes-operator-${CLEAN_VERSION}
+### Development Installation
 
-# Install using kustomize
-kubectl apply -k config/default
+For development work:
 
-# Download examples separately
-wget https://github.com/neo4j-labs/neo4j-kubernetes-operator/releases/download/${LATEST_RELEASE}/examples-${CLEAN_VERSION}.tar.gz
-tar -xzf examples-${CLEAN_VERSION}.tar.gz
-kubectl apply -f examples/clusters/multi-server-cluster.yaml
+```bash
+# Create development cluster with operator
+make dev-cluster
+make dev-run  # Run operator locally outside cluster
+
+# Or deploy operator to development cluster
+make operator-setup
 ```
 
 See the [Complete Installation Guide](docs/user_guide/installation.md) for all deployment options.
 
 ## 💡 Examples
 
-Ready-to-use configurations for common deployment scenarios:
+After cloning the repository, ready-to-use configurations are available in the `examples/` directory:
 
 ### Standalone Deployments (Single-Node, Non-Clustered)
 - **[Single-node standalone](examples/standalone/single-node-standalone.yaml)** - Development and testing
@@ -117,6 +149,20 @@ Ready-to-use configurations for common deployment scenarios:
 - **[Cluster plugin example](examples/plugins/cluster-plugin-example.yaml)** - Install APOC on a Neo4jEnterpriseCluster
 - **[Standalone plugin example](examples/plugins/standalone-plugin-example.yaml)** - Install Graph Data Science on standalone
 - **[Plugin documentation](examples/plugins/README.md)** - Complete guide to plugin management
+
+### Quick Example Deployment
+
+```bash
+# After cloning and installing the operator:
+kubectl apply -f examples/standalone/single-node-standalone.yaml
+
+# Check status
+kubectl get neo4jenterprisestandalone
+kubectl get pods
+
+# Access Neo4j Browser
+kubectl port-forward svc/standalone-neo4j-service 7474:7474
+```
 
 See the [examples directory](examples/) for complete documentation and additional configurations.
 
@@ -269,9 +315,44 @@ We welcome contributions from both Kubernetes beginners and experts!
 # Clone and setup development environment
 git clone https://github.com/neo4j-labs/neo4j-kubernetes-operator.git
 cd neo4j-kubernetes-operator
-make dev-cluster  # Creates local Kind cluster
-make test-unit    # Run unit tests
+
+# Create local Kind cluster for development
+make dev-cluster
+
+# Run tests to verify setup
+make test-unit     # Unit tests
+make test-cluster  # Create test cluster
+make test-integration  # Integration tests
+
+# Deploy operator for development
+make operator-setup
 ```
+
+### Available Make Targets
+
+**Development & Testing**:
+
+- `make dev-cluster` - Create development Kind cluster
+- `make dev-run` - Run operator locally (outside cluster)
+- `make test-unit` - Run unit tests
+- `make test-integration` - Run integration tests
+- `make test-e2e` - Run end-to-end tests
+
+**Operator Installation**:
+
+- `make install` - Install CRDs
+- `make deploy` - Deploy operator
+- `make deploy-dev` - Deploy with dev config
+- `make deploy-prod` - Deploy with production config
+- `make undeploy` - Remove operator
+- `make uninstall` - Remove CRDs
+
+**Code Quality**:
+
+- `make fmt` - Format code
+- `make lint` - Run linter
+- `make vet` - Run go vet
+- `make test-coverage` - Generate coverage report
 
 See the [Contributing Guide](docs/developer_guide/contributing.md) for detailed instructions.
 

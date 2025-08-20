@@ -95,8 +95,8 @@ help: ## Display this help.
 ##@ Development
 
 .PHONY: manifests
-manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
-	$(CONTROLLER_GEN) rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+manifests: controller-gen ## Generate ClusterRole and CustomResourceDefinition objects.
+	$(CONTROLLER_GEN) rbac:roleName=manager-role crd paths="./..." output:crd:artifacts:config=config/crd/bases
 
 .PHONY: generate
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
@@ -224,10 +224,6 @@ deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
 	$(KUSTOMIZE) build config/default | $(KUBECTL) apply -f -
 
-.PHONY: deploy-test-with-webhooks
-deploy-test-with-webhooks: manifests kustomize ## Deploy controller to the K8s cluster with webhooks enabled and cert-manager for testing.
-	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
-	$(KUSTOMIZE) build config/test-with-webhooks | $(KUBECTL) apply -f -
 
 .PHONY: undeploy
 undeploy: kustomize ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
@@ -450,9 +446,6 @@ test-cluster-clean: ## Clean operator resources from test cluster
 		kubectl delete namespace neo4j --ignore-not-found=true --timeout=60s; \
 		echo "Removing CRDs..."; \
 		kubectl delete crd --selector=app.kubernetes.io/name=neo4j-operator --ignore-not-found=true; \
-		echo "Removing webhook configurations..."; \
-		kubectl delete mutatingwebhookconfiguration --selector=app.kubernetes.io/name=neo4j-operator --ignore-not-found=true; \
-		kubectl delete validatingwebhookconfiguration --selector=app.kubernetes.io/name=neo4j-operator --ignore-not-found=true; \
 		echo "Removing cluster roles and bindings..."; \
 		kubectl delete clusterrole --selector=app.kubernetes.io/name=neo4j-operator --ignore-not-found=true; \
 		kubectl delete clusterrolebinding --selector=app.kubernetes.io/name=neo4j-operator --ignore-not-found=true; \
@@ -477,8 +470,8 @@ test-destroy: ## Completely destroy test environment
 	@echo "Test environment destroyed!"
 
 .PHONY: operator-setup
-operator-setup: ## Set up the Neo4j operator with webhooks (automated)
-	@echo "🔧 Setting up Neo4j operator with webhooks..."
+operator-setup: ## Set up the Neo4j operator (automated)
+	@echo "🔧 Setting up Neo4j operator..."
 	@SKIP_OPERATOR_CONFIRMATION=true ./scripts/setup-operator.sh setup
 
 .PHONY: operator-setup-interactive
@@ -506,9 +499,6 @@ dev-cluster-clean: ## Clean operator resources from dev cluster
 		kubectl delete namespace neo4j-operator-system --ignore-not-found=true --timeout=120s; \
 		echo "Removing CRDs..."; \
 		kubectl delete crd --selector=app.kubernetes.io/name=neo4j-operator --ignore-not-found=true; \
-		echo "Removing webhook configurations..."; \
-		kubectl delete mutatingwebhookconfiguration --selector=app.kubernetes.io/name=neo4j-operator --ignore-not-found=true; \
-		kubectl delete validatingwebhookconfiguration --selector=app.kubernetes.io/name=neo4j-operator --ignore-not-found=true; \
 		echo "Removing cluster roles and bindings..."; \
 		kubectl delete clusterrole --selector=app.kubernetes.io/name=neo4j-operator --ignore-not-found=true; \
 		kubectl delete clusterrolebinding --selector=app.kubernetes.io/name=neo4j-operator --ignore-not-found=true; \

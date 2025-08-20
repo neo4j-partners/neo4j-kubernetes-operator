@@ -466,7 +466,7 @@ Backup jobs fail with "permission denied" or "cannot exec into pod" errors.
 **Solution**: The operator now automatically creates RBAC resources. If you're upgrading:
 ```bash
 # Ensure operator has latest permissions
-kubectl apply -f https://github.com/neo4j-labs/neo4j-kubernetes-operator/releases/latest/download/neo4j-kubernetes-operator.yaml
+make install  # After cloning the repository
 
 # Check operator has pods/exec and pods/log permissions
 kubectl describe clusterrole neo4j-operator-manager-role | grep -E "pods/exec|pods/log"

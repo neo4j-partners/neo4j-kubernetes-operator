@@ -32,7 +32,7 @@ git checkout -b feature/my-awesome-feature
 # Generate CRDs and Go code
 make manifests generate
 
-# Create development Kind cluster with cert-manager
+# Create development Kind cluster (includes cert-manager for TLS features)
 make dev-cluster
 
 # Start the operator locally for development

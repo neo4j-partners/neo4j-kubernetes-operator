@@ -95,7 +95,7 @@ Integration tests use envtest to provide a real Kubernetes API server without re
 ### Test Cluster Management
 
 ```bash
-# Create test cluster with cert-manager
+# Create test cluster (includes cert-manager for TLS tests)
 make test-cluster
 
 # Clean operator resources (keep cluster running)

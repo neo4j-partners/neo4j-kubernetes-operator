@@ -7,7 +7,7 @@ Welcome to the documentation for the Neo4j Enterprise Operator for Kubernetes.
 The [User Guide](user_guide) is for users of the Neo4j Enterprise Operator. It contains all the information you need to deploy, manage, and operate Neo4j clusters on Kubernetes.
 
 *   **[Getting Started](user_guide/getting_started.md)**: A quickstart guide to get you up and running in minutes.
-*   **[Installation](user_guide/installation.md)**: Detailed installation instructions.
+*   **[Installation](user_guide/installation.md)**: Installation instructions via git clone (private repository).
 *   **[Configuration](user_guide/configuration.md)**: Comprehensive configuration options.
 *   **[External Access](user_guide/external_access.md)**: Expose Neo4j outside Kubernetes using LoadBalancer, NodePort, or Ingress.
 *   **[Topology Placement](user_guide/topology_placement.md)**: Configure zone distribution, anti-affinity, and advanced placement strategies.

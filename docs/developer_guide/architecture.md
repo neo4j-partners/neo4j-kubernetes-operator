@@ -349,7 +349,6 @@ Each cluster gets automatic RBAC creation:
 ### Future Extensibility:
 - **Plugin System**: Neo4j plugin management framework
 - **Custom Metrics**: Extensible monitoring capabilities
-- **Webhook Integration**: Admission webhook support for validation
 - **Event Handling**: Pluggable event system for custom integrations
 - **Multi-Architecture**: Support for different deployment patterns
 
