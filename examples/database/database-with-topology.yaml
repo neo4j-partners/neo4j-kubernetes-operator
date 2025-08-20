@@ -8,10 +8,11 @@
 # - Database Topology: How this database uses those servers (e.g., 2 primaries + 1 secondary = 3 servers used)
 #
 # REQUIREMENTS:
-# - Cluster must have at least 3 servers available (2 primaries + 1 secondary)
-# - Referenced cluster "my-neo4j-cluster" must exist and be ready
+# - Referenced resource "my-neo4j-cluster" must exist and be ready
+# - For clusters: Must have at least 3 servers available (2 primaries + 1 secondary)
+# - For standalone: Topology will be ignored (single-node databases only)
 #
-# DISTRIBUTION:
+# DISTRIBUTION (Clusters only):
 # - 2 servers will host primary replicas (read/write)
 # - 1 server will host secondary replica (read-only)
 # - Remaining cluster servers can be used by other databases
@@ -22,7 +23,8 @@ metadata:
   name: orders-database
   namespace: default
 spec:
-  # Reference to Neo4j Enterprise Cluster
+# Reference to Neo4j Enterprise Cluster or Standalone deployment
+  # Can reference either Neo4jEnterpriseCluster or Neo4jEnterpriseStandalone
   clusterRef: my-neo4j-cluster
 
   # Database name as it appears in Neo4j

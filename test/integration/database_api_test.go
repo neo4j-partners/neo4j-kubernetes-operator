@@ -80,6 +80,35 @@ var _ = Describe("Database API Integration Tests", func() {
 			Expect(database.Spec.DefaultCypherLanguage).To(Equal("25"))
 		})
 
+		It("Should create database with standalone reference", func() {
+			By("Creating a database that references a Neo4jEnterpriseStandalone")
+			database := &neo4jv1alpha1.Neo4jDatabase{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-database-standalone",
+					Namespace: testNamespace,
+				},
+				Spec: neo4jv1alpha1.Neo4jDatabaseSpec{
+					ClusterRef:  "test-standalone", // References standalone resource
+					Name:        "teststandalonedb",
+					Wait:        true,
+					IfNotExists: true,
+				},
+			}
+			Expect(k8sClient.Create(ctx, database)).To(Succeed())
+
+			By("Database resource should be created and accept standalone reference")
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, types.NamespacedName{
+					Name:      database.Name,
+					Namespace: database.Namespace,
+				}, database)
+				return err == nil
+			}, timeout, interval).Should(BeTrue())
+
+			By("Verifying standalone reference is preserved")
+			Expect(database.Spec.ClusterRef).To(Equal("test-standalone"))
+		})
+
 		It("Should create a database with minimal configuration", func() {
 			By("Creating a simple database")
 			database := &neo4jv1alpha1.Neo4jDatabase{

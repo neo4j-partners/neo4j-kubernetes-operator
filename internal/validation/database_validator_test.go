@@ -24,6 +24,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1"
@@ -695,4 +696,250 @@ func containsString(haystack, needle string) bool {
 			}
 			return false
 		}()
+}
+
+func TestDatabaseValidator_ValidateStandalone(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = neo4jv1alpha1.AddToScheme(scheme)
+	_ = corev1.AddToScheme(scheme)
+
+	// Create test standalone
+	standalone := &neo4jv1alpha1.Neo4jEnterpriseStandalone{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-standalone",
+			Namespace: "default",
+		},
+		Spec: neo4jv1alpha1.Neo4jEnterpriseStandaloneSpec{
+			Auth: &neo4jv1alpha1.AuthSpec{
+				AdminSecret: "admin-secret",
+			},
+		},
+	}
+
+	// Create admin secret
+	adminSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "admin-secret",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"username": []byte("neo4j"),
+			"password": []byte("test123"),
+		},
+	}
+
+	tests := []struct {
+		name            string
+		database        *neo4jv1alpha1.Neo4jDatabase
+		expectErrors    int
+		expectWarnings  int
+		errorMessages   []string
+		warningMessages []string
+	}{
+		{
+			name: "valid standalone database without topology",
+			database: &neo4jv1alpha1.Neo4jDatabase{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-db",
+					Namespace: "default",
+				},
+				Spec: neo4jv1alpha1.Neo4jDatabaseSpec{
+					ClusterRef: "test-standalone",
+					Name:       "testdb",
+					Wait:       true,
+				},
+			},
+			expectErrors:   0,
+			expectWarnings: 0,
+		},
+		{
+			name: "standalone database with topology (should warn)",
+			database: &neo4jv1alpha1.Neo4jDatabase{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-db-with-topology",
+					Namespace: "default",
+				},
+				Spec: neo4jv1alpha1.Neo4jDatabaseSpec{
+					ClusterRef: "test-standalone",
+					Name:       "testdb",
+					Wait:       true,
+					Topology: &neo4jv1alpha1.DatabaseTopology{
+						Primaries:   1,
+						Secondaries: 2,
+					},
+				},
+			},
+			expectErrors:   0,
+			expectWarnings: 2, // topology not required + secondaries warning
+			warningMessages: []string{
+				"Database topology specification is not required for standalone deployments",
+				"Database topology specifies 2 secondaries, but standalone deployments cannot provide read replicas",
+			},
+		},
+		{
+			name: "standalone database with invalid topology",
+			database: &neo4jv1alpha1.Neo4jDatabase{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-db-invalid",
+					Namespace: "default",
+				},
+				Spec: neo4jv1alpha1.Neo4jDatabaseSpec{
+					ClusterRef: "test-standalone",
+					Name:       "testdb",
+					Wait:       true,
+					Topology: &neo4jv1alpha1.DatabaseTopology{
+						Primaries:   0, // Invalid - need at least 1 primary
+						Secondaries: 1,
+					},
+				},
+			},
+			expectErrors:   1,
+			expectWarnings: 2,
+			errorMessages:  []string{"at least 1 primary is required"},
+			warningMessages: []string{
+				"Database topology specification is not required for standalone deployments",
+				"Database topology specifies 1 secondaries, but standalone deployments cannot provide read replicas",
+			},
+		},
+		{
+			name: "standalone not found",
+			database: &neo4jv1alpha1.Neo4jDatabase{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-db-notfound",
+					Namespace: "default",
+				},
+				Spec: neo4jv1alpha1.Neo4jDatabaseSpec{
+					ClusterRef: "nonexistent-standalone",
+					Name:       "testdb",
+					Wait:       true,
+				},
+			},
+			expectErrors:   1,
+			expectWarnings: 0,
+			errorMessages:  []string{"Referenced cluster nonexistent-standalone not found"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create fake client with standalone and secret
+			fakeClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(standalone, adminSecret).
+				Build()
+
+			validator := NewDatabaseValidator(fakeClient)
+
+			result := validator.Validate(context.Background(), tt.database)
+
+			assert.Equal(t, tt.expectErrors, len(result.Errors),
+				"Expected %d errors, got %d. Errors: %v", tt.expectErrors, len(result.Errors), result.Errors)
+			assert.Equal(t, tt.expectWarnings, len(result.Warnings),
+				"Expected %d warnings, got %d. Warnings: %v", tt.expectWarnings, len(result.Warnings), result.Warnings)
+
+			// Check specific error messages
+			for _, expectedErr := range tt.errorMessages {
+				found := false
+				for _, actualErr := range result.Errors {
+					if containsString(actualErr.Error(), expectedErr) {
+						found = true
+						break
+					}
+				}
+				assert.True(t, found, "Expected error message containing '%s' not found in: %v", expectedErr, result.Errors)
+			}
+
+			// Check specific warning messages
+			for _, expectedWarn := range tt.warningMessages {
+				found := false
+				for _, actualWarn := range result.Warnings {
+					if containsString(actualWarn, expectedWarn) {
+						found = true
+						break
+					}
+				}
+				assert.True(t, found, "Expected warning message containing '%s' not found in: %v", expectedWarn, result.Warnings)
+			}
+		})
+	}
+}
+
+func TestDatabaseValidator_ValidateClusterAndStandaloneFallback(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = neo4jv1alpha1.AddToScheme(scheme)
+	_ = corev1.AddToScheme(scheme)
+
+	// Create both cluster and standalone with same name
+	cluster := &neo4jv1alpha1.Neo4jEnterpriseCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "neo4j-resource",
+			Namespace: "default",
+		},
+		Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
+			Topology: neo4jv1alpha1.TopologyConfiguration{
+				Servers: 3,
+			},
+		},
+	}
+
+	standalone := &neo4jv1alpha1.Neo4jEnterpriseStandalone{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "neo4j-resource", // Same name as cluster
+			Namespace: "default",
+		},
+	}
+
+	tests := []struct {
+		name         string
+		objects      []client.Object
+		database     *neo4jv1alpha1.Neo4jDatabase
+		expectErrors int
+		description  string
+	}{
+		{
+			name:    "cluster found first (takes precedence)",
+			objects: []client.Object{cluster},
+			database: &neo4jv1alpha1.Neo4jDatabase{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-db", Namespace: "default"},
+				Spec: neo4jv1alpha1.Neo4jDatabaseSpec{
+					ClusterRef: "neo4j-resource",
+					Name:       "testdb",
+					Topology: &neo4jv1alpha1.DatabaseTopology{
+						Primaries:   2,
+						Secondaries: 1,
+					},
+				},
+			},
+			expectErrors: 0,
+			description:  "Should validate as cluster (no warnings about topology not required)",
+		},
+		{
+			name:    "only standalone exists (fallback works)",
+			objects: []client.Object{standalone},
+			database: &neo4jv1alpha1.Neo4jDatabase{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-db", Namespace: "default"},
+				Spec: neo4jv1alpha1.Neo4jDatabaseSpec{
+					ClusterRef: "neo4j-resource",
+					Name:       "testdb",
+				},
+			},
+			expectErrors: 0,
+			description:  "Should validate as standalone successfully",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fakeClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(tt.objects...).
+				Build()
+
+			validator := NewDatabaseValidator(fakeClient)
+			result := validator.Validate(context.Background(), tt.database)
+
+			assert.Equal(t, tt.expectErrors, len(result.Errors),
+				"Test: %s. Expected %d errors, got %d. Errors: %v", tt.description, tt.expectErrors, len(result.Errors), result.Errors)
+		})
+	}
 }

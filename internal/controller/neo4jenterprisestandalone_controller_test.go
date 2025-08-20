@@ -273,6 +273,114 @@ var _ = Describe("Neo4jEnterpriseStandalone Controller", func() {
 		})
 	})
 
+	Context("When creating a standalone with authentication configuration", func() {
+		It("Should set NEO4J_AUTH environment variable correctly", func() {
+			By("Creating admin secret")
+			adminSecret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "admin-secret-test",
+					Namespace: namespaceName,
+				},
+				Data: map[string][]byte{
+					"username": []byte("neo4j"),
+					"password": []byte("test123456"),
+				},
+			}
+			Expect(k8sClient.Create(ctx, adminSecret)).Should(Succeed())
+
+			By("Adding authentication configuration")
+			standalone.Spec.Auth = &neo4jv1alpha1.AuthSpec{
+				AdminSecret: "admin-secret-test",
+				Provider:    "native",
+			}
+
+			By("Creating the standalone resource")
+			Expect(k8sClient.Create(ctx, standalone)).Should(Succeed())
+
+			By("Waiting for StatefulSet with correct authentication environment variables")
+			Eventually(func() bool {
+				statefulSet := &appsv1.StatefulSet{}
+				err := k8sClient.Get(ctx, types.NamespacedName{
+					Name:      standaloneName,
+					Namespace: namespaceName,
+				}, statefulSet)
+				if err != nil {
+					return false
+				}
+
+				containers := statefulSet.Spec.Template.Spec.Containers
+				if len(containers) == 0 {
+					return false
+				}
+
+				// Find the neo4j container
+				var neo4jContainer *corev1.Container
+				for i := range containers {
+					if containers[i].Name == "neo4j" {
+						neo4jContainer = &containers[i]
+						break
+					}
+				}
+				if neo4jContainer == nil {
+					return false
+				}
+
+				// Check for required authentication environment variables
+				var hasDBUsername, hasDBPassword, hasNEO4JAuth bool
+				for _, env := range neo4jContainer.Env {
+					switch env.Name {
+					case "DB_USERNAME":
+						if env.ValueFrom != nil && env.ValueFrom.SecretKeyRef != nil &&
+							env.ValueFrom.SecretKeyRef.Name == "admin-secret-test" &&
+							env.ValueFrom.SecretKeyRef.Key == "username" {
+							hasDBUsername = true
+						}
+					case "DB_PASSWORD":
+						if env.ValueFrom != nil && env.ValueFrom.SecretKeyRef != nil &&
+							env.ValueFrom.SecretKeyRef.Name == "admin-secret-test" &&
+							env.ValueFrom.SecretKeyRef.Key == "password" {
+							hasDBPassword = true
+						}
+					case "NEO4J_AUTH":
+						// This should be set to "$(DB_USERNAME)/$(DB_PASSWORD)" for environment variable substitution
+						if env.Value == "$(DB_USERNAME)/$(DB_PASSWORD)" {
+							hasNEO4JAuth = true
+						}
+					}
+				}
+
+				return hasDBUsername && hasDBPassword && hasNEO4JAuth
+			}, timeout, interval).Should(BeTrue())
+
+			By("Verifying the StatefulSet has all required authentication environment variables")
+			statefulSet := &appsv1.StatefulSet{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      standaloneName,
+				Namespace: namespaceName,
+			}, statefulSet)).Should(Succeed())
+
+			neo4jContainer := statefulSet.Spec.Template.Spec.Containers[0]
+			envVars := make(map[string]corev1.EnvVar)
+			for _, env := range neo4jContainer.Env {
+				envVars[env.Name] = env
+			}
+
+			// Verify DB_USERNAME is properly configured
+			Expect(envVars).To(HaveKey("DB_USERNAME"))
+			Expect(envVars["DB_USERNAME"].ValueFrom.SecretKeyRef.Name).To(Equal("admin-secret-test"))
+			Expect(envVars["DB_USERNAME"].ValueFrom.SecretKeyRef.Key).To(Equal("username"))
+
+			// Verify DB_PASSWORD is properly configured
+			Expect(envVars).To(HaveKey("DB_PASSWORD"))
+			Expect(envVars["DB_PASSWORD"].ValueFrom.SecretKeyRef.Name).To(Equal("admin-secret-test"))
+			Expect(envVars["DB_PASSWORD"].ValueFrom.SecretKeyRef.Key).To(Equal("password"))
+
+			// Verify NEO4J_AUTH uses environment variable substitution
+			Expect(envVars).To(HaveKey("NEO4J_AUTH"))
+			Expect(envVars["NEO4J_AUTH"].Value).To(Equal("$(DB_USERNAME)/$(DB_PASSWORD)"))
+		})
+	})
+
 	Context("When creating a standalone with resource limits", func() {
 		It("Should respect resource configuration", func() {
 			By("Adding resource limits")

@@ -676,6 +676,12 @@ func (r *Neo4jEnterpriseStandaloneReconciler) buildEnvVars(standalone *neo4jv1al
 					},
 				},
 			},
+			// Set NEO4J_AUTH in the format Neo4j expects (username/password)
+			// This combines the username and password from the secret into the standard Neo4j format
+			corev1.EnvVar{
+				Name:  "NEO4J_AUTH",
+				Value: "$(DB_USERNAME)/$(DB_PASSWORD)",
+			},
 		)
 	}
 

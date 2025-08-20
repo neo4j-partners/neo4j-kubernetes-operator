@@ -1,6 +1,9 @@
 # Single-node Neo4j Enterprise Standalone deployment
 # This creates a standalone Neo4j deployment in single mode (not clustered)
 # Suitable for development, testing, and simple production workloads that don't need scaling
+#
+# NEW: Now supports Neo4jDatabase resources! You can create databases in standalone
+# deployments using the Neo4jDatabase custom resource with clusterRef pointing to this standalone.
 
 apiVersion: neo4j.neo4j.com/v1alpha1
 kind: Neo4jEnterpriseStandalone

@@ -123,26 +123,51 @@ func (r *Neo4jDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		}
 	}
 
-	// Get referenced cluster
+	// Get referenced cluster or standalone
 	cluster := &neo4jv1alpha1.Neo4jEnterpriseCluster{}
 	clusterKey := types.NamespacedName{
 		Name:      database.Spec.ClusterRef,
 		Namespace: database.Namespace,
 	}
-	if err := r.Get(ctx, clusterKey, cluster); err != nil {
-		if errors.IsNotFound(err) {
-			r.updateDatabaseStatus(ctx, database, metav1.ConditionFalse, "ClusterNotFound",
-				fmt.Sprintf("Referenced cluster %s not found", database.Spec.ClusterRef))
-			r.Recorder.Eventf(database, "Warning", "ClusterNotFound",
-				"Referenced cluster %s not found", database.Spec.ClusterRef)
-			return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
+
+	clusterErr := r.Get(ctx, clusterKey, cluster)
+	var standalone *neo4jv1alpha1.Neo4jEnterpriseStandalone
+	var isStandalone bool
+
+	// If cluster not found, try to get standalone
+	if errors.IsNotFound(clusterErr) {
+		standalone = &neo4jv1alpha1.Neo4jEnterpriseStandalone{}
+		standaloneKey := types.NamespacedName{
+			Name:      database.Spec.ClusterRef,
+			Namespace: database.Namespace,
 		}
-		logger.Error(err, "Failed to get referenced cluster")
-		return ctrl.Result{}, err
+
+		if err := r.Get(ctx, standaloneKey, standalone); err != nil {
+			if errors.IsNotFound(err) {
+				r.updateDatabaseStatus(ctx, database, metav1.ConditionFalse, "ClusterNotFound",
+					fmt.Sprintf("Referenced cluster %s not found", database.Spec.ClusterRef))
+				r.Recorder.Eventf(database, "Warning", "ClusterNotFound",
+					"Referenced cluster %s not found", database.Spec.ClusterRef)
+				return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
+			}
+			logger.Error(err, "Failed to get referenced standalone")
+			return ctrl.Result{}, err
+		}
+		isStandalone = true
+	} else if clusterErr != nil {
+		logger.Error(clusterErr, "Failed to get referenced cluster")
+		return ctrl.Result{}, clusterErr
 	}
 
-	// Check if cluster is ready
-	if !r.isClusterReady(cluster) {
+	// Check if cluster/standalone is ready
+	var clusterReady bool
+	if isStandalone {
+		clusterReady = r.isStandaloneReady(standalone)
+	} else {
+		clusterReady = r.isClusterReady(cluster)
+	}
+
+	if !clusterReady {
 		r.updateDatabaseStatus(ctx, database, metav1.ConditionFalse, "ClusterNotReady",
 			"Referenced cluster is not ready")
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
@@ -155,7 +180,11 @@ func (r *Neo4jDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return strings.Contains(err.Error(), "connection") || strings.Contains(err.Error(), "timeout")
 	}, func() error {
 		var clientErr error
-		neo4jClient, clientErr = r.createNeo4jClient(ctx, cluster)
+		if isStandalone {
+			neo4jClient, clientErr = r.createNeo4jClientForStandalone(ctx, standalone)
+		} else {
+			neo4jClient, clientErr = r.createNeo4jClient(ctx, cluster)
+		}
 		return clientErr
 	})
 
@@ -442,6 +471,11 @@ func (r *Neo4jDatabaseReconciler) createNeo4jClient(ctx context.Context, cluster
 	return neo4j.NewClientForEnterprise(cluster, r.Client, "neo4j-admin-secret")
 }
 
+func (r *Neo4jDatabaseReconciler) createNeo4jClientForStandalone(ctx context.Context, standalone *neo4jv1alpha1.Neo4jEnterpriseStandalone) (*neo4j.Client, error) {
+	// Use the enterprise client method for standalone
+	return neo4j.NewClientForEnterpriseStandalone(standalone, r.Client, "neo4j-admin-secret")
+}
+
 func (r *Neo4jDatabaseReconciler) isClusterReady(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) bool {
 	for _, condition := range cluster.Status.Conditions {
 		if condition.Type == "Ready" && condition.Status == metav1.ConditionTrue {
@@ -449,6 +483,11 @@ func (r *Neo4jDatabaseReconciler) isClusterReady(cluster *neo4jv1alpha1.Neo4jEnt
 		}
 	}
 	return false
+}
+
+func (r *Neo4jDatabaseReconciler) isStandaloneReady(standalone *neo4jv1alpha1.Neo4jEnterpriseStandalone) bool {
+	// Standalone uses a simple ready boolean field, not conditions array
+	return standalone.Status.Ready
 }
 
 func (r *Neo4jDatabaseReconciler) updateDatabaseStatus(ctx context.Context, database *neo4jv1alpha1.Neo4jDatabase, status metav1.ConditionStatus, reason, message string) {

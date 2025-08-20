@@ -1,0 +1,51 @@
+# Neo4jDatabase example for standalone deployments
+#
+# This example shows how to create a database in a Neo4j standalone deployment.
+# The Neo4jDatabase resource can reference either Neo4jEnterpriseCluster or
+# Neo4jEnterpriseStandalone resources via the clusterRef field.
+#
+# Prerequisites:
+# 1. A running Neo4jEnterpriseStandalone resource named "my-standalone"
+# 2. Admin credentials secret configured in the standalone deployment
+#
+# Usage:
+# kubectl apply -f database-standalone.yaml
+
+---
+apiVersion: neo4j.com/v1alpha1
+kind: Neo4jDatabase
+metadata:
+  name: standalone-database
+  namespace: default
+spec:
+  # Reference to Neo4jEnterpriseStandalone resource
+  clusterRef: my-standalone
+
+  # Database name in Neo4j
+  name: appdb
+
+  # Create only if database doesn't exist
+  ifNotExists: true
+
+  # Wait for database creation to complete
+  wait: true
+
+  # Note: Topology is not applicable for standalone deployments
+  # as they only support single-node databases
+
+  # Optional: Set default Cypher language (5 or 25)
+  # defaultCypherLanguage: "5"
+
+---
+# Example: Multiple databases in standalone deployment
+apiVersion: neo4j.com/v1alpha1
+kind: Neo4jDatabase
+metadata:
+  name: standalone-test-database
+  namespace: default
+spec:
+  clusterRef: my-standalone
+  name: testdb
+  ifNotExists: true
+  wait: true
+  defaultCypherLanguage: "25"  # Use Cypher 25 for Neo4j 2025.x features

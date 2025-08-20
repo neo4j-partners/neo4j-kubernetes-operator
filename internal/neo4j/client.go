@@ -176,6 +176,77 @@ func NewClientForPod(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, k8sClient cl
 }
 
 // NewClientForEnterprise creates a new optimized Neo4j client for enterprise clusters
+func NewClientForEnterpriseStandalone(standalone *neo4jv1alpha1.Neo4jEnterpriseStandalone, k8sClient client.Client, adminSecretName string) (*Client, error) {
+	// Get credentials from secret
+	credentials, err := getCredentials(context.Background(), k8sClient, standalone.Namespace, adminSecretName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get credentials: %w", err)
+	}
+
+	// Build connection URI
+	uri := buildConnectionURIForStandalone(standalone)
+
+	// Configure optimized driver with connection pooling
+	auth := neo4j.BasicAuth(credentials.Username, credentials.Password, "")
+
+	config := func(c *config.Config) {
+		// Optimized connection pool settings for standalone
+		c.MaxConnectionLifetime = 30 * time.Minute
+		c.MaxConnectionPoolSize = 10                      // Reduced for standalone deployment
+		c.ConnectionAcquisitionTimeout = 30 * time.Second // Increased for Neo4j initialization time
+		c.SocketConnectTimeout = 15 * time.Second         // Increased for Neo4j startup time
+		c.SocketKeepalive = true
+		c.ConnectionLivenessCheckTimeout = 10 * time.Second
+
+		// Connection pool optimization
+		c.MaxTransactionRetryTime = 30 * time.Second
+		c.FetchSize = 1000 // Optimized fetch size for memory efficiency
+
+		// Configure TLS if enabled
+		// Note: TLS configuration is handled by the URI scheme (bolt+s://)
+		// No additional configuration needed as cert-manager handles certificates
+	}
+
+	// Create driver with retry logic for connection establishment
+	driver, err := neo4j.NewDriverWithContext(uri, auth, config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Neo4j driver: %w", err)
+	}
+
+	// Test driver connectivity with proper timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	err = driver.VerifyConnectivity(ctx)
+	if err != nil {
+		driver.Close(context.Background())
+		return nil, fmt.Errorf("failed to verify Neo4j connectivity: %w", err)
+	}
+
+	// Initialize circuit breaker
+	circuitBreaker := &CircuitBreaker{
+		maxFailures:      5,
+		resetTimeout:     30 * time.Second,
+		halfOpenMaxCalls: 3,
+		state:            CircuitClosed,
+	}
+
+	// Initialize connection pool metrics
+	poolMetrics := &ConnectionPoolMetrics{
+		LastHealthCheck: time.Now(),
+	}
+
+	client := &Client{
+		driver:            driver,
+		enterpriseCluster: nil, // No cluster for standalone
+		credentials:       credentials,
+		circuitBreaker:    circuitBreaker,
+		poolMetrics:       poolMetrics,
+	}
+
+	return client, nil
+}
+
 func NewClientForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, k8sClient client.Client, adminSecretName string) (*Client, error) {
 	// Get credentials from secret
 	credentials, err := getCredentials(context.Background(), k8sClient, cluster.Namespace, adminSecretName)
@@ -1749,6 +1820,19 @@ func isVersionSupported(version string) bool {
 	}
 
 	return false
+}
+
+func buildConnectionURIForStandalone(standalone *neo4jv1alpha1.Neo4jEnterpriseStandalone) string {
+	scheme := "bolt"
+	if standalone.Spec.TLS != nil && standalone.Spec.TLS.Mode == "cert-manager" {
+		scheme = "bolt+s"
+	}
+
+	// Use service for connection (standalone service naming pattern)
+	host := fmt.Sprintf("%s-service.%s.svc.cluster.local", standalone.Name, standalone.Namespace)
+	port := 7687
+
+	return fmt.Sprintf("%s://%s:%d", scheme, host, port)
 }
 
 func buildConnectionURIForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) string {
