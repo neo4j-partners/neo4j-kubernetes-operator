@@ -37,18 +37,25 @@ If you're new to Kubernetes, start here:
 
 3. **Deploy your first Neo4j instance**:
 
+   **Download examples from the release**:
+   ```bash
+   # Get the latest release version
+   LATEST_RELEASE=$(curl -s https://api.github.com/repos/neo4j-labs/neo4j-kubernetes-operator/releases/latest | grep 'tag_name' | cut -d '"' -f 4)
+   CLEAN_VERSION=${LATEST_RELEASE#v}  # Remove 'v' prefix
+
+   # Download and extract examples
+   wget https://github.com/neo4j-labs/neo4j-kubernetes-operator/releases/download/${LATEST_RELEASE}/examples-${CLEAN_VERSION}.tar.gz
+   tar -xzf examples-${CLEAN_VERSION}.tar.gz
+   ```
+
    **For single-node development** (non-clustered):
    ```bash
-   # Download the example from the latest release
-   curl -L https://github.com/neo4j-labs/neo4j-kubernetes-operator/releases/latest/download/examples-standalone-single-node.yaml -o standalone.yaml
-   kubectl apply -f standalone.yaml
+   kubectl apply -f examples/standalone/single-node-standalone.yaml
    ```
 
    **For clustered deployment** (production):
    ```bash
-   # Download the example from the latest release
-   curl -L https://github.com/neo4j-labs/neo4j-kubernetes-operator/releases/latest/download/examples-cluster-minimal.yaml -o cluster.yaml
-   kubectl apply -f cluster.yaml
+   kubectl apply -f examples/clusters/minimal-cluster.yaml
    ```
 
 4. **Access your Neo4j instance**:
@@ -66,13 +73,24 @@ If you're new to Kubernetes, start here:
 Jump right in with advanced configurations:
 
 ```bash
-# Install the operator from the latest release
-kubectl apply -f https://github.com/neo4j-labs/neo4j-kubernetes-operator/releases/latest/download/neo4j-kubernetes-operator.yaml
+# Method 1: Complete operator installation
+kubectl apply -f https://github.com/neo4j-labs/neo4j-kubernetes-operator/releases/latest/download/neo4j-kubernetes-operator-complete.yaml
 
-# Deploy production cluster with high availability
-# First, clone the release or download specific example files
-git clone --branch $(curl -s https://api.github.com/repos/neo4j-labs/neo4j-kubernetes-operator/releases/latest | grep tag_name | cut -d '"' -f 4) https://github.com/neo4j-labs/neo4j-kubernetes-operator.git
-cd neo4j-kubernetes-operator
+# Method 2: Download release tarball for customization
+LATEST_RELEASE=$(curl -s https://api.github.com/repos/neo4j-labs/neo4j-kubernetes-operator/releases/latest | grep 'tag_name' | cut -d '"' -f 4)
+CLEAN_VERSION=${LATEST_RELEASE#v}  # Remove 'v' prefix
+
+# Download source tarball
+wget https://github.com/neo4j-labs/neo4j-kubernetes-operator/releases/download/${LATEST_RELEASE}/neo4j-kubernetes-operator-${CLEAN_VERSION}.tar.gz
+tar -xzf neo4j-kubernetes-operator-${CLEAN_VERSION}.tar.gz
+cd neo4j-kubernetes-operator-${CLEAN_VERSION}
+
+# Install using kustomize
+kubectl apply -k config/default
+
+# Download examples separately
+wget https://github.com/neo4j-labs/neo4j-kubernetes-operator/releases/download/${LATEST_RELEASE}/examples-${CLEAN_VERSION}.tar.gz
+tar -xzf examples-${CLEAN_VERSION}.tar.gz
 kubectl apply -f examples/clusters/multi-server-cluster.yaml
 ```
 

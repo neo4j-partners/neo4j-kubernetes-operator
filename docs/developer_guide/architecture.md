@@ -1,6 +1,6 @@
-# Architecture
+# Architecture Overview
 
-This guide provides an overview of the Neo4j Enterprise Operator's architecture and design principles.
+This guide provides a comprehensive overview of the Neo4j Enterprise Operator's architecture, design principles, and current implementation status as of August 2025.
 
 ## Core Design Principles
 
@@ -8,253 +8,363 @@ The Neo4j Enterprise Operator follows cloud-native best practices with a focus o
 
 - **Production Stability**: Optimized reconciliation frequency and efficient resource management
 - **Performance**: Intelligent rate limiting and status update optimization
+- **Server-Based Architecture**: Unified server deployments with self-organizing roles
+- **Resource Efficiency**: Centralized backup system (70% resource reduction)
 - **Observability**: Comprehensive monitoring and operational insights
 - **Validation**: Proactive resource validation and recommendations
 
-## Controllers
+## Current Architecture (August 2025)
 
-The operator is built around a set of controllers that manage the lifecycle of Neo4j resources. Each controller is optimized for performance and reliability.
+### Server-Based Architecture
 
-### Neo4jEnterpriseCluster Controller
+The operator has evolved to use a **unified server-based architecture** where Neo4j servers self-organize into primary/secondary roles:
 
-The main controller (`internal/controller/neo4jenterprisecluster_controller.go`) manages clustered Neo4j Enterprise deployments with the following architectural components:
+#### Key Changes from Legacy Architecture
+- **Before**: Separate primary/secondary StatefulSets with complex orchestration
+- **After**: Single `{cluster-name}-server` StatefulSet with self-organizing servers
+- **Benefit**: Simplified resource management, improved scaling, reduced complexity
 
-#### Performance Optimizations
-- **Efficient Reconciliation**: Optimized from ~18,000 to ~34 reconciliations per minute
-- **Smart Status Updates**: Only updates status when cluster state actually changes
-- **ConfigMap Debouncing**: 2-minute debounce mechanism prevents restart loops
+#### Current Implementation
+```yaml
+# Neo4jEnterpriseCluster topology
+topology:
+  servers: 3  # Creates: my-cluster-server StatefulSet (replicas: 3)
+  # Pods: my-cluster-server-0, my-cluster-server-1, my-cluster-server-2
+```
 
-#### Core Components
-- **ConfigMap Manager** (`internal/controller/configmap_manager.go`): Handles Neo4j configuration with hash-based change detection
-- **Topology Scheduler**: Handles pod placement and anti-affinity rules
-- **Cluster Topology Validator**: Enforces minimum cluster topology requirements (2+ servers)
+```yaml
+# Neo4jEnterpriseStandalone deployment
+# Creates: my-standalone StatefulSet (replicas: 1)
+# Pod: my-standalone-0
+```
 
-### Neo4jEnterpriseStandalone Controller
+### Centralized Backup System
 
-The standalone controller (`internal/controller/neo4jenterprisestandalone_controller.go`) manages single-node Neo4j Enterprise deployments:
+**Major Efficiency Improvement**: Replaced expensive per-pod backup sidecars with centralized backup architecture:
 
-#### Key Features
-- **Unified Clustering Infrastructure**: Uses clustering infrastructure with single member (Neo4j 5.26+ approach)
-- **Simplified Topology**: Single-node deployment without complex clustering configurations
-- **Resource Management**: Handles ConfigMap, Service, and StatefulSet for single-node deployments
-- **Status Tracking**: Provides comprehensive status updates for standalone instances
-
-### Other Controllers
-
-- **Neo4jDatabase Controller**: Manages database lifecycle within clusters
-- **Neo4jBackup/Restore Controllers**: Handle backup and restore operations (supports both cluster and standalone targets)
-- **Neo4jPlugin Controller**: Manages Neo4j plugin installation and configuration
+- **Resource Efficiency**: 100m CPU/256Mi memory per cluster vs N×200m CPU/512Mi per sidecar
+- **Resource Savings**: ~70% reduction in backup-related resource usage
+- **Architecture**: Single `{cluster-name}-backup-0` StatefulSet per cluster
+- **Connectivity**: Connects to cluster via client service using Bolt protocol
+- **Neo4j 5.26+ Support**: Modern backup syntax with automated path creation
 
 ## Custom Resource Definitions (CRDs)
 
-The operator defines a set of CRDs to represent Neo4j resources. The Go type definitions are located in `api/v1alpha1/`.
+The operator defines six core CRDs located in `api/v1alpha1/`:
 
-### Core CRDs
+### Core Deployment CRDs
 
-#### Neo4jEnterpriseCluster
-- **Purpose**: Manages clustered Neo4j Enterprise deployments requiring high availability
-- **Minimum Topology**: Enforces 2+ servers that self-organize into primary/secondary roles
-- **Discovery Mode**: Automatically configures V2_ONLY discovery for Neo4j 5.26+ and 2025.x
-- **CRITICAL**: Uses `tcp-discovery` port (5000) for V2_ONLY discovery, not `tcp-tx` port (6000)
-- **Scaling**: Supports horizontal scaling with topology validation
+#### Neo4jEnterpriseCluster (`neo4jenterprisecluster_types.go`)
+- **Purpose**: High-availability clustered Neo4j Enterprise deployments
+- **Architecture**: Server-based with `{cluster-name}-server` StatefulSet
+- **Minimum Topology**: 2+ servers (enforced by validation)
+- **Server Organization**: Servers self-organize into primary/secondary roles for databases
+- **Scaling**: Horizontal scaling supported with topology validation
+- **Discovery**: V2_ONLY mode exclusively for Neo4j 5.26+ and 2025.x
+- **Resource Pattern**: Single StatefulSet replaces complex multi-StatefulSet architecture
 
-#### Neo4jEnterpriseStandalone
-- **Purpose**: Manages single-node Neo4j Enterprise deployments
+**Key Fields**:
+```go
+type Neo4jEnterpriseClusterSpec struct {
+    Image    ImageSpec              `json:"image"`
+    Topology TopologyConfiguration  `json:"topology"`  // servers: N
+    Storage  StorageSpec           `json:"storage"`
+    // ... additional fields
+}
+```
+
+#### Neo4jEnterpriseStandalone (`neo4jenterprisestandalone_types.go`)
+- **Purpose**: Single-node Neo4j Enterprise deployments
+- **Architecture**: Uses clustering infrastructure but fixed at 1 replica
 - **Use Cases**: Development, testing, simple production workloads
-- **Configuration**: Uses unified clustering approach with single member (Neo4j 5.26+)
-- **Restrictions**: Fixed at 1 replica, does not support scaling to multiple nodes
+- **StatefulSet**: `{standalone-name}` (no "-server" suffix)
+- **Configuration**: Modern clustering approach with single member (Neo4j 5.26+)
+- **Restrictions**: Cannot scale beyond 1 replica
 
-### Enhanced CRD Features
-- **Resource Validation**: Built-in validation for resource limits and Neo4j configuration
-- **Status Conditions**: Comprehensive status reporting with detailed conditions
-- **Topology Validation**: Prevents invalid cluster configurations
+### Database Management CRDs
 
-## Validation Framework
+#### Neo4jDatabase (`neo4jdatabase_types.go`)
+- **Purpose**: Manages database lifecycle within clusters and standalone deployments
+- **Dual Support**: Works with both Neo4jEnterpriseCluster and Neo4jEnterpriseStandalone
+- **Enhanced Validation**: DatabaseValidator supports automatic deployment type detection
+- **Neo4j 5.26+ Syntax**: Uses modern `TOPOLOGY` clause for database creation
+- **Standalone Fix**: Added NEO4J_AUTH environment variable for automatic authentication
 
-The operator uses a comprehensive validation framework (`internal/validation/`) to ensure resource correctness:
+**Key Features**:
+```go
+type Neo4jDatabaseSpec struct {
+    ClusterRef string           `json:"clusterRef"`     // References cluster OR standalone
+    Name       string           `json:"name"`           // Database name
+    Topology   DatabaseTopology `json:"topology"`       // Primary/secondary counts
+    IfNotExists bool            `json:"ifNotExists"`    // CREATE IF NOT EXISTS
+}
+```
 
-### Validation Components
-- **Topology Validator** (`topology_validator.go`): Validates cluster topology and enforces minimum requirements
-- **Cluster Validator** (`cluster_validator.go`): Validates cluster configuration and topology
-- **Memory Validator** (`memory_validator.go`): Ensures Neo4j memory settings are within container limits
-- **Resource Validator** (`resource_validator.go`): Validates CPU, memory, and storage allocation
+#### Neo4jPlugin (`neo4jplugin_types.go`)
+- **Purpose**: Manages Neo4j plugin installation and configuration
+- **Dual Architecture Support**: Enhanced for server-based cluster + standalone compatibility
+- **Deployment Detection**: Automatic cluster vs standalone recognition
+- **Resource Naming**: Handles `{cluster-name}-server` vs `{standalone-name}` patterns
+- **Plugin Sources**: Official, community, custom registry, direct URL support
 
-### Validation Features
-- **Proactive Validation**: Catches configuration errors before deployment
-- **Topology Enforcement**: Ensures Neo4jEnterpriseCluster meets minimum topology requirements
-- **CRD Separation**: Validates that single-node deployments use Neo4jEnterpriseStandalone
+### Backup & Restore CRDs
+
+#### Neo4jBackup (`neo4jbackup_types.go`)
+- **Purpose**: Manages backup operations for both clusters and standalone deployments
+- **Centralized Architecture**: Uses single backup pod per cluster (not sidecars)
+- **Target Support**: Can backup both cluster and standalone deployments
+- **Neo4j 5.26+ Support**: Modern backup syntax with `--to-path` parameter
+
+#### Neo4jRestore (`neo4jrestore_types.go`)
+- **Purpose**: Manages database restoration from backups
+- **Point-in-Time Recovery**: Supports `--restore-until` for precise recovery
+- **Cross-Deployment Support**: Can restore to different deployment types
+
+## Controllers Architecture
+
+### Core Controllers (`internal/controller/`)
+
+#### Neo4jEnterpriseCluster Controller (`neo4jenterprisecluster_controller.go`)
+**Primary cluster management controller with server-based architecture:**
+
+**Performance Optimizations**:
+- **Efficient Reconciliation**: Reduced from ~18,000 to ~34 reconciliations per minute
+- **Smart Status Updates**: Only updates when cluster state changes
+- **ConfigMap Debouncing**: 2-minute debounce prevents restart loops
+- **Resource Version Conflict Handling**: Retry logic for concurrent updates
+
+**Server-Based Implementation**:
+- **Single StatefulSet**: Creates `{cluster-name}-server` instead of separate primary/secondary
+- **Self-Organizing Servers**: Neo4j servers automatically assign database hosting roles
+- **Simplified Resource Management**: Unified pod templates and configuration
+- **Certificate DNS**: Includes all server pod names in TLS certificates
+
+**Split-Brain Detection**:
+- **Location**: `internal/controller/splitbrain_detector.go`
+- **Multi-Pod Analysis**: Connects to each server to compare cluster views
+- **Automatic Repair**: Restarts orphaned pods to rejoin main cluster
+- **Production Ready**: Comprehensive logging and fallback mechanisms
+
+#### Neo4jEnterpriseStandalone Controller (`neo4jenterprisestandalone_controller.go`)
+**Single-node deployment controller:**
+
+**Key Features**:
+- **Clustering Infrastructure**: Uses same infrastructure as clusters (Neo4j 5.26+ approach)
+- **Single Member Configuration**: Sets up clustering with single server
+- **Resource Management**: Handles ConfigMap, Service, and StatefulSet
+- **Status Tracking**: Comprehensive status updates for standalone instances
+
+#### Database Controller (`neo4jdatabase_controller.go`)
+**Enhanced for dual deployment support:**
+- **Automatic Detection**: Tries cluster lookup first, then standalone fallback
+- **Neo4j Client Creation**: `NewClientForEnterprise()` vs `NewClientForEnterpriseStandalone()`
+- **Authentication Handling**: Manages NEO4J_AUTH for standalone deployments
+- **Syntax Support**: Neo4j 5.26+ and 2025.x database creation syntax
+
+#### Plugin Controller (`plugin_controller.go`)
+**Manages plugin lifecycle with architecture compatibility:**
+- **DeploymentInfo Abstraction**: Unified handling of cluster/standalone types
+- **Resource Naming**: Correct StatefulSet names (`{cluster-name}-server` vs `{standalone-name}`)
+- **Pod Labels**: Applies appropriate labels for each deployment type
+- **Plugin Sources**: Official, community, custom registries, direct URLs
+
+#### Backup Controller (`neo4jbackup_controller.go`)
+**Centralized backup management:**
+- **Architecture**: Single backup StatefulSet per cluster
+- **Resource Efficiency**: 70% reduction in backup resource usage
+- **Cross-Deployment Support**: Backs up both clusters and standalone deployments
+- **Modern Syntax**: Neo4j 5.26+ compatible backup commands
+
+#### Restore Controller (`neo4jrestore_controller.go`)
+**Database restoration management:**
+- **Point-in-Time Recovery**: Supports precise timestamp restoration
+- **Flexible Targets**: Can restore to different deployment types
+- **Validation**: Ensures target deployment compatibility
+
+## Validation Framework (`internal/validation/`)
+
+### Comprehensive Validation Architecture
+
+#### Core Validators:
+- **TopologyValidator** (`topology_validator.go`): Cluster topology and server count validation
+- **ClusterValidator** (`cluster_validator.go`): Cluster-specific configuration validation
+- **MemoryValidator** (`memory_validator.go`): Neo4j memory settings vs container limits
+- **ResourceValidator** (`resource_validator.go`): CPU, memory, and storage validation
+- **TLSValidator** (`tls_validator.go`): TLS/SSL configuration validation
+- **DatabaseValidator** (`database_validator.go`): Database creation and topology validation
+
+#### Enhanced Validation Features:
+- **Dual CRD Validation**: Separate validation rules for cluster vs standalone
+- **Server-Based Topology**: Validates server counts instead of primary/secondary counts
 - **Resource Recommendations**: Suggests optimal resource allocation
-- **Memory Ratio Validation**: Ensures proper heap/page cache ratios
-- **Configuration Restrictions**: Prevents clustering configurations in standalone deployments
+- **Configuration Restrictions**: Prevents clustering settings in standalone deployments
+- **Neo4j Version Compatibility**: Validates settings against Neo4j 5.26+ and 2025.x
 
-## Monitoring and Observability
+### Database Validator Enhancements
+- **Automatic Deployment Detection**: Tries cluster first, then standalone
+- **Appropriate Client Creation**: Uses correct client type for deployment
+- **Clear Error Messages**: Distinguishes between cluster and standalone validation failures
 
-The operator includes a comprehensive monitoring framework for operational insights:
+## Neo4j Version Compatibility
 
-### Resource Monitoring
-- **Resource Monitor** (`internal/monitoring/resource_monitor.go`): Real-time resource utilization tracking
-- **Performance Metrics**: Controller performance and reconciliation efficiency
-- **Operational Insights**: ConfigMap update patterns and debounce effectiveness
+### Supported Versions
+- **Neo4j 5.26+**: Semver format (5.26.0, 5.27.1, etc.)
+- **Neo4j 2025.x+**: Calver format (2025.01.0, 2025.02.0, etc.)
 
-### Status Management
-- **Enhanced Status Updates**: Detailed cluster state tracking
-- **Condition Management**: Comprehensive status conditions with proper transitions
-- **Event Recording**: Structured events for debugging and monitoring
+### Version-Specific Configuration
 
-## Resource Management
+#### Discovery Configuration:
+- **Neo4j 5.26.x**: `dbms.kubernetes.discovery.v2.service_port_name=tcp-discovery`
+- **Neo4j 2025.x**: `dbms.kubernetes.discovery.service_port_name=tcp-discovery`
+- **Auto-Detection**: `getKubernetesDiscoveryParameter()` in `cluster.go`
 
-The operator includes intelligent resource management capabilities:
+#### Modern Configuration Standards:
+- **Memory**: `server.memory.*` (not deprecated `dbms.memory.*`)
+- **TLS/SSL**: `server.https.*` and `server.bolt.*` (not `dbms.connector.*`)
+- **Database Format**: `db.format: "block"` (not deprecated formats)
+- **Discovery**: `dbms.cluster.discovery.resolver_type: "K8S"`
 
-### Resource Recommendations
-- **Resource Recommendation Engine** (`internal/resources/resource_recommendation.go`): Suggests optimal resource allocation
-- **Memory Optimization**: Automatic heap and page cache sizing recommendations
-- **Scaling Guidance**: Intelligent scaling recommendations based on usage patterns
+### Database Creation Syntax
 
-### Configuration Management
-- **Hash-based Change Detection**: Prevents unnecessary ConfigMap updates
-- **Debounce Mechanism**: Reduces configuration churn and restart loops
-- **Content Normalization**: Ensures consistent configuration formatting
-- **Dual CRD Support**: Handles configuration for both clustered and standalone deployments
-- **V2_ONLY Discovery Fix**: Automatically configures correct discovery port for Neo4j 5.26+ and 2025.x
-  - Neo4j 5.26.x: `dbms.kubernetes.discovery.v2.service_port_name=tcp-discovery`
-  - Neo4j 2025.x: `dbms.kubernetes.discovery.service_port_name=tcp-discovery`
-  - Implementation: `internal/resources/cluster.go:getKubernetesDiscoveryParameter()`
-- **Unified Clustering**: All deployments use clustering infrastructure (no special single mode)
+#### Neo4j 5.26+ (Cypher 5):
+```cypher
+CREATE DATABASE name [IF NOT EXISTS]
+[TOPOLOGY n PRIMAR{Y|IES} [m SECONDAR{Y|IES}]]
+[OPTIONS "{" option: value[, ...] "}"]
+[WAIT [n [SEC[OND[S]]]]|NOWAIT]
+```
 
-## RBAC and Security
+#### Neo4j 2025.x (Cypher 25):
+```cypher
+CREATE DATABASE name [IF NOT EXISTS]
+[[SET] DEFAULT LANGUAGE CYPHER {5|25}]
+[[SET] TOPOLOGY n PRIMARIES [m SECONDARIES]]
+[OPTIONS "{" option: value[, ...] "}"]
+[WAIT [n [SEC[OND[S]]]]|NOWAIT]
+```
 
-The operator's permissions are defined in `config/rbac/` following security best practices:
+## Resource Management Architecture
 
-- **Principle of Least Privilege**: Minimal required permissions
-- **ClusterRole Design**: Scoped permissions for cross-namespace operations
-- **Service Account Security**: Dedicated service accounts with specific roles
+### Intelligent Resource Handling
 
-## Performance Architecture
+#### Resource Builders (`internal/resources/`):
+- **ClusterBuilder** (`cluster.go`): Server-based StatefulSet creation
+- **StandaloneBuilder** (`standalone.go`): Single-node deployment resources
+- **ConfigMapBuilder**: Unified configuration for both deployment types
+- **ServiceBuilder**: Client and discovery services
+- **BackupBuilder**: Centralized backup StatefulSet
 
-### Reconciliation Optimization
+#### Server-Based Resource Patterns:
+- **StatefulSet Naming**: `{cluster-name}-server` for clusters, `{standalone-name}` for standalone
+- **Pod Naming**: `{cluster-name}-server-0`, `{cluster-name}-server-1`, etc.
+- **Service Names**: `{cluster-name}-client`, `{cluster-name}-discovery`
+- **Backup Resources**: `{cluster-name}-backup-0` (centralized)
+
+### Performance Optimizations
+
+#### Reconciliation Efficiency:
 - **Rate Limiting**: Intelligent rate limiting prevents API server overload
 - **Status Update Efficiency**: Only updates when state actually changes
 - **Event Filtering**: Reduces unnecessary reconciliation triggers
+- **ConfigMap Hashing**: Hash-based change detection prevents unnecessary updates
 
-### Caching Strategy
-- **Informer Caching**: Optimized Kubernetes informer usage
-- **Direct Client Mode**: Ultra-fast startup with direct API calls
-- **Selective Watching**: Only watches resources that trigger reconciliation
+#### Startup Optimization:
+- **Parallel Pod Management**: All server pods start simultaneously
+- **Minimum Primaries = 1**: First pod forms cluster immediately
+- **PublishNotReadyAddresses**: Discovery includes pending pods
+- **Resource Version Conflict Retry**: Handles concurrent updates gracefully
 
-### Startup Modes
-The operator supports multiple startup modes for different environments:
+## Security Architecture
 
-- **Production Mode**: Standard settings with full caching
-- **Development Mode**: Optimized cache settings for development
-- **Minimal Mode**: Ultra-fast startup with minimal caching
+### RBAC Configuration (`config/rbac/`)
 
-## Integration Points
+#### Core RBAC Resources:
+- **Principle of Least Privilege**: Minimal required permissions
+- **ClusterRole Design**: Cross-namespace operations support
+- **Service Account Security**: Dedicated accounts with specific roles
 
-### External Systems
-- **Cert-Manager**: TLS certificate management integration
-- **Prometheus**: Metrics collection and monitoring
+#### Discovery RBAC (Critical):
+Each cluster gets automatic RBAC creation:
+- **ServiceAccount**: `{cluster-name}-discovery`
+- **Role**: Services and endpoints permissions
+- **RoleBinding**: Links account to role
+- **Endpoints Permission**: **CRITICAL** for cluster formation
+
+### TLS/SSL Support:
+- **Cert-Manager Integration**: Automatic certificate provisioning
+- **SSL Policy Configuration**: Separate policies for `https`, `bolt`, and `cluster` scopes
+- **Trust All for Cluster**: `dbms.ssl.policy.cluster.trust_all=true` for formation
+- **Certificate DNS Names**: Includes all server pod names
+
+## Monitoring & Observability
+
+### Resource Monitoring (`internal/monitoring/`):
+- **ResourceMonitor** (`resource_monitor.go`): Real-time utilization tracking
+- **Performance Metrics**: Controller performance and reconciliation efficiency
+- **Operational Insights**: ConfigMap update patterns and debounce effectiveness
+
+### Status Management:
+- **Enhanced Status Updates**: Detailed cluster state tracking
+- **Condition Management**: Comprehensive status conditions with proper transitions
+- **Event Recording**: Structured events for debugging and monitoring
+- **Connection Examples**: Automatic generation of connection strings
+
+## Integration Architecture
+
+### External System Integration:
+- **Cert-Manager**: TLS certificate lifecycle management
+- **Prometheus**: Metrics collection and alerting
 - **External Secrets**: Secret management integration
-- **Storage Classes**: Persistent volume integration
+- **Storage Classes**: Persistent volume provisioning
+- **Cloud Providers**: AWS, GCP, Azure LoadBalancer optimizations
 
-### Kubernetes Integration
+### Kubernetes Integration:
 - **Network Policies**: Pod-to-pod communication security
 - **Service Mesh**: Istio/Linkerd compatibility
-- **Ingress Controllers**: External traffic routing
+- **Ingress Controllers**: External traffic routing with connection examples
+- **Node Affinity**: Topology spread and anti-affinity rules
 
-## Extensibility
+## Testing Architecture
 
-The operator is designed for extensibility:
+### Test Strategy:
+- **Unit Tests**: Controller logic and helper functions
+- **Integration Tests**: Full workflow testing with envtest
+- **End-to-End Tests**: Real cluster testing with Kind
+- **Performance Tests**: Reconciliation efficiency validation
 
-- **Plugin System**: Support for Neo4j plugin management
-- **Custom Metrics**: Extensible monitoring framework
-- **Webhook Integration**: Admission webhook support
-- **Event Handlers**: Pluggable event handling system
-- **Dual CRD Architecture**: Supports both clustered and standalone deployment patterns
-- **Migration Support**: Provides tools and guidance for migrating between deployment types
+### Test Infrastructure:
+- **Ginkgo/Gomega**: BDD-style testing framework
+- **Envtest**: Kubernetes API server for integration testing
+- **Kind Clusters**: Development and test cluster automation
+- **Test Cleanup**: Automatic finalizer removal and namespace cleanup
 
-## Configuration Management
+## Migration & Compatibility
 
-### Neo4j Version Compatibility
+### Legacy Architecture Migration:
+- **Backward Compatibility**: Existing clusters continue to work
+- **Gradual Migration**: No breaking changes for existing deployments
+- **Resource Name Updates**: New deployments use server-based naming
+- **Configuration Migration**: Automatic handling of deprecated settings
 
-The operator supports Neo4j 5.26+ and 2025.x+ versions. Key configuration considerations:
+### Future Extensibility:
+- **Plugin System**: Neo4j plugin management framework
+- **Custom Metrics**: Extensible monitoring capabilities
+- **Webhook Integration**: Admission webhook support for validation
+- **Event Handling**: Pluggable event system for custom integrations
+- **Multi-Architecture**: Support for different deployment patterns
 
-1. **Memory Settings**: Always use `server.memory.*` prefix (not deprecated `dbms.memory.*`)
-2. **TLS/SSL Settings**: Use `server.https.*` and `server.bolt.*` (not deprecated `dbms.connector.*`)
-3. **Discovery Settings**: Use `dbms.cluster.discovery.resolver_type` (not deprecated `type`)
-4. **Database Format**: Use `db.format: "block"` (not deprecated "standard" or "high_limit")
+## Development Best Practices
 
-### Automatic Configuration
+### Code Organization:
+- **Controller Pattern**: Standard Kubernetes controller pattern
+- **Builder Pattern**: Resource builders for clean separation
+- **Validation Framework**: Centralized validation with clear error messages
+- **Testing Strategy**: Comprehensive test coverage with multiple levels
 
-The operator automatically manages:
-- Cluster discovery settings (`dbms.cluster.discovery.resolver_type: "K8S"`)
-- Discovery version (`dbms.cluster.discovery.version: "V2_ONLY"` for 5.26+, default for 2025.x)
-- **CRITICAL V2_ONLY Discovery Fix**: Correct port configuration for cluster formation
-  - Neo4j 5.26.x: `dbms.kubernetes.discovery.v2.service_port_name=tcp-discovery`
-  - Neo4j 2025.x: `dbms.kubernetes.discovery.service_port_name=tcp-discovery`
-  - Uses port 5000 (cluster) not port 6000 (discovery - disabled in V2_ONLY)
-- Kubernetes-specific endpoints and advertised addresses
-- Network bindings for pods
+### Performance Considerations:
+- **Memory Usage**: Optimized for large-scale deployments
+- **API Efficiency**: Minimal API calls with intelligent caching
+- **Resource Creation**: Parallel resource creation where possible
+- **Error Handling**: Graceful error handling with proper recovery
 
-### Kubernetes Discovery Mechanism
-
-Neo4j's Kubernetes discovery (`resolver_type=K8S`) works as follows:
-
-1. **Service Discovery**: Neo4j queries the Kubernetes API to find services matching the configured label selector
-2. **Endpoint Resolution**: For each matching service, Neo4j retrieves the Endpoints resource to get individual pod IPs
-3. **Cluster Formation**: Neo4j uses these pod IPs to establish direct connections between cluster members
-
-**Important Discovery Behavior**: When Neo4j discovers services, it logs the service hostname (e.g., `my-cluster-discovery.default.svc.cluster.local:5000`). This is **expected behavior** - Neo4j discovers the service first, then internally queries its endpoints to resolve individual pod IPs.
-
-### Cluster Formation Strategy
-
-The operator implements an optimized cluster formation strategy that achieves 100% success rate:
-
-**Key Design Decisions**:
-1. **Parallel Pod Management**: All pods (primaries and secondaries) start simultaneously using `ParallelPodManagement`
-2. **Minimum Primaries = 1**: Always set to 1, allowing the first pod to form the initial cluster
-3. **No Secondary Delay**: Secondaries start immediately with primaries, discovering and joining the cluster
-4. **PublishNotReadyAddresses**: Discovery service includes pods in endpoints even before they're ready
-
-**Why This Works**:
-- **Fast Cluster Formation**: First pod forms cluster immediately without waiting
-- **Reliable Discovery**: All pods discover each other via Kubernetes endpoints
-- **No Split Brain**: Single cluster forms naturally as pods join the first-formed cluster
-- **Simplified Logic**: No complex timing or sequencing required
-
-**Implementation Details**:
-- StatefulSets use `PodManagementPolicy: ParallelPodManagement` (line 135 in `cluster.go`)
-- Startup script sets `MIN_PRIMARIES=1` and `dbms.cluster.minimum_initial_system_primaries_count=${MIN_PRIMARIES}`
-- Discovery service has `PublishNotReadyAddresses: true` for early pod discovery
-- Raft timeouts: `dbms.cluster.raft.membership.join_timeout=10m` and `dbms.cluster.raft.binding_timeout=1d`
-
-**TLS-Specific Optimizations**:
-- **Trust All for Cluster SSL**: `dbms.ssl.policy.cluster.trust_all=true` prevents certificate validation issues during formation
-- **Maintained Parallel Startup**: TLS doesn't change the pod management policy
-- **No Special Delays**: TLS handshakes complete within normal formation timeouts
-- **RBAC for Endpoints**: Operator has endpoints permission for proper discovery
-
-**Service Architecture**:
-- **Discovery Service**: ClusterIP service with `neo4j.com/clustering=true` label
-- **Shared Services**: No per-pod services needed (matches Neo4j Helm chart pattern)
-- **ClusterIP Type**: Discovery service is regular ClusterIP, not headless (deliberate for stability)
-
-**RBAC Requirements**: The discovery ServiceAccount needs permissions to:
-- `get`, `list`, `watch` services (to find matching services)
-- `get`, `list`, `watch` endpoints (to resolve pod IPs behind services) **[CRITICAL]**
-
-Without endpoints permission, Neo4j can discover services but cannot resolve individual pods, preventing cluster formation.
-
-The operator automatically creates these RBAC resources for each cluster, including:
-- ServiceAccount: `{cluster-name}-discovery`
-- Role: `{cluster-name}-discovery` with services and endpoints permissions
-- RoleBinding: `{cluster-name}-discovery`
-
-### Configuration Validation
-
-The validation framework (`internal/validation/`) ensures:
-- Deprecated settings are identified and warned about
-- Clustering settings are blocked in standalone deployments
-- Memory settings are validated against container resources
-- Required settings are present for the deployment type
-
-For detailed configuration guidelines, see the [Configuration Best Practices Guide](../user_guide/guides/configuration_best_practices.md).
+This architecture provides a solid foundation for managing Neo4j Enterprise deployments in Kubernetes with high performance, reliability, and operational simplicity.

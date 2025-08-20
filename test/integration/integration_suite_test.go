@@ -31,6 +31,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -432,5 +433,36 @@ func createBasicStandalone(name, namespace string) *neo4jv1alpha1.Neo4jEnterpris
 				Size:      "1Gi",
 			},
 		},
+	}
+}
+
+// getCIAppropriateResourceRequirements returns resource requirements optimized for CI environments
+// Uses lower memory limits to work within GitHub Actions constraints while maintaining functionality
+func getCIAppropriateResourceRequirements() *corev1.ResourceRequirements {
+	// Check if running in CI environment
+	if os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
+		// CI environment: Use reduced memory to fit within GitHub Actions runners
+		// GitHub Actions runners have ~7GB total memory, need to fit 3 Neo4j pods + system overhead
+		return &corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("25m"), // Minimal CPU for CI scheduling
+				corev1.ResourceMemory: resource.MustParse("1Gi"), // Reduced memory for CI constraints
+			},
+			Limits: corev1.ResourceList{
+				corev1.ResourceMemory: resource.MustParse("1Gi"), // 3 pods × 1Gi = 3Gi total (fits in CI)
+			},
+		}
+	} else {
+		// Local/development environment: Use standard Neo4j Enterprise requirements
+		return &corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("100m"),  // Standard CPU request
+				corev1.ResourceMemory: resource.MustParse("1.5Gi"), // Neo4j Enterprise recommended minimum
+			},
+			Limits: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("500m"),  // Standard CPU limit
+				corev1.ResourceMemory: resource.MustParse("1.5Gi"), // Neo4j Enterprise recommended minimum
+			},
+		}
 	}
 }

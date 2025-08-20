@@ -26,7 +26,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -75,16 +74,7 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 					Topology: neo4jv1alpha1.TopologyConfiguration{
 						Servers: 2,
 					},
-					Resources: &corev1.ResourceRequirements{
-						Requests: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("100m"),
-							corev1.ResourceMemory: resource.MustParse("1.5Gi"),
-						},
-						Limits: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("500m"),
-							corev1.ResourceMemory: resource.MustParse("1.5Gi"),
-						},
-					},
+					Resources: getCIAppropriateResourceRequirements(), // Automatically adjusts for CI vs local environments
 					Storage: neo4jv1alpha1.StorageSpec{
 						Size:      "1Gi",
 						ClassName: "standard",
@@ -208,16 +198,7 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 						Repo: "neo4j",
 						Tag:  "5.26.0-enterprise",
 					},
-					Resources: &corev1.ResourceRequirements{
-						Requests: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("100m"),
-							corev1.ResourceMemory: resource.MustParse("1.5Gi"),
-						},
-						Limits: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("500m"),
-							corev1.ResourceMemory: resource.MustParse("1.5Gi"),
-						},
-					},
+					Resources: getCIAppropriateResourceRequirements(), // Automatically adjusts for CI vs local environments
 					Storage: neo4jv1alpha1.StorageSpec{
 						Size:      "1Gi",
 						ClassName: "standard",
@@ -385,12 +366,7 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 					Topology: neo4jv1alpha1.TopologyConfiguration{
 						Servers: 2,
 					},
-					Resources: &corev1.ResourceRequirements{
-						Requests: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("100m"),
-							corev1.ResourceMemory: resource.MustParse("1.5Gi"),
-						},
-					},
+					Resources: getCIAppropriateResourceRequirements(), // Automatically adjusts for CI vs local environments
 					Storage: neo4jv1alpha1.StorageSpec{
 						Size:      "1Gi",
 						ClassName: "standard",
