@@ -83,7 +83,7 @@ var _ = Describe("Split-Brain Detection Integration Tests", func() {
 					},
 					Resources: &corev1.ResourceRequirements{
 						Requests: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("50m"),
+							corev1.ResourceCPU:    resource.MustParse("25m"),   // Reduced for CI scheduling
 							corev1.ResourceMemory: resource.MustParse("1.5Gi"), // Neo4j Enterprise minimum for database operations
 						},
 						Limits: corev1.ResourceList{
@@ -225,7 +225,7 @@ var _ = Describe("Split-Brain Detection Integration Tests", func() {
 					},
 					Resources: &corev1.ResourceRequirements{
 						Requests: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("50m"),
+							corev1.ResourceCPU:    resource.MustParse("25m"),   // Reduced for CI scheduling
 							corev1.ResourceMemory: resource.MustParse("1.5Gi"), // Neo4j Enterprise minimum for database operations
 						},
 						Limits: corev1.ResourceList{
@@ -277,7 +277,7 @@ var _ = Describe("Split-Brain Detection Integration Tests", func() {
 			Expect(k8sClient.Delete(ctx, &podToDelete)).To(Succeed())
 
 			By("Verifying split-brain detection monitors the situation")
-			time.Sleep(30 * time.Second) // Give time for detection to run
+			time.Sleep(60 * time.Second) // Give more time for detection and pod rescheduling in CI
 
 			By("Verifying cluster eventually recovers")
 			Eventually(func() bool {
@@ -327,7 +327,14 @@ var _ = Describe("Split-Brain Detection Integration Tests", func() {
 							runningCount++
 						}
 					} else {
-						GinkgoWriter.Printf("Pod %s not running: phase=%s\n", pod.Name, pod.Status.Phase)
+						GinkgoWriter.Printf("Pod %s not running: phase=%s", pod.Name, pod.Status.Phase)
+						// Add more detail about why pod isn't running
+						for _, condition := range pod.Status.Conditions {
+							if condition.Status != corev1.ConditionTrue {
+								GinkgoWriter.Printf(" [%s=%s: %s]", condition.Type, condition.Status, condition.Reason)
+							}
+						}
+						GinkgoWriter.Printf("\n")
 					}
 				}
 				GinkgoWriter.Printf("Currently %d of 3 pods are running and ready\n", runningCount)
