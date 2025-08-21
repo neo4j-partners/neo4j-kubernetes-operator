@@ -10,17 +10,21 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Clear any existing Go cache to prevent conflicts
-      shell: bash
-      run: |
-        rm -rf ~/.cache/go-build || true
-        rm -rf ~/go/pkg/mod || true
-
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
         go-version: ${{ inputs.go-version }}
-        cache: true
+        cache: false  # Disable built-in caching to avoid tar conflicts
+
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: go-cache-${{ runner.os }}-${{ inputs.go-version }}-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          go-cache-${{ runner.os }}-${{ inputs.go-version }}-
 
     - name: Download dependencies
       shell: bash
