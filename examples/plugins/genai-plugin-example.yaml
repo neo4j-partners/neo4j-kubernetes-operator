@@ -1,0 +1,49 @@
+# GenAI Plugin Example - AI Provider Integration
+# GenAI plugin enables vector embeddings and AI integrations
+
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jPlugin
+metadata:
+  name: genai-plugin
+  namespace: default
+spec:
+  # Can reference either Neo4jEnterpriseCluster or Neo4jEnterpriseStandalone
+  clusterRef: my-cluster
+
+  name: genai
+  version: "1.0.0"
+  enabled: true
+
+  source:
+    type: official
+
+  # GenAI-specific configuration - these go through neo4j.conf
+  config:
+    # Provider configurations would typically be set via environment variables
+    # or external configuration management for security
+
+    # Example: OpenAI configuration (use secrets in production)
+    # genai.openai.api_key: "your-api-key"
+    # genai.openai.model: "text-embedding-ada-002"
+
+    # Example: Vertex AI configuration
+    # genai.vertexai.project_id: "your-project-id"
+    # genai.vertexai.region: "us-central1"
+
+    # Enable specific GenAI features
+    genai.vector.enabled: "true"
+    genai.embeddings.enabled: "true"
+
+  # Security configuration
+  security:
+    allowedProcedures:
+      - "genai.*"
+    sandbox: false
+
+# Note: In production, store API keys and credentials in Kubernetes secrets
+# and reference them via environment variables rather than in the config section.
+#
+# The GenAI plugin enables:
+# - Vector similarity search
+# - Text embedding generation
+# - Integration with AI providers (OpenAI, Vertex AI, Azure OpenAI, Bedrock)

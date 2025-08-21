@@ -1,4 +1,6 @@
-# Example Neo4jPlugin for Neo4jEnterpriseCluster
+# Legacy Example - Use apoc-plugin-example.yaml instead
+# This example shows the old approach, see newer examples for Neo4j 5.26+ compatibility
+
 apiVersion: neo4j.neo4j.com/v1alpha1
 kind: Neo4jPlugin
 metadata:
@@ -17,7 +19,8 @@ spec:
   source:
     type: official
 
-  # Plugin configuration
+  # DEPRECATED: This approach works but is not optimal for Neo4j 5.26+
+  # See apoc-plugin-example.yaml for the recommended approach
   config:
     "apoc.export.file.enabled": "true"
     "apoc.import.file.enabled": "true"
@@ -27,8 +30,3 @@ spec:
     allowedProcedures:
       - "apoc.*"
     sandbox: false
-
-  # Resource requirements for the plugin
-  resources:
-    memoryLimit: "256Mi"
-    cpuLimit: "100m"

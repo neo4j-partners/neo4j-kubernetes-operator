@@ -1,0 +1,46 @@
+# Graph Data Science Plugin Example - Neo4j Config (neo4j.conf)
+# GDS configuration goes through neo4j.conf with automatic security settings
+
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jPlugin
+metadata:
+  name: gds-plugin
+  namespace: default
+spec:
+  # Can reference either Neo4jEnterpriseCluster or Neo4jEnterpriseStandalone
+  clusterRef: my-cluster
+
+  name: graph-data-science
+  version: "2.10.0"
+  enabled: true
+
+  source:
+    type: community
+
+  # GDS-specific configuration - these go through neo4j.conf
+  config:
+    # Enterprise license file (if available)
+    gds.enterprise.license_file: "/licenses/gds.license"
+
+    # Optional: Configure GDS-specific settings
+    gds.arrow.enabled: "true"
+
+  # Security configuration
+  security:
+    allowedProcedures:
+      - "gds.*"
+    sandbox: false
+
+  # Dependencies - APOC is commonly used with GDS
+  dependencies:
+    - name: apoc
+      versionConstraint: ">=5.26.0"
+      optional: false
+
+# The operator automatically configures:
+# - dbms.security.procedures.unrestricted=gds.*
+# - dbms.security.procedures.allowlist=gds.*
+#
+# Both GDS and APOC will be installed:
+# - GDS: neo4j.conf configuration
+# - APOC: environment variable configuration

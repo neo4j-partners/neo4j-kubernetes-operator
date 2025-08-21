@@ -54,6 +54,8 @@ spec:
         args:
           - --leader-elect
           - --health-probe-bind-address=:8081
+          - --mode=dev
+          - --zap-log-level=debug
         image: controller:latest
         imagePullPolicy: IfNotPresent
         name: manager

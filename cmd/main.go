@@ -97,7 +97,7 @@ func main() {
 		secureMetrics        = flag.Bool("metrics-secure", false, "If set the metrics endpoint is served securely")
 
 		// Development mode specific flags
-		controllersToLoad = flag.String("controllers", "cluster", "Comma-separated list of controllers to load (dev mode only)")
+		controllersToLoad = flag.String("controllers", "cluster,standalone,database,backup,restore,plugin", "Comma-separated list of controllers to load (dev mode only)")
 
 		// Minimal mode specific flags
 		namespace  = flag.String("namespace", "default", "Namespace to watch (minimal mode only, empty for all namespaces)")
@@ -770,7 +770,7 @@ func startupFeedback(mode OperatorMode, metricsAddr, probeAddr string, skipCache
 // parseControllers parses the comma-separated list of controllers
 func parseControllers(controllersStr string) []string {
 	if controllersStr == "" {
-		return []string{"cluster"}
+		return []string{"cluster", "standalone", "database", "backup", "restore", "plugin"}
 	}
 
 	controllers := []string{}

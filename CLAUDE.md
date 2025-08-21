@@ -301,6 +301,121 @@ spec:
 
 **Test**: `curl -k https://localhost:7473`
 
+## Neo4j Plugin Support
+
+**CRITICAL**: The operator provides comprehensive support for Neo4j plugins with automatic configuration based on plugin type and Neo4j version compatibility.
+
+### Plugin Types and Configuration
+
+**Environment Variable Only Plugins** (Neo4j 5.26+):
+- **APOC**: `apoc.export.file.enabled` → `NEO4J_APOC_EXPORT_FILE_ENABLED`
+- **APOC Extended**: Similar environment variable mapping
+- **Reason**: APOC settings no longer supported in `neo4j.conf` in Neo4j 5.26+
+
+**Neo4j Config Plugins**:
+- **Graph Data Science**: Requires `dbms.security.procedures.unrestricted=gds.*`
+- **Bloom**: Requires multiple settings (`dbms.bloom.*`, `server.unmanaged_extension_classes`, HTTP auth)
+- **GenAI**: Provider-specific configuration through neo4j.conf
+- **Neo Semantics (N10s)**: Procedure security configuration
+- **GraphQL**: Standard plugin configuration
+
+### Plugin Usage Examples
+
+**APOC Plugin** (Environment Variables):
+```yaml
+apiVersion: neo4j.com/v1alpha1
+kind: Neo4jPlugin
+metadata:
+  name: apoc-plugin
+spec:
+  clusterRef: my-cluster
+  name: apoc
+  version: "5.26.0"
+  config:
+    # These become NEO4J_APOC_* environment variables
+    apoc.export.file.enabled: "true"
+    apoc.import.file.enabled: "true"
+```
+
+**Graph Data Science Plugin** (Neo4j Config):
+```yaml
+apiVersion: neo4j.com/v1alpha1
+kind: Neo4jPlugin
+metadata:
+  name: gds-plugin
+spec:
+  clusterRef: my-cluster
+  name: graph-data-science
+  version: "2.10.0"
+  config:
+    # These go through neo4j.conf
+    gds.enterprise.license_file: "/licenses/gds.license"
+  # Security settings automatically applied:
+  # - dbms.security.procedures.unrestricted=gds.*
+  # - dbms.security.procedures.allowlist=gds.*
+```
+
+**Bloom Plugin** (Complex Neo4j Config):
+```yaml
+apiVersion: neo4j.com/v1alpha1
+kind: Neo4jPlugin
+metadata:
+  name: bloom-plugin
+spec:
+  clusterRef: my-cluster
+  name: bloom
+  version: "2.15.0"
+  config:
+    dbms.bloom.license_file: "/licenses/bloom.license"
+  # Automatically configured:
+  # - dbms.security.procedures.unrestricted=bloom.*
+  # - dbms.security.http_auth_allowlist=/,/browser.*,/bloom.*
+  # - server.unmanaged_extension_classes=com.neo4j.bloom.server=/bloom
+```
+
+**Plugin with Dependencies**:
+```yaml
+apiVersion: neo4j.com/v1alpha1
+kind: Neo4jPlugin
+metadata:
+  name: gds-with-apoc
+spec:
+  clusterRef: my-cluster
+  name: graph-data-science
+  version: "2.10.0"
+  dependencies:
+    - name: apoc
+      versionConstraint: ">=5.26.0"
+      optional: false
+  # Both GDS and APOC will be installed and configured correctly
+```
+
+### Key Plugin Features
+
+**Automatic Configuration**:
+- Plugin-specific security settings applied automatically
+- Environment variables vs neo4j.conf handled correctly
+- Procedure allowlists configured per plugin requirements
+
+**Dependency Management**:
+- Automatic dependency resolution and installation
+- Version constraint validation
+- Optional vs required dependency handling
+
+**Plugin Installation Methods**:
+- `NEO4J_PLUGINS` environment variable (recommended)
+- Automatic jar file management
+- Version compatibility validation
+
+**Testing Plugin Installation**:
+```bash
+# Verify plugin installation
+kubectl exec <pod-name> -c neo4j -- cypher-shell -u neo4j -p <password> "SHOW PROCEDURES"
+
+# Check plugin-specific procedures
+kubectl exec <pod-name> -c neo4j -- cypher-shell -u neo4j -p <password> "SHOW PROCEDURES YIELD name WHERE name STARTS WITH 'apoc'"
+```
+
 ## Neo4j Database Syntax Reference (5.26+ and 2025.x)
 
 ### CREATE DATABASE Syntax

@@ -26,6 +26,98 @@ import (
 )
 
 // Unit tests using standard Go testing for unexported methods
+
+func TestMapPluginName(t *testing.T) {
+	r := &Neo4jPluginReconciler{}
+
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "apoc plugin",
+			input:    "apoc",
+			expected: "apoc",
+		},
+		{
+			name:     "graph data science plugin",
+			input:    "graph-data-science",
+			expected: "graph-data-science",
+		},
+		{
+			name:     "bloom plugin",
+			input:    "bloom",
+			expected: "bloom",
+		},
+		{
+			name:     "custom plugin",
+			input:    "my-custom-plugin",
+			expected: "my-custom-plugin",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := r.mapPluginName(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestAddPluginToList(t *testing.T) {
+	r := &Neo4jPluginReconciler{}
+
+	tests := []struct {
+		name      string
+		existing  string
+		newPlugin string
+		expected  string
+		wantErr   bool
+	}{
+		{
+			name:      "add to empty list",
+			existing:  "[]",
+			newPlugin: "apoc",
+			expected:  "[\"apoc\"]",
+			wantErr:   false,
+		},
+		{
+			name:      "add to existing list",
+			existing:  "[\"apoc\"]",
+			newPlugin: "graph-data-science",
+			expected:  "[\"apoc\",\"graph-data-science\"]",
+			wantErr:   false,
+		},
+		{
+			name:      "plugin already exists",
+			existing:  "[\"apoc\",\"bloom\"]",
+			newPlugin: "apoc",
+			expected:  "[\"apoc\",\"bloom\"]", // Should not duplicate
+			wantErr:   false,
+		},
+		{
+			name:      "add to list with spaces",
+			existing:  "[\"apoc\", \"bloom\"]",
+			newPlugin: "graph-data-science",
+			expected:  "[\"apoc\",\"bloom\",\"graph-data-science\"]",
+			wantErr:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := r.addPluginToList(tt.existing, tt.newPlugin)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.expected, result)
+			}
+		})
+	}
+}
+
 func TestGetStatefulSetName(t *testing.T) {
 	r := &Neo4jPluginReconciler{}
 

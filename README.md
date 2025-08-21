@@ -244,7 +244,7 @@ Complete CRD documentation for all custom resources:
 - **Point-in-Time Recovery**: Restore clusters to specific timestamps with `--restore-until`
 - **Database Management**: Create databases with IF NOT EXISTS, WAIT/NOWAIT, and topology constraints
 - **Version-Aware Operations**: Automatic detection and adaptation for Neo4j 5.26.x and 2025.x
-- **Plugin Management**: Install and configure Neo4j plugins (APOC, GDS, etc.)
+- **Plugin Management**: Install and configure Neo4j plugins using NEO4J_PLUGINS environment variable (APOC, GDS, etc.)
 - **Query Monitoring**: Performance monitoring and slow query detection
 
 ### ⚡ Performance & Efficiency
@@ -286,13 +286,24 @@ kubectl logs -l app.kubernetes.io/name=neo4j-operator
 
 ### Enterprise Features
 - **LDAP/AD integration** for centralized authentication
-- **Plugin ecosystem** (APOC, Graph Data Science, Bloom)
+- **Plugin ecosystem** with Neo4j 5.26+ compatibility:
+  - **APOC & APOC Extended**: Environment variable configuration (Neo4j 5.26+ compatible)
+  - **Graph Data Science (GDS)**: Automatic security configuration and license support
+  - **Bloom**: Complete setup with web interface and security settings
+  - **GenAI**: AI provider integrations (OpenAI, Vertex AI, Azure OpenAI, Bedrock)
+  - **Neo Semantics (N10s)**: RDF and semantic web support
+- **Smart Plugin Configuration**: Automatic detection of plugin type and appropriate configuration method
 - **Compliance-ready** logging and auditing
 - **Resource quotas** and governance controls
 
 ## 🎯 Recent Improvements
 
 ### Latest Version Enhancements
+- **Neo4j 5.26+ Plugin Compatibility**: Complete rework of plugin system for Neo4j 5.26+ compatibility
+  - **APOC Environment Variables**: APOC configuration now uses environment variables (no longer supported in neo4j.conf)
+  - **Automatic Security Settings**: Plugin-specific procedure security applied automatically
+  - **Plugin Type Detection**: Smart configuration based on plugin requirements
+  - **Dependency Management**: Automatic resolution and installation of plugin dependencies
 - **Enhanced External Access**: Full support for LoadBalancer, NodePort services and Ingress resources with automatic connection string generation in status
 - **Cloud Provider Integration**: Automatic detection of AWS, GCP, and Azure with optimal LoadBalancer configurations
 - **Improved Service Configuration**: Support for static IPs, source ranges, external traffic policies, and custom annotations

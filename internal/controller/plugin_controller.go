@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -100,10 +101,17 @@ func (r *Neo4jPluginReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	// Update status to "Installing"
 	r.updatePluginStatus(ctx, plugin, "Installing", "Installing plugin")
 
-	// Install plugin
-	if err := r.installPlugin(ctx, plugin, deployment); err != nil {
+	// Install plugin using NEO4J_PLUGINS environment variable (recommended by Neo4j docs)
+	if err := r.installPluginViaEnvironment(ctx, plugin, deployment); err != nil {
 		logger.Error(err, "Failed to install plugin")
 		r.updatePluginStatus(ctx, plugin, "Failed", fmt.Sprintf("Plugin installation failed: %v", err))
+		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
+	}
+
+	// Wait for deployment to be ready after restart
+	if err := r.waitForDeploymentReady(ctx, deployment); err != nil {
+		logger.Error(err, "Deployment not ready after plugin installation")
+		r.updatePluginStatus(ctx, plugin, "Failed", fmt.Sprintf("Deployment not ready after plugin installation: %v", err))
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 	}
 
@@ -799,8 +807,22 @@ func (r *Neo4jPluginReconciler) verifyPluginLoaded(ctx context.Context, neo4jCli
 func (r *Neo4jPluginReconciler) configurePlugin(ctx context.Context, plugin *neo4jv1alpha1.Neo4jPlugin, deployment *DeploymentInfo) error {
 	logger := log.FromContext(ctx)
 
-	if len(plugin.Spec.Config) == 0 {
+	if len(plugin.Spec.Config) == 0 && plugin.Spec.Security == nil {
 		logger.Info("No plugin configuration provided")
+		return nil
+	}
+
+	// For plugins that require environment variable configuration only
+	// APOC settings are no longer supported in neo4j.conf in Neo4j 5.26+
+	if r.isEnvironmentVariableOnlyPlugin(plugin.Spec.Name) {
+		logger.Info("Plugin configuration handled via environment variables only", "plugin", plugin.Spec.Name)
+		return r.applyAPOCSecurityConfiguration(ctx, plugin, deployment)
+	}
+
+	// For other plugins that require Neo4j client configuration
+	neo4jClientConfig := r.filterNeo4jClientConfig(plugin.Spec.Config)
+	if len(neo4jClientConfig) == 0 && plugin.Spec.Security == nil {
+		logger.Info("No Neo4j client configuration required")
 		return nil
 	}
 
@@ -821,8 +843,8 @@ func (r *Neo4jPluginReconciler) configurePlugin(ctx context.Context, plugin *neo
 	}
 	defer neo4jClient.Close()
 
-	// Configure plugin settings
-	for key, value := range plugin.Spec.Config {
+	// Configure plugin settings that should go through Neo4j configuration system
+	for key, value := range neo4jClientConfig {
 		if err := neo4jClient.SetConfiguration(ctx, key, value); err != nil {
 			return fmt.Errorf("failed to set configuration %s=%s: %w", key, value, err)
 		}
@@ -1012,6 +1034,221 @@ func (r *Neo4jPluginReconciler) updatePluginStatus(ctx context.Context, plugin *
 }
 
 // SetupWithManager configures the controller with the manager
+// installPluginViaEnvironment installs the plugin using NEO4J_PLUGINS environment variable
+// This is the recommended approach by Neo4j for Docker plugin installation
+func (r *Neo4jPluginReconciler) installPluginViaEnvironment(ctx context.Context, plugin *neo4jv1alpha1.Neo4jPlugin, deployment *DeploymentInfo) error {
+	logger := log.FromContext(ctx)
+	logger.Info("Installing plugin via NEO4J_PLUGINS environment variable", "plugin", plugin.Spec.Name)
+
+	// Get the StatefulSet for the deployment
+	sts := &appsv1.StatefulSet{}
+	stsKey := types.NamespacedName{
+		Name:      r.getStatefulSetName(deployment),
+		Namespace: deployment.Namespace,
+	}
+
+	if err := r.Get(ctx, stsKey, sts); err != nil {
+		return fmt.Errorf("failed to get StatefulSet: %w", err)
+	}
+
+	// Find the Neo4j container
+	var neo4jContainer *corev1.Container
+	for i := range sts.Spec.Template.Spec.Containers {
+		if sts.Spec.Template.Spec.Containers[i].Name == "neo4j" {
+			neo4jContainer = &sts.Spec.Template.Spec.Containers[i]
+			break
+		}
+	}
+
+	if neo4jContainer == nil {
+		return fmt.Errorf("neo4j container not found in StatefulSet")
+	}
+
+	// Prepare plugin name and dependencies for NEO4J_PLUGINS
+	pluginName := r.mapPluginName(plugin.Spec.Name)
+
+	// Collect all plugins to install (main plugin + dependencies)
+	pluginsToInstall := []string{pluginName}
+	for _, dep := range plugin.Spec.Dependencies {
+		depName := r.mapPluginName(dep.Name)
+		pluginsToInstall = append(pluginsToInstall, depName)
+	}
+
+	// Find existing NEO4J_PLUGINS environment variable or create new one
+	var pluginsEnvVar *corev1.EnvVar
+	for i := range neo4jContainer.Env {
+		if neo4jContainer.Env[i].Name == "NEO4J_PLUGINS" {
+			pluginsEnvVar = &neo4jContainer.Env[i]
+			break
+		}
+	}
+
+	if pluginsEnvVar == nil {
+		// Add new NEO4J_PLUGINS environment variable with all plugins
+		var quotedPlugins []string
+		for _, plugin := range pluginsToInstall {
+			quotedPlugins = append(quotedPlugins, fmt.Sprintf("\"%s\"", plugin))
+		}
+		neo4jContainer.Env = append(neo4jContainer.Env, corev1.EnvVar{
+			Name:  "NEO4J_PLUGINS",
+			Value: fmt.Sprintf("[%s]", strings.Join(quotedPlugins, ",")),
+		})
+	} else {
+		// Update existing NEO4J_PLUGINS - parse and add all new plugins
+		currentValue := pluginsEnvVar.Value
+		for _, plugin := range pluginsToInstall {
+			updatedPlugins, err := r.addPluginToList(currentValue, plugin)
+			if err != nil {
+				return fmt.Errorf("failed to update plugin list: %w", err)
+			}
+			currentValue = updatedPlugins
+		}
+		pluginsEnvVar.Value = currentValue
+	}
+
+	// Add plugin configuration as environment variables
+	for key, value := range plugin.Spec.Config {
+		envVarName := fmt.Sprintf("NEO4J_%s", strings.ToUpper(strings.ReplaceAll(key, ".", "_")))
+		neo4jContainer.Env = append(neo4jContainer.Env, corev1.EnvVar{
+			Name:  envVarName,
+			Value: value,
+		})
+	}
+
+	// Add required procedure security settings if the plugin needs them and they're not environment-variable only
+	if r.getPluginType(plugin.Spec.Name) != PluginTypeEnvironmentOnly {
+		requiredSettings := r.getRequiredProcedureSecuritySettings(plugin.Spec.Name)
+		for key, value := range requiredSettings {
+			envVarName := fmt.Sprintf("NEO4J_%s", strings.ToUpper(strings.ReplaceAll(key, ".", "_")))
+
+			// Check if this environment variable already exists
+			exists := false
+			for i, env := range neo4jContainer.Env {
+				if env.Name == envVarName {
+					// Merge values for allowlist/unrestricted settings
+					if strings.Contains(key, "allowlist") || strings.Contains(key, "unrestricted") {
+						if !strings.Contains(env.Value, value) {
+							neo4jContainer.Env[i].Value = env.Value + "," + value
+						}
+					}
+					exists = true
+					break
+				}
+			}
+
+			if !exists {
+				neo4jContainer.Env = append(neo4jContainer.Env, corev1.EnvVar{
+					Name:  envVarName,
+					Value: value,
+				})
+			}
+		}
+	}
+
+	// Update the StatefulSet
+	if err := r.Update(ctx, sts); err != nil {
+		return fmt.Errorf("failed to update StatefulSet with plugin configuration: %w", err)
+	}
+
+	logger.Info("Successfully updated StatefulSet with plugin configuration", "plugin", pluginName)
+	return nil
+}
+
+// mapPluginName maps our plugin names to Neo4j's expected plugin names for NEO4J_PLUGINS
+func (r *Neo4jPluginReconciler) mapPluginName(pluginName string) string {
+	switch pluginName {
+	case "apoc":
+		return "apoc"
+	case "apoc-extended":
+		return "apoc-extended"
+	case "graph-data-science", "gds":
+		return "graph-data-science"
+	case "bloom":
+		return "bloom"
+	case "genai":
+		return "genai"
+	case "n10s", "neosemantics":
+		return "n10s"
+	case "graphql":
+		return "graphql"
+	default:
+		return pluginName // Use as-is for custom plugins
+	}
+}
+
+// getRequiredProcedureSecuritySettings returns the required procedure security settings for a plugin
+func (r *Neo4jPluginReconciler) getRequiredProcedureSecuritySettings(pluginName string) map[string]string {
+	settings := make(map[string]string)
+
+	switch pluginName {
+	case "graph-data-science", "gds":
+		// GDS requires unrestricted access for performance
+		settings["dbms.security.procedures.unrestricted"] = "gds.*"
+		settings["dbms.security.procedures.allowlist"] = "gds.*"
+	case "bloom":
+		// Bloom requires unrestricted access
+		settings["dbms.security.procedures.unrestricted"] = "bloom.*"
+		// Bloom also needs HTTP auth allowlist for web interface
+		settings["dbms.security.http_auth_allowlist"] = "/,/browser.*,/bloom.*"
+		// Unmanaged extension for hosting Bloom client
+		settings["server.unmanaged_extension_classes"] = "com.neo4j.bloom.server=/bloom"
+	case "apoc", "apoc-extended":
+		// APOC procedures should be configured via allowlist (principle of least privilege)
+		// Note: This is handled separately since APOC config is environment-variable only
+		// These settings would still go through neo4j.conf for procedure security
+		break
+	case "genai":
+		// GenAI may need procedure allowlist depending on usage
+		break
+	case "n10s", "neosemantics":
+		// Neo Semantics procedures
+		settings["dbms.security.procedures.unrestricted"] = "n10s.*"
+		settings["dbms.security.procedures.allowlist"] = "n10s.*"
+	case "graphql":
+		// GraphQL plugin procedures
+		settings["dbms.security.procedures.unrestricted"] = "graphql.*"
+		settings["dbms.security.procedures.allowlist"] = "graphql.*"
+	}
+
+	return settings
+}
+
+// addPluginToList parses the existing NEO4J_PLUGINS JSON array and adds a new plugin
+func (r *Neo4jPluginReconciler) addPluginToList(existing string, newPlugin string) (string, error) {
+	// Simple JSON array manipulation for plugin list
+	// Expected format: ["plugin1", "plugin2"]
+
+	// Remove existing brackets and quotes, split by comma
+	cleaned := strings.Trim(existing, "[]")
+	cleaned = strings.ReplaceAll(cleaned, "\"", "")
+
+	var plugins []string
+	if cleaned != "" {
+		plugins = strings.Split(cleaned, ",")
+		for i := range plugins {
+			plugins[i] = strings.TrimSpace(plugins[i])
+		}
+	}
+
+	// Check if plugin already exists
+	for _, plugin := range plugins {
+		if plugin == newPlugin {
+			return existing, nil // Plugin already in list
+		}
+	}
+
+	// Add new plugin
+	plugins = append(plugins, newPlugin)
+
+	// Rebuild JSON array
+	var quotedPlugins []string
+	for _, plugin := range plugins {
+		quotedPlugins = append(quotedPlugins, fmt.Sprintf("\"%s\"", plugin))
+	}
+
+	return fmt.Sprintf("[%s]", strings.Join(quotedPlugins, ",")), nil
+}
+
 func (r *Neo4jPluginReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&neo4jv1alpha1.Neo4jPlugin{}).
@@ -1121,4 +1358,105 @@ func (r *Neo4jPluginReconciler) waitForJobCompletion(ctx context.Context, job *b
 			// Still running, continue waiting
 		}
 	}
+}
+
+// PluginType represents different categories of Neo4j plugins
+type PluginType int
+
+const (
+	PluginTypeEnvironmentOnly PluginType = iota // APOC, APOC Extended - environment variables only
+	PluginTypeNeo4jConfig                       // GDS, Bloom, GenAI - neo4j.conf configuration
+	PluginTypeHybrid                            // Plugins that use both methods
+)
+
+// getPluginType determines the configuration approach for a plugin
+func (r *Neo4jPluginReconciler) getPluginType(pluginName string) PluginType {
+	switch pluginName {
+	case "apoc", "apoc-extended":
+		// APOC and APOC Extended in Neo4j 5.26+ use environment variables only
+		// APOC-specific settings are no longer supported in neo4j.conf
+		return PluginTypeEnvironmentOnly
+	case "graph-data-science", "gds":
+		// GDS uses neo4j.conf for configuration (gds.*, dbms.security.procedures.*)
+		return PluginTypeNeo4jConfig
+	case "bloom":
+		// Bloom uses neo4j.conf for configuration (dbms.bloom.*, dbms.security.procedures.*)
+		return PluginTypeNeo4jConfig
+	case "genai":
+		// GenAI uses neo4j.conf for configuration and procedure security
+		return PluginTypeNeo4jConfig
+	case "n10s", "neosemantics":
+		// Neo Semantics uses neo4j.conf for configuration
+		return PluginTypeNeo4jConfig
+	case "graphql":
+		// GraphQL plugin uses neo4j.conf for configuration
+		return PluginTypeNeo4jConfig
+	default:
+		// Default to neo4j.conf configuration for unknown plugins
+		return PluginTypeNeo4jConfig
+	}
+}
+
+// isEnvironmentVariableOnlyPlugin checks if the plugin requires environment variable configuration only
+func (r *Neo4jPluginReconciler) isEnvironmentVariableOnlyPlugin(pluginName string) bool {
+	return r.getPluginType(pluginName) == PluginTypeEnvironmentOnly
+}
+
+// filterNeo4jClientConfig filters out plugin-specific configurations that should be handled via environment variables
+func (r *Neo4jPluginReconciler) filterNeo4jClientConfig(config map[string]string) map[string]string {
+	filtered := make(map[string]string)
+
+	for key, value := range config {
+		// Skip APOC-specific settings - these must be handled via environment variables only in Neo4j 5.26+
+		if strings.HasPrefix(key, "apoc.") {
+			continue
+		}
+
+		// Include settings that should go through Neo4j configuration system:
+		// - GDS settings (gds.*, dbms.security.procedures.unrestricted=gds.*)
+		// - Bloom settings (dbms.bloom.*, server.unmanaged_extension_classes, dbms.security.http_auth_allowlist)
+		// - GenAI settings (provider configurations, procedure security)
+		// - General Neo4j settings (dbms.*, server.*)
+		// - Plugin procedure security settings (dbms.security.procedures.*)
+		filtered[key] = value
+	}
+
+	return filtered
+}
+
+// applyAPOCSecurityConfiguration applies APOC security configuration without using Neo4j client configuration
+// APOC security is handled via environment variables and procedure allowlists in Neo4j configuration
+func (r *Neo4jPluginReconciler) applyAPOCSecurityConfiguration(ctx context.Context, plugin *neo4jv1alpha1.Neo4jPlugin, deployment *DeploymentInfo) error {
+	logger := log.FromContext(ctx)
+
+	if plugin.Spec.Security == nil {
+		return nil
+	}
+
+	// For APOC security configuration, we need to set procedure allowlists via Neo4j configuration
+	// but not APOC-specific settings
+	if len(plugin.Spec.Security.AllowedProcedures) > 0 || len(plugin.Spec.Security.DeniedProcedures) > 0 {
+		var neo4jClient *neo4jclient.Client
+		var err error
+
+		if deployment.Type == "cluster" {
+			cluster := deployment.Object.(*neo4jv1alpha1.Neo4jEnterpriseCluster)
+			neo4jClient, err = neo4jclient.NewClientForEnterprise(cluster, r.Client, "neo4j-admin-secret")
+		} else {
+			standalone := deployment.Object.(*neo4jv1alpha1.Neo4jEnterpriseStandalone)
+			neo4jClient, err = neo4jclient.NewClientForEnterpriseStandalone(standalone, r.Client, "neo4j-admin-secret")
+		}
+
+		if err != nil {
+			return fmt.Errorf("failed to create Neo4j client for security configuration: %w", err)
+		}
+		defer neo4jClient.Close()
+
+		if err := r.applySecurityConfiguration(ctx, neo4jClient, plugin); err != nil {
+			return fmt.Errorf("failed to apply security configuration: %w", err)
+		}
+	}
+
+	logger.Info("APOC security configuration applied successfully")
+	return nil
 }

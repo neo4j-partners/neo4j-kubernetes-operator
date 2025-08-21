@@ -1,0 +1,43 @@
+# Bloom Plugin Example - Complex Neo4j Config
+# Bloom requires multiple neo4j.conf settings for proper operation
+
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jPlugin
+metadata:
+  name: bloom-plugin
+  namespace: default
+spec:
+  # Can reference either Neo4jEnterpriseCluster or Neo4jEnterpriseStandalone
+  clusterRef: my-cluster
+
+  name: bloom
+  version: "2.15.0"
+  enabled: true
+
+  source:
+    type: official
+
+  # Bloom-specific configuration - these go through neo4j.conf
+  config:
+    # License file configuration (required for Bloom)
+    dbms.bloom.license_file: "/licenses/bloom.license"
+
+    # Optional: Restrict Bloom access to specific roles
+    dbms.bloom.authorization_role: "admin,architect,analyst"
+
+    # Optional: Configure Bloom-specific settings
+    dbms.bloom.allow_file_urls: "false"
+
+  # Security configuration
+  security:
+    allowedProcedures:
+      - "bloom.*"
+    sandbox: false
+
+# The operator automatically configures these required settings:
+# - dbms.security.procedures.unrestricted=bloom.*
+# - dbms.security.http_auth_allowlist=/,/browser.*,/bloom.*
+# - server.unmanaged_extension_classes=com.neo4j.bloom.server=/bloom
+#
+# After deployment, Bloom will be available at:
+# http://<neo4j-server>:<http-port>/bloom/

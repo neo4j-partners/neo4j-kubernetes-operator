@@ -11,6 +11,18 @@ The `Neo4jPlugin` CRD supports both deployment types:
 
 The plugin controller automatically detects the deployment type and applies the appropriate configuration.
 
+## Implementation Overview
+
+The `Neo4jPlugin` controller uses Neo4j's recommended `NEO4J_PLUGINS` environment variable approach for plugin installation:
+
+1. **Environment Variable Configuration**: Plugins are configured via the `NEO4J_PLUGINS` environment variable in the Neo4j StatefulSet
+2. **Automatic Download**: Neo4j automatically downloads and installs plugins on startup
+3. **Dependency Handling**: Plugin dependencies are automatically included in the plugins list
+4. **Configuration Management**: Plugin-specific configuration is added as `NEO4J_*` environment variables
+5. **StatefulSet Restart**: The StatefulSet is updated with a rolling restart to apply plugin changes
+
+This approach follows Neo4j's Docker plugin installation best practices and eliminates the need for external jobs or volume mounts.
+
 ## API Version
 
 ```yaml
@@ -124,7 +136,7 @@ spec:
   source:
     type: community
 
-  # Plugin dependencies
+  # Plugin dependencies (automatically included in NEO4J_PLUGINS)
   dependencies:
     - name: apoc
       versionConstraint: ">=5.26.0"
@@ -240,6 +252,39 @@ Private plugin registries with authentication support.
 
 ### Direct URL
 Direct download from URLs with checksum verification.
+
+## How Plugin Installation Works
+
+When you create a `Neo4jPlugin` resource, the controller performs the following steps:
+
+1. **Validates the target deployment** - Checks that the referenced cluster or standalone exists and is ready
+2. **Collects plugins** - Gathers the main plugin and all its dependencies into a single list
+3. **Updates StatefulSet** - Modifies the Neo4j StatefulSet with:
+   - `NEO4J_PLUGINS` environment variable containing the plugin list (e.g., `["apoc", "graph-data-science"]`)
+   - `NEO4J_*` environment variables for plugin configuration (e.g., `NEO4J_APOC_EXPORT_FILE_ENABLED=true`)
+4. **Triggers rolling restart** - StatefulSet pods restart with new plugin configuration
+5. **Waits for readiness** - Ensures all pods are running and Neo4j is responsive
+6. **Marks as Ready** - Sets plugin status to "Ready" when installation is complete
+
+### Environment Variables Applied
+
+For this APOC plugin configuration:
+```yaml
+config:
+  "apoc.export.file.enabled": "true"
+  "apoc.import.file.enabled": "true"
+```
+
+The controller adds these environment variables to the Neo4j container:
+```yaml
+env:
+- name: NEO4J_PLUGINS
+  value: '["apoc"]'
+- name: NEO4J_APOC_EXPORT_FILE_ENABLED
+  value: 'true'
+- name: NEO4J_APOC_IMPORT_FILE_ENABLED
+  value: 'true'
+```
 
 ## Best Practices
 

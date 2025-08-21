@@ -19,12 +19,12 @@ package integration_test
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
-	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -34,7 +34,7 @@ import (
 
 var _ = Describe("Neo4jPlugin Integration Tests", func() {
 	const (
-		timeout  = time.Second * 300
+		timeout  = time.Second * 600 // Increased to 10 minutes for CI cluster provisioning
 		interval = time.Second * 5
 	)
 
@@ -120,6 +120,8 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 					Source: &neo4jv1alpha1.PluginSource{
 						Type: "official",
 					},
+					// APOC configuration in Neo4j 5.26+ is handled via environment variables only
+					// These settings will be converted to NEO4J_APOC_EXPORT_FILE_ENABLED and NEO4J_APOC_IMPORT_FILE_ENABLED
 					Config: map[string]string{
 						"apoc.export.file.enabled": "true",
 						"apoc.import.file.enabled": "true",
@@ -141,23 +143,59 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 				return currentPlugin.Status.Phase
 			}, timeout, interval).Should(Equal("Ready"))
 
-			By("Verifying download job was created")
-			downloadJob := &batchv1.Job{}
-			Eventually(func() error {
-				return k8sClient.Get(ctx, types.NamespacedName{
-					Name:      "apoc-plugin-download",
+			By("Verifying StatefulSet has NEO4J_PLUGINS environment variable")
+			serverSts = &appsv1.StatefulSet{}
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, types.NamespacedName{
+					Name:      clusterName + "-server",
 					Namespace: namespace.Name,
-				}, downloadJob)
-			}, timeout, interval).Should(Succeed())
+				}, serverSts)
+				if err != nil {
+					return false
+				}
 
-			By("Verifying installation job was created")
-			installJob := &batchv1.Job{}
-			Eventually(func() error {
-				return k8sClient.Get(ctx, types.NamespacedName{
-					Name:      "apoc-plugin-install",
+				// Find Neo4j container and check for NEO4J_PLUGINS env var
+				for _, container := range serverSts.Spec.Template.Spec.Containers {
+					if container.Name == "neo4j" {
+						for _, env := range container.Env {
+							if env.Name == "NEO4J_PLUGINS" && strings.Contains(env.Value, "apoc") {
+								return true
+							}
+						}
+					}
+				}
+				return false
+			}, timeout, interval).Should(BeTrue())
+
+			By("Verifying APOC configuration environment variables (Neo4j 5.26+ approach)")
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, types.NamespacedName{
+					Name:      clusterName + "-server",
 					Namespace: namespace.Name,
-				}, installJob)
-			}, timeout, interval).Should(Succeed())
+				}, serverSts)
+				if err != nil {
+					return false
+				}
+
+				// Check for APOC configuration env vars - this is the only way to configure APOC in Neo4j 5.26+
+				// APOC settings are no longer supported in neo4j.conf, only via environment variables
+				for _, container := range serverSts.Spec.Template.Spec.Containers {
+					if container.Name == "neo4j" {
+						hasExportEnabled := false
+						hasImportEnabled := false
+						for _, env := range container.Env {
+							if env.Name == "NEO4J_APOC_EXPORT_FILE_ENABLED" && env.Value == "true" {
+								hasExportEnabled = true
+							}
+							if env.Name == "NEO4J_APOC_IMPORT_FILE_ENABLED" && env.Value == "true" {
+								hasImportEnabled = true
+							}
+						}
+						return hasExportEnabled && hasImportEnabled
+					}
+				}
+				return false
+			}, timeout, interval).Should(BeTrue())
 
 			By("Cleaning up")
 			Expect(k8sClient.Delete(ctx, plugin)).Should(Succeed())
@@ -251,6 +289,7 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 							Optional:          false,
 						},
 					},
+					// GDS configuration goes through neo4j.conf (not environment variables like APOC)
 					Config: map[string]string{
 						"gds.enterprise.license_file": "/licenses/gds.license",
 					},
@@ -278,14 +317,172 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 				Equal("Ready"),
 			))
 
-			By("Verifying dependency plugin was created")
-			depPlugin := &neo4jv1alpha1.Neo4jPlugin{}
-			Eventually(func() error {
-				return k8sClient.Get(ctx, types.NamespacedName{
-					Name:      "gds-plugin-apoc-dep",
+			By("Verifying dependency plugins are included in NEO4J_PLUGINS")
+			standaloneSts = &appsv1.StatefulSet{}
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, types.NamespacedName{
+					Name:      standaloneName,
 					Namespace: namespace.Name,
-				}, depPlugin)
-			}, time.Second*60, interval).Should(Succeed())
+				}, standaloneSts)
+				if err != nil {
+					return false
+				}
+
+				// Check that NEO4J_PLUGINS contains both gds and apoc (dependency)
+				for _, container := range standaloneSts.Spec.Template.Spec.Containers {
+					if container.Name == "neo4j" {
+						for _, env := range container.Env {
+							if env.Name == "NEO4J_PLUGINS" {
+								return strings.Contains(env.Value, "graph-data-science") && strings.Contains(env.Value, "apoc")
+							}
+						}
+					}
+				}
+				return false
+			}, timeout, interval).Should(BeTrue())
+
+			By("Verifying GDS procedure security settings are configured")
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, types.NamespacedName{
+					Name:      standaloneName,
+					Namespace: namespace.Name,
+				}, standaloneSts)
+				if err != nil {
+					return false
+				}
+
+				// Check for GDS-specific security environment variables
+				// GDS requires dbms.security.procedures.unrestricted=gds.*
+				for _, container := range standaloneSts.Spec.Template.Spec.Containers {
+					if container.Name == "neo4j" {
+						hasUnrestricted := false
+						for _, env := range container.Env {
+							if env.Name == "NEO4J_DBMS_SECURITY_PROCEDURES_UNRESTRICTED" && strings.Contains(env.Value, "gds.*") {
+								hasUnrestricted = true
+								break
+							}
+						}
+						return hasUnrestricted
+					}
+				}
+				return false
+			}, timeout, interval).Should(BeTrue())
+
+			By("Cleaning up")
+			Expect(k8sClient.Delete(ctx, plugin)).Should(Succeed())
+			Expect(k8sClient.Delete(ctx, standalone)).Should(Succeed())
+		})
+
+		It("Should configure Bloom plugin with proper neo4j.conf settings", func() {
+			ctx := context.Background()
+			namespace := createUniqueNamespace()
+
+			By("Creating namespace")
+			Expect(k8sClient.Create(ctx, namespace)).Should(Succeed())
+
+			By("Creating admin secret")
+			adminSecret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "neo4j-admin-secret",
+					Namespace: namespace.Name,
+				},
+				StringData: map[string]string{
+					"username": "neo4j",
+					"password": "admin123",
+				},
+			}
+			Expect(k8sClient.Create(ctx, adminSecret)).Should(Succeed())
+
+			By("Creating Neo4jEnterpriseStandalone for Bloom test")
+			standaloneName := "bloom-test-standalone"
+			standalone := &neo4jv1alpha1.Neo4jEnterpriseStandalone{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      standaloneName,
+					Namespace: namespace.Name,
+				},
+				Spec: neo4jv1alpha1.Neo4jEnterpriseStandaloneSpec{
+					Image: neo4jv1alpha1.ImageSpec{
+						Repo: "neo4j",
+						Tag:  "5.26.0-enterprise",
+					},
+					Resources: getCIAppropriateResourceRequirements(),
+					Storage: neo4jv1alpha1.StorageSpec{
+						Size:      "1Gi",
+						ClassName: "standard",
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, standalone)).Should(Succeed())
+
+			By("Waiting for standalone to be ready")
+			Eventually(func() string {
+				currentStandalone := &neo4jv1alpha1.Neo4jEnterpriseStandalone{}
+				err := k8sClient.Get(ctx, types.NamespacedName{
+					Name:      standaloneName,
+					Namespace: namespace.Name,
+				}, currentStandalone)
+				if err != nil {
+					return ""
+				}
+				return currentStandalone.Status.Phase
+			}, timeout, interval).Should(Equal("Ready"))
+
+			By("Creating Bloom plugin with neo4j.conf configuration")
+			plugin := &neo4jv1alpha1.Neo4jPlugin{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "bloom-plugin",
+					Namespace: namespace.Name,
+				},
+				Spec: neo4jv1alpha1.Neo4jPluginSpec{
+					ClusterRef: standaloneName,
+					Name:       "bloom",
+					Version:    "2.15.0",
+					Enabled:    true,
+					Source: &neo4jv1alpha1.PluginSource{
+						Type: "official",
+					},
+					// Bloom configuration goes through neo4j.conf (unlike APOC)
+					Config: map[string]string{
+						"dbms.bloom.license_file": "/licenses/bloom.license",
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, plugin)).Should(Succeed())
+
+			By("Verifying Bloom procedure security settings are automatically configured")
+			standaloneSts := &appsv1.StatefulSet{}
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, types.NamespacedName{
+					Name:      standaloneName,
+					Namespace: namespace.Name,
+				}, standaloneSts)
+				if err != nil {
+					return false
+				}
+
+				// Check for Bloom-specific security environment variables
+				for _, container := range standaloneSts.Spec.Template.Spec.Containers {
+					if container.Name == "neo4j" {
+						hasUnrestricted := false
+						hasHttpAuth := false
+						hasUnmanagedExt := false
+
+						for _, env := range container.Env {
+							if env.Name == "NEO4J_DBMS_SECURITY_PROCEDURES_UNRESTRICTED" && strings.Contains(env.Value, "bloom.*") {
+								hasUnrestricted = true
+							}
+							if env.Name == "NEO4J_DBMS_SECURITY_HTTP_AUTH_ALLOWLIST" && strings.Contains(env.Value, "/bloom.*") {
+								hasHttpAuth = true
+							}
+							if env.Name == "NEO4J_SERVER_UNMANAGED_EXTENSION_CLASSES" && strings.Contains(env.Value, "bloom.server=/bloom") {
+								hasUnmanagedExt = true
+							}
+						}
+						return hasUnrestricted && hasHttpAuth && hasUnmanagedExt
+					}
+				}
+				return false
+			}, timeout, interval).Should(BeTrue())
 
 			By("Cleaning up")
 			Expect(k8sClient.Delete(ctx, plugin)).Should(Succeed())

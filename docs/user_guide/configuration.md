@@ -18,5 +18,5 @@ Below are some of the most important fields you will use to configure your clust
 *   `spec.resources`: Allows you to set specific CPU and memory requests and limits for the Neo4j pods, which is crucial for performance tuning.
 *   `spec.backups`: Configure automated backups, including the schedule and storage location (S3, GCS, etc.).
 *   `spec.monitoring`: Enable and configure monitoring, primarily through the Prometheus exporter.
-*   `spec.plugins`: A list of plugins to install into the Neo4j cluster, such as APOC and GDS.
+*   Plugin management: Use separate Neo4jPlugin CRDs to install plugins like APOC and GDS (see [Neo4jPlugin API Reference](../api_reference/neo4jplugin.md)).
 *   `spec.multiCluster`: For advanced use cases, this allows you to configure deployments across multiple Kubernetes clusters.

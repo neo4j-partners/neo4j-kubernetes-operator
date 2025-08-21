@@ -1,0 +1,36 @@
+# APOC Plugin Example - Environment Variable Configuration (Neo4j 5.26+)
+# APOC configuration no longer supported in neo4j.conf, uses environment variables only
+
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jPlugin
+metadata:
+  name: apoc-plugin
+  namespace: default
+spec:
+  # Can reference either Neo4jEnterpriseCluster or Neo4jEnterpriseStandalone
+  clusterRef: my-cluster
+
+  name: apoc
+  version: "5.26.0"
+  enabled: true
+
+  source:
+    type: official
+
+  # APOC-specific configuration - these become NEO4J_APOC_* environment variables
+  config:
+    apoc.export.file.enabled: "true"
+    apoc.import.file.enabled: "true"
+    apoc.load.json.enabled: "true"
+    apoc.load.csv.enabled: "true"
+    apoc.uuid.enabled: "true"
+
+  # Security configuration (procedure allowlists still go through neo4j.conf)
+  security:
+    allowedProcedures:
+      - "apoc.load.*"
+      - "apoc.export.*"
+      - "apoc.import.*"
+      - "apoc.convert.*"
+      - "apoc.math.*"
+    sandbox: false
