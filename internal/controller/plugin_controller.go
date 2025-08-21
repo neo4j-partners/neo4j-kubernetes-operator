@@ -92,9 +92,10 @@ func (r *Neo4jPluginReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 	}
 
-	if !deployment.IsReady {
-		logger.Info("Target deployment not ready, requeuing", "type", deployment.Type, "name", deployment.Name)
-		r.updatePluginStatus(ctx, plugin, "Waiting", fmt.Sprintf("Waiting for %s %s to be ready", deployment.Type, deployment.Name))
+	// Check if deployment is actually functional, not just status reporting
+	if !r.isDeploymentFunctional(ctx, deployment) {
+		logger.Info("Target deployment not functional, requeuing", "type", deployment.Type, "name", deployment.Name)
+		r.updatePluginStatus(ctx, plugin, "Waiting", fmt.Sprintf("Waiting for %s %s to be functional", deployment.Type, deployment.Name))
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
 	}
 
@@ -1145,8 +1146,11 @@ func (r *Neo4jPluginReconciler) installPluginViaEnvironment(ctx context.Context,
 		}
 	}
 
-	// Update the StatefulSet
-	if err := r.Update(ctx, sts); err != nil {
+	// Update the StatefulSet with retry on conflict
+	err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+		return r.Update(ctx, sts)
+	})
+	if err != nil {
 		return fmt.Errorf("failed to update StatefulSet with plugin configuration: %w", err)
 	}
 
@@ -1211,6 +1215,68 @@ func (r *Neo4jPluginReconciler) getRequiredProcedureSecuritySettings(pluginName 
 	}
 
 	return settings
+}
+
+// isDeploymentFunctional checks if the deployment is actually functional by testing Neo4j connectivity
+func (r *Neo4jPluginReconciler) isDeploymentFunctional(ctx context.Context, deployment *DeploymentInfo) bool {
+	logger := log.FromContext(ctx)
+
+	// For clusters, try to connect and verify cluster formation
+	if deployment.Type == "cluster" {
+		cluster := deployment.Object.(*neo4jv1alpha1.Neo4jEnterpriseCluster)
+		neo4jClient, err := neo4jclient.NewClientForEnterprise(cluster, r.Client, "neo4j-admin-secret")
+		if err != nil {
+			logger.Info("Cannot create Neo4j client", "error", err)
+			return false
+		}
+		defer neo4jClient.Close()
+
+		// Test connectivity by getting server list
+		servers, err := neo4jClient.GetServerList(ctx)
+		if err != nil {
+			logger.Info("Cannot get server list", "error", err)
+			return false
+		}
+
+		// For clusters, verify we have the expected number of servers
+		expectedServers := int(cluster.Spec.Topology.Servers)
+		if len(servers) < expectedServers {
+			logger.Info("Cluster not fully formed", "expected", expectedServers, "actual", len(servers))
+			return false
+		}
+
+		logger.Info("Cluster is functional", "servers", len(servers))
+		return true
+	}
+
+	// For standalone, just check basic connectivity
+	if deployment.Type == "standalone" {
+		standalone := deployment.Object.(*neo4jv1alpha1.Neo4jEnterpriseStandalone)
+		neo4jClient, err := neo4jclient.NewClientForEnterpriseStandalone(standalone, r.Client, "neo4j-admin-secret")
+		if err != nil {
+			logger.Info("Cannot create Neo4j standalone client", "error", err)
+			return false
+		}
+		defer neo4jClient.Close()
+
+		// Test connectivity by getting server list (should have 1 server)
+		servers, err := neo4jClient.GetServerList(ctx)
+		if err != nil {
+			logger.Info("Cannot get server list for standalone", "error", err)
+			return false
+		}
+
+		if len(servers) == 0 {
+			logger.Info("Standalone instance not ready")
+			return false
+		}
+
+		logger.Info("Standalone is functional")
+		return true
+	}
+
+	logger.Info("Unknown deployment type", "type", deployment.Type)
+	return false
 }
 
 // addPluginToList parses the existing NEO4J_PLUGINS JSON array and adds a new plugin
