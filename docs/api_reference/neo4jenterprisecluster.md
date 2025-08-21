@@ -72,7 +72,7 @@ The `Neo4jEnterpriseClusterSpec` defines the desired state of a Neo4j Enterprise
 | Field | Type | Description |
 |---|---|---|
 | `tls` | [`TLSSpec`](#tlsspec) | TLS configuration |
-| `plugins` | `[]PluginSpec` | Plugin configuration |
+| `plugins` | `[]PluginSpec` | **DEPRECATED:** Plugin configuration (use Neo4jPlugin CRD instead) |
 | `monitoring` | [`MonitoringSpec`](#monitoringspec) | Monitoring configuration |
 | `queryMonitoring` | [`QueryMonitoringSpec`](#querymonitoringspec) | Query monitoring configuration |
 | `podManagementPolicy` | `string` | Pod management policy: `"Parallel"` or `"OrderedReady"` |

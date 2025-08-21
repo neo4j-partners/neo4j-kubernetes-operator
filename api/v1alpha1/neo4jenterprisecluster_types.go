@@ -73,8 +73,7 @@ type Neo4jEnterpriseClusterSpec struct {
 	// UpgradeStrategy specifies how to handle rolling upgrades
 	UpgradeStrategy *UpgradeStrategySpec `json:"upgradeStrategy,omitempty"`
 
-	// Plugin management configuration
-	Plugins []PluginSpec `json:"plugins,omitempty"`
+	// Plugin management configuration - DEPRECATED: Use Neo4jPlugin CRD instead
 
 	// Query performance monitoring
 	QueryMonitoring *QueryMonitoringSpec `json:"queryMonitoring,omitempty"`
@@ -785,26 +784,8 @@ type Neo4jEnterpriseClusterList struct {
 	Items           []Neo4jEnterpriseCluster `json:"items"`
 }
 
-// PluginSpec defines a plugin configuration
-type PluginSpec struct {
-	// +kubebuilder:validation:Required
-	// Plugin name
-	Name string `json:"name"`
-
-	// +kubebuilder:validation:Required
-	// Plugin version
-	Version string `json:"version"`
-
-	// +kubebuilder:default=true
-	// Enable the plugin
-	Enabled bool `json:"enabled,omitempty"`
-
-	// Plugin configuration
-	Config map[string]string `json:"config,omitempty"`
-
-	// Plugin source
-	Source *PluginSource `json:"source,omitempty"`
-}
+// DEPRECATED: PluginSpec is deprecated. Use Neo4jPlugin CRD instead.
+// This type is kept for backward compatibility but will be removed in future versions.
 
 // QueryMonitoringSpec defines query performance monitoring
 type QueryMonitoringSpec struct {

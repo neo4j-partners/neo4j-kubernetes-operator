@@ -27,32 +27,7 @@ func TestBuildPodSpecForEnterprise_WithPlugins(t *testing.T) {
 				ClassName: "fast-ssd",
 				Size:      "10Gi",
 			},
-			Plugins: []neo4jv1alpha1.PluginSpec{
-				{
-					Name:    "apoc",
-					Version: "5.26.0",
-					Enabled: true,
-					Source: &neo4jv1alpha1.PluginSource{
-						URL: "https://github.com/neo4j/apoc/releases/download/5.26.0/apoc-5.26.0-core.jar",
-					},
-				},
-				{
-					Name:    "graph-data-science",
-					Version: "2.4.0",
-					Enabled: true,
-					Source: &neo4jv1alpha1.PluginSource{
-						URL: "https://graphdatascience.ninja/neo4j-graph-data-science-2.4.0.zip",
-					},
-				},
-				{
-					Name:    "disabled-plugin",
-					Version: "1.0.0",
-					Enabled: false,
-					Source: &neo4jv1alpha1.PluginSource{
-						URL: "https://example.com/disabled.jar",
-					},
-				},
-			},
+			// Plugin management is now handled via separate Neo4jPlugin CRD
 		},
 	}
 
@@ -81,20 +56,8 @@ func TestBuildPodSpecForEnterprise_WithPlugins(t *testing.T) {
 	require.NotNil(t, pluginsMount, "plugins volume mount should be added to main container")
 	assert.Equal(t, "/plugins", pluginsMount.MountPath)
 
-	// Test that init containers are added for enabled plugins
-	require.Len(t, podSpec.InitContainers, 2, "should have 2 init containers for enabled plugins")
-
-	// Test first plugin init container
-	apocInitContainer := podSpec.InitContainers[0]
-	assert.Equal(t, "install-plugin-apoc", apocInitContainer.Name)
-	assert.Equal(t, "alpine:3.18", apocInitContainer.Image)
-	assert.Contains(t, apocInitContainer.Args[0], "apoc-5.26.0-core.jar")
-	assert.Contains(t, apocInitContainer.Args[0], "https://github.com/neo4j/apoc/releases/download/5.26.0/apoc-5.26.0-core.jar")
-
-	// Test second plugin init container
-	gdsInitContainer := podSpec.InitContainers[1]
-	assert.Equal(t, "install-plugin-graph-data-science", gdsInitContainer.Name)
-	assert.Contains(t, gdsInitContainer.Args[0], "neo4j-graph-data-science-2.4.0.zip")
+	// Plugins are now managed by the Neo4jPlugin CRD - no init containers expected
+	assert.Len(t, podSpec.InitContainers, 0, "should have no init containers as plugins are managed via Neo4jPlugin CRD")
 }
 
 func TestBuildPodSpecForEnterprise_WithQueryMonitoring(t *testing.T) {
@@ -186,16 +149,7 @@ func TestBuildStatefulSetForEnterprise_WithFeatures(t *testing.T) {
 				ClassName: "fast-ssd",
 				Size:      "10Gi",
 			},
-			Plugins: []neo4jv1alpha1.PluginSpec{
-				{
-					Name:    "apoc",
-					Version: "5.26.0",
-					Enabled: true,
-					Source: &neo4jv1alpha1.PluginSource{
-						URL: "https://github.com/neo4j/apoc/releases/download/5.26.0/apoc-5.26.0-core.jar",
-					},
-				},
-			},
+			// Plugin management is now handled via separate Neo4jPlugin CRD
 			QueryMonitoring: &neo4jv1alpha1.QueryMonitoringSpec{
 				Enabled: true,
 			},
@@ -214,7 +168,7 @@ func TestBuildStatefulSetForEnterprise_WithFeatures(t *testing.T) {
 
 	// Test that pod template has the features
 	podSpec := sts.Spec.Template.Spec
-	assert.Len(t, podSpec.InitContainers, 1, "should have init container for plugin")
+	assert.Len(t, podSpec.InitContainers, 0, "should have no init containers as plugins are managed via Neo4jPlugin CRD")
 	assert.Len(t, podSpec.Containers, 2, "should have main container + exporter (no backup due to centralized backup architecture)")
 
 	// Test pod management policy

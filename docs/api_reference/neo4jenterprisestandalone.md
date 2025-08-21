@@ -75,8 +75,7 @@ Environment variables for the Neo4j container.
 env:
   - name: NEO4J_ACCEPT_LICENSE_AGREEMENT
     value: "yes"
-  - name: NEO4J_PLUGINS
-    value: '["apoc", "gds"]'
+  # Note: Use Neo4jPlugin CRD for plugin management instead of NEO4J_PLUGINS
 ```
 
 #### `config` (map[string]string)
@@ -188,18 +187,25 @@ restoreFrom:
   pointInTime: "2023-12-01T10:00:00Z"
 ```
 
-#### `plugins` ([]PluginSpec)
-Neo4j plugins to install.
+#### `plugins` ([]PluginSpec) - DEPRECATED
+**DEPRECATED:** Use the Neo4jPlugin CRD instead for plugin management.
+
+The embedded plugin configuration is deprecated. Use separate Neo4jPlugin resources:
 
 ```yaml
-plugins:
-  - name: apoc
-    version: "5.26.0"
-    enabled: true
-  - name: graph-data-science
-    version: "2.9.0"
-    enabled: true
+# Instead of embedded plugins, use Neo4jPlugin CRD
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jPlugin
+metadata:
+  name: my-apoc-plugin
+spec:
+  clusterRef: my-standalone  # References the Neo4jEnterpriseStandalone
+  name: apoc
+  version: "5.26.0"
+  enabled: true
 ```
+
+See the [Neo4jPlugin API reference](neo4jplugin.md) for complete documentation.
 
 #### `queryMonitoring` (QueryMonitoringSpec)
 Query performance monitoring.
@@ -445,13 +451,8 @@ spec:
     enabled: true
     retentionPolicy: Retain
 
-  plugins:
-    - name: apoc
-      version: "5.26.0"
-      enabled: true
-    - name: graph-data-science
-      version: "2.9.0"
-      enabled: true
+  # Note: plugins field is DEPRECATED - use Neo4jPlugin CRD instead
+  # See neo4jplugin.md for plugin installation examples
 
   queryMonitoring:
     enabled: true

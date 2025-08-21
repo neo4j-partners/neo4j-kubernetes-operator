@@ -1324,29 +1324,9 @@ func BuildPodSpecForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, se
 		podSpec.Affinity = cluster.Spec.Affinity
 	}
 
-	// --- Plugin Management: Add init containers for plugins ---
-	var initContainers []corev1.Container
-	for _, plugin := range cluster.Spec.Plugins {
-		if plugin.Enabled && plugin.Source != nil && plugin.Source.URL != "" {
-			initContainers = append(initContainers, corev1.Container{
-				Name:    "install-plugin-" + plugin.Name,
-				Image:   "alpine:3.18",
-				Command: []string{"/bin/sh", "-c"},
-				Args: []string{
-					"apk add --no-cache curl && " +
-						"echo Downloading plugin: " + plugin.Source.URL + " && " +
-						"curl -L --fail --retry 3 -o /plugins/" + plugin.Name + ".jar '" + plugin.Source.URL + "'",
-				},
-				VolumeMounts: []corev1.VolumeMount{{
-					Name:      "plugins",
-					MountPath: "/plugins",
-				}},
-			})
-		}
-	}
-	if len(initContainers) > 0 {
-		podSpec.InitContainers = initContainers
-	}
+	// --- Plugin Management ---
+	// NOTE: Plugins are now managed through the Neo4jPlugin CRD instead of embedded configuration.
+	// The Neo4jPlugin controller handles plugin installation and management separately.
 
 	// --- Query Monitoring: Add Prometheus exporter sidecar ---
 	if cluster.Spec.QueryMonitoring != nil && cluster.Spec.QueryMonitoring.Enabled {

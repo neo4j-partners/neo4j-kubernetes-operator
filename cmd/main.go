@@ -624,13 +624,19 @@ func configureSelectiveCache(base cache.Options, minimalResources bool) cache.Op
 
 // configureOnDemandCache sets up on-demand informer creation
 func configureOnDemandCache(base cache.Options, minimalResources bool) cache.Options {
-	// Start with absolutely minimal cache - only what's needed for health checks
-	base.ByObject = map[client.Object]cache.ByObject{}
+	// Always include ALL Neo4j CRDs - essential for operator functionality
+	base.ByObject = map[client.Object]cache.ByObject{
+		&neo4jv1alpha1.Neo4jEnterpriseCluster{}:    {},
+		&neo4jv1alpha1.Neo4jEnterpriseStandalone{}: {},
+		&neo4jv1alpha1.Neo4jDatabase{}:             {},
+		&neo4jv1alpha1.Neo4jBackup{}:               {},
+		&neo4jv1alpha1.Neo4jRestore{}:              {},
+		&neo4jv1alpha1.Neo4jPlugin{}:               {},
+	}
 
 	if !minimalResources {
-		// Keep cluster CRD for basic functionality
-		base.ByObject[&neo4jv1alpha1.Neo4jEnterpriseCluster{}] = cache.ByObject{}
-		base.ByObject[&neo4jv1alpha1.Neo4jEnterpriseStandalone{}] = cache.ByObject{}
+		// Add additional resources for full functionality
+		// (currently all CRDs are already included above)
 	}
 
 	return base
