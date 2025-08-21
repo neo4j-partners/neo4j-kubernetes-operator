@@ -64,8 +64,7 @@ type Neo4jEnterpriseStandaloneSpec struct {
 	// RestoreFrom specifies backup to restore from during standalone creation
 	RestoreFrom *RestoreSpec `json:"restoreFrom,omitempty"`
 
-	// Plugin management configuration
-	Plugins []PluginSpec `json:"plugins,omitempty"`
+	// Plugin management configuration - DEPRECATED: Use Neo4jPlugin CRD instead
 
 	// Query performance monitoring
 	QueryMonitoring *QueryMonitoringSpec `json:"queryMonitoring,omitempty"`

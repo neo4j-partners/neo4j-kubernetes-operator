@@ -238,15 +238,23 @@ metadata:
   name: apoc-plugin
   namespace: neo4j-production
 spec:
-  targetClusters:
-    - production-cluster
-  pluginType: apoc
+  # References the cluster defined above
+  clusterRef: production-cluster
+
+  # Plugin configuration
+  name: apoc
+  version: "5.26.0"
+  enabled: true
+
+  # Plugin source
   source:
     type: official
+
+  # APOC configuration (Neo4j 5.26+ uses environment variables)
   config:
-    apoc.export.file.enabled: "true"
-    apoc.import.file.enabled: "true"
-    apoc.trigger.enabled: "true"
+    "apoc.export.file.enabled": "true"
+    "apoc.import.file.enabled": "true"
+    "apoc.trigger.enabled": "true"
 ---
 # Monitoring service
 apiVersion: v1

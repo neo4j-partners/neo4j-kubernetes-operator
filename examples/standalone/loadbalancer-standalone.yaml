@@ -72,8 +72,6 @@ spec:
   env:
     - name: NEO4J_ACCEPT_LICENSE_AGREEMENT
       value: "yes"
-    - name: NEO4J_PLUGINS
-      value: '["apoc"]'  # Optional: Install APOC plugin
 
   # Configuration
   config:
@@ -92,6 +90,32 @@ spec:
     # Network settings
     server.bolt.listen_address: "0.0.0.0:7687"
     server.http.listen_address: "0.0.0.0:7474"
+
+---
+# Optional: Install APOC plugin using Neo4jPlugin CRD
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jPlugin
+metadata:
+  name: loadbalancer-standalone-apoc
+  namespace: default
+spec:
+  # References the standalone deployment above
+  clusterRef: loadbalancer-standalone
+
+  # APOC plugin configuration
+  name: apoc
+  version: "5.26.0"
+  enabled: true
+
+  # Plugin source - official Neo4j repository
+  source:
+    type: official
+
+  # APOC configuration via environment variables (Neo4j 5.26+ approach)
+  config:
+    "apoc.export.file.enabled": "true"
+    "apoc.import.file.enabled": "true"
+    "apoc.import.file.use_neo4j_config": "true"
 
 ---
 # Access Instructions:
