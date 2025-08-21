@@ -52,6 +52,20 @@ var _ = Describe("Multi-Node Cluster Formation Integration Tests", func() {
 		}
 
 		clusterName = fmt.Sprintf("test-cluster-%d", time.Now().Unix())
+
+		// Create admin secret for authentication
+		adminSecret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "neo4j-admin-secret",
+				Namespace: namespaceName,
+			},
+			Data: map[string][]byte{
+				"username": []byte("neo4j"),
+				"password": []byte("password123"),
+			},
+			Type: corev1.SecretTypeOpaque,
+		}
+		Expect(k8sClient.Create(ctx, adminSecret)).To(Succeed())
 	})
 
 	AfterEach(func() {
@@ -87,6 +101,10 @@ var _ = Describe("Multi-Node Cluster Formation Integration Tests", func() {
 					Image: neo4jv1alpha1.ImageSpec{
 						Repo: "neo4j",
 						Tag:  "5.26-enterprise",
+					},
+					Auth: &neo4jv1alpha1.AuthSpec{
+						Provider:    "native",
+						AdminSecret: "neo4j-admin-secret",
 					},
 					Topology: neo4jv1alpha1.TopologyConfiguration{
 						Servers: 2, // Minimum cluster topology
@@ -196,6 +214,10 @@ var _ = Describe("Multi-Node Cluster Formation Integration Tests", func() {
 					Image: neo4jv1alpha1.ImageSpec{
 						Repo: "neo4j",
 						Tag:  "2025.02.0-enterprise", // Test 2025.x version
+					},
+					Auth: &neo4jv1alpha1.AuthSpec{
+						Provider:    "native",
+						AdminSecret: "neo4j-admin-secret",
 					},
 					Topology: neo4jv1alpha1.TopologyConfiguration{
 						Servers: 2, // 1 + 1 total servers
