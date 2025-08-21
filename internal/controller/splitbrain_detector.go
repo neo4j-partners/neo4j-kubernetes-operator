@@ -193,7 +193,7 @@ func (d *SplitBrainDetector) createPodSpecificNeo4jClient(ctx context.Context, c
 		podName, cluster.Name, cluster.Namespace)
 
 	// Create client with pod-specific URL and cluster credentials
-	return neo4jclient.NewClientForPod(cluster, d.Client, "neo4j-admin-secret", podURL)
+	return neo4jclient.NewClientForPod(cluster, d.Client, cluster.Spec.Auth.AdminSecret, podURL)
 }
 
 // analyzeClusterViews analyzes all cluster views to determine if there's a split-brain
