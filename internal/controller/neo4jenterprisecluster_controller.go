@@ -1058,6 +1058,8 @@ func (r *Neo4jEnterpriseClusterReconciler) verifyNeo4jClusterFormation(ctx conte
 	// First, check if Neo4j is ready to accept connections using legacy check
 	// Only run split-brain detection if we can connect to Neo4j
 	canConnect := false
+	var connectError error
+	var testError error
 	neo4jClient, err := r.createNeo4jClient(ctx, cluster)
 	if err == nil {
 		// Test the connection by trying to get server list
@@ -1065,12 +1067,17 @@ func (r *Neo4jEnterpriseClusterReconciler) verifyNeo4jClusterFormation(ctx conte
 		neo4jClient.Close()
 		if testErr == nil {
 			canConnect = true
+		} else {
+			testError = testErr
 		}
+	} else {
+		connectError = err
 	}
 
 	if !canConnect {
 		// Neo4j is not ready to accept connections yet, wait for it
-		logger.Info("Neo4j not ready to accept connections, waiting...")
+		logger.Info("Neo4j not ready to accept connections, waiting...",
+			"clientError", connectError, "testError", testError)
 		return false, "Waiting for Neo4j to accept connections", nil
 	}
 
@@ -1084,9 +1091,12 @@ func (r *Neo4jEnterpriseClusterReconciler) verifyNeo4jClusterFormation(ctx conte
 	}
 	analysis, err := splitBrainDetector.DetectSplitBrain(ctx, cluster)
 	if err != nil {
-		logger.Error(err, "Failed to perform split-brain detection")
+		logger.Error(err, "Failed to perform split-brain detection, falling back to legacy check")
 		// Fall back to legacy cluster formation check
-		return r.legacyClusterFormationCheck(ctx, cluster, expectedServers)
+		isFormed, message, legacyErr := r.legacyClusterFormationCheck(ctx, cluster, expectedServers)
+		logger.Info("Legacy cluster formation check result",
+			"isFormed", isFormed, "message", message, "error", legacyErr)
+		return isFormed, message, legacyErr
 	}
 
 	logger.Info("Split-brain analysis results",
@@ -1151,8 +1161,11 @@ func (r *Neo4jEnterpriseClusterReconciler) verifyNeo4jClusterFormation(ctx conte
 	}
 
 	// Fall back to legacy cluster formation check if split-brain analysis was inconclusive
-	logger.Info("Falling back to legacy cluster formation check")
-	return r.legacyClusterFormationCheck(ctx, cluster, expectedServers)
+	logger.Info("Falling back to legacy cluster formation check after split-brain analysis")
+	isFormed, message, legacyErr := r.legacyClusterFormationCheck(ctx, cluster, expectedServers)
+	logger.Info("Final legacy cluster formation check result",
+		"isFormed", isFormed, "message", message, "error", legacyErr)
+	return isFormed, message, legacyErr
 }
 
 // legacyClusterFormationCheck performs the original cluster formation verification

@@ -79,6 +79,10 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 						Size:      "1Gi",
 						ClassName: "standard",
 					},
+					Auth: &neo4jv1alpha1.AuthSpec{
+						Provider:    "native",
+						AdminSecret: "neo4j-admin-secret",
+					},
 				},
 			}
 			Expect(k8sClient.Create(ctx, cluster)).Should(Succeed())
@@ -548,6 +552,19 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 			By("Creating namespace")
 			Expect(k8sClient.Create(ctx, namespace)).Should(Succeed())
 
+			By("Creating admin secret")
+			adminSecret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "neo4j-admin-secret",
+					Namespace: namespace.Name,
+				},
+				StringData: map[string]string{
+					"username": "neo4j",
+					"password": "admin123",
+				},
+			}
+			Expect(k8sClient.Create(ctx, adminSecret)).Should(Succeed())
+
 			By("Creating Neo4jEnterpriseCluster in Pending state")
 			clusterName := "pending-cluster"
 			cluster := &neo4jv1alpha1.Neo4jEnterpriseCluster{
@@ -567,6 +584,10 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 					Storage: neo4jv1alpha1.StorageSpec{
 						Size:      "1Gi",
 						ClassName: "standard",
+					},
+					Auth: &neo4jv1alpha1.AuthSpec{
+						Provider:    "native",
+						AdminSecret: "neo4j-admin-secret",
 					},
 				},
 			}

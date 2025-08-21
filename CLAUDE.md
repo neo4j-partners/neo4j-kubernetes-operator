@@ -34,7 +34,6 @@ make build                 # Build operator binary
 make docker-build         # Build container image
 make manifests            # Generate CRDs and RBAC
 make generate             # Generate DeepCopy methods
-make dev-run              # Run operator locally (outside cluster)
 
 # Development cluster management
 make dev-cluster          # Create Kind development cluster (neo4j-operator-dev)
@@ -44,8 +43,14 @@ make dev-cluster-delete   # Delete dev cluster
 make dev-cleanup          # Clean dev environment (keep cluster)
 make dev-destroy          # Completely destroy dev environment
 
-make operator-setup       # Deploy operator to test cluster
+make operator-setup       # Deploy operator to cluster (ALWAYS USE THIS)
 ```
+
+**CRITICAL: NEVER run `make dev-run` (operator outside cluster)**
+- DNS resolution fails when operator runs outside cluster
+- Cluster formation verification requires in-cluster connectivity
+- Always use `make operator-setup` to deploy operator inside cluster
+- This applies to ALL development and testing workflows
 
 ### Quick Testing with Examples
 ```bash
