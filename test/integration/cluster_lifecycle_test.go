@@ -55,6 +55,20 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 
 		clusterName = fmt.Sprintf("lifecycle-cluster-%d", GinkgoRandomSeed())
 		By(fmt.Sprintf("Generated cluster name: %s", clusterName))
+
+		// Create admin secret for authentication
+		adminSecret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "neo4j-admin-secret",
+				Namespace: namespaceName,
+			},
+			Data: map[string][]byte{
+				"username": []byte("neo4j"),
+				"password": []byte("password123"),
+			},
+			Type: corev1.SecretTypeOpaque,
+		}
+		Expect(k8sClient.Create(ctx, adminSecret)).To(Succeed())
 		By("Completed BeforeEach setup")
 	})
 
@@ -96,6 +110,10 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 					Image: neo4jv1alpha1.ImageSpec{
 						Repo: "neo4j",
 						Tag:  "5.26-enterprise",
+					},
+					Auth: &neo4jv1alpha1.AuthSpec{
+						Provider:    "native",
+						AdminSecret: "neo4j-admin-secret",
 					},
 					Topology: neo4jv1alpha1.TopologyConfiguration{
 						Servers: 3,
@@ -243,6 +261,10 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 						Repo: "neo4j",
 						Tag:  "5.26-enterprise",
 					},
+					Auth: &neo4jv1alpha1.AuthSpec{
+						Provider:    "native",
+						AdminSecret: "neo4j-admin-secret",
+					},
 					Topology: neo4jv1alpha1.TopologyConfiguration{
 						Servers: 3,
 					},
@@ -263,6 +285,10 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 					Image: neo4jv1alpha1.ImageSpec{
 						Repo: "neo4j",
 						Tag:  "5.26-enterprise",
+					},
+					Auth: &neo4jv1alpha1.AuthSpec{
+						Provider:    "native",
+						AdminSecret: "neo4j-admin-secret",
 					},
 					Topology: neo4jv1alpha1.TopologyConfiguration{
 						Servers: 3,
