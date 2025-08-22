@@ -164,7 +164,8 @@ test-integration-ci: ## Run integration tests in CI (assumes cluster already exi
 		kind export kubeconfig --name neo4j-operator-test --kubeconfig="$$KUBECONFIG"; \
 	fi
 	@echo "Using KUBECONFIG: $$KUBECONFIG"
-	@KUBECONFIG="$$KUBECONFIG" go test ./test/integration/... -v -timeout=30m
+	@echo "📊 Running with enhanced progress output..."
+	@KUBECONFIG="$$KUBECONFIG" ginkgo run --procs=1 --keep-going --v --progress --trace ./test/integration/... --timeout=30m
 
 # E2E Tests - Removed to simplify test structure
 

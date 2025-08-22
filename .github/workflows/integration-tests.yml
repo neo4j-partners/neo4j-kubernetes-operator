@@ -63,16 +63,24 @@ jobs:
 
     - name: Run integration tests
       run: |
+        # Enable line-buffered output for real-time progress
+        export PYTHONUNBUFFERED=1
+
         if [ "${{ github.event.inputs.run-full-suite }}" == "true" ]; then
-          echo "Running full integration test suite..."
-          make test-integration-ci
+          echo "Running full integration test suite with real-time progress..."
+          make test-integration-ci | tee integration-test-output.log
         else
-          echo "Running basic smoke tests..."
-          go test ./test/integration/... -v -timeout=30m -ginkgo.focus="Basic.*Smoke"
+          echo "Running basic smoke tests with real-time progress..."
+          ginkgo run --procs=1 --v --progress --trace ./test/integration/... --timeout=30m --focus="Basic.*Smoke" | tee integration-test-output.log
         fi
+
+        # Also save the exit code
+        echo "Test run completed with exit code: $?"
       env:
         KUBECONFIG: /home/runner/.kube/config
         NEO4J_VERSION: ${{ github.event.inputs.neo4j-version || '5.26-enterprise' }}
+        FORCE_COLOR: 1
+        GOMAXPROCS: 1
 
     - name: Collect cluster state
       if: always()
@@ -103,6 +111,7 @@ jobs:
         path: |
           coverage/
           *.out
+          integration-test-output.log
         if-no-files-found: warn
 
     - name: Archive cluster state dump
