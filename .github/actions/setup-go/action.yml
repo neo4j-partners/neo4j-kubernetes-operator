@@ -10,14 +10,11 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Set up Go with built-in caching
+    - name: Set up Go
       uses: actions/setup-go@v5
       with:
         go-version: ${{ inputs.go-version }}
-        cache: true
-        cache-dependency-path: |
-          go.sum
-          go.mod
+        cache: false
 
     - name: Download dependencies
       shell: bash
