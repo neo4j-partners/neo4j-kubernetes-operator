@@ -1,0 +1,157 @@
+name: Integration Tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      neo4j-version:
+        description: 'Neo4j version to test against'
+        required: false
+        default: '5.26-enterprise'
+        type: string
+      timeout-minutes:
+        description: 'Test timeout in minutes'
+        required: false
+        default: '60'
+        type: string
+      run-full-suite:
+        description: 'Run full integration test suite (vs. basic smoke tests)'
+        required: false
+        default: true
+        type: boolean
+
+env:
+  GO_VERSION: '1.22'
+  KIND_VERSION: 'v0.20.0'
+
+jobs:
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ fromJson(github.event.inputs.timeout-minutes || '60') }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Go environment
+      uses: ./.github/actions/setup-go
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Setup Kubernetes environment
+      uses: ./.github/actions/setup-k8s
+      with:
+        kind-version: ${{ env.KIND_VERSION }}
+
+    - name: Build and deploy operator
+      run: |
+        echo "Building operator image..."
+        make docker-build IMG=neo4j-operator:integration-test
+
+        echo "Loading operator image into Kind cluster..."
+        kind load docker-image neo4j-operator:integration-test --name neo4j-operator-test
+
+        echo "Installing CRDs..."
+        make install
+
+        echo "Deploying operator..."
+        make deploy IMG=neo4j-operator:integration-test
+
+        echo "Waiting for operator to be ready..."
+        kubectl wait --for=condition=Available deployment/neo4j-operator-controller-manager \
+          -n neo4j-operator-system --timeout=300s
+
+    - name: Run integration tests
+      run: |
+        if [ "${{ github.event.inputs.run-full-suite }}" == "true" ]; then
+          echo "Running full integration test suite..."
+          make test-integration-ci
+        else
+          echo "Running basic smoke tests..."
+          go test ./test/integration/... -v -timeout=30m -ginkgo.focus="Basic.*Smoke"
+        fi
+      env:
+        KUBECONFIG: /home/runner/.kube/config
+        NEO4J_VERSION: ${{ github.event.inputs.neo4j-version || '5.26-enterprise' }}
+
+    - name: Collect cluster state
+      if: always()
+      run: |
+        echo "=== Cluster Nodes ==="
+        kubectl get nodes -o wide || true
+
+        echo "=== All Pods ==="
+        kubectl get pods --all-namespaces || true
+
+        echo "=== Neo4j Resources ==="
+        kubectl get neo4jenterpriseclusters,neo4jenterprisestandalones,neo4jdatabases,neo4jplugins --all-namespaces || true
+
+        echo "=== Recent Events ==="
+        kubectl get events --all-namespaces --sort-by='.lastTimestamp' | tail -50 || true
+
+    - name: Collect cluster logs
+      uses: ./.github/actions/collect-logs
+      if: always()
+      with:
+        artifact-name: integration-test-logs
+
+    - name: Archive test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: integration-test-results
+        path: |
+          coverage/
+          *.out
+        if-no-files-found: warn
+
+    - name: Archive cluster state dump
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: cluster-state-dump
+        path: |
+          /tmp/cluster-logs/
+        if-no-files-found: warn
+
+    - name: Cleanup test cluster
+      if: always()
+      run: make test-cluster-delete || true
+
+  integration-test-summary:
+    name: Integration Test Summary
+    runs-on: ubuntu-latest
+    needs: [integration-tests]
+    if: always()
+
+    steps:
+    - name: Integration Test Summary
+      run: |
+        echo "## Integration Test Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        if [ "${{ needs.integration-tests.result }}" == "success" ]; then
+          echo "✅ **Integration Tests**: PASSED" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "All integration tests completed successfully." >> $GITHUB_STEP_SUMMARY
+        elif [ "${{ needs.integration-tests.result }}" == "failure" ]; then
+          echo "❌ **Integration Tests**: FAILED" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Integration tests encountered failures. Check the logs and artifacts for details." >> $GITHUB_STEP_SUMMARY
+        elif [ "${{ needs.integration-tests.result }}" == "cancelled" ]; then
+          echo "⏹️ **Integration Tests**: CANCELLED" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Integration tests were cancelled before completion." >> $GITHUB_STEP_SUMMARY
+        else
+          echo "⚠️ **Integration Tests**: UNKNOWN STATUS" >> $GITHUB_STEP_SUMMARY
+        fi
+
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Test Configuration:" >> $GITHUB_STEP_SUMMARY
+        echo "- **Neo4j Version**: ${{ github.event.inputs.neo4j-version || '5.26-enterprise' }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Timeout**: ${{ github.event.inputs.timeout-minutes || '60' }} minutes" >> $GITHUB_STEP_SUMMARY
+        echo "- **Test Suite**: ${{ github.event.inputs.run-full-suite == 'true' && 'Full' || 'Smoke Tests' }}" >> $GITHUB_STEP_SUMMARY
+
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Artifacts:" >> $GITHUB_STEP_SUMMARY
+        echo "- Integration test logs and cluster state dumps are available as workflow artifacts" >> $GITHUB_STEP_SUMMARY

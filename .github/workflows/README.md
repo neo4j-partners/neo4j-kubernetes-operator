@@ -6,23 +6,31 @@ This directory contains streamlined GitHub Actions workflows for the Neo4j Kuber
 
 ### 🧪 ci.yml - Main CI Pipeline
 **Triggers:** Push to main/develop, Pull Requests, Manual dispatch
-**Purpose:** Streamlined CI with automatic unit tests and optional integration tests
+**Purpose:** Fast CI feedback with unit tests only
 
 **Jobs:**
 1. **Unit Tests** - ✅ Always run on all pushes/PRs (fast, no cluster required)
-2. **Integration Tests** - ⏭️ Optional, on-demand only (memory-intensive, requires explicit trigger)
-3. **CI Summary** - Status summary with integration test trigger instructions
-
-**Integration Test Triggers (Optional):**
-- **Manual**: Use "Run workflow" button in GitHub Actions with "Run integration tests" checked
-- **PR Label**: Add `run-integration-tests` label to pull request
-- **Commit Message**: Include `[run-integration]` in commit message
 
 **Features:**
-- ⚡ Fast feedback with automatic unit tests
-- 💾 Resource savings - integration tests only run when explicitly requested
-- 🎛️ Configurable Neo4j version for integration tests
-- 📊 Clear status reporting with trigger instructions
+- ⚡ Extremely fast feedback - unit tests only
+- 💾 No resource overhead from Kubernetes clusters
+- 🔄 Clean and simple workflow focused on code quality
+- 📊 Clear pass/fail status for essential code validation
+
+### 🔬 integration-tests.yml - Integration Tests (On-Demand)
+**Triggers:** Manual dispatch only
+**Purpose:** Comprehensive integration testing with full operator deployment
+
+**Jobs:**
+1. **Integration Tests** - Full integration test suite with deployed operator
+2. **Integration Test Summary** - Detailed status reporting with configuration info
+
+**Features:**
+- 🎛️ Configurable Neo4j version (default: 5.26-enterprise)
+- ⏱️ Configurable timeout (default: 60 minutes)
+- 🔄 Choice between full test suite or smoke tests only
+- 🏗️ Complete operator build and deployment
+- 📦 Comprehensive artifact collection (logs, cluster state)
 - 🧹 Automatic cluster cleanup
 
 ### 🚀 release.yml - Release Pipeline
@@ -78,8 +86,8 @@ The workflows use centralized environment variables for consistency:
 ```yaml
 env:
   GO_VERSION: '1.22'          # Go version for all jobs
-  KIND_VERSION: 'v0.20.0'     # Kind version for integration tests
-  REGISTRY: ghcr.io           # Container registry
+  KIND_VERSION: 'v0.20.0'     # Kind version (integration-tests.yml only)
+  REGISTRY: ghcr.io           # Container registry (release.yml only)
 ```
 
 ## 🔧 Usage
@@ -97,36 +105,33 @@ make test-cluster-delete
 
 ### Triggering Workflows
 
-**Unit Tests:** ✅ Run automatically on every push/PR
+**Unit Tests (ci.yml):** ✅ Run automatically on every push/PR
 
-**Integration Tests (Optional - On-demand only):**
-- **Manual Trigger**: Go to Actions → CI → "Run workflow" → Check "Run integration tests"
-- **PR Label**: Add `run-integration-tests` label to any pull request
-- **Commit Message**: Include `[run-integration]` anywhere in commit message
-- **Configuration**: Optionally specify Neo4j version (default: `5.26-enterprise`)
+**Integration Tests (integration-tests.yml) - On-demand only:**
+- **Manual Trigger**: Actions → "Integration Tests" → "Run workflow"
+- **Configuration Options**:
+  - **Neo4j Version**: Choose Neo4j version (default: `5.26-enterprise`)
+  - **Timeout**: Set test timeout in minutes (default: 60)
+  - **Test Suite**: Choose between full integration tests or smoke tests only
+- **Features**: Complete operator deployment testing with comprehensive logging
 
-**Full E2E Tests:**
-- **Manual Trigger**: Actions → "Full Integration Tests (E2E)" → "Run workflow"
-- **Features**: Complete operator deployment testing with custom image tags
-
-**Release:**
+**Release (release.yml):**
 - Push git tag: `git tag v1.0.0 && git push origin v1.0.0`
 - Manual: Use GitHub Actions UI with custom tag
 
-## 🎯 Optimization Benefits
+## 🎯 Workflow Benefits
 
-### Before Optimization
-- 4 separate workflow files
-- ~150 lines of duplicated setup code
-- Inconsistent caching strategies
-- Hardcoded versions scattered throughout
-
-### After Optimization
-- 2 consolidated workflow files
+### Current Structure
+- 3 focused workflow files (ci.yml, integration-tests.yml, release.yml)
 - 3 reusable composite actions
-- 60% reduction in total workflow code
-- Centralized version management
-- Consistent caching and setup patterns
+- Clear separation of concerns
+- Minimal resource usage for primary CI
+
+### Key Benefits
+- **Fast CI Feedback**: Unit tests run in < 5 minutes without Kubernetes overhead
+- **Resource Efficient**: Integration tests only consume GitHub runner resources when needed
+- **Flexible Testing**: Choose between full integration suite or smoke tests
+- **Clear Purpose**: Each workflow has a single, well-defined responsibility
 
 ### Performance Improvements
 - **Faster builds** through optimized caching

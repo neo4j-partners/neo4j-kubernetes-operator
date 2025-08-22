@@ -10,21 +10,14 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Set up Go
+    - name: Set up Go with built-in caching
       uses: actions/setup-go@v5
       with:
         go-version: ${{ inputs.go-version }}
-        cache: false  # Disable built-in caching to avoid tar conflicts
-
-    - name: Cache Go modules
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cache/go-build
-          ~/go/pkg/mod
-        key: go-cache-${{ runner.os }}-${{ inputs.go-version }}-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          go-cache-${{ runner.os }}-${{ inputs.go-version }}-
+        cache: true
+        cache-dependency-path: |
+          go.sum
+          go.mod
 
     - name: Download dependencies
       shell: bash

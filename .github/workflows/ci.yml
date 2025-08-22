@@ -6,21 +6,9 @@ on:
   pull_request:
     branches: [ main, develop ]
   workflow_dispatch:
-    inputs:
-      run-integration-tests:
-        description: 'Run integration tests'
-        required: false
-        default: 'true'
-        type: boolean
-      neo4j-version:
-        description: 'Neo4j version for integration tests'
-        required: false
-        default: '5.26-enterprise'
-        type: string
 
 env:
   GO_VERSION: '1.22'
-  KIND_VERSION: 'v0.20.0'
 
 jobs:
   unit-tests:
@@ -48,89 +36,3 @@ jobs:
           coverage/
           *.out
         if-no-files-found: warn
-
-  integration-tests:
-    name: Integration Tests
-    runs-on: ubuntu-latest
-    needs: unit-tests
-    if: |
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.run-integration-tests == 'true') ||
-      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run-integration-tests')) ||
-      (github.event_name == 'push' && contains(github.event.head_commit.message, '[run-integration]'))
-    timeout-minutes: 60
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Setup Go environment
-      uses: ./.github/actions/setup-go
-      with:
-        go-version: ${{ env.GO_VERSION }}
-
-    - name: Setup Kubernetes environment
-      uses: ./.github/actions/setup-k8s
-      with:
-        kind-version: ${{ env.KIND_VERSION }}
-
-    - name: Run integration tests
-      run: make test-integration-ci
-      env:
-        KUBECONFIG: /home/runner/.kube/config
-        NEO4J_VERSION: ${{ github.event.inputs.neo4j-version || '5.26-enterprise' }}
-
-    - name: Collect cluster logs
-      uses: ./.github/actions/collect-logs
-      with:
-        artifact-name: integration-test-logs
-
-    - name: Archive test results
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: integration-test-results
-        path: |
-          coverage/
-          *.out
-        if-no-files-found: warn
-
-    - name: Cleanup test cluster
-      if: always()
-      run: make test-cluster-delete || true
-
-  ci-summary:
-    name: CI Summary
-    runs-on: ubuntu-latest
-    needs: [unit-tests, integration-tests]
-    if: always()
-
-    steps:
-    - name: CI Summary
-      run: |
-        echo "## CI Workflow Summary" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-
-        # Unit tests always run
-        if [ "${{ needs.unit-tests.result }}" == "success" ]; then
-          echo "✅ **Unit Tests**: PASSED" >> $GITHUB_STEP_SUMMARY
-        else
-          echo "❌ **Unit Tests**: FAILED" >> $GITHUB_STEP_SUMMARY
-        fi
-
-        # Integration tests are conditional
-        if [ "${{ needs.integration-tests.result }}" == "skipped" ]; then
-          echo "⏭️ **Integration Tests**: SKIPPED (Optional - On-demand only)" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### How to run integration tests:" >> $GITHUB_STEP_SUMMARY
-          echo "- **Manual trigger**: Use 'Run workflow' button with 'Run integration tests' checked" >> $GITHUB_STEP_SUMMARY
-          echo "- **PR label**: Add 'run-integration-tests' label to pull request" >> $GITHUB_STEP_SUMMARY
-          echo "- **Commit message**: Include '[run-integration]' in commit message" >> $GITHUB_STEP_SUMMARY
-        elif [ "${{ needs.integration-tests.result }}" == "success" ]; then
-          echo "✅ **Integration Tests**: PASSED" >> $GITHUB_STEP_SUMMARY
-        elif [ "${{ needs.integration-tests.result }}" == "failure" ]; then
-          echo "❌ **Integration Tests**: FAILED" >> $GITHUB_STEP_SUMMARY
-        fi
-
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### Integration tests are now optional and on-demand only." >> $GITHUB_STEP_SUMMARY
-        echo "Unit tests run automatically on all pushes and PRs." >> $GITHUB_STEP_SUMMARY
