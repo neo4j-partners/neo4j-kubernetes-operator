@@ -4,13 +4,15 @@ This guide will walk you through the process of deploying your first Neo4j Enter
 
 ## Prerequisites
 
-*   A Kubernetes cluster (v1.21+).
-*   `kubectl` installed and configured.
-*   A Neo4j Enterprise license.
+*   A Kubernetes cluster (v1.21+)
+*   `kubectl` installed and configured
+*   Neo4j Enterprise Edition (evaluation license acceptable for testing)
+*   Go 1.22+ (for building from source)
+*   cert-manager 1.18+ (optional, for TLS-enabled deployments)
 
 ## Installation
 
-For detailed installation instructions, see the [Installation Guide](installation.md).
+For detailed installation instructions, refer to the main README.
 
 Since this is a private repository, installation requires cloning from source:
 
@@ -30,8 +32,8 @@ make deploy   # Deploy operator
 
 The Neo4j Enterprise Operator supports two deployment types:
 
-- **Neo4jEnterpriseStandalone**: Single-node deployments for development and testing
-- **Neo4jEnterpriseCluster**: Clustered deployments for production with high availability
+- **Neo4jEnterpriseStandalone**: Single-node deployments for development, testing, and simple production workloads
+- **Neo4jEnterpriseCluster**: Clustered deployments (minimum 2 servers) for production with high availability and automatic failover
 
 ## Deploying a Standalone Instance (Development)
 

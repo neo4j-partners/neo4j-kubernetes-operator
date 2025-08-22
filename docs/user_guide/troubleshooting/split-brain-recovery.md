@@ -214,9 +214,9 @@ spec:
     dbms.kubernetes.discovery.v2.refresh_rate: "10s"
     dbms.cluster.discovery.resolution_timeout: "30s"
 
-    # Cluster communication resilience
-    causal_clustering.leader_election_timeout: "7s"
-    causal_clustering.leader_failure_detection_window: "30s"
+    # Cluster communication resilience (Neo4j 5.26+)
+    dbms.cluster.raft.election_timeout: "7s"
+    dbms.cluster.raft.leader_failure_detection_window: "30s"
 ```
 
 ## Monitoring and Alerting

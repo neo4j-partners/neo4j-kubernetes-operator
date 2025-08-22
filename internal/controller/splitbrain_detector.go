@@ -116,18 +116,31 @@ func (d *SplitBrainDetector) DetectSplitBrain(ctx context.Context, cluster *neo4
 
 	// Query each running pod to get its view of the cluster
 	clusterViews := make([]ClusterView, 0, len(serverPods))
+	connectionErrors := 0
 	for _, pod := range serverPods {
 		if pod.Status.Phase != corev1.PodRunning {
+			logger.V(1).Info("Skipping non-running pod", "pod", pod.Name, "phase", pod.Status.Phase)
 			continue
 		}
 
 		view := d.getClusterViewFromPod(ctx, cluster, pod.Name)
 		clusterViews = append(clusterViews, view)
 
-		logger.Info("Got cluster view from pod",
-			"pod", pod.Name,
-			"visibleServers", len(view.Servers),
-			"connectionError", view.ConnectionError != nil)
+		if view.ConnectionError != nil {
+			connectionErrors++
+			logger.Info("Connection error getting cluster view from pod",
+				"pod", pod.Name,
+				"error", view.ConnectionError)
+		} else {
+			logger.Info("Got cluster view from pod",
+				"pod", pod.Name,
+				"visibleServers", len(view.Servers))
+		}
+	}
+
+	// If we have too many connection errors early on, return an error rather than hanging
+	if len(clusterViews) > 0 && connectionErrors == len(clusterViews) {
+		return nil, fmt.Errorf("failed to connect to any running Neo4j server pods (%d/%d failed), cluster may not be ready for split-brain detection", connectionErrors, len(clusterViews))
 	}
 
 	// Analyze the cluster views to detect split-brain
@@ -160,27 +173,34 @@ func (d *SplitBrainDetector) getServerPods(ctx context.Context, cluster *neo4jv1
 
 // getClusterViewFromPod connects to a specific pod and gets its view of the cluster
 func (d *SplitBrainDetector) getClusterViewFromPod(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, podName string) ClusterView {
+	logger := log.FromContext(ctx)
 	view := ClusterView{
 		ServerPodName: podName,
 		Servers:       []neo4jclient.ServerInfo{},
 	}
 
+	logger.V(1).Info("Connecting to pod for cluster view", "pod", podName, "cluster", cluster.Name)
+
 	// Create a Neo4j client that connects specifically to this pod
-	// We'll modify the client creation to target a specific pod
 	neo4jClient, err := d.createPodSpecificNeo4jClient(ctx, cluster, podName)
 	if err != nil {
 		view.ConnectionError = fmt.Errorf("failed to connect to pod %s: %w", podName, err)
+		logger.V(1).Info("Failed to create client for pod", "pod", podName, "error", err)
 		return view
 	}
 	defer neo4jClient.Close()
+
+	logger.V(1).Info("Getting server list from pod", "pod", podName)
 
 	// Get the server list as seen by this pod
 	servers, err := neo4jClient.GetServerList(ctx)
 	if err != nil {
 		view.ConnectionError = fmt.Errorf("failed to get server list from pod %s: %w", podName, err)
+		logger.V(1).Info("Failed to get server list from pod", "pod", podName, "error", err)
 		return view
 	}
 
+	logger.V(1).Info("Successfully got cluster view from pod", "pod", podName, "serverCount", len(servers))
 	view.Servers = servers
 	return view
 }
@@ -191,6 +211,11 @@ func (d *SplitBrainDetector) createPodSpecificNeo4jClient(ctx context.Context, c
 	// Format: bolt://pod-name.headless-service.namespace.svc.cluster.local:7687
 	podURL := fmt.Sprintf("bolt://%s.%s-headless.%s.svc.cluster.local:7687",
 		podName, cluster.Name, cluster.Namespace)
+
+	// Defensive check for auth configuration
+	if cluster.Spec.Auth == nil || cluster.Spec.Auth.AdminSecret == "" {
+		return nil, fmt.Errorf("cluster %s has no auth configuration or admin secret specified", cluster.Name)
+	}
 
 	// Create client with pod-specific URL and cluster credentials
 	return neo4jclient.NewClientForPod(cluster, d.Client, cluster.Spec.Auth.AdminSecret, podURL)

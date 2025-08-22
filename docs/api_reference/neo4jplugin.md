@@ -1,27 +1,72 @@
-# Neo4jPlugin
+# Neo4jPlugin API Reference
 
-This document provides a reference for the `Neo4jPlugin` Custom Resource Definition (CRD). This resource is used to install and manage plugins in both Neo4j Enterprise clusters and standalone deployments.
+The `Neo4jPlugin` Custom Resource Definition (CRD) provides automated plugin installation and management for both Neo4j Enterprise clusters and standalone deployments.
 
-## Architecture Compatibility
+## Overview
 
-The `Neo4jPlugin` CRD supports both deployment types:
+- **API Version**: `neo4j.neo4j.com/v1alpha1`
+- **Kind**: `Neo4jPlugin`
+- **Target Deployments**: Both `Neo4jEnterpriseCluster` and `Neo4jEnterpriseStandalone`
+- **Installation Method**: Neo4j's `NEO4J_PLUGINS` environment variable approach
+- **Supported Plugins**: APOC, Graph Data Science, Bloom, GraphQL, GenAI, N10s, and custom plugins
+- **Automatic Configuration**: Plugin-specific settings and security policies
 
-- **Neo4jEnterpriseCluster**: Server-based architecture with StatefulSet named `{cluster-name}-server`
-- **Neo4jEnterpriseStandalone**: Single-node deployments with StatefulSet named `{standalone-name}`
+## Architecture
 
-The plugin controller automatically detects the deployment type and applies the appropriate configuration.
+**Universal Compatibility**: The `Neo4jPlugin` CRD works seamlessly with both deployment architectures:
 
-## Implementation Overview
+- **Cluster Support**: Updates `{cluster-name}-server` StatefulSet with plugin configuration
+- **Standalone Support**: Updates `{standalone-name}` StatefulSet with plugin configuration
+- **Automatic Detection**: Controller automatically identifies target deployment type
+- **Rolling Updates**: Triggers controlled restarts to apply plugin changes
+- **Environment Variable Method**: Uses Neo4j's recommended `NEO4J_PLUGINS` installation approach
 
-The `Neo4jPlugin` controller uses Neo4j's recommended `NEO4J_PLUGINS` environment variable approach for plugin installation:
+## Related Resources
 
-1. **Environment Variable Configuration**: Plugins are configured via the `NEO4J_PLUGINS` environment variable in the Neo4j StatefulSet
-2. **Automatic Download**: Neo4j automatically downloads and installs plugins on startup
-3. **Dependency Handling**: Plugin dependencies are automatically included in the plugins list
-4. **Configuration Management**: Plugin-specific configuration is added as `NEO4J_*` environment variables
-5. **StatefulSet Restart**: The StatefulSet is updated with a rolling restart to apply plugin changes
+- [`Neo4jEnterpriseCluster`](neo4jenterprisecluster.md) - Target cluster deployments
+- [`Neo4jEnterpriseStandalone`](neo4jenterprisestandalone.md) - Target standalone deployments
+- [`Neo4jDatabase`](neo4jdatabase.md) - Create databases that use plugin functionality
+- [Plugin Installation Guide](../user_guide/guides/plugin_installation.md) - Detailed usage examples
 
-This approach follows Neo4j's Docker plugin installation best practices and eliminates the need for external jobs or volume mounts.
+## Plugin Installation Process
+
+The `Neo4jPlugin` controller implements Neo4j's recommended installation approach:
+
+### Installation Steps
+
+1. **Target Discovery**: Automatically detects whether `clusterRef` points to a cluster or standalone
+2. **Plugin Collection**: Gathers main plugin and all dependencies into a unified list
+3. **Environment Variable Setup**: Configures `NEO4J_PLUGINS` with plugin names and versions
+4. **Configuration Application**: Adds plugin-specific settings as `NEO4J_*` environment variables
+5. **StatefulSet Update**: Patches the target StatefulSet with new configuration
+6. **Rolling Restart**: Triggers controlled pod restarts to apply changes
+7. **Verification**: Confirms plugin installation and updates status
+
+### Environment Variable Mapping
+
+**Example Configuration**:
+```yaml
+config:
+  "apoc.export.file.enabled": "true"
+  "apoc.import.file.enabled": "true"
+```
+
+**Applied Environment Variables**:
+```yaml
+env:
+- name: NEO4J_PLUGINS
+  value: '["apoc"]'
+- name: NEO4J_APOC_EXPORT_FILE_ENABLED
+  value: 'true'
+- name: NEO4J_APOC_IMPORT_FILE_ENABLED
+  value: 'true'
+```
+
+**Benefits**:
+- No external jobs or volume mounts required
+- Follows Neo4j Docker best practices
+- Automatic dependency resolution
+- Controlled rolling updates
 
 ## API Version
 
@@ -34,16 +79,16 @@ kind: Neo4jPlugin
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `clusterRef` | `string` | Yes | Name of the target Neo4jEnterpriseCluster or Neo4jEnterpriseStandalone |
-| `name` | `string` | Yes | Plugin name (e.g., "apoc", "graph-data-science") |
-| `version` | `string` | Yes | Plugin version to install |
-| `enabled` | `boolean` | No | Whether the plugin is enabled (default: true) |
-| `source` | `PluginSource` | No | Plugin source configuration (default: official) |
-| `dependencies` | `[]PluginDependency` | No | Plugin dependencies |
-| `config` | `map[string]string` | No | Plugin-specific configuration |
-| `license` | `PluginLicense` | No | License configuration for commercial plugins |
-| `security` | `PluginSecurity` | No | Security settings |
-| `resources` | `PluginResources` | No | Resource requirements |
+| `clusterRef` | `string` | ✅ | Name of target Neo4jEnterpriseCluster or Neo4jEnterpriseStandalone |
+| `name` | `string` | ✅ | Plugin name (e.g., "apoc", "graph-data-science") |
+| `version` | `string` | ✅ | Plugin version to install (must match Neo4j version compatibility) |
+| `enabled` | `boolean` | ❌ | Enable the plugin (default: `true`) |
+| `source` | [`PluginSource`](#pluginsource) | ❌ | Plugin source configuration (default: official repository) |
+| `dependencies` | [`[]PluginDependency`](#plugindependency) | ❌ | Plugin dependencies (automatically resolved) |
+| `config` | `map[string]string` | ❌ | Plugin-specific configuration (becomes `NEO4J_*` env vars) |
+| `license` | [`PluginLicense`](#pluginlicense) | ❌ | License configuration for commercial plugins |
+| `security` | [`PluginSecurity`](#pluginsecurity) | ❌ | Security settings and procedure restrictions |
+| `resources` | [`PluginResourceRequirements`](#pluginresourcerequirements) | ❌ | Resource requirements for plugin operations |
 
 ### PluginSource
 
@@ -74,16 +119,50 @@ kind: Neo4jPlugin
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `phase` | `string` | Current phase: "Pending", "Installing", "Ready", "Failed", "Waiting" |
+| `conditions` | `[]metav1.Condition` | Current plugin conditions |
+| `phase` | `string` | Current phase: `"Pending"`, `"Installing"`, `"Ready"`, `"Failed"`, `"Waiting"` |
 | `message` | `string` | Human-readable status message |
-| `lastUpdated` | `metav1.Time` | Last status update timestamp |
 | `installedVersion` | `string` | Actually installed plugin version |
-| `downloadJobName` | `string` | Name of the download job |
-| `installJobName` | `string` | Name of the install job |
+| `installationTime` | `*metav1.Time` | When the plugin was successfully installed |
+| `health` | [`*PluginHealth`](#pluginhealth) | Plugin health and performance information |
+| `usage` | [`*PluginUsage`](#pluginusage) | Plugin usage statistics |
+| `observedGeneration` | `int64` | Generation of the most recently observed spec |
+
+### PluginHealth
+
+Plugin health and performance metrics.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `status` | `string` | Plugin health status |
+| `lastHealthCheck` | `*metav1.Time` | Last health check timestamp |
+| `errors` | `[]string` | Error messages from health checks |
+| `performance` | [`*PluginPerformance`](#pluginperformance) | Performance metrics |
+
+### PluginPerformance
+
+Plugin performance statistics.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `memoryUsage` | `string` | Current memory usage |
+| `cpuUsage` | `string` | Current CPU usage |
+| `executionCount` | `int64` | Number of procedure executions |
+| `avgExecutionTime` | `string` | Average execution time |
+
+### PluginUsage
+
+Plugin usage analytics.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `proceduresCalled` | `map[string]int64` | Count of procedure calls by name |
+| `lastUsed` | `*metav1.Time` | Last time plugin was used |
+| `usageFrequency` | `string` | Usage frequency classification |
 
 ## Examples
 
-### Cluster Plugin Example
+### APOC Plugin for Cluster
 
 Install APOC plugin on a Neo4jEnterpriseCluster:
 
@@ -97,25 +176,38 @@ spec:
   # References a Neo4jEnterpriseCluster
   clusterRef: my-cluster
 
-  # Plugin configuration
+  # Plugin identification
   name: apoc
-  version: "5.26.0"
+  version: "5.26.0"  # Must match Neo4j version
   enabled: true
 
-  # Plugin source - official Neo4j repository
+  # Plugin source (official Neo4j repository)
   source:
     type: official
 
-  # APOC-specific configuration
+  # APOC-specific configuration (becomes NEO4J_APOC_* env vars)
   config:
     "apoc.export.file.enabled": "true"
     "apoc.import.file.enabled": "true"
     "apoc.import.file.use_neo4j_config": "true"
+    "apoc.trigger.enabled": "true"
+
+  # Security configuration
+  security:
+    allowedProcedures:
+      - "apoc.*"
+    securityPolicy: "open"
 ```
 
-### Standalone Plugin Example
+**Result**: Updates `my-cluster-server` StatefulSet with:
+- `NEO4J_PLUGINS=["apoc"]`
+- `NEO4J_APOC_EXPORT_FILE_ENABLED=true`
+- `NEO4J_APOC_IMPORT_FILE_ENABLED=true`
+- Security settings for APOC procedures
 
-Install Graph Data Science plugin on a Neo4jEnterpriseStandalone:
+### Graph Data Science Plugin for Standalone
+
+Install GDS plugin with dependencies on a Neo4jEnterpriseStandalone:
 
 ```yaml
 apiVersion: neo4j.neo4j.com/v1alpha1
@@ -127,26 +219,28 @@ spec:
   # References a Neo4jEnterpriseStandalone
   clusterRef: my-standalone
 
-  # Plugin configuration
+  # Plugin identification
   name: graph-data-science
   version: "2.10.0"
   enabled: true
 
-  # Plugin source - community repository
+  # Plugin source - official Neo4j repository
   source:
-    type: community
+    type: official
 
-  # Plugin dependencies (automatically included in NEO4J_PLUGINS)
+  # Plugin dependencies (automatically included in installation)
   dependencies:
     - name: apoc
       versionConstraint: ">=5.26.0"
       optional: false
 
-  # Plugin configuration
+  # GDS-specific configuration
   config:
     "gds.enterprise.license_file": "/licenses/gds.license"
+    "gds.procedure.allowlist": "gds.*"
+    "gds.graph.store.max_size": "2GB"
 
-  # License configuration
+  # License configuration for enterprise features
   license:
     keySecret: gds-license-secret
     licenseFile: "/licenses/gds.license"
@@ -155,16 +249,22 @@ spec:
   security:
     allowedProcedures:
       - "gds.*"
-      - "apoc.load.*"
+      - "apoc.load.*"  # APOC dependency procedures
     securityPolicy: "restricted"
-    sandbox: true
+    sandbox: false  # GDS requires full access
 
-  # Resource requirements
+  # Resource requirements for GDS operations
   resources:
-    memoryLimit: "1Gi"
-    cpuLimit: "500m"
-    threadPoolSize: 4
+    memoryLimit: "2Gi"    # GDS needs substantial memory
+    cpuLimit: "1"         # CPU for graph algorithms
+    threadPoolSize: 8     # Parallel processing
 ```
+
+**Result**: Updates `my-standalone` StatefulSet with:
+- `NEO4J_PLUGINS=["apoc", "graph-data-science"]` (dependencies included)
+- GDS-specific environment variables
+- Security settings for both APOC and GDS procedures
+- Enhanced resource allocation
 
 ### Custom Plugin Example
 
@@ -216,14 +316,65 @@ spec:
     checksum: "sha256:abcd1234567890abcd1234567890abcd1234567890abcd1234567890abcd1234"
 ```
 
-## Plugin Installation Process
+## Supported Plugins
 
-1. **Download Phase**: Plugin files are downloaded from the specified source
-2. **Dependency Resolution**: Required dependencies are resolved and installed
-3. **Installation Phase**: Plugin is installed to the Neo4j plugins directory
-4. **Configuration**: Plugin-specific configuration is applied
-5. **Restart**: Neo4j pods are restarted to load the new plugin
-6. **Verification**: Plugin installation is verified
+### Official Neo4j Plugins
+
+| Plugin | Name | Description | Configuration Method |
+|--------|------|-------------|---------------------|
+| **APOC** | `apoc` | Awesome Procedures on Cypher | Environment Variables |
+| **APOC Extended** | `apoc-extended` | Extended APOC procedures | Environment Variables |
+| **Graph Data Science** | `graph-data-science` | Advanced graph algorithms | Neo4j Config + Security |
+| **Neo4j Streams** | `streams` | Kafka/Pulsar integration | Neo4j Config |
+| **GraphQL** | `graphql` | GraphQL endpoint | Neo4j Config |
+
+### Enterprise Plugins
+
+| Plugin | Name | Description | License Required |
+|--------|------|-------------|------------------|
+| **Bloom** | `bloom` | Graph visualization | ✅ Commercial License |
+| **GenAI** | `genai` | AI/ML integration | ✅ Commercial License |
+
+### Community Plugins
+
+| Plugin | Name | Description | Configuration |
+|--------|------|-------------|---------------|
+| **Neo Semantics (N10s)** | `n10s` | RDF/ontology support | Neo4j Config |
+| **Custom Plugins** | `custom` | User-defined plugins | Flexible |
+
+### Plugin-Specific Configuration
+
+**APOC (Environment Variables)**:
+```yaml
+config:
+  "apoc.export.file.enabled": "true"
+  "apoc.import.file.enabled": "true"
+  "apoc.trigger.enabled": "true"
+  "apoc.jobs.pool.num_threads": "4"
+```
+
+**Graph Data Science (Neo4j Config)**:
+```yaml
+config:
+  "gds.enterprise.license_file": "/licenses/gds.license"
+  "gds.graph.store.max_size": "8GB"
+  "gds.procedure.allowlist": "gds.*"
+security:
+  allowedProcedures:
+    - "gds.*"
+    - "apoc.load.*"
+```
+
+**Bloom (Complex Configuration)**:
+```yaml
+config:
+  "dbms.bloom.license_file": "/licenses/bloom.license"
+  "dbms.security.http_auth_allowlist": "/,/browser.*,/bloom.*"
+  "server.unmanaged_extension_classes": "com.neo4j.bloom.server=/bloom"
+license:
+  keySecret: bloom-license-secret
+  licenseFile: "/licenses/bloom.license"
+```
 
 ## Plugin Status Phases
 
@@ -253,30 +404,62 @@ Private plugin registries with authentication support.
 ### Direct URL
 Direct download from URLs with checksum verification.
 
-## How Plugin Installation Works
+## Installation Workflow
 
-When you create a `Neo4jPlugin` resource, the controller performs the following steps:
+The `Neo4jPlugin` controller follows this comprehensive workflow:
 
-1. **Validates the target deployment** - Checks that the referenced cluster or standalone exists and is ready
-2. **Collects plugins** - Gathers the main plugin and all its dependencies into a single list
-3. **Updates StatefulSet** - Modifies the Neo4j StatefulSet with:
-   - `NEO4J_PLUGINS` environment variable containing the plugin list (e.g., `["apoc", "graph-data-science"]`)
-   - `NEO4J_*` environment variables for plugin configuration (e.g., `NEO4J_APOC_EXPORT_FILE_ENABLED=true`)
-4. **Triggers rolling restart** - StatefulSet pods restart with new plugin configuration
-5. **Waits for readiness** - Ensures all pods are running and Neo4j is responsive
-6. **Marks as Ready** - Sets plugin status to "Ready" when installation is complete
+### Phase 1: Validation and Discovery
 
-### Environment Variables Applied
+1. **Target Validation**: Verifies `clusterRef` points to existing cluster or standalone
+2. **Plugin Validation**: Checks plugin name, version compatibility, and source availability
+3. **Dependency Analysis**: Resolves plugin dependencies and version constraints
+4. **Conflict Detection**: Identifies conflicts with existing plugins
 
-For this APOC plugin configuration:
+### Phase 2: Configuration Preparation
+
+1. **Plugin Collection**: Assembles main plugin and dependencies into unified list
+2. **Environment Variable Mapping**: Converts plugin config to `NEO4J_*` environment variables
+3. **Security Configuration**: Applies plugin-specific security settings
+4. **License Verification**: Validates commercial plugin licenses (if required)
+
+### Phase 3: Deployment
+
+1. **StatefulSet Update**: Patches target StatefulSet with plugin configuration
+2. **Rolling Restart**: Initiates controlled pod restart sequence
+3. **Health Monitoring**: Tracks pod restart progress and Neo4j startup
+4. **Installation Verification**: Confirms plugin loading via Neo4j procedures
+
+### Phase 4: Status and Monitoring
+
+1. **Status Update**: Sets plugin phase to "Ready" and records installation time
+2. **Health Tracking**: Monitors plugin performance and usage
+3. **Error Handling**: Captures and reports installation failures
+4. **Dependency Tracking**: Maintains dependency relationships
+
+### Example Installation Timeline
+
+```bash
+# Plugin creation
+kubectl apply -f apoc-plugin.yaml
+
+# Phase progression
+# 0s:  Phase: Pending
+# 5s:  Phase: Installing (StatefulSet updated)
+# 30s: Phase: Installing (pods restarting)
+# 60s: Phase: Ready (plugin verified)
+```
+
+### Configuration Examples by Plugin Type
+
+**APOC Plugin (Environment Variables)**:
 ```yaml
+# Input configuration
 config:
   "apoc.export.file.enabled": "true"
   "apoc.import.file.enabled": "true"
-```
+  "apoc.trigger.enabled": "true"
 
-The controller adds these environment variables to the Neo4j container:
-```yaml
+# Applied environment variables
 env:
 - name: NEO4J_PLUGINS
   value: '["apoc"]'
@@ -284,21 +467,303 @@ env:
   value: 'true'
 - name: NEO4J_APOC_IMPORT_FILE_ENABLED
   value: 'true'
+- name: NEO4J_APOC_TRIGGER_ENABLED
+  value: 'true'
+```
+
+**Graph Data Science (Environment + Config)**:
+```yaml
+# Input configuration
+config:
+  "gds.enterprise.license_file": "/licenses/gds.license"
+  "gds.graph.store.max_size": "4GB"
+security:
+  allowedProcedures: ["gds.*", "apoc.*"]
+
+# Applied configuration
+env:
+- name: NEO4J_PLUGINS
+  value: '["apoc", "graph-data-science"]'
+- name: NEO4J_GDS_ENTERPRISE_LICENSE_FILE
+  value: '/licenses/gds.license'
+- name: NEO4J_GDS_GRAPH_STORE_MAX_SIZE
+  value: '4GB'
+- name: NEO4J_DBMS_SECURITY_PROCEDURES_UNRESTRICTED
+  value: 'gds.*,apoc.*'
+```
+
+**Multiple Plugins with Dependencies**:
+```yaml
+# Multiple Neo4jPlugin resources
+# Result: Combined environment variables
+env:
+- name: NEO4J_PLUGINS
+  value: '["apoc", "graph-data-science", "streams"]'
+- name: NEO4J_APOC_EXPORT_FILE_ENABLED
+  value: 'true'
+- name: NEO4J_GDS_ENTERPRISE_LICENSE_FILE
+  value: '/licenses/gds.license'
+- name: NEO4J_STREAMS_SINK_TOPIC_CYPHER_NODES
+  value: 'CREATE (n:Node {id: event.id})'
+```
+
+## Advanced Plugin Configurations
+
+### Custom Plugin from URL
+
+```yaml
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jPlugin
+metadata:
+  name: custom-plugin
+spec:
+  clusterRef: my-cluster
+  name: my-custom-plugin
+  version: "1.0.0"
+
+  # Custom plugin source
+  source:
+    type: url
+    url: "https://my-registry.example.com/plugins/my-plugin-1.0.0.jar"
+    checksum: "sha256:abcd1234567890abcd1234567890abcd1234567890abcd1234567890abcd1234"
+    authSecret: custom-registry-credentials
+
+  # Custom configuration
+  config:
+    "custom.plugin.setting1": "value1"
+    "custom.plugin.setting2": "value2"
+
+  # Security restrictions
+  security:
+    allowedProcedures:
+      - "custom.*"
+    securityPolicy: "restricted"
+    sandbox: true
+```
+
+### Plugin with Private Registry
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: private-registry-auth
+type: Opaque
+data:
+  username: <base64-encoded-username>
+  password: <base64-encoded-password>
+---
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jPlugin
+metadata:
+  name: private-plugin
+spec:
+  clusterRef: enterprise-cluster
+  name: enterprise-plugin
+  version: "2.0.0"
+
+  source:
+    type: custom
+    registry:
+      url: "https://private-registry.company.com"
+      authSecret: private-registry-auth
+      tls:
+        insecureSkipVerify: false
+        caSecret: private-registry-ca
+```
+
+### Production Plugin Setup with Monitoring
+
+```yaml
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jPlugin
+metadata:
+  name: production-apoc
+  labels:
+    environment: production
+    plugin-type: essential
+spec:
+  clusterRef: prod-cluster
+  name: apoc
+  version: "5.26.0"
+
+  # Production configuration
+  config:
+    "apoc.export.file.enabled": "true"
+    "apoc.import.file.enabled": "false"  # Disabled for security
+    "apoc.trigger.enabled": "true"
+    "apoc.jobs.pool.num_threads": "8"
+    "apoc.spatial.geocode.provider": "osm"
+
+  # Enhanced security
+  security:
+    allowedProcedures:
+      - "apoc.export.*"
+      - "apoc.trigger.*"
+      - "apoc.periodic.*"
+      - "apoc.meta.*"
+    securityPolicy: "restricted"
+    sandbox: false
+
+  # Resource allocation
+  resources:
+    memoryLimit: "512Mi"
+    cpuLimit: "200m"
+    threadPoolSize: 8
+```
+
+### Multi-Plugin Setup for Analytics Workload
+
+```yaml
+# APOC Foundation
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jPlugin
+metadata:
+  name: analytics-apoc
+spec:
+  clusterRef: analytics-cluster
+  name: apoc
+  version: "5.26.0"
+  config:
+    "apoc.export.file.enabled": "true"
+    "apoc.import.file.enabled": "true"
+    "apoc.periodic.enabled": "true"
+
+---
+# Graph Data Science for Analytics
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jPlugin
+metadata:
+  name: analytics-gds
+spec:
+  clusterRef: analytics-cluster
+  name: graph-data-science
+  version: "2.10.0"
+  dependencies:
+    - name: apoc
+      versionConstraint: "5.26.0"
+      optional: false
+  config:
+    "gds.enterprise.license_file": "/licenses/gds.license"
+    "gds.graph.store.max_size": "16GB"
+    "gds.procedure.allowlist": "gds.*"
+  license:
+    keySecret: gds-enterprise-license
+    licenseFile: "/licenses/gds.license"
+  resources:
+    memoryLimit: "8Gi"
+    cpuLimit: "4"
+    threadPoolSize: 16
+
+---
+# Neo4j Streams for Real-time Data
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jPlugin
+metadata:
+  name: analytics-streams
+spec:
+  clusterRef: analytics-cluster
+  name: streams
+  version: "5.26.0"
+  config:
+    "streams.sink.enabled": "true"
+    "streams.sink.topic.nodes": "graph-nodes"
+    "streams.sink.topic.relationships": "graph-relationships"
+    "kafka.bootstrap.servers": "kafka.analytics.svc.cluster.local:9092"
+```
+
+## Troubleshooting
+
+### Common Issues and Solutions
+
+**Plugin Not Loading**:
+```bash
+# Check plugin installation status
+kubectl get neo4jplugin <plugin-name> -o yaml
+
+# Verify Neo4j logs for plugin loading
+kubectl logs <pod-name> -c neo4j | grep -i "plugin\|apoc\|gds"
+
+# Check available procedures
+kubectl exec <pod-name> -c neo4j -- \
+  cypher-shell -u neo4j -p password "SHOW PROCEDURES YIELD name WHERE name STARTS WITH 'apoc'"
+```
+
+**Dependency Conflicts**:
+```bash
+# Check for version mismatches
+kubectl describe neo4jplugin <plugin-name>
+
+# Common conflicts:
+# - APOC version doesn't match Neo4j version
+# - GDS requires specific APOC version
+# - Multiple plugins trying to load same dependency
+```
+
+**Resource Constraints**:
+```bash
+# Check pod resource usage
+kubectl top pod <pod-name> --containers
+
+# Monitor during plugin installation
+kubectl logs <pod-name> -c neo4j | grep -i "outofmemory\|heap"
+
+# Common issues:
+# - Insufficient memory for GDS operations
+# - CPU limits too low for parallel plugin loading
+```
+
+**License Issues (Commercial Plugins)**:
+```bash
+# Verify license secret exists
+kubectl get secret <license-secret> -o yaml
+
+# Check license file mounting
+kubectl exec <pod-name> -c neo4j -- ls -la /licenses/
+
+# Verify license in Neo4j
+kubectl exec <pod-name> -c neo4j -- \
+  cypher-shell -u neo4j -p password "SHOW PROCEDURES YIELD name WHERE name CONTAINS 'bloom'"
+```
+
+**Network and Source Issues**:
+```bash
+# Test plugin source connectivity
+kubectl run test-plugin --rm -it --image=curlimages/curl -- \
+  curl -I "https://repo1.maven.org/maven2/org/neo4j/procedure/apoc/"
+
+# Check custom registry access
+kubectl get secret <registry-auth-secret> -o yaml
+```
+
+### Performance Monitoring
+
+```bash
+# Monitor plugin performance
+kubectl get neo4jplugin <plugin-name> -o jsonpath='{.status.health.performance}'
+
+# Check plugin usage statistics
+kubectl get neo4jplugin <plugin-name> -o jsonpath='{.status.usage.proceduresCalled}'
+
+# View plugin health status
+kubectl describe neo4jplugin <plugin-name> | grep -A 10 "Health:"
 ```
 
 ## Best Practices
 
-1. **Version Pinning**: Always specify exact plugin versions for reproducible deployments
-2. **Dependency Management**: Explicitly declare plugin dependencies
-3. **Security**: Use sandbox mode and restrict procedures for untrusted plugins
-4. **Resource Limits**: Set appropriate resource limits for plugin operations
-5. **Testing**: Test plugins in development environments before production deployment
+1. **Version Compatibility**: Always match plugin versions with Neo4j version
+2. **Dependency Management**: Let the controller handle dependency resolution
+3. **Resource Planning**: Allocate sufficient memory for plugin operations (especially GDS)
+4. **Security Configuration**: Use appropriate procedure allowlists and security policies
+5. **License Management**: Store commercial plugin licenses in secure secrets
+6. **Installation Order**: Install base plugins (APOC) before dependent plugins (GDS)
+7. **Monitoring**: Regularly check plugin health and performance metrics
+8. **Updates**: Test plugin updates in development before production deployment
+9. **Configuration**: Use environment variables for APOC, neo4j.conf for other plugins
+10. **Troubleshooting**: Enable debug logging for plugin installation issues
 
-## Troubleshooting
-
-Common issues and solutions:
-
-- **Plugin not loading**: Check Neo4j logs for plugin errors
-- **Dependency conflicts**: Verify compatible plugin versions
-- **Resource constraints**: Ensure sufficient memory/CPU for plugin operations
-- **Network issues**: Verify connectivity to plugin sources
+For detailed plugin-specific guides, see:
+- [APOC Plugin Guide](../user_guide/guides/apoc_plugin.md)
+- [Graph Data Science Guide](../user_guide/guides/gds_plugin.md)
+- [Plugin Troubleshooting](../user_guide/troubleshooting/plugin_issues.md)
+- [Performance Tuning](../user_guide/guides/performance.md)

@@ -12,8 +12,8 @@ The Neo4j Enterprise Operator for Kubernetes provides a complete solution for de
 
 - **Neo4j**: Version 5.26 or higher (supports both SemVer 5.x and CalVer 2025.x formats)
 - **Kubernetes**: Version 1.21 or higher
-- **Go**: Version 1.21+ (for development)
-- **cert-manager**: Version 1.5+ (optional, only required for TLS-enabled Neo4j deployments)
+- **Go**: Version 1.22+ (for development)
+- **cert-manager**: Version 1.18+ (optional, only required for TLS-enabled Neo4j deployments)
 
 ## 🚀 Quick Start
 
@@ -97,7 +97,7 @@ Since this is a private repository, installation requires cloning from source:
    make test-cluster
    make test-integration
 
-   # Run end-to-end tests
+   # Run end-to-end tests (optional)
    make test-e2e
    ```
 
@@ -120,13 +120,13 @@ For development work:
 ```bash
 # Create development cluster with operator
 make dev-cluster
-make dev-run  # Run operator locally outside cluster
+make operator-setup  # Deploy operator to cluster (recommended)
 
-# Or deploy operator to development cluster
-make operator-setup
+# Note: 'make dev-run' (running operator outside cluster) is not recommended
+# as it causes DNS resolution issues and cluster formation problems
 ```
 
-See the [Complete Installation Guide](docs/user_guide/installation.md) for all deployment options.
+For additional deployment options, see the Installation section above.
 
 ## 💡 Examples
 
@@ -213,7 +213,7 @@ See [authentication example](examples/clusters/auth-example.yaml) for complete c
 - **[Architecture Overview](docs/developer_guide/architecture.md)** - System design and components
 - **[Development Setup](docs/developer_guide/development.md)** - Local development environment
 - **[Testing Guide](docs/developer_guide/testing.md)** - Test strategy and execution
-- **[Contributing](docs/developer_guide/contributing.md)** - How to contribute code
+- **[Contributing](CONTRIBUTING.md)** - How to contribute code
 
 ### 📖 API Reference
 Complete CRD documentation for all custom resources:
@@ -235,17 +235,17 @@ Complete CRD documentation for all custom resources:
 
 ### 🔐 Security & Authentication
 - **TLS/SSL**: Configurable TLS encryption for client and cluster communications
-- **Authentication**: Support for LDAP, OIDC, and native authentication
+- **Authentication**: Support for native, LDAP, Kerberos, and JWT authentication
 - **Automatic RBAC**: Operator automatically creates all necessary RBAC resources for backups
 - **Network Policies**: Pod-to-pod communication security
 
 ### 🚀 Operations & Automation
-- **Automated Backups**: Scheduled backups with automatic RBAC management
+- **Automated Backups**: Scheduled backups with centralized backup StatefulSet (resource-efficient)
 - **Point-in-Time Recovery**: Restore clusters to specific timestamps with `--restore-until`
-- **Database Management**: Create databases with IF NOT EXISTS, WAIT/NOWAIT, and topology constraints
+- **Database Management**: Create databases with topology constraints, seed URIs, and point-in-time recovery
 - **Version-Aware Operations**: Automatic detection and adaptation for Neo4j 5.26.x and 2025.x
-- **Plugin Management**: Install and configure Neo4j plugins using NEO4J_PLUGINS environment variable (APOC, GDS, etc.)
-- **Query Monitoring**: Performance monitoring and slow query detection
+- **Plugin Management**: Smart plugin installation with automatic configuration (APOC, GDS, Bloom, GenAI, N10s, GraphQL)
+- **Split-Brain Detection**: Automatic detection and repair of split-brain scenarios in clusters
 
 ### ⚡ Performance & Efficiency
 - **Optimized Reconciliation**: Intelligent rate limiting reduces API calls by 99.8% (18,000+ to ~34 per minute)

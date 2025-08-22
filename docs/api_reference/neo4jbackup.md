@@ -121,27 +121,26 @@ The `Neo4jBackupStatus` represents the observed state of the backup.
 
 ### BackupStats
 
-Backup statistics.
+Provides detailed backup operation statistics.
 
 | Field | Type | Description |
 |---|---|---|
-| `size` | `string` | Size of the backup |
-| `duration` | `string` | Duration of the backup operation |
-| `filesBackedUp` | `int64` | Number of files backed up |
-| `bytesProcessed` | `int64` | Total bytes processed |
+| `size` | `string` | Total backup size (e.g., `"2.5GB"`) |
+| `duration` | `string` | Backup operation duration (e.g., `"5m30s"`) |
+| `throughput` | `string` | Backup throughput rate (e.g., `"8.3MB/s"`) |
+| `fileCount` | `int32` | Number of files in the backup |
 
 ### BackupRun
 
-Information about a backup run.
+Represents a single backup execution with detailed tracking.
 
 | Field | Type | Description |
 |---|---|---|
-| `startTime` | `metav1.Time` | When the backup started |
-| `endTime` | `*metav1.Time` | When the backup ended |
-| `phase` | `string` | Backup phase: `"Running"`, `"Succeeded"`, `"Failed"` |
-| `message` | `string` | Additional information |
-| `location` | `string` | Where the backup was stored |
-| `size` | `string` | Size of the backup |
+| `startTime` | `metav1.Time` | **Required**. When the backup run started |
+| `completionTime` | `*metav1.Time` | When the backup run completed (nil if running) |
+| `status` | `string` | **Required**. Run status: `"Running"`, `"Succeeded"`, `"Failed"` |
+| `error` | `string` | Error message if backup failed |
+| `stats` | [`*BackupStats`](#backupstats) | Backup statistics for this run |
 
 ## Examples
 

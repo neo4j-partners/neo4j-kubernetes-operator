@@ -18,13 +18,19 @@ The `Neo4jRestore` spec defines the configuration for restore operations.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `targetCluster` | `string` | ✅ | Name of the cluster to restore to |
+| `targetCluster` | `string` | ✅ | Name of target Neo4jEnterpriseCluster or Neo4jEnterpriseStandalone |
 | `source` | [`RestoreSource`](#restoresource) | ✅ | Source of the backup to restore |
 | `databaseName` | `string` | ✅ | Name of the database to restore |
 | `options` | [`RestoreOptionsSpec`](#restoreoptionsspec) | ❌ | Additional restore configuration options |
 | `force` | `boolean` | ❌ | Force restore with --overwrite-destination (default: false) |
-| `stopCluster` | `boolean` | ❌ | Stop cluster before restore (default: false) |
+| `stopCluster` | `boolean` | ❌ | Stop target before restore (default: false) |
 | `timeout` | `string` | ❌ | Timeout for restore operation (e.g., "2h", "30m") |
+
+**Target Compatibility**: `targetCluster` can reference either:
+- `Neo4jEnterpriseCluster` - For cluster restore operations
+- `Neo4jEnterpriseStandalone` - For standalone restore operations
+
+The controller automatically detects the target type and uses the appropriate restore approach.
 
 ### RestoreSource
 
@@ -238,31 +244,33 @@ Information about the backup that was restored.
 
 ## Examples
 
-### Complete Example: PITR Restore Configuration
+### Production Cluster Restore with PITR
 
 ```yaml
 apiVersion: neo4j.neo4j.com/v1alpha1
 kind: Neo4jRestore
 metadata:
-  name: pitr-restore-production
+  name: production-cluster-restore
   namespace: neo4j
   labels:
     environment: production
     restore-type: pitr
+    criticality: high
 spec:
-  targetCluster: recovery-cluster
+  targetCluster: recovery-cluster  # Neo4jEnterpriseCluster
   databaseName: production-db
+
   source:
     type: pitr
-    pointInTime: "2025-01-04T12:30:00Z"
+    pointInTime: "2025-01-04T12:30:00Z"  # Precise recovery point
     pitr:
       baseBackup:
         type: backup
-        backupRef: daily-backup
+        backupRef: daily-production-backup
       logStorage:
         type: s3
-        bucket: transaction-logs
-        path: production/logs
+        bucket: neo4j-transaction-logs
+        path: production/logs/
         cloud:
           provider: aws
           region: us-east-1
@@ -271,12 +279,215 @@ spec:
       validateLogIntegrity: true
       compression:
         enabled: true
-        algorithm: gzip
-        level: 6
+        algorithm: lz4  # Faster decompression
+        level: 3
       encryption:
         enabled: true
-        keySecret: log-encryption-key
+        keySecret: transaction-log-encryption
         algorithm: AES256
+
+  options:
+    verifyBackup: true
+    replaceExisting: true
+    preRestore:
+      cypherStatements:
+        - "CALL dbms.backup.prepare()"
+        - "CALL db.checkpoint()"
+        - "CALL dbms.querylog.rotate()"
+    postRestore:
+      cypherStatements:
+        - "CALL db.awaitIndexes(600)"
+        - "CALL dbms.security.clearAuthCache()"
+        - "CALL gds.graph.drop('*') YIELD graphName"
+      job:
+        template:
+          container:
+            image: neo4j-data-validator:latest
+            command: ["/bin/sh"]
+            args: ["-c", "/scripts/validate-production-restore.sh"]
+            env:
+              - name: NEO4J_URI
+                value: "neo4j://recovery-cluster-client:7687"
+              - name: DATABASE_NAME
+                value: production-db
+              - name: VALIDATION_LEVEL
+                value: "comprehensive"
+        timeout: "30m"  # Extended timeout for production validation
+
+  force: true       # Override existing database
+  stopCluster: true # Required for cluster-wide restore
+  timeout: "4h"     # Extended timeout for large production restore
+```
+
+### Standalone Restore from S3
+
+```yaml
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jRestore
+metadata:
+  name: dev-standalone-restore
+  namespace: development
+spec:
+  targetCluster: dev-standalone  # Neo4jEnterpriseStandalone
+  databaseName: dev-app
+
+  source:
+    type: storage
+    storage:
+      type: s3
+      bucket: dev-neo4j-backups
+      path: snapshots/
+      cloud:
+        provider: aws
+        region: us-west-2
+    backupPath: /backups/dev-app/backup-20250120-103000
+
+  options:
+    verifyBackup: false  # Skip verification for dev
+    replaceExisting: true
+    postRestore:
+      cypherStatements:
+        - "CALL db.awaitIndexes(60)"
+        - "CREATE (:TestNode {restored: datetime()})"
+
+  force: true
+  stopCluster: false  # Standalone doesn't require stopping
+  timeout: "30m"     # Shorter timeout for dev
+```
+
+### Cross-Cloud Disaster Recovery
+
+```yaml
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jRestore
+metadata:
+  name: disaster-recovery-restore
+  namespace: disaster-recovery
+  labels:
+    scenario: cross-cloud-dr
+spec:
+  targetCluster: dr-cluster  # Disaster recovery cluster
+  databaseName: critical-app
+
+  source:
+    type: storage
+    storage:
+      type: gcs  # Restoring from Google Cloud to AWS cluster
+      bucket: primary-site-backups
+      path: disaster-recovery/
+      cloud:
+        provider: gcp
+        region: us-central1
+    backupPath: /backups/critical-app/latest.backup
+
+  options:
+    verifyBackup: true   # Critical for DR scenarios
+    replaceExisting: true
+    preRestore:
+      cypherStatements:
+        - "CALL dbms.backup.prepare()"
+        - "CALL db.checkpoint()"
+    postRestore:
+      cypherStatements:
+        - "CALL db.awaitIndexes()"
+        - "CALL dbms.security.clearAuthCache()"
+        - "CALL apoc.log.info('Disaster recovery restore completed')"
+      job:
+        template:
+          container:
+            image: dr-validation-tool:latest
+            command: ["/scripts/dr-validation.sh"]
+            env:
+              - name: NEO4J_URI
+                value: "neo4j://dr-cluster-client:7687"
+              - name: RESTORE_TIMESTAMP
+                value: "2025-01-20T14:30:00Z"
+              - name: NOTIFICATION_WEBHOOK
+                value: "https://alerts.company.com/dr-restore"
+        timeout: "45m"
+
+  force: true
+  stopCluster: true
+  timeout: "3h"
+```
+
+### Simple Backup Reference Restore
+
+```yaml
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jRestore
+metadata:
+  name: simple-backup-restore
+spec:
+  targetCluster: test-cluster  # Can be cluster or standalone
+  databaseName: testdb
+
+  source:
+    type: backup
+    backupRef: daily-test-backup  # References Neo4jBackup resource
+
+  options:
+    verifyBackup: true
+    replaceExisting: true
+
+  force: false      # Don't override if database exists
+  stopCluster: true # Stop target before restore
+  timeout: "1h"
+```
+
+### Point-in-Time Recovery (Neo4j 2025.x)
+
+```yaml
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jRestore
+metadata:
+  name: point-in-time-restore
+spec:
+  targetCluster: recovery-cluster  # Neo4j 2025.x cluster
+  databaseName: time-sensitive-app
+
+  source:
+    type: backup
+    backupRef: base-backup
+    pointInTime: "2025-01-20T14:25:30Z"  # Precise recovery point
+
+  options:
+    verifyBackup: true
+    replaceExisting: true
+    additionalArgs:
+      - "--restore-until=2025-01-20T14:25:30Z"
+      - "--verbose"
+
+  force: true
+  stopCluster: true
+  timeout: "2h"
+```
+
+### Enterprise Multi-Cloud Restore
+
+```yaml
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jRestore
+metadata:
+  name: enterprise-azure-restore
+  labels:
+    compliance: required
+    environment: production
+spec:
+  targetCluster: enterprise-cluster
+  databaseName: customer-data
+
+  source:
+    type: storage
+    storage:
+      type: azure
+      bucket: enterprise-backups  # Azure container
+      path: production/encrypted/
+      cloud:
+        provider: azure
+        region: eastus2
+    backupPath: /backups/customer-data/backup-20250120-020000.backup
+
   options:
     verifyBackup: true
     replaceExisting: true
@@ -288,69 +499,62 @@ spec:
       cypherStatements:
         - "CALL db.awaitIndexes()"
         - "CALL dbms.security.clearAuthCache()"
+        - "CALL apoc.log.info('Enterprise restore completed - customer data')"
       job:
         template:
           container:
-            image: my-registry/data-validator:latest
-            command: ["/bin/sh"]
-            args: ["-c", "/scripts/validate-restore.sh"]
+            image: enterprise-compliance-checker:latest
+            command: ["/scripts/compliance-check.sh"]
             env:
               - name: NEO4J_URI
-                value: "neo4j://recovery-cluster:7687"
-              - name: DATABASE_NAME
-                value: production-db
-        timeout: "15m"
+                value: "neo4j://enterprise-cluster-client:7687"
+              - name: COMPLIANCE_LEVEL
+                value: "GDPR,HIPAA,SOX"
+              - name: AUDIT_ENDPOINT
+                value: "https://audit.enterprise.com/neo4j-restore"
+        timeout: "60m"
+    additionalArgs:
+      - "--check-consistency"
+      - "--verbose"
+      - "--report-progress"
+
   force: true
   stopCluster: true
-  timeout: "2h"
+  timeout: "6h"  # Extended for enterprise validation
 ```
 
-### Simple Restore Example
+### Development Data Refresh
 
 ```yaml
 apiVersion: neo4j.neo4j.com/v1alpha1
 kind: Neo4jRestore
 metadata:
-  name: simple-restore
+  name: dev-data-refresh
+  namespace: development
 spec:
-  targetCluster: my-cluster
-  databaseName: neo4j
-  source:
-    type: backup
-    backupRef: daily-backup
-  options:
-    verifyBackup: true
-    replaceExisting: true
-  force: false
-  stopCluster: true
-```
+  targetCluster: dev-standalone  # Development standalone
+  databaseName: app-dev
 
-### Restore from Storage Example
-
-```yaml
-apiVersion: neo4j.neo4j.com/v1alpha1
-kind: Neo4jRestore
-metadata:
-  name: storage-restore
-spec:
-  targetCluster: disaster-recovery
-  databaseName: critical-app
   source:
     type: storage
     storage:
-      type: gcs
-      bucket: backup-storage
-      path: production/backups
-      cloud:
-        provider: gcp
-        region: us-central1
-    backupPath: /backup/production/backup-20250104-120000
+      type: s3
+      bucket: dev-data-snapshots
+      path: sanitized/
+    backupPath: /snapshots/production-sanitized-20250120.backup
+
   options:
-    verifyBackup: true
+    verifyBackup: false  # Skip for dev speed
     replaceExisting: true
+    postRestore:
+      cypherStatements:
+        - "MATCH (u:User) SET u.email = 'dev-' + u.id + '@example.com'"
+        - "MATCH (c:Customer) SET c.phone = '555-0000'"
+        - "CREATE (:DevMarker {refreshed: datetime(), source: 'production-sanitized'})"
+
   force: true
-  stopCluster: true
-  timeout: "1h"
+  stopCluster: false  # Standalone restore doesn't require stopping
+  timeout: "45m"
 ```
 
 ### Monitoring Example

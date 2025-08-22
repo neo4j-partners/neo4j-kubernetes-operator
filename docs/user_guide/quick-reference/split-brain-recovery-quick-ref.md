@@ -125,7 +125,7 @@ spec:
   config:
     # Optimize discovery timeouts
     dbms.kubernetes.discovery.v2.refresh_rate: "10s"
-    causal_clustering.leader_election_timeout: "7s"
+    dbms.cluster.raft.election_timeout: "7s"  # Neo4j 5.26+
 ```
 
 ## Monitoring Commands

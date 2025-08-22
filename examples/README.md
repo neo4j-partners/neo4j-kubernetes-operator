@@ -7,11 +7,11 @@ This directory contains example configurations for deploying Neo4j Enterprise cl
 Before deploying any examples, ensure you have:
 
 1. **Neo4j Kubernetes Operator installed** in your cluster
-2. **cert-manager with ClusterIssuer** (automatically installed in dev/test clusters)
+2. **cert-manager v1.18+ with ClusterIssuer** (automatically installed in dev/test clusters)
 3. **Appropriate storage classes** available in your cluster
-4. **Neo4j Enterprise license** (required for all examples)
+4. **Neo4j Enterprise Edition** (evaluation license acceptable for testing)
 
-**Note**: Development and test clusters created with `make dev-cluster` or `make test-cluster` automatically include cert-manager v1.18.2 and a self-signed ClusterIssuer (`ca-cluster-issuer`) for TLS testing.
+**Note**: Development and test clusters created with `make dev-cluster` or `make test-cluster` automatically include cert-manager v1.18.2 and a self-signed ClusterIssuer (`ca-cluster-issuer`) for TLS testing. The operator works with Neo4j Enterprise 5.26+ and 2025.x versions.
 
 ## Quick Start
 

@@ -1,5 +1,6 @@
-# Legacy Example - Use apoc-plugin-example.yaml instead
-# This example shows the old approach, see newer examples for Neo4j 5.26+ compatibility
+# DEPRECATED - Use apoc-plugin-example.yaml instead
+# This example shows the legacy approach for reference only
+# For Neo4j 5.26+, see apoc-plugin-example.yaml for the correct configuration
 
 apiVersion: neo4j.neo4j.com/v1alpha1
 kind: Neo4jPlugin

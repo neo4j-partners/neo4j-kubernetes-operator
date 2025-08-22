@@ -1,14 +1,33 @@
 # Neo4jEnterpriseStandalone API Reference
 
-The `Neo4jEnterpriseStandalone` custom resource represents a single-node Neo4j Enterprise deployment running in single mode (non-clustered). This is ideal for development, testing, and simple production workloads that don't require clustering capabilities.
+The `Neo4jEnterpriseStandalone` custom resource manages single-node Neo4j Enterprise deployments for development, testing, and simple production workloads that don't require clustering capabilities.
 
 ## Overview
 
 - **API Version**: `neo4j.neo4j.com/v1alpha1`
 - **Kind**: `Neo4jEnterpriseStandalone`
-- **Metadata**: Standard Kubernetes metadata
-- **Spec**: Desired state specification
-- **Status**: Current state and conditions
+- **Supported Neo4j Versions**: 5.26.0+ (semver) and 2025.01.0+ (calver)
+- **Architecture**: Single StatefulSet with unified clustering infrastructure
+- **Database Support**: Compatible with Neo4jDatabase CRD for automated database creation
+- **Plugin Support**: Full compatibility with Neo4jPlugin CRD
+
+## Architecture
+
+**Unified Infrastructure**: `Neo4jEnterpriseStandalone` uses the same clustering infrastructure as cluster deployments but with a single server:
+
+- **Single StatefulSet**: `{standalone-name}` with 1 replica
+- **Single Pod**: Named `{standalone-name}-0`
+- **Database Compatibility**: Supports Neo4jDatabase resources for automated database creation
+- **Plugin Compatibility**: Full support for Neo4jPlugin installation and management
+- **Backup Integration**: Compatible with Neo4jBackup/Restore for data protection
+
+## Related Resources
+
+- [`Neo4jDatabase`](neo4jdatabase.md) - Create databases within the standalone instance
+- [`Neo4jPlugin`](neo4jplugin.md) - Install plugins (APOC, GDS, etc.)
+- [`Neo4jBackup`](neo4jbackup.md) - Schedule automated backups
+- [`Neo4jRestore`](neo4jrestore.md) - Restore from backups
+- [`Neo4jEnterpriseCluster`](neo4jenterprisecluster.md) - For clustered deployments
 
 ## When to Use Neo4jEnterpriseStandalone
 
@@ -28,16 +47,30 @@ Use `Neo4jEnterpriseStandalone` when you need:
 #### `image` (ImageSpec)
 Specifies the Neo4j Docker image to use.
 
+| Field | Type | Description |
+|---|---|---|
+| `repo` | `string` | **Required**. Docker repository (default: `"neo4j"`) |
+| `tag` | `string` | **Required**. Neo4j version tag (5.26+ required) |
+| `pullPolicy` | `string` | Image pull policy: `"Always"`, `"IfNotPresent"` (default), `"Never"` |
+| `pullSecrets` | `[]string` | Image pull secrets for private registries |
+
 ```yaml
 image:
   repo: neo4j                    # Docker repository
-  tag: "5.26-enterprise"         # Neo4j version (5.26+ required)
+  tag: "5.26.0-enterprise"       # Neo4j version (5.26+ required)
   pullPolicy: IfNotPresent       # Image pull policy
   pullSecrets: []                # Image pull secrets
 ```
 
 #### `storage` (StorageSpec)
 Defines storage configuration for the Neo4j data volume.
+
+| Field | Type | Description |
+|---|---|---|
+| `className` | `string` | **Required**. Storage class name |
+| `size` | `string` | **Required**. Storage size (e.g., `"10Gi"`) |
+| `retentionPolicy` | `string` | PVC retention policy: `"Delete"` (default), `"Retain"` |
+| `backupStorage` | [`*BackupStorageSpec`](#backupstoragespec) | Additional storage for backups |
 
 ```yaml
 storage:
@@ -89,12 +122,19 @@ config:
   dbms.security.procedures.unrestricted: "gds.*,apoc.*"
   dbms.logs.query.enabled: "true"
   dbms.logs.query.threshold: "1s"
+  # Neo4j 5.26+ configuration syntax
+  server.default_listen_address: "0.0.0.0"
+  server.discovery.advertised_address: "$(hostname -f)"
 ```
 
-**Restricted Configurations**: The following clustering-related configurations are not allowed (they are managed automatically by the operator):
-- `dbms.cluster.*`
-- `dbms.kubernetes.*`
-- Any internal clustering settings
+**Automatically Managed**: The following configurations are managed by the operator:
+- `dbms.cluster.*` - Clustering settings (uses unified infrastructure)
+- `dbms.kubernetes.*` - Kubernetes discovery settings
+- `server.bolt.listen_address` - Network listeners
+- `server.http.listen_address` - HTTP endpoints
+- `NEO4J_AUTH` - Authentication setup (when using adminSecret)
+
+**Critical for Standalone**: The operator automatically configures clustering infrastructure but ensures single-node operation.
 
 #### `tls` (TLSSpec)
 TLS/SSL configuration for secure connections.
@@ -202,8 +242,16 @@ spec:
   clusterRef: my-standalone  # References the Neo4jEnterpriseStandalone
   name: apoc
   version: "5.26.0"
-  enabled: true
+  config:
+    "apoc.export.file.enabled": "true"
+    "apoc.import.file.enabled": "true"
 ```
+
+**Plugin Installation**: The Neo4jPlugin controller automatically:
+1. Updates the standalone StatefulSet with `NEO4J_PLUGINS` environment variable
+2. Adds plugin-specific configuration as `NEO4J_*` environment variables
+3. Triggers a rolling restart to apply plugin changes
+4. Verifies plugin installation and marks status as Ready
 
 See the [Neo4jPlugin API reference](neo4jplugin.md) for complete documentation.
 
@@ -265,13 +313,24 @@ podStatus:
 #### `databaseStatus` (StandaloneDatabaseStatus)
 Information about the Neo4j database.
 
+| Field | Type | Description |
+|---|---|---|
+| `databaseMode` | `string` | Database mode (should show unified infrastructure mode) |
+| `databaseName` | `string` | Active database name (usually `"neo4j"`) |
+| `lastBackupTime` | `*metav1.Time` | When the last backup was completed |
+| `storageSize` | `string` | Current storage usage |
+| `connectionCount` | `int32` | Number of active connections |
+| `lastHealthCheck` | `*metav1.Time` | When the last health check was performed |
+| `healthStatus` | `string` | Current health status |
+
 ```yaml
 databaseStatus:
-  databaseMode: SINGLE
-  databaseName: neo4j
+  databaseMode: "UNIFIED"  # Reflects unified clustering infrastructure
+  databaseName: "neo4j"
   storageSize: "2.5Gi"
   connectionCount: 5
   healthStatus: "Healthy"
+  lastHealthCheck: "2025-01-20T10:30:00Z"
 ```
 
 ## Examples
@@ -287,30 +346,33 @@ metadata:
 spec:
   image:
     repo: neo4j
-    tag: "5.26-enterprise"
+    tag: "5.26.0-enterprise"       # Use specific version
 
   storage:
     className: standard
     size: "10Gi"
+    retentionPolicy: Delete        # Clean up PVC on deletion
 
   resources:
     requests:
-      memory: "2Gi"
+      memory: "2Gi"                # Minimum for Neo4j Enterprise
       cpu: "500m"
     limits:
       memory: "4Gi"
       cpu: "2"
 
-  tls:
-    mode: disabled
-
   auth:
-    provider: native
-    adminSecret: neo4j-admin-secret
+    adminSecret: neo4j-admin-secret  # Contains username/password
 
   env:
     - name: NEO4J_ACCEPT_LICENSE_AGREEMENT
       value: "yes"
+
+  # Optional: Custom Neo4j configuration
+  config:
+    server.memory.heap.initial_size: "1G"
+    server.memory.heap.max_size: "2G"
+    server.memory.pagecache.size: "1G"
 ```
 
 ### Standalone with LoadBalancer Service
@@ -324,11 +386,12 @@ metadata:
 spec:
   image:
     repo: neo4j
-    tag: "5.26-enterprise"
+    tag: "5.26.0-enterprise"
 
   storage:
     className: fast-ssd
     size: "50Gi"
+    retentionPolicy: Retain        # Keep data on deletion
 
   resources:
     requests:
@@ -351,12 +414,22 @@ spec:
     externalTrafficPolicy: Local  # Preserve client IPs
 
   auth:
-    provider: native
     adminSecret: neo4j-admin-secret
+    passwordPolicy:
+      minLength: 12
+      requireSpecialChars: true
 
   env:
     - name: NEO4J_ACCEPT_LICENSE_AGREEMENT
       value: "yes"
+
+  # Production configuration
+  config:
+    server.memory.heap.initial_size: "3G"
+    server.memory.heap.max_size: "6G"
+    server.memory.pagecache.size: "2G"
+    dbms.logs.query.enabled: "true"
+    dbms.logs.query.threshold: "1s"
 ```
 
 ### Standalone with Ingress
@@ -404,7 +477,7 @@ spec:
       value: "yes"
 ```
 
-### Production Standalone with TLS
+### Production Standalone with TLS and Plugins
 
 ```yaml
 apiVersion: neo4j.neo4j.com/v1alpha1
@@ -415,16 +488,17 @@ metadata:
 spec:
   image:
     repo: neo4j
-    tag: "5.26-enterprise"
+    tag: "5.26.0-enterprise"
 
   storage:
     className: fast-ssd
     size: "50Gi"
+    retentionPolicy: Retain        # Persist data
 
   resources:
     requests:
       memory: "4Gi"
-      cpu: "1"
+      cpu: "2"
     limits:
       memory: "8Gi"
       cpu: "4"
@@ -436,7 +510,6 @@ spec:
       kind: ClusterIssuer
 
   auth:
-    provider: native
     adminSecret: neo4j-admin-secret
     passwordPolicy:
       minLength: 12
@@ -451,25 +524,55 @@ spec:
     enabled: true
     retentionPolicy: Retain
 
-  # Note: plugins field is DEPRECATED - use Neo4jPlugin CRD instead
-  # See neo4jplugin.md for plugin installation examples
-
   queryMonitoring:
     enabled: true
     slowQueryThreshold: "1s"
     explainPlan: true
+    indexRecommendations: true
 
   config:
     server.memory.heap.initial_size: "3G"
     server.memory.heap.max_size: "6G"
     server.memory.pagecache.size: "2G"
-    dbms.security.procedures.unrestricted: "gds.*,apoc.*"
     dbms.logs.query.enabled: "true"
     dbms.logs.query.threshold: "500ms"
 
   env:
     - name: NEO4J_ACCEPT_LICENSE_AGREEMENT
       value: "yes"
+
+---
+# Install APOC plugin using Neo4jPlugin CRD
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jPlugin
+metadata:
+  name: prod-apoc-plugin
+  namespace: production
+spec:
+  clusterRef: prod-neo4j-standalone  # References the standalone
+  name: apoc
+  version: "5.26.0"
+  config:
+    "apoc.export.file.enabled": "true"
+    "apoc.import.file.enabled": "true"
+    "apoc.import.file.use_neo4j_config": "true"
+
+---
+# Create a database using Neo4jDatabase CRD
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jDatabase
+metadata:
+  name: prod-app-database
+  namespace: production
+spec:
+  clusterRef: prod-neo4j-standalone  # References the standalone
+  name: appdb
+  ifNotExists: true
+  initialData:
+    source: cypher
+    cypherStatements:
+      - "CREATE CONSTRAINT user_email IF NOT EXISTS ON (u:User) ASSERT u.email IS UNIQUE"
+      - "CREATE INDEX user_name IF NOT EXISTS FOR (u:User) ON (u.name)"
 ```
 
 ## Management Commands
@@ -506,6 +609,40 @@ kubectl patch neo4jenterprisestandalone dev-neo4j -p '{"spec":{"image":{"tag":"5
 kubectl get neo4jenterprisestandalone dev-neo4j -o yaml
 ```
 
+### Database and Plugin Management
+
+```bash
+# Create a database in the standalone instance
+kubectl apply -f - <<EOF
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jDatabase
+metadata:
+  name: app-database
+spec:
+  clusterRef: dev-neo4j  # References the standalone
+  name: appdb
+  ifNotExists: true
+  initialData:
+    source: cypher
+    cypherStatements:
+      - "CREATE CONSTRAINT user_email IF NOT EXISTS ON (u:User) ASSERT u.email IS UNIQUE"
+EOF
+
+# Install APOC plugin
+kubectl apply -f - <<EOF
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jPlugin
+metadata:
+  name: apoc-plugin
+spec:
+  clusterRef: dev-neo4j  # References the standalone
+  name: apoc
+  version: "5.26.0"
+  config:
+    "apoc.export.file.enabled": "true"
+EOF
+```
+
 ### Backup and Restore
 
 ```bash
@@ -517,7 +654,7 @@ metadata:
   name: dev-neo4j-backup
 spec:
   target:
-    kind: Neo4jEnterpriseStandalone
+    kind: Neo4jEnterpriseStandalone  # Note: correct target kind
     name: dev-neo4j
   storage:
     type: s3
@@ -528,13 +665,17 @@ EOF
 # Restore from backup
 kubectl apply -f - <<EOF
 apiVersion: neo4j.neo4j.com/v1alpha1
-kind: Neo4jEnterpriseStandalone
+kind: Neo4jRestore
 metadata:
-  name: restored-neo4j
+  name: restore-dev-neo4j
 spec:
-  # ... other config ...
-  restoreFrom:
+  targetCluster: dev-neo4j        # Target standalone instance
+  databaseName: neo4j
+  source:
+    type: backup
     backupRef: dev-neo4j-backup
+  options:
+    replaceExisting: true
 EOF
 ```
 
@@ -609,12 +750,20 @@ kubectl describe neo4jenterprisestandalone <name>
 kubectl get svc -l app=<standalone-name>
 kubectl describe svc <service-name>
 
+# Check pod status
+kubectl get pods -l app=<standalone-name>
+kubectl describe pod <standalone-name>-0
+
 # Check pod logs
-kubectl logs -l app=<standalone-name>
+kubectl logs <standalone-name>-0 -c neo4j
 
 # Test connectivity
-kubectl port-forward svc/<service-name> 7474:7474
+kubectl port-forward svc/<service-name> 7474:7474 7687:7687
 curl http://localhost:7474
+
+# Test database connectivity
+kubectl exec <standalone-name>-0 -c neo4j -- \
+  cypher-shell -u neo4j -p <password> "RETURN 'Connected!' as status"
 ```
 
 ### Performance Tuning
@@ -654,4 +803,145 @@ config:
 7. **Configure resource quotas** in production namespaces
 8. **Use correct configuration settings** - see [Configuration Best Practices](../user_guide/guides/configuration_best_practices.md)
 
-For more advanced configurations and cluster deployments, see the [Neo4jEnterpriseCluster API Reference](neo4jenterprisecluster.md).
+## Usage Patterns
+
+### Development Environment
+
+```yaml
+# Minimal development setup
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jEnterpriseStandalone
+metadata:
+  name: dev-neo4j
+spec:
+  image:
+    repo: neo4j
+    tag: "5.26.0-enterprise"
+  storage:
+    className: standard
+    size: 5Gi
+    retentionPolicy: Delete
+  resources:
+    requests:
+      cpu: 200m
+      memory: 1Gi
+    limits:
+      cpu: 1
+      memory: 2Gi
+  auth:
+    adminSecret: dev-auth-secret
+  env:
+    - name: NEO4J_ACCEPT_LICENSE_AGREEMENT
+      value: "yes"
+```
+
+### Testing with Multiple Databases
+
+```yaml
+# Standalone for testing multiple databases
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jEnterpriseStandalone
+metadata:
+  name: test-neo4j
+spec:
+  image:
+    repo: neo4j
+    tag: "5.26.0-enterprise"
+  storage:
+    className: standard
+    size: 20Gi
+  resources:
+    requests:
+      memory: 2Gi
+      cpu: 500m
+    limits:
+      memory: 4Gi
+      cpu: 2
+  auth:
+    adminSecret: test-auth-secret
+
+---
+# Test database 1
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jDatabase
+metadata:
+  name: test-users-db
+spec:
+  clusterRef: test-neo4j
+  name: users
+  ifNotExists: true
+
+---
+# Test database 2
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jDatabase
+metadata:
+  name: test-products-db
+spec:
+  clusterRef: test-neo4j
+  name: products
+  ifNotExists: true
+```
+
+### Migration from Cluster to Standalone
+
+```bash
+# 1. Create backup from cluster
+kubectl apply -f - <<EOF
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jBackup
+metadata:
+  name: cluster-migration-backup
+spec:
+  target:
+    kind: Neo4jEnterpriseCluster
+    name: old-cluster
+  storage:
+    type: s3
+    bucket: migration-backups
+    path: /cluster-to-standalone/
+EOF
+
+# 2. Wait for backup completion
+kubectl wait --for=condition=Ready neo4jbackup/cluster-migration-backup --timeout=600s
+
+# 3. Create standalone with restore
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jEnterpriseStandalone
+metadata:
+  name: migrated-standalone
+spec:
+  # ... standalone configuration ...
+  restoreFrom:
+    backupRef: cluster-migration-backup
+```
+
+## Best Practices
+
+1. **Resource Allocation**: Use at least 1.5Gi memory for Neo4j Enterprise database operations
+2. **Storage**: Use fast SSD storage classes for production workloads
+3. **Authentication**: Always use adminSecret for secure credential management
+4. **TLS**: Enable TLS for production deployments using cert-manager
+5. **Backup Strategy**: Implement regular backups with appropriate retention policies
+6. **Plugin Management**: Use Neo4jPlugin CRD instead of deprecated embedded configuration
+7. **Database Management**: Use Neo4jDatabase CRD for automated database creation and schema setup
+8. **Monitoring**: Enable query monitoring for performance insights
+9. **Configuration**: Use Neo4j 5.26+ configuration syntax (server.* instead of dbms.connector.*)
+10. **Version Pinning**: Always use specific version tags instead of latest
+
+## When to Use Cluster Instead
+
+Consider migrating to [`Neo4jEnterpriseCluster`](neo4jenterprisecluster.md) when you need:
+
+- **High Availability**: Automatic failover and redundancy
+- **Horizontal Scaling**: Multiple servers for read/write scaling
+- **Multi-Database Topologies**: Different databases with optimized distribution
+- **Production Workloads**: Enhanced reliability and performance
+- **Load Distribution**: Separation of read and write workloads
+
+For more information:
+- [Neo4jEnterpriseCluster API Reference](neo4jenterprisecluster.md)
+- [Neo4jDatabase API Reference](neo4jdatabase.md)
+- [Neo4jPlugin API Reference](neo4jplugin.md)
+- [Backup and Restore Guide](../user_guide/guides/backup_restore.md)
+- [Configuration Best Practices](../user_guide/guides/configuration_best_practices.md)

@@ -7,7 +7,7 @@ Welcome to the documentation for the Neo4j Enterprise Operator for Kubernetes.
 The [User Guide](user_guide) is for users of the Neo4j Enterprise Operator. It contains all the information you need to deploy, manage, and operate Neo4j clusters on Kubernetes.
 
 *   **[Getting Started](user_guide/getting_started.md)**: A quickstart guide to get you up and running in minutes.
-*   **[Installation](user_guide/installation.md)**: Installation instructions via git clone (private repository).
+*   **[Installation](../README.md#quick-start)**: Installation instructions via git clone and make commands.
 *   **[Configuration](user_guide/configuration.md)**: Comprehensive configuration options.
 *   **[External Access](user_guide/external_access.md)**: Expose Neo4j outside Kubernetes using LoadBalancer, NodePort, or Ingress.
 *   **[Topology Placement](user_guide/topology_placement.md)**: Configure zone distribution, anti-affinity, and advanced placement strategies.
@@ -38,7 +38,7 @@ The [API Reference](api_reference) contains detailed information about the opera
 *   **[Neo4jBackup](api_reference/neo4jbackup.md)**
 *   **[Neo4jRestore](api_reference/neo4jrestore.md)**
 *   **[Neo4jDatabase](api_reference/neo4jdatabase.md)** - Enhanced with IF NOT EXISTS, WAIT/NOWAIT, topology support, and **seed URI functionality**
-*   **[Neo4jPlugin](api_reference/neo4jplugin.md)**
+*   **[Neo4jPlugin](api_reference/neo4jplugin.md)** - Smart plugin management with Neo4j 5.26+ compatibility
 
 ## 🚀 End-to-End Examples
 
@@ -51,7 +51,7 @@ Complete deployment examples demonstrating real-world scenarios:
 
 ## 🆕 What's New
 
-### Neo4j 5.26+ and 2025.x Support
+### Latest Features (Neo4j 5.26+ and 2025.x)
 *   **Database Management**: Create databases with `IF NOT EXISTS`, `WAIT`/`NOWAIT` options
 *   **🆕 Seed URI Functionality**: Create databases directly from existing backups stored in cloud storage
 *   **Topology Constraints**: Specify primary/secondary distribution for databases
@@ -59,7 +59,7 @@ Complete deployment examples demonstrating real-world scenarios:
 *   **Cypher Language**: Support for Cypher 25 in Neo4j 2025.x
 *   **Backup Improvements**: FULL/DIFF/AUTO backup types, backup from secondaries
 *   **Point-in-Time Recovery**: Restore to specific timestamps with `--restore-until`
-*   **Backup Sidecar**: Automatic backup capabilities added to all pods
+*   **Centralized Backup**: Single backup StatefulSet per cluster for resource efficiency
 
 ## 🚀 Seed URI Database Creation
 

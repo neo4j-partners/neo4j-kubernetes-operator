@@ -134,9 +134,9 @@ spec:
 ```yaml
 spec:
   config:
-    # Cluster communication timeouts
-    causal_clustering.leader_election_timeout: "7s"
-    causal_clustering.leader_failure_detection_window: "30s"
+    # Cluster communication timeouts (Neo4j 5.26+)
+    dbms.cluster.raft.election_timeout: "7s"
+    dbms.cluster.raft.leader_failure_detection_window: "30s"
 
     # Discovery performance
     dbms.kubernetes.discovery.v2.refresh_rate: "5s"
@@ -330,8 +330,8 @@ spec:
         topologyKey: kubernetes.io/hostname
 
   config:
-    # Cross-zone communication optimization
-    causal_clustering.cluster_topology_refresh: "5m"
+    # Cross-zone communication optimization (Neo4j 5.26+)
+    dbms.cluster.discovery.v2.refresh_rate: "5m"
     dbms.cluster.discovery.resolution_timeout: "60s"
 ```
 

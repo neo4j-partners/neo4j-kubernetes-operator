@@ -1,10 +1,40 @@
-# Neo4jEnterpriseCluster
+# Neo4jEnterpriseCluster API Reference
 
-This document provides a reference for the `Neo4jEnterpriseCluster` Custom Resource Definition (CRD). This resource is used for creating and managing Neo4j Enterprise clusters with high availability.
+The `Neo4jEnterpriseCluster` Custom Resource Definition (CRD) manages Neo4j Enterprise clusters with high availability, automatic failover, and horizontal scaling capabilities.
 
-**Important**: `Neo4jEnterpriseCluster` uses a server-based architecture where servers self-organize into primary and secondary roles automatically. The minimum cluster configuration requires **2 or more servers**.
+## Overview
 
-For single-node deployments, use [`Neo4jEnterpriseStandalone`](neo4jenterprisestandalone.md) instead.
+- **API Version**: `neo4j.neo4j.com/v1alpha1`
+- **Kind**: `Neo4jEnterpriseCluster`
+- **Supported Neo4j Versions**: 5.26.0+ (semver) and 2025.01.0+ (calver)
+- **Architecture**: Server-based deployment with unified StatefulSet
+- **Minimum Servers**: 2 (required for clustering)
+- **Maximum Servers**: 20 (validated limit)
+
+## Architecture
+
+**Server-Based Architecture**: `Neo4jEnterpriseCluster` uses a unified server-based architecture introduced in Neo4j 5.26+:
+
+- **Single StatefulSet**: `{cluster-name}-server` with configurable replica count
+- **Server Pods**: Named `{cluster-name}-server-0`, `{cluster-name}-server-1`, etc.
+- **Self-Organization**: Servers automatically organize into primary/secondary roles for databases
+- **Centralized Backup**: Optional `{cluster-name}-backup-0` pod for centralized backup operations
+- **Role Flexibility**: Servers can host multiple databases with different roles
+
+**When to Use**:
+- Production workloads requiring high availability
+- Multi-database deployments with different topology requirements
+- Workloads needing horizontal read scaling
+- Enterprise features like advanced backup, security, and monitoring
+
+**For single-node deployments**, use [`Neo4jEnterpriseStandalone`](neo4jenterprisestandalone.md) instead.
+
+## Related Resources
+
+- [`Neo4jDatabase`](neo4jdatabase.md) - Create databases within the cluster
+- [`Neo4jPlugin`](neo4jplugin.md) - Install plugins (APOC, GDS, etc.)
+- [`Neo4jBackup`](neo4jbackup.md) - Schedule automated backups
+- [`Neo4jRestore`](neo4jrestore.md) - Restore from backups
 
 ## Spec
 
@@ -94,12 +124,38 @@ The `Neo4jEnterpriseClusterSpec` defines the desired state of a Neo4j Enterprise
 
 ### TopologyConfiguration
 
+Defines the cluster server topology and role constraints.
+
 | Field | Type | Description |
 |---|---|---|
-| `servers` | `int32` | Number of servers in the cluster (minimum: 2) |
-| `serverModeConstraint` | `string` | Optional server mode constraint: `"PRIMARY"`, `"SECONDARY"`, or empty for automatic role assignment |
+| `servers` | `int32` | **Required**. Number of Neo4j servers (minimum: 2, maximum: 20) |
+| `serverModeConstraint` | `string` | Global server mode constraint: `"NONE"` (default), `"PRIMARY"`, `"SECONDARY"` |
+| `serverRoles` | [`[]ServerRoleHint`](#serverrolehint) | Per-server role constraints (overrides global constraint) |
+| `placement` | [`*PlacementConfig`](#placementconfig) | Advanced placement and scheduling configuration |
+| `availabilityZones` | `[]string` | Target availability zones for server distribution |
+| `enforceDistribution` | `bool` | Enforce server distribution across topology domains |
 
-**Validation**: Must have at least 2 servers for clustering. Servers automatically organize into primary and secondary roles based on Neo4j's cluster management.
+**Server Role Management**:
+- Servers self-organize into primary/secondary roles at the **database level**
+- Role constraints influence which databases a server can host:
+  - `NONE`: Server can host databases in any mode (default)
+  - `PRIMARY`: Server only hosts databases in primary mode
+  - `SECONDARY`: Server only hosts databases in secondary mode
+- Use `serverRoles` for granular per-server control
+
+**Validation**:
+- Minimum 2 servers required for clustering
+- Cannot configure all servers as `SECONDARY` (cluster needs primaries)
+- Server indices in `serverRoles` must be within range (0 to servers-1)
+
+### ServerRoleHint
+
+Specifies role constraints for individual servers.
+
+| Field | Type | Description |
+|---|---|---|
+| `serverIndex` | `int32` | **Required**. Server index (0-based, must be < servers count) |
+| `modeConstraint` | `string` | **Required**. Role constraint: `"NONE"`, `"PRIMARY"`, `"SECONDARY"` |
 
 ### StorageSpec
 
@@ -194,27 +250,68 @@ The `Neo4jEnterpriseClusterSpec` defines the desired state of a Neo4j Enterprise
 
 ### QueryMonitoringSpec
 
-| Field | Type | Description |
-|---|---|---|
-| `enabled` | `bool` | Enable query monitoring |
-| `sampleRate` | `float32` | Query sampling rate (0.0-1.0) |
-| `logSlowQueries` | `bool` | Log slow queries |
-| `slowQueryThreshold` | `string` | Slow query threshold (e.g., `"500ms"`) |
-| `killLongRunningQueries` | `bool` | Kill long-running queries |
-| `longRunningQueryThreshold` | `string` | Long-running query threshold |
-| `exportMetrics` | `bool` | Export query metrics |
-| `metricsEndpoint` | `string` | Metrics export endpoint |
-
-### PlacementSpec
+Query performance monitoring and analytics configuration.
 
 | Field | Type | Description |
 |---|---|---|
-| `affinity` | `*corev1.Affinity` | Server affinity rules |
-| `tolerations` | `[]corev1.Toleration` | Server tolerations |
-| `nodeSelector` | `map[string]string` | Server node selector |
-| `topologySpreadConstraints` | `[]corev1.TopologySpreadConstraint` | Server topology constraints |
-| `enforceDistribution` | `bool` | Enforce even distribution across availability zones |
-| `availabilityZones` | `[]string` | Target availability zones for server placement |
+| `enabled` | `bool` | Enable query monitoring (default: `true`) |
+| `slowQueryThreshold` | `string` | Slow query threshold (default: `"5s"`) |
+| `explainPlan` | `bool` | Enable query plan explanation (default: `true`) |
+| `indexRecommendations` | `bool` | Enable index recommendations (default: `true`) |
+| `sampling` | [`*QuerySamplingConfig`](#querysamplingconfig) | Query sampling configuration |
+| `metricsExport` | [`*QueryMetricsExportConfig`](#querymetricsexportconfig) | Metrics export configuration |
+
+### QuerySamplingConfig
+
+Query sampling configuration for performance monitoring.
+
+| Field | Type | Description |
+|---|---|---|
+| `rate` | `string` | Sampling rate (0.0 to 1.0) |
+| `maxQueriesPerSecond` | `int32` | Maximum queries to sample per second |
+
+### QueryMetricsExportConfig
+
+Metrics export configuration for query monitoring.
+
+| Field | Type | Description |
+|---|---|---|
+| `prometheus` | `bool` | Export to Prometheus |
+| `customEndpoint` | `string` | Export to custom endpoint |
+| `interval` | `string` | Export interval |
+
+### PlacementConfig
+
+Advanced placement and scheduling configuration.
+
+| Field | Type | Description |
+|---|---|---|
+| `topologySpread` | [`*TopologySpreadConfig`](#topologyspreadconfig) | Topology spread constraints |
+| `antiAffinity` | [`*PodAntiAffinityConfig`](#podantiaffinityconfig) | Pod anti-affinity rules |
+| `nodeSelector` | `map[string]string` | Node selection constraints |
+| `requiredDuringScheduling` | `bool` | Hard placement requirements |
+
+### TopologySpreadConfig
+
+Controls how servers are distributed across cluster topology.
+
+| Field | Type | Description |
+|---|---|---|
+| `enabled` | `bool` | Enable topology spread constraints |
+| `topologyKey` | `string` | Topology domain (e.g., `"topology.kubernetes.io/zone"`) |
+| `maxSkew` | `int32` | Maximum allowed imbalance between domains |
+| `whenUnsatisfiable` | `string` | Action when constraints can't be satisfied |
+| `minDomains` | `*int32` | Minimum number of eligible domains |
+
+### PodAntiAffinityConfig
+
+Prevents servers from being scheduled on the same nodes/zones.
+
+| Field | Type | Description |
+|---|---|---|
+| `enabled` | `bool` | Enable anti-affinity rules |
+| `topologyKey` | `string` | Anti-affinity topology domain |
+| `type` | `string` | Constraint type: `"required"` or `"preferred"` |
 
 ### ServiceSpec
 
@@ -284,6 +381,48 @@ Example connection strings for various scenarios.
 | `browserURL` | `string` | Neo4j Browser URL |
 | `boltURI` | `string` | Bolt connection URI |
 | `neo4jURI` | `string` | Neo4j driver URI |
+| `pythonExample` | `string` | Python driver connection example |
+| `javaExample` | `string` | Java driver connection example |
+
+### UpgradeStatus
+
+Detailed upgrade progress tracking.
+
+| Field | Type | Description |
+|---|---|---|
+| `phase` | `string` | Upgrade phase: `"Pending"`, `"InProgress"`, `"Paused"`, `"Completed"`, `"Failed"` |
+| `startTime` | `*metav1.Time` | When the upgrade started |
+| `completionTime` | `*metav1.Time` | When the upgrade completed |
+| `currentStep` | `string` | Current upgrade step description |
+| `previousVersion` | `string` | Version before upgrade |
+| `targetVersion` | `string` | Version being upgraded to |
+| `progress` | [`*UpgradeProgress`](#upgradeprogress) | Upgrade progress statistics |
+| `message` | `string` | Additional upgrade details |
+| `lastError` | `string` | Last error encountered during upgrade |
+
+### UpgradeProgress
+
+Upgrade progress across servers.
+
+| Field | Type | Description |
+|---|---|---|
+| `total` | `int32` | Total number of servers to upgrade |
+| `upgraded` | `int32` | Number of servers successfully upgraded |
+| `inProgress` | `int32` | Number of servers currently being upgraded |
+| `pending` | `int32` | Number of servers pending upgrade |
+| `servers` | [`*NodeUpgradeProgress`](#nodeupgradeprogress) | Server upgrade details |
+
+### NodeUpgradeProgress
+
+Server-specific upgrade progress.
+
+| Field | Type | Description |
+|---|---|---|
+| `total` | `int32` | Total number of servers |
+| `upgraded` | `int32` | Number of servers successfully upgraded |
+| `inProgress` | `int32` | Number of servers currently being upgraded |
+| `pending` | `int32` | Number of servers pending upgrade |
+| `currentLeader` | `string` | Current leader server |
 
 ## Examples
 
@@ -297,15 +436,15 @@ metadata:
 spec:
   edition: enterprise
   image:
-    repository: neo4j
+    repo: neo4j  # Note: field name is 'repo', not 'repository'
     tag: "5.26.0-enterprise"
   topology:
-    servers: 3  # 3 servers will self-organize into primary/secondary roles
+    servers: 3  # Creates StatefulSet basic-cluster-server with 3 replicas
   storage:
+    className: standard
     size: 10Gi
   auth:
-    provider: secrets
-    secret: neo4j-auth
+    adminSecret: neo4j-admin-secret  # Note: field name is 'adminSecret'
   resources:
     requests:
       cpu: "1"
@@ -315,7 +454,58 @@ spec:
       memory: 8Gi
 ```
 
-### Cluster with Backup and Monitoring
+### Cluster with Server Role Constraints
+
+```yaml
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: role-constrained-cluster
+spec:
+  edition: enterprise
+  image:
+    repo: neo4j
+    tag: "5.26.0-enterprise"
+  topology:
+    servers: 5
+    # Global constraint: all servers default to any role
+    serverModeConstraint: NONE
+    # Per-server role hints (overrides global constraint)
+    serverRoles:
+      - serverIndex: 0
+        modeConstraint: PRIMARY    # Server-0: only primary databases
+      - serverIndex: 1
+        modeConstraint: PRIMARY    # Server-1: only primary databases
+      - serverIndex: 2
+        modeConstraint: SECONDARY  # Server-2: only secondary databases
+      - serverIndex: 3
+        modeConstraint: SECONDARY  # Server-3: only secondary databases
+      - serverIndex: 4
+        modeConstraint: NONE       # Server-4: any database mode
+    # Advanced placement for high availability
+    placement:
+      topologySpread:
+        enabled: true
+        topologyKey: topology.kubernetes.io/zone
+        maxSkew: 1
+        whenUnsatisfiable: DoNotSchedule
+      antiAffinity:
+        enabled: true
+        topologyKey: kubernetes.io/hostname
+        type: required
+    availabilityZones:
+      - us-east-1a
+      - us-east-1b
+      - us-east-1c
+    enforceDistribution: true
+  storage:
+    className: fast-ssd
+    size: 50Gi
+  auth:
+    adminSecret: neo4j-admin-secret
+```
+
+### Cluster with Centralized Backup
 
 ```yaml
 apiVersion: neo4j.neo4j.com/v1alpha1
@@ -325,41 +515,63 @@ metadata:
 spec:
   edition: enterprise
   image:
-    repository: neo4j
+    repo: neo4j
     tag: "5.26.0-enterprise"
   topology:
-    servers: 3  # 3 servers will self-organize into primary/secondary roles
+    servers: 3  # Creates monitored-cluster-server StatefulSet
   storage:
+    className: fast-ssd
     size: 50Gi
   auth:
-    provider: secrets
-    secret: neo4j-auth
+    adminSecret: neo4j-admin-secret
+  # Centralized backup configuration
   backups:
-    enabled: true
-    schedule: "0 2 * * *"  # Daily at 2 AM
-    type: full
-    retention:
-      keepDaily: 7
-      keepWeekly: 4
-      keepMonthly: 6
-    storage:
-      provider: s3
+    defaultStorage:
+      type: s3
       bucket: neo4j-backups
-      region: us-east-1
-      credentialsSecret: s3-credentials
-    fromSecondary: true
+      path: production/
+    cloud:
+      provider: aws
+      identity:
+        provider: aws
+        serviceAccount: neo4j-backup-sa  # Uses IAM roles for pods
+  # Enhanced query monitoring
   queryMonitoring:
     enabled: true
-    sampleRate: 0.1
-    logSlowQueries: true
     slowQueryThreshold: "1s"
-    exportMetrics: true
-  monitoring:
-    enabled: true
-    serviceMonitor:
-      enabled: true
-      labels:
-        prometheus: kube-prometheus
+    explainPlan: true
+    indexRecommendations: true
+    sampling:
+      rate: "0.1"
+      maxQueriesPerSecond: 100
+    metricsExport:
+      prometheus: true
+      interval: "30s"
+```
+
+### Create Scheduled Backup (Separate Resource)
+
+```yaml
+# Note: Backups are now managed via Neo4jBackup CRD
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jBackup
+metadata:
+  name: daily-cluster-backup
+spec:
+  target:
+    kind: Cluster
+    name: monitored-cluster
+  storage:
+    type: s3
+    bucket: neo4j-backups
+    path: daily/
+  schedule: "0 2 * * *"  # Daily at 2 AM
+  retention:
+    maxAge: "30d"
+    maxCount: 30
+  options:
+    compress: true
+    backupType: FULL
 ```
 
 ### Cluster with LoadBalancer Service
@@ -372,15 +584,15 @@ metadata:
 spec:
   edition: enterprise
   image:
-    repository: neo4j
+    repo: neo4j
     tag: "5.26.0-enterprise"
   topology:
-    servers: 5  # 5 servers will self-organize into primary/secondary roles
+    servers: 5  # Creates public-cluster-server StatefulSet with 5 replicas
   storage:
+    className: standard
     size: 20Gi
   auth:
-    provider: secrets
-    secret: neo4j-auth
+    adminSecret: neo4j-admin-secret
   # LoadBalancer service configuration
   service:
     type: LoadBalancer
@@ -404,15 +616,15 @@ metadata:
 spec:
   edition: enterprise
   image:
-    repository: neo4j
+    repo: neo4j
     tag: "5.26.0-enterprise"
   topology:
-    servers: 3  # 3 servers will self-organize into primary/secondary roles
+    servers: 3  # Creates ingress-cluster-server StatefulSet
   storage:
+    className: fast-ssd
     size: 20Gi
   auth:
-    provider: secrets
-    secret: neo4j-auth
+    adminSecret: neo4j-admin-secret
   # TLS configuration
   tls:
     mode: cert-manager
@@ -425,11 +637,211 @@ spec:
       enabled: true
       className: nginx
       host: neo4j.example.com
-      tlsEnabled: true
       tlsSecretName: neo4j-tls
       annotations:
         cert-manager.io/cluster-issuer: letsencrypt-prod
         nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
 ```
 
-For more information on configuration best practices, see the [Configuration Best Practices Guide](../user_guide/guides/configuration_best_practices.md).
+## Management Commands
+
+### Basic Operations
+
+```bash
+# Create a cluster
+kubectl apply -f cluster.yaml
+
+# List clusters
+kubectl get neo4jenterprisecluster
+
+# Get cluster details
+kubectl describe neo4jenterprisecluster my-cluster
+
+# Check cluster status
+kubectl get neo4jenterprisecluster my-cluster -o yaml
+
+# Port forward for local access
+kubectl port-forward svc/my-cluster-client 7474:7474 7687:7687
+```
+
+### Cluster Operations
+
+```bash
+# Scale cluster (change server count)
+kubectl patch neo4jenterprisecluster my-cluster -p '{"spec":{"topology":{"servers":5}}}'
+
+# Update Neo4j version
+kubectl patch neo4jenterprisecluster my-cluster -p '{"spec":{"image":{"tag":"5.27.0-enterprise"}}}'
+
+# Check cluster health
+kubectl exec my-cluster-server-0 -- cypher-shell -u neo4j -p password "SHOW SERVERS"
+
+# Monitor server pods
+kubectl get pods -l app=my-cluster
+kubectl logs my-cluster-server-0 -c neo4j
+```
+
+## Usage Patterns
+
+### Multi-Database Architecture
+
+```yaml
+# 1. Create cluster with role-optimized servers
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: multi-db-cluster
+spec:
+  topology:
+    servers: 6
+    serverRoles:
+      - serverIndex: 0
+        modeConstraint: PRIMARY    # Dedicated for write workloads
+      - serverIndex: 1
+        modeConstraint: PRIMARY
+      - serverIndex: 2
+        modeConstraint: SECONDARY  # Dedicated for read workloads
+      - serverIndex: 3
+        modeConstraint: SECONDARY
+      - serverIndex: 4
+        modeConstraint: NONE       # Mixed workloads
+      - serverIndex: 5
+        modeConstraint: NONE
+  # ... other configuration
+
+---
+# 2. Create databases with specific topologies
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jDatabase
+metadata:
+  name: user-database
+spec:
+  clusterRef: multi-db-cluster
+  name: users
+  topology:
+    primaries: 2    # Uses servers 0-1 (PRIMARY constraint)
+    secondaries: 2  # Uses servers 2-3 (SECONDARY constraint)
+
+---
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jDatabase
+metadata:
+  name: analytics-database
+spec:
+  clusterRef: multi-db-cluster
+  name: analytics
+  topology:
+    primaries: 1    # Uses server 4 or 5 (NONE constraint)
+    secondaries: 3  # Uses remaining servers
+```
+
+### Development vs Production
+
+```yaml
+# Development cluster (minimal resources)
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: dev-cluster
+spec:
+  topology:
+    servers: 2  # Minimum for clustering
+  storage:
+    className: standard
+    size: 10Gi
+  resources:
+    requests:
+      cpu: 200m
+      memory: 1Gi
+    limits:
+      cpu: 1
+      memory: 2Gi
+  tls:
+    mode: disabled
+
+---
+# Production cluster (high availability)
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: prod-cluster
+spec:
+  topology:
+    servers: 5
+    placement:
+      topologySpread:
+        enabled: true
+        topologyKey: topology.kubernetes.io/zone
+        maxSkew: 1
+      antiAffinity:
+        enabled: true
+        type: required
+    availabilityZones: [us-east-1a, us-east-1b, us-east-1c]
+    enforceDistribution: true
+  storage:
+    className: fast-ssd
+    size: 100Gi
+  resources:
+    requests:
+      cpu: 2
+      memory: 8Gi
+    limits:
+      cpu: 4
+      memory: 16Gi
+  tls:
+    mode: cert-manager
+    issuerRef:
+      name: ca-cluster-issuer
+      kind: ClusterIssuer
+  auth:
+    passwordPolicy:
+      minLength: 12
+      requireSpecialChars: true
+```
+
+## Best Practices
+
+1. **Resource Planning**: Allocate sufficient memory (≥4Gi) and CPU for Neo4j Enterprise workloads
+2. **High Availability**: Use odd number of servers (3, 5) and distribute across availability zones
+3. **Server Role Optimization**: Use role constraints to optimize server usage for specific workload patterns
+4. **Storage**: Use fast SSD storage classes (`fast-ssd`, `premium-ssd`) for production workloads
+5. **Security**: Always enable TLS and use strong password policies in production
+6. **Monitoring**: Enable query monitoring and centralized logging for performance insights
+7. **Backup Strategy**: Use centralized backup with appropriate retention policies
+8. **Scaling**: Plan for growth - scaling up is easier than scaling down
+
+## Troubleshooting
+
+### Common Issues
+
+```bash
+# Check cluster formation
+kubectl exec my-cluster-server-0 -- cypher-shell -u neo4j -p password "SHOW SERVERS"
+
+# Check pod status
+kubectl get pods -l app=my-cluster
+kubectl describe pod my-cluster-server-0
+
+# Check operator logs
+kubectl logs -n neo4j-operator deployment/neo4j-operator-controller-manager
+
+# Verify split-brain detection
+kubectl get events --field-selector reason=SplitBrainDetected
+```
+
+### Resource Conflicts
+
+```bash
+# Check resource version conflicts
+kubectl get events --field-selector reason=UpdateConflict
+
+# Force reconciliation
+kubectl annotate neo4jenterprisecluster my-cluster \
+  operator.neo4j.com/force-reconcile="$(date)"
+```
+
+For more information:
+- [Configuration Best Practices](../user_guide/guides/configuration_best_practices.md)
+- [Split-Brain Recovery Guide](../user_guide/troubleshooting/split-brain-recovery.md)
+- [Resource Sizing Guide](../user_guide/guides/resource_sizing.md)
+- [Fault Tolerance Guide](../user_guide/guides/fault_tolerance.md)
