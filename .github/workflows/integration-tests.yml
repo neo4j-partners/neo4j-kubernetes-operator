@@ -67,17 +67,38 @@ jobs:
 
         # Pre-pull common Neo4j images used in tests
         NEO4J_VERSION="${{ github.event.inputs.neo4j-version || '5.26-enterprise' }}"
-        echo "Pulling Neo4j image: neo4j:${NEO4J_VERSION}"
-        docker pull neo4j:${NEO4J_VERSION} || {
-          echo "Failed to pull neo4j:${NEO4J_VERSION}, trying fallback versions..."
-          docker pull neo4j:5.26-enterprise || docker pull neo4j:5.26.0-enterprise
-        }
+        echo "Pulling Neo4j images to avoid Docker rate limits during tests..."
 
-        # Load images into Kind cluster
-        echo "Loading images into Kind cluster..."
-        kind load docker-image neo4j:${NEO4J_VERSION} --name neo4j-operator-test || true
-        kind load docker-image neo4j:5.26-enterprise --name neo4j-operator-test || true
-        kind load docker-image neo4j:5.26.0-enterprise --name neo4j-operator-test || true
+        # Pull primary version
+        echo "Pulling Neo4j image: neo4j:${NEO4J_VERSION}"
+        if docker pull neo4j:${NEO4J_VERSION}; then
+          echo "✅ Successfully pulled neo4j:${NEO4J_VERSION}"
+        else
+          echo "❌ Failed to pull neo4j:${NEO4J_VERSION}"
+        fi
+
+        # Pull common fallback versions used in tests
+        for VERSION in "5.26-enterprise" "5.26.0-enterprise" "latest"; do
+          if [ "$VERSION" != "$NEO4J_VERSION" ]; then
+            echo "Pulling fallback version: neo4j:${VERSION}"
+            if docker pull neo4j:${VERSION}; then
+              echo "✅ Successfully pulled neo4j:${VERSION}"
+            else
+              echo "❌ Failed to pull neo4j:${VERSION}"
+            fi
+          fi
+        done
+
+        # Load all available images into Kind cluster
+        echo "Loading pulled images into Kind cluster..."
+        docker images --format "{{.Repository}}:{{.Tag}}" | grep "^neo4j:" | while read image; do
+          echo "Loading ${image} into Kind cluster..."
+          if kind load docker-image "${image}" --name neo4j-operator-test; then
+            echo "✅ Successfully loaded ${image}"
+          else
+            echo "❌ Failed to load ${image}"
+          fi
+        done
 
         echo "Available images in Kind cluster:"
         docker exec neo4j-operator-test-control-plane crictl images | grep neo4j || echo "No Neo4j images found"
