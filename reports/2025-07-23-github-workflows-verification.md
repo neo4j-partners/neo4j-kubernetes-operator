@@ -25,7 +25,7 @@ The GitHub workflows are properly configured to handle the RBAC changes and inte
 Key steps that ensure RBAC is handled:
 1. **Line 58**: `make manifests` - Generates CRDs and RBAC from kubebuilder markers
 2. **Line 59**: `make install` - Installs CRDs to cluster
-3. **Line 81**: `make deploy` - Deploys operator with generated RBAC
+3. **Line 81**: `make deploy` - Deploys operator with generated RBAC (Note: Updated to `make deploy-prod` in 2025-08-25)
 
 The workflow includes:
 - Manual trigger with configurable parameters

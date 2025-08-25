@@ -92,8 +92,7 @@ kubectl port-forward svc/minimal-cluster-client 7474:7474 &
 ### Testing
 ```bash
 # Quick tests (no cluster required)
-make test-unit            # Unit tests only
-make test-webhooks        # Webhook validation tests with envtest
+make test-unit            # Unit tests (includes webhook validation via envtest)
 
 # Test cluster management
 make test-cluster         # Create test cluster (neo4j-operator-test)
@@ -103,7 +102,6 @@ make test-cluster-delete  # Delete test cluster
 
 # Cluster-based tests
 make test-integration     # Integration tests (requires test cluster)
-make test-e2e            # End-to-end tests (requires test cluster)
 
 # Full test suite
 make test                 # Run unit + integration tests
@@ -146,8 +144,8 @@ kubectl get certificate -n neo4j-operator
 # Validate CRDs
 kubectl explain neo4jenterprisecluster.spec
 
-# Test webhook locally
-make webhook-test
+# Webhook validation is included in unit tests
+make test-unit
 
 # Troubleshoot OOM issues
 kubectl describe pod <pod-name> | grep -E "(OOMKilled|Memory|Exit.*137)"
@@ -229,7 +227,6 @@ See detailed implementation: `/reports/2025-08-19-server-based-architecture-impl
 **Test Suite** (Ginkgo/Gomega):
 - Unit Tests: `make test-unit` (run before commits)
 - Integration Tests: `make test-integration` (requires cluster)
-- E2E Tests: `make test-e2e`
 
 **Key Notes**:
 - Kind clusters only (no minikube/k3s)

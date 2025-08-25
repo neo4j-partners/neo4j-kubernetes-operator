@@ -251,7 +251,7 @@ var (
    make test-integration FOCUS="conflict handling"
 
    # Load test with concurrent updates
-   make test-e2e FOCUS="scale"
+   make test-integration FOCUS="scale"
    ```
 
 2. **Rollback Plan**

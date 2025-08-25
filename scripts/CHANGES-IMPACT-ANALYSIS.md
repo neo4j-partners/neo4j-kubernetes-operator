@@ -69,7 +69,7 @@ make test-integration   # Integration tests (with test cluster)
 - `make test-cluster` - Unchanged
 - `make test-integration` - Unchanged
 - `make install` - Unchanged (used by CI)
-- `make deploy` - Unchanged
+- `make deploy-prod/deploy-dev` - Updated to require explicit mode selection
 
 **New Targets**:
 - `make operator-setup-interactive` - New interactive mode

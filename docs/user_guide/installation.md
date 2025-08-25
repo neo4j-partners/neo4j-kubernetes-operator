@@ -138,7 +138,6 @@ After cloning the repository, you have access to these make targets:
 | `make operator-setup` | Deploy operator to existing cluster |
 | `make test-unit` | Run unit tests |
 | `make test-integration` | Run integration tests |
-| `make test-e2e` | Run end-to-end tests |
 
 ### Code Quality
 | Target | Description |
