@@ -850,10 +850,10 @@ curl http://localhost:6060/debug/pprof/heap > heap.prof && go tool pprof heap.pr
 
 ### Port Reference
 
-| Mode | Metrics | Health | pprof | Webhook |
-|------|---------|--------|-------|---------|
-| **Production** | 8080 | 8081 | - | 9443 |
-| **Development** | 8082 | 8083 | 6060 | 9443 |
+| Mode | Metrics | Health | pprof |
+|------|---------|-----------|-------|
+| **Production** | 8080 | 8081 | - |
+| **Development** | 8082 | 8083 | 6060 |
 
 ### Cache Strategy Selection Flow
 

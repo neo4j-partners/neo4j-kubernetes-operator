@@ -112,11 +112,11 @@ Production Environment?
 
 ## Port Reference
 
-| Environment | Metrics | Health | pprof | Webhook |
-|-------------|---------|--------|-------|---------|
-| **Production** | 8080 | 8081 | - | 9443 |
-| **Development** | 8082 | 8083 | 6060 | 9443 |
-| **Local** | Custom | Custom | 6060 | - |
+| Environment | Metrics | Health | pprof |
+|-------------|---------|-----------|-------|
+| **Production** | 8080 | 8081 | - |
+| **Development** | 8082 | 8083 | 6060 |
+| **Local** | Custom | Custom | 6060 |
 
 ## Environment Variables
 

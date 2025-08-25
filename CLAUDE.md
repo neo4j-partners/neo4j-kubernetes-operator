@@ -92,7 +92,7 @@ kubectl port-forward svc/minimal-cluster-client 7474:7474 &
 ### Testing
 ```bash
 # Quick tests (no cluster required)
-make test-unit            # Unit tests (includes webhook validation via envtest)
+make test-unit            # Unit tests only
 
 # Test cluster management
 make test-cluster         # Create test cluster (neo4j-operator-test)
@@ -138,14 +138,8 @@ make security            # Run gosec security scan
 # View operator logs
 kubectl logs -n neo4j-operator deployment/neo4j-operator-controller-manager
 
-# Check webhook certificates
-kubectl get certificate -n neo4j-operator
-
 # Validate CRDs
 kubectl explain neo4jenterprisecluster.spec
-
-# Webhook validation is included in unit tests
-make test-unit
 
 # Troubleshoot OOM issues
 kubectl describe pod <pod-name> | grep -E "(OOMKilled|Memory|Exit.*137)"
@@ -230,7 +224,7 @@ See detailed implementation: `/reports/2025-08-19-server-based-architecture-impl
 
 **Key Notes**:
 - Kind clusters only (no minikube/k3s)
-- Webhooks require cert-manager
+- TLS features require cert-manager
 - Use envtest for controller unit tests
 - Neo4j client uses Bolt protocol
 - Integration tests use 300-second timeouts for CI compatibility

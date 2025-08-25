@@ -402,7 +402,7 @@ spec:
                 value: "neo4j://dr-cluster-client:7687"
               - name: RESTORE_TIMESTAMP
                 value: "2025-01-20T14:30:00Z"
-              - name: NOTIFICATION_WEBHOOK
+              - name: NOTIFICATION_URL
                 value: "https://alerts.company.com/dr-restore"
         timeout: "45m"
 
