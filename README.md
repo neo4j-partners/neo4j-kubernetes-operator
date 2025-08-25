@@ -8,6 +8,24 @@ The Neo4j Enterprise Operator for Kubernetes provides a complete solution for de
 
 > ⚠️ **ALPHA SOFTWARE WARNING**: This operator is currently in **alpha stage**. There may be breaking changes at any time due to ongoing development. For production use or evaluation, please use the [latest alpha release](https://github.com/neo4j-labs/neo4j-kubernetes-operator/releases/latest) rather than the main branch code.
 
+## 📑 Table of Contents
+
+- [Requirements](#-requirements)
+- [Quick Start](#-quick-start)
+  - [Installation](#installation)
+  - [Cleanup](#cleanup)
+  - [Development Installation](#development-installation)
+- [Database Management](#-database-management)
+- [Backup and Restore](#-backup-and-restore)
+- [Examples](#-examples)
+- [Authentication](#-authentication)
+- [Documentation Structure](#-documentation-structure)
+- [Key Features](#-key-features)
+- [Common Use Cases](#️-common-use-cases)
+- [Recent Improvements](#-recent-improvements)
+- [Contributing](#-contributing)
+- [Support & Community](#-support--community)
+
 ## 📋 Requirements
 
 - **Neo4j**: Version 5.26 or higher (supports both SemVer 5.x and CalVer 2025.x formats)
@@ -19,7 +37,7 @@ The Neo4j Enterprise Operator for Kubernetes provides a complete solution for de
 
 ### Installation
 
-Since this is a private repository, installation requires cloning from source:
+Installation requires cloning from source:
 
 1. **Clone the repository** and checkout the latest tag:
    ```bash
@@ -77,6 +95,17 @@ Since this is a private repository, installation requires cloning from source:
    ```
 
    Open <http://localhost:7474> in your browser.
+
+6. **Verify your installation** (Optional):
+
+   ```bash
+   # Run unit tests
+   make test-unit
+
+   # Create test cluster and run integration tests
+   make test-cluster
+   make test-integration
+   ```
 
 ## 📊 Database Management
 
@@ -138,17 +167,6 @@ kubectl apply -f examples/backup-restore/restore-from-backup.yaml
 - [Point-in-time recovery setup](examples/backup-restore/pitr-setup-complete.yaml)
 - [Incremental backups](examples/backup/backup-incremental.yaml)
 - [Backup with specific types](examples/backup/backup-with-type.yaml)
-
-6. **Run tests** to verify installation:
-
-   ```bash
-   # Run unit tests
-   make test-unit
-
-   # Create test cluster and run integration tests
-   make test-cluster
-   make test-integration
-   ```
 
 ### Cleanup
 
@@ -424,15 +442,13 @@ make operator-setup
 - `make operator-setup` - Deploy operator in-cluster (recommended)
 - `make test-unit` - Run unit tests
 - `make test-integration` - Run integration tests
-- `make test-e2e` - Run end-to-end tests
-- `make test-ci-local` - Emulate CI workflow with debug logging (Added 2025-08-22)
+- `make test-ci-local` - Emulate CI workflow with debug logging
 
 **Operator Installation**:
 
 - `make install` - Install CRDs
 - `make deploy-prod` - Deploy with production config
-- `make deploy-dev` - Deploy with dev config
-- `make deploy-prod` - Deploy with production config
+- `make deploy-dev` - Deploy with development config
 - `make undeploy-prod/undeploy-dev` - Remove operator deployment
 - `make uninstall` - Remove CRDs
 
