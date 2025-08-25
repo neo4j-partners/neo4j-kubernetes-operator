@@ -163,7 +163,7 @@ test-integration-ci: ## Run integration tests in CI (assumes cluster already exi
 	fi
 	@echo "Using KUBECONFIG: $$KUBECONFIG"
 	@echo "📊 Running with enhanced progress output..."
-	@KUBECONFIG="$$KUBECONFIG" go test ./test/integration/... -v -timeout=30m -race -json | tee /tmp/test-output.json | go run github.com/gotesttools/gotestfmt/v2/cmd/gotestfmt@latest || true
+	@KUBECONFIG="$$KUBECONFIG" go test ./test/integration/... -v -timeout=30m -race -json | tee /tmp/test-output.json | go run github.com/gotesttools/gotestfmt/v2/cmd/gotestfmt@latest
 
 # E2E Tests - Removed to simplify test structure
 

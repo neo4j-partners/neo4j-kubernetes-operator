@@ -66,7 +66,7 @@ jobs:
         echo "Pre-loading Neo4j images to avoid Docker rate limits..."
 
         # Pre-pull common Neo4j images used in tests
-        NEO4J_VERSION="${{ github.event.inputs.neo4j-version || '5.26.0-enterprise' }}"
+        NEO4J_VERSION="${{ github.event.inputs.neo4j-version || '5.26-enterprise' }}"
         echo "Pulling Neo4j image: neo4j:${NEO4J_VERSION}"
         docker pull neo4j:${NEO4J_VERSION} || {
           echo "Failed to pull neo4j:${NEO4J_VERSION}, trying fallback versions..."
