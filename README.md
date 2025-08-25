@@ -37,18 +37,9 @@ Since this is a private repository, installation requires cloning from source:
    # Install CRDs into your cluster
    make install
 
-   # Deploy the operator to your cluster (use explicit mode)
-   make deploy-prod  # or deploy-dev
-   ```
-
-   **Alternative installation methods**:
-   ```bash
-   # Deploy with development configuration
-   make deploy-dev
-
-   # Deploy with production configuration
-   make deploy-prod
-
+   # Deploy the operator (choose mode based on use case)
+   make deploy-prod  # Production deployment (recommended)
+   make deploy-dev   # Development deployment (with debug features)
    ```
 
 3. **Create admin credentials** (Required for authentication):
