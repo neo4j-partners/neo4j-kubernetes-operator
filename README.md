@@ -78,6 +78,67 @@ Since this is a private repository, installation requires cloning from source:
 
    Open <http://localhost:7474> in your browser.
 
+## 📊 Database Management
+
+Once your cluster is running, you can create and manage databases using the Neo4jDatabase CRD:
+
+### Creating Databases
+
+```bash
+# Create a basic database
+kubectl apply -f - <<EOF
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jDatabase
+metadata:
+  name: my-application-db
+spec:
+  clusterRef: minimal-cluster  # Reference to your cluster
+  name: appdb
+  topology:
+    primaries: 1
+    secondaries: 1
+  wait: true
+  ifNotExists: true
+EOF
+```
+
+**More database examples:**
+- [Database with custom topology](examples/database/database-with-topology.yaml)
+- [Database for standalone instance](examples/database/database-standalone.yaml)
+- [Database from S3 backup](examples/databases/database-from-s3-seed.yaml)
+- [Database from existing backup](examples/databases/database-dump-vs-backup-seed.yaml)
+
+## 💾 Backup and Restore
+
+### Setting up Backups
+
+**Simple PVC-based backup:**
+```bash
+kubectl apply -f examples/backup-restore/backup-pvc-simple.yaml
+```
+
+**S3-based backup with scheduling:**
+```bash
+kubectl apply -f examples/backup-restore/backup-s3-basic.yaml
+```
+
+**Scheduled daily backups:**
+```bash
+kubectl apply -f examples/backup-restore/backup-scheduled-daily.yaml
+```
+
+### Restoring from Backup
+
+```bash
+# Restore from a previous backup
+kubectl apply -f examples/backup-restore/restore-from-backup.yaml
+```
+
+**Advanced backup features:**
+- [Point-in-time recovery setup](examples/backup-restore/pitr-setup-complete.yaml)
+- [Incremental backups](examples/backup/backup-incremental.yaml)
+- [Backup with specific types](examples/backup/backup-with-type.yaml)
+
 6. **Run tests** to verify installation:
 
    ```bash
@@ -87,9 +148,6 @@ Since this is a private repository, installation requires cloning from source:
    # Create test cluster and run integration tests
    make test-cluster
    make test-integration
-
-   # Run end-to-end tests (optional)
-   make test-e2e
    ```
 
 ### Cleanup
@@ -97,8 +155,8 @@ Since this is a private repository, installation requires cloning from source:
 To remove the operator from your cluster:
 
 ```bash
-# Remove operator deployment
-make undeploy
+# Remove operator deployment (choose your deployment mode)
+make undeploy-prod  # or undeploy-dev
 
 # Remove CRDs (this will also remove all Neo4j instances)
 make uninstall
