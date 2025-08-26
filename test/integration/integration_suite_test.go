@@ -462,16 +462,17 @@ func getCIAppropriateClusterSize(defaultSize int32) int32 {
 func getCIAppropriateResourceRequirements() *corev1.ResourceRequirements {
 	// Check if running in CI environment
 	if os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
-		// CI environment: Use minimal resources for GitHub Actions runners (2 CPU, 7GB RAM)
-		// Reduced further to account for Kind cluster, operator, and system overhead
+		// CI environment: Ultra-minimal resources for GitHub Actions standard runners
+		// Total available: 2 CPU, 7GB RAM minus system overhead (~2GB) = ~5GB usable
+		// Multiple tests may run concurrently, so keep requests very low
 		return &corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("10m"),   // Ultra-minimal CPU for CI scheduling
-				corev1.ResourceMemory: resource.MustParse("512Mi"), // Reduced memory for CI constraints
+				corev1.ResourceCPU:    resource.MustParse("10m"),   // Minimal CPU for scheduling
+				corev1.ResourceMemory: resource.MustParse("400Mi"), // Low but workable memory request
 			},
 			Limits: corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("100m"), // Allow CPU burst but keep low request
-				corev1.ResourceMemory: resource.MustParse("1Gi"),  // Limit to prevent OOM, but lower than before
+				corev1.ResourceCPU:    resource.MustParse("200m"), // Allow reasonable CPU burst
+				corev1.ResourceMemory: resource.MustParse("1Gi"),  // Reasonable limit for Neo4j Enterprise
 			},
 		}
 	} else {
