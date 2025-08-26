@@ -446,19 +446,32 @@ func getNeo4jImageTag() string {
 	return "5.26-enterprise"
 }
 
+// getCIAppropriateClusterSize returns cluster size optimized for CI resources
+// Uses minimum viable cluster size in CI to reduce resource pressure
+func getCIAppropriateClusterSize(defaultSize int32) int32 {
+	if os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
+		// In CI: Use minimum cluster size (2) to reduce resource usage
+		// Neo4j Enterprise clusters require minimum 2 servers
+		return 2
+	}
+	// Local/development: Use the requested size
+	return defaultSize
+}
+
 // Uses minimal resources while respecting Neo4j Enterprise's 1Gi memory minimum requirement
 func getCIAppropriateResourceRequirements() *corev1.ResourceRequirements {
 	// Check if running in CI environment
 	if os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
-		// CI environment: Use minimal resources that still meet Neo4j Enterprise requirements
-		// CRITICAL: Neo4j Enterprise requires minimum 1Gi memory limit for validation to pass
+		// CI environment: Use minimal resources for GitHub Actions runners (2 CPU, 7GB RAM)
+		// Reduced further to account for Kind cluster, operator, and system overhead
 		return &corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("50m"), // Minimal CPU for CI scheduling
-				corev1.ResourceMemory: resource.MustParse("1Gi"), // Meet Neo4j Enterprise minimum requirement
+				corev1.ResourceCPU:    resource.MustParse("10m"),   // Ultra-minimal CPU for CI scheduling
+				corev1.ResourceMemory: resource.MustParse("512Mi"), // Reduced memory for CI constraints
 			},
 			Limits: corev1.ResourceList{
-				corev1.ResourceMemory: resource.MustParse("1.5Gi"), // Safe limit above minimum for CI stability
+				corev1.ResourceCPU:    resource.MustParse("100m"), // Allow CPU burst but keep low request
+				corev1.ResourceMemory: resource.MustParse("1Gi"),  // Limit to prevent OOM, but lower than before
 			},
 		}
 	} else {

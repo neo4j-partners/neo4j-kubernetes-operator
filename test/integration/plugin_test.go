@@ -72,7 +72,7 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 						Tag:  getNeo4jImageTag(),
 					},
 					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Servers: 2,
+						Servers: getCIAppropriateClusterSize(2),
 					},
 					Resources: getCIAppropriateResourceRequirements(), // Automatically adjusts for CI vs local environments
 					Storage: neo4jv1alpha1.StorageSpec{
@@ -578,7 +578,7 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 						Tag:  getNeo4jImageTag(),
 					},
 					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Servers: 2,
+						Servers: getCIAppropriateClusterSize(2),
 					},
 					Resources: getCIAppropriateResourceRequirements(), // Automatically adjusts for CI vs local environments
 					Storage: neo4jv1alpha1.StorageSpec{
