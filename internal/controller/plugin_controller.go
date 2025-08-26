@@ -40,6 +40,27 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
+const (
+	// DefaultAdminSecretNamePlugin is the default name for admin credentials secret
+	DefaultAdminSecretNamePlugin = "neo4j-admin-secret"
+)
+
+// getAdminSecretName safely extracts the admin secret name from cluster spec with fallback to default
+func getClusterAdminSecretName(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) string {
+	if cluster.Spec.Auth != nil && cluster.Spec.Auth.AdminSecret != "" {
+		return cluster.Spec.Auth.AdminSecret
+	}
+	return DefaultAdminSecretNamePlugin
+}
+
+// getStandaloneAdminSecretName safely extracts the admin secret name from standalone spec with fallback to default
+func getStandaloneAdminSecretName(standalone *neo4jv1alpha1.Neo4jEnterpriseStandalone) string {
+	if standalone.Spec.Auth != nil && standalone.Spec.Auth.AdminSecret != "" {
+		return standalone.Spec.Auth.AdminSecret
+	}
+	return DefaultAdminSecretNamePlugin
+}
+
 // Neo4jPluginReconciler reconciles a Neo4jPlugin object
 type Neo4jPluginReconciler struct {
 	client.Client
@@ -222,10 +243,10 @@ func (r *Neo4jPluginReconciler) installPlugin(ctx context.Context, plugin *neo4j
 
 	if deployment.Type == "cluster" {
 		cluster := deployment.Object.(*neo4jv1alpha1.Neo4jEnterpriseCluster)
-		neo4jClient, err = neo4jclient.NewClientForEnterprise(cluster, r.Client, cluster.Spec.Auth.AdminSecret)
+		neo4jClient, err = neo4jclient.NewClientForEnterprise(cluster, r.Client, getClusterAdminSecretName(cluster))
 	} else {
 		standalone := deployment.Object.(*neo4jv1alpha1.Neo4jEnterpriseStandalone)
-		neo4jClient, err = neo4jclient.NewClientForEnterpriseStandalone(standalone, r.Client, standalone.Spec.Auth.AdminSecret)
+		neo4jClient, err = neo4jclient.NewClientForEnterpriseStandalone(standalone, r.Client, getStandaloneAdminSecretName(standalone))
 	}
 
 	if err != nil {
@@ -833,10 +854,10 @@ func (r *Neo4jPluginReconciler) configurePlugin(ctx context.Context, plugin *neo
 
 	if deployment.Type == "cluster" {
 		cluster := deployment.Object.(*neo4jv1alpha1.Neo4jEnterpriseCluster)
-		neo4jClient, err = neo4jclient.NewClientForEnterprise(cluster, r.Client, cluster.Spec.Auth.AdminSecret)
+		neo4jClient, err = neo4jclient.NewClientForEnterprise(cluster, r.Client, getClusterAdminSecretName(cluster))
 	} else {
 		standalone := deployment.Object.(*neo4jv1alpha1.Neo4jEnterpriseStandalone)
-		neo4jClient, err = neo4jclient.NewClientForEnterpriseStandalone(standalone, r.Client, standalone.Spec.Auth.AdminSecret)
+		neo4jClient, err = neo4jclient.NewClientForEnterpriseStandalone(standalone, r.Client, getStandaloneAdminSecretName(standalone))
 	}
 
 	if err != nil {
@@ -1224,7 +1245,7 @@ func (r *Neo4jPluginReconciler) isDeploymentFunctional(ctx context.Context, depl
 	// For clusters, try to connect and verify cluster formation
 	if deployment.Type == "cluster" {
 		cluster := deployment.Object.(*neo4jv1alpha1.Neo4jEnterpriseCluster)
-		neo4jClient, err := neo4jclient.NewClientForEnterprise(cluster, r.Client, cluster.Spec.Auth.AdminSecret)
+		neo4jClient, err := neo4jclient.NewClientForEnterprise(cluster, r.Client, getClusterAdminSecretName(cluster))
 		if err != nil {
 			logger.Info("Cannot create Neo4j client", "error", err)
 			return false
@@ -1252,7 +1273,7 @@ func (r *Neo4jPluginReconciler) isDeploymentFunctional(ctx context.Context, depl
 	// For standalone, just check basic connectivity
 	if deployment.Type == "standalone" {
 		standalone := deployment.Object.(*neo4jv1alpha1.Neo4jEnterpriseStandalone)
-		neo4jClient, err := neo4jclient.NewClientForEnterpriseStandalone(standalone, r.Client, standalone.Spec.Auth.AdminSecret)
+		neo4jClient, err := neo4jclient.NewClientForEnterpriseStandalone(standalone, r.Client, getStandaloneAdminSecretName(standalone))
 		if err != nil {
 			logger.Info("Cannot create Neo4j standalone client", "error", err)
 			return false
@@ -1507,10 +1528,10 @@ func (r *Neo4jPluginReconciler) applyAPOCSecurityConfiguration(ctx context.Conte
 
 		if deployment.Type == "cluster" {
 			cluster := deployment.Object.(*neo4jv1alpha1.Neo4jEnterpriseCluster)
-			neo4jClient, err = neo4jclient.NewClientForEnterprise(cluster, r.Client, cluster.Spec.Auth.AdminSecret)
+			neo4jClient, err = neo4jclient.NewClientForEnterprise(cluster, r.Client, getClusterAdminSecretName(cluster))
 		} else {
 			standalone := deployment.Object.(*neo4jv1alpha1.Neo4jEnterpriseStandalone)
-			neo4jClient, err = neo4jclient.NewClientForEnterpriseStandalone(standalone, r.Client, standalone.Spec.Auth.AdminSecret)
+			neo4jClient, err = neo4jclient.NewClientForEnterpriseStandalone(standalone, r.Client, getStandaloneAdminSecretName(standalone))
 		}
 
 		if err != nil {
