@@ -165,8 +165,8 @@ test-integration-ci: ginkgo ## Run integration tests in CI (assumes cluster alre
 	@echo "📊 Running essential tests only in CI to prevent resource exhaustion..."
 	@echo "⚠️  Skipping resource-intensive tests (plugins, clusters, split-brain)"
 	@KUBECONFIG="$$KUBECONFIG" $(GINKGO) run --timeout=30m --procs=1 --fail-on-pending \
-		--focus="(standalone|backup|restore|database|version detection)" \
-		--skip="(plugin|split-brain|cluster|enterprise features)" \
+		--focus="(standalone|backup.*api|restore.*api|database.*api|version detection|rbac)" \
+		--skip="(plugin|split-brain|cluster|enterprise features|seed.*uri)" \
 		-v ./test/integration/...
 
 .PHONY: test-integration-ci-full

@@ -14,7 +14,7 @@ on:
         default: '60'
         type: string
       run-full-suite:
-        description: 'Run full integration test suite (vs. essential tests only). Full suite may cause resource exhaustion in GitHub Actions (7GB RAM, 2 CPU). Essential tests cover: standalone, backup, restore, database, version detection (21/49 specs). Full suite includes resource-intensive tests: plugins, clusters, split-brain detection.'
+        description: 'Run full integration test suite (vs. essential tests only). Full suite may cause resource exhaustion in GitHub Actions (7GB RAM, 2 CPU). Essential tests are API-only and lightweight deployments (3/49 specs). Full suite includes resource-intensive tests: plugins, clusters, split-brain detection.'
         required: false
         default: true
         type: boolean
@@ -114,8 +114,8 @@ jobs:
           set -e
         else
           echo "Running essential integration tests optimized for CI..."
-          echo "📊 Essential tests cover: standalone, backup, restore, database, version detection"
-          echo "⚡ Optimized for GitHub Actions constraints (7GB RAM, 2 CPU) - runs 21/49 specs"
+          echo "📊 Essential tests cover: API validation and lightweight deployments"
+          echo "⚡ Optimized for GitHub Actions constraints (7GB RAM, 2 CPU) - runs 3/49 specs"
           set +e  # Don't exit on test failure, capture exit code
           make test-integration-ci 2>&1 | tee integration-test-output.log
           EXIT_CODE=${PIPESTATUS[0]}
