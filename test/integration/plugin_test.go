@@ -260,7 +260,7 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 					return ""
 				}
 				return currentStandalone.Status.Phase
-			}, timeout, interval).Should(Equal("Ready"))
+			}, timeout, interval).Should(Equal("Running"))
 
 			By("Verifying standalone StatefulSet exists with correct name")
 			standaloneSts := &appsv1.StatefulSet{}
@@ -429,7 +429,7 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 					return ""
 				}
 				return currentStandalone.Status.Phase
-			}, timeout, interval).Should(Equal("Ready"))
+			}, timeout, interval).Should(Equal("Running"))
 
 			By("Creating Bloom plugin with neo4j.conf configuration")
 			plugin := &neo4jv1alpha1.Neo4jPlugin{
