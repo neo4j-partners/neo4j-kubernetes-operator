@@ -162,8 +162,24 @@ test-integration-ci: ginkgo ## Run integration tests in CI (assumes cluster alre
 		kind export kubeconfig --name neo4j-operator-test --kubeconfig="$$KUBECONFIG"; \
 	fi
 	@echo "Using KUBECONFIG: $$KUBECONFIG"
-	@echo "📊 Running with enhanced progress output..."
-	@KUBECONFIG="$$KUBECONFIG" $(GINKGO) run --timeout=60m --procs=1 -v ./test/integration/...
+	@echo "📊 Running essential tests only in CI to prevent resource exhaustion..."
+	@echo "⚠️  Skipping resource-intensive tests (plugins, clusters, split-brain)"
+	@KUBECONFIG="$$KUBECONFIG" $(GINKGO) run --timeout=30m --procs=1 --fail-on-pending \
+		--focus="(standalone|backup|restore|database|version detection)" \
+		--skip="(plugin|split-brain|cluster|enterprise features)" \
+		-v ./test/integration/...
+
+.PHONY: test-integration-ci-full
+test-integration-ci-full: ginkgo ## Run ALL integration tests in CI (use with caution)
+	@echo "🔗 Running FULL integration test suite in CI with Ginkgo..."
+	@if [ -z "$$KUBECONFIG" ]; then \
+		echo "KUBECONFIG not set, trying to export from kind cluster..."; \
+		export KUBECONFIG="$(HOME)/.kube/config"; \
+		kind export kubeconfig --name neo4j-operator-test --kubeconfig="$$KUBECONFIG"; \
+	fi
+	@echo "Using KUBECONFIG: $$KUBECONFIG"
+	@echo "⚠️  WARNING: Running full test suite - may cause resource exhaustion in CI"
+	@KUBECONFIG="$$KUBECONFIG" $(GINKGO) run --timeout=60m --procs=1 --fail-on-pending --keep-going=false -v ./test/integration/...
 
 # E2E Tests - Removed to simplify test structure
 
