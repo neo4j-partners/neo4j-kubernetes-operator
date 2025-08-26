@@ -154,8 +154,8 @@ test-integration: test-cluster ## Run integration tests
 		go test ./test/integration/... -v -timeout=60m
 
 .PHONY: test-integration-ci
-test-integration-ci: ## Run integration tests in CI (assumes cluster already exists)
-	@echo "🔗 Running integration tests in CI..."
+test-integration-ci: ginkgo ## Run integration tests in CI (assumes cluster already exists)
+	@echo "🔗 Running integration tests in CI with Ginkgo..."
 	@if [ -z "$$KUBECONFIG" ]; then \
 		echo "KUBECONFIG not set, trying to export from kind cluster..."; \
 		export KUBECONFIG="$(HOME)/.kube/config"; \
@@ -163,7 +163,7 @@ test-integration-ci: ## Run integration tests in CI (assumes cluster already exi
 	fi
 	@echo "Using KUBECONFIG: $$KUBECONFIG"
 	@echo "📊 Running with enhanced progress output..."
-	@KUBECONFIG="$$KUBECONFIG" go test ./test/integration/... -v -timeout=60m -json -ginkgo.p=false | tee /tmp/test-output.json | go run github.com/gotesttools/gotestfmt/v2/cmd/gotestfmt@latest
+	@KUBECONFIG="$$KUBECONFIG" $(GINKGO) run --timeout=60m --procs=1 -v ./test/integration/...
 
 # E2E Tests - Removed to simplify test structure
 
@@ -333,12 +333,14 @@ KUSTOMIZE ?= $(LOCALBIN)/kustomize
 CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
 GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
+GINKGO = $(LOCALBIN)/ginkgo
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.4.3
 CONTROLLER_TOOLS_VERSION ?= v0.16.1
 ENVTEST_VERSION ?= release-0.19
 GOLANGCI_LINT_VERSION ?= v1.64.8
+GINKGO_VERSION ?= v2.23.4
 
 .PHONY: kustomize
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
@@ -359,6 +361,11 @@ $(ENVTEST): $(LOCALBIN)
 golangci-lint: $(GOLANGCI_LINT) ## Download golangci-lint locally if necessary.
 $(GOLANGCI_LINT): $(LOCALBIN)
 	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint,$(GOLANGCI_LINT_VERSION))
+
+.PHONY: ginkgo
+ginkgo: $(GINKGO) ## Download ginkgo locally if necessary.
+$(GINKGO): $(LOCALBIN)
+	$(call go-install-tool,$(GINKGO),github.com/onsi/ginkgo/v2/ginkgo,$(GINKGO_VERSION))
 
 # go-install-tool will 'go install' any package with custom target and name of binary, if it doesn't exist
 # $1 - target path with name of binary
