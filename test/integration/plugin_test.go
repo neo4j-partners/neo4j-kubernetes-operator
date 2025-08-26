@@ -69,7 +69,7 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 					Image: neo4jv1alpha1.ImageSpec{
 						Repo: "neo4j",
-						Tag:  "5.26-enterprise",
+						Tag:  getNeo4jImageTag(),
 					},
 					Topology: neo4jv1alpha1.TopologyConfiguration{
 						Servers: 2,
@@ -238,7 +238,7 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 				Spec: neo4jv1alpha1.Neo4jEnterpriseStandaloneSpec{
 					Image: neo4jv1alpha1.ImageSpec{
 						Repo: "neo4j",
-						Tag:  "5.26-enterprise",
+						Tag:  getNeo4jImageTag(),
 					},
 					Resources: getCIAppropriateResourceRequirements(), // Automatically adjusts for CI vs local environments
 					Storage: neo4jv1alpha1.StorageSpec{
@@ -407,7 +407,7 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 				Spec: neo4jv1alpha1.Neo4jEnterpriseStandaloneSpec{
 					Image: neo4jv1alpha1.ImageSpec{
 						Repo: "neo4j",
-						Tag:  "5.26-enterprise",
+						Tag:  getNeo4jImageTag(),
 					},
 					Resources: getCIAppropriateResourceRequirements(),
 					Storage: neo4jv1alpha1.StorageSpec{
@@ -575,7 +575,7 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 					Image: neo4jv1alpha1.ImageSpec{
 						Repo: "neo4j",
-						Tag:  "5.26-enterprise",
+						Tag:  getNeo4jImageTag(),
 					},
 					Topology: neo4jv1alpha1.TopologyConfiguration{
 						Servers: 2,

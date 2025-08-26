@@ -63,45 +63,37 @@ jobs:
 
     - name: Pre-load Neo4j images to avoid Docker rate limits
       run: |
-        echo "Pre-loading Neo4j images to avoid Docker rate limits..."
+        echo "Pre-loading Neo4j image to avoid Docker rate limits..."
 
-        # Pre-pull common Neo4j images used in tests
+        # Define the Neo4j version to use for all tests
         NEO4J_VERSION="${{ github.event.inputs.neo4j-version || '5.26-enterprise' }}"
-        echo "Pulling Neo4j images to avoid Docker rate limits during tests..."
+        echo "Neo4j version for tests: ${NEO4J_VERSION}"
 
-        # Pull primary version
+        # Pull the specific Neo4j image
         echo "Pulling Neo4j image: neo4j:${NEO4J_VERSION}"
-        if docker pull neo4j:${NEO4J_VERSION}; then
-          echo "✅ Successfully pulled neo4j:${NEO4J_VERSION}"
-        else
-          echo "❌ Failed to pull neo4j:${NEO4J_VERSION}"
+        if ! docker pull neo4j:${NEO4J_VERSION}; then
+          echo "❌ ERROR: Failed to pull neo4j:${NEO4J_VERSION}"
+          echo "This image is required for integration tests to run."
+          exit 1
         fi
+        echo "✅ Successfully pulled neo4j:${NEO4J_VERSION}"
 
-        # Pull common fallback versions used in tests
-        for VERSION in "5.26-enterprise" "latest"; do
-          if [ "$VERSION" != "$NEO4J_VERSION" ]; then
-            echo "Pulling fallback version: neo4j:${VERSION}"
-            if docker pull neo4j:${VERSION}; then
-              echo "✅ Successfully pulled neo4j:${VERSION}"
-            else
-              echo "❌ Failed to pull neo4j:${VERSION}"
-            fi
-          fi
-        done
+        # Load the image into Kind cluster
+        echo "Loading neo4j:${NEO4J_VERSION} into Kind cluster..."
+        if ! kind load docker-image neo4j:${NEO4J_VERSION} --name neo4j-operator-test; then
+          echo "❌ ERROR: Failed to load image into Kind cluster"
+          exit 1
+        fi
+        echo "✅ Successfully loaded neo4j:${NEO4J_VERSION} into Kind"
 
-        # Load all available images into Kind cluster
-        echo "Loading pulled images into Kind cluster..."
-        docker images --format "{{.Repository}}:{{.Tag}}" | grep "^neo4j:" | while read image; do
-          echo "Loading ${image} into Kind cluster..."
-          if kind load docker-image "${image}" --name neo4j-operator-test; then
-            echo "✅ Successfully loaded ${image}"
-          else
-            echo "❌ Failed to load ${image}"
-          fi
-        done
-
-        echo "Available images in Kind cluster:"
-        docker exec neo4j-operator-test-control-plane crictl images | grep neo4j || echo "No Neo4j images found"
+        # Verify the image is available in the cluster
+        echo "Verifying image availability in Kind cluster:"
+        if docker exec neo4j-operator-test-control-plane crictl images | grep -q "neo4j.*${NEO4J_VERSION}"; then
+          echo "✅ Image neo4j:${NEO4J_VERSION} is available in Kind cluster"
+        else
+          echo "⚠️ Warning: Could not verify image in Kind cluster"
+          docker exec neo4j-operator-test-control-plane crictl images | grep neo4j || echo "No Neo4j images found"
+        fi
 
     - name: Run integration tests
       run: |

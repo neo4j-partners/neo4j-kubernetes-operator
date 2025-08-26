@@ -70,7 +70,7 @@ var _ = Describe("Backup RBAC Automatic Creation", func() {
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 					Image: neo4jv1alpha1.ImageSpec{
 						Repo: "neo4j",
-						Tag:  "5.26-enterprise",
+						Tag:  getNeo4jImageTag(),
 					},
 					Topology: neo4jv1alpha1.TopologyConfiguration{
 						Servers: 2,

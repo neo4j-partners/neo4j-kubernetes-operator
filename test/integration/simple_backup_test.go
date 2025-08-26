@@ -91,7 +91,7 @@ var _ = Describe("Simple Backup Test", func() {
 					Edition: "enterprise",
 					Image: neo4jv1alpha1.ImageSpec{
 						Repo: "neo4j",
-						Tag:  "5.26-enterprise",
+						Tag:  getNeo4jImageTag(),
 					},
 					Topology: neo4jv1alpha1.TopologyConfiguration{
 						Servers: 2, // 1 + 1 total servers

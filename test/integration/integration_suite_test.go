@@ -437,6 +437,15 @@ func createBasicStandalone(name, namespace string) *neo4jv1alpha1.Neo4jEnterpris
 }
 
 // getCIAppropriateResourceRequirements returns resource requirements optimized for CI environments
+// getNeo4jImageTag returns the Neo4j image tag to use for tests
+// It uses NEO4J_VERSION environment variable if set, otherwise defaults to 5.26-enterprise
+func getNeo4jImageTag() string {
+	if tag := os.Getenv("NEO4J_VERSION"); tag != "" {
+		return tag
+	}
+	return "5.26-enterprise"
+}
+
 // Uses minimal resources while respecting Neo4j Enterprise's 1Gi memory minimum requirement
 func getCIAppropriateResourceRequirements() *corev1.ResourceRequirements {
 	// Check if running in CI environment
