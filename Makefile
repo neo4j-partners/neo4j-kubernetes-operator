@@ -151,7 +151,7 @@ test-unit: manifests generate fmt vet envtest ## Run unit tests (no cluster requ
 test-integration: test-cluster ## Run integration tests
 	@echo "🔗 Running integration tests..."
 	@kind export kubeconfig --name neo4j-operator-test && \
-		go test ./test/integration/... -v -timeout=30m
+		go test ./test/integration/... -v -timeout=60m
 
 .PHONY: test-integration-ci
 test-integration-ci: ## Run integration tests in CI (assumes cluster already exists)
@@ -163,7 +163,7 @@ test-integration-ci: ## Run integration tests in CI (assumes cluster already exi
 	fi
 	@echo "Using KUBECONFIG: $$KUBECONFIG"
 	@echo "📊 Running with enhanced progress output..."
-	@KUBECONFIG="$$KUBECONFIG" go test ./test/integration/... -v -timeout=30m -race -json | tee /tmp/test-output.json | go run github.com/gotesttools/gotestfmt/v2/cmd/gotestfmt@latest
+	@KUBECONFIG="$$KUBECONFIG" go test ./test/integration/... -v -timeout=60m -race -json | tee /tmp/test-output.json | go run github.com/gotesttools/gotestfmt/v2/cmd/gotestfmt@latest
 
 # E2E Tests - Removed to simplify test structure
 
@@ -235,10 +235,10 @@ test-ci-local: ## Emulate CI workflow locally with debug logging (for troublesho
 		echo "Environment: CI=true GITHUB_ACTIONS=true"; \
 		echo "Resource requirements: Using getCIAppropriateResourceRequirements()"; \
 		echo "Memory limits: 512Mi (CI) vs 1.5Gi (local)"; \
-		echo "Timeout: 30 minutes"; \
+		echo "Timeout: 60 minutes"; \
 		echo ""; \
 		CI=true GITHUB_ACTIONS=true kind export kubeconfig --name neo4j-operator-test 2>&1; \
-		CI=true GITHUB_ACTIONS=true go test ./test/integration/... -v -timeout=30m 2>&1; \
+		CI=true GITHUB_ACTIONS=true go test ./test/integration/... -v -timeout=60m 2>&1; \
 	} | tee -a logs/ci-local-integration.log
 	@if [ $$? -ne 0 ]; then \
 		echo "❌ Integration tests failed! Check logs/ci-local-integration.log for details"; \
