@@ -56,6 +56,25 @@ var _ = Describe("Split-Brain Detection Integration Tests", func() {
 		Expect(k8sClient.Create(ctx, adminSecret)).To(Succeed())
 	})
 
+	AfterEach(func() {
+		// Critical: Clean up resources immediately to prevent CI resource exhaustion
+		if cluster != nil {
+			By("Cleaning up cluster in split-brain test AfterEach")
+			// Remove finalizers first
+			if len(cluster.GetFinalizers()) > 0 {
+				cluster.SetFinalizers([]string{})
+				_ = k8sClient.Update(ctx, cluster)
+			}
+			// Delete the resource
+			_ = k8sClient.Delete(ctx, cluster)
+			cluster = nil
+		}
+		// Clean up any remaining resources in namespace
+		if testNamespace != "" {
+			cleanupCustomResourcesInNamespace(testNamespace)
+		}
+	})
+
 	Context("When cluster experiences split-brain during startup", func() {
 		It("should detect and repair split-brain automatically", func() {
 			By("Creating a 3-server cluster that may experience split-brain")
@@ -187,6 +206,15 @@ var _ = Describe("Split-Brain Detection Integration Tests", func() {
 				}
 				return runningCount
 			}, timeout, interval).Should(Equal(3), "All 3 server pods should be running")
+
+			By("Immediately cleaning up cluster to prevent CI resource exhaustion")
+			if cluster != nil {
+				err := k8sClient.Delete(ctx, cluster)
+				if err == nil {
+					// Wait briefly for deletion to start
+					time.Sleep(time.Second * 5)
+				}
+			}
 		})
 	})
 

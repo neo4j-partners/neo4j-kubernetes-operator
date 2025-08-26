@@ -130,10 +130,16 @@ var _ = BeforeSuite(func() {
 
 	isSetup = true
 	By("Integration test setup completed successfully")
+
+	// Monitor initial resource state
+	monitorResourceUsage("BEFORESUITE_END")
 })
 
 var _ = AfterSuite(func() {
 	By("Cleaning up test environment")
+
+	// Monitor resource usage before cleanup
+	monitorResourceUsage("AFTERSUITE_START")
 
 	// Cancel context
 	if cancel != nil {
@@ -142,6 +148,9 @@ var _ = AfterSuite(func() {
 
 	// Clean up test namespaces
 	cleanupTestNamespaces()
+
+	// Monitor final resource state
+	monitorResourceUsage("AFTERSUITE_END")
 
 	By("Test environment cleanup completed")
 })
@@ -343,6 +352,49 @@ func isCRDAvailable(crdName string) bool {
 	return false
 }
 
+// monitorResourceUsage logs current cluster resource usage for debugging
+func monitorResourceUsage(context string) {
+	if os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
+		By(fmt.Sprintf("=== RESOURCE MONITOR: %s ===", context))
+
+		// Count all pods
+		podList := &corev1.PodList{}
+		err := k8sClient.List(ctx, podList, &client.ListOptions{})
+		if err == nil {
+			runningPods := 0
+			pendingPods := 0
+			for _, pod := range podList.Items {
+				switch pod.Status.Phase {
+				case corev1.PodRunning:
+					runningPods++
+				case corev1.PodPending:
+					pendingPods++
+					// Log pending pod details for troubleshooting
+					for _, condition := range pod.Status.Conditions {
+						if condition.Type == corev1.PodScheduled && condition.Status == corev1.ConditionFalse {
+							By(fmt.Sprintf("UNSCHEDULABLE POD: %s/%s - %s", pod.Namespace, pod.Name, condition.Message))
+						}
+					}
+				}
+			}
+			By(fmt.Sprintf("PODS: %d total, %d running, %d pending", len(podList.Items), runningPods, pendingPods))
+		}
+
+		// Count Neo4j resources
+		clusterList := &neo4jv1alpha1.Neo4jEnterpriseClusterList{}
+		if err := k8sClient.List(ctx, clusterList, &client.ListOptions{}); err == nil {
+			By(fmt.Sprintf("NEO4J CLUSTERS: %d", len(clusterList.Items)))
+		}
+
+		standaloneList := &neo4jv1alpha1.Neo4jEnterpriseStandaloneList{}
+		if err := k8sClient.List(ctx, standaloneList, &client.ListOptions{}); err == nil {
+			By(fmt.Sprintf("NEO4J STANDALONES: %d", len(standaloneList.Items)))
+		}
+
+		By(fmt.Sprintf("=== END RESOURCE MONITOR: %s ===", context))
+	}
+}
+
 // installCRDsIfMissing installs required CRDs using kubectl if any are missing
 func installCRDsIfMissing() {
 	missing := []string{}
@@ -468,11 +520,11 @@ func getCIAppropriateResourceRequirements() *corev1.ResourceRequirements {
 		return &corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{
 				corev1.ResourceCPU:    resource.MustParse("10m"),   // Minimal CPU for scheduling
-				corev1.ResourceMemory: resource.MustParse("400Mi"), // Low but workable memory request
+				corev1.ResourceMemory: resource.MustParse("200Mi"), // Reduced memory request for CI
 			},
 			Limits: corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("200m"), // Allow reasonable CPU burst
-				corev1.ResourceMemory: resource.MustParse("1Gi"),  // Reasonable limit for Neo4j Enterprise
+				corev1.ResourceCPU:    resource.MustParse("100m"),  // Reduced CPU limit for CI
+				corev1.ResourceMemory: resource.MustParse("512Mi"), // Significantly reduced memory limit for CI
 			},
 		}
 	} else {

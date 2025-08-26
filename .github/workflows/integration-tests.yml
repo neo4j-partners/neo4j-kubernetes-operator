@@ -106,14 +106,15 @@ jobs:
 
         if [ "${{ github.event.inputs.run-full-suite }}" == "true" ]; then
           echo "Running full integration test suite with real-time progress..."
+          echo "⚠️ WARNING: Full suite may cause resource exhaustion in CI"
           set +e  # Don't exit on test failure, capture exit code
-          make test-integration-ci 2>&1 | tee integration-test-output.log
+          make test-integration-ci-full 2>&1 | tee integration-test-output.log
           EXIT_CODE=${PIPESTATUS[0]}
           set -e
         else
-          echo "Running basic smoke tests with real-time progress..."
+          echo "Running essential integration tests optimized for CI..."
           set +e  # Don't exit on test failure, capture exit code
-          go test ./test/integration/... -v -timeout=30m -run="TestIntegration" -ginkgo.focus="Basic.*Smoke" 2>&1 | tee integration-test-output.log
+          make test-integration-ci 2>&1 | tee integration-test-output.log
           EXIT_CODE=${PIPESTATUS[0]}
           set -e
         fi

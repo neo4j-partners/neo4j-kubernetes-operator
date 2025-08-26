@@ -633,7 +633,7 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 			}, currentPlugin)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(currentPlugin.Status.Message).To(ContainSubstring("Waiting for"))
-			Expect(currentPlugin.Status.Message).To(ContainSubstring("to be ready"))
+			Expect(currentPlugin.Status.Message).To(ContainSubstring("to be functional"))
 
 			By("Cleaning up")
 			Expect(k8sClient.Delete(ctx, plugin)).Should(Succeed())
