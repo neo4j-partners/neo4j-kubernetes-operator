@@ -6,16 +6,19 @@ This directory contains streamlined GitHub Actions workflows for the Neo4j Kuber
 
 ### 🧪 ci.yml - Main CI Pipeline
 **Triggers:** Push to main/develop, Pull Requests, Manual dispatch
-**Purpose:** Fast CI feedback with unit tests only
+**Purpose:** Fast CI feedback with unit tests + optional integration tests
 
 **Jobs:**
 1. **Unit Tests** - ✅ Always run on all pushes/PRs (fast, no cluster required)
+2. **Integration Tests** - ⏭️ Optional, on-demand only (triggered by PR label, commit message, or manual dispatch)
 
 **Features:**
-- ⚡ Extremely fast feedback - unit tests only
-- 💾 No resource overhead from Kubernetes clusters
-- 🔄 Clean and simple workflow focused on code quality
-- 📊 Clear pass/fail status for essential code validation
+- ⚡ Extremely fast feedback - unit tests always run
+- 🎯 Optional integration tests - run only when needed
+- 🏷️ **PR Label Trigger**: Add `run-integration-tests` label
+- 💬 **Commit Message Trigger**: Include `[run-integration]` in commit message
+- 🖱️ **Manual Trigger**: Use workflow dispatch with integration tests option
+- 📊 Clear guidance when integration tests are skipped
 
 ### 🔬 integration-tests.yml - Integration Tests (On-Demand)
 **Triggers:** Manual dispatch only
@@ -107,13 +110,17 @@ make test-cluster-delete
 
 **Unit Tests (ci.yml):** ✅ Run automatically on every push/PR
 
-**Integration Tests (integration-tests.yml) - On-demand only:**
-- **Manual Trigger**: Actions → "Integration Tests" → "Run workflow"
+**Integration Tests (ci.yml) - Optional:**
+- **PR Label Method**: `gh pr edit --add-label "run-integration-tests"`
+- **Commit Message Method**: `git commit -m "feat: cluster changes [run-integration]"`
+- **Manual Dispatch Method**: Actions → "CI" → "Run workflow" → Check "Run integration tests"
+
+**Extended Integration Tests (integration-tests.yml) - On-demand only:**
+- **Manual Trigger**: Actions → "Extended Integration Tests" → "Run workflow"
 - **Configuration Options**:
   - **Neo4j Version**: Choose Neo4j version (default: `5.26-enterprise`)
-  - **Timeout**: Set test timeout in minutes (default: 60)
-  - **Test Suite**: Choose between full integration tests or smoke tests only
-- **Features**: Complete operator deployment testing with comprehensive logging
+  - **Timeout**: Set test timeout in minutes (default: 90)
+- **Features**: Complete operator deployment testing with custom Neo4j versions
 
 **Release (release.yml):**
 - Push git tag: `git tag v1.0.0 && git push origin v1.0.0`

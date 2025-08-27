@@ -320,20 +320,81 @@ spec:
 
 ### Official Neo4j Plugins
 
-| Plugin | Name | Description | Configuration Method |
-|--------|------|-------------|---------------------|
-| **APOC** | `apoc` | Awesome Procedures on Cypher | Environment Variables |
-| **APOC Extended** | `apoc-extended` | Extended APOC procedures | Environment Variables |
-| **Graph Data Science** | `graph-data-science` | Advanced graph algorithms | Neo4j Config + Security |
-| **Neo4j Streams** | `streams` | Kafka/Pulsar integration | Neo4j Config |
-| **GraphQL** | `graphql` | GraphQL endpoint | Neo4j Config |
+| Plugin | Name | Description | Configuration Method | Automatic Security |
+|--------|------|-------------|---------------------|-------------------|
+| **APOC** | `apoc` | Awesome Procedures on Cypher | Environment Variables | ❌ Manual setup |
+| **APOC Extended** | `apoc-extended` | Extended APOC procedures | Environment Variables | ❌ Manual setup |
+| **Graph Data Science** | `graph-data-science` | Advanced graph algorithms | Neo4j Config + Security | ✅ Auto-configured |
+| **Neo4j Streams** | `streams` | Kafka/Pulsar integration | Neo4j Config | ❌ Manual setup |
+| **GraphQL** | `graphql` | GraphQL endpoint | Neo4j Config | ❌ Manual setup |
 
 ### Enterprise Plugins
 
-| Plugin | Name | Description | License Required |
-|--------|------|-------------|------------------|
-| **Bloom** | `bloom` | Graph visualization | ✅ Commercial License |
-| **GenAI** | `genai` | AI/ML integration | ✅ Commercial License |
+| Plugin | Name | Description | License Required | Automatic Security |
+|--------|------|-------------|------------------|-------------------|
+| **Bloom** | `bloom` | Graph visualization | ✅ Commercial License | ✅ Auto-configured |
+| **GenAI** | `genai` | AI/ML integration | ✅ Commercial License | ❌ Manual setup |
+
+## Automatic Security Configuration
+
+**New Feature**: Some plugins require specific security settings to function properly. The operator automatically applies these settings even when no user configuration is provided.
+
+### Plugins with Automatic Security
+
+**Bloom Plugin**:
+- Automatically applies required security settings for proper operation
+- No manual configuration needed for basic functionality
+- Automatically configured settings:
+  - `NEO4J_DBMS_SECURITY_PROCEDURES_UNRESTRICTED=bloom.*`
+  - `NEO4J_DBMS_SECURITY_HTTP_AUTH_ALLOWLIST=/,/browser.*,/bloom.*`
+  - `NEO4J_SERVER_UNMANAGED_EXTENSION_CLASSES=com.neo4j.bloom.server=/bloom`
+
+**Graph Data Science Plugin**:
+- Automatically applies default security settings
+- User security configuration can override defaults
+- Automatically configured settings:
+  - `NEO4J_DBMS_SECURITY_PROCEDURES_UNRESTRICTED=gds.*,apoc.load.*`
+
+### Examples with Automatic Security
+
+**Bloom Plugin (Zero Configuration)**:
+```yaml
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jPlugin
+metadata:
+  name: bloom-plugin
+spec:
+  clusterRef: my-cluster
+  name: bloom
+  version: "2.15.0"
+  # No config or security section needed
+  # All required security settings applied automatically
+```
+
+**GDS Plugin with Custom Security**:
+```yaml
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jPlugin
+metadata:
+  name: gds-plugin
+spec:
+  clusterRef: my-cluster
+  name: graph-data-science
+  version: "2.10.0"
+  # User security settings override automatic ones
+  security:
+    sandbox: true  # Uses allowlist instead of unrestricted
+    allowedProcedures: ["gds.*", "apoc.load.*"]
+    # Results in: NEO4J_DBMS_SECURITY_PROCEDURES_ALLOWLIST=gds.*,apoc.load.*
+```
+
+**Automatic vs Manual Security Configuration**:
+
+| Configuration Type | Applies When | Environment Variables | Override Behavior |
+|-------------------|--------------|----------------------|-------------------|
+| **Automatic** | No user `security` section | Applied automatically | Overridden by user config |
+| **User-Provided** | User defines `security` section | User settings + automatic defaults | User settings take precedence |
+| **Mixed** | User partially configures security | Automatic + user settings merged | User settings override matching keys |
 
 ### Community Plugins
 
@@ -365,15 +426,18 @@ security:
     - "apoc.load.*"
 ```
 
-**Bloom (Complex Configuration)**:
+**Bloom (Automatic Security Configuration)**:
 ```yaml
+# Minimal configuration - security settings applied automatically
 config:
   "dbms.bloom.license_file": "/licenses/bloom.license"
-  "dbms.security.http_auth_allowlist": "/,/browser.*,/bloom.*"
-  "server.unmanaged_extension_classes": "com.neo4j.bloom.server=/bloom"
 license:
   keySecret: bloom-license-secret
   licenseFile: "/licenses/bloom.license"
+# Automatically applied by operator:
+# - NEO4J_DBMS_SECURITY_PROCEDURES_UNRESTRICTED=bloom.*
+# - NEO4J_DBMS_SECURITY_HTTP_AUTH_ALLOWLIST=/,/browser.*,/bloom.*
+# - NEO4J_SERVER_UNMANAGED_EXTENSION_CLASSES=com.neo4j.bloom.server=/bloom
 ```
 
 ## Plugin Status Phases
