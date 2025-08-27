@@ -109,6 +109,19 @@ var _ = Describe("Neo4jEnterpriseStandalone Integration Tests", func() {
 				},
 			}
 
+			By("Creating admin secret")
+			adminSecret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "neo4j-admin-secret",
+					Namespace: namespace.Name,
+				},
+				StringData: map[string]string{
+					"username": "neo4j",
+					"password": "admin123",
+				},
+			}
+			Expect(k8sClient.Create(ctx, adminSecret)).Should(Succeed())
+
 			By("Creating the standalone resource")
 			Expect(k8sClient.Create(ctx, standalone)).To(Succeed())
 
@@ -312,6 +325,19 @@ var _ = Describe("Neo4jEnterpriseStandalone Integration Tests", func() {
 				},
 			}
 
+			By("Creating admin secret")
+			adminSecret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "neo4j-admin-secret",
+					Namespace: namespace.Name,
+				},
+				StringData: map[string]string{
+					"username": "neo4j",
+					"password": "admin123",
+				},
+			}
+			Expect(k8sClient.Create(ctx, adminSecret)).Should(Succeed())
+
 			By("Creating the standalone resource")
 			Expect(k8sClient.Create(ctx, standalone)).To(Succeed())
 
@@ -387,6 +413,19 @@ var _ = Describe("Neo4jEnterpriseStandalone Integration Tests", func() {
 					},
 				},
 			}
+
+			By("Creating admin secret")
+			adminSecret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "neo4j-admin-secret",
+					Namespace: namespace.Name,
+				},
+				StringData: map[string]string{
+					"username": "neo4j",
+					"password": "admin123",
+				},
+			}
+			Expect(k8sClient.Create(ctx, adminSecret)).Should(Succeed())
 
 			By("Creating the standalone resource")
 			Expect(k8sClient.Create(ctx, standalone)).To(Succeed())
@@ -563,6 +602,19 @@ var _ = Describe("Neo4jEnterpriseStandalone Integration Tests", func() {
 					},
 				},
 			}
+
+			By("Creating admin secret")
+			adminSecret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "neo4j-admin-secret",
+					Namespace: namespace.Name,
+				},
+				StringData: map[string]string{
+					"username": "neo4j",
+					"password": "admin123",
+				},
+			}
+			Expect(k8sClient.Create(ctx, adminSecret)).Should(Succeed())
 
 			By("Creating the standalone resource")
 			Expect(k8sClient.Create(ctx, standalone)).To(Succeed())

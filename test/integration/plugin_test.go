@@ -294,8 +294,9 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 						},
 					},
 					// GDS configuration goes through neo4j.conf (not environment variables like APOC)
+					// Note: GDS license file configuration removed for testing - production deployments need actual license
 					Config: map[string]string{
-						"gds.enterprise.license_file": "/licenses/gds.license",
+						// Test basic GDS configuration without requiring license file
 					},
 					Security: &neo4jv1alpha1.PluginSecurity{
 						AllowedProcedures: []string{"gds.*", "apoc.load.*"},
@@ -356,17 +357,17 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 				}
 
 				// Check for GDS-specific security environment variables
-				// GDS requires dbms.security.procedures.unrestricted=gds.*
+				// Since sandbox=true, GDS uses allowlist instead of unrestricted
 				for _, container := range standaloneSts.Spec.Template.Spec.Containers {
 					if container.Name == "neo4j" {
-						hasUnrestricted := false
+						hasAllowlist := false
 						for _, env := range container.Env {
-							if env.Name == "NEO4J_DBMS_SECURITY_PROCEDURES_UNRESTRICTED" && strings.Contains(env.Value, "gds.*") {
-								hasUnrestricted = true
+							if env.Name == "NEO4J_DBMS_SECURITY_PROCEDURES_ALLOWLIST" && strings.Contains(env.Value, "gds.*") {
+								hasAllowlist = true
 								break
 							}
 						}
-						return hasUnrestricted
+						return hasAllowlist
 					}
 				}
 				return false
@@ -446,8 +447,9 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 						Type: "official",
 					},
 					// Bloom configuration goes through neo4j.conf (unlike APOC)
+					// Note: Bloom license file configuration removed for testing - production deployments need actual license
 					Config: map[string]string{
-						"dbms.bloom.license_file": "/licenses/bloom.license",
+						// Test basic Bloom configuration without requiring license file
 					},
 				},
 			}

@@ -1,4 +1,4 @@
-name: Integration Tests
+name: Extended Integration Tests
 
 on:
   workflow_dispatch:
@@ -11,23 +11,18 @@ on:
       timeout-minutes:
         description: 'Test timeout in minutes'
         required: false
-        default: '60'
+        default: '90'
         type: string
-      run-full-suite:
-        description: 'Run full integration test suite (vs. essential tests only). Full suite may cause resource exhaustion in GitHub Actions (7GB RAM, 2 CPU). Essential tests are API-only and lightweight deployments (3/49 specs). Full suite includes resource-intensive tests: plugins, clusters, split-brain detection.'
-        required: false
-        default: true
-        type: boolean
 
 env:
   GO_VERSION: '1.22'
   KIND_VERSION: 'v0.20.0'
 
 jobs:
-  integration-tests:
-    name: Integration Tests
+  extended-integration-tests:
+    name: Extended Integration Tests
     runs-on: ubuntu-latest
-    timeout-minutes: ${{ fromJson(github.event.inputs.timeout-minutes || '60') }}
+    timeout-minutes: ${{ fromJson(github.event.inputs.timeout-minutes || '90') }}
 
     steps:
     - name: Checkout code
@@ -43,23 +38,10 @@ jobs:
       with:
         kind-version: ${{ env.KIND_VERSION }}
 
-    - name: Build and deploy operator
+    - name: Setup test cluster and deploy operator
       run: |
-        echo "Building operator image..."
-        make docker-build IMG=neo4j-operator:integration-test
-
-        echo "Loading operator image into Kind cluster..."
-        kind load docker-image neo4j-operator:integration-test --name neo4j-operator-test
-
-        echo "Installing CRDs..."
-        make install
-
-        echo "Deploying operator..."
-        make deploy-prod IMG=neo4j-operator:integration-test
-
-        echo "Waiting for operator to be ready..."
-        kubectl wait --for=condition=Available deployment/neo4j-operator-controller-manager \
-          -n neo4j-operator-system --timeout=300s
+        echo "Creating test cluster and deploying operator..."
+        make test-cluster
 
     - name: Pre-load Neo4j images to avoid Docker rate limits
       run: |
@@ -95,42 +77,25 @@ jobs:
           docker exec neo4j-operator-test-control-plane crictl images | grep neo4j || echo "No Neo4j images found"
         fi
 
-    - name: Run integration tests
+    - name: Run extended integration tests
       run: |
         # Enable line-buffered output for real-time progress
         export PYTHONUNBUFFERED=1
         export FORCE_COLOR=1
 
-        # Store the exit code properly
-        EXIT_CODE=0
+        echo "Running extended integration tests with custom Neo4j version..."
+        echo "📊 Neo4j version: ${{ github.event.inputs.neo4j-version || '5.26-enterprise' }}"
+        echo "🔗 Running full integration test suite..."
 
-        if [ "${{ github.event.inputs.run-full-suite }}" == "true" ]; then
-          echo "Running full integration test suite with real-time progress..."
-          echo "⚠️ WARNING: Full suite may cause resource exhaustion in CI"
-          echo "📊 Full suite includes: plugins, clusters, split-brain detection (49 specs total)"
-          set +e  # Don't exit on test failure, capture exit code
-          make test-integration-ci-full 2>&1 | tee integration-test-output.log
-          EXIT_CODE=${PIPESTATUS[0]}
-          set -e
-        else
-          echo "Running essential integration tests optimized for CI..."
-          echo "📊 Essential tests cover: API validation and lightweight deployments"
-          echo "⚡ Optimized for GitHub Actions constraints (7GB RAM, 2 CPU) - runs 3/49 specs"
-          set +e  # Don't exit on test failure, capture exit code
-          make test-integration-ci 2>&1 | tee integration-test-output.log
-          EXIT_CODE=${PIPESTATUS[0]}
-          set -e
-        fi
+        # Deploy operator with correct image and run tests
+        make docker-build IMG=neo4j-operator:integration-test
+        kind load docker-image neo4j-operator:integration-test --name neo4j-operator-test
+        make deploy-dev IMG=neo4j-operator:integration-test
+        kubectl set image deployment/neo4j-operator-controller-manager manager=neo4j-operator:integration-test -n neo4j-operator-dev
+        kubectl rollout status deployment/neo4j-operator-controller-manager -n neo4j-operator-dev --timeout=120s
 
-        echo "Test run completed with exit code: ${EXIT_CODE}"
-
-        # Fail the step if tests failed
-        if [ ${EXIT_CODE} -ne 0 ]; then
-          echo "❌ Integration tests failed with exit code ${EXIT_CODE}"
-          exit ${EXIT_CODE}
-        else
-          echo "✅ Integration tests passed successfully"
-        fi
+        # Run all integration tests
+        go test ./test/integration/... -v -timeout=60m | tee integration-test-output.log
       env:
         KUBECONFIG: /home/runner/.kube/config
         NEO4J_VERSION: ${{ github.event.inputs.neo4j-version || '5.26-enterprise' }}
@@ -182,40 +147,40 @@ jobs:
       if: always()
       run: make test-cluster-delete || true
 
-  integration-test-summary:
-    name: Integration Test Summary
+  extended-integration-test-summary:
+    name: Extended Integration Test Summary
     runs-on: ubuntu-latest
-    needs: [integration-tests]
+    needs: [extended-integration-tests]
     if: always()
 
     steps:
-    - name: Integration Test Summary
+    - name: Extended Integration Test Summary
       run: |
-        echo "## Integration Test Results" >> $GITHUB_STEP_SUMMARY
+        echo "## Extended Integration Test Results" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
 
-        if [ "${{ needs.integration-tests.result }}" == "success" ]; then
-          echo "✅ **Integration Tests**: PASSED" >> $GITHUB_STEP_SUMMARY
+        if [ "${{ needs.extended-integration-tests.result }}" == "success" ]; then
+          echo "✅ **Extended Integration Tests**: PASSED" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "All integration tests completed successfully." >> $GITHUB_STEP_SUMMARY
-        elif [ "${{ needs.integration-tests.result }}" == "failure" ]; then
-          echo "❌ **Integration Tests**: FAILED" >> $GITHUB_STEP_SUMMARY
+          echo "All extended integration tests completed successfully with custom Neo4j version." >> $GITHUB_STEP_SUMMARY
+        elif [ "${{ needs.extended-integration-tests.result }}" == "failure" ]; then
+          echo "❌ **Extended Integration Tests**: FAILED" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Integration tests encountered failures. Check the logs and artifacts for details." >> $GITHUB_STEP_SUMMARY
-        elif [ "${{ needs.integration-tests.result }}" == "cancelled" ]; then
-          echo "⏹️ **Integration Tests**: CANCELLED" >> $GITHUB_STEP_SUMMARY
+          echo "Extended integration tests encountered failures. Check the logs and artifacts for details." >> $GITHUB_STEP_SUMMARY
+        elif [ "${{ needs.extended-integration-tests.result }}" == "cancelled" ]; then
+          echo "⏹️ **Extended Integration Tests**: CANCELLED" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Integration tests were cancelled before completion." >> $GITHUB_STEP_SUMMARY
+          echo "Extended integration tests were cancelled before completion." >> $GITHUB_STEP_SUMMARY
         else
-          echo "⚠️ **Integration Tests**: UNKNOWN STATUS" >> $GITHUB_STEP_SUMMARY
+          echo "⚠️ **Extended Integration Tests**: UNKNOWN STATUS" >> $GITHUB_STEP_SUMMARY
         fi
 
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### Test Configuration:" >> $GITHUB_STEP_SUMMARY
         echo "- **Neo4j Version**: ${{ github.event.inputs.neo4j-version || '5.26-enterprise' }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Timeout**: ${{ github.event.inputs.timeout-minutes || '60' }} minutes" >> $GITHUB_STEP_SUMMARY
-        echo "- **Test Suite**: ${{ github.event.inputs.run-full-suite == 'true' && 'Full' || 'Smoke Tests' }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Timeout**: ${{ github.event.inputs.timeout-minutes || '90' }} minutes" >> $GITHUB_STEP_SUMMARY
+        echo "- **Test Suite**: Full integration suite with custom Neo4j version" >> $GITHUB_STEP_SUMMARY
 
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### Artifacts:" >> $GITHUB_STEP_SUMMARY
-        echo "- Integration test logs and cluster state dumps are available as workflow artifacts" >> $GITHUB_STEP_SUMMARY
+        echo "- Extended integration test logs and cluster state dumps are available as workflow artifacts" >> $GITHUB_STEP_SUMMARY

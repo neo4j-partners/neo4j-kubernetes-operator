@@ -150,8 +150,16 @@ test-unit: manifests generate fmt vet envtest ## Run unit tests (no cluster requ
 .PHONY: test-integration
 test-integration: test-cluster ## Run integration tests
 	@echo "🔗 Running integration tests..."
-	@kind export kubeconfig --name neo4j-operator-test && \
-		go test ./test/integration/... -v -timeout=60m
+	@echo "📦 Building and deploying operator to test cluster..."
+	@kind export kubeconfig --name neo4j-operator-test
+	@$(MAKE) docker-build IMG=neo4j-operator:integration-test
+	@kind load docker-image neo4j-operator:integration-test --name neo4j-operator-test
+	@$(MAKE) deploy-dev IMG=neo4j-operator:integration-test
+	@kubectl set image deployment/neo4j-operator-controller-manager manager=neo4j-operator:integration-test -n neo4j-operator-dev
+	@kubectl rollout status deployment/neo4j-operator-controller-manager -n neo4j-operator-dev --timeout=120s
+	@echo "✅ Operator deployed successfully!"
+	@echo "🔗 Running integration tests..."
+	@go test ./test/integration/... -v -timeout=60m
 
 .PHONY: test-integration-ci
 test-integration-ci: ginkgo ## Run integration tests in CI (assumes cluster already exists)

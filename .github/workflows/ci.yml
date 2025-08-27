@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [ main, develop ]
   workflow_dispatch:
+    inputs:
+      run-integration-tests:
+        description: 'Run integration tests'
+        required: false
+        default: true
+        type: boolean
 
 env:
   GO_VERSION: '1.22'
@@ -73,3 +79,106 @@ jobs:
           *.out
           unit-test-output.log
         if-no-files-found: warn
+
+  integration-tests-info:
+    name: Integration Tests Info
+    runs-on: ubuntu-latest
+    if: |
+      !(
+        contains(github.event.pull_request.labels.*.name, 'run-integration-tests') ||
+        contains(github.event.head_commit.message, '[run-integration]') ||
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.run-integration-tests == 'true')
+      )
+
+    steps:
+    - name: Integration tests skipped
+      run: |
+        echo "## ⏭️ Integration Tests Skipped" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "Integration tests are optional and can be triggered by:" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 🏷️ PR Label Method:" >> $GITHUB_STEP_SUMMARY
+        echo '```bash' >> $GITHUB_STEP_SUMMARY
+        echo "gh pr edit --add-label \"run-integration-tests\"" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 💬 Commit Message Method:" >> $GITHUB_STEP_SUMMARY
+        echo '```bash' >> $GITHUB_STEP_SUMMARY
+        echo 'git commit -m "feat: cluster changes [run-integration]"' >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 🖱️ Manual Dispatch Method:" >> $GITHUB_STEP_SUMMARY
+        echo "Actions → CI → Run workflow → Check \"Run integration tests\"" >> $GITHUB_STEP_SUMMARY
+
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    if: |
+      contains(github.event.pull_request.labels.*.name, 'run-integration-tests') ||
+      contains(github.event.head_commit.message, '[run-integration]') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.run-integration-tests == 'true')
+    timeout-minutes: 90
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Go environment
+      uses: ./.github/actions/setup-go
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Setup Kubernetes environment
+      uses: ./.github/actions/setup-k8s
+      with:
+        kind-version: 'v0.20.0'
+
+    - name: Run integration tests
+      run: |
+        # Enable line-buffered output for real-time progress
+        export PYTHONUNBUFFERED=1
+        export FORCE_COLOR=1
+
+        echo "Running integration tests with enhanced logging..."
+        make test-integration | tee integration-test-output.log
+      env:
+        KUBECONFIG: /home/runner/.kube/config
+        FORCE_COLOR: 1
+        GOMAXPROCS: 1
+
+    - name: Collect cluster state
+      if: always()
+      run: |
+        echo "=== Cluster Nodes ==="
+        kubectl get nodes -o wide || true
+
+        echo "=== All Pods ==="
+        kubectl get pods --all-namespaces || true
+
+        echo "=== Neo4j Resources ==="
+        kubectl get neo4jenterpriseclusters,neo4jenterprisestandalones,neo4jdatabases,neo4jplugins --all-namespaces || true
+
+        echo "=== Recent Events ==="
+        kubectl get events --all-namespaces --sort-by='.lastTimestamp' | tail -50 || true
+
+    - name: Collect cluster logs
+      uses: ./.github/actions/collect-logs
+      if: always()
+      with:
+        artifact-name: integration-test-logs
+
+    - name: Archive test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: integration-test-results
+        path: |
+          coverage/
+          *.out
+          integration-test-output.log
+        if-no-files-found: warn
+
+    - name: Cleanup test cluster
+      if: always()
+      run: make test-cluster-delete || true

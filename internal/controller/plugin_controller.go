@@ -130,11 +130,11 @@ func (r *Neo4jPluginReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 	}
 
-	// Wait for deployment to be ready after restart
-	if err := r.waitForDeploymentReady(ctx, deployment); err != nil {
-		logger.Error(err, "Deployment not ready after plugin installation")
-		r.updatePluginStatus(ctx, plugin, "Failed", fmt.Sprintf("Deployment not ready after plugin installation: %v", err))
-		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
+	// Check if deployment is ready after restart (non-blocking)
+	if !r.arePodsReady(ctx, deployment) {
+		logger.Info("Waiting for pods to be ready after plugin installation")
+		r.updatePluginStatus(ctx, plugin, "Installing", "Waiting for pods to be ready after plugin installation")
+		return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
 	}
 
 	// Configure plugin
@@ -203,7 +203,7 @@ func (r *Neo4jPluginReconciler) getTargetDeployment(ctx context.Context, plugin 
 		Name:      plugin.Spec.ClusterRef,
 		Namespace: plugin.Namespace,
 	}, standalone); err == nil {
-		isReady := standalone.Status.Phase == "Ready"
+		isReady := standalone.Status.Phase == "Running"
 		return &DeploymentInfo{
 			Object:    standalone,
 			Type:      "standalone",
@@ -755,6 +755,45 @@ func (r *Neo4jPluginReconciler) restartNeo4jInstances(ctx context.Context, deplo
 	return nil
 }
 
+// arePodsReady checks if all pods are ready without blocking
+func (r *Neo4jPluginReconciler) arePodsReady(ctx context.Context, deployment *DeploymentInfo) bool {
+	logger := log.FromContext(ctx)
+
+	// Check if all pods are ready
+	pods := &corev1.PodList{}
+	podLabels := r.getPodLabels(deployment)
+	if err := r.List(ctx, pods, client.InNamespace(deployment.Namespace), client.MatchingLabels(podLabels)); err != nil {
+		logger.Error(err, "Failed to list pods")
+		return false
+	}
+
+	expectedReplicas := r.getExpectedReplicas(deployment)
+	if len(pods.Items) != expectedReplicas {
+		logger.Info("Not all pods are created yet", "current", len(pods.Items), "expected", expectedReplicas)
+		return false
+	}
+
+	for _, pod := range pods.Items {
+		// Check if pod is ready
+		podReady := pod.Status.Phase == corev1.PodRunning
+		if podReady {
+			for _, condition := range pod.Status.Conditions {
+				if condition.Type == corev1.PodReady {
+					podReady = condition.Status == corev1.ConditionTrue
+					break
+				}
+			}
+		}
+		if !podReady {
+			logger.Info("Pod not ready yet", "pod", pod.Name, "phase", pod.Status.Phase)
+			return false
+		}
+	}
+
+	logger.Info("All pods are ready")
+	return true
+}
+
 func (r *Neo4jPluginReconciler) waitForDeploymentReady(ctx context.Context, deployment *DeploymentInfo) error {
 	logger := log.FromContext(ctx)
 	logger.Info("Waiting for deployment to be ready after plugin installation", "type", deployment.Type)
@@ -829,7 +868,10 @@ func (r *Neo4jPluginReconciler) verifyPluginLoaded(ctx context.Context, neo4jCli
 func (r *Neo4jPluginReconciler) configurePlugin(ctx context.Context, plugin *neo4jv1alpha1.Neo4jPlugin, deployment *DeploymentInfo) error {
 	logger := log.FromContext(ctx)
 
-	if len(plugin.Spec.Config) == 0 && plugin.Spec.Security == nil {
+	// Check if plugin requires automatic security configuration even without user config
+	needsAutoSecurity := r.requiresAutomaticSecurityConfiguration(plugin.Spec.Name)
+
+	if len(plugin.Spec.Config) == 0 && plugin.Spec.Security == nil && !needsAutoSecurity {
 		logger.Info("No plugin configuration provided")
 		return nil
 	}
@@ -843,7 +885,7 @@ func (r *Neo4jPluginReconciler) configurePlugin(ctx context.Context, plugin *neo
 
 	// For other plugins that require Neo4j client configuration
 	neo4jClientConfig := r.filterNeo4jClientConfig(plugin.Spec.Config)
-	if len(neo4jClientConfig) == 0 && plugin.Spec.Security == nil {
+	if len(neo4jClientConfig) == 0 && plugin.Spec.Security == nil && !needsAutoSecurity {
 		logger.Info("No Neo4j client configuration required")
 		return nil
 	}
@@ -873,7 +915,8 @@ func (r *Neo4jPluginReconciler) configurePlugin(ctx context.Context, plugin *neo
 	}
 
 	// Apply security configuration if specified
-	if plugin.Spec.Security != nil {
+	// Only apply runtime security configuration for settings that are dynamic
+	if plugin.Spec.Security != nil && r.hasRuntimeSecurityConfiguration(plugin.Spec.Security) {
 		if err := r.applySecurityConfiguration(ctx, neo4jClient, plugin); err != nil {
 			return fmt.Errorf("failed to apply security configuration: %w", err)
 		}
@@ -884,28 +927,14 @@ func (r *Neo4jPluginReconciler) configurePlugin(ctx context.Context, plugin *neo
 }
 
 func (r *Neo4jPluginReconciler) applySecurityConfiguration(ctx context.Context, neo4jClient *neo4jclient.Client, plugin *neo4jv1alpha1.Neo4jPlugin) error {
-	security := plugin.Spec.Security
+	logger := log.FromContext(ctx)
 
-	// Configure allowed procedures
-	if len(security.AllowedProcedures) > 0 {
-		if err := neo4jClient.SetAllowedProcedures(ctx, security.AllowedProcedures); err != nil {
-			return fmt.Errorf("failed to set allowed procedures: %w", err)
-		}
-	}
+	// In Neo4j 5.26+, most security settings (allowlist, denylist, unrestricted) are non-dynamic
+	// and must be applied as environment variables at startup, not at runtime
+	logger.Info("Skipping runtime security configuration - all security settings are applied as environment variables in Neo4j 5.26+")
 
-	// Configure denied procedures
-	if len(security.DeniedProcedures) > 0 {
-		if err := neo4jClient.SetDeniedProcedures(ctx, security.DeniedProcedures); err != nil {
-			return fmt.Errorf("failed to set denied procedures: %w", err)
-		}
-	}
-
-	// Configure sandbox mode
-	if security.Sandbox {
-		if err := neo4jClient.EnableSandboxMode(ctx, security.Sandbox); err != nil {
-			return fmt.Errorf("failed to enable sandbox mode: %w", err)
-		}
-	}
+	// Future: If there are any dynamic security settings that can be applied at runtime,
+	// add them here. Currently, all common security settings are non-dynamic.
 
 	return nil
 }
@@ -1169,7 +1198,141 @@ func (r *Neo4jPluginReconciler) installPluginViaEnvironment(ctx context.Context,
 
 	// Update the StatefulSet with retry on conflict
 	err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
-		return r.Update(ctx, sts)
+		// Fetch latest version of StatefulSet for each retry
+		currentSts := &appsv1.StatefulSet{}
+		if err := r.Get(ctx, stsKey, currentSts); err != nil {
+			return err
+		}
+
+		// Find the Neo4j container in the current StatefulSet
+		var currentNeo4jContainer *corev1.Container
+		for i := range currentSts.Spec.Template.Spec.Containers {
+			if currentSts.Spec.Template.Spec.Containers[i].Name == "neo4j" {
+				currentNeo4jContainer = &currentSts.Spec.Template.Spec.Containers[i]
+				break
+			}
+		}
+		if currentNeo4jContainer == nil {
+			return fmt.Errorf("neo4j container not found in current StatefulSet")
+		}
+
+		// Apply the same plugin changes to the current StatefulSet
+		pluginName := r.mapPluginName(plugin.Spec.Name)
+		pluginsToInstall := []string{pluginName}
+		for _, dep := range plugin.Spec.Dependencies {
+			depName := r.mapPluginName(dep.Name)
+			pluginsToInstall = append(pluginsToInstall, depName)
+		}
+
+		// Find existing NEO4J_PLUGINS environment variable or create new one
+		var pluginsEnvVar *corev1.EnvVar
+		for i := range currentNeo4jContainer.Env {
+			if currentNeo4jContainer.Env[i].Name == "NEO4J_PLUGINS" {
+				pluginsEnvVar = &currentNeo4jContainer.Env[i]
+				break
+			}
+		}
+		if pluginsEnvVar == nil {
+			// Add new NEO4J_PLUGINS environment variable with all plugins
+			var quotedPlugins []string
+			for _, plugin := range pluginsToInstall {
+				quotedPlugins = append(quotedPlugins, fmt.Sprintf("\"%s\"", plugin))
+			}
+			currentNeo4jContainer.Env = append(currentNeo4jContainer.Env, corev1.EnvVar{
+				Name:  "NEO4J_PLUGINS",
+				Value: fmt.Sprintf("[%s]", strings.Join(quotedPlugins, ",")),
+			})
+		} else {
+			// Update existing NEO4J_PLUGINS - parse and add all new plugins
+			currentValue := pluginsEnvVar.Value
+			for _, plugin := range pluginsToInstall {
+				quotedPlugin := fmt.Sprintf("\"%s\"", plugin)
+				if !strings.Contains(currentValue, quotedPlugin) {
+					if currentValue == "[]" || currentValue == "" {
+						pluginsEnvVar.Value = fmt.Sprintf("[\"%s\"]", plugin)
+					} else {
+						// Remove closing bracket and add new plugin
+						if strings.HasSuffix(currentValue, "]") {
+							currentValue = currentValue[:len(currentValue)-1]
+						}
+						pluginsEnvVar.Value = fmt.Sprintf("%s,\"%s\"]", currentValue, plugin)
+					}
+				}
+			}
+		}
+
+		// Add plugin-specific configuration as environment variables
+		for key, value := range plugin.Spec.Config {
+			envVarName := fmt.Sprintf("NEO4J_%s", strings.ToUpper(strings.ReplaceAll(key, ".", "_")))
+			// Check if environment variable already exists
+			exists := false
+			for i := range currentNeo4jContainer.Env {
+				if currentNeo4jContainer.Env[i].Name == envVarName {
+					currentNeo4jContainer.Env[i].Value = value
+					exists = true
+					break
+				}
+			}
+			if !exists {
+				currentNeo4jContainer.Env = append(currentNeo4jContainer.Env, corev1.EnvVar{
+					Name:  envVarName,
+					Value: value,
+				})
+			}
+		}
+
+		// Start with automatic security settings for plugins that require them
+		userSecuritySettings := r.getAutomaticSecuritySettings(plugin.Spec.Name)
+
+		// Add user-provided security settings as environment variables (non-dynamic settings only)
+		if plugin.Spec.Security != nil {
+
+			// Convert allowed procedures to allowlist setting
+			if len(plugin.Spec.Security.AllowedProcedures) > 0 {
+				allowedList := strings.Join(plugin.Spec.Security.AllowedProcedures, ",")
+				userSecuritySettings["dbms.security.procedures.allowlist"] = allowedList
+			}
+
+			// Convert denied procedures to denylist setting
+			if len(plugin.Spec.Security.DeniedProcedures) > 0 {
+				deniedList := strings.Join(plugin.Spec.Security.DeniedProcedures, ",")
+				userSecuritySettings["dbms.security.procedures.denylist"] = deniedList
+			}
+
+			// Convert sandbox setting to unrestricted (inverted logic)
+			if plugin.Spec.Security.Sandbox {
+				// Sandbox mode means restricted procedures - use allowlist only, no unrestricted
+			} else {
+				// Non-sandbox mode may need unrestricted procedures (use allowed list as unrestricted)
+				if len(plugin.Spec.Security.AllowedProcedures) > 0 {
+					allowedList := strings.Join(plugin.Spec.Security.AllowedProcedures, ",")
+					userSecuritySettings["dbms.security.procedures.unrestricted"] = allowedList
+				}
+			}
+
+		}
+
+		// Apply security settings as environment variables (both automatic and user-provided)
+		for key, value := range userSecuritySettings {
+			envVarName := fmt.Sprintf("NEO4J_%s", strings.ToUpper(strings.ReplaceAll(key, ".", "_")))
+			// Check if environment variable already exists
+			exists := false
+			for i := range currentNeo4jContainer.Env {
+				if currentNeo4jContainer.Env[i].Name == envVarName {
+					currentNeo4jContainer.Env[i].Value = value
+					exists = true
+					break
+				}
+			}
+			if !exists {
+				currentNeo4jContainer.Env = append(currentNeo4jContainer.Env, corev1.EnvVar{
+					Name:  envVarName,
+					Value: value,
+				})
+			}
+		}
+
+		return r.Update(ctx, currentSts)
 	})
 	if err != nil {
 		return fmt.Errorf("failed to update StatefulSet with plugin configuration: %w", err)
@@ -1489,6 +1652,42 @@ func (r *Neo4jPluginReconciler) isEnvironmentVariableOnlyPlugin(pluginName strin
 	return r.getPluginType(pluginName) == PluginTypeEnvironmentOnly
 }
 
+// requiresAutomaticSecurityConfiguration checks if the plugin needs automatic security settings even without user config
+func (r *Neo4jPluginReconciler) requiresAutomaticSecurityConfiguration(pluginName string) bool {
+	switch pluginName {
+	case "bloom":
+		// Bloom requires automatic security configuration:
+		// - dbms.security.procedures.unrestricted=bloom.*
+		// - dbms.security.http_auth_allowlist=/,/browser.*,/bloom.*
+		// - server.unmanaged_extension_classes=com.neo4j.bloom.server=/bloom
+		return true
+	case "graph-data-science", "gds":
+		// GDS requires automatic security configuration:
+		// - dbms.security.procedures.unrestricted=gds.* (or allowlist based on sandbox setting)
+		return true
+	default:
+		return false
+	}
+}
+
+// getAutomaticSecuritySettings returns the required security settings for plugins that need automatic configuration
+func (r *Neo4jPluginReconciler) getAutomaticSecuritySettings(pluginName string) map[string]string {
+	settings := make(map[string]string)
+
+	switch pluginName {
+	case "bloom":
+		// Bloom requires these security settings to function properly
+		settings["dbms.security.procedures.unrestricted"] = "bloom.*"
+		settings["dbms.security.http_auth_allowlist"] = "/,/browser.*,/bloom.*"
+		settings["server.unmanaged_extension_classes"] = "com.neo4j.bloom.server=/bloom"
+	case "graph-data-science", "gds":
+		// GDS default automatic security (can be overridden by user security settings)
+		settings["dbms.security.procedures.unrestricted"] = "gds.*,apoc.load.*"
+	}
+
+	return settings
+}
+
 // filterNeo4jClientConfig filters out plugin-specific configurations that should be handled via environment variables
 func (r *Neo4jPluginReconciler) filterNeo4jClientConfig(config map[string]string) map[string]string {
 	filtered := make(map[string]string)
@@ -1499,8 +1698,13 @@ func (r *Neo4jPluginReconciler) filterNeo4jClientConfig(config map[string]string
 			continue
 		}
 
-		// Include settings that should go through Neo4j configuration system:
-		// - GDS settings (gds.*, dbms.security.procedures.unrestricted=gds.*)
+		// Skip non-dynamic GDS settings - these can only be set at startup, not runtime
+		if r.isNonDynamicSetting(key) {
+			continue
+		}
+
+		// Include settings that can be applied dynamically through Neo4j configuration system:
+		// - Dynamic GDS settings (gds.* except license_file)
 		// - Bloom settings (dbms.bloom.*, server.unmanaged_extension_classes, dbms.security.http_auth_allowlist)
 		// - GenAI settings (provider configurations, procedure security)
 		// - General Neo4j settings (dbms.*, server.*)
@@ -1509,6 +1713,37 @@ func (r *Neo4jPluginReconciler) filterNeo4jClientConfig(config map[string]string
 	}
 
 	return filtered
+}
+
+// isNonDynamicSetting determines if a configuration setting can only be applied at startup
+func (r *Neo4jPluginReconciler) isNonDynamicSetting(key string) bool {
+	nonDynamicSettings := []string{
+		// Plugin license files (must be available at startup)
+		"gds.enterprise.license_file",
+		"dbms.bloom.license_file",
+		// Security settings (must be applied at startup via environment variables)
+		"dbms.security.procedures.allowlist",
+		"dbms.security.procedures.denylist",
+		"dbms.security.procedures.unrestricted",
+		// Add other non-dynamic settings as needed
+	}
+
+	for _, nonDynamic := range nonDynamicSettings {
+		if key == nonDynamic {
+			return true
+		}
+	}
+
+	return false
+}
+
+// hasRuntimeSecurityConfiguration checks if security configuration contains settings that can be applied at runtime
+// Most security settings (allowlist, denylist, unrestricted) are non-dynamic and must be applied as environment variables
+func (r *Neo4jPluginReconciler) hasRuntimeSecurityConfiguration(security *neo4jv1alpha1.PluginSecurity) bool {
+	// Currently, all common security settings are non-dynamic in Neo4j 5.26+
+	// They must be applied as environment variables at StatefulSet creation time
+	// Future: if there are any dynamic security settings, check for them here
+	return false
 }
 
 // applyAPOCSecurityConfiguration applies APOC security configuration without using Neo4j client configuration
@@ -1539,9 +1774,9 @@ func (r *Neo4jPluginReconciler) applyAPOCSecurityConfiguration(ctx context.Conte
 		}
 		defer neo4jClient.Close()
 
-		if err := r.applySecurityConfiguration(ctx, neo4jClient, plugin); err != nil {
-			return fmt.Errorf("failed to apply security configuration: %w", err)
-		}
+		// In Neo4j 5.26+, all security settings are applied as environment variables
+		// Skip runtime security configuration for consistency
+		logger.Info("Skipping APOC runtime security configuration - all security settings are applied as environment variables in Neo4j 5.26+")
 	}
 
 	logger.Info("APOC security configuration applied successfully")

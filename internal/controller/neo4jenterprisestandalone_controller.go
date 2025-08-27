@@ -651,39 +651,44 @@ func (r *Neo4jEnterpriseStandaloneReconciler) buildEnvVars(standalone *neo4jv1al
 		Value: "yes",
 	})
 
-	// Add auth credentials from secret if specified
+	// Determine auth secret name (use default if not specified)
+	authSecretName := "neo4j-admin-secret" // Default secret name
 	if standalone.Spec.Auth != nil && standalone.Spec.Auth.AdminSecret != "" {
-		envVars = append(envVars,
-			corev1.EnvVar{
-				Name: "DB_USERNAME",
-				ValueFrom: &corev1.EnvVarSource{
-					SecretKeyRef: &corev1.SecretKeySelector{
-						LocalObjectReference: corev1.LocalObjectReference{
-							Name: standalone.Spec.Auth.AdminSecret,
-						},
-						Key: "username",
-					},
-				},
-			},
-			corev1.EnvVar{
-				Name: "DB_PASSWORD",
-				ValueFrom: &corev1.EnvVarSource{
-					SecretKeyRef: &corev1.SecretKeySelector{
-						LocalObjectReference: corev1.LocalObjectReference{
-							Name: standalone.Spec.Auth.AdminSecret,
-						},
-						Key: "password",
-					},
-				},
-			},
-			// Set NEO4J_AUTH in the format Neo4j expects (username/password)
-			// This combines the username and password from the secret into the standard Neo4j format
-			corev1.EnvVar{
-				Name:  "NEO4J_AUTH",
-				Value: "$(DB_USERNAME)/$(DB_PASSWORD)",
-			},
-		)
+		authSecretName = standalone.Spec.Auth.AdminSecret
 	}
+
+	// Always add auth credentials (either from specified secret or default)
+	// This ensures Neo4j doesn't generate a random password
+	envVars = append(envVars,
+		corev1.EnvVar{
+			Name: "DB_USERNAME",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: authSecretName,
+					},
+					Key: "username",
+				},
+			},
+		},
+		corev1.EnvVar{
+			Name: "DB_PASSWORD",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: authSecretName,
+					},
+					Key: "password",
+				},
+			},
+		},
+		// Set NEO4J_AUTH in the format Neo4j expects (username/password)
+		// This combines the username and password from the secret into the standard Neo4j format
+		corev1.EnvVar{
+			Name:  "NEO4J_AUTH",
+			Value: "$(DB_USERNAME)/$(DB_PASSWORD)",
+		},
+	)
 
 	// Add user-provided environment variables
 	envVars = append(envVars, standalone.Spec.Env...)
