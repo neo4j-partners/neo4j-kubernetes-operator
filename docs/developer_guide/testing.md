@@ -114,16 +114,22 @@ make test-destroy
 ### Running Integration Tests
 
 ```bash
-# Full integration test suite
+# Full integration test suite (automatically creates cluster and deploys operator)
 make test-integration
 
-# Run tests for CI (assumes cluster exists)
-make test-integration-ci
+# Alternative: step-by-step approach
+make test-cluster         # Create test cluster
+make test-integration     # Run tests (uses existing cluster)
+make test-cluster-delete  # Clean up cluster
 
 # Run specific test suites
 ginkgo run -focus "Neo4jEnterpriseCluster" ./test/integration
 ginkgo run -focus "should create backup" ./test/integration
 ginkgo run -focus "Plugin Installation" ./test/integration
+
+# CI-optimized test commands (for advanced use)
+make test-integration-ci     # Assumes cluster and operator already deployed
+make test-integration-ci-full # Full suite in CI environment
 ```
 
 ### Integration Test Structure

@@ -101,7 +101,7 @@ make test-cluster-reset   # Delete and recreate test cluster
 make test-cluster-delete  # Delete test cluster
 
 # Cluster-based tests
-make test-integration     # Integration tests (requires test cluster)
+make test-integration     # Integration tests (auto-creates cluster and deploys operator)
 
 # Full test suite
 make test                 # Run unit + integration tests
@@ -250,7 +250,7 @@ See detailed implementation: `/reports/2025-08-19-server-based-architecture-impl
 
 ## CI/CD & Debugging
 
-**GitHub Actions (Updated 2025-08-22)**:
+**GitHub Actions (Updated 2025-08-27)**:
 - **Unit Tests**: ✅ Always run automatically on all pushes/PRs
 - **Integration Tests**: ⏭️ Optional, on-demand only (trigger with PR label `run-integration-tests`, commit message `[run-integration]`, or manual dispatch)
 - **E2E Tests**: Manual workflow dispatch only

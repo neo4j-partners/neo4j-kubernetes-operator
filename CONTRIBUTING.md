@@ -175,7 +175,7 @@ cd neo4j-kubernetes-operator
 We have several levels of testing:
 
 - **Unit Tests**: `make test-unit`
-- **Integration Tests**: `make test-integration`
+- **Integration Tests**: `make test-integration` (auto-creates cluster and deploys operator)
 - **All Tests**: `make test`
 - **Coverage Report**: `make test-coverage`
 

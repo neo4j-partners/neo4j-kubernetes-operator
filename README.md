@@ -101,12 +101,16 @@ Installation requires cloning from source:
 6. **Verify your installation** (Optional):
 
    ```bash
-   # Run unit tests
+   # Run unit tests (fast, no cluster required)
    make test-unit
 
-   # Create test cluster and run integration tests
-   make test-cluster
+   # Run integration tests (automatically creates cluster and deploys operator)
    make test-integration
+
+   # Or run tests step by step
+   make test-cluster        # Create test cluster
+   make test-integration    # Run integration tests
+   make test-cluster-delete # Clean up test cluster
    ```
 
 ## 📊 Database Management
@@ -477,9 +481,8 @@ cd neo4j-kubernetes-operator
 make dev-cluster
 
 # Run tests to verify setup
-make test-unit          # Unit tests
-make test-cluster       # Create test cluster
-make test-integration   # Integration tests
+make test-unit          # Unit tests (fast, no cluster required)
+make test-integration   # Integration tests (auto-creates cluster, deploys operator)
 make test-ci-local      # Emulate CI workflow with debug logging (Added 2025-08-22)
 
 # Deploy operator for development
@@ -492,8 +495,8 @@ make operator-setup
 
 - `make dev-cluster` - Create development Kind cluster
 - `make operator-setup` - Deploy operator in-cluster (recommended)
-- `make test-unit` - Run unit tests
-- `make test-integration` - Run integration tests
+- `make test-unit` - Run unit tests (fast, no cluster required)
+- `make test-integration` - Run integration tests (auto-creates cluster, deploys operator)
 - `make test-ci-local` - Emulate CI workflow with debug logging
 
 **Operator Installation**:

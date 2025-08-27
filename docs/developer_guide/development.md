@@ -261,8 +261,13 @@ go test ./internal/validation -v
 
 ### Integration Testing
 ```bash
-# Full integration test suite
+# Full integration test suite (automatically creates cluster and deploys operator)
 make test-integration
+
+# Alternative: step-by-step approach for debugging
+make test-cluster         # Create test cluster only
+make test-integration     # Run tests with existing cluster
+make test-cluster-delete  # Clean up test cluster
 
 # Run specific integration tests
 ginkgo run -focus "should create backup" ./test/integration
