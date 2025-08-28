@@ -357,6 +357,7 @@ func setupProductionControllers(mgr ctrl.Manager) error {
 			controller: &controller.Neo4jPluginReconciler{
 				Client:       mgr.GetClient(),
 				Scheme:       mgr.GetScheme(),
+				Recorder:     mgr.GetEventRecorderFor("neo4j-plugin-controller"),
 				RequeueAfter: controller.GetTestRequeueAfter(),
 			},
 		},

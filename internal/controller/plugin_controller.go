@@ -26,6 +26,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -65,6 +66,7 @@ func getStandaloneAdminSecretName(standalone *neo4jv1alpha1.Neo4jEnterpriseStand
 type Neo4jPluginReconciler struct {
 	client.Client
 	Scheme       *runtime.Scheme
+	Recorder     record.EventRecorder
 	RequeueAfter time.Duration
 }
 
@@ -148,7 +150,7 @@ func (r *Neo4jPluginReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	r.updatePluginStatus(ctx, plugin, "Ready", "Plugin installed and configured successfully")
 
 	logger.Info("Plugin reconciliation completed")
-	return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
+	return ctrl.Result{}, nil
 }
 
 func (r *Neo4jPluginReconciler) handleDeletion(ctx context.Context, plugin *neo4jv1alpha1.Neo4jPlugin) (ctrl.Result, error) {
