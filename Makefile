@@ -328,12 +328,10 @@ uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified 
 # Removed: deploy/undeploy targets - use explicit deploy-prod or deploy-dev instead
 
 .PHONY: deploy-dev
-deploy-dev: manifests kustomize ## Deploy controller with development configuration to the K8s cluster.
-	$(KUSTOMIZE) build config/overlays/dev | $(KUBECTL) apply -f -
+deploy-dev: deploy-dev-local ## Deploy controller with development configuration (uses local image by default).
 
 .PHONY: deploy-prod
-deploy-prod: manifests kustomize ## Deploy controller with production configuration to the K8s cluster.
-	$(KUSTOMIZE) build config/overlays/prod | $(KUBECTL) apply -f -
+deploy-prod: deploy-prod-local ## Deploy controller with production configuration (uses local image by default).
 
 .PHONY: deploy-dev-local
 deploy-dev-local: manifests kustomize docker-build ## Build and deploy controller with local dev image to Kind cluster.
@@ -365,9 +363,15 @@ deploy-prod-local: manifests kustomize ## Build and deploy controller with local
 		exit 1; \
 	fi
 	@echo "Deploying to prod namespace with local image..."
-	@cd config/manager && ../../bin/kustomize edit set image controller=neo4j-operator:latest && cd ../..
-	$(KUSTOMIZE) build config/default | $(KUBECTL) apply -f -
-	@cd config/manager && ../../bin/kustomize edit set image controller=controller:latest && cd ../..
+	$(KUSTOMIZE) build config/overlays/prod | $(KUBECTL) apply -f -
+
+.PHONY: deploy-dev-registry
+deploy-dev-registry: manifests kustomize ## Deploy controller with development configuration using registry image.
+	$(KUSTOMIZE) build config/overlays/dev | $(KUBECTL) apply -f -
+
+.PHONY: deploy-prod-registry
+deploy-prod-registry: manifests kustomize ## Deploy controller with production configuration using registry image.
+	$(KUSTOMIZE) build config/overlays/prod-registry | $(KUBECTL) apply -f -
 
 .PHONY: undeploy-dev
 undeploy-dev: kustomize ## Undeploy development controller from the K8s cluster.

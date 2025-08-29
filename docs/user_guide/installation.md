@@ -18,10 +18,10 @@ LATEST_TAG=$(git describe --tags --abbrev=0)
 git checkout $LATEST_TAG
 
 # Install CRDs and operator
-make install           # Install CRDs
-make deploy-prod-local # Build and deploy operator with local image
+make install      # Install CRDs
+make deploy-prod  # Deploy operator (builds and uses local image)
 # or (requires ghcr.io access)
-make deploy-prod       # Deploy from registry
+make deploy-prod-registry  # Deploy from ghcr.io registry
 ```
 
 This installs:
@@ -42,10 +42,10 @@ cd neo4j-kubernetes-operator
 # Create development cluster
 make dev-cluster
 
-# Deploy operator with local image (RECOMMENDED)
-make deploy-dev-local   # Development namespace with debug features
+# Deploy operator (uses local image by default)
+make deploy-dev   # Development namespace with debug features
 # or
-make deploy-prod-local  # Production-like namespace
+make deploy-prod  # Production namespace
 
 # Alternative: Use automated setup (detects cluster and deploys)
 make operator-setup

@@ -58,11 +58,11 @@ Installation requires cloning from source:
    make install
 
    # Deploy the operator (choose based on your environment)
-   make deploy-prod-local  # Local development with prod-like settings
-   make deploy-dev-local   # Local development with debug features
-   # or (requires ghcr.io access)
-   make deploy-prod        # Deploy from ghcr.io/neo4j-labs/neo4j-kubernetes-operator
-   make deploy-dev         # Deploy dev overlay from local neo4j-operator:dev
+   make deploy-prod        # Production deployment (uses local neo4j-operator:latest image)
+   make deploy-dev         # Development deployment (uses local neo4j-operator:dev image)
+   # or (for registry-based deployment)
+   make deploy-prod-registry  # Deploy from ghcr.io registry (requires authentication)
+   make deploy-dev-registry   # Deploy dev overlay with registry image
    ```
 
 3. **Create admin credentials** (Required for authentication):
@@ -247,15 +247,15 @@ For development work with locally built images:
 # Create development cluster
 make dev-cluster
 
-# Build and deploy operator with local image (RECOMMENDED)
-make deploy-dev-local   # Deploy to dev namespace with local neo4j-operator:dev image
+# Deploy operator (uses local images by default)
+make deploy-dev   # Deploy to dev namespace with local neo4j-operator:dev image
 # or
-make deploy-prod-local  # Deploy to prod namespace with local neo4j-operator:latest image
+make deploy-prod  # Deploy to prod namespace with local neo4j-operator:latest image
 
 # Alternative: Use automated setup (detects available clusters)
 make operator-setup
 
-# Note: Always use local images for development to avoid registry dependencies
+# Note: Production deployment now uses local images by default
 ```
 
 For additional deployment options, see the Installation section above.

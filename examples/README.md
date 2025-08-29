@@ -8,11 +8,11 @@ Before deploying any examples, ensure you have:
 
 1. **Neo4j Kubernetes Operator installed** in your cluster:
    ```bash
-   # For local development
-   make deploy-dev-local   # or make deploy-prod-local
+   # Standard deployment (uses local images)
+   make deploy-dev   # or make deploy-prod
 
-   # For production (requires ghcr.io access)
-   make deploy-prod
+   # Registry-based deployment (requires ghcr.io access)
+   make deploy-prod-registry
    ```
 2. **cert-manager v1.18+ with ClusterIssuer** (automatically installed in dev/test clusters)
 3. **Appropriate storage classes** available in your cluster

@@ -24,10 +24,10 @@ LATEST_TAG=$(git describe --tags --abbrev=0)
 git checkout $LATEST_TAG
 
 # Install CRDs and operator
-make install           # Install CRDs
-make deploy-prod-local # Build and deploy operator with local image (recommended)
+make install      # Install CRDs
+make deploy-prod  # Deploy operator (builds and uses local image)
 # or (requires ghcr.io access)
-make deploy-prod       # Deploy from registry
+make deploy-prod-registry  # Deploy from ghcr.io registry
 ```
 
 ## Operator Modes
@@ -42,15 +42,15 @@ For detailed information about modes, configuration options, and caching strateg
 ### Quick Mode Selection
 
 ```bash
-# Production deployment with local image (recommended)
-make deploy-prod-local
+# Production deployment (uses local image by default)
+make deploy-prod
 
-# Development deployment with local image (recommended)
-make deploy-dev-local
+# Development deployment (uses local image by default)
+make deploy-dev
 
 # Alternative: Registry-based deployment
-make deploy-prod  # Requires ghcr.io access
-make deploy-dev   # Requires local neo4j-operator:dev image
+make deploy-prod-registry  # Requires ghcr.io access
+make deploy-dev-registry   # Requires registry access for dev image
 ```
 
 **⚠️ Important:** The operator must always run in-cluster, even for development. This ensures proper DNS resolution and cluster connectivity required for Neo4j cluster formation.

@@ -6,27 +6,28 @@ This guide provides deployment options for the Neo4j Enterprise Operator, optimi
 
 | Target | Make Command | Image Source | Use Case |
 |--------|-------------|-------------|----------|
-| **Local Development** | `make deploy-dev-local` | Built locally (`neo4j-operator:dev`) | Development with debug features |
-| **Local Production-like** | `make deploy-prod-local` | Built locally (`neo4j-operator:latest`) | Local testing with prod settings |
-| **Production** | `make deploy-prod` | ghcr.io registry | Production deployment (requires registry access) |
-| **Development Overlay** | `make deploy-dev` | Pre-built `neo4j-operator:dev` | Development with custom image |
+| **Development** | `make deploy-dev` | Built locally (`neo4j-operator:dev`) | Development with debug features |
+| **Production** | `make deploy-prod` | Built locally (`neo4j-operator:latest`) | Production deployment (local build) |
+| **Development Registry** | `make deploy-dev-registry` | Pre-built `neo4j-operator:dev` | Development with pre-built image |
+| **Production Registry** | `make deploy-prod-registry` | ghcr.io registry | Production deployment (requires registry access) |
 
 ## Quick Start
 
-### Local Development (Recommended)
+### Standard Deployment (Recommended)
 
-For development and testing without external dependencies:
+For development and production using locally built images:
 
 ```bash
 # Create development cluster
 make dev-cluster
 
-# Build and deploy operator with local image
-make deploy-dev-local
-```
+# Deploy operator (builds and uses local image automatically)
+make deploy-dev   # for development
+# or
+make deploy-prod  # for production
 
 This approach:
-- ✅ Builds operator from your current code
+- ✅ Builds operator from your current code automatically
 - ✅ No registry authentication required
 - ✅ Fast iteration cycle
 - ✅ Complete control over image content
@@ -43,11 +44,11 @@ cd neo4j-kubernetes-operator
 # Install CRDs
 make install
 
-# Option 1: Local build (recommended for air-gapped or private environments)
-make deploy-prod-local
-
-# Option 2: Registry image (requires ghcr.io access)
+# Deploy production operator (builds local image automatically)
 make deploy-prod
+
+# Alternative: Registry-based deployment (requires ghcr.io access)
+make deploy-prod-registry
 ```
 
 ## Deployment Details
