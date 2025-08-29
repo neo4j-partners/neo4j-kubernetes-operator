@@ -84,8 +84,10 @@ var _ = Describe("Multi-Node Cluster Formation Integration Tests", func() {
 			}
 		}
 
-		// Note: Namespace cleanup is handled by the test suite cleanup
-		// which removes all test namespaces and their resources
+		// Clean up any remaining resources in namespace
+		if namespace != nil {
+			cleanupCustomResourcesInNamespace(namespace.Name)
+		}
 	})
 
 	Context("Minimal Cluster (1 Primary + 1 Secondary)", func() {
