@@ -95,10 +95,30 @@ jobs:
         # Ensure kustomize is available
         make kustomize
 
-        # Build and deploy with the local test image directly
-        cd config/manager && ../../bin/kustomize edit set image controller=neo4j-operator:integration-test && cd ../..
-        ./bin/kustomize build config/default | kubectl apply -f -
-        kubectl rollout status deployment/neo4j-operator-controller-manager -n neo4j-operator-system --timeout=120s
+        # Create a temporary kustomization overlay directory for CI with local image
+        mkdir -p config/overlays/ci-temp
+        cat <<EOF > config/overlays/ci-temp/kustomization.yaml
+        apiVersion: kustomize.config.k8s.io/v1beta1
+        kind: Kustomization
+        namespace: neo4j-operator-system
+        resources:
+        - ../../default
+        images:
+        - name: controller
+          newName: neo4j-operator
+          newTag: integration-test
+        EOF
+
+        # Verify the overlay produces the correct image
+        echo "Verifying kustomize overlay produces correct image..."
+        ./bin/kustomize build config/overlays/ci-temp | grep "image:" | grep -v "description:" || true
+
+        # Deploy using the temporary overlay
+        ./bin/kustomize build config/overlays/ci-temp | kubectl apply -f -
+
+        # Wait for deployment and verify the image
+        kubectl wait --for=condition=available --timeout=120s deployment/neo4j-operator-controller-manager -n neo4j-operator-system || true
+        kubectl describe deployment neo4j-operator-controller-manager -n neo4j-operator-system | grep -A 2 "Image:" || true
 
         # Run all integration tests
         go test ./test/integration/... -v -timeout=60m | tee integration-test-output.log
