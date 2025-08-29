@@ -333,7 +333,6 @@ deploy-dev: manifests kustomize ## Deploy controller with development configurat
 
 .PHONY: deploy-prod
 deploy-prod: manifests kustomize ## Deploy controller with production configuration to the K8s cluster.
-	cd config/overlays/prod && $(KUSTOMIZE) edit set image controller=ghcr.io/neo4j-labs/neo4j-kubernetes-operator:$(VERSION)
 	$(KUSTOMIZE) build config/overlays/prod | $(KUBECTL) apply -f -
 
 .PHONY: undeploy-dev
