@@ -88,8 +88,10 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 			}
 		}
 
-		// Note: Namespace cleanup is handled by the test suite cleanup
-		// which removes all test namespaces and their resources
+		// Clean up any remaining resources in namespace
+		if namespace != nil {
+			cleanupCustomResourcesInNamespace(namespace.Name)
+		}
 	})
 
 	Context("End-to-end cluster lifecycle", func() {

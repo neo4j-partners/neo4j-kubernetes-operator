@@ -47,7 +47,8 @@ var _ = Describe("Topology Placement Simple", func() {
 				By(fmt.Sprintf("Failed to delete cluster: %v", err))
 			}
 		}
-		// Note: Namespace cleanup is handled by the test suite cleanup
+		// Clean up any remaining resources in namespace
+		cleanupCustomResourcesInNamespace(testNamespace)
 	})
 
 	Context("Topology Spread Constraints", func() {

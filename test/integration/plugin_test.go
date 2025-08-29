@@ -38,6 +38,54 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 		interval = time.Second * 5
 	)
 
+	AfterEach(func() {
+		// Critical: Clean up any plugin test resources to prevent CI resource exhaustion
+		By("Cleaning up plugin test resources")
+
+		// Clean up any clusters created by plugin tests
+		clusterList := &neo4jv1alpha1.Neo4jEnterpriseClusterList{}
+		if err := k8sClient.List(ctx, clusterList); err == nil {
+			for i := range clusterList.Items {
+				cluster := &clusterList.Items[i]
+				if cluster.Name == "plugin-test-cluster" || strings.Contains(cluster.Namespace, "plugin") {
+					if len(cluster.GetFinalizers()) > 0 {
+						cluster.SetFinalizers([]string{})
+						_ = k8sClient.Update(ctx, cluster)
+					}
+					_ = k8sClient.Delete(ctx, cluster)
+				}
+			}
+		}
+
+		// Clean up any standalones created by plugin tests
+		standaloneList := &neo4jv1alpha1.Neo4jEnterpriseStandaloneList{}
+		if err := k8sClient.List(ctx, standaloneList); err == nil {
+			for i := range standaloneList.Items {
+				standalone := &standaloneList.Items[i]
+				if standalone.Name == "plugin-test-standalone" || strings.Contains(standalone.Namespace, "plugin") {
+					if len(standalone.GetFinalizers()) > 0 {
+						standalone.SetFinalizers([]string{})
+						_ = k8sClient.Update(ctx, standalone)
+					}
+					_ = k8sClient.Delete(ctx, standalone)
+				}
+			}
+		}
+
+		// Clean up any plugins
+		pluginList := &neo4jv1alpha1.Neo4jPluginList{}
+		if err := k8sClient.List(ctx, pluginList); err == nil {
+			for i := range pluginList.Items {
+				plugin := &pluginList.Items[i]
+				if len(plugin.GetFinalizers()) > 0 {
+					plugin.SetFinalizers([]string{})
+					_ = k8sClient.Update(ctx, plugin)
+				}
+				_ = k8sClient.Delete(ctx, plugin)
+			}
+		}
+	})
+
 	Context("Plugin Installation on Cluster", func() {
 		It("Should install APOC plugin on Neo4jEnterpriseCluster", func() {
 			ctx := context.Background()
