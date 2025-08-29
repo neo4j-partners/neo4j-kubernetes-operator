@@ -6,7 +6,14 @@ This directory contains example configurations for deploying Neo4j Enterprise cl
 
 Before deploying any examples, ensure you have:
 
-1. **Neo4j Kubernetes Operator installed** in your cluster
+1. **Neo4j Kubernetes Operator installed** in your cluster:
+   ```bash
+   # For local development
+   make deploy-dev-local   # or make deploy-prod-local
+
+   # For production (requires ghcr.io access)
+   make deploy-prod
+   ```
 2. **cert-manager v1.18+ with ClusterIssuer** (automatically installed in dev/test clusters)
 3. **Appropriate storage classes** available in your cluster
 4. **Neo4j Enterprise Edition** (evaluation license acceptable for testing)

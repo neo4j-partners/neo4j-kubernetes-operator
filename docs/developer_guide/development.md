@@ -123,27 +123,37 @@ This creates a Kind cluster with:
 - **Development-Optimized**: Fast cluster creation for development
 - **Neo4j CRDs**: Automatically installed
 
-### 4. Local Development
+### 4. Local Development with Built Images
+
+**RECOMMENDED**: Use local image deployment for development to avoid registry dependencies:
 
 ```bash
-# Deploy operator in development cluster (REQUIRED)
-make deploy-dev
+# Build and deploy operator with local image (RECOMMENDED)
+make deploy-dev-local   # Uses neo4j-operator:dev image
+# or
+make deploy-prod-local  # Uses neo4j-operator:latest image with prod settings
+```
+
+**Alternative**: Use pre-built images (requires image availability):
+```bash
+# Deploy using overlay configurations
+make deploy-dev   # Uses neo4j-operator:dev (must be built locally first)
+make deploy-prod  # Uses ghcr.io registry image (requires authentication)
 ```
 
 **⚠️ CRITICAL:** The operator must run in-cluster to avoid DNS resolution issues and ensure proper Neo4j cluster formation.
 
-**Benefits of local development**:
-- **Rapid Iteration**: Immediate code changes without rebuilds
-- **Debug Support**: Full debugger support with breakpoints
-- **Log Access**: Direct console output for debugging
-- **Fast Feedback**: No container builds or deployments required
+**Benefits of local image development**:
+- **Complete Control**: Use exact code you're working on
+- **No Registry Dependencies**: No need for ghcr.io access or authentication
+- **Rapid Testing**: Build and deploy changes quickly
+- **Consistent Environment**: Same image used for development and testing
 
-**Optional arguments**:
+**Development logging**:
 ```bash
-# Deploy with debug logging enabled
-make deploy-dev
+# Enable debug logging on running operator
 kubectl patch -n neo4j-operator-dev deployment/neo4j-operator-controller-manager \
-  -p '{"spec":{"template":{"spec":{"containers":[{"name":"manager","args":["--mode=dev","--zap-log-level=debug"]}]}}}}'
+  -p '{"spec":{"template":{"spec":{"containers":[{"name":"manager","args":["--leader-elect","--health-probe-bind-address=:8081","--zap-log-level=debug"]}]}}}}'
 ```
 
 ## Development Workflow
@@ -152,8 +162,8 @@ kubectl patch -n neo4j-operator-dev deployment/neo4j-operator-controller-manager
 
 1. **Start with clean environment**:
    ```bash
-   make dev-cluster        # Create fresh cluster
-   make deploy-dev         # Deploy operator in cluster
+   make dev-cluster          # Create fresh cluster
+   make deploy-dev-local     # Build and deploy operator with local image
    ```
 
 2. **Test your changes**:

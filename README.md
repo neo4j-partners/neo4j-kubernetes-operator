@@ -57,9 +57,12 @@ Installation requires cloning from source:
    # Install CRDs into your cluster
    make install
 
-   # Deploy the operator (choose mode based on use case)
-   make deploy-prod  # Production deployment (recommended)
-   make deploy-dev   # Development deployment (with debug features)
+   # Deploy the operator (choose based on your environment)
+   make deploy-prod-local  # Local development with prod-like settings
+   make deploy-dev-local   # Local development with debug features
+   # or (requires ghcr.io access)
+   make deploy-prod        # Deploy from ghcr.io/neo4j-labs/neo4j-kubernetes-operator
+   make deploy-dev         # Deploy dev overlay from local neo4j-operator:dev
    ```
 
 3. **Create admin credentials** (Required for authentication):
@@ -238,15 +241,21 @@ make uninstall
 
 ### Development Installation
 
-For development work:
+For development work with locally built images:
 
 ```bash
-# Create development cluster with operator
+# Create development cluster
 make dev-cluster
-make operator-setup  # Deploy operator to cluster (recommended)
 
-# Note: Operator must always run in-cluster for proper DNS resolution
-# Local execution has been removed to prevent cluster formation issues
+# Build and deploy operator with local image (RECOMMENDED)
+make deploy-dev-local   # Deploy to dev namespace with local neo4j-operator:dev image
+# or
+make deploy-prod-local  # Deploy to prod namespace with local neo4j-operator:latest image
+
+# Alternative: Use automated setup (detects available clusters)
+make operator-setup
+
+# Note: Always use local images for development to avoid registry dependencies
 ```
 
 For additional deployment options, see the Installation section above.
