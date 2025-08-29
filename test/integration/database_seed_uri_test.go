@@ -43,13 +43,8 @@ var _ = Describe("Neo4jDatabase Seed URI Integration Tests", func() {
 		)
 
 		BeforeEach(func() {
-			// Create a unique namespace for each test
-			testNamespace = "test-seed-uri-" + generateRandomString(8)
-
-			ns := &corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
-			}
-			Expect(k8sClient.Create(context.Background(), ns)).To(Succeed())
+			// Create a unique namespace for each test using the standard helper
+			testNamespace = createTestNamespace("seed-uri")
 
 			// Create admin secret for Neo4j authentication
 			adminSecret := &corev1.Secret{
@@ -131,11 +126,8 @@ var _ = Describe("Neo4jDatabase Seed URI Integration Tests", func() {
 		})
 
 		AfterEach(func() {
-			// Cleanup namespace (cascade deletes all resources)
-			ns := &corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
-			}
-			Expect(k8sClient.Delete(context.Background(), ns)).To(Succeed())
+			// Cleanup is handled by the test suite's cleanup of test namespaces
+			// The createTestNamespace function already tracks namespaces for cleanup
 		})
 
 		It("should create database with valid S3 seed URI successfully", func() {
@@ -452,14 +444,4 @@ func Contains(s, substr string) bool {
 		}
 		return false
 	}()
-}
-
-// Helper function to generate random string for unique test namespaces
-func generateRandomString(length int) string {
-	const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
-	result := make([]byte, length)
-	for i := range result {
-		result[i] = charset[time.Now().UnixNano()%int64(len(charset))]
-	}
-	return string(result)
 }
