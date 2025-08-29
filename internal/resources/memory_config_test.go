@@ -67,7 +67,7 @@ func TestCalculateOptimalMemorySettings(t *testing.T) {
 			testMemorySize: "8Gi",
 		},
 		{
-			name: "low memory deployment (512Mi)",
+			name: "low memory deployment (1Gi)",
 			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-cluster",
@@ -75,14 +75,14 @@ func TestCalculateOptimalMemorySettings(t *testing.T) {
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 					Resources: &corev1.ResourceRequirements{
 						Limits: corev1.ResourceList{
-							corev1.ResourceMemory: resource.MustParse("512Mi"),
+							corev1.ResourceMemory: resource.MustParse("1Gi"),
 						},
 					},
 				},
 			},
-			expectedHeap:   "192M", // Heap size after reserving space for page cache
-			expectedPage:   "64M",  // Minimum page cache for low memory
-			testMemorySize: "512Mi",
+			expectedHeap:   "512M", // Heap size after reserving space for page cache
+			expectedPage:   "256M", // Page cache for 1Gi (25% of 1Gi)
+			testMemorySize: "1Gi",
 		},
 		{
 			name: "very high memory deployment (16Gi)",
