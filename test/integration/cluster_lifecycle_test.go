@@ -220,13 +220,20 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 					Namespace: namespace.Name,
 				}, cluster)
 				if err != nil {
+					GinkgoWriter.Printf("Failed to get cluster: %v\n", err)
 					return false
 				}
-				for _, condition := range cluster.Status.Conditions {
-					if condition.Type == "Ready" && condition.Status == metav1.ConditionTrue {
-						return true
-					}
+
+				// Check if cluster phase is Ready (more reliable than conditions)
+				if cluster.Status.Phase == "Ready" {
+					GinkgoWriter.Printf("Cluster is ready. Phase: %s, Message: %s\n",
+						cluster.Status.Phase, cluster.Status.Message)
+					return true
 				}
+
+				// Log current status for debugging
+				GinkgoWriter.Printf("Cluster not yet ready. Phase: %s, Message: %s\n",
+					cluster.Status.Phase, cluster.Status.Message)
 				return false
 			}, timeout, interval).Should(BeTrue())
 

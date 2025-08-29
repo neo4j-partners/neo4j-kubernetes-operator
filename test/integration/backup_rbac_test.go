@@ -104,13 +104,20 @@ var _ = Describe("Backup RBAC Automatic Creation", func() {
 					Namespace: testNamespace,
 				}, &clusterStatus)
 				if err != nil {
+					GinkgoWriter.Printf("Failed to get cluster: %v\n", err)
 					return false
 				}
-				for _, condition := range clusterStatus.Status.Conditions {
-					if condition.Type == "Ready" && condition.Status == metav1.ConditionTrue {
-						return true
-					}
+
+				// Check if cluster phase is Ready (more reliable than conditions)
+				if clusterStatus.Status.Phase == "Ready" {
+					GinkgoWriter.Printf("Cluster is ready. Phase: %s, Message: %s\n",
+						clusterStatus.Status.Phase, clusterStatus.Status.Message)
+					return true
 				}
+
+				// Log current status for debugging
+				GinkgoWriter.Printf("Cluster not yet ready. Phase: %s, Message: %s\n",
+					clusterStatus.Status.Phase, clusterStatus.Status.Message)
 				return false
 			}, timeout, interval).Should(BeTrue())
 		})

@@ -152,15 +152,16 @@ var _ = Describe("Centralized Backup Configuration", func() {
 					return false
 				}
 
-				// Log status for debugging
-				GinkgoWriter.Printf("Cluster %s status: Phase=%s, Message=%s\n",
-					foundCluster.Name, foundCluster.Status.Phase, foundCluster.Status.Message)
-
-				for _, condition := range foundCluster.Status.Conditions {
-					if condition.Type == "Ready" && condition.Status == metav1.ConditionTrue {
-						return true
-					}
+				// Check if cluster phase is Ready (more reliable than conditions)
+				if foundCluster.Status.Phase == "Ready" {
+					GinkgoWriter.Printf("Cluster %s is ready. Phase: %s, Message: %s\n",
+						foundCluster.Name, foundCluster.Status.Phase, foundCluster.Status.Message)
+					return true
 				}
+
+				// Log current status for debugging
+				GinkgoWriter.Printf("Cluster %s not yet ready. Phase: %s, Message: %s\n",
+					foundCluster.Name, foundCluster.Status.Phase, foundCluster.Status.Message)
 				return false
 			}, timeout, interval).Should(BeTrue())
 
@@ -274,13 +275,20 @@ var _ = Describe("Centralized Backup Configuration", func() {
 				var foundCluster neo4jv1alpha1.Neo4jEnterpriseCluster
 				if err := k8sClient.Get(ctx, types.NamespacedName{
 					Name: cluster2025.Name, Namespace: testNamespace}, &foundCluster); err != nil {
+					GinkgoWriter.Printf("Failed to get 2025.x cluster: %v\n", err)
 					return false
 				}
-				for _, condition := range foundCluster.Status.Conditions {
-					if condition.Type == "Ready" && condition.Status == metav1.ConditionTrue {
-						return true
-					}
+
+				// Check if cluster phase is Ready (more reliable than conditions)
+				if foundCluster.Status.Phase == "Ready" {
+					GinkgoWriter.Printf("2025.x Cluster is ready. Phase: %s, Message: %s\n",
+						foundCluster.Status.Phase, foundCluster.Status.Message)
+					return true
 				}
+
+				// Log current status for debugging
+				GinkgoWriter.Printf("2025.x Cluster not yet ready. Phase: %s, Message: %s\n",
+					foundCluster.Status.Phase, foundCluster.Status.Message)
 				return false
 			}, timeout, interval).Should(BeTrue())
 
