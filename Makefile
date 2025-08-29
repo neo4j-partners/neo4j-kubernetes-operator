@@ -335,6 +335,40 @@ deploy-dev: manifests kustomize ## Deploy controller with development configurat
 deploy-prod: manifests kustomize ## Deploy controller with production configuration to the K8s cluster.
 	$(KUSTOMIZE) build config/overlays/prod | $(KUBECTL) apply -f -
 
+.PHONY: deploy-dev-local
+deploy-dev-local: manifests kustomize docker-build ## Build and deploy controller with local dev image to Kind cluster.
+	@echo "Building local dev image..."
+	$(CONTAINER_TOOL) build -t neo4j-operator:dev .
+	@echo "Loading image into Kind cluster..."
+	@if kind get clusters | grep -q neo4j-operator-dev; then \
+		kind load docker-image neo4j-operator:dev --name neo4j-operator-dev; \
+	elif kind get clusters | grep -q neo4j-operator-test; then \
+		kind load docker-image neo4j-operator:dev --name neo4j-operator-test; \
+	else \
+		echo "No Kind cluster found. Please run 'make dev-cluster' or 'make test-cluster' first."; \
+		exit 1; \
+	fi
+	@echo "Deploying to dev namespace with local image..."
+	$(KUSTOMIZE) build config/overlays/dev | $(KUBECTL) apply -f -
+
+.PHONY: deploy-prod-local
+deploy-prod-local: manifests kustomize ## Build and deploy controller with local prod image to Kind cluster.
+	@echo "Building local prod image..."
+	$(CONTAINER_TOOL) build -t neo4j-operator:latest .
+	@echo "Loading image into Kind cluster..."
+	@if kind get clusters | grep -q neo4j-operator-dev; then \
+		kind load docker-image neo4j-operator:latest --name neo4j-operator-dev; \
+	elif kind get clusters | grep -q neo4j-operator-test; then \
+		kind load docker-image neo4j-operator:latest --name neo4j-operator-test; \
+	else \
+		echo "No Kind cluster found. Please run 'make dev-cluster' or 'make test-cluster' first."; \
+		exit 1; \
+	fi
+	@echo "Deploying to prod namespace with local image..."
+	@cd config/manager && ../../bin/kustomize edit set image controller=neo4j-operator:latest && cd ../..
+	$(KUSTOMIZE) build config/default | $(KUBECTL) apply -f -
+	@cd config/manager && ../../bin/kustomize edit set image controller=controller:latest && cd ../..
+
 .PHONY: undeploy-dev
 undeploy-dev: kustomize ## Undeploy development controller from the K8s cluster.
 	$(KUSTOMIZE) build config/overlays/dev | $(KUBECTL) delete --ignore-not-found=true -f -

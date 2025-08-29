@@ -59,7 +59,14 @@ make dev-cluster-delete   # Delete dev cluster
 make dev-cleanup          # Clean dev environment (keep cluster)
 make dev-destroy          # Completely destroy dev environment
 
-make operator-setup       # Deploy operator to cluster (ALWAYS USE THIS)
+# Local deployment with built images (RECOMMENDED FOR DEVELOPMENT)
+make deploy-dev-local     # Build and deploy to dev namespace with local image
+make deploy-prod-local    # Build and deploy to prod namespace with local image
+make operator-setup       # Deploy operator to cluster (automated script)
+
+# Remote deployment (requires ghcr.io access)
+make deploy-dev           # Deploy dev overlay (uses neo4j-operator:dev)
+make deploy-prod          # Deploy prod overlay (uses ghcr.io image)
 ```
 
 **CRITICAL: NEVER run `make dev-run` (operator outside cluster)**

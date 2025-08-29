@@ -118,7 +118,7 @@ cd neo4j-kubernetes-operator
 
    ```bash
    make dev-cluster
-   make operator-setup  # Deploy operator in development cluster
+   make deploy-dev-local  # Build and deploy operator with local image
    ```
 
 ## Development Workflow
@@ -167,7 +167,9 @@ cd neo4j-kubernetes-operator
 4. **Test your changes locally**:
 
    ```bash
-   make operator-setup  # Deploy operator to test your changes
+   make deploy-dev-local  # Build and deploy operator with your changes
+   # or
+   make deploy-prod-local  # Test in production-like environment
    ```
 
 ### Testing Your Changes
