@@ -300,22 +300,46 @@ const (
 
 ### Critical Cleanup Requirements
 
-Proper resource cleanup is **critical** to prevent namespace termination issues:
+Proper resource cleanup is **critical** to prevent CI failures and resource exhaustion:
 
-#### 1. Always Remove Finalizers Before Deletion
+#### 1. MANDATORY AfterEach Pattern
+
+**All integration tests MUST include AfterEach blocks** to prevent resource leaks:
 
 ```go
-By("Cleaning up")
-if resource != nil {
-    // Remove finalizers first
-    if len(resource.GetFinalizers()) > 0 {
-        resource.SetFinalizers([]string{})
-        Expect(k8sClient.Update(ctx, resource)).Should(Succeed())
+AfterEach(func() {
+    // Critical: Clean up resources immediately to prevent CI resource exhaustion
+    if cluster != nil {
+        By("Cleaning up cluster resource")
+        // Remove finalizers first
+        if len(cluster.GetFinalizers()) > 0 {
+            cluster.SetFinalizers([]string{})
+            _ = k8sClient.Update(ctx, cluster)
+        }
+        // Delete the resource
+        _ = k8sClient.Delete(ctx, cluster)
+        cluster = nil
     }
-    // Then delete the resource
-    Expect(k8sClient.Delete(ctx, resource)).Should(Succeed())
-}
+    // Clean up any remaining resources in namespace
+    if testNamespace != "" {
+        cleanupCustomResourcesInNamespace(testNamespace)
+    }
+})
 ```
+
+**Why This Pattern Is Critical:**
+- **Prevents resource accumulation** that causes "Insufficient memory" errors
+- **Ensures cleanup even if tests fail** (inline cleanup won't run on failure)
+- **Removes finalizers** to prevent resources stuck in Terminating state
+- **Cleans namespace resources** that might not have owner references
+
+#### 2. Common Mistakes to Avoid
+
+❌ **No AfterEach block** - Causes resource leaks if tests fail
+❌ **Inline cleanup only** - Won't execute if test panics or fails
+❌ **Missing namespace cleanup** - Leaves behind ConfigMaps, Services, etc.
+❌ **Not removing finalizers** - Resources stay in Terminating state
+❌ **Relying on test suite cleanup** - Not sufficient for resource-intensive tests
 
 #### 2. Handle All Resource Types
 

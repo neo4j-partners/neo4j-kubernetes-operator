@@ -632,6 +632,45 @@ func (r *Neo4jEnterpriseClusterReconciler) createOrUpdateResource(ctx context.Co
 - **Memory Validation**: Neo4j Enterprise requires minimum 1.5Gi for database creation and topology operations
 - **OOM Prevention**: Tests configured to prevent Out of Memory kills (exit code 137) during database operations
 
+### Integration Test Resource Management (Critical)
+**MANDATORY**: All integration tests MUST implement proper resource cleanup to prevent CI failures.
+
+**Required AfterEach Pattern**:
+```go
+AfterEach(func() {
+    // Critical: Clean up resources immediately to prevent CI resource exhaustion
+    if cluster != nil {
+        By("Cleaning up cluster resource")
+        // Remove finalizers first
+        if len(cluster.GetFinalizers()) > 0 {
+            cluster.SetFinalizers([]string{})
+            _ = k8sClient.Update(ctx, cluster)
+        }
+        // Delete the resource
+        _ = k8sClient.Delete(ctx, cluster)
+        cluster = nil
+    }
+    // Clean up any remaining resources in namespace
+    if testNamespace != "" {
+        cleanupCustomResourcesInNamespace(testNamespace)
+    }
+})
+```
+
+**Key Requirements**:
+1. **Always include AfterEach blocks** - Even if tests have inline cleanup
+2. **Remove finalizers before deletion** - Ensures resources are actually deleted
+3. **Call cleanupCustomResourcesInNamespace()** - Cleans up related resources
+4. **Set resources to nil after deletion** - Prevents double cleanup
+5. **Don't rely on test suite cleanup alone** - Active cleanup prevents accumulation
+
+**Common Pitfalls to Avoid**:
+- ❌ No AfterEach block (causes resource leaks if tests fail)
+- ❌ Only deleting main resource without namespace cleanup
+- ❌ Relying on inline cleanup at end of test (won't run if test fails)
+- ❌ Not removing finalizers (resources stay in Terminating state)
+- ❌ Comments saying "cleanup handled by test suite" (not sufficient)
+
 ### Template Comparison Fix (Critical)
 **Issue**: Original logic used `sts.ResourceVersion != ""` to check if StatefulSet exists
 **Problem**: ResourceVersion is populated even for new resources, preventing initial creation

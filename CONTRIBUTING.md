@@ -179,6 +179,33 @@ We have several levels of testing:
 - **All Tests**: `make test`
 - **Coverage Report**: `make test-coverage`
 
+#### Integration Test Best Practices
+
+When writing integration tests, **proper resource cleanup is MANDATORY** to prevent CI failures:
+
+1. **Always include AfterEach blocks** with comprehensive cleanup
+2. **Remove finalizers** before deleting resources to ensure actual deletion
+3. **Call cleanupCustomResourcesInNamespace()** to clean up all related resources
+4. **Don't rely on test suite cleanup alone** - implement active cleanup
+
+Example pattern:
+```go
+AfterEach(func() {
+    if cluster != nil {
+        // Remove finalizers and delete
+        if len(cluster.GetFinalizers()) > 0 {
+            cluster.SetFinalizers([]string{})
+            _ = k8sClient.Update(ctx, cluster)
+        }
+        _ = k8sClient.Delete(ctx, cluster)
+    }
+    // Clean up namespace resources
+    cleanupCustomResourcesInNamespace(testNamespace)
+})
+```
+
+See CLAUDE.md for detailed integration test patterns and common pitfalls to avoid.
+
 #### CI Workflow Emulation (Added 2025-08-22)
 
 Before submitting PRs, test your changes with CI-identical resource constraints:
