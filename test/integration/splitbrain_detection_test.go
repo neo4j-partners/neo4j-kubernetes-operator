@@ -256,14 +256,20 @@ var _ = Describe("Split-Brain Detection Integration Tests", func() {
 					Namespace: cluster.Namespace,
 				}, cluster)
 				if err != nil {
+					GinkgoWriter.Printf("Failed to get cluster: %v\n", err)
 					return false
 				}
 
-				for _, condition := range cluster.Status.Conditions {
-					if condition.Type == "Ready" && condition.Status == metav1.ConditionTrue {
-						return true
-					}
+				// Check if cluster phase is Ready (more reliable than conditions)
+				if cluster.Status.Phase == "Ready" {
+					GinkgoWriter.Printf("Cluster is ready. Phase: %s, Message: %s\n",
+						cluster.Status.Phase, cluster.Status.Message)
+					return true
 				}
+
+				// Log current status for debugging
+				GinkgoWriter.Printf("Cluster not yet ready. Phase: %s, Message: %s\n",
+					cluster.Status.Phase, cluster.Status.Message)
 				return false
 			}, timeout, interval).Should(BeTrue())
 
@@ -290,15 +296,20 @@ var _ = Describe("Split-Brain Detection Integration Tests", func() {
 					Namespace: cluster.Namespace,
 				}, cluster)
 				if err != nil {
+					GinkgoWriter.Printf("Failed to get cluster during recovery: %v\n", err)
 					return false
 				}
 
 				// Cluster should remain ready or return to ready state
-				for _, condition := range cluster.Status.Conditions {
-					if condition.Type == "Ready" && condition.Status == metav1.ConditionTrue {
-						return true
-					}
+				if cluster.Status.Phase == "Ready" {
+					GinkgoWriter.Printf("Cluster has recovered. Phase: %s, Message: %s\n",
+						cluster.Status.Phase, cluster.Status.Message)
+					return true
 				}
+
+				// Log current status for debugging
+				GinkgoWriter.Printf("Cluster not yet recovered. Phase: %s, Message: %s\n",
+					cluster.Status.Phase, cluster.Status.Message)
 				return false
 			}, timeout, interval).Should(BeTrue(), "Cluster should recover after pod failure")
 
