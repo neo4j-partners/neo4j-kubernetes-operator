@@ -90,9 +90,15 @@ jobs:
         # Deploy operator with correct image and run tests
         make docker-build IMG=neo4j-operator:integration-test
         kind load docker-image neo4j-operator:integration-test --name neo4j-operator-test
-        make deploy-dev IMG=neo4j-operator:integration-test
-        kubectl set image deployment/neo4j-operator-controller-manager manager=neo4j-operator:integration-test -n neo4j-operator-dev
-        kubectl rollout status deployment/neo4j-operator-controller-manager -n neo4j-operator-dev --timeout=120s
+
+        # Deploy to neo4j-operator-system namespace (where tests expect it)
+        # First ensure the namespace exists
+        kubectl create namespace neo4j-operator-system --dry-run=client -o yaml | kubectl apply -f -
+
+        # Deploy using kustomize with local image to neo4j-operator-system namespace
+        ./bin/kustomize build config/overlays/prod | kubectl apply -f -
+        kubectl patch deployment neo4j-operator-controller-manager -n neo4j-operator-system -p '{"spec":{"template":{"spec":{"containers":[{"name":"manager","image":"neo4j-operator:integration-test"}]}}}}'
+        kubectl rollout status deployment/neo4j-operator-controller-manager -n neo4j-operator-system --timeout=120s
 
         # Run all integration tests
         go test ./test/integration/... -v -timeout=60m | tee integration-test-output.log
