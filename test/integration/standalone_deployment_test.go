@@ -267,26 +267,26 @@ var _ = Describe("Neo4jEnterpriseStandalone Integration Tests", func() {
 			}, time.Minute*3, time.Second*10).Should(Succeed())
 
 			By("Verifying standalone status is properly reported")
-			Eventually(func() error {
+			Eventually(func() bool {
 				updatedStandalone := &neo4jv1alpha1.Neo4jEnterpriseStandalone{}
 				if err := k8sClient.Get(ctx, types.NamespacedName{
 					Name:      standaloneName,
 					Namespace: namespace.Name,
 				}, updatedStandalone); err != nil {
-					return err
+					GinkgoWriter.Printf("Failed to get standalone: %v\n", err)
+					return false
 				}
 
-				// Check if standalone has proper status
-				if updatedStandalone.Status.Phase == "" {
-					return fmt.Errorf("standalone should have phase in status")
+				// Check if standalone phase is Ready (more reliable than conditions)
+				if updatedStandalone.Status.Phase == "Ready" {
+					GinkgoWriter.Printf("Standalone is ready. Phase: %s\n", updatedStandalone.Status.Phase)
+					return true
 				}
 
-				if updatedStandalone.Status.Ready != true {
-					return fmt.Errorf("standalone should be ready, current phase: %s", updatedStandalone.Status.Phase)
-				}
-
-				return nil
-			}, time.Minute*2, time.Second*5).Should(Succeed())
+				// Log current status for debugging
+				GinkgoWriter.Printf("Standalone not yet ready. Phase: %s\n", updatedStandalone.Status.Phase)
+				return false
+			}, time.Minute*2, time.Second*5).Should(BeTrue())
 		})
 	})
 
@@ -517,21 +517,26 @@ var _ = Describe("Neo4jEnterpriseStandalone Integration Tests", func() {
 			Expect(k8sClient.Create(ctx, standalone)).To(Succeed())
 
 			By("Waiting for standalone to become ready")
-			Eventually(func() error {
+			Eventually(func() bool {
 				updatedStandalone := &neo4jv1alpha1.Neo4jEnterpriseStandalone{}
 				if err := k8sClient.Get(ctx, types.NamespacedName{
 					Name:      standaloneName,
 					Namespace: namespace.Name,
 				}, updatedStandalone); err != nil {
-					return err
+					GinkgoWriter.Printf("Failed to get standalone: %v\n", err)
+					return false
 				}
 
-				if updatedStandalone.Status.Ready != true {
-					return fmt.Errorf("standalone not ready, current phase: %s", updatedStandalone.Status.Phase)
+				// Check if standalone phase is Ready (more reliable than conditions)
+				if updatedStandalone.Status.Phase == "Ready" {
+					GinkgoWriter.Printf("Standalone is ready. Phase: %s\n", updatedStandalone.Status.Phase)
+					return true
 				}
 
-				return nil
-			}, time.Minute*5, time.Second*10).Should(Succeed())
+				// Log current status for debugging
+				GinkgoWriter.Printf("Standalone not yet ready. Phase: %s\n", updatedStandalone.Status.Phase)
+				return false
+			}, time.Minute*5, time.Second*10).Should(BeTrue())
 
 			By("Creating a database resource that references the standalone")
 			database := &neo4jv1alpha1.Neo4jDatabase{
