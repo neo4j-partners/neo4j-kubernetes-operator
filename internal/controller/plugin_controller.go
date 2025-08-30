@@ -205,7 +205,7 @@ func (r *Neo4jPluginReconciler) getTargetDeployment(ctx context.Context, plugin 
 		Name:      plugin.Spec.ClusterRef,
 		Namespace: plugin.Namespace,
 	}, standalone); err == nil {
-		isReady := standalone.Status.Phase == "Running"
+		isReady := standalone.Status.Phase == "Ready"
 		return &DeploymentInfo{
 			Object:    standalone,
 			Type:      "standalone",

@@ -19,7 +19,6 @@ package integration_test
 import (
 	"context"
 	"os"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -135,7 +134,7 @@ var _ = Describe("Enterprise Features Integration Tests", func() {
 						Name:      "apoc-plugin",
 						Namespace: namespace,
 					}, updated)
-				}, time.Minute*2, time.Second*5).Should(Succeed())
+				}, timeout, interval).Should(Succeed())
 			}
 		})
 	})
@@ -194,7 +193,7 @@ var _ = Describe("Enterprise Features Integration Tests", func() {
 					Name:      "monitoring-cluster",
 					Namespace: namespace,
 				}, updated)
-			}, time.Minute*2, time.Second*5).Should(Succeed())
+			}, timeout, interval).Should(Succeed())
 
 			By("Checking query monitoring configuration")
 			updated := &neo4jv1alpha1.Neo4jEnterpriseCluster{}
