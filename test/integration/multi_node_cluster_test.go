@@ -164,7 +164,7 @@ var _ = Describe("Multi-Node Cluster Formation Integration Tests", func() {
 				}
 
 				return nil
-			}, time.Minute*2, time.Second*5).Should(Succeed())
+			}, timeout, interval).Should(Succeed())
 
 			By("Waiting for single server StatefulSet to be created")
 			// CURRENT ARCHITECTURE: Single StatefulSet with multiple replicas
@@ -184,7 +184,7 @@ var _ = Describe("Multi-Node Cluster Formation Integration Tests", func() {
 				}
 
 				return nil
-			}, time.Minute*2, time.Second*5).Should(Succeed())
+			}, timeout, interval).Should(Succeed())
 
 			By("Verifying pods are created for minimal cluster")
 			Eventually(func() error {
@@ -200,7 +200,7 @@ var _ = Describe("Multi-Node Cluster Formation Integration Tests", func() {
 				}
 
 				return nil
-			}, time.Minute*2, time.Second*5).Should(Succeed())
+			}, timeout, interval).Should(Succeed())
 		})
 	})
 
@@ -267,7 +267,7 @@ var _ = Describe("Multi-Node Cluster Formation Integration Tests", func() {
 				}
 
 				return nil
-			}, time.Minute*2, time.Second*5).Should(Succeed())
+			}, timeout, interval).Should(Succeed())
 
 			By("Cleaning up the cluster")
 			Expect(k8sClient.Delete(ctx, cluster)).Should(Succeed())

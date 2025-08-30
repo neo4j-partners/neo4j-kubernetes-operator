@@ -264,7 +264,7 @@ var _ = Describe("Neo4jEnterpriseStandalone Integration Tests", func() {
 				}
 
 				return fmt.Errorf("pod is not ready")
-			}, time.Minute*3, time.Second*10).Should(Succeed())
+			}, timeout, interval).Should(Succeed())
 
 			By("Verifying standalone status is properly reported")
 			Eventually(func() bool {
