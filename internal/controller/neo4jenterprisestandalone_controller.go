@@ -569,8 +569,8 @@ func (r *Neo4jEnterpriseStandaloneReconciler) updateStatus(ctx context.Context, 
 	var ready bool
 
 	if statefulSet.Status.ReadyReplicas == 1 {
-		phase = "Running"
-		message = "Standalone deployment is running"
+		phase = "Ready"
+		message = "Standalone deployment is ready"
 		ready = true
 	} else {
 		phase = "Pending"

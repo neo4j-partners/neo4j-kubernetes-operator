@@ -59,6 +59,15 @@ var namespaceMutex sync.Mutex
 var timeout = 5 * time.Minute
 var interval = 5 * time.Second
 
+// Initialize timeout based on environment
+func init() {
+	// Increase timeout in CI environments where resources are more constrained
+	if os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
+		timeout = 10 * time.Minute
+		GinkgoWriter.Printf("Running in CI environment - using extended timeout of %v\n", timeout)
+	}
+}
+
 // List of required CRDs for integration tests
 var requiredCRDs = []string{
 	"neo4jenterpriseclusters.neo4j.neo4j.com",

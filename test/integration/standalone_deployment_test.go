@@ -154,7 +154,7 @@ var _ = Describe("Neo4jEnterpriseStandalone Integration Tests", func() {
 				}
 
 				return nil
-			}, time.Minute*2, time.Second*5).Should(Succeed())
+			}, timeout, interval).Should(Succeed())
 
 			By("Waiting for StatefulSet to be created")
 			statefulSetKey := types.NamespacedName{
@@ -174,7 +174,7 @@ var _ = Describe("Neo4jEnterpriseStandalone Integration Tests", func() {
 				}
 
 				return nil
-			}, time.Minute*2, time.Second*5).Should(Succeed())
+			}, timeout, interval).Should(Succeed())
 
 			By("Waiting for Service to be created")
 			serviceKey := types.NamespacedName{
@@ -209,7 +209,7 @@ var _ = Describe("Neo4jEnterpriseStandalone Integration Tests", func() {
 				}
 
 				return nil
-			}, time.Minute*2, time.Second*5).Should(Succeed())
+			}, timeout, interval).Should(Succeed())
 
 			By("Waiting for Pod to be created and become ready")
 			Eventually(func() error {
@@ -286,7 +286,7 @@ var _ = Describe("Neo4jEnterpriseStandalone Integration Tests", func() {
 				// Log current status for debugging
 				GinkgoWriter.Printf("Standalone not yet ready. Phase: %s\n", updatedStandalone.Status.Phase)
 				return false
-			}, time.Minute*2, time.Second*5).Should(BeTrue())
+			}, timeout, interval).Should(BeTrue())
 		})
 	})
 
@@ -378,7 +378,7 @@ var _ = Describe("Neo4jEnterpriseStandalone Integration Tests", func() {
 				}
 
 				return nil
-			}, time.Minute*2, time.Second*5).Should(Succeed())
+			}, timeout, interval).Should(Succeed())
 		})
 	})
 
@@ -463,7 +463,7 @@ var _ = Describe("Neo4jEnterpriseStandalone Integration Tests", func() {
 				}
 
 				return nil
-			}, time.Minute*2, time.Second*5).Should(Succeed())
+			}, timeout, interval).Should(Succeed())
 		})
 	})
 
@@ -536,7 +536,7 @@ var _ = Describe("Neo4jEnterpriseStandalone Integration Tests", func() {
 				// Log current status for debugging
 				GinkgoWriter.Printf("Standalone not yet ready. Phase: %s\n", updatedStandalone.Status.Phase)
 				return false
-			}, time.Minute*5, time.Second*10).Should(BeTrue())
+			}, timeout, interval).Should(BeTrue())
 
 			By("Creating a database resource that references the standalone")
 			database := &neo4jv1alpha1.Neo4jDatabase{
@@ -565,7 +565,7 @@ var _ = Describe("Neo4jEnterpriseStandalone Integration Tests", func() {
 
 				// Database should exist without validation errors
 				return nil
-			}, time.Minute*2, time.Second*5).Should(Succeed())
+			}, timeout, interval).Should(Succeed())
 
 			By("Cleaning up database resource")
 			Expect(k8sClient.Delete(ctx, database)).To(Succeed())
@@ -639,7 +639,7 @@ var _ = Describe("Neo4jEnterpriseStandalone Integration Tests", func() {
 				}
 
 				return nil
-			}, time.Minute*2, time.Second*5).Should(Succeed())
+			}, timeout, interval).Should(Succeed())
 
 			By("Waiting for ConfigMap with TLS configuration")
 			configMapKey := types.NamespacedName{
@@ -675,7 +675,7 @@ var _ = Describe("Neo4jEnterpriseStandalone Integration Tests", func() {
 				}
 
 				return nil
-			}, time.Minute*2, time.Second*5).Should(Succeed())
+			}, timeout, interval).Should(Succeed())
 
 			By("Waiting for TLS Secret to be created")
 			Eventually(func() error {
@@ -692,7 +692,7 @@ var _ = Describe("Neo4jEnterpriseStandalone Integration Tests", func() {
 				}
 
 				return fmt.Errorf("no TLS secret found")
-			}, time.Minute*2, time.Second*5).Should(Succeed())
+			}, timeout, interval).Should(Succeed())
 		})
 	})
 })
