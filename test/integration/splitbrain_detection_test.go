@@ -146,7 +146,7 @@ var _ = Describe("Split-Brain Detection Integration Tests", func() {
 				GinkgoWriter.Printf("Cluster not yet ready. Phase: %s, Message: %s\n",
 					cluster.Status.Phase, cluster.Status.Message)
 				return false
-			}, timeout, interval).Should(BeTrue(), "Cluster should reach Ready state")
+			}, clusterTimeout, interval).Should(BeTrue(), "Cluster should reach Ready state")
 
 			By("Checking if split-brain detection occurred (optional)")
 			// After cluster is ready, check if there were any split-brain events

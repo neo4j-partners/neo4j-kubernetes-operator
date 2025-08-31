@@ -131,8 +131,21 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 						Provider:    "native",
 						AdminSecret: "neo4j-admin-secret",
 					},
+					TLS: &neo4jv1alpha1.TLSSpec{
+						Mode: "disabled",
+					},
+					Env: []corev1.EnvVar{
+						{
+							Name:  "NEO4J_ACCEPT_LICENSE_AGREEMENT",
+							Value: "eval",
+						},
+					},
 				},
 			}
+
+			// Apply CI-specific optimizations
+			applyCIOptimizations(cluster)
+
 			Expect(k8sClient.Create(ctx, cluster)).Should(Succeed())
 
 			By("Waiting for cluster to be ready")
@@ -146,7 +159,7 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 					return ""
 				}
 				return currentCluster.Status.Phase
-			}, timeout, interval).Should(Equal("Ready"))
+			}, clusterTimeout, interval).Should(Equal("Ready"))
 
 			By("Verifying server StatefulSet exists with correct name")
 			serverSts := &appsv1.StatefulSet{}
@@ -292,6 +305,18 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 					Storage: neo4jv1alpha1.StorageSpec{
 						Size:      "1Gi",
 						ClassName: "standard",
+					},
+					Auth: &neo4jv1alpha1.AuthSpec{
+						AdminSecret: "neo4j-admin-secret",
+					},
+					TLS: &neo4jv1alpha1.TLSSpec{
+						Mode: "disabled",
+					},
+					Env: []corev1.EnvVar{
+						{
+							Name:  "NEO4J_ACCEPT_LICENSE_AGREEMENT",
+							Value: "eval",
+						},
 					},
 				},
 			}
@@ -462,6 +487,18 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 					Storage: neo4jv1alpha1.StorageSpec{
 						Size:      "1Gi",
 						ClassName: "standard",
+					},
+					Auth: &neo4jv1alpha1.AuthSpec{
+						AdminSecret: "neo4j-admin-secret",
+					},
+					TLS: &neo4jv1alpha1.TLSSpec{
+						Mode: "disabled",
+					},
+					Env: []corev1.EnvVar{
+						{
+							Name:  "NEO4J_ACCEPT_LICENSE_AGREEMENT",
+							Value: "eval",
+						},
 					},
 				},
 			}
