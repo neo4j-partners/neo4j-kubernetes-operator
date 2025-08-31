@@ -18,7 +18,6 @@ package integration_test
 
 import (
 	"context"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -30,10 +29,8 @@ import (
 )
 
 var _ = Describe("Neo4jDatabase Seed URI Integration Tests", func() {
-	const (
-		timeout  = time.Second * 600 // Increased to 10 minutes for cluster formation + database creation
-		interval = time.Second * 2
-	)
+	// Use global timeout variables from integration_suite_test.go
+	// These are automatically adjusted for CI environments
 
 	Context("Seed URI Validation Integration", func() {
 		var (
@@ -81,8 +78,21 @@ var _ = Describe("Neo4jDatabase Seed URI Integration Tests", func() {
 					Auth: &neo4jv1alpha1.AuthSpec{
 						AdminSecret: "neo4j-admin-secret",
 					},
+					TLS: &neo4jv1alpha1.TLSSpec{
+						Mode: "disabled",
+					},
+					Env: []corev1.EnvVar{
+						{
+							Name:  "NEO4J_ACCEPT_LICENSE_AGREEMENT",
+							Value: "eval",
+						},
+					},
 				},
 			}
+
+			// Apply CI-specific optimizations (reduces 3 servers to 2 in CI)
+			applyCIOptimizations(testCluster)
+
 			Expect(k8sClient.Create(context.Background(), testCluster)).To(Succeed())
 
 			// Create test credentials secret
@@ -122,7 +132,7 @@ var _ = Describe("Neo4jDatabase Seed URI Integration Tests", func() {
 				GinkgoWriter.Printf("Cluster not yet ready. Phase: %s, Message: %s\n",
 					cluster.Status.Phase, cluster.Status.Message)
 				return false
-			}, timeout, interval).Should(BeTrue())
+			}, clusterTimeout, interval).Should(BeTrue())
 		})
 
 		AfterEach(func() {

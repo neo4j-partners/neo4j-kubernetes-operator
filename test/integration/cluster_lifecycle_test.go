@@ -18,6 +18,7 @@ package integration_test
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -124,14 +125,31 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 						ClassName: "standard",
 						Size:      "1Gi",
 					},
+					Resources: getCIAppropriateResourceRequirements(), // Add CI resource constraints
+					TLS: &neo4jv1alpha1.TLSSpec{
+						Mode: "disabled",
+					},
+					Env: []corev1.EnvVar{
+						{
+							Name:  "NEO4J_ACCEPT_LICENSE_AGREEMENT",
+							Value: "eval",
+						},
+					},
 				},
 			}
+
+			// Apply CI-specific optimizations (reduces cluster size and applies resource constraints)
+			applyCIOptimizations(cluster)
+
 			By("About to create Neo4jEnterpriseCluster")
 			Expect(k8sClient.Create(ctx, cluster)).Should(Succeed())
 			By("Successfully created Neo4jEnterpriseCluster")
 
 			By("Waiting for single server StatefulSet to be created")
 			// CURRENT ARCHITECTURE: Single StatefulSet with multiple replicas
+			// In CI, cluster size is reduced from 3 to 2 by applyCIOptimizations
+			expectedInitialReplicas := cluster.Spec.Topology.Servers // Use the actual cluster spec after CI optimizations
+
 			serverStatefulSet := &appsv1.StatefulSet{}
 			Eventually(func() error {
 				err := k8sClient.Get(ctx, types.NamespacedName{
@@ -141,13 +159,13 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 				if err != nil {
 					return fmt.Errorf("server StatefulSet not found: %v", err)
 				}
-				if serverStatefulSet.Spec.Replicas == nil || *serverStatefulSet.Spec.Replicas != 3 {
-					return fmt.Errorf("server StatefulSet should have 3 replicas, got %v", serverStatefulSet.Spec.Replicas)
+				if serverStatefulSet.Spec.Replicas == nil || *serverStatefulSet.Spec.Replicas != expectedInitialReplicas {
+					return fmt.Errorf("server StatefulSet should have %d replicas, got %v", expectedInitialReplicas, serverStatefulSet.Spec.Replicas)
 				}
 				return nil
 			}, timeout, interval).Should(Succeed())
 
-			By("Verifying initial server count (single StatefulSet with 3 replicas)")
+			By(fmt.Sprintf("Verifying initial server count (single StatefulSet with %d replicas)", expectedInitialReplicas))
 			// Verify single StatefulSet with correct replica count
 			serverSts := &appsv1.StatefulSet{}
 			err := k8sClient.Get(ctx, types.NamespacedName{
@@ -155,9 +173,15 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 				Namespace: namespace.Name,
 			}, serverSts)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(*serverSts.Spec.Replicas).To(Equal(int32(3)))
+			Expect(*serverSts.Spec.Replicas).To(Equal(expectedInitialReplicas))
 
 			By("Scaling up servers")
+			// In CI, scale from 2 to 3; in local, scale from 3 to 5
+			targetReplicas := int32(5)
+			if os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
+				targetReplicas = 3 // Smaller scale-up in CI
+			}
+
 			Eventually(func() error {
 				err := k8sClient.Get(ctx, types.NamespacedName{
 					Name:      clusterName,
@@ -167,11 +191,11 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 					return err
 				}
 				// Update server count (servers self-organize into primaries/secondaries)
-				cluster.Spec.Topology.Servers = 5
+				cluster.Spec.Topology.Servers = targetReplicas
 				return k8sClient.Update(ctx, cluster)
 			}, timeout, interval).Should(Succeed())
 
-			By("Verifying scaling completed - should update StatefulSet to 5 replicas")
+			By(fmt.Sprintf("Verifying scaling completed - should update StatefulSet to %d replicas", targetReplicas))
 			Eventually(func() int32 {
 				serverSts := &appsv1.StatefulSet{}
 				err := k8sClient.Get(ctx, types.NamespacedName{
@@ -186,7 +210,7 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 				}
 				fmt.Printf("Current StatefulSet replica count: %d\n", *serverSts.Spec.Replicas)
 				return *serverSts.Spec.Replicas
-			}, 60*time.Second, interval).Should(Equal(int32(5)))
+			}, 60*time.Second, interval).Should(Equal(targetReplicas))
 
 			By("Upgrading cluster image")
 			Eventually(func() error {
