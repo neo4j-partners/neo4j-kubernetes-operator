@@ -303,7 +303,17 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 					},
 					Storage: neo4jv1alpha1.StorageSpec{
 						ClassName: "standard",
-						Size:      "5Gi",
+						Size:      "1Gi",
+					},
+					Resources: getCIAppropriateResourceRequirements(), // Add CI resource constraints
+					TLS: &neo4jv1alpha1.TLSSpec{
+						Mode: "disabled",
+					},
+					Env: []corev1.EnvVar{
+						{
+							Name:  "NEO4J_ACCEPT_LICENSE_AGREEMENT",
+							Value: "eval",
+						},
 					},
 				},
 			}
@@ -328,17 +338,35 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 					},
 					Storage: neo4jv1alpha1.StorageSpec{
 						ClassName: "standard",
-						Size:      "5Gi",
+						Size:      "1Gi",
+					},
+					Resources: getCIAppropriateResourceRequirements(), // Add CI resource constraints
+					TLS: &neo4jv1alpha1.TLSSpec{
+						Mode: "disabled",
+					},
+					Env: []corev1.EnvVar{
+						{
+							Name:  "NEO4J_ACCEPT_LICENSE_AGREEMENT",
+							Value: "eval",
+						},
 					},
 				},
 			}
+
+			// Apply CI-specific optimizations
+			applyCIOptimizations(cluster1)
+			applyCIOptimizations(cluster2)
 
 			By("Creating multiple clusters")
 			Expect(k8sClient.Create(ctx, cluster1)).Should(Succeed())
 			Expect(k8sClient.Create(ctx, cluster2)).Should(Succeed())
 
 			By("Verifying both clusters are processed independently")
-			// Check first cluster - should have single StatefulSet with 3 replicas
+			// Get expected server count after CI optimizations
+			expectedReplicas1 := cluster1.Spec.Topology.Servers
+			expectedReplicas2 := cluster2.Spec.Topology.Servers
+
+			// Check first cluster - should have single StatefulSet with expected replicas
 			serverSts1 := &appsv1.StatefulSet{}
 			Eventually(func() error {
 				err := k8sClient.Get(ctx, types.NamespacedName{
@@ -348,13 +376,13 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 				if err != nil {
 					return fmt.Errorf("cluster-1 server StatefulSet not found: %v", err)
 				}
-				if serverSts1.Spec.Replicas == nil || *serverSts1.Spec.Replicas != 3 {
-					return fmt.Errorf("cluster-1 server StatefulSet should have 3 replicas, got %v", serverSts1.Spec.Replicas)
+				if serverSts1.Spec.Replicas == nil || *serverSts1.Spec.Replicas != expectedReplicas1 {
+					return fmt.Errorf("cluster-1 server StatefulSet should have %d replicas, got %v", expectedReplicas1, serverSts1.Spec.Replicas)
 				}
 				return nil
 			}, timeout, interval).Should(Succeed())
 
-			// Check second cluster - should have single StatefulSet with 3 replicas
+			// Check second cluster - should have single StatefulSet with expected replicas
 			serverSts2 := &appsv1.StatefulSet{}
 			Eventually(func() error {
 				err := k8sClient.Get(ctx, types.NamespacedName{
@@ -364,8 +392,8 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 				if err != nil {
 					return fmt.Errorf("cluster-2 server StatefulSet not found: %v", err)
 				}
-				if serverSts2.Spec.Replicas == nil || *serverSts2.Spec.Replicas != 3 {
-					return fmt.Errorf("cluster-2 server StatefulSet should have 3 replicas, got %v", serverSts2.Spec.Replicas)
+				if serverSts2.Spec.Replicas == nil || *serverSts2.Spec.Replicas != expectedReplicas2 {
+					return fmt.Errorf("cluster-2 server StatefulSet should have %d replicas, got %v", expectedReplicas2, serverSts2.Spec.Replicas)
 				}
 				return nil
 			}, timeout, interval).Should(Succeed())
@@ -378,7 +406,7 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 				Namespace: namespace.Name,
 			}, serverSts1Check)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(*serverSts1Check.Spec.Replicas).To(Equal(int32(3)))
+			Expect(*serverSts1Check.Spec.Replicas).To(Equal(expectedReplicas1))
 
 			// Verify cluster 2 StatefulSet
 			serverSts2Check := &appsv1.StatefulSet{}
@@ -387,7 +415,7 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 				Namespace: namespace.Name,
 			}, serverSts2Check)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(*serverSts2Check.Spec.Replicas).To(Equal(int32(3)))
+			Expect(*serverSts2Check.Spec.Replicas).To(Equal(expectedReplicas2))
 
 			// Verify services are created with unique names
 			service1 := &corev1.Service{}

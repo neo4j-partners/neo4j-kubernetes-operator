@@ -98,8 +98,20 @@ var _ = Describe("Topology Placement Simple", func() {
 						Size:      "1Gi",
 					},
 					Resources: getCIAppropriateResourceRequirements(), // Automatically adjusts for CI vs local environments
+					TLS: &neo4jv1alpha1.TLSSpec{
+						Mode: "disabled",
+					},
+					Env: []corev1.EnvVar{
+						{
+							Name:  "NEO4J_ACCEPT_LICENSE_AGREEMENT",
+							Value: "eval",
+						},
+					},
 				},
 			}
+
+			// Apply CI-specific optimizations
+			applyCIOptimizations(cluster)
 
 			// Create the cluster
 			Expect(k8sClient.Create(ctx, cluster)).To(Succeed())

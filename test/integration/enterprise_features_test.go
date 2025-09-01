@@ -89,8 +89,22 @@ var _ = Describe("Enterprise Features Integration Tests", func() {
 					Auth: &neo4jv1alpha1.AuthSpec{
 						AdminSecret: "neo4j-admin-secret",
 					},
+					Resources: getCIAppropriateResourceRequirements(),
+					TLS: &neo4jv1alpha1.TLSSpec{
+						Mode: "disabled",
+					},
+					Env: []corev1.EnvVar{
+						{
+							Name:  "NEO4J_ACCEPT_LICENSE_AGREEMENT",
+							Value: "eval",
+						},
+					},
 				},
 			}
+
+			// Apply CI-specific optimizations
+			applyCIOptimizations(cluster)
+
 			Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
 
 			// Create a plugin
@@ -163,6 +177,16 @@ var _ = Describe("Enterprise Features Integration Tests", func() {
 						ClassName: "standard",
 						Size:      "1Gi",
 					},
+					Resources: getCIAppropriateResourceRequirements(),
+					TLS: &neo4jv1alpha1.TLSSpec{
+						Mode: "disabled",
+					},
+					Env: []corev1.EnvVar{
+						{
+							Name:  "NEO4J_ACCEPT_LICENSE_AGREEMENT",
+							Value: "eval",
+						},
+					},
 					QueryMonitoring: &neo4jv1alpha1.QueryMonitoringSpec{
 						Enabled:              true,
 						SlowQueryThreshold:   "2s",
@@ -182,6 +206,9 @@ var _ = Describe("Enterprise Features Integration Tests", func() {
 					},
 				},
 			}
+
+			// Apply CI-specific optimizations
+			applyCIOptimizations(cluster)
 
 			By("Creating the cluster with query monitoring")
 			Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
