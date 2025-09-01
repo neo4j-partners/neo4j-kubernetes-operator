@@ -185,6 +185,8 @@ var _ = Describe("Split-Brain Detection Integration Tests", func() {
 			Expect(clusterReady).To(BeTrue(), "Cluster should be ready")
 
 			By("Verifying all server pods are running")
+			// Get the actual expected server count after CI optimizations
+			expectedServers := int(cluster.Spec.Topology.Servers)
 			Eventually(func() int {
 				podList := &corev1.PodList{}
 				err := k8sClient.List(ctx, podList, client.InNamespace(testNamespace), client.MatchingLabels{
@@ -202,7 +204,7 @@ var _ = Describe("Split-Brain Detection Integration Tests", func() {
 					}
 				}
 				return runningCount
-			}, clusterTimeout, interval).Should(Equal(3), "All 3 server pods should be running")
+			}, clusterTimeout, interval).Should(Equal(expectedServers), "All %d server pods should be running", expectedServers)
 
 			By("Immediately cleaning up cluster to prevent CI resource exhaustion")
 			if cluster != nil {
@@ -322,6 +324,8 @@ var _ = Describe("Split-Brain Detection Integration Tests", func() {
 			}, clusterTimeout, interval).Should(BeTrue(), "Cluster should recover after pod failure")
 
 			By("Verifying all pods are running again")
+			// Get the actual expected server count after CI optimizations
+			expectedServers := int(cluster.Spec.Topology.Servers)
 			Eventually(func() int {
 				podList := &corev1.PodList{}
 				err := k8sClient.List(ctx, podList, client.InNamespace(testNamespace), client.MatchingLabels{
@@ -360,9 +364,9 @@ var _ = Describe("Split-Brain Detection Integration Tests", func() {
 						GinkgoWriter.Printf("\n")
 					}
 				}
-				GinkgoWriter.Printf("Currently %d of 3 pods are running and ready\n", runningCount)
+				GinkgoWriter.Printf("Currently %d of %d pods are running and ready\n", runningCount, expectedServers)
 				return runningCount
-			}, clusterTimeout, interval).Should(Equal(3), "All 3 server pods should be running and ready")
+			}, clusterTimeout, interval).Should(Equal(expectedServers), "All %d server pods should be running and ready", expectedServers)
 		})
 	})
 })
