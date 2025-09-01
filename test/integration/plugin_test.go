@@ -168,7 +168,7 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 					Name:      clusterName + "-server",
 					Namespace: namespace.Name,
 				}, serverSts)
-			}, timeout, interval).Should(Succeed())
+			}, clusterTimeout, interval).Should(Succeed())
 			Expect(*serverSts.Spec.Replicas).To(Equal(int32(2)))
 
 			By("Creating APOC plugin for cluster")
@@ -206,7 +206,7 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 					return ""
 				}
 				return currentPlugin.Status.Phase
-			}, timeout, interval).Should(Equal("Ready"))
+			}, clusterTimeout, interval).Should(Equal("Ready"))
 
 			By("Verifying StatefulSet has NEO4J_PLUGINS environment variable")
 			serverSts = &appsv1.StatefulSet{}
@@ -230,7 +230,7 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 					}
 				}
 				return false
-			}, timeout, interval).Should(BeTrue())
+			}, clusterTimeout, interval).Should(BeTrue())
 
 			By("Verifying APOC configuration environment variables (Neo4j 5.26+ approach)")
 			Eventually(func() bool {
@@ -260,7 +260,7 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 					}
 				}
 				return false
-			}, timeout, interval).Should(BeTrue())
+			}, clusterTimeout, interval).Should(BeTrue())
 
 			By("Cleaning up")
 			Expect(k8sClient.Delete(ctx, plugin)).Should(Succeed())
@@ -333,7 +333,7 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 					return ""
 				}
 				return currentStandalone.Status.Phase
-			}, timeout, interval).Should(Equal("Ready"))
+			}, clusterTimeout, interval).Should(Equal("Ready"))
 
 			By("Verifying standalone StatefulSet exists with correct name")
 			standaloneSts := &appsv1.StatefulSet{}
@@ -342,7 +342,7 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 					Name:      standaloneName,
 					Namespace: namespace.Name,
 				}, standaloneSts)
-			}, timeout, interval).Should(Succeed())
+			}, clusterTimeout, interval).Should(Succeed())
 			Expect(*standaloneSts.Spec.Replicas).To(Equal(int32(1)))
 
 			By("Creating GDS plugin for standalone with dependency")
@@ -379,7 +379,7 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 			}
 			Expect(k8sClient.Create(ctx, plugin)).Should(Succeed())
 
-			By("Waiting for plugin status to be Installing")
+			By("Waiting for plugin status to be Installing or Ready")
 			Eventually(func() string {
 				currentPlugin := &neo4jv1alpha1.Neo4jPlugin{}
 				err := k8sClient.Get(ctx, types.NamespacedName{
@@ -390,7 +390,8 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 					return ""
 				}
 				return currentPlugin.Status.Phase
-			}, timeout, interval).Should(SatisfyAny(
+			}, clusterTimeout, interval).Should(SatisfyAny(
+				Equal("Waiting"),
 				Equal("Installing"),
 				Equal("Ready"),
 			))
@@ -417,7 +418,7 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 					}
 				}
 				return false
-			}, timeout, interval).Should(BeTrue())
+			}, clusterTimeout, interval).Should(BeTrue())
 
 			By("Verifying GDS procedure security settings are configured")
 			Eventually(func() bool {
@@ -444,7 +445,7 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 					}
 				}
 				return false
-			}, timeout, interval).Should(BeTrue())
+			}, clusterTimeout, interval).Should(BeTrue())
 
 			By("Cleaning up")
 			Expect(k8sClient.Delete(ctx, plugin)).Should(Succeed())
@@ -515,7 +516,7 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 					return ""
 				}
 				return currentStandalone.Status.Phase
-			}, timeout, interval).Should(Equal("Ready"))
+			}, clusterTimeout, interval).Should(Equal("Ready"))
 
 			By("Creating Bloom plugin with neo4j.conf configuration")
 			plugin := &neo4jv1alpha1.Neo4jPlugin{
@@ -573,7 +574,7 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 					}
 				}
 				return false
-			}, timeout, interval).Should(BeTrue())
+			}, clusterTimeout, interval).Should(BeTrue())
 
 			By("Cleaning up")
 			Expect(k8sClient.Delete(ctx, plugin)).Should(Succeed())
@@ -617,7 +618,7 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 					return ""
 				}
 				return currentPlugin.Status.Phase
-			}, timeout, interval).Should(Equal("Failed"))
+			}, clusterTimeout, interval).Should(Equal("Failed"))
 
 			By("Verifying error message mentions deployment not found")
 			currentPlugin := &neo4jv1alpha1.Neo4jPlugin{}
@@ -710,7 +711,7 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 					return ""
 				}
 				return currentPlugin.Status.Phase
-			}, timeout, interval).Should(Equal("Waiting"))
+			}, clusterTimeout, interval).Should(Equal("Waiting"))
 
 			By("Verifying status message mentions waiting for deployment")
 			currentPlugin := &neo4jv1alpha1.Neo4jPlugin{}

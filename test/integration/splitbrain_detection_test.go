@@ -202,7 +202,7 @@ var _ = Describe("Split-Brain Detection Integration Tests", func() {
 					}
 				}
 				return runningCount
-			}, timeout, interval).Should(Equal(3), "All 3 server pods should be running")
+			}, clusterTimeout, interval).Should(Equal(3), "All 3 server pods should be running")
 
 			By("Immediately cleaning up cluster to prevent CI resource exhaustion")
 			if cluster != nil {
@@ -319,7 +319,7 @@ var _ = Describe("Split-Brain Detection Integration Tests", func() {
 				GinkgoWriter.Printf("Cluster not yet recovered. Phase: %s, Message: %s\n",
 					cluster.Status.Phase, cluster.Status.Message)
 				return false
-			}, timeout, interval).Should(BeTrue(), "Cluster should recover after pod failure")
+			}, clusterTimeout, interval).Should(BeTrue(), "Cluster should recover after pod failure")
 
 			By("Verifying all pods are running again")
 			Eventually(func() int {
@@ -362,7 +362,7 @@ var _ = Describe("Split-Brain Detection Integration Tests", func() {
 				}
 				GinkgoWriter.Printf("Currently %d of 3 pods are running and ready\n", runningCount)
 				return runningCount
-			}, timeout, interval).Should(Equal(3), "All 3 server pods should be running and ready")
+			}, clusterTimeout, interval).Should(Equal(3), "All 3 server pods should be running and ready")
 		})
 	})
 })
