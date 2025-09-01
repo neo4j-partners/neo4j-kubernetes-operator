@@ -63,6 +63,7 @@ var _ = Describe("Neo4jDatabase Seed URI Integration Tests", func() {
 					Namespace: testNamespace,
 				},
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
+					Edition: "enterprise",
 					Topology: neo4jv1alpha1.TopologyConfiguration{
 						Servers: 3, // Smaller cluster for integration tests (requires less memory)
 					},
