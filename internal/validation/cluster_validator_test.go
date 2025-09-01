@@ -44,7 +44,6 @@ func TestClusterValidator_ValidateCreate(t *testing.T) {
 			name: "valid cluster",
 			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
-					Edition: "enterprise",
 					Image: neo4jv1alpha1.ImageSpec{
 						Repo:       "neo4j",
 						Tag:        "5.26.0",
@@ -62,31 +61,9 @@ func TestClusterValidator_ValidateCreate(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "invalid edition",
-			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
-				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
-					Edition: "community",
-					Image: neo4jv1alpha1.ImageSpec{
-						Repo:       "neo4j",
-						Tag:        "5.26.0",
-						PullPolicy: "IfNotPresent",
-					},
-					Storage: neo4jv1alpha1.StorageSpec{
-						ClassName: "fast-ssd",
-						Size:      "100Gi",
-					},
-					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Servers: 4,
-					},
-				},
-			},
-			wantErr: true,
-		},
-		{
 			name: "invalid image version",
 			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
-					Edition: "enterprise",
 					Image: neo4jv1alpha1.ImageSpec{
 						Repo:       "neo4j",
 						Tag:        "4.4.0",
@@ -107,7 +84,6 @@ func TestClusterValidator_ValidateCreate(t *testing.T) {
 			name: "valid topology with even servers (warnings only)",
 			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
-					Edition: "enterprise",
 					Image: neo4jv1alpha1.ImageSpec{
 						Repo:       "neo4j",
 						Tag:        "5.26.0",
@@ -162,10 +138,7 @@ func TestClusterValidator_ApplyDefaults(t *testing.T) {
 
 	validator.ApplyDefaults(context.Background(), cluster)
 
-	// Check defaults were applied
-	if cluster.Spec.Edition != "enterprise" {
-		t.Errorf("Expected edition to be defaulted to 'enterprise', got %s", cluster.Spec.Edition)
-	}
+	// Edition field removed - operator only supports enterprise edition
 
 	if cluster.Spec.Image.PullPolicy != "IfNotPresent" {
 		t.Errorf("Expected image pull policy to be defaulted to 'IfNotPresent', got %s", cluster.Spec.Image.PullPolicy)

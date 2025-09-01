@@ -34,7 +34,6 @@ metadata:
   name: dev-instance
   namespace: neo4j-dev
 spec:
-  edition: enterprise
   image:
     repo: neo4j
     tag: "5.26.0-enterprise"

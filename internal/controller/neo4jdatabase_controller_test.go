@@ -85,7 +85,6 @@ var _ = Describe("Neo4jDatabase Controller", func() {
 					Namespace: "default",
 				},
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
-					Edition: "enterprise",
 					Image: neo4jv1alpha1.ImageSpec{
 						Repo: "neo4j",
 						Tag:  "5.26-enterprise",

@@ -8,7 +8,6 @@ metadata:
   name: multi-zone-cluster
   namespace: default
 spec:
-  edition: enterprise
 
   # Neo4j Docker image configuration
   image:

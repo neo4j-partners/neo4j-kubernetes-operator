@@ -45,7 +45,6 @@ The `Neo4jEnterpriseClusterSpec` defines the desired state of a Neo4j Enterprise
 | Field | Type | Description |
 |---|---|---|
 | `image` | [`ImageSpec`](#imagespec) | The Neo4j Docker image configuration |
-| `edition` | `string` | Neo4j edition: `"enterprise"` or `"community"` |
 | `topology` | [`TopologyConfiguration`](#topologyconfiguration) | Cluster topology (number of servers) |
 | `storage` | [`StorageSpec`](#storagespec) | Storage configuration for data persistence |
 | `auth` | [`AuthSpec`](#authspec) | Authentication configuration |
@@ -434,7 +433,6 @@ kind: Neo4jEnterpriseCluster
 metadata:
   name: basic-cluster
 spec:
-  edition: enterprise
   image:
     repo: neo4j  # Note: field name is 'repo', not 'repository'
     tag: "5.26.0-enterprise"
@@ -462,7 +460,6 @@ kind: Neo4jEnterpriseCluster
 metadata:
   name: role-constrained-cluster
 spec:
-  edition: enterprise
   image:
     repo: neo4j
     tag: "5.26.0-enterprise"
@@ -513,7 +510,6 @@ kind: Neo4jEnterpriseCluster
 metadata:
   name: monitored-cluster
 spec:
-  edition: enterprise
   image:
     repo: neo4j
     tag: "5.26.0-enterprise"
@@ -582,7 +578,6 @@ kind: Neo4jEnterpriseCluster
 metadata:
   name: public-cluster
 spec:
-  edition: enterprise
   image:
     repo: neo4j
     tag: "5.26.0-enterprise"
@@ -614,7 +609,6 @@ kind: Neo4jEnterpriseCluster
 metadata:
   name: ingress-cluster
 spec:
-  edition: enterprise
   image:
     repo: neo4j
     tag: "5.26.0-enterprise"

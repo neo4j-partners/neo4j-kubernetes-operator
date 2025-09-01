@@ -9,7 +9,6 @@ metadata:
   namespace: default
 spec:
   # Neo4j Enterprise Edition
-  edition: enterprise
 
   # Neo4j Docker image configuration
   image:

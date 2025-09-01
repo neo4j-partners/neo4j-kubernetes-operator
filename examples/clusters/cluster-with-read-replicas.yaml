@@ -8,7 +8,6 @@ metadata:
   name: cluster-with-replicas
   namespace: default
 spec:
-  edition: enterprise
 
   image:
     repo: neo4j

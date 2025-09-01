@@ -18,7 +18,6 @@ kind: Neo4jEnterpriseCluster
 metadata:
   name: ingress-cluster
 spec:
-  edition: enterprise
 
   image:
     repository: neo4j

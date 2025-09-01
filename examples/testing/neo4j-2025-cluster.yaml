@@ -4,7 +4,6 @@ metadata:
   name: neo4j-2025-cluster
   namespace: default
 spec:
-  edition: enterprise
   image:
     repo: neo4j
     tag: "2025.02.0-enterprise"

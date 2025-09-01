@@ -307,7 +307,6 @@ kind: Neo4jEnterpriseCluster
 metadata:
   name: production-neo4j
 spec:
-  edition: enterprise
   image:
     repo: neo4j
     tag: "5.26-enterprise"

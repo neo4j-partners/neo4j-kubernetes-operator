@@ -51,7 +51,6 @@ var _ = Describe("Neo4jRestore Controller", func() {
 				Namespace: namespaceName,
 			},
 			Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
-				Edition: "enterprise",
 				Image: neo4jv1alpha1.ImageSpec{
 					Repo: "neo4j",
 					Tag:  "5.26-enterprise",

@@ -4,7 +4,6 @@ metadata:
   name: tls-standalone-example
   namespace: default
 spec:
-  edition: enterprise
   image:
     repo: neo4j
     tag: "5.26-enterprise"

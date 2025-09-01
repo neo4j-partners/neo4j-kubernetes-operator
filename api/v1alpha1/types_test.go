@@ -19,7 +19,6 @@ func TestNeo4jEnterpriseClusterSpec_BasicValidation(t *testing.T) {
 		{
 			name: "valid minimal spec",
 			spec: Neo4jEnterpriseClusterSpec{
-				Edition: "enterprise",
 				Image: ImageSpec{
 					Repo: "neo4j",
 					Tag:  "5.26.0-enterprise",
@@ -193,7 +192,6 @@ func TestNeo4jEnterpriseCluster_ResourceRequirements(t *testing.T) {
 					Namespace: "test-namespace",
 				},
 				Spec: Neo4jEnterpriseClusterSpec{
-					Edition: "enterprise",
 					Image: ImageSpec{
 						Repo: "neo4j",
 						Tag:  "5.26.0-enterprise",
@@ -224,7 +222,6 @@ func TestNeo4jEnterpriseCluster_StatusConditions(t *testing.T) {
 			Namespace: "test-namespace",
 		},
 		Spec: Neo4jEnterpriseClusterSpec{
-			Edition: "enterprise",
 			Image: ImageSpec{
 				Repo: "neo4j",
 				Tag:  "5.26.0-enterprise",
@@ -269,7 +266,6 @@ func TestDeepCopyMethods(t *testing.T) {
 			Namespace: "test-namespace",
 		},
 		Spec: Neo4jEnterpriseClusterSpec{
-			Edition: "enterprise",
 			Image: ImageSpec{
 				Repo: "neo4j",
 				Tag:  "5.26.0-enterprise",

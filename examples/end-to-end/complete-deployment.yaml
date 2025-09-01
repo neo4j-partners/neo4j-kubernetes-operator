@@ -42,7 +42,6 @@ metadata:
   name: production-cluster
   namespace: neo4j-production
 spec:
-  edition: enterprise
   image:
     repo: neo4j
     tag: "5.26.0-enterprise"  # or "2025.01.0-enterprise" for CalVer

@@ -629,6 +629,34 @@ func (r *Neo4jEnterpriseClusterReconciler) createOrUpdateResource(ctx context.Co
 3. **Cluster Bootstrap Window**: Resource conflicts during critical cluster formation window cause permanent failure
 4. **Production Reliability**: Essential for consistent cluster formation across all Neo4j versions
 
+## CRITICAL: Edition Field Removal (Added 2025-09-02)
+
+**MANDATORY FOR API SIMPLIFICATION**: The operator no longer requires users to specify an Edition field since only Neo4j Enterprise edition is supported.
+
+**Changes Made**:
+- **Removed Edition field** from `Neo4jEnterpriseClusterSpec` and `Neo4jEnterpriseStandaloneSpec` API types
+- **Eliminated redundant validation** - edition_validator.go now always returns no errors
+- **Updated all examples** - removed `edition: enterprise` from 22+ YAML files
+- **Updated all tests** - removed Edition field from integration and unit tests
+- **Updated documentation** - removed Edition field references from API docs
+
+**Why This Change Is Critical**:
+1. **User Experience**: Eliminates confusion about why users need to specify something that only has one valid option
+2. **API Clarity**: Simplifies the API surface - if only enterprise is supported, don't make users declare it
+3. **Reduced Complexity**: Less validation code, fewer test cases, cleaner examples
+4. **Future-Proof**: When there's only one option, having a field for it is an anti-pattern
+
+**Impact**:
+- **Existing deployments**: No breaking changes - operator internally assumes enterprise edition
+- **New deployments**: Simpler YAML with no edition field required
+- **Tests pass**: All integration tests updated to work without Edition field
+- **Documentation**: Updated to reflect simplified API
+
+**Technical Notes**:
+- Neo4j client code still checks actual Neo4j server edition (from `CALL dbms.components()`) - this remains unchanged
+- CRDs regenerated to remove edition field from OpenAPI schema
+- All controller and validation logic updated to not expect Edition field
+
 ## Configuration Validation
 
 ### Integration Test Configuration

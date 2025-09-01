@@ -23,7 +23,6 @@ metadata:
   name: multi-db-cluster
   namespace: default
 spec:
-  edition: enterprise
 
   image:
     repo: neo4j

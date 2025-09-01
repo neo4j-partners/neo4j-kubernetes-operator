@@ -17,7 +17,6 @@ kind: Neo4jEnterpriseStandalone
 metadata:
   name: loadbalancer-standalone
 spec:
-  edition: enterprise
 
   image:
     repo: neo4j

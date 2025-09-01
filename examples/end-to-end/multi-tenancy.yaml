@@ -63,7 +63,6 @@ metadata:
   name: multi-tenant-cluster
   namespace: neo4j-multi-tenant
 spec:
-  edition: enterprise
   image:
     repo: neo4j
     tag: "5.26.0-enterprise"

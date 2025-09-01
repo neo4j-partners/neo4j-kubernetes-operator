@@ -81,13 +81,6 @@ storage:
 
 ### Optional Fields
 
-#### `edition` (string)
-Neo4j edition. Always set to `enterprise`.
-
-```yaml
-edition: enterprise
-```
-
 #### `resources` (ResourceRequirements)
 Resource limits and requests for the Neo4j pod.
 
