@@ -162,7 +162,7 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 					return fmt.Errorf("server StatefulSet should have %d replicas, got %v", expectedInitialReplicas, serverStatefulSet.Spec.Replicas)
 				}
 				return nil
-			}, timeout, interval).Should(Succeed())
+			}, clusterTimeout, interval).Should(Succeed())
 
 			By(fmt.Sprintf("Verifying initial server count (single StatefulSet with %d replicas)", expectedInitialReplicas))
 			// Verify single StatefulSet with correct replica count
@@ -173,6 +173,30 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 			}, serverSts)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(*serverSts.Spec.Replicas).To(Equal(expectedInitialReplicas))
+
+			By("Waiting for initial cluster to be Ready before scaling")
+			// Wait for cluster to form properly before attempting to scale
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, types.NamespacedName{
+					Name:      clusterName,
+					Namespace: namespace.Name,
+				}, cluster)
+				if err != nil {
+					GinkgoWriter.Printf("Failed to get cluster during initial formation: %v\n", err)
+					return false
+				}
+
+				// Check if cluster phase is Ready
+				if cluster.Status.Phase == "Ready" {
+					GinkgoWriter.Printf("Initial cluster is ready. Phase: %s\n", cluster.Status.Phase)
+					return true
+				}
+
+				// Log current status for debugging
+				GinkgoWriter.Printf("Waiting for initial cluster formation. Phase: %s, Message: %s\n",
+					cluster.Status.Phase, cluster.Status.Message)
+				return false
+			}, clusterTimeout, interval).Should(BeTrue(), "Initial cluster should be Ready before scaling")
 
 			By("Scaling up servers")
 			// In CI, scale from 2 to 3; in local, scale from 3 to 5
@@ -192,7 +216,7 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 				// Update server count (servers self-organize into primaries/secondaries)
 				cluster.Spec.Topology.Servers = targetReplicas
 				return k8sClient.Update(ctx, cluster)
-			}, timeout, interval).Should(Succeed())
+			}, clusterTimeout, interval).Should(Succeed())
 
 			By(fmt.Sprintf("Verifying scaling completed - should update StatefulSet to %d replicas", targetReplicas))
 			Eventually(func() int32 {
@@ -211,6 +235,30 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 				return *serverSts.Spec.Replicas
 			}, 60*time.Second, interval).Should(Equal(targetReplicas))
 
+			By("Waiting for cluster to reform after scaling")
+			// After scaling, wait for cluster to become Ready again before proceeding
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, types.NamespacedName{
+					Name:      clusterName,
+					Namespace: namespace.Name,
+				}, cluster)
+				if err != nil {
+					GinkgoWriter.Printf("Failed to get cluster during scale verification: %v\n", err)
+					return false
+				}
+
+				// Check if cluster phase is Ready after scaling
+				if cluster.Status.Phase == "Ready" {
+					GinkgoWriter.Printf("Cluster reformed successfully after scaling. Phase: %s\n", cluster.Status.Phase)
+					return true
+				}
+
+				// Log current status for debugging
+				GinkgoWriter.Printf("Waiting for cluster to reform after scaling. Phase: %s, Message: %s\n",
+					cluster.Status.Phase, cluster.Status.Message)
+				return false
+			}, clusterTimeout, interval).Should(BeTrue(), "Cluster should reform successfully after scaling")
+
 			By("Upgrading cluster image")
 			Eventually(func() error {
 				err := k8sClient.Get(ctx, types.NamespacedName{
@@ -222,7 +270,7 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 				}
 				cluster.Spec.Image.Tag = getNeo4jImageTag() // Skip upgrade test - use same version
 				return k8sClient.Update(ctx, cluster)
-			}, timeout, interval).Should(Succeed())
+			}, clusterTimeout, interval).Should(Succeed())
 
 			By("Verifying image upgrade on server StatefulSet")
 			Eventually(func() bool {
@@ -236,7 +284,7 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 					return false
 				}
 				return containsString(serverSts.Spec.Template.Spec.Containers[0].Image, getNeo4jImageTag())
-			}, timeout, interval).Should(BeTrue())
+			}, clusterTimeout, interval).Should(BeTrue())
 
 			By("Verifying cluster status")
 			Eventually(func() bool {
@@ -260,7 +308,7 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 				GinkgoWriter.Printf("Cluster not yet ready. Phase: %s, Message: %s\n",
 					cluster.Status.Phase, cluster.Status.Message)
 				return false
-			}, timeout, interval).Should(BeTrue())
+			}, clusterTimeout, interval).Should(BeTrue())
 
 			By("Deleting the cluster")
 			Expect(k8sClient.Delete(ctx, cluster)).Should(Succeed())
@@ -272,7 +320,7 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 					Namespace: namespace.Name,
 				}, cluster)
 				return client.IgnoreNotFound(err) == nil
-			}, timeout, interval).Should(BeTrue())
+			}, clusterTimeout, interval).Should(BeTrue())
 		})
 	})
 
@@ -377,7 +425,7 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 					return fmt.Errorf("cluster-1 server StatefulSet should have %d replicas, got %v", expectedReplicas1, serverSts1.Spec.Replicas)
 				}
 				return nil
-			}, timeout, interval).Should(Succeed())
+			}, clusterTimeout, interval).Should(Succeed())
 
 			// Check second cluster - should have single StatefulSet with expected replicas
 			serverSts2 := &appsv1.StatefulSet{}
@@ -393,7 +441,7 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 					return fmt.Errorf("cluster-2 server StatefulSet should have %d replicas, got %v", expectedReplicas2, serverSts2.Spec.Replicas)
 				}
 				return nil
-			}, timeout, interval).Should(Succeed())
+			}, clusterTimeout, interval).Should(Succeed())
 
 			By("Verifying resource isolation - each cluster has its own StatefulSet")
 			// Verify cluster 1 StatefulSet
@@ -421,7 +469,7 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 					Name:      clusterName + "-1-client",
 					Namespace: namespace.Name,
 				}, service1)
-			}, timeout, interval).Should(Succeed())
+			}, clusterTimeout, interval).Should(Succeed())
 
 			service2 := &corev1.Service{}
 			Eventually(func() error {
@@ -429,7 +477,7 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 					Name:      clusterName + "-2-client",
 					Namespace: namespace.Name,
 				}, service2)
-			}, timeout, interval).Should(Succeed())
+			}, clusterTimeout, interval).Should(Succeed())
 		})
 	})
 })
