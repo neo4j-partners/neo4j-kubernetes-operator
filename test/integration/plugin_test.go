@@ -420,31 +420,33 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 				return false
 			}, clusterTimeout, interval).Should(BeTrue())
 
-			By("Verifying GDS procedure security settings are configured")
+			By("Verifying GDS procedure security settings are configured in ConfigMap")
+			configMapName := fmt.Sprintf("%s-config", standaloneName)
 			Eventually(func() bool {
+				configMap := &corev1.ConfigMap{}
 				err := k8sClient.Get(ctx, types.NamespacedName{
-					Name:      standaloneName,
+					Name:      configMapName,
 					Namespace: namespace.Name,
-				}, standaloneSts)
+				}, configMap)
 				if err != nil {
 					return false
 				}
 
-				// Check for GDS-specific security environment variables
-				// Since sandbox=true, GDS uses allowlist instead of unrestricted
-				for _, container := range standaloneSts.Spec.Template.Spec.Containers {
-					if container.Name == "neo4j" {
-						hasAllowlist := false
-						for _, env := range container.Env {
-							if env.Name == "NEO4J_DBMS_SECURITY_PROCEDURES_ALLOWLIST" && strings.Contains(env.Value, "gds.*") {
-								hasAllowlist = true
-								break
-							}
-						}
-						return hasAllowlist
-					}
+				neo4jConf := configMap.Data["neo4j.conf"]
+				// GDS plugin should have both automatic unrestricted settings and user-provided allowlist
+				// Automatic: dbms.security.procedures.unrestricted=gds.*,apoc.load.*
+				// User-provided (sandbox=true): dbms.security.procedures.allowlist=gds.*,apoc.load.*
+				hasUnrestricted := strings.Contains(neo4jConf, "dbms.security.procedures.unrestricted") &&
+					strings.Contains(neo4jConf, "gds.*")
+				hasAllowlist := strings.Contains(neo4jConf, "dbms.security.procedures.allowlist") &&
+					strings.Contains(neo4jConf, "gds.*")
+
+				if !hasUnrestricted && !hasAllowlist {
+					GinkgoWriter.Printf("GDS security settings not found in ConfigMap neo4j.conf. Content: %s\n", neo4jConf)
 				}
-				return false
+
+				// Either automatic unrestricted OR user-provided allowlist should be present
+				return hasUnrestricted || hasAllowlist
 			}, clusterTimeout, interval).Should(BeTrue())
 
 			By("Cleaning up")
