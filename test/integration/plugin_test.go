@@ -542,38 +542,41 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 			Expect(k8sClient.Create(ctx, plugin)).Should(Succeed())
 
 			By("Verifying Bloom procedure security settings are automatically configured")
-			standaloneSts := &appsv1.StatefulSet{}
+			// Bloom settings go into neo4j.conf via ConfigMap, not environment variables
+			configMap := &corev1.ConfigMap{}
 			Eventually(func() bool {
 				err := k8sClient.Get(ctx, types.NamespacedName{
-					Name:      standaloneName,
+					Name:      fmt.Sprintf("%s-config", standaloneName),
 					Namespace: namespace.Name,
-				}, standaloneSts)
+				}, configMap)
 				if err != nil {
+					GinkgoWriter.Printf("Failed to get ConfigMap: %v\n", err)
 					return false
 				}
 
-				// Check for Bloom-specific security environment variables
-				for _, container := range standaloneSts.Spec.Template.Spec.Containers {
-					if container.Name == "neo4j" {
-						hasUnrestricted := false
-						hasHttpAuth := false
-						hasUnmanagedExt := false
-
-						for _, env := range container.Env {
-							if env.Name == "NEO4J_DBMS_SECURITY_PROCEDURES_UNRESTRICTED" && strings.Contains(env.Value, "bloom.*") {
-								hasUnrestricted = true
-							}
-							if env.Name == "NEO4J_DBMS_SECURITY_HTTP_AUTH_ALLOWLIST" && strings.Contains(env.Value, "/bloom.*") {
-								hasHttpAuth = true
-							}
-							if env.Name == "NEO4J_SERVER_UNMANAGED_EXTENSION_CLASSES" && strings.Contains(env.Value, "bloom.server=/bloom") {
-								hasUnmanagedExt = true
-							}
-						}
-						return hasUnrestricted && hasHttpAuth && hasUnmanagedExt
-					}
+				// Check for Bloom-specific settings in neo4j.conf
+				neo4jConf, exists := configMap.Data["neo4j.conf"]
+				if !exists {
+					GinkgoWriter.Printf("neo4j.conf not found in ConfigMap\n")
+					return false
 				}
-				return false
+
+				// Verify Bloom security settings are present
+				hasUnrestricted := strings.Contains(neo4jConf, "dbms.security.procedures.unrestricted=bloom.*")
+				hasHttpAuth := strings.Contains(neo4jConf, "dbms.security.http_auth_allowlist=/,/browser.*,/bloom.*")
+				hasUnmanagedExt := strings.Contains(neo4jConf, "server.unmanaged_extension_classes=com.neo4j.bloom.server=/bloom")
+
+				if !hasUnrestricted {
+					GinkgoWriter.Printf("Missing dbms.security.procedures.unrestricted=bloom.* in neo4j.conf\n")
+				}
+				if !hasHttpAuth {
+					GinkgoWriter.Printf("Missing dbms.security.http_auth_allowlist=/,/browser.*,/bloom.* in neo4j.conf\n")
+				}
+				if !hasUnmanagedExt {
+					GinkgoWriter.Printf("Missing server.unmanaged_extension_classes=com.neo4j.bloom.server=/bloom in neo4j.conf\n")
+				}
+
+				return hasUnrestricted && hasHttpAuth && hasUnmanagedExt
 			}, clusterTimeout, interval).Should(BeTrue())
 
 			By("Cleaning up")
