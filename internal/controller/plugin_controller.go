@@ -1341,6 +1341,110 @@ func (r *Neo4jPluginReconciler) installPluginViaEnvironment(ctx context.Context,
 	}
 
 	logger.Info("Successfully updated StatefulSet with plugin configuration", "plugin", pluginName)
+
+	// For standalone deployments, also update the ConfigMap with plugin security settings
+	if deployment.Type == "standalone" {
+		if err := r.updateStandaloneConfigMapForPlugin(ctx, plugin, deployment); err != nil {
+			logger.Error(err, "Failed to update ConfigMap for standalone deployment", "plugin", pluginName)
+			return fmt.Errorf("failed to update ConfigMap for standalone deployment: %w", err)
+		}
+		logger.Info("Successfully updated ConfigMap for standalone deployment", "plugin", pluginName)
+	}
+
+	return nil
+}
+
+// updateStandaloneConfigMapForPlugin updates the ConfigMap for standalone deployments with plugin security settings
+func (r *Neo4jPluginReconciler) updateStandaloneConfigMapForPlugin(ctx context.Context, plugin *neo4jv1alpha1.Neo4jPlugin, deployment *DeploymentInfo) error {
+	logger := log.FromContext(ctx)
+
+	// Get automatic security settings for this plugin
+	automaticSettings := r.getAutomaticSecuritySettings(plugin.Spec.Name)
+	if len(automaticSettings) == 0 {
+		logger.Info("No automatic security settings required for plugin", "plugin", plugin.Spec.Name)
+		return nil
+	}
+
+	// Get the standalone resource
+	standalone := deployment.Object.(*neo4jv1alpha1.Neo4jEnterpriseStandalone)
+
+	// Get the ConfigMap name for the standalone
+	configMapName := fmt.Sprintf("%s-config", standalone.Name)
+	configMapKey := types.NamespacedName{
+		Namespace: standalone.Namespace,
+		Name:      configMapName,
+	}
+
+	// Retrieve the current ConfigMap
+	configMap := &corev1.ConfigMap{}
+	if err := r.Get(ctx, configMapKey, configMap); err != nil {
+		return fmt.Errorf("failed to get ConfigMap %s: %w", configMapName, err)
+	}
+
+	// Get current neo4j.conf content
+	currentConf := configMap.Data["neo4j.conf"]
+	if currentConf == "" {
+		return fmt.Errorf("neo4j.conf not found in ConfigMap %s", configMapName)
+	}
+
+	// Add automatic security settings to neo4j.conf if they don't already exist
+	updatedConf := currentConf
+	for key, value := range automaticSettings {
+		settingLine := fmt.Sprintf("%s=%s", key, value)
+		if !strings.Contains(updatedConf, settingLine) {
+			// Add a comment and the setting
+			comment := fmt.Sprintf("\n# %s plugin automatic configuration", plugin.Spec.Name)
+			updatedConf += comment + "\n" + settingLine + "\n"
+			logger.Info("Adding automatic security setting to ConfigMap", "setting", settingLine)
+		} else {
+			logger.Info("Security setting already present in ConfigMap", "setting", settingLine)
+		}
+	}
+
+	// Update the ConfigMap if changes were made
+	if updatedConf != currentConf {
+		configMap.Data["neo4j.conf"] = updatedConf
+		if err := r.Update(ctx, configMap); err != nil {
+			return fmt.Errorf("failed to update ConfigMap %s: %w", configMapName, err)
+		}
+		logger.Info("ConfigMap updated with plugin security settings", "plugin", plugin.Spec.Name)
+
+		// Restart the standalone pod to pick up the configuration changes
+		if err := r.restartStandalonePods(ctx, standalone); err != nil {
+			logger.Error(err, "Failed to restart standalone pods after ConfigMap update")
+			// Don't fail the entire operation if restart fails - ConfigMap is updated
+		}
+	}
+
+	return nil
+}
+
+// restartStandalonePods restarts the pods of a standalone deployment to pick up ConfigMap changes
+func (r *Neo4jPluginReconciler) restartStandalonePods(ctx context.Context, standalone *neo4jv1alpha1.Neo4jEnterpriseStandalone) error {
+	logger := log.FromContext(ctx)
+
+	// Get the StatefulSet for the standalone
+	stsKey := types.NamespacedName{
+		Namespace: standalone.Namespace,
+		Name:      standalone.Name,
+	}
+
+	sts := &appsv1.StatefulSet{}
+	if err := r.Get(ctx, stsKey, sts); err != nil {
+		return fmt.Errorf("failed to get StatefulSet %s: %w", standalone.Name, err)
+	}
+
+	// Add a restart annotation to force pod restart
+	if sts.Spec.Template.Annotations == nil {
+		sts.Spec.Template.Annotations = make(map[string]string)
+	}
+	sts.Spec.Template.Annotations["kubectl.kubernetes.io/restartedAt"] = time.Now().Format(time.RFC3339)
+
+	if err := r.Update(ctx, sts); err != nil {
+		return fmt.Errorf("failed to update StatefulSet to restart pods: %w", err)
+	}
+
+	logger.Info("StatefulSet updated with restart annotation", "name", standalone.Name)
 	return nil
 }
 
