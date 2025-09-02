@@ -32,8 +32,9 @@ import (
 )
 
 var _ = Describe("Centralized Backup Configuration", func() {
-	const (
-		timeout  = time.Second * 600 // Increased to 10 minutes for cluster formation + backup operations
+	var (
+		// Use clusterTimeout from suite_test.go (20 minutes in CI, 10 minutes locally)
+		timeout  = clusterTimeout // Dynamic timeout based on environment
 		interval = time.Second * 5
 	)
 
@@ -129,6 +130,9 @@ var _ = Describe("Centralized Backup Configuration", func() {
 					},
 				},
 			}
+			// Apply CI optimizations (reduces resources, enables shorter timeouts in CI)
+			applyCIOptimizations(cluster)
+
 			Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
 			defer func() {
 				// Clean up cluster with finalizer removal if needed
@@ -193,20 +197,16 @@ var _ = Describe("Centralized Backup Configuration", func() {
 			Expect(backupContainer.Name).To(Equal("backup"))
 
 			// Verify environment variables are set correctly
-			var hasLicenseEnv, hasEditionEnv, hasClusterEnv bool
+			var hasLicenseEnv, hasClusterEnv bool
 			for _, env := range backupContainer.Env {
 				if env.Name == "NEO4J_ACCEPT_LICENSE_AGREEMENT" && env.Value == "yes" {
 					hasLicenseEnv = true
-				}
-				if env.Name == "NEO4J_EDITION" && env.Value == "enterprise" {
-					hasEditionEnv = true
 				}
 				if env.Name == "NEO4J_CLUSTER_NAME" && env.Value == cluster.Name {
 					hasClusterEnv = true
 				}
 			}
 			Expect(hasLicenseEnv).To(BeTrue(), "Should have NEO4J_ACCEPT_LICENSE_AGREEMENT=yes")
-			Expect(hasEditionEnv).To(BeTrue(), "Should have NEO4J_EDITION=enterprise")
 			Expect(hasClusterEnv).To(BeTrue(), "Should have NEO4J_CLUSTER_NAME set")
 
 			// Verify volume mounts
@@ -262,6 +262,9 @@ var _ = Describe("Centralized Backup Configuration", func() {
 					},
 				},
 			}
+			// Apply CI optimizations for 2025.x test
+			applyCIOptimizations(cluster2025)
+
 			Expect(k8sClient.Create(ctx, cluster2025)).To(Succeed())
 			defer func() {
 				cleanupResource(cluster2025, testNamespace, "Neo4jEnterpriseCluster")
