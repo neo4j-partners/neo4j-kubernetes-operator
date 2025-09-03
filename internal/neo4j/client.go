@@ -203,11 +203,10 @@ func NewClientForEnterpriseStandalone(standalone *neo4jv1alpha1.Neo4jEnterpriseS
 		c.MaxTransactionRetryTime = 30 * time.Second
 		c.FetchSize = 1000 // Optimized fetch size for memory efficiency
 
-		// Configure TLS if enabled
-		// Note: TLS configuration is handled by the URI scheme (bolt+s://)
+		// Configure TLS if enabled for cert-manager mode
 		// For self-signed certificates in development/demo, skip verification
 		// In production, proper CA certificates should be used
-		if strings.HasPrefix(uri, "bolt+s://") || strings.HasPrefix(uri, "neo4j+s://") {
+		if standalone.Spec.TLS != nil && standalone.Spec.TLS.Mode == "cert-manager" {
 			// Skip TLS verification for self-signed certificates
 			// This is needed for demo environments with cert-manager self-signed issuers
 			tlsConfig := &tls.Config{
@@ -283,10 +282,10 @@ func NewClientForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, k8sCl
 		c.MaxTransactionRetryTime = 30 * time.Second
 		c.FetchSize = 1000 // Optimized fetch size for memory efficiency
 
-		// Configure TLS if needed for secure connections
+		// Configure TLS if needed for cert-manager enabled clusters
 		// For self-signed certificates in development/demo, skip verification
 		// In production, proper CA certificates should be used
-		if strings.HasPrefix(uri, "bolt+s://") || strings.HasPrefix(uri, "neo4j+s://") {
+		if cluster.Spec.TLS != nil && cluster.Spec.TLS.Mode == "cert-manager" {
 			// Skip TLS verification for self-signed certificates
 			// This is needed for demo environments with cert-manager self-signed issuers
 			tlsConfig := &tls.Config{
