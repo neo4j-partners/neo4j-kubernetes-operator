@@ -548,7 +548,7 @@ demo-setup: ## Setup complete demo environment (cluster + operator)
 .PHONY: operator-setup
 operator-setup: ## Deploy operator to available Kind cluster
 	@echo "🔧 Setting up Neo4j operator..."
-	@./scripts/setup-operator.sh
+	@SKIP_OPERATOR_CONFIRMATION=true ./scripts/setup-operator.sh setup
 
 .PHONY: dev-cluster
 dev-cluster: ## Create a Kind cluster for development
@@ -607,11 +607,6 @@ test-destroy: ## Completely destroy test environment
 	@echo "Destroying test environment..."
 	@./scripts/test-env.sh cleanup
 	@echo "Test environment destroyed!"
-
-.PHONY: operator-setup
-operator-setup: ## Set up the Neo4j operator (automated)
-	@echo "🔧 Setting up Neo4j operator..."
-	@SKIP_OPERATOR_CONFIRMATION=true ./scripts/setup-operator.sh setup
 
 .PHONY: operator-setup-interactive
 operator-setup-interactive: ## Set up the Neo4j operator interactively
