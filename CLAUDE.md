@@ -730,6 +730,37 @@ AfterEach(func() {
 **Solution**: Use `sts.UID != ""` which correctly identifies existing vs new resources
 **Impact**: Enables immediate StatefulSet creation instead of being blocked by template comparison
 
+### CRD Separation of Concerns (Critical)
+
+**MANDATORY DESIGN PRINCIPLE**: The operator follows strict separation of concerns between CRDs to prevent configuration conflicts and maintain clear responsibility boundaries.
+
+**Neo4jEnterpriseCluster / Neo4jEnterpriseStandalone CRDs**:
+- Infrastructure-level configuration (servers, resources, networking)
+- Neo4j server configuration (`neo4j.conf` settings)
+- Authentication, TLS, and security settings
+- Plugin installations and environment variables
+- Backup policies and monitoring configuration
+- Image versions and repository settings
+
+**Neo4jDatabase CRD**:
+- Database-specific settings only (name, topology, Cypher version)
+- Database creation options passed to `CREATE DATABASE` statement
+- Initial data import and seeding configuration
+- Database-level topology (primaries/secondaries distribution within cluster)
+
+**NEVER Allow Cross-CRD Configuration Overrides**:
+- ❌ Neo4jDatabase MUST NOT override cluster/server-level settings
+- ❌ Neo4jDatabase MUST NOT modify resource limits, TLS, or authentication
+- ❌ Neo4jDatabase MUST NOT change Neo4j server configuration
+- ✅ Each CRD manages its own responsibility scope exclusively
+
+**Why This Design Matters**:
+1. **Clear Ownership**: Each CRD has a single responsibility
+2. **Prevents Conflicts**: Avoids configuration conflicts between resources
+3. **Operational Clarity**: Operators know exactly where to configure each setting
+4. **Resource Management**: Infrastructure decisions stay at infrastructure level
+5. **Security Consistency**: Security settings apply uniformly across all databases
+
 ### Regression Prevention Checklist
 1. **Resource Conflicts**: Always use `retry.RetryOnConflict` with `controllerutil.CreateOrUpdate`
 2. **Template Comparison**: Use `UID != ""` to check resource existence, not `ResourceVersion != ""`
@@ -740,6 +771,14 @@ AfterEach(func() {
 7. **Pod Naming**: Expect `<cluster>-server-*` naming, not `<cluster>-primary-*` or `<cluster>-secondary-*`
 8. **Certificate DNS**: Include all server pod DNS names in certificates
 9. **Discovery Port**: Always use `tcp-discovery` (5000), never `tcp-tx` (6000) for V2_ONLY mode
+10. **CRD Separation**: Never allow cross-CRD configuration overrides
+11. **Enterprise Image Validation**: Always validate Neo4j Enterprise images only (`neo4j:X.Y-enterprise`, `neo4j:2025.X.Y-enterprise`) - never allow community images (`neo4j:X.Y`) as they cause licensing and feature failures
+12. **Integration Test Cleanup**: MANDATORY AfterEach blocks with finalizer removal and `cleanupCustomResourcesInNamespace()` - prevents CI resource exhaustion and test failures from resource leaks
+13. **NEO4J_AUTH Environment Variable**: Standalone deployments require `NEO4J_AUTH` environment variable for automatic password setup - critical for Neo4jDatabase support on standalone deployments
+14. **Plugin Configuration Validation**: Environment variable plugins (APOC) check StatefulSet env vars for clusters; Neo4j config plugins (GDS, Bloom) check ConfigMap content for standalone - test configuration source based on deployment type
+15. **Status Phase Validation**: Always check `status.phase="Ready"` for clusters before database operations - don't rely solely on conditions as phase is more reliable for readiness
+16. **TLS Scheme Consistency**: TLS-enabled clusters must use `bolt+s://` scheme, TLS-disabled use `bolt://` - critical for Neo4j client connections and seed URI functionality
+17. **Backup Path Syntax**: Neo4j 5.26+ requires correct `--to-path` syntax for backup operations with automated path creation to prevent backup failures
 
 ## Reports
 
