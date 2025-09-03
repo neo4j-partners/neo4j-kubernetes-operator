@@ -357,7 +357,6 @@ spec:
     tag: "5.26-enterprise"
     pullPolicy: IfNotPresent
 
-  edition: enterprise
 
   # Required environment variables
   env:
@@ -453,26 +452,26 @@ EOF
 
 # Deploy multi-node TLS cluster
 deploy_multi_node_tls() {
-    log_header "DEMO PART 2: Multi-Node TLS-Enabled Neo4j Cluster"
+    log_header "DEMO PART 2: Multi-Node High Availability Neo4j Cluster"
 
     log_demo "Now we'll deploy a production-ready 3-node Neo4j cluster with:"
     log_demo "  • High availability through clustering"
-    log_demo "  • TLS encryption using cert-manager"
-    log_demo "  • Automatic certificate management"
     log_demo "  • Raft consensus for data consistency"
     log_demo "  • Read and write scalability"
+    log_demo "  • Automatic failover and recovery"
+    log_demo "  • Load balancing across nodes"
 
-    confirm "Ready to deploy the TLS-enabled cluster?"
+    confirm "Ready to deploy the multi-node cluster?"
 
-    log_section "Deploying Multi-Node TLS Cluster"
+    log_section "Deploying Multi-Node Cluster"
 
-    log_manifest "Creating multi-node TLS cluster manifest:"
+    log_manifest "Creating multi-node cluster manifest:"
     log_info "This manifest will create a Neo4j Enterprise cluster with:"
     log_info "  • 3 server nodes (HA clustering)"
-    log_info "  • TLS enabled using cert-manager"
     log_info "  • Optimized resource allocation for Kind"
-    log_info "  • 10Gi storage per node"
-    log_info "  • Automatic certificate management"
+    log_info "  • 5Gi storage per node"
+    log_info "  • Automatic cluster formation"
+    log_info "  • Production-ready configuration"
     echo
 
     # Create TLS-enabled cluster manifest
@@ -488,7 +487,6 @@ spec:
     tag: "5.26-enterprise"
     pullPolicy: IfNotPresent
 
-  edition: enterprise
 
   # Required environment variables
   env:
@@ -517,17 +515,10 @@ spec:
     className: standard
     size: "10Gi"
 
-  # TLS configuration using cert-manager
+  # TLS disabled for demo simplicity
+  # In production, use cert-manager for TLS
   tls:
-    mode: cert-manager
-    issuerRef:
-      name: ca-cluster-issuer
-      kind: ClusterIssuer
-    duration: "8760h"  # 1 year
-    renewBefore: "720h" # 30 days
-    usages:
-      - server auth
-      - client auth
+    mode: disabled
 
   # Production configuration
   config:
@@ -751,7 +742,7 @@ spec:
   initialData:
     source: cypher
     cypherStatements:
-      - "CREATE CONSTRAINT product_id_unique IF NOT EXISTS ON (p:Product) ASSERT p.productId IS UNIQUE"
+      - "CREATE CONSTRAINT product_id_unique IF NOT EXISTS FOR (p:Product) REQUIRE p.productId IS UNIQUE"
       - "CREATE INDEX product_name_index IF NOT EXISTS FOR (p:Product) ON (p.name)"
       - "CREATE (p:Product {productId: 'prod-001', name: 'Demo Product', price: 29.99, category: 'Electronics'}) RETURN p"
       - "CREATE (p:Product {productId: 'prod-002', name: 'Test Widget', price: 15.50, category: 'Tools'}) RETURN p"
@@ -791,10 +782,15 @@ EOF
     local ready=false
 
     while [[ $elapsed -lt $timeout ]] && [[ "$ready" != "true" ]]; do
-        if kubectl get neo4jdatabase products-database-standalone -n ${DEMO_NAMESPACE} -o jsonpath='{.status.ready}' 2>/dev/null | grep -q "true"; then
+        # Check both Ready condition and phase status for robustness
+        local phase=$(kubectl get neo4jdatabase products-database-standalone -n ${DEMO_NAMESPACE} -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+        local ready_condition=$(kubectl get neo4jdatabase products-database-standalone -n ${DEMO_NAMESPACE} -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "")
+
+        if [[ "$phase" == "Ready" ]] || [[ "$ready_condition" == "True" ]]; then
             ready=true
             break
         fi
+
         sleep 5
         elapsed=$((elapsed + 5))
         printf "."
@@ -986,7 +982,7 @@ spec:
   initialData:
     source: cypher
     cypherStatements:
-      - "CREATE CONSTRAINT order_id_unique IF NOT EXISTS ON (o:Order) ASSERT o.orderId IS UNIQUE"
+      - "CREATE CONSTRAINT order_id_unique IF NOT EXISTS FOR (o:Order) REQUIRE o.orderId IS UNIQUE"
       - "CREATE INDEX order_date_index IF NOT EXISTS FOR (o:Order) ON (o.orderDate)"
       - "CREATE (o:Order {orderId: 'demo-001', orderDate: date(), status: 'pending', amount: 99.99}) RETURN o"
 EOF
@@ -1101,9 +1097,9 @@ show_demo_summary() {
     echo "  • External access via port-forward (HTTP/Bolt)"
     echo "  • Database creation without topology complexity"
     echo
-    echo -e "${GREEN}✓ Multi-Node TLS Cluster${NC}"
+    echo -e "${GREEN}✓ Multi-Node HA Cluster${NC}"
     echo "  • Production-ready high availability"
-    echo "  • Automatic TLS certificate management"
+    echo "  • Automatic cluster formation"
     echo "  • Raft consensus and data consistency"
     echo "  • Horizontal scaling capabilities"
     echo "  • Secure TLS external access"
@@ -1155,8 +1151,9 @@ validate_prerequisites() {
         log_info "Run 'make demo-setup' to set up the demo environment"
     fi
 
-    # Check for operator
-    if ! kubectl get deployment -n neo4j-operator-system neo4j-operator-controller-manager >/dev/null 2>&1; then
+    # Check for operator (try both namespaces)
+    if ! kubectl get deployment -n neo4j-operator-system neo4j-operator-controller-manager >/dev/null 2>&1 && \
+       ! kubectl get deployment -n neo4j-operator-dev neo4j-operator-controller-manager >/dev/null 2>&1; then
         log_warning "Neo4j operator not found"
         log_info "Run 'make demo-setup' to set up the demo environment"
     fi

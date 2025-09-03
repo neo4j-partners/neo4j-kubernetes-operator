@@ -5,7 +5,6 @@
 set -euo pipefail
 
 # Configuration
-NAMESPACE="neo4j-operator-system"
 DEV_CLUSTER="neo4j-operator-dev"
 TEST_CLUSTER="neo4j-operator-test"
 OPERATOR_IMAGE_BASE="neo4j-operator"
@@ -85,14 +84,18 @@ log_cluster_detection() {
 deploy_to_cluster() {
     local cluster_name=$1
     local image_tag
+    local namespace
 
-    # Determine image tag based on cluster type
+    # Determine image tag and namespace based on cluster type
     if [[ "${cluster_name}" == "${DEV_CLUSTER}" ]]; then
         image_tag="dev"
+        namespace="neo4j-operator-dev"
     elif [[ "${cluster_name}" == "${TEST_CLUSTER}" ]]; then
         image_tag="test"
+        namespace="neo4j-operator-system"
     else
         image_tag="latest"
+        namespace="neo4j-operator-system"
     fi
 
     local operator_image="${OPERATOR_IMAGE_BASE}:${image_tag}"
@@ -111,7 +114,7 @@ deploy_to_cluster() {
     fi
 
     # Check if operator is already deployed
-    if kubectl get deployment neo4j-operator-controller-manager -n "${NAMESPACE}" >/dev/null 2>&1; then
+    if kubectl get deployment neo4j-operator-controller-manager -n "${namespace}" >/dev/null 2>&1; then
         log_warning "Operator already deployed to ${cluster_name}"
         if ! confirm "Redeploy operator to ${cluster_name}?"; then
             log "Skipping deployment to ${cluster_name}"
@@ -119,8 +122,8 @@ deploy_to_cluster() {
         fi
 
         log "Removing existing operator deployment..."
-        kubectl delete deployment neo4j-operator-controller-manager -n "${NAMESPACE}" --ignore-not-found=true
-        kubectl wait --for=delete deployment/neo4j-operator-controller-manager -n "${NAMESPACE}" --timeout=60s || true
+        kubectl delete deployment neo4j-operator-controller-manager -n "${namespace}" --ignore-not-found=true
+        kubectl wait --for=delete deployment/neo4j-operator-controller-manager -n "${namespace}" --timeout=60s || true
     fi
 
     # Build operator image
@@ -133,15 +136,19 @@ deploy_to_cluster() {
 
     # Deploy operator
     log "Deploying operator to ${cluster_name}..."
-    make deploy IMG="${operator_image}"
+    if [[ "${image_tag}" == "dev" ]]; then
+        make deploy-dev
+    else
+        make deploy-prod
+    fi
 
     # Wait for operator to be ready
     log "Waiting for operator to be ready..."
-    kubectl wait --for=condition=available deployment/neo4j-operator-controller-manager -n "${NAMESPACE}" --timeout=300s
+    kubectl wait --for=condition=available deployment/neo4j-operator-controller-manager -n "${namespace}" --timeout=300s
 
     # Verify deployment
     log "Verifying deployment..."
-    kubectl get pods -n "${NAMESPACE}"
+    kubectl get pods -n "${namespace}"
 
     log_success "Operator successfully deployed to ${cluster_name}!"
 }
@@ -273,6 +280,14 @@ status() {
         echo
         log "=== Cluster: ${cluster} ==="
 
+        # Determine namespace based on cluster type
+        local namespace
+        if [[ "${cluster}" == "${DEV_CLUSTER}" ]]; then
+            namespace="neo4j-operator-dev"
+        else
+            namespace="neo4j-operator-system"
+        fi
+
         # Switch context
         kind export kubeconfig --name "${cluster}"
 
@@ -282,13 +297,13 @@ status() {
         fi
 
         echo "Pods:"
-        kubectl get pods -n "${NAMESPACE}" 2>/dev/null || echo "  No pods found"
+        kubectl get pods -n "${namespace}" 2>/dev/null || echo "  No pods found"
 
         echo "Deployments:"
-        kubectl get deployments -n "${NAMESPACE}" 2>/dev/null || echo "  No deployments found"
+        kubectl get deployments -n "${namespace}" 2>/dev/null || echo "  No deployments found"
 
         echo "Services:"
-        kubectl get services -n "${NAMESPACE}" 2>/dev/null || echo "  No services found"
+        kubectl get services -n "${namespace}" 2>/dev/null || echo "  No services found"
     done
 }
 
@@ -325,8 +340,17 @@ logs() {
     fi
 
     log "Following logs from cluster: ${selected_cluster}"
+
+    # Determine namespace based on cluster type
+    local namespace
+    if [[ "${selected_cluster}" == "${DEV_CLUSTER}" ]]; then
+        namespace="neo4j-operator-dev"
+    else
+        namespace="neo4j-operator-system"
+    fi
+
     kind export kubeconfig --name "${selected_cluster}"
-    kubectl logs -n "${NAMESPACE}" deployment/neo4j-operator-controller-manager -f
+    kubectl logs -n "${namespace}" deployment/neo4j-operator-controller-manager -f
 }
 
 # Cleanup operator from clusters
@@ -355,12 +379,18 @@ cleanup() {
             continue
         fi
 
-        # Remove operator resources
-        log "Removing operator from ${cluster}..."
-        make undeploy 2>/dev/null || true
+        # Determine namespace based on cluster type
+        local namespace
+        if [[ "${cluster}" == "${DEV_CLUSTER}" ]]; then
+            namespace="neo4j-operator-dev"
+            make undeploy-dev 2>/dev/null || true
+        else
+            namespace="neo4j-operator-system"
+            make undeploy-prod 2>/dev/null || true
+        fi
 
         # Clean up any remaining resources
-        kubectl delete namespace "${NAMESPACE}" --ignore-not-found=true --timeout=60s || true
+        kubectl delete namespace "${namespace}" --ignore-not-found=true --timeout=60s || true
 
         log_success "Cleaned up ${cluster}"
     done

@@ -286,6 +286,13 @@ kubectl patch -n neo4j-operator-dev deployment/neo4j-operator-controller-manager
 
 ## Key Features
 
+### Plugin Installation Testing
+- **Environment Variable Only Plugins**: APOC configuration uses environment variables (no longer supported in neo4j.conf in Neo4j 5.26+)
+- **Neo4j Config Plugins**: Graph Data Science, Bloom require neo4j.conf configuration with automatic security settings
+- **Dual Deployment Support**: Plugin tests verify both cluster and standalone deployment architectures
+- **ConfigMap Validation**: Standalone plugin tests check ConfigMap content, not StatefulSet environment variables
+- **Critical Test Fix**: Updated GDS and Bloom plugin tests to check ConfigMap where Neo4j standalone reads configuration
+
 ### Centralized Backup System
 - **Architecture**: Single backup StatefulSet per cluster (replaces expensive per-pod sidecars)
 - **Resource Efficiency**: 100m CPU/256Mi memory for entire cluster vs N×200m CPU/512Mi per sidecar
@@ -458,7 +465,18 @@ kubectl exec <pod-name> -c neo4j -- cypher-shell -u neo4j -p <password> "SHOW PR
 
 # Check plugin-specific procedures
 kubectl exec <pod-name> -c neo4j -- cypher-shell -u neo4j -p <password> "SHOW PROCEDURES YIELD name WHERE name STARTS WITH 'apoc'"
+
+# For standalone deployments: Check ConfigMap content (not environment variables)
+kubectl get configmap <standalone-name>-config -o yaml | grep -A10 neo4j.conf
+
+# For cluster deployments: Check environment variables
+kubectl get statefulset <cluster-name>-server -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="NEO4J_PLUGINS")].value}'
 ```
+
+**Plugin Testing Architecture**:
+- **Cluster Tests**: Verify plugin installation via StatefulSet environment variables
+- **Standalone Tests**: Verify plugin configuration via ConfigMap where Neo4j reads settings
+- **Critical Fix Applied**: Plugin tests now correctly validate configuration source based on deployment type
 
 ## Neo4j Database Syntax Reference (5.26+ and 2025.x)
 

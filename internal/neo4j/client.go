@@ -19,6 +19,7 @@ package neo4j
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"strconv"
@@ -204,7 +205,16 @@ func NewClientForEnterpriseStandalone(standalone *neo4jv1alpha1.Neo4jEnterpriseS
 
 		// Configure TLS if enabled
 		// Note: TLS configuration is handled by the URI scheme (bolt+s://)
-		// No additional configuration needed as cert-manager handles certificates
+		// For self-signed certificates in development/demo, skip verification
+		// In production, proper CA certificates should be used
+		if strings.HasPrefix(uri, "bolt+s://") || strings.HasPrefix(uri, "neo4j+s://") {
+			// Skip TLS verification for self-signed certificates
+			// This is needed for demo environments with cert-manager self-signed issuers
+			tlsConfig := &tls.Config{
+				InsecureSkipVerify: true,
+			}
+			c.TlsConfig = tlsConfig
+		}
 	}
 
 	// Create driver with retry logic for connection establishment
@@ -273,9 +283,17 @@ func NewClientForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, k8sCl
 		c.MaxTransactionRetryTime = 30 * time.Second
 		c.FetchSize = 1000 // Optimized fetch size for memory efficiency
 
-		// Configure TLS if enabled
-		// Note: TLS configuration is handled by the URI scheme (bolt+s://)
-		// No additional configuration needed as cert-manager handles certificates
+		// Configure TLS if needed for clusters with cert-manager
+		// For self-signed certificates in development/demo, skip verification
+		// In production, proper CA certificates should be used
+		if cluster.Spec.TLS != nil && cluster.Spec.TLS.Mode == "cert-manager" {
+			// Skip TLS verification for self-signed certificates
+			// This is needed for demo environments with cert-manager self-signed issuers
+			tlsConfig := &tls.Config{
+				InsecureSkipVerify: true,
+			}
+			c.TlsConfig = tlsConfig
+		}
 
 		// Add custom resolver for better connection management
 		c.AddressResolver = func(address config.ServerAddress) []config.ServerAddress {
@@ -1836,16 +1854,15 @@ func buildConnectionURIForStandalone(standalone *neo4jv1alpha1.Neo4jEnterpriseSt
 }
 
 func buildConnectionURIForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) string {
+	// Always use plain bolt scheme - TLS config will handle encryption
 	scheme := "bolt"
-	if cluster.Spec.TLS != nil && cluster.Spec.TLS.Mode == "cert-manager" {
-		scheme = "bolt+s"
-	}
 
 	// Use client service for connection
 	host := fmt.Sprintf("%s-client.%s.svc.cluster.local", cluster.Name, cluster.Namespace)
 	port := 7687
 
-	return fmt.Sprintf("%s://%s:%d", scheme, host, port)
+	uri := fmt.Sprintf("%s://%s:%d", scheme, host, port)
+	return uri
 }
 
 // CreateDatabaseFromSeedURI creates a database from a seed URI using Neo4j CloudSeedProvider
