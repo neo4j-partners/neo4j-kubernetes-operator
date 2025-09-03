@@ -119,45 +119,7 @@ graph TB
     VD -->|Queries| PSN
 ```
 
-### 1.4 Data Flow and Query Processing
-
-```ascii
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                             Query Processing Flow                               │
-└─────────────────────────────────────────────────────────────────────────────────┘
-
-Client Application
-        │
-        │ MATCH (n:Person) WHERE n.name = 'Alice' RETURN n.age
-        ▼
-┌───────────────────┐
-│ Virtual Database  │ ──► Cypher 25 Query Parser
-│    "products"     │
-└───────────────────┘
-        │
-        │ Query Plan: Need graph structure + properties
-        ▼
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                          Query Coordinator                                      │
-│                                                                                 │
-│  Step 1: Find nodes ──────► Graph Shard (products-g000)                         │
-│          WHERE n:Person    │ Returns: node IDs without properties               │
-│                            │                                                    │
-│  Step 2: Get properties ──► Property Shards (hash-based routing)                │
-│          name='Alice'      │ products-p000: Check for name='Alice'              │
-│                            │ products-p001: Check for name='Alice'              │
-│                            │ Returns: matching node IDs + properties            │
-│                            │                                                    │
-│  Step 3: Join results ────► Combine graph structure + properties                │
-│          RETURN n.age      │ Return final result with age property              │
-└─────────────────────────────────────────────────────────────────────────────────┘
-        │
-        │ Results: {name: 'Alice', age: 30}
-        ▼
-Client Application
-```
-
-### 1.5 Deployment Topology
+### 1.4 Deployment Topology
 
 - **Graph Shard**: Uses cluster's Raft consensus (3+ primaries recommended for HA)
 - **Property Shards**: Use cluster's replica-based replication (M = F + 1 fault tolerance)
