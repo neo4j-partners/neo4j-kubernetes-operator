@@ -2294,3 +2294,166 @@ type BackupMetadata struct {
 	Encrypted    bool
 	Checksum     string
 }
+
+// ===== Property Sharding Support =====
+
+// CreateShardedDatabase creates a sharded database with graph and property shards
+func (c *Client) CreateShardedDatabase(ctx context.Context, virtualDBName, graphShardName string, propertyShardNames []string, options map[string]string, wait bool, ifNotExists bool) error {
+	session := c.driver.NewSession(ctx, neo4j.SessionConfig{
+		DatabaseName: "system",
+		AccessMode:   neo4j.AccessModeWrite,
+	})
+	defer session.Close(ctx)
+
+	// Build CREATE SHARDED DATABASE query
+	queryBuilder := strings.Builder{}
+	if ifNotExists {
+		queryBuilder.WriteString(fmt.Sprintf("CREATE SHARDED DATABASE `%s` IF NOT EXISTS\n", virtualDBName))
+	} else {
+		queryBuilder.WriteString(fmt.Sprintf("CREATE SHARDED DATABASE `%s`\n", virtualDBName))
+	}
+
+	// Add graph shard
+	queryBuilder.WriteString(fmt.Sprintf("GRAPH SHARD `%s`\n", graphShardName))
+
+	// Add property shards
+	if len(propertyShardNames) > 0 {
+		queryBuilder.WriteString("PROPERTY SHARDS ")
+		for i, shard := range propertyShardNames {
+			if i > 0 {
+				queryBuilder.WriteString(", ")
+			}
+			queryBuilder.WriteString(fmt.Sprintf("`%s`", shard))
+		}
+		queryBuilder.WriteString("\n")
+	}
+
+	// Add options
+	if len(options) > 0 {
+		queryBuilder.WriteString("OPTIONS {\n")
+		first := true
+		for key, value := range options {
+			if !first {
+				queryBuilder.WriteString(",\n")
+			}
+			queryBuilder.WriteString(fmt.Sprintf("  %s: '%s'", key, value))
+			first = false
+		}
+		queryBuilder.WriteString("\n}\n")
+	}
+
+	// Add wait clause
+	if wait {
+		queryBuilder.WriteString("WAIT")
+	}
+
+	query := queryBuilder.String()
+	result, err := session.Run(ctx, query, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create sharded database: %w", err)
+	}
+
+	if _, err := result.Consume(ctx); err != nil {
+		return fmt.Errorf("failed to consume create sharded database result: %w", err)
+	}
+
+	return nil
+}
+
+// GetShardedDatabases retrieves information about sharded databases
+func (c *Client) GetShardedDatabases(ctx context.Context) ([]ShardedDatabaseInfo, error) {
+	session := c.driver.NewSession(ctx, neo4j.SessionConfig{
+		DatabaseName: "system",
+		AccessMode:   neo4j.AccessModeRead,
+	})
+	defer session.Close(ctx)
+
+	query := "SHOW SHARDED DATABASES"
+	result, err := session.Run(ctx, query, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to show sharded databases: %w", err)
+	}
+
+	var shardedDatabases []ShardedDatabaseInfo
+	for result.Next(ctx) {
+		record := result.Record()
+
+		name, _ := record.Get("name")
+		status, _ := record.Get("status")
+		graphShard, _ := record.Get("graphShard")
+
+		propertyShards := []string{}
+		if shards, ok := record.Get("propertyShards"); ok {
+			if shardList, ok := shards.([]interface{}); ok {
+				for _, shard := range shardList {
+					if shardStr, ok := shard.(string); ok {
+						propertyShards = append(propertyShards, shardStr)
+					}
+				}
+			}
+		}
+
+		shardedDB := ShardedDatabaseInfo{
+			Name:           name.(string),
+			Status:         status.(string),
+			GraphShard:     graphShard.(string),
+			PropertyShards: propertyShards,
+		}
+		shardedDatabases = append(shardedDatabases, shardedDB)
+	}
+
+	if err := result.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating sharded databases results: %w", err)
+	}
+
+	return shardedDatabases, nil
+}
+
+// GetShardedDatabaseStatus retrieves the status of a specific sharded database
+func (c *Client) GetShardedDatabaseStatus(ctx context.Context, virtualDBName string) (*ShardedDatabaseInfo, error) {
+	shardedDBs, err := c.GetShardedDatabases(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get sharded databases: %w", err)
+	}
+
+	for _, db := range shardedDBs {
+		if db.Name == virtualDBName {
+			return &db, nil
+		}
+	}
+
+	return nil, fmt.Errorf("sharded database %s not found", virtualDBName)
+}
+
+// DropShardedDatabase drops a sharded database
+func (c *Client) DropShardedDatabase(ctx context.Context, virtualDBName string, wait bool) error {
+	session := c.driver.NewSession(ctx, neo4j.SessionConfig{
+		DatabaseName: "system",
+		AccessMode:   neo4j.AccessModeWrite,
+	})
+	defer session.Close(ctx)
+
+	query := fmt.Sprintf("DROP SHARDED DATABASE `%s`", virtualDBName)
+	if wait {
+		query += " WAIT"
+	}
+
+	result, err := session.Run(ctx, query, nil)
+	if err != nil {
+		return fmt.Errorf("failed to drop sharded database: %w", err)
+	}
+
+	if _, err := result.Consume(ctx); err != nil {
+		return fmt.Errorf("failed to consume drop sharded database result: %w", err)
+	}
+
+	return nil
+}
+
+// ShardedDatabaseInfo represents information about a sharded database
+type ShardedDatabaseInfo struct {
+	Name           string   `json:"name"`
+	Status         string   `json:"status"`
+	GraphShard     string   `json:"graphShard"`
+	PropertyShards []string `json:"propertyShards"`
+}

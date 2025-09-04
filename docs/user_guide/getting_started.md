@@ -262,10 +262,41 @@ spec:
 EOF
 ```
 
+### Property Sharding for Large Datasets
+
+For large datasets that require horizontal scaling, you can enable property sharding (Neo4j 2025.06+):
+
+```bash
+# Create a property sharding enabled cluster
+kubectl apply -f examples/property_sharding/basic-property-sharding.yaml
+
+# Create a sharded database with property distribution
+kubectl apply -f - <<EOF
+apiVersion: neo4j.com/v1alpha1
+kind: Neo4jShardedDatabase
+metadata:
+  name: large-dataset-db
+spec:
+  clusterRef: basic-sharding-cluster
+  name: largedata
+  propertySharding:
+    propertyShards: 4
+    includedProperties:
+      - "description"
+      - "large_payload"
+    excludedProperties:
+      - "id"
+      - "name"
+  wait: true
+EOF
+```
+
 For detailed database management, see:
 - [Neo4jDatabase API Reference](../api_reference/neo4jdatabase.md)
+- [Property Sharding Guide](property_sharding.md)
 - [Database Seed URI Guide](../seed-uri-feature-guide.md)
 - [Database Examples](../../examples/databases/)
+- [Property Sharding Examples](../../examples/property_sharding/)
 
 ## Next Steps
 

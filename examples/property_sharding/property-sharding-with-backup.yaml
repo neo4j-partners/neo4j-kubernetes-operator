@@ -1,0 +1,157 @@
+# Property Sharding with Coordinated Backup Example
+# This example shows how to configure backups for sharded databases
+
+# Property sharding cluster
+apiVersion: neo4j.com/v1alpha1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: backup-sharding-cluster
+  namespace: default
+spec:
+  image:
+    repo: neo4j
+    tag: 2025.06-enterprise
+
+  topology:
+    servers: 5
+
+  storage:
+    size: 20Gi
+
+  resources:
+    requests:
+      memory: 6Gi
+      cpu: 1500m
+    limits:
+      memory: 12Gi
+      cpu: 3000m
+
+  propertySharding:
+    enabled: true
+    config:
+      # Extended retention for backup coordination
+      db.tx_log.rotation.retention_policy: "10 days"
+
+      # Backup-friendly settings
+      server.backup.enabled: "true"
+      server.backup.listen_address: "0.0.0.0:6362"
+
+---
+# Sharded database with backup configuration
+apiVersion: neo4j.com/v1alpha1
+kind: Neo4jShardedDatabase
+metadata:
+  name: backed-up-sharded-db
+  namespace: default
+spec:
+  clusterRef: backup-sharding-cluster
+
+  name: userdata
+
+  defaultCypherLanguage: "25"
+
+  propertySharding:
+    propertyShards: 4
+
+    # Properties that should be backed up consistently
+    includedProperties:
+      - "user_profile"
+      - "preferences"
+      - "history"
+      - "documents"
+
+    excludedProperties:
+      - "id"
+      - "username"
+      - "email"
+      - "created_at"
+
+    graphShard:
+      primaries: 3
+      secondaries: 1
+
+    propertyShardTopology:
+      primaries: 2
+      secondaries: 1
+
+  # Integrated backup configuration
+  backupConfig:
+    enabled: true
+    schedule: "0 3 * * *"     # Daily at 3 AM
+    consistency: "strict"      # Ensure consistent backups across shards
+    timeout: "1h"             # Allow sufficient time
+    retention: "14d"          # Keep backups for 2 weeks
+
+    storage:
+      type: "s3"
+      location: "s3://neo4j-backups/sharded-userdata/"
+      credentials:
+        secretRef: "backup-credentials"
+
+---
+# Manual backup job for immediate backup
+apiVersion: neo4j.com/v1alpha1
+kind: Neo4jBackup
+metadata:
+  name: manual-sharded-backup
+  namespace: default
+spec:
+  clusterRef: backup-sharding-cluster
+
+  # Multi-database backup for all shards
+  databases:
+    - name: "userdata-g000"    # Graph shard
+      type: "full+differential"
+      schedule: "0 3 * * *"
+    - name: "userdata-p000"    # Property shards (full backups only)
+      type: "full"
+      schedule: "0 3 * * *"
+    - name: "userdata-p001"
+      type: "full"
+      schedule: "0 3 * * *"
+    - name: "userdata-p002"
+      type: "full"
+      schedule: "0 3 * * *"
+    - name: "userdata-p003"
+      type: "full"
+      schedule: "0 3 * * *"
+
+  # Coordinated backup settings
+  consistency: "cross-database"  # Ensure consistent point across all shards
+  parallelism: 2                # Backup shards in parallel for speed
+
+  storage:
+    type: "s3"
+    location: "s3://neo4j-backups/manual-sharded/"
+    credentials:
+      secretRef: "backup-credentials"
+
+  retention:
+    daily: 7     # Keep daily backups for 7 days
+    weekly: 4    # Keep weekly backups for 4 weeks
+    monthly: 6   # Keep monthly backups for 6 months
+
+---
+# Backup credentials
+apiVersion: v1
+kind: Secret
+metadata:
+  name: backup-credentials
+  namespace: default
+type: Opaque
+data:
+  # Replace with actual base64-encoded credentials
+  access-key-id: QUNFRVNTX0tFWV9JRA==
+  secret-access-key: U0VDUkVUX0FDQ0VTU19LRVk=
+
+---
+# Neo4j admin credentials
+apiVersion: v1
+kind: Secret
+metadata:
+  name: neo4j-admin-secret
+  namespace: default
+type: Opaque
+stringData:
+  username: "neo4j"
+  password: "backup-cluster-123"

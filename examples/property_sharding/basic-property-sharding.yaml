@@ -1,0 +1,75 @@
+# Basic Property Sharding Example
+# This example demonstrates the minimal configuration for property sharding
+
+# First create a property sharding enabled cluster
+apiVersion: neo4j.com/v1alpha1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: basic-sharding-cluster
+  namespace: default
+spec:
+  # Neo4j 2025.06+ required for property sharding
+  image:
+    repo: neo4j
+    tag: 2025.06-enterprise
+
+  # Minimum 3 servers for property sharding
+  topology:
+    servers: 3
+
+  storage:
+    size: 5Gi
+
+  # Resources must be sufficient for property sharding
+  resources:
+    requests:
+      memory: 4Gi    # Minimum 4GB for property sharding
+      cpu: 1000m
+    limits:
+      memory: 8Gi
+      cpu: 2000m
+
+  # Enable property sharding with default configuration
+  propertySharding:
+    enabled: true
+    # Default config is applied automatically:
+    # - internal.dbms.sharded_property_database.enabled: "true"
+    # - db.query.default_language: "CYPHER_25"
+    # - internal.dbms.cluster.experimental_protocol_version.dbms_enabled: "true"
+    # - internal.dbms.sharded_property_database.allow_external_shard_access: "false"
+
+---
+# Then create a sharded database targeting the cluster
+apiVersion: neo4j.com/v1alpha1
+kind: Neo4jShardedDatabase
+metadata:
+  name: basic-sharded-db
+  namespace: default
+spec:
+  # Target the property sharding enabled cluster
+  clusterRef: basic-sharding-cluster
+
+  # Virtual database name (what users connect to)
+  name: products
+
+  # Cypher 25 required for property sharding
+  defaultCypherLanguage: "25"
+
+  # Basic property sharding configuration
+  propertySharding:
+    # Create 2 property shards (minimal setup)
+    propertyShards: 2
+
+    # Graph shard topology (nodes/relationships without properties)
+    graphShard:
+      primaries: 2    # Fault tolerant
+      secondaries: 1
+
+    # Property shard topology (properties only)
+    propertyShardTopology:
+      primaries: 1    # Simple setup
+      secondaries: 1
+
+  # Standard database options
+  wait: true          # Wait for creation
+  ifNotExists: true   # Don't fail if exists

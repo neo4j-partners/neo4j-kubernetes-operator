@@ -1840,7 +1840,7 @@ func buildHealthScript(_ *neo4jv1alpha1.Neo4jEnterpriseCluster) string {
 # Health check script for Neo4j clustering
 
 # Check if Neo4j process is running
-if ! pgrep -f "neo4j.*EnterpriseEntryPoint" > /dev/null; then
+if ! (pgrep -f "EnterpriseEntryPoint" > /dev/null || pgrep -f "Neo4jEnterprise" > /dev/null); then
     echo "Neo4j process not running"
     exit 1
 fi

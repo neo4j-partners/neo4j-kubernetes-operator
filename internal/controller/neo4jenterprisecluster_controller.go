@@ -182,6 +182,16 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 		}
 	}
 
+	// Validate property sharding configuration if enabled
+	if cluster.Spec.PropertySharding != nil && cluster.Spec.PropertySharding.Enabled {
+		if err := r.validatePropertyShardingConfiguration(ctx, cluster); err != nil {
+			logger.Error(err, "Property sharding validation failed")
+			r.Recorder.Eventf(cluster, corev1.EventTypeWarning, "PropertyShardingValidationFailed", "Property sharding validation failed: %v", err)
+			_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Property sharding validation failed: %v", err))
+			return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
+		}
+	}
+
 	// Add finalizer if not present
 	if !controllerutil.ContainsFinalizer(cluster, ClusterFinalizer) {
 		controllerutil.AddFinalizer(cluster, ClusterFinalizer)
@@ -382,6 +392,14 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 	// Update status to "Ready" only if cluster formation is verified
 	// Note: Split-brain detection is already performed in verifyNeo4jClusterFormation
 	statusChanged := r.updateClusterStatus(ctx, cluster, "Ready", "Neo4j cluster is fully formed and ready")
+
+	// Update property sharding readiness status if enabled
+	if cluster.Spec.PropertySharding != nil && cluster.Spec.PropertySharding.Enabled {
+		if err := r.updatePropertyShardingStatus(ctx, cluster, true); err != nil {
+			logger.Error(err, "Failed to update property sharding status")
+			// Don't fail the reconciliation for status update issues
+		}
+	}
 
 	// Only create event if status actually changed
 	if statusChanged {
@@ -1494,6 +1512,104 @@ func (qm *QueryMonitor) setupAlertingRules(ctx context.Context, cluster *neo4jv1
 
 	logger.Info("Alerting rules setup completed")
 	return nil
+}
+
+// validatePropertyShardingConfiguration validates property sharding settings
+func (r *Neo4jEnterpriseClusterReconciler) validatePropertyShardingConfiguration(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) error {
+	logger := log.FromContext(ctx)
+
+	// Validate Neo4j version supports property sharding (2025.06+)
+	if err := validatePropertyShardingVersion(cluster.Spec.Image.Tag); err != nil {
+		return fmt.Errorf("property sharding version validation failed: %w", err)
+	}
+
+	// Validate minimum cluster size for property sharding
+	if cluster.Spec.Topology.Servers < 3 {
+		return fmt.Errorf("property sharding requires minimum 3 servers, got %d", cluster.Spec.Topology.Servers)
+	}
+
+	// Validate required configuration settings
+	requiredSettings := map[string]string{
+		"internal.dbms.sharded_property_database.enabled":                     "true",
+		"db.query.default_language":                                           "CYPHER_25",
+		"internal.dbms.cluster.experimental_protocol_version.dbms_enabled":    "true",
+		"internal.dbms.sharded_property_database.allow_external_shard_access": "false",
+	}
+
+	if cluster.Spec.PropertySharding.Config != nil {
+		for key, expectedValue := range requiredSettings {
+			if actualValue, exists := cluster.Spec.PropertySharding.Config[key]; !exists || actualValue != expectedValue {
+				return fmt.Errorf("property sharding requires %s=%s, got %s=%s", key, expectedValue, key, actualValue)
+			}
+		}
+	} else {
+		// If config is nil, create it with required settings
+		logger.Info("Property sharding config is empty, will use default required settings")
+	}
+
+	// Validate resource requirements
+	if cluster.Spec.Resources != nil && cluster.Spec.Resources.Requests != nil {
+		if memory := cluster.Spec.Resources.Requests.Memory(); memory != nil {
+			memoryMB := memory.Value() / (1024 * 1024)
+			if memoryMB < 4096 { // 4GB minimum for property sharding
+				return fmt.Errorf("property sharding requires minimum 4GB memory, got %dMB", memoryMB)
+			}
+		}
+	}
+
+	logger.Info("Property sharding configuration validation passed")
+	return nil
+}
+
+// validatePropertyShardingVersion checks if Neo4j version supports property sharding
+func validatePropertyShardingVersion(imageTag string) error {
+	// Property sharding requires Neo4j 2025.06+
+	// This is a simplified version check - in production should use semver parsing
+	if imageTag == "" {
+		return fmt.Errorf("image tag is required for property sharding")
+	}
+
+	// For now, accept tags starting with "2025." (calver) or >= "2025.06" (semver)
+	// More sophisticated version parsing can be added later
+	if !contains([]string{"2025.", "2026.", "2027."}, imageTag) {
+		return fmt.Errorf("property sharding requires Neo4j 2025.06+, got %s", imageTag)
+	}
+
+	return nil
+}
+
+// contains checks if string starts with any of the prefixes
+func contains(prefixes []string, s string) bool {
+	for _, prefix := range prefixes {
+		if len(s) >= len(prefix) && s[:len(prefix)] == prefix {
+			return true
+		}
+	}
+	return false
+}
+
+// updatePropertyShardingStatus updates the property sharding ready status
+func (r *Neo4jEnterpriseClusterReconciler) updatePropertyShardingStatus(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, ready bool) error {
+	logger := log.FromContext(ctx)
+
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		// Get latest version
+		latest := &neo4jv1alpha1.Neo4jEnterpriseCluster{}
+		if err := r.Get(ctx, client.ObjectKeyFromObject(cluster), latest); err != nil {
+			return err
+		}
+
+		// Update property sharding ready status
+		if latest.Status.PropertyShardingReady == nil || *latest.Status.PropertyShardingReady != ready {
+			latest.Status.PropertyShardingReady = &ready
+			if err := r.Status().Update(ctx, latest); err != nil {
+				return err
+			}
+			logger.Info("Updated property sharding readiness", "ready", ready)
+		}
+
+		return nil
+	})
 }
 
 // SetupWithManager sets up the controller with the Manager.

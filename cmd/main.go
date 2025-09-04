@@ -361,6 +361,17 @@ func setupProductionControllers(mgr ctrl.Manager) error {
 				RequeueAfter: controller.GetTestRequeueAfter(),
 			},
 		},
+		{
+			name: "Neo4jShardedDatabase",
+			controller: &controller.Neo4jShardedDatabaseReconciler{
+				Client:                   mgr.GetClient(),
+				Scheme:                   mgr.GetScheme(),
+				Recorder:                 mgr.GetEventRecorderFor("neo4j-sharded-database-controller"),
+				MaxConcurrentReconciles:  1,
+				RequeueAfter:             controller.GetTestRequeueAfter(),
+				ShardedDatabaseValidator: validation.NewShardedDatabaseValidator(mgr.GetClient()),
+			},
+		},
 	}
 
 	for _, ctrl := range controllers {
@@ -430,6 +441,16 @@ func setupDevelopmentControllers(mgr ctrl.Manager, controllers []string) error {
 				Recorder:     mgr.GetEventRecorderFor("neo4j-plugin-controller"),
 				RequeueAfter: controller.GetTestRequeueAfter(),
 			}, "Neo4jPlugin"
+		},
+		"shardeddatabase": func() (interface{ SetupWithManager(ctrl.Manager) error }, string) {
+			return &controller.Neo4jShardedDatabaseReconciler{
+				Client:                   mgr.GetClient(),
+				Scheme:                   mgr.GetScheme(),
+				Recorder:                 mgr.GetEventRecorderFor("neo4j-sharded-database-controller"),
+				MaxConcurrentReconciles:  1,
+				RequeueAfter:             controller.GetTestRequeueAfter(),
+				ShardedDatabaseValidator: validation.NewShardedDatabaseValidator(mgr.GetClient()),
+			}, "Neo4jShardedDatabase"
 		},
 	}
 

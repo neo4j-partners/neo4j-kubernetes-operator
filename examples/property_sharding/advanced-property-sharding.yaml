@@ -1,0 +1,191 @@
+# Advanced Property Sharding Example
+# This example demonstrates production-ready property sharding configuration
+
+# Property sharding enabled cluster with performance tuning
+apiVersion: neo4j.com/v1alpha1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: production-sharding-cluster
+  namespace: default
+  labels:
+    environment: production
+    feature: property-sharding
+spec:
+  # Latest Neo4j version for best property sharding support
+  image:
+    repo: neo4j
+    tag: 2025.08-enterprise
+
+  # Production cluster sizing
+  topology:
+    servers: 7  # Enough servers for graph + property shards with HA
+
+  storage:
+    size: 100Gi
+    storageClass: fast-ssd
+
+  # Production resource allocation
+  resources:
+    requests:
+      memory: 8Gi    # Generous memory for shard coordination
+      cpu: 2000m
+    limits:
+      memory: 16Gi
+      cpu: 4000m
+
+  # Property sharding with performance tuning
+  propertySharding:
+    enabled: true
+    config:
+      # Required settings (applied automatically)
+      internal.dbms.sharded_property_database.enabled: "true"
+      db.query.default_language: "CYPHER_25"
+      internal.dbms.cluster.experimental_protocol_version.dbms_enabled: "true"
+      internal.dbms.sharded_property_database.allow_external_shard_access: "false"
+
+      # Performance tuning
+      db.tx_log.rotation.retention_policy: "14 days"  # Longer retention for large datasets
+      internal.dbms.sharded_property_database.property_pull_interval: "5ms"  # Faster sync
+
+      # Memory optimization
+      server.memory.heap.max_size: "12G"
+      server.memory.pagecache.size: "6G"
+
+      # Connection pooling
+      dbms.connector.bolt.thread_pool_min_size: "10"
+      dbms.connector.bolt.thread_pool_max_size: "100"
+
+  # TLS configuration for production
+  tls:
+    mode: cert-manager
+    issuerRef:
+      name: ca-cluster-issuer
+      kind: ClusterIssuer
+
+---
+# Production sharded database with sophisticated property distribution
+apiVersion: neo4j.com/v1alpha1
+kind: Neo4jShardedDatabase
+metadata:
+  name: ecommerce-sharded-db
+  namespace: default
+  labels:
+    application: ecommerce
+    database-type: sharded
+spec:
+  clusterRef: production-sharding-cluster
+
+  # E-commerce product database
+  name: ecommerce
+
+  defaultCypherLanguage: "25"
+
+  propertySharding:
+    # Optimal shard count for large dataset
+    propertyShards: 8
+
+    # Use murmur3 for best performance
+    hashFunction: murmur3
+
+    # Strategic property distribution
+    includedProperties:
+      # Large, infrequently accessed properties go to property shards
+      - "description"           # Product descriptions
+      - "full_specifications"   # Detailed specs
+      - "reviews"              # Customer reviews
+      - "images_metadata"      # Image information
+      - "analytics_data"       # Usage analytics
+      - "marketing_content"    # Marketing materials
+      - "inventory_history"    # Historical inventory data
+      - "user_preferences"     # Personalization data
+
+    excludedProperties:
+      # Frequently accessed properties stay in graph shard for performance
+      - "id"                   # Primary keys
+      - "name"                 # Product names
+      - "price"                # Current price
+      - "category"             # Category classification
+      - "brand"                # Brand information
+      - "availability"         # Stock status
+      - "rating"               # Average rating
+      - "created_at"           # Timestamps
+      - "updated_at"           # Update timestamps
+
+    # High-availability graph shard (critical path)
+    graphShard:
+      primaries: 3     # Raft consensus with fault tolerance
+      secondaries: 2   # Read replicas
+
+    # Fault-tolerant property shards
+    propertyShardTopology:
+      primaries: 2     # Redundant primaries
+      secondaries: 1   # Read replicas
+
+    # Advanced property sharding configuration
+    config:
+      # Hash ring configuration
+      internal.dbms.sharded_property_database.hash_ring_size: "1024"
+
+      # Replication settings
+      internal.dbms.sharded_property_database.replication_factor: "2"
+
+      # Performance tuning
+      internal.dbms.sharded_property_database.batch_size: "1000"
+      internal.dbms.sharded_property_database.flush_interval: "1s"
+
+  # Initial data loading from backup
+  initialGraphData:
+    source: "s3://ecommerce-backups/initial-graph-data.dump"
+    credentials:
+      secretRef: "s3-credentials"
+
+  # Backup configuration for sharded database
+  backupConfig:
+    enabled: true
+    schedule: "0 2 * * *"  # Daily at 2 AM
+    consistency: "strict"   # Consistent point-in-time backups
+    timeout: "2h"          # Allow time for large backups
+    retention: "30d"       # Keep backups for 30 days
+    storage:
+      type: "s3"
+      location: "s3://ecommerce-backups/sharded/"
+      credentials:
+        secretRef: "backup-s3-credentials"
+
+---
+# Secret for S3 access
+apiVersion: v1
+kind: Secret
+metadata:
+  name: s3-credentials
+  namespace: default
+type: Opaque
+data:
+  # Base64 encoded credentials
+  access-key-id: <base64-encoded-access-key>
+  secret-access-key: <base64-encoded-secret-key>
+
+---
+# Secret for backup S3 access
+apiVersion: v1
+kind: Secret
+metadata:
+  name: backup-s3-credentials
+  namespace: default
+type: Opaque
+data:
+  # Base64 encoded backup credentials
+  access-key-id: <base64-encoded-backup-access-key>
+  secret-access-key: <base64-encoded-backup-secret-key>
+
+---
+# Admin secret for Neo4j authentication
+apiVersion: v1
+kind: Secret
+metadata:
+  name: neo4j-admin-secret
+  namespace: default
+type: Opaque
+data:
+  username: bmVvNGo=        # neo4j
+  password: cHJvZHVjdGlvbjEyMw==  # production123
