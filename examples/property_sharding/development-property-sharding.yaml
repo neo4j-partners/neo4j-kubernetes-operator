@@ -1,0 +1,117 @@
+# Development Property Sharding Example
+# This example is optimized for development and testing environments
+
+# Minimal resource cluster for development
+apiVersion: neo4j.com/v1alpha1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: dev-sharding-cluster
+  namespace: neo4j-dev
+  labels:
+    environment: development
+    purpose: testing
+spec:
+  image:
+    repo: neo4j
+    tag: 2025.06-enterprise
+
+  # Minimal cluster for development
+  topology:
+    servers: 3  # Minimum required for property sharding
+
+  storage:
+    size: 2Gi  # Small storage for dev
+
+  # Development resources (minimal but functional)
+  resources:
+    requests:
+      memory: 4Gi    # Minimum for property sharding
+      cpu: 500m     # Lower CPU for dev
+    limits:
+      memory: 6Gi
+      cpu: 1000m
+
+  # Enable property sharding with development-friendly settings
+  propertySharding:
+    enabled: true
+    config:
+      # Default required settings applied automatically
+
+      # Development-specific tuning
+      db.tx_log.rotation.retention_policy: "2 days"    # Shorter retention
+      internal.dbms.sharded_property_database.property_pull_interval: "50ms"  # Less aggressive
+
+      # Memory settings for development
+      server.memory.heap.max_size: "4G"
+      server.memory.pagecache.size: "1G"
+
+      # Enable more logging for development
+      dbms.logs.debug.level: "INFO"
+
+---
+# Simple sharded database for testing
+apiVersion: neo4j.com/v1alpha1
+kind: Neo4jShardedDatabase
+metadata:
+  name: test-sharded-db
+  namespace: neo4j-dev
+  labels:
+    purpose: testing
+    dataset: sample
+spec:
+  clusterRef: dev-sharding-cluster
+
+  name: testdata
+
+  defaultCypherLanguage: "25"
+
+  propertySharding:
+    # Small number of shards for testing
+    propertyShards: 2
+
+    hashFunction: murmur3
+
+    # Test property distribution
+    includedProperties:
+      - "description"      # Test large text fields
+      - "metadata"        # Test JSON data
+      - "test_payload"    # Test data for experiments
+
+    excludedProperties:
+      - "id"              # Keep IDs in graph
+      - "name"            # Frequently accessed
+      - "type"            # Used in queries
+
+    # Simple topology for development
+    graphShard:
+      primaries: 1    # Single primary for dev
+      secondaries: 1  # One backup
+
+    propertyShardTopology:
+      primaries: 1    # Single primary per shard
+      secondaries: 0  # No replicas in dev
+
+  wait: true
+  ifNotExists: true
+
+---
+# Development namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: neo4j-dev
+  labels:
+    purpose: development
+    environment: dev
+
+---
+# Simple admin credentials for development
+apiVersion: v1
+kind: Secret
+metadata:
+  name: neo4j-admin-secret
+  namespace: neo4j-dev
+type: Opaque
+stringData:
+  username: "neo4j"
+  password: "development123"

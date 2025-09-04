@@ -13,6 +13,7 @@ The [User Guide](user_guide) is for users of the Neo4j Enterprise Operator. It c
 *   **[Configuration](user_guide/configuration.md)**: Comprehensive configuration options.
 *   **[External Access](user_guide/external_access.md)**: Expose Neo4j outside Kubernetes using LoadBalancer, NodePort, or Ingress.
 *   **[Topology Placement](user_guide/topology_placement.md)**: Configure zone distribution, anti-affinity, and advanced placement strategies.
+*   **[Property Sharding](user_guide/property_sharding.md)**: Horizontal scaling for large datasets with property sharding
 *   **[Guides](user_guide/guides)**: In-depth guides on specific topics, such as:
     *   [Configuration Best Practices](user_guide/guides/configuration_best_practices.md) - Neo4j 5.26+ configuration guidelines and **seed URI best practices**
     *   [Backup and Restore](user_guide/guides/backup_restore.md) - Comprehensive backup and restore operations including PITR
@@ -47,6 +48,7 @@ The [API Reference](api_reference) contains detailed information about the opera
 *   **[Neo4jRestore](api_reference/neo4jrestore.md)**
 *   **[Neo4jDatabase](api_reference/neo4jdatabase.md)** - Enhanced with IF NOT EXISTS, WAIT/NOWAIT, topology support, and **seed URI functionality**
 *   **[Neo4jPlugin](api_reference/neo4jplugin.md)** - Smart plugin management with Neo4j 5.26+ compatibility
+*   **[Neo4jShardedDatabase](api_reference/neo4jshardeddatabase.md)** - Property sharding for horizontal scaling
 
 ## 🚀 End-to-End Examples
 
@@ -56,12 +58,14 @@ Complete deployment examples demonstrating real-world scenarios:
 *   **[Disaster Recovery](../examples/end-to-end/disaster-recovery.yaml)** - Backup strategies, PITR, and cross-region recovery
 *   **[Development Workflow](../examples/end-to-end/development-workflow.yaml)** - Local development, migrations, and CI/CD integration
 *   **[Multi-Tenancy](../examples/end-to-end/multi-tenancy.yaml)** - Shared clusters with tenant isolation
+*   **[Property Sharding](../examples/property_sharding/)** - Horizontal scaling with property sharding for large datasets
 
 ## 🆕 What's New
 
 ### Latest Features (Neo4j 5.26+ and 2025.x)
 *   **Database Management**: Create databases with `IF NOT EXISTS`, `WAIT`/`NOWAIT` options
 *   **🆕 Seed URI Functionality**: Create databases directly from existing backups stored in cloud storage
+*   **🆕 Property Sharding**: Horizontal scaling for large datasets with separate graph and property shards
 *   **Topology Constraints**: Specify primary/secondary distribution for databases
 *   **Version Detection**: Automatic adaptation for Neo4j 5.26.x (SemVer) and 2025.x (CalVer)
 *   **Cypher Language**: Support for Cypher 25 in Neo4j 2025.x

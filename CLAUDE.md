@@ -235,6 +235,16 @@ See detailed implementation: `/reports/2025-08-19-server-based-architecture-impl
 - Use envtest for controller unit tests
 - Neo4j client uses Bolt protocol
 - Integration tests use 300-second timeouts for CI compatibility
+- **Property Sharding tests**: Skipped in CI due to resource requirements (run locally only)
+
+**Property Sharding Tests** (Local Only):
+```bash
+# Run property sharding tests locally (requires Neo4j 2025.06+ images)
+make test-integration FOCUS="Property Sharding"
+
+# Or with ginkgo directly
+ginkgo run -focus "Property Sharding" ./test/integration
+```
 
 **Test Troubleshooting**:
 - If tests timeout: Check image pull delays in CI - tests use 5-minute timeout
@@ -242,6 +252,7 @@ See detailed implementation: `/reports/2025-08-19-server-based-architecture-impl
 - If cluster formation fails: Check discovery service and endpoints RBAC permissions
 - If pods get OOMKilled: Check memory limits - Neo4j Enterprise needs ≥ 1.5Gi for database operations
 - If database creation hangs: Verify Neo4j 5.x syntax uses `TOPOLOGY` clause, not `OPTIONS`
+- If property sharding tests fail: Ensure Neo4j 2025.06+ images available, sufficient cluster resources (7+ nodes, 8Gi+ memory per server)
 
 ### Development Environment
 

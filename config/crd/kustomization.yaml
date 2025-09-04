@@ -9,6 +9,7 @@ resources:
   - bases/neo4j.neo4j.com_neo4jbackups.yaml
   - bases/neo4j.neo4j.com_neo4jrestores.yaml
   - bases/neo4j.neo4j.com_neo4jplugins.yaml
+  - bases/neo4j.neo4j.com_neo4jshardeddatabases.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches: []

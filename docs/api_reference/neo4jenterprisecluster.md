@@ -22,16 +22,19 @@ The `Neo4jEnterpriseCluster` Custom Resource Definition (CRD) manages Neo4j Ente
 - **Role Flexibility**: Servers can host multiple databases with different roles
 
 **When to Use**:
+
 - Production workloads requiring high availability
 - Multi-database deployments with different topology requirements
 - Workloads needing horizontal read scaling
 - Enterprise features like advanced backup, security, and monitoring
+- Large datasets requiring property sharding (Neo4j 2025.06+)
 
 **For single-node deployments**, use [`Neo4jEnterpriseStandalone`](neo4jenterprisestandalone.md) instead.
 
 ## Related Resources
 
 - [`Neo4jDatabase`](neo4jdatabase.md) - Create databases within the cluster
+- [`Neo4jShardedDatabase`](neo4jshardeddatabase.md) - Create sharded databases for horizontal scaling
 - [`Neo4jPlugin`](neo4jplugin.md) - Install plugins (APOC, GDS, etc.)
 - [`Neo4jBackup`](neo4jbackup.md) - Schedule automated backups
 - [`Neo4jRestore`](neo4jrestore.md) - Restore from backups
@@ -103,6 +106,7 @@ The `Neo4jEnterpriseClusterSpec` defines the desired state of a Neo4j Enterprise
 | `tls` | [`TLSSpec`](#tlsspec) | TLS configuration |
 | `plugins` | `[]PluginSpec` | **DEPRECATED:** Plugin configuration (use Neo4jPlugin CRD instead) |
 | `monitoring` | [`MonitoringSpec`](#monitoringspec) | Monitoring configuration |
+| `propertySharding` | [`PropertyShardingSpec`](#propertyshardingspec) | Property sharding configuration (Neo4j 2025.06+) |
 | `queryMonitoring` | [`QueryMonitoringSpec`](#querymonitoringspec) | Query monitoring configuration |
 | `podManagementPolicy` | `string` | Pod management policy: `"Parallel"` or `"OrderedReady"` |
 | `updateStrategy` | `*appsv1.StatefulSetUpdateStrategy` | StatefulSet update strategy |
@@ -228,6 +232,39 @@ Specifies role constraints for individual servers.
 | `secretStoreRef` | `string` | External Secrets store reference |
 | `refreshInterval` | `string` | Refresh interval (e.g., `"1h"`) |
 | `keyMapping` | `map[string]string` | Key mapping |
+
+### PropertyShardingSpec
+
+Configures property sharding for horizontal scaling of large datasets. Property sharding separates graph structure from properties, allowing different scaling strategies for each. Available in Neo4j 2025.06+.
+
+| Field | Type | Description |
+|---|---|---|
+| `enabled` | `bool` | Enable property sharding for this cluster |
+| `config` | `map[string]string` | Additional property sharding configuration |
+
+**Required Configuration** (automatically applied when enabled):
+
+- `internal.dbms.sharded_property_database.enabled: "true"`
+- `db.query.default_language: "CYPHER_25"`
+- `internal.dbms.cluster.experimental_protocol_version.dbms_enabled: "true"`
+- `internal.dbms.sharded_property_database.allow_external_shard_access: "false"`
+
+**Performance Tuning Options**:
+
+```yaml
+propertySharding:
+  enabled: true
+  config:
+    # Transaction log retention
+    db.tx_log.rotation.retention_policy: "14 days"
+    # Property sync interval
+    internal.dbms.sharded_property_database.property_pull_interval: "10ms"
+    # Memory settings
+    server.memory.heap.max_size: "12G"
+    server.memory.pagecache.size: "6G"
+```
+
+For detailed configuration, see the [Property Sharding Guide](../user_guide/property_sharding.md).
 
 ### BackupsSpec
 
@@ -754,6 +791,41 @@ spec:
     mode: disabled
 
 ---
+# Property Sharding cluster (Neo4j 2025.06+)
+apiVersion: neo4j.com/v1alpha1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: sharding-cluster
+spec:
+  image:
+    repo: neo4j
+    tag: 2025.06-enterprise
+  topology:
+    servers: 7  # Sufficient for property sharding workloads
+  storage:
+    className: fast-ssd
+    size: 100Gi
+  resources:
+    requests:
+      cpu: 2
+      memory: 8Gi
+    limits:
+      cpu: 4
+      memory: 16Gi
+  propertySharding:
+    enabled: true
+    config:
+      db.tx_log.rotation.retention_policy: "14 days"
+      internal.dbms.sharded_property_database.property_pull_interval: "5ms"
+      server.memory.heap.max_size: "12G"
+      server.memory.pagecache.size: "6G"
+  tls:
+    mode: cert-manager
+    issuerRef:
+      name: ca-cluster-issuer
+      kind: ClusterIssuer
+
+---
 # Production cluster (high availability)
 apiVersion: neo4j.neo4j.com/v1alpha1
 kind: Neo4jEnterpriseCluster
@@ -835,7 +907,9 @@ kubectl annotate neo4jenterprisecluster my-cluster \
 ```
 
 For more information:
+
 - [Configuration Best Practices](../user_guide/guides/configuration_best_practices.md)
+- [Property Sharding Guide](../user_guide/property_sharding.md)
 - [Split-Brain Recovery Guide](../user_guide/troubleshooting/split-brain-recovery.md)
 - [Resource Sizing Guide](../user_guide/guides/resource_sizing.md)
 - [Fault Tolerance Guide](../user_guide/guides/fault_tolerance.md)
