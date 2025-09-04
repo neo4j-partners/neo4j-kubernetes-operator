@@ -16,6 +16,7 @@ The Neo4j Enterprise Operator for Kubernetes provides a complete solution for de
   - [Cleanup](#cleanup)
   - [Development Installation](#development-installation)
 - [Database Management](#-database-management)
+- [Property Sharding](#-property-sharding-preview)
 - [Backup and Restore](#-backup-and-restore)
 - [Examples](#-examples)
 - [Authentication](#-authentication)
@@ -192,6 +193,74 @@ EOF
 - [Database from S3 backup](examples/databases/database-from-s3-seed.yaml)
 - [Database from existing backup](examples/databases/database-dump-vs-backup-seed.yaml)
 
+## 🔄 Property Sharding (PREVIEW)
+
+> ⚠️ **PREVIEW FEATURE**: Property Sharding is a preview feature available in Neo4j 2025.06+. It enables massive scale graph databases by separating graph structure and properties into specialized shards.
+
+Property sharding separates your graph data into:
+- **Graph shards**: Store nodes and relationships (no properties)
+- **Property shards**: Store node and relationship properties
+
+### Requirements
+
+- **Neo4j Version**: 2025.06+ (CalVer format)
+- **Minimum Servers**: 3+ servers required
+- **Memory**: At least 4GB per server (recommended 8GB+)
+
+### Quick Start
+
+1. **Create a property sharding enabled cluster:**
+
+```yaml
+apiVersion: neo4j.com/v1alpha1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: sharding-cluster
+spec:
+  image:
+    repo: neo4j
+    tag: 2025.06-enterprise
+  topology:
+    servers: 3
+  resources:
+    requests:
+      memory: 4Gi
+    limits:
+      memory: 8Gi
+  propertySharding:
+    enabled: true
+```
+
+2. **Create a sharded database:**
+
+```yaml
+apiVersion: neo4j.com/v1alpha1
+kind: Neo4jShardedDatabase
+metadata:
+  name: my-sharded-db
+spec:
+  clusterRef: sharding-cluster
+  name: products
+  defaultCypherLanguage: "25"  # Required for property sharding
+  propertySharding:
+    propertyShards: 2
+    graphShard:
+      primaries: 2
+      secondaries: 1
+    propertyShardTopology:
+      primaries: 1
+      secondaries: 1
+```
+
+### Examples
+
+- **[Basic setup](examples/property_sharding/basic-property-sharding.yaml)** - Simple property sharded database
+- **[Advanced configuration](examples/property_sharding/advanced-property-sharding.yaml)** - Production setup with multiple shards
+- **[Development setup](examples/property_sharding/development-property-sharding.yaml)** - Minimal resources for testing
+- **[With backup](examples/property_sharding/property-sharding-with-backup.yaml)** - Backup configuration for sharded databases
+
+For complete documentation, see [Property Sharding Guide](examples/property_sharding/README.md).
+
 ## 💾 Backup and Restore
 
 ### Setting up Backups
@@ -282,6 +351,13 @@ After cloning the repository, ready-to-use configurations are available in the `
 - **[Standalone plugin example](examples/plugins/standalone-plugin-example.yaml)** - Install Graph Data Science on standalone
 - **[Plugin documentation](examples/plugins/README.md)** - Complete guide to plugin management
 
+### Property Sharding (PREVIEW - Neo4j 2025.06+)
+- **[Basic property sharding](examples/property_sharding/basic-property-sharding.yaml)** - Simple property sharded database setup
+- **[Advanced property sharding](examples/property_sharding/advanced-property-sharding.yaml)** - Production configuration with multiple shards
+- **[Development property sharding](examples/property_sharding/development-property-sharding.yaml)** - Development setup with minimal resources
+- **[Property sharding with backup](examples/property_sharding/property-sharding-with-backup.yaml)** - Backup configuration for sharded databases
+- **[Property sharding documentation](examples/property_sharding/README.md)** - Complete guide to property sharding
+
 ### Quick Example Deployment
 
 ```bash
@@ -353,6 +429,7 @@ Complete CRD documentation for all custom resources:
 - [Neo4jEnterpriseStandalone](docs/api_reference/neo4jenterprisestandalone.md) - Single-node deployments
 - [Neo4jBackup](docs/api_reference/neo4jbackup.md) & [Neo4jRestore](docs/api_reference/neo4jrestore.md)
 - [Neo4jDatabase](docs/api_reference/neo4jdatabase.md)
+- [Neo4jShardedDatabase](docs/api_reference/neo4jshardeddatabase.md) - Property sharded databases (PREVIEW)
 - [Neo4jPlugin](docs/api_reference/neo4jplugin.md)
 
 ## ✨ Key Features
@@ -361,6 +438,7 @@ Complete CRD documentation for all custom resources:
 - **Dual Deployment Modes**: Choose between clustered (Neo4jEnterpriseCluster) or standalone (Neo4jEnterpriseStandalone) deployments
 - **Server-Based Architecture**: Enterprise clusters use unified server StatefulSets where servers self-organize into database primary/secondary roles
 - **Flexible Topology**: Specify total server count and let Neo4j automatically assign database hosting roles based on requirements
+- **Property Sharding**: Neo4j 2025.06+ property sharding support for massive scale graph databases (PREVIEW)
 - **High Availability**: Multi-server clusters with automatic leader election and V2_ONLY discovery
 - **Persistent Storage**: Configurable storage classes and volume management
 - **Rolling Updates**: Zero-downtime Neo4j version upgrades
@@ -431,6 +509,11 @@ kubectl logs -l app.kubernetes.io/name=neo4j-operator
 ## 🎯 Recent Improvements
 
 ### Latest Version Enhancements
+- **Property Sharding Support (PREVIEW)**: Neo4j 2025.06+ property sharding integration for massive scale deployments
+  - **Automatic Configuration**: Property sharding clusters configured with required settings automatically
+  - **Version Validation**: Ensures Neo4j 2025.06+ versions for property sharding compatibility
+  - **Topology Requirements**: Validates minimum 3 servers for property sharding clusters
+  - **Neo4jShardedDatabase CRD**: New CRD for creating and managing property-sharded databases
 - **Neo4j 5.26+ Plugin Compatibility**: Complete rework of plugin system for Neo4j 5.26+ compatibility
   - **APOC Environment Variables**: APOC configuration now uses environment variables (no longer supported in neo4j.conf)
   - **Automatic Security Settings**: Plugin-specific procedure security applied automatically
