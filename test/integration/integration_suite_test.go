@@ -96,9 +96,9 @@ func applyCIOptimizations(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) {
 		cluster.Spec.Resources.Requests[corev1.ResourceCPU] = resource.MustParse("100m")
 		cluster.Spec.Resources.Requests[corev1.ResourceMemory] = resource.MustParse("1.5Gi")
 		cluster.Spec.Resources.Limits[corev1.ResourceCPU] = resource.MustParse("500m")
-		cluster.Spec.Resources.Limits[corev1.ResourceMemory] = resource.MustParse("2Gi")
+		cluster.Spec.Resources.Limits[corev1.ResourceMemory] = resource.MustParse("1.5Gi") // Neo4j Enterprise REQUIRES ≥ 1.5Gi
 
-		GinkgoWriter.Printf("CI optimization: applied resource constraints (100m-500m CPU, 1.5Gi-2Gi memory)\n")
+		GinkgoWriter.Printf("CI optimization: applied resource constraints (100m-500m CPU, 1.5Gi memory)\n")
 	}
 }
 
@@ -564,8 +564,8 @@ func getCIAppropriateResourceRequirements() *corev1.ResourceRequirements {
 				corev1.ResourceMemory: resource.MustParse("200Mi"), // Reduced memory request for CI
 			},
 			Limits: corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("100m"), // Reduced CPU limit for CI
-				corev1.ResourceMemory: resource.MustParse("1Gi"),  // Neo4j Enterprise minimum memory requirement (use 1Gi not 1.0Gi for consistency)
+				corev1.ResourceCPU:    resource.MustParse("100m"),  // Reduced CPU limit for CI
+				corev1.ResourceMemory: resource.MustParse("1.5Gi"), // Neo4j Enterprise REQUIRES ≥ 1.5Gi for database operations
 			},
 		}
 	} else {
