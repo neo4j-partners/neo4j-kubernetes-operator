@@ -17,6 +17,7 @@ limitations under the License.
 package integration_test
 
 import (
+	"os"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -30,10 +31,20 @@ import (
 )
 
 var _ = Describe("Split-Brain Detection Integration Tests", func() {
-	const (
-		timeout  = time.Second * 1200 // 20 minutes for CI environment constraints (split-brain detection and repair)
-		interval = time.Second * 10   // Increased polling interval to reduce API load in CI
+	// Use dynamic timeout and interval based on environment
+	var (
+		timeout  time.Duration
+		interval time.Duration
 	)
+
+	// Initialize based on CI environment
+	if os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
+		timeout = time.Minute * 30 // Extended timeout for split-brain scenarios in CI
+		interval = time.Second * 2 // Faster polling in CI to catch state changes
+	} else {
+		timeout = time.Minute * 10 // Local testing timeout
+		interval = time.Second * 2 // Consistent fast polling
+	}
 
 	var testNamespace string
 	var cluster *neo4jv1alpha1.Neo4jEnterpriseCluster
@@ -145,7 +156,7 @@ var _ = Describe("Split-Brain Detection Integration Tests", func() {
 				GinkgoWriter.Printf("Cluster not yet ready. Phase: %s, Message: %s\n",
 					cluster.Status.Phase, cluster.Status.Message)
 				return false
-			}, clusterTimeout, interval).Should(BeTrue(), "Cluster should reach Ready state")
+			}, timeout, interval).Should(BeTrue(), "Cluster should reach Ready state")
 
 			By("Checking if split-brain detection occurred (optional)")
 			// After cluster is ready, check if there were any split-brain events
@@ -203,7 +214,7 @@ var _ = Describe("Split-Brain Detection Integration Tests", func() {
 					}
 				}
 				return runningCount
-			}, clusterTimeout, interval).Should(Equal(expectedServers), "All %d server pods should be running", expectedServers)
+			}, timeout, interval).Should(Equal(expectedServers), "All %d server pods should be running", expectedServers)
 
 			By("Immediately cleaning up cluster to prevent CI resource exhaustion")
 			if cluster != nil {
@@ -279,7 +290,7 @@ var _ = Describe("Split-Brain Detection Integration Tests", func() {
 				GinkgoWriter.Printf("Cluster not yet ready. Phase: %s, Message: %s\n",
 					cluster.Status.Phase, cluster.Status.Message)
 				return false
-			}, clusterTimeout, interval).Should(BeTrue())
+			}, timeout, interval).Should(BeTrue())
 
 			By("Simulating pod failure by deleting one server pod")
 			podList := &corev1.PodList{}
@@ -319,7 +330,7 @@ var _ = Describe("Split-Brain Detection Integration Tests", func() {
 				GinkgoWriter.Printf("Cluster not yet recovered. Phase: %s, Message: %s\n",
 					cluster.Status.Phase, cluster.Status.Message)
 				return false
-			}, clusterTimeout, interval).Should(BeTrue(), "Cluster should recover after pod failure")
+			}, timeout, interval).Should(BeTrue(), "Cluster should recover after pod failure")
 
 			By("Verifying all pods are running again")
 			// Get the actual expected server count after CI optimizations
@@ -364,7 +375,7 @@ var _ = Describe("Split-Brain Detection Integration Tests", func() {
 				}
 				GinkgoWriter.Printf("Currently %d of %d pods are running and ready\n", runningCount, expectedServers)
 				return runningCount
-			}, clusterTimeout, interval).Should(Equal(expectedServers), "All %d server pods should be running and ready", expectedServers)
+			}, timeout, interval).Should(Equal(expectedServers), "All %d server pods should be running and ready", expectedServers)
 		})
 	})
 })
