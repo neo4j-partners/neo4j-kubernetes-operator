@@ -12,11 +12,16 @@ spec:
     repo: neo4j
     tag: 2025.06-enterprise
 
+  # Authentication required for property sharding
+  auth:
+    adminSecret: neo4j-admin-secret
+
   topology:
     servers: 5
 
   storage:
     size: 20Gi
+    className: standard  # Storage class must be specified
 
   resources:
     requests:

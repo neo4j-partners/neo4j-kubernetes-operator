@@ -6,8 +6,9 @@ This directory contains examples demonstrating how to configure Neo4j Property S
 
 - Neo4j Kubernetes Operator deployed
 - Neo4j Enterprise 2025.06+ images
-- Kubernetes cluster with sufficient resources
+- Kubernetes cluster with minimum 5 nodes
 - Storage class supporting persistent volumes
+- Admin secret for Neo4j authentication
 
 ## Examples
 
@@ -16,9 +17,9 @@ This directory contains examples demonstrating how to configure Neo4j Property S
 **Use Case**: Getting started with property sharding
 
 **Features**:
-- Minimal 3-server cluster
+- Minimal 5-server cluster (required minimum)
 - Basic sharded database with 2 property shards
-- Default configuration settings
+- Authentication and storage class configuration
 - Suitable for learning and small datasets
 
 **Deploy**:
@@ -64,7 +65,7 @@ cypher-shell -a bolt://localhost:7687 -u neo4j -p development123
 **Use Case**: Production deployments with high availability
 
 **Features**:
-- 7-server cluster for optimal distribution
+- 5-server cluster with high availability
 - 8 property shards with strategic property placement
 - TLS encryption
 - Performance tuning

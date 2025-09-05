@@ -295,6 +295,13 @@ make test-integration FOCUS="Property Sharding"
 ginkgo run -focus "Property Sharding" ./test/integration
 ```
 
+**✅ Property Sharding Test Results** (Successfully Tested 2025-09-05):
+- **Minimum servers**: 5 servers (validated working configuration)
+- **Memory requirements**: 6-8Gi per server (30-40Gi total cluster memory)
+- **Test duration**: ~130 seconds for full cluster creation and validation
+- **Authentication**: Required (Auth.AdminSecret must be configured)
+- **Storage**: Storage class must be specified (e.g., `className: standard`)
+
 **Test Troubleshooting**:
 - If tests timeout: Check image pull delays in CI - tests use 5-minute timeout
 - If pod scheduling fails: Check resource constraints - tests use minimal CPU/memory

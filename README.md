@@ -204,12 +204,22 @@ Property sharding separates your graph data into:
 ### Requirements
 
 - **Neo4j Version**: 2025.06+ (CalVer format)
-- **Minimum Servers**: 3+ servers required
-- **Memory**: At least 4GB per server (recommended 8GB+)
+- **Minimum Servers**: 5 servers required (property sharding minimum)
+- **Memory**: At least 4GB per server (recommended 6GB+)
+- **Authentication**: Admin secret required
+- **Storage**: Storage class must be specified
 
 ### Quick Start
 
-1. **Create a property sharding enabled cluster:**
+1. **Create admin secret (required):**
+
+```bash
+kubectl create secret generic neo4j-admin-secret \
+  --from-literal=username=neo4j \
+  --from-literal=password=your-secure-password
+```
+
+2. **Create a property sharding enabled cluster:**
 
 ```yaml
 apiVersion: neo4j.com/v1alpha1
@@ -220,18 +230,23 @@ spec:
   image:
     repo: neo4j
     tag: 2025.06-enterprise
+  auth:
+    adminSecret: neo4j-admin-secret  # Required
   topology:
-    servers: 3
+    servers: 5  # Minimum 5 servers for property sharding
+  storage:
+    size: 10Gi
+    className: standard  # Storage class must be specified
   resources:
     requests:
       memory: 4Gi
     limits:
-      memory: 8Gi
+      memory: 6Gi
   propertySharding:
     enabled: true
 ```
 
-2. **Create a sharded database:**
+3. **Create a sharded database:**
 
 ```yaml
 apiVersion: neo4j.com/v1alpha1

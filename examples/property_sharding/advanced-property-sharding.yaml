@@ -1,6 +1,11 @@
 # Advanced Property Sharding Example
 # This example demonstrates production-ready property sharding configuration
 
+# Prerequisites: Create admin secret
+# kubectl create secret generic neo4j-admin-secret \
+#   --from-literal=username=neo4j \
+#   --from-literal=password=production-secure-password
+
 # Property sharding enabled cluster with performance tuning
 apiVersion: neo4j.com/v1alpha1
 kind: Neo4jEnterpriseCluster
@@ -16,22 +21,26 @@ spec:
     repo: neo4j
     tag: 2025.08-enterprise
 
-  # Production cluster sizing
+  # Authentication required for property sharding
+  auth:
+    adminSecret: neo4j-admin-secret
+
+  # Production cluster sizing (5+ servers for optimal property sharding)
   topology:
-    servers: 7  # Enough servers for graph + property shards with HA
+    servers: 5  # Minimum for property sharding, can scale up for production
 
   storage:
     size: 100Gi
-    storageClass: fast-ssd
+    className: fast-ssd  # High-performance storage class
 
   # Production resource allocation
   resources:
     requests:
-      memory: 8Gi    # Generous memory for shard coordination
-      cpu: 2000m
+      memory: 8Gi    # High memory for optimal shard coordination
+      cpu: 2
     limits:
-      memory: 16Gi
-      cpu: 4000m
+      memory: 12Gi
+      cpu: 3
 
   # Property sharding with performance tuning
   propertySharding:

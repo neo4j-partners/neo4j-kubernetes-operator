@@ -124,8 +124,11 @@ var _ = Describe("Property Sharding Integration Tests", func() {
 							Repo: "neo4j",
 							Tag:  "2025.06-enterprise", // Property sharding requires 2025.06+
 						},
+						Auth: &neo4jv1alpha1.AuthSpec{
+							AdminSecret: "neo4j-admin-secret",
+						},
 						Topology: neo4jv1alpha1.TopologyConfiguration{
-							Servers: 5, // Minimum for property sharding
+							Servers: 5, // Property sharding test configuration
 						},
 						Storage: neo4jv1alpha1.StorageSpec{
 							Size:      "1Gi",
@@ -133,12 +136,12 @@ var _ = Describe("Property Sharding Integration Tests", func() {
 						},
 						Resources: &corev1.ResourceRequirements{
 							Requests: corev1.ResourceList{
-								corev1.ResourceMemory: resource.MustParse("4Gi"), // Minimum for property sharding
-								corev1.ResourceCPU:    resource.MustParse("1000m"),
+								corev1.ResourceMemory: resource.MustParse("6Gi"), // High resource allocation for beefy system
+								corev1.ResourceCPU:    resource.MustParse("2"),
 							},
 							Limits: corev1.ResourceList{
 								corev1.ResourceMemory: resource.MustParse("8Gi"),
-								corev1.ResourceCPU:    resource.MustParse("2000m"),
+								corev1.ResourceCPU:    resource.MustParse("3"),
 							},
 						},
 						PropertySharding: &neo4jv1alpha1.PropertyShardingSpec{
@@ -188,6 +191,9 @@ var _ = Describe("Property Sharding Integration Tests", func() {
 							Repo: "neo4j",
 							Tag:  "2025.06-enterprise",
 						},
+						Auth: &neo4jv1alpha1.AuthSpec{
+							AdminSecret: "neo4j-admin-secret",
+						},
 						Topology: neo4jv1alpha1.TopologyConfiguration{
 							Servers: 2, // Too few for property sharding
 						},
@@ -227,6 +233,9 @@ var _ = Describe("Property Sharding Integration Tests", func() {
 						Image: neo4jv1alpha1.ImageSpec{
 							Repo: "neo4j",
 							Tag:  "5.26-enterprise", // Too old for property sharding
+						},
+						Auth: &neo4jv1alpha1.AuthSpec{
+							AdminSecret: "neo4j-admin-secret",
 						},
 						Topology: neo4jv1alpha1.TopologyConfiguration{
 							Servers: 5,
@@ -272,20 +281,24 @@ var _ = Describe("Property Sharding Integration Tests", func() {
 						Repo: "neo4j",
 						Tag:  "2025.06-enterprise",
 					},
+					Auth: &neo4jv1alpha1.AuthSpec{
+						AdminSecret: "neo4j-admin-secret",
+					},
 					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Servers: 5,
+						Servers: 7, // Minimum required for property sharding
 					},
 					Storage: neo4jv1alpha1.StorageSpec{
-						Size: "1Gi",
+						Size:      "1Gi",
+						ClassName: "standard",
 					},
 					Resources: &corev1.ResourceRequirements{
 						Requests: corev1.ResourceList{
-							corev1.ResourceMemory: resource.MustParse("1.5Gi"),
-							corev1.ResourceCPU:    resource.MustParse("200m"),
+							corev1.ResourceMemory: resource.MustParse("6Gi"),
+							corev1.ResourceCPU:    resource.MustParse("2"),
 						},
 						Limits: corev1.ResourceList{
-							corev1.ResourceMemory: resource.MustParse("2Gi"),
-							corev1.ResourceCPU:    resource.MustParse("500m"),
+							corev1.ResourceMemory: resource.MustParse("8Gi"),
+							corev1.ResourceCPU:    resource.MustParse("3"),
 						},
 					},
 					PropertySharding: &neo4jv1alpha1.PropertyShardingSpec{
@@ -432,6 +445,9 @@ var _ = Describe("Property Sharding Integration Tests", func() {
 						Image: neo4jv1alpha1.ImageSpec{
 							Repo: "neo4j",
 							Tag:  "2025.06-enterprise",
+						},
+						Auth: &neo4jv1alpha1.AuthSpec{
+							AdminSecret: "neo4j-admin-secret",
 						},
 						Topology: neo4jv1alpha1.TopologyConfiguration{
 							Servers: 3,

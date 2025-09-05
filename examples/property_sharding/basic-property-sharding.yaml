@@ -1,7 +1,12 @@
 # Basic Property Sharding Example
 # This example demonstrates the minimal configuration for property sharding
 
-# First create a property sharding enabled cluster
+# Prerequisites: Create admin secret
+# kubectl create secret generic neo4j-admin-secret \
+#   --from-literal=username=neo4j \
+#   --from-literal=password=your-secure-password
+
+# Create a property sharding enabled cluster
 apiVersion: neo4j.com/v1alpha1
 kind: Neo4jEnterpriseCluster
 metadata:
@@ -13,21 +18,26 @@ spec:
     repo: neo4j
     tag: 2025.06-enterprise
 
-  # Minimum 3 servers for property sharding
+  # Authentication required for property sharding
+  auth:
+    adminSecret: neo4j-admin-secret
+
+  # Minimum 5 servers required for property sharding
   topology:
-    servers: 3
+    servers: 5
 
   storage:
     size: 5Gi
+    className: standard  # Storage class must be specified
 
   # Resources must be sufficient for property sharding
   resources:
     requests:
       memory: 4Gi    # Minimum 4GB for property sharding
-      cpu: 1000m
+      cpu: 1
     limits:
-      memory: 8Gi
-      cpu: 2000m
+      memory: 6Gi
+      cpu: 2
 
   # Enable property sharding with default configuration
   propertySharding:

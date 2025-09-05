@@ -16,12 +16,26 @@ Property Sharding decouples data into:
 - **Recommended**: Neo4j 2025.08.0+ (includes stability improvements)
 
 ### Cluster Requirements
-- **Minimum Servers**: 3 (to host graph shard with HA and property shards)
-- **Recommended Servers**: 5+ (for better distribution and fault tolerance)
-- **Memory**: 4GB+ per server (property sharding requires additional memory)
+- **Minimum Servers**: 5 (required for proper shard distribution and fault tolerance)
+- **Recommended Servers**: 5+ (property sharding benefits from multiple servers for shard distribution)
+- **Memory**: 4GB+ per server (property sharding requires additional memory overhead)
+- **Authentication**: Admin secret required (property sharding requires authenticated cluster access)
+- **Storage**: Storage class must be specified (e.g., `standard`)
 - **Cypher Version**: Must use Cypher 25 for sharded database operations
 
 ## Quick Start
+
+> **✅ Tested Configuration**: The examples below have been successfully tested with Neo4j 2025.06-enterprise on Kubernetes clusters with the specified resource requirements. Property sharding cluster creation typically completes in 2-3 minutes with proper resources.
+
+### 0. Prerequisites
+
+Before creating a property sharding cluster, create the required admin secret:
+
+```bash
+kubectl create secret generic neo4j-admin-secret \
+  --from-literal=username=neo4j \
+  --from-literal=password=your-secure-password
+```
 
 ### 1. Create Property Sharding Enabled Cluster
 
@@ -36,19 +50,24 @@ spec:
     repo: neo4j
     tag: 2025.06-enterprise  # Required for property sharding
 
+  # Authentication required for property sharding
+  auth:
+    adminSecret: neo4j-admin-secret
+
   topology:
-    servers: 5  # Minimum 3, recommended 5+
+    servers: 5  # Minimum 5 servers required for property sharding
 
   storage:
     size: 10Gi
+    className: standard  # Storage class must be specified
 
   resources:
     requests:
-      memory: 4Gi    # Minimum for property sharding
-      cpu: 1000m
+      memory: 6Gi    # Recommended for production property sharding
+      cpu: 2
     limits:
       memory: 8Gi
-      cpu: 2000m
+      cpu: 3
 
   # Enable property sharding
   propertySharding:
@@ -172,13 +191,13 @@ config:
 ### Cluster Sizing
 
 **Development/Testing**:
-- 3 servers minimum
-- 4GB RAM per server
+- 5 servers minimum (property sharding requirement)
+- 4GB RAM per server (absolute minimum)
 - Property shards: 2-4
 
 **Production**:
-- 5+ servers recommended
-- 8GB+ RAM per server
+- 5+ servers recommended (property sharding benefits from scale)
+- 6-8GB+ RAM per server (for optimal performance)
 - Property shards: 4-16 (start conservatively)
 
 ### Property Distribution Strategy
@@ -306,9 +325,9 @@ Solution: Increase cluster resource limits.
 
 **3. Too Few Servers**
 ```
-Error: property sharding requires minimum 3 servers
+Error: property sharding requires minimum 5 servers
 ```
-Solution: Scale cluster to at least 3 servers.
+Solution: Scale cluster to at least 5 servers for proper shard distribution.
 
 **4. Cluster Not Ready**
 ```
