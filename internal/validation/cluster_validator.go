@@ -24,6 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1"
+	"github.com/neo4j-labs/neo4j-kubernetes-operator/internal/resources"
 )
 
 // ClusterValidationResult holds validation results including warnings
@@ -158,6 +159,9 @@ func (v *ClusterValidator) validateCluster(ctx context.Context, cluster *neo4jv1
 	allErrs = append(allErrs, v.tlsValidator.Validate(cluster)...)
 	allErrs = append(allErrs, v.authValidator.Validate(cluster)...)
 
+	// Property sharding validation (version requirements)
+	allErrs = append(allErrs, v.validatePropertySharding(cluster)...)
+
 	// Memory validation (critical for preventing runtime failures)
 	allErrs = append(allErrs, v.memoryValidator.Validate(cluster)...)
 
@@ -233,4 +237,26 @@ func (v *ClusterValidator) ValidateUpdateWithWarnings(ctx context.Context, oldCl
 	result.Warnings = append(result.Warnings, topologyResult.Warnings...)
 
 	return result
+}
+
+// validatePropertySharding validates property sharding configuration and version requirements
+func (v *ClusterValidator) validatePropertySharding(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) field.ErrorList {
+	var allErrs field.ErrorList
+
+	// Only validate if property sharding is enabled
+	if cluster.Spec.PropertySharding == nil || !cluster.Spec.PropertySharding.Enabled {
+		return allErrs
+	}
+
+	specPath := field.NewPath("spec")
+
+	// Validate minimum version requirement for property sharding
+	if !resources.IsNeo4jVersion2025071OrHigher(cluster.Spec.Image.Tag) {
+		allErrs = append(allErrs, field.Invalid(
+			specPath.Child("image", "tag"),
+			cluster.Spec.Image.Tag,
+			"property sharding requires Neo4j version 2025.07.1+ Enterprise"))
+	}
+
+	return allErrs
 }

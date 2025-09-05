@@ -27,7 +27,7 @@ The `Neo4jEnterpriseCluster` Custom Resource Definition (CRD) manages Neo4j Ente
 - Multi-database deployments with different topology requirements
 - Workloads needing horizontal read scaling
 - Enterprise features like advanced backup, security, and monitoring
-- Large datasets requiring property sharding (Neo4j 2025.06+)
+- Large datasets requiring property sharding (Neo4j 2025.07.1+)
 
 **For single-node deployments**, use [`Neo4jEnterpriseStandalone`](neo4jenterprisestandalone.md) instead.
 
@@ -235,7 +235,7 @@ Specifies role constraints for individual servers.
 
 ### PropertyShardingSpec
 
-Configures property sharding for horizontal scaling of large datasets. Property sharding separates graph structure from properties, distributing properties across multiple databases for better scalability. Available in Neo4j 2025.06+ Enterprise only.
+Configures property sharding for horizontal scaling of large datasets. Property sharding separates graph structure from properties, distributing properties across multiple databases for better scalability. Available in Neo4j 2025.07.1+ Enterprise only.
 
 | Field | Type | Description |
 |---|---|---|
@@ -244,7 +244,7 @@ Configures property sharding for horizontal scaling of large datasets. Property 
 
 **System Requirements** (validated by operator):
 
-- **Neo4j Version**: 2025.06+ Enterprise
+- **Neo4j Version**: 2025.07.1+ Enterprise
 - **Minimum Servers**: 5 servers (for proper shard distribution)
 - **Memory**: 6GB minimum, 12GB+ recommended per server
 - **CPU**: 1+ core minimum, 2+ cores recommended per server
@@ -307,7 +307,7 @@ resources:
 
 | Error | Cause | Resolution |
 |-------|-------|------------|
-| `property sharding requires Neo4j 2025.06+` | Old Neo4j version | Upgrade to 2025.06+ Enterprise |
+| `property sharding requires Neo4j 2025.07.1+` | Old Neo4j version | Upgrade to 2025.07.1+ Enterprise |
 | `property sharding requires minimum 5 servers` | Insufficient servers | Increase server count to 5+ |
 | `property sharding requires minimum 6GB memory` | Insufficient memory | Increase memory to 12GB+ (recommended) |
 | `property sharding requires minimum 1 CPU core` | Insufficient CPU | Increase CPU to 2+ cores (recommended) |
@@ -839,7 +839,7 @@ spec:
     mode: disabled
 
 ---
-# Property Sharding cluster (Neo4j 2025.06+)
+# Property Sharding cluster (Neo4j 2025.07.1+)
 apiVersion: neo4j.com/v1alpha1
 kind: Neo4jEnterpriseCluster
 metadata:
@@ -847,7 +847,7 @@ metadata:
 spec:
   image:
     repo: neo4j
-    tag: 2025.06-enterprise
+    tag: 2025.07.1-enterprise
   topology:
     servers: 7  # Sufficient for property sharding workloads
   storage:

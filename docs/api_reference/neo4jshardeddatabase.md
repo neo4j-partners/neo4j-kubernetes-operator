@@ -1,12 +1,12 @@
 # Neo4jShardedDatabase API Reference
 
-The `Neo4jShardedDatabase` Custom Resource Definition (CRD) manages sharded databases with property sharding for horizontal scaling of large datasets in Neo4j 2025.06+ clusters.
+The `Neo4jShardedDatabase` Custom Resource Definition (CRD) manages sharded databases with property sharding for horizontal scaling of large datasets in Neo4j 2025.07.1+ clusters.
 
 ## Overview
 
 - **API Version**: `neo4j.com/v1alpha1`
 - **Kind**: `Neo4jShardedDatabase`
-- **Supported Neo4j Versions**: 2025.06.0+ (requires property sharding support)
+- **Supported Neo4j Versions**: 2025.07.1+ (requires property sharding support)
 - **Prerequisites**: Neo4jEnterpriseCluster with `propertySharding.enabled: true`
 
 This document provides detailed API specifications for both Neo4jShardedDatabase and the property sharding configuration in Neo4jEnterpriseCluster.
@@ -67,7 +67,7 @@ status:
 #### Prerequisites for propertyShardingReady=true
 
 1. Cluster phase is "Ready"
-2. Neo4j version is 2025.06+
+2. Neo4j version is 2025.07.1+
 3. Minimum 5 servers configured (property sharding requirement)
 4. Minimum 6GB memory per server (12GB+ recommended for production)
 5. Minimum 1 CPU core per server (2+ cores recommended for cross-shard queries)
@@ -350,7 +350,7 @@ queryMetrics:
 
 ### Neo4jEnterpriseCluster Validation
 
-- Neo4j version must be 2025.06+ when property sharding enabled
+- Neo4j version must be 2025.07.1+ when property sharding enabled
 - Minimum 5 servers required for property sharding (proper shard distribution)
 - Minimum 6GB memory per server (12GB+ recommended for production)
 - Minimum 1 CPU core per server (2+ cores recommended for cross-shard queries)
@@ -375,7 +375,7 @@ queryMetrics:
 
 | Error | Cause | Resolution |
 |-------|-------|------------|
-| `property sharding requires Neo4j 2025.06+` | Old Neo4j version | Upgrade to 2025.06+ |
+| `property sharding requires Neo4j 2025.07.1+` | Old Neo4j version | Upgrade to 2025.07.1+ |
 | `property sharding requires minimum 5 servers` | Insufficient servers | Increase server count to 5+ |
 | `property sharding requires minimum 6GB memory` | Insufficient memory | Increase memory to 12GB+ (recommended) |
 | `defaultCypherLanguage must be '25'` | Wrong Cypher version | Set to "25" |

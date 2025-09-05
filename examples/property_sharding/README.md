@@ -5,7 +5,7 @@ This directory contains examples demonstrating how to configure Neo4j Property S
 ## Prerequisites
 
 - Neo4j Kubernetes Operator deployed
-- Neo4j Enterprise 2025.06+ images
+- Neo4j Enterprise 2025.07.1+ images
 - Kubernetes cluster with minimum 5 nodes
 - Storage class supporting persistent volumes
 - Admin secret for Neo4j authentication

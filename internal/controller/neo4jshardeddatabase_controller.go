@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -246,18 +247,16 @@ func (r *Neo4jShardedDatabaseReconciler) reconcileShardedDatabase(ctx context.Co
 func (r *Neo4jShardedDatabaseReconciler) createGraphShard(ctx context.Context, shardedDB *neo4jv1alpha1.Neo4jShardedDatabase, client *neo4j.Client) error {
 	logger := log.FromContext(ctx).WithValues("shard", "graph")
 
-	graphShardName := fmt.Sprintf("%s_graph", shardedDB.Spec.Name)
+	graphShardName := fmt.Sprintf("%s-graph", shardedDB.Spec.Name)
 	topology := shardedDB.Spec.PropertySharding.GraphShard
 
-	// Create database with topology
-	query := fmt.Sprintf(`
-		CREATE DATABASE %s IF NOT EXISTS
-		DEFAULT LANGUAGE CYPHER 25
-		TOPOLOGY %d PRIMARIES %d SECONDARIES
-		WAIT
-	`, graphShardName, topology.Primaries, topology.Secondaries)
+	// Wait for Neo4j to be ready for database operations
+	if err := r.waitForNeo4jReadiness(ctx, client); err != nil {
+		return fmt.Errorf("Neo4j not ready for database operations: %w", err)
+	}
 
-	if _, err := client.ExecuteQuery(ctx, query); err != nil {
+	// Create database with topology using proper method with retry logic
+	if err := r.createDatabaseWithRetry(ctx, client, graphShardName, topology.Primaries, topology.Secondaries); err != nil {
 		return fmt.Errorf("failed to create graph shard database: %w", err)
 	}
 
@@ -269,18 +268,11 @@ func (r *Neo4jShardedDatabaseReconciler) createGraphShard(ctx context.Context, s
 func (r *Neo4jShardedDatabaseReconciler) createPropertyShard(ctx context.Context, shardedDB *neo4jv1alpha1.Neo4jShardedDatabase, client *neo4j.Client, shardIndex int32) error {
 	logger := log.FromContext(ctx).WithValues("shard", "property", "index", shardIndex)
 
-	propertyShardName := fmt.Sprintf("%s_properties_%d", shardedDB.Spec.Name, shardIndex)
+	propertyShardName := fmt.Sprintf("%s-properties-%d", shardedDB.Spec.Name, shardIndex)
 	topology := shardedDB.Spec.PropertySharding.PropertyShardTopology
 
-	// Create database with topology
-	query := fmt.Sprintf(`
-		CREATE DATABASE %s IF NOT EXISTS
-		DEFAULT LANGUAGE CYPHER 25
-		TOPOLOGY %d PRIMARIES %d SECONDARIES
-		WAIT
-	`, propertyShardName, topology.Primaries, topology.Secondaries)
-
-	if _, err := client.ExecuteQuery(ctx, query); err != nil {
+	// Create database with topology using proper method with retry logic
+	if err := r.createDatabaseWithRetry(ctx, client, propertyShardName, topology.Primaries, topology.Secondaries); err != nil {
 		return fmt.Errorf("failed to create property shard database: %w", err)
 	}
 
@@ -431,6 +423,98 @@ func (r *Neo4jShardedDatabaseReconciler) updateStatus(ctx context.Context, shard
 
 		return r.Status().Update(ctx, &latest)
 	})
+}
+
+// waitForNeo4jReadiness waits for Neo4j to be ready for database operations
+func (r *Neo4jShardedDatabaseReconciler) waitForNeo4jReadiness(ctx context.Context, client *neo4j.Client) error {
+	logger := log.FromContext(ctx)
+
+	// Check if we can execute basic queries (system database readiness)
+	maxRetries := 30 // 30 seconds with 1 second intervals
+	for i := 0; i < maxRetries; i++ {
+		logger.V(1).Info("Checking Neo4j readiness", "attempt", i+1, "maxRetries", maxRetries)
+
+		// Try to get databases (this will fail if system database is not ready)
+		_, err := (*client).GetDatabases(ctx)
+		if err == nil {
+			logger.Info("Neo4j is ready for database operations")
+			return nil
+		}
+
+		// Check if this is a transient error we should retry (simple string check)
+		errMsg := strings.ToLower(err.Error())
+		isTransient := strings.Contains(errMsg, "unavailable") ||
+			strings.Contains(errMsg, "timeout") ||
+			strings.Contains(errMsg, "transient") ||
+			strings.Contains(errMsg, "connection") ||
+			strings.Contains(errMsg, "routing")
+
+		if isTransient {
+			logger.V(1).Info("Neo4j not ready yet, retrying", "error", err.Error())
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(time.Second):
+				continue
+			}
+		} else {
+			// Non-transient error, fail immediately
+			return fmt.Errorf("Neo4j readiness check failed with non-transient error: %w", err)
+		}
+	}
+
+	return fmt.Errorf("timeout waiting for Neo4j to become ready for database operations after %d attempts", maxRetries)
+}
+
+// createDatabaseWithRetry creates a database with retry logic for transient failures
+func (r *Neo4jShardedDatabaseReconciler) createDatabaseWithRetry(ctx context.Context, client *neo4j.Client, dbName string, primaries, secondaries int32) error {
+	logger := log.FromContext(ctx).WithValues("database", dbName)
+
+	maxRetries := 10
+	baseDelay := time.Second
+	maxDelay := 30 * time.Second
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		logger.V(1).Info("Attempting database creation", "attempt", attempt+1, "maxRetries", maxRetries)
+
+		// Use the correct method signature with all required parameters
+		err := (*client).CreateDatabaseWithTopology(ctx, dbName, primaries, secondaries, nil, true, false, "")
+		if err == nil {
+			logger.Info("Successfully created database", "primaries", primaries, "secondaries", secondaries)
+			return nil
+		}
+
+		// Check if this is a retryable transient error (simple string check)
+		errMsg := strings.ToLower(err.Error())
+		isTransient := strings.Contains(errMsg, "unavailable") ||
+			strings.Contains(errMsg, "timeout") ||
+			strings.Contains(errMsg, "transient") ||
+			strings.Contains(errMsg, "connection") ||
+			strings.Contains(errMsg, "routing")
+
+		if isTransient {
+			// Calculate exponential backoff delay
+			delay := time.Duration(attempt) * baseDelay
+			if delay > maxDelay {
+				delay = maxDelay
+			}
+
+			logger.V(1).Info("Database creation failed with transient error, retrying",
+				"error", err.Error(), "delay", delay.String())
+
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(delay):
+				continue
+			}
+		} else {
+			// Non-transient error, fail immediately
+			return fmt.Errorf("database creation failed with non-transient error: %w", err)
+		}
+	}
+
+	return fmt.Errorf("database creation failed after %d attempts", maxRetries)
 }
 
 // SetupWithManager sets up the controller with the Manager.
