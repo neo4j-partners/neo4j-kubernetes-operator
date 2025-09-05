@@ -1525,8 +1525,8 @@ func (r *Neo4jEnterpriseClusterReconciler) validatePropertyShardingConfiguration
 	}
 
 	// Validate minimum cluster size for property sharding
-	if cluster.Spec.Topology.Servers < 3 {
-		return fmt.Errorf("property sharding requires minimum 3 servers, got %d", cluster.Spec.Topology.Servers)
+	if cluster.Spec.Topology.Servers < 5 {
+		return fmt.Errorf("property sharding requires minimum 5 servers for proper shard distribution, got %d", cluster.Spec.Topology.Servers)
 	}
 
 	// Validate required configuration settings
@@ -1548,12 +1548,28 @@ func (r *Neo4jEnterpriseClusterReconciler) validatePropertyShardingConfiguration
 		logger.Info("Property sharding config is empty, will use default required settings")
 	}
 
-	// Validate resource requirements
+	// Validate resource requirements with lenient but realistic minimums
 	if cluster.Spec.Resources != nil && cluster.Spec.Resources.Requests != nil {
 		if memory := cluster.Spec.Resources.Requests.Memory(); memory != nil {
 			memoryMB := memory.Value() / (1024 * 1024)
-			if memoryMB < 4096 { // 4GB minimum for property sharding
-				return fmt.Errorf("property sharding requires minimum 4GB memory, got %dMB", memoryMB)
+			if memoryMB < 8192 { // 8GB lenient minimum (implementation report recommends 12GB+)
+				logger.Info("Property sharding memory below recommended 12GB+, proceeding with caution",
+					"requestedMB", memoryMB, "recommendedMB", 12288)
+			}
+			if memoryMB < 6144 { // 6GB absolute minimum
+				return fmt.Errorf("property sharding requires minimum 6GB memory for basic operation, got %dMB (recommended: 12GB+)", memoryMB)
+			}
+		}
+
+		// Check CPU requirements (lenient validation)
+		if cpu := cluster.Spec.Resources.Requests.Cpu(); cpu != nil {
+			cpuMillis := cpu.MilliValue()
+			if cpuMillis < 2000 { // 2 cores recommended minimum
+				logger.Info("Property sharding CPU below recommended 2+ cores, may impact cross-shard query performance",
+					"requestedMillis", cpuMillis, "recommendedMillis", 2000)
+			}
+			if cpuMillis < 1000 { // 1 core absolute minimum
+				return fmt.Errorf("property sharding requires minimum 1 CPU core, got %dm (recommended: 2+ cores)", cpuMillis)
 			}
 		}
 	}

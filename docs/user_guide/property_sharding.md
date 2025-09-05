@@ -11,17 +11,80 @@ Property Sharding decouples data into:
 
 ## Prerequisites
 
-### Neo4j Version Requirements
-- **Minimum**: Neo4j 2025.06.0-enterprise (first version with property sharding support)
-- **Recommended**: Neo4j 2025.08.0+ (includes stability improvements)
+### System Requirements
 
-### Cluster Requirements
-- **Minimum Servers**: 5 (required for proper shard distribution and fault tolerance)
-- **Recommended Servers**: 5+ (property sharding benefits from multiple servers for shard distribution)
-- **Memory**: 4GB+ per server (property sharding requires additional memory overhead)
+**Neo4j Version Requirements:**
+- **Minimum**: Neo4j 2025.06.0-enterprise (first version with property sharding support)
+- **Recommended**: Neo4j 2025.08.0+ (includes stability improvements and performance optimizations)
+- **Note**: Property sharding is an enterprise-only feature and requires valid licensing
+
+**Cluster Infrastructure Requirements:**
+- **Minimum Servers**: 5 servers (required for proper shard distribution and fault tolerance)
+- **Recommended Servers**: 5-7 servers (odd numbers provide better consensus characteristics)
+- **Maximum Recommended**: 20+ servers for very large deployments
+
+**Resource Requirements per Server:**
+
+| Component | Minimum (Basic) | Recommended (Production) | Notes |
+|-----------|----------------|-------------------------|-------|
+| **Memory** | 6GB total | 16GB+ total | 12GB+ heap + 4GB+ system |
+| **CPU** | 1 core | 2+ cores | Cross-shard queries are CPU intensive |
+| **Storage** | 10GB | 100GB+ | Depends on data volume and shard count |
+| **Network** | 1Gbps | 10Gbps+ | Low latency critical for transaction log sync |
+
+**Additional Requirements:**
 - **Authentication**: Admin secret required (property sharding requires authenticated cluster access)
-- **Storage**: Storage class must be specified (e.g., `standard`)
+- **Storage Class**: Persistent storage class must be specified (e.g., `standard`, `fast-ssd`)
+- **Kubernetes Version**: 1.24+ for full operator compatibility
+- **Network Policy**: Allow inter-pod communication on discovery and bolt ports
 - **Cypher Version**: Must use Cypher 25 for sharded database operations
+
+**Performance Considerations:**
+- **Memory Overhead**: 20-30% additional memory required for shard coordination
+- **CPU Overhead**: 20-30% additional CPU required for cross-shard operations
+- **Storage Growth**: Linear growth with number of property shards
+- **Network Traffic**: 2-3x increase in inter-server communication
+
+**Capacity Planning Guidelines:**
+
+*Development/Testing:*
+```yaml
+topology:
+  servers: 5
+resources:
+  requests:
+    memory: 6Gi    # Absolute minimum
+    cpu: 1000m     # Basic operation
+  limits:
+    memory: 8Gi
+    cpu: 2000m
+```
+
+*Production:*
+```yaml
+topology:
+  servers: 5      # or 7 for larger datasets
+resources:
+  requests:
+    memory: 12Gi   # Recommended minimum
+    cpu: 2000m     # Cross-shard performance
+  limits:
+    memory: 16Gi   # Allow headroom
+    cpu: 4000m     # Handle peak loads
+```
+
+*High-Performance Production:*
+```yaml
+topology:
+  servers: 7      # Better distribution
+resources:
+  requests:
+    memory: 16Gi   # Optimal performance
+    cpu: 4000m     # Maximum throughput
+  limits:
+    memory: 20Gi   # Peak load handling
+    cpu: 6000m     # Burst capability
+```
 
 ## Quick Start
 
@@ -63,11 +126,11 @@ spec:
 
   resources:
     requests:
-      memory: 6Gi    # Recommended for production property sharding
-      cpu: 2
+      memory: 12Gi   # Property sharding requires 12GB+ heap per server
+      cpu: 2000m     # 2+ cores required for cross-shard queries
     limits:
-      memory: 8Gi
-      cpu: 3
+      memory: 16Gi   # Account for total memory needs beyond heap
+      cpu: 4000m     # Higher CPU for shard coordination overhead (20-30% increase)
 
   # Enable property sharding
   propertySharding:
@@ -192,12 +255,15 @@ config:
 
 **Development/Testing**:
 - 5 servers minimum (property sharding requirement)
-- 4GB RAM per server (absolute minimum)
+- 12GB heap per server (absolute minimum for property sharding)
+- 16GB+ total RAM per server (recommended for stable operation)
 - Property shards: 2-4
 
 **Production**:
 - 5+ servers recommended (property sharding benefits from scale)
-- 6-8GB+ RAM per server (for optimal performance)
+- 12-16GB+ heap per server (for optimal performance)
+- 20GB+ total RAM per server (accounting for system overhead)
+- 2+ CPU cores per server (cross-shard query requirements)
 - Property shards: 4-16 (start conservatively)
 
 ### Property Distribution Strategy
@@ -317,17 +383,42 @@ Error: property sharding requires Neo4j 2025.06+
 ```
 Solution: Upgrade to Neo4j 2025.06 or later.
 
-**2. Insufficient Resources**
+**2. Insufficient Memory**
 ```
-Error: property sharding requires minimum 4GB memory
+Error: property sharding requires minimum 6GB memory for basic operation, got 4096MB (recommended: 12GB+)
 ```
-Solution: Increase cluster resource limits.
+**Solution**: Increase memory allocation to at least 6GB, recommended 12GB+:
+```yaml
+resources:
+  requests:
+    memory: 12Gi  # Recommended minimum
+  limits:
+    memory: 16Gi  # Allow headroom for peak operations
+```
 
-**3. Too Few Servers**
+**3. Insufficient CPU Resources**
 ```
-Error: property sharding requires minimum 5 servers
+Error: property sharding requires minimum 1 CPU core, got 500m (recommended: 2+ cores)
 ```
-Solution: Scale cluster to at least 5 servers for proper shard distribution.
+**Solution**: Increase CPU allocation for cross-shard query performance:
+```yaml
+resources:
+  requests:
+    cpu: 2000m    # Recommended minimum for cross-shard queries
+  limits:
+    cpu: 4000m    # Allow burst capacity
+```
+
+**4. Too Few Servers**
+```
+Error: property sharding requires minimum 5 servers for proper shard distribution, got 3
+```
+**Solution**: Scale cluster to at least 5 servers for proper shard distribution:
+```yaml
+topology:
+  servers: 5  # Minimum for property sharding
+  # Consider 7 servers for larger datasets
+```
 
 **4. Cluster Not Ready**
 ```
@@ -385,22 +476,161 @@ spec:
   consistency: "cross-database"  # Ensure consistent backup point
 ```
 
-## Performance Considerations
+## Performance Considerations and Optimization
 
-### Query Performance
-- Cross-shard queries may have higher latency
-- Properties in graph shard have better query performance
-- Use appropriate property distribution strategy
+### Query Performance Patterns
 
-### Storage Growth
-- Graph shard grows with nodes/relationships
-- Property shards grow with property volume
-- Total storage is sum of all shards plus overhead
+**Fast Queries (Graph Shard Only):**
+```cypher
+// Structure queries - very fast (single shard)
+MATCH (n)-[r]->(m) RETURN count(r)
 
-### Network Traffic
-- Increased inter-server traffic for shard coordination
-- Transaction log synchronization between shards
-- Consider low-latency networking
+// Index-based lookups on graph properties - fast
+MATCH (p:Product) WHERE p.id = "12345" RETURN p.name, p.category
+```
+
+**Moderate Queries (Mixed Access):**
+```cypher
+// Graph structure + property shard access - moderate speed
+MATCH (p:Product)
+WHERE p.category = "electronics"    // Graph shard
+RETURN p.name, p.description        // Mixed: graph + property shard
+```
+
+**Slower Queries (Heavy Property Access):**
+```cypher
+// Full property shard scans - slower
+MATCH (p:Product)
+WHERE p.description CONTAINS "high-performance"  // Property shard scan
+RETURN p.name, p.specifications                  // Property shard data
+```
+
+### Performance Optimization Strategies
+
+**1. Strategic Property Distribution:**
+```yaml
+propertySharding:
+  includedProperties:      # Move to property shards
+    - "description"        # Large text fields
+    - "specifications"     # JSON documents
+    - "reviews"           # User-generated content
+    - "metadata"          # Analytics data
+
+  excludedProperties:      # Keep in graph shard
+    - "id"                # Primary keys (indexing)
+    - "name"              # Frequently accessed
+    - "category"          # Used in WHERE clauses
+    - "price"             # Numerical queries
+    - "created_at"        # Timestamps
+```
+
+**2. Resource Scaling Recommendations:**
+
+*Development (Basic Testing):*
+- **Memory**: 6-8GB per server (basic functionality)
+- **CPU**: 1-2 cores per server (acceptable for development)
+- **Network**: Standard Kubernetes networking (1Gbps)
+- **Servers**: 5 minimum (fault tolerance)
+
+*Production (Recommended):*
+- **Memory**: 12-16GB per server (optimal performance)
+- **CPU**: 2-4 cores per server (cross-shard query performance)
+- **Network**: High-speed networking (10Gbps+, low latency)
+- **Servers**: 5-7 servers (better shard distribution)
+
+*High-Performance (Enterprise):*
+- **Memory**: 16-20GB+ per server (maximum throughput)
+- **CPU**: 4-6+ cores per server (concurrent cross-shard queries)
+- **Network**: Ultra-low latency networking (<1ms)
+- **Servers**: 7+ servers (optimal shard placement)
+
+**3. Monitoring Key Metrics:**
+
+*Resource Utilization:*
+```bash
+# Monitor memory usage per server
+kubectl top pods -l app.kubernetes.io/name=your-cluster --containers
+
+# Check CPU utilization during peak queries
+kubectl top pods -l app.kubernetes.io/name=your-cluster --containers
+```
+
+*Query Performance:*
+```cypher
+// Monitor cross-shard query latencies
+CALL dbms.queryJmx("org.neo4j:instance=kernel#0,name=Transactions")
+YIELD attributes
+RETURN attributes.NumberOfOpenTransactions;
+
+// Check transaction log positions
+SHOW DATABASES
+  WHERE name STARTS WITH "your-db-"
+  RETURN name, currentStatus, requestedStatus;
+```
+
+*Network and I/O:*
+```bash
+# Monitor network traffic between pods
+kubectl exec your-cluster-server-0 -- ss -tuln
+
+# Check storage I/O patterns
+kubectl exec your-cluster-server-0 -- iostat -x 1
+```
+
+### Storage Scaling Considerations
+
+**Graph Shard Growth:**
+- Grows with number of nodes and relationships
+- Index storage for graph properties
+- Transaction logs for consensus
+
+**Property Shard Growth:**
+- Grows with property volume per shard
+- Distributed based on hash function
+- Each shard has independent transaction logs
+
+**Total Storage Planning:**
+```
+Total Storage = Graph_Shard + (Property_Shards × Avg_Property_Size) + Overhead
+
+Example:
+- Graph: 10GB (structure + graph properties)
+- Property Shards: 4 × 25GB = 100GB (distributed properties)
+- Overhead: 20GB (transaction logs, indexes, system)
+- Total: ~130GB per server (with replication)
+```
+
+**Network Performance Requirements:**
+
+*Transaction Log Synchronization:*
+- **Latency**: <10ms between servers (critical)
+- **Bandwidth**: 100MB/s+ sustained (busy clusters)
+- **Consistency**: All shards must stay within transaction log window
+
+*Cross-Shard Query Traffic:*
+- **Latency**: <5ms for responsive queries
+- **Bandwidth**: Proportional to result set size
+- **Concurrent Queries**: Multiple cross-shard queries increase traffic
+
+### Performance Troubleshooting
+
+**Slow Query Performance:**
+1. Check property distribution strategy
+2. Monitor cross-shard query patterns
+3. Verify adequate CPU allocation
+4. Check network latency between servers
+
+**High Memory Usage:**
+1. Monitor heap usage during peak loads
+2. Check transaction log retention settings
+3. Verify property shard distribution balance
+4. Consider increasing memory limits
+
+**Network Saturation:**
+1. Monitor inter-pod network traffic
+2. Check for transaction log lag
+3. Verify network bandwidth capacity
+4. Consider network policy optimizations
 
 ## Migration from Standard Databases
 

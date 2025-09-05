@@ -59,7 +59,7 @@ var _ = Describe("Neo4jEnterpriseCluster Controller - Property Sharding", func()
 							Tag:  "5.26-enterprise", // Too old for property sharding
 						},
 						Topology: neo4jv1alpha1.TopologyConfiguration{
-							Servers: int32(3),
+							Servers: int32(5),
 						},
 						PropertySharding: &neo4jv1alpha1.PropertyShardingSpec{
 							Enabled: true,
@@ -137,7 +137,7 @@ var _ = Describe("Neo4jEnterpriseCluster Controller - Property Sharding", func()
 
 				err := reconciler.validatePropertyShardingConfiguration(ctx, cluster)
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("minimum 3 servers"))
+				Expect(err.Error()).To(ContainSubstring("minimum 5 servers"))
 			})
 
 			It("should apply required configuration settings", func() {
@@ -152,7 +152,7 @@ var _ = Describe("Neo4jEnterpriseCluster Controller - Property Sharding", func()
 							Tag:  "2025.06-enterprise",
 						},
 						Topology: neo4jv1alpha1.TopologyConfiguration{
-							Servers: int32(3),
+							Servers: int32(5),
 						},
 						PropertySharding: &neo4jv1alpha1.PropertyShardingSpec{
 							Enabled: true,
@@ -198,7 +198,7 @@ var _ = Describe("Neo4jEnterpriseCluster Controller - Property Sharding", func()
 							Tag:  "2025.06-enterprise",
 						},
 						Topology: neo4jv1alpha1.TopologyConfiguration{
-							Servers: int32(3),
+							Servers: int32(5),
 						},
 						PropertySharding: &neo4jv1alpha1.PropertyShardingSpec{
 							Enabled: true,
@@ -259,7 +259,7 @@ var _ = Describe("Neo4jEnterpriseCluster Controller - Property Sharding", func()
 							Tag:  "5.26-enterprise",
 						},
 						Topology: neo4jv1alpha1.TopologyConfiguration{
-							Servers: int32(3),
+							Servers: int32(5),
 						},
 						Config: map[string]string{},
 					},

@@ -235,12 +235,21 @@ Specifies role constraints for individual servers.
 
 ### PropertyShardingSpec
 
-Configures property sharding for horizontal scaling of large datasets. Property sharding separates graph structure from properties, allowing different scaling strategies for each. Available in Neo4j 2025.06+.
+Configures property sharding for horizontal scaling of large datasets. Property sharding separates graph structure from properties, distributing properties across multiple databases for better scalability. Available in Neo4j 2025.06+ Enterprise only.
 
 | Field | Type | Description |
 |---|---|---|
-| `enabled` | `bool` | Enable property sharding for this cluster |
-| `config` | `map[string]string` | Additional property sharding configuration |
+| `enabled` | `bool` | **Required**. Enable property sharding for this cluster |
+| `config` | `map[string]string` | Optional advanced property sharding configuration |
+
+**System Requirements** (validated by operator):
+
+- **Neo4j Version**: 2025.06+ Enterprise
+- **Minimum Servers**: 5 servers (for proper shard distribution)
+- **Memory**: 6GB minimum, 12GB+ recommended per server
+- **CPU**: 1+ core minimum, 2+ cores recommended per server
+- **Authentication**: Admin secret required
+- **Storage**: Persistent storage class required
 
 **Required Configuration** (automatically applied when enabled):
 
@@ -255,14 +264,53 @@ Configures property sharding for horizontal scaling of large datasets. Property 
 propertySharding:
   enabled: true
   config:
-    # Transaction log retention
+    # Transaction log retention (critical for shard sync)
     db.tx_log.rotation.retention_policy: "14 days"
-    # Property sync interval
+
+    # Property synchronization interval
     internal.dbms.sharded_property_database.property_pull_interval: "10ms"
-    # Memory settings
+
+    # Memory optimization
     server.memory.heap.max_size: "12G"
     server.memory.pagecache.size: "6G"
+
+    # Connection pooling for cross-shard queries
+    dbms.connector.bolt.thread_pool_min_size: "10"
+    dbms.connector.bolt.thread_pool_max_size: "100"
 ```
+
+**Resource Recommendations**:
+
+*Development:*
+```yaml
+resources:
+  requests:
+    memory: 6Gi    # Absolute minimum
+    cpu: 1000m     # Basic operation
+  limits:
+    memory: 8Gi
+    cpu: 2000m
+```
+
+*Production:*
+```yaml
+resources:
+  requests:
+    memory: 12Gi   # Recommended minimum
+    cpu: 2000m     # Cross-shard performance
+  limits:
+    memory: 16Gi   # Allow headroom
+    cpu: 4000m     # Handle peak loads
+```
+
+**Validation Errors**:
+
+| Error | Cause | Resolution |
+|-------|-------|------------|
+| `property sharding requires Neo4j 2025.06+` | Old Neo4j version | Upgrade to 2025.06+ Enterprise |
+| `property sharding requires minimum 5 servers` | Insufficient servers | Increase server count to 5+ |
+| `property sharding requires minimum 6GB memory` | Insufficient memory | Increase memory to 12GB+ (recommended) |
+| `property sharding requires minimum 1 CPU core` | Insufficient CPU | Increase CPU to 2+ cores (recommended) |
 
 For detailed configuration, see the [Property Sharding Guide](../user_guide/property_sharding.md).
 

@@ -136,12 +136,12 @@ var _ = Describe("Property Sharding Integration Tests", func() {
 						},
 						Resources: &corev1.ResourceRequirements{
 							Requests: corev1.ResourceList{
-								corev1.ResourceMemory: resource.MustParse("6Gi"), // High resource allocation for beefy system
-								corev1.ResourceCPU:    resource.MustParse("2"),
+								corev1.ResourceMemory: resource.MustParse("12Gi"),  // Property sharding requires 12GB+ heap per report
+								corev1.ResourceCPU:    resource.MustParse("2000m"), // 2+ cores required for cross-shard queries
 							},
 							Limits: corev1.ResourceList{
-								corev1.ResourceMemory: resource.MustParse("8Gi"),
-								corev1.ResourceCPU:    resource.MustParse("3"),
+								corev1.ResourceMemory: resource.MustParse("16Gi"),  // Account for total memory needs beyond heap
+								corev1.ResourceCPU:    resource.MustParse("4000m"), // Higher CPU for shard coordination overhead
 							},
 						},
 						PropertySharding: &neo4jv1alpha1.PropertyShardingSpec{
@@ -293,12 +293,12 @@ var _ = Describe("Property Sharding Integration Tests", func() {
 					},
 					Resources: &corev1.ResourceRequirements{
 						Requests: corev1.ResourceList{
-							corev1.ResourceMemory: resource.MustParse("6Gi"),
-							corev1.ResourceCPU:    resource.MustParse("2"),
+							corev1.ResourceMemory: resource.MustParse("12Gi"),  // Property sharding requires 12GB+ heap per report
+							corev1.ResourceCPU:    resource.MustParse("2000m"), // 2+ cores required for cross-shard queries
 						},
 						Limits: corev1.ResourceList{
-							corev1.ResourceMemory: resource.MustParse("8Gi"),
-							corev1.ResourceCPU:    resource.MustParse("3"),
+							corev1.ResourceMemory: resource.MustParse("16Gi"),  // Account for total memory needs beyond heap
+							corev1.ResourceCPU:    resource.MustParse("4000m"), // Higher CPU for shard coordination overhead
 						},
 					},
 					PropertySharding: &neo4jv1alpha1.PropertyShardingSpec{

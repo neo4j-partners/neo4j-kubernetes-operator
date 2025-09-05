@@ -205,9 +205,11 @@ Property sharding separates your graph data into:
 
 - **Neo4j Version**: 2025.06+ (CalVer format)
 - **Minimum Servers**: 5 servers required (property sharding minimum)
-- **Memory**: At least 4GB per server (recommended 6GB+)
+- **Memory**: 12GB+ heap per server (16GB+ total memory recommended)
+- **CPU**: 2+ cores per server (cross-shard queries require additional overhead)
 - **Authentication**: Admin secret required
 - **Storage**: Storage class must be specified
+- **Network**: Low-latency networking essential for transaction log sync
 
 ### Quick Start
 
@@ -239,9 +241,11 @@ spec:
     className: standard  # Storage class must be specified
   resources:
     requests:
-      memory: 4Gi
+      memory: 12Gi   # Property sharding requires 12GB+ heap per server
+      cpu: 2000m     # 2+ cores required for cross-shard queries
     limits:
-      memory: 6Gi
+      memory: 16Gi   # Account for total memory needs beyond heap
+      cpu: 4000m     # Higher CPU for shard coordination overhead
   propertySharding:
     enabled: true
 ```
@@ -527,7 +531,7 @@ kubectl logs -l app.kubernetes.io/name=neo4j-operator
 - **Property Sharding Support (PREVIEW)**: Neo4j 2025.06+ property sharding integration for massive scale deployments
   - **Automatic Configuration**: Property sharding clusters configured with required settings automatically
   - **Version Validation**: Ensures Neo4j 2025.06+ versions for property sharding compatibility
-  - **Topology Requirements**: Validates minimum 3 servers for property sharding clusters
+  - **Topology Requirements**: Validates minimum 5 servers for property sharding clusters
   - **Neo4jShardedDatabase CRD**: New CRD for creating and managing property-sharded databases
 - **Neo4j 5.26+ Plugin Compatibility**: Complete rework of plugin system for Neo4j 5.26+ compatibility
   - **APOC Environment Variables**: APOC configuration now uses environment variables (no longer supported in neo4j.conf)

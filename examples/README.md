@@ -185,7 +185,7 @@ For optimal cluster quorum, consider using an odd number (3, 5, or 7) of servers
 ### Best Practices
 
 1. **Use odd numbers** of servers for production
-2. **3 servers minimum** for any production deployment
+2. **5 servers minimum** for property sharding deployments (3+ for standard clusters)
 3. **Scale with databases**, not excessive servers
 4. **Monitor cluster health** continuously
 5. **Test failover scenarios** regularly

@@ -87,3 +87,7 @@ quality-summary.md
 .dev-config
 test-output.log
 integration-test-output.log
+
+# Log files in project root
+*.log
+logs/*.log

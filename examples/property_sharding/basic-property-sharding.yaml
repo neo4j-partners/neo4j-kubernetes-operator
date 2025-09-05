@@ -1,12 +1,19 @@
 # Basic Property Sharding Example
-# This example demonstrates the minimal configuration for property sharding
+# This example demonstrates the minimal but functional configuration for property sharding
+#
+# IMPORTANT: Property sharding has specific resource requirements:
+# - Minimum 5 servers for proper shard distribution
+# - 6GB+ memory per server (12GB+ recommended for production)
+# - 2+ CPU cores per server for cross-shard query performance
+# - Authentication required via admin secret
+# - Storage class must be specified
 
-# Prerequisites: Create admin secret
+# Prerequisites: Create admin secret (REQUIRED)
 # kubectl create secret generic neo4j-admin-secret \
 #   --from-literal=username=neo4j \
 #   --from-literal=password=your-secure-password
 
-# Create a property sharding enabled cluster
+# Step 1: Create a property sharding enabled cluster
 apiVersion: neo4j.com/v1alpha1
 kind: Neo4jEnterpriseCluster
 metadata:
@@ -33,11 +40,11 @@ spec:
   # Resources must be sufficient for property sharding
   resources:
     requests:
-      memory: 4Gi    # Minimum 4GB for property sharding
-      cpu: 1
+      memory: 12Gi   # Property sharding requires 12GB+ heap per server
+      cpu: 2000m     # 2+ cores required for cross-shard queries
     limits:
-      memory: 6Gi
-      cpu: 2
+      memory: 16Gi   # Account for total memory needs beyond heap
+      cpu: 4000m     # Higher CPU for shard coordination overhead
 
   # Enable property sharding with default configuration
   propertySharding:
@@ -49,7 +56,8 @@ spec:
     # - internal.dbms.sharded_property_database.allow_external_shard_access: "false"
 
 ---
-# Then create a sharded database targeting the cluster
+# Step 2: Create a sharded database targeting the cluster
+# This creates the virtual database that users connect to
 apiVersion: neo4j.com/v1alpha1
 kind: Neo4jShardedDatabase
 metadata:
@@ -83,3 +91,58 @@ spec:
   # Standard database options
   wait: true          # Wait for creation
   ifNotExists: true   # Don't fail if exists
+
+---
+# Step 3: Usage Instructions and Verification
+
+# Deploy this configuration:
+# kubectl apply -f basic-property-sharding.yaml
+
+# Wait for cluster to be ready (may take 2-3 minutes):
+# kubectl get neo4jenterpriseclusters basic-sharding-cluster -w
+
+# Wait for sharded database to be ready:
+# kubectl get neo4jshardeddatabases basic-sharded-db -w
+
+# Access the virtual database:
+# kubectl port-forward svc/basic-sharding-cluster-client 7687:7687 7474:7474
+
+# Connect with Neo4j Browser:
+# Open http://localhost:7474
+# Connect with bolt://localhost:7687
+# Username: neo4j
+# Password: your-secure-password
+# Database: products (the virtual sharded database)
+
+# Example queries that work transparently:
+#
+# Create data (properties distributed automatically):
+# CREATE (p:Product {
+#   id: "12345",           // Stays in graph shard (fast access)
+#   name: "Widget",        // Stays in graph shard (frequently accessed)
+#   description: "..."     // May go to property shard (large content)
+# })
+#
+# Query data (unified view across shards):
+# MATCH (p:Product) RETURN p.name, p.description LIMIT 10
+#
+# Check shard status:
+# :use system
+# SHOW DATABASES WHERE name STARTS WITH "products-"
+#
+# Verify virtual database:
+# SHOW SHARDED DATABASES
+
+# Monitoring commands:
+#
+# Check cluster status:
+# kubectl describe neo4jenterprisecluster basic-sharding-cluster
+#
+# Check sharded database status:
+# kubectl describe neo4jshardeddatabase basic-sharded-db
+#
+# View operator logs:
+# kubectl logs -n neo4j-operator deployment/neo4j-operator-controller-manager
+#
+# Monitor resource usage:
+# kubectl top pods -l app.kubernetes.io/name=basic-sharding-cluster --containers

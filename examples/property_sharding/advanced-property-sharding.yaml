@@ -1,12 +1,21 @@
 # Advanced Property Sharding Example
 # This example demonstrates production-ready property sharding configuration
+# with high-performance resource allocation, TLS, and comprehensive monitoring
+#
+# PRODUCTION REQUIREMENTS:
+# - 5+ servers for optimal shard distribution
+# - 16-20GB memory per server for high performance
+# - 4+ CPU cores per server for concurrent cross-shard queries
+# - High-speed, low-latency networking (10Gbps+)
+# - TLS encryption for security
+# - Comprehensive monitoring and backup integration
 
-# Prerequisites: Create admin secret
+# Prerequisites: Create admin secret (REQUIRED)
 # kubectl create secret generic neo4j-admin-secret \
 #   --from-literal=username=neo4j \
 #   --from-literal=password=production-secure-password
 
-# Property sharding enabled cluster with performance tuning
+# Property sharding enabled cluster with production-grade configuration
 apiVersion: neo4j.com/v1alpha1
 kind: Neo4jEnterpriseCluster
 metadata:
@@ -27,7 +36,7 @@ spec:
 
   # Production cluster sizing (5+ servers for optimal property sharding)
   topology:
-    servers: 5  # Minimum for property sharding, can scale up for production
+    servers: 5  # Minimum for property sharding, consider 7 for larger datasets
 
   storage:
     size: 100Gi
@@ -36,11 +45,11 @@ spec:
   # Production resource allocation
   resources:
     requests:
-      memory: 8Gi    # High memory for optimal shard coordination
-      cpu: 2
+      memory: 16Gi   # Higher allocation for production property sharding
+      cpu: 4000m     # 4+ cores for optimal performance
     limits:
-      memory: 12Gi
-      cpu: 3
+      memory: 20Gi   # Production memory allocation for maximum performance
+      cpu: 6000m     # Additional CPU for high-throughput workloads
 
   # Property sharding with performance tuning
   propertySharding:

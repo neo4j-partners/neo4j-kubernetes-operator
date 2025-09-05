@@ -1,12 +1,22 @@
 # Development Property Sharding Example
 # This example is optimized for development and testing environments
+#
+# DEVELOPMENT NOTES:
+# - Still requires 5 servers minimum (property sharding constraint)
+# - Uses minimum viable resource allocation (6GB memory, 1-2 CPU cores)
+# - Suitable for learning, testing, and small-scale development
+# - NOT recommended for production workloads
+# - Consider using regular Neo4j clusters for basic development
+#
+# ALTERNATIVE: For pure development without property sharding features,
+# use examples/clusters/development-cluster.yaml instead
 
-# Prerequisites: Create admin secret
+# Prerequisites: Create admin secret (REQUIRED)
 # kubectl create secret generic neo4j-admin-secret \
 #   --from-literal=username=neo4j \
 #   --from-literal=password=dev-password
 
-# Minimal resource cluster for development
+# Development property sharding cluster with minimal resources
 apiVersion: neo4j.com/v1alpha1
 kind: Neo4jEnterpriseCluster
 metadata:
@@ -32,14 +42,14 @@ spec:
     size: 2Gi  # Small storage for dev
     className: standard
 
-  # Development resources (minimal but functional)
+  # Development resources (minimum viable for property sharding)
   resources:
     requests:
-      memory: 4Gi    # Minimum for property sharding
-      cpu: 500m     # Lower CPU for dev
+      memory: 6Gi    # Absolute minimum for property sharding (12GB+ recommended)
+      cpu: 1000m     # Basic operation (2+ cores recommended for performance)
     limits:
-      memory: 6Gi
-      cpu: 1000m
+      memory: 8Gi    # Allow some headroom
+      cpu: 2000m     # Allow burst capacity
 
   # Enable property sharding with development-friendly settings
   propertySharding:
