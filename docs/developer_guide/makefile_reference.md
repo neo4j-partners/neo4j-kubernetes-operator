@@ -229,6 +229,33 @@ make test-integration-ci-full
 
 ### Test Environment Management
 
+#### `make test-setup`
+**Description**: Setup test environment and prepare for testing
+**Usage**: `make test-setup`
+**Dependencies**: Test environment scripts
+**Example**:
+```bash
+make test-setup
+# Prepares test environment
+# Creates necessary directories
+# Sets up test configurations
+```
+
+#### `make test-cleanup`
+**Description**: Clean up test environment artifacts while keeping cluster
+**Usage**: `make test-cleanup`
+**Features**:
+- Removes test results and logs
+- Cleans coverage files
+- Preserves cluster for reuse
+**Example**:
+```bash
+make test-cleanup
+# Removes test-results/ coverage/ logs/ tmp/
+# Cleans test-output.log and coverage files
+# Keeps cluster running
+```
+
 #### `make test-cluster`
 **Description**: Create dedicated Kind cluster for testing
 **Usage**: `make test-cluster`
@@ -440,6 +467,36 @@ make deploy-prod
 # 🚀 Deploys to neo4j-operator-system namespace
 ```
 
+#### `make deploy-dev-local`
+**Description**: Build and deploy controller with local dev image to Kind cluster
+**Usage**: `make deploy-dev-local`
+**Dependencies**: `manifests`, `kustomize`, `docker-build`
+**Features**:
+- Builds `neo4j-operator:dev` image locally
+- Auto-detects and loads to available Kind cluster
+- Deploys to `neo4j-operator-dev` namespace
+**Example**:
+```bash
+make deploy-dev-local
+# Explicit local build and deploy
+# Same as deploy-dev but more explicit
+```
+
+#### `make deploy-prod-local`
+**Description**: Build and deploy controller with local prod image to Kind cluster
+**Usage**: `make deploy-prod-local`
+**Dependencies**: `manifests`, `kustomize`, `docker-build`
+**Features**:
+- Builds `neo4j-operator:latest` image locally
+- Auto-detects and loads to available Kind cluster
+- Deploys to production namespace
+**Example**:
+```bash
+make deploy-prod-local
+# Explicit local build and deploy
+# Same as deploy-prod but more explicit
+```
+
 #### `make deploy-dev-registry`
 **Description**: Deploy development configuration using registry image
 **Usage**: `make deploy-dev-registry`
@@ -541,14 +598,27 @@ make dev-cluster-delete
 # Removes neo4j-operator-dev cluster
 ```
 
+#### `make dev-cleanup`
+**Description**: Clean up development environment completely (keeps cluster)
+**Usage**: `make dev-cleanup`
+**Dependencies**: Development cleanup script
+**Example**:
+```bash
+make dev-cleanup
+# Runs hack/cleanup-dev.sh
+# Removes artifacts but keeps cluster
+# Useful for resetting state
+```
+
 #### `make dev-destroy`
-**Description**: Complete development environment cleanup
+**Description**: Complete development environment destruction
 **Usage**: `make dev-destroy`
 **Example**:
 ```bash
 make dev-destroy
 # Removes all development artifacts
 # Deletes development cluster
+# Complete cleanup
 ```
 
 ### Operator Management
@@ -641,9 +711,90 @@ make demo-fast
 # ⚡ No user interaction required
 ```
 
+#### `make demo-only`
+**Description**: Run fast demo without environment setup (assumes cluster exists)
+**Usage**: `make demo-only`
+**Dependencies**: Existing cluster and operator
+**Example**:
+```bash
+make demo-only
+# 🎪 Demo on existing environment
+# ⚡ Skips setup phase
+```
+
+#### `make demo-interactive`
+**Description**: Run interactive demo without environment setup
+**Usage**: `make demo-interactive`
+**Dependencies**: Existing cluster and operator
+**Example**:
+```bash
+make demo-interactive
+# 🎪 Interactive demo on existing setup
+# 💬 User-guided walkthrough
+```
+
 ## Dependencies
 
 The Makefile automatically manages tool dependencies:
+
+### Bundle and Catalog Management
+
+#### `make opm`
+**Description**: Download OPM (Operator Package Manager) tool
+**Usage**: `make opm`
+**Location**: `bin/opm`
+**Example**:
+```bash
+make opm
+# Downloads opm for catalog management
+```
+
+#### `make bundle`
+**Description**: Generate operator bundle manifests
+**Usage**: `make bundle [VERSION=<version>]`
+**Dependencies**: `manifests`, `kustomize`, `operator-sdk`
+**Example**:
+```bash
+make bundle VERSION=0.1.0
+# Generates bundle for version 0.1.0
+```
+
+#### `make bundle-build`
+**Description**: Build bundle image
+**Usage**: `make bundle-build [BUNDLE_IMG=<image>]`
+**Example**:
+```bash
+make bundle-build BUNDLE_IMG=my-bundle:v0.1.0
+# Builds bundle container image
+```
+
+#### `make bundle-push`
+**Description**: Push bundle image to registry
+**Usage**: `make bundle-push [BUNDLE_IMG=<image>]`
+**Example**:
+```bash
+make bundle-push BUNDLE_IMG=ghcr.io/org/bundle:v0.1.0
+# Pushes bundle to registry
+```
+
+#### `make catalog-build`
+**Description**: Build a catalog image for OLM
+**Usage**: `make catalog-build [CATALOG_IMG=<image>] [BUNDLE_IMGS=<bundles>]`
+**Dependencies**: `opm`
+**Example**:
+```bash
+make catalog-build CATALOG_IMG=my-catalog:v1.0
+# Builds catalog with bundle images
+```
+
+#### `make catalog-push`
+**Description**: Push catalog image to registry
+**Usage**: `make catalog-push [CATALOG_IMG=<image>]`
+**Example**:
+```bash
+make catalog-push CATALOG_IMG=ghcr.io/my-org/catalog:v1.0
+# Pushes catalog to registry
+```
 
 ### Core Tools
 
@@ -676,21 +827,6 @@ The Makefile automatically manages tool dependencies:
 **Description**: Download Operator SDK for bundle management
 **Version**: v1.39.1
 **Location**: `bin/operator-sdk`
-
-### Bundle Management
-
-#### `make bundle`
-**Description**: Generate operator bundle manifests
-**Usage**: `make bundle [VERSION=<version>]`
-**Dependencies**: `manifests`, `kustomize`, `operator-sdk`
-
-#### `make bundle-build`
-**Description**: Build bundle image
-**Usage**: `make bundle-build`
-
-#### `make bundle-push`
-**Description**: Push bundle image to registry
-**Usage**: `make bundle-push`
 
 ## Code Quality
 

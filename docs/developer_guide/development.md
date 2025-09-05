@@ -129,16 +129,21 @@ This creates a Kind cluster with:
 
 ```bash
 # Build and deploy operator with local image (RECOMMENDED)
-make deploy-dev-local   # Uses neo4j-operator:dev image
+make deploy-dev         # Builds and deploys with neo4j-operator:dev image
 # or
-make deploy-prod-local  # Uses neo4j-operator:latest image with prod settings
+make deploy-prod        # Builds and deploys with neo4j-operator:latest image
 ```
 
-**Alternative**: Use pre-built images (requires image availability):
+**Explicit local build targets** (same as above but more explicit):
 ```bash
-# Deploy using overlay configurations
-make deploy-dev   # Uses neo4j-operator:dev (must be built locally first)
-make deploy-prod  # Uses ghcr.io registry image (requires authentication)
+make deploy-dev-local   # Explicitly builds and loads neo4j-operator:dev
+make deploy-prod-local  # Explicitly builds and loads neo4j-operator:latest
+```
+
+**Registry-based deployment** (requires ghcr.io authentication):
+```bash
+make deploy-dev-registry   # Deploy dev overlay with registry image
+make deploy-prod-registry  # Deploy prod overlay with ghcr.io image
 ```
 
 **⚠️ CRITICAL:** The operator must run in-cluster to avoid DNS resolution issues and ensure proper Neo4j cluster formation.
@@ -163,7 +168,9 @@ kubectl patch -n neo4j-operator-dev deployment/neo4j-operator-controller-manager
 1. **Start with clean environment**:
    ```bash
    make dev-cluster          # Create fresh cluster
-   make deploy-dev-local     # Build and deploy operator with local image
+   make operator-setup       # Deploy operator automatically
+   # or
+   make deploy-dev           # Build and deploy manually
    ```
 
 2. **Test your changes**:
@@ -180,8 +187,10 @@ kubectl patch -n neo4j-operator-dev deployment/neo4j-operator-controller-manager
 
 3. **Iterate quickly**:
    - Make code changes
-   - Rebuild and redeploy: `make docker-build deploy-dev`
+   - Rebuild and redeploy: `make deploy-dev` (includes build)
    - Test changes immediately
+   - Monitor logs: `make operator-logs`
+   - Check status: `make operator-status`
 
 ### Development Environment Management
 
@@ -190,13 +199,16 @@ kubectl patch -n neo4j-operator-dev deployment/neo4j-operator-controller-manager
 # Clean operator resources (keep cluster running)
 make dev-cluster-clean
 
+# Clean development environment (keep cluster)
+make dev-cleanup
+
 # Reset cluster (delete and recreate)
 make dev-cluster-reset
 
 # Delete cluster entirely
 make dev-cluster-delete
 
-# Complete cleanup (cluster + environment)
+# Complete destruction (cluster + environment)
 make dev-destroy
 ```
 

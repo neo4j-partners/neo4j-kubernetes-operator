@@ -20,8 +20,10 @@ git checkout $LATEST_TAG
 # Install CRDs and operator
 make install      # Install CRDs
 make deploy-prod  # Deploy operator (builds and uses local image)
-# or (requires ghcr.io access)
-make deploy-prod-registry  # Deploy from ghcr.io registry
+
+# Alternative deployment options:
+make deploy-prod-local     # Explicit local build and deploy
+make deploy-prod-registry  # Deploy from ghcr.io registry (requires authentication)
 ```
 
 This installs:
@@ -42,13 +44,16 @@ cd neo4j-kubernetes-operator
 # Create development cluster
 make dev-cluster
 
-# Deploy operator (uses local image by default)
-make deploy-dev   # Development namespace with debug features
-# or
-make deploy-prod  # Production namespace
+# Deploy operator (recommended)
+make operator-setup  # Automated setup (detects cluster and deploys)
 
-# Alternative: Use automated setup (detects cluster and deploys)
-make operator-setup
+# Manual deployment options:
+make deploy-dev      # Development namespace with debug features (builds local image)
+make deploy-prod     # Production namespace (builds local image)
+
+# Registry-based deployment:
+make deploy-dev-registry   # Deploy from registry (requires authentication)
+make deploy-prod-registry  # Deploy from ghcr.io registry
 ```
 
 ## Advanced Installation Methods
@@ -86,10 +91,14 @@ After cloning the repository, you can use different deployment configurations:
 
 ```bash
 # Production deployment (optimized resource limits)
-make deploy-prod
+make deploy-prod           # Builds and deploys local image
+# or
+make deploy-prod-registry  # Deploy from ghcr.io registry
 
 # Development deployment (with debugging enabled)
-make deploy-dev
+make deploy-dev            # Builds and deploys local dev image
+# or
+make deploy-dev-registry   # Deploy from registry
 
 ```
 
@@ -149,9 +158,13 @@ After cloning the repository, you have access to these make targets:
 ### Code Quality
 | Target | Description |
 |--------|-------------|
-| `make fmt` | Format code |
-| `make lint` | Run linter |
+| `make fmt` | Format code with gofmt |
+| `make lint` | Run golangci-lint (strict mode) |
+| `make lint-lenient` | Run golangci-lint with relaxed rules |
 | `make vet` | Run go vet |
+| `make security` | Run gosec security scan |
+| `make tidy` | Tidy and verify go modules |
+| `make clean` | Clean build artifacts |
 | `make test-coverage` | Generate test coverage report |
 
 ## Getting Started with Examples

@@ -48,6 +48,7 @@ kind create cluster --name test && kind delete cluster --name test
 ```bash
 make build                 # Build operator binary
 make docker-build         # Build container image
+make docker-push          # Push docker image
 make manifests            # Generate CRDs and RBAC
 make generate             # Generate DeepCopy methods
 
@@ -62,11 +63,29 @@ make dev-destroy          # Completely destroy dev environment
 # Standard deployment (uses local images by default)
 make deploy-dev           # Deploy to dev namespace with local neo4j-operator:dev image
 make deploy-prod          # Deploy to prod namespace with local neo4j-operator:latest image
-make operator-setup       # Deploy operator to cluster (automated script)
+make deploy-dev-local     # Build and deploy controller with local dev image to Kind cluster
+make deploy-prod-local    # Build and deploy controller with local prod image to Kind cluster
+make operator-setup       # Deploy operator to available Kind cluster
 
 # Registry-based deployment (requires ghcr.io access)
 make deploy-dev-registry  # Deploy dev overlay with registry image
 make deploy-prod-registry # Deploy prod overlay with ghcr.io image
+
+# Undeployment
+make undeploy-dev         # Undeploy development controller from cluster
+make undeploy-prod        # Undeploy production controller from cluster
+
+# Operator management utilities
+make operator-setup-interactive  # Set up the Neo4j operator interactively
+make operator-status      # Show operator status
+make operator-logs        # Follow operator logs
+
+# Demo capabilities
+make demo                 # Run interactive demo of the operator capabilities
+make demo-fast            # Run fast automated demo (no confirmations)
+make demo-only            # Run fast demo without environment setup (assumes cluster exists)
+make demo-interactive     # Run interactive demo without environment setup
+make demo-setup           # Setup complete demo environment (cluster + operator)
 ```
 
 **CRITICAL: NEVER run `make dev-run` (operator outside cluster)**
@@ -98,6 +117,11 @@ kubectl port-forward svc/minimal-cluster-client 7474:7474 &
 
 ### Testing
 ```bash
+# Environment management
+make test-setup           # Setup test environment
+make test-cleanup         # Clean test artifacts (keep cluster)
+make test-destroy         # Completely destroy test environment
+
 # Quick tests (no cluster required)
 make test-unit            # Unit tests only
 
@@ -109,22 +133,20 @@ make test-cluster-delete  # Delete test cluster
 
 # Cluster-based tests
 make test-integration     # Integration tests (auto-creates cluster and deploys operator)
+make test-integration-ci  # Run integration tests in CI (assumes cluster already exists)
+make test-integration-ci-full  # Run ALL integration tests in CI (use with caution - may exhaust resources)
 
 # Full test suite
 make test                 # Run unit + integration tests
-make test-coverage       # Generate coverage report
+make test-coverage        # Generate coverage report
 
 # CI Workflow Emulation (Added 2025-08-22)
-make test-ci-local       # Emulate CI workflow locally with debug logging
-                         # - Runs unit tests with CI=true GITHUB_ACTIONS=true
-                         # - Creates test cluster and deploys operator
-                         # - Runs integration tests with 512Mi memory constraints
-                         # - Provides detailed logging for troubleshooting
-                         # - Logs saved to: logs/ci-local-*.log
-
-# Environment cleanup
-make test-cleanup        # Clean test artifacts (keep cluster)
-make test-destroy        # Completely destroy test environment
+make test-ci-local        # Emulate CI workflow locally with debug logging
+                          # - Runs unit tests with CI=true GITHUB_ACTIONS=true
+                          # - Creates test cluster and deploys operator
+                          # - Runs integration tests with 512Mi memory constraints
+                          # - Provides detailed logging for troubleshooting
+                          # - Logs saved to: logs/ci-local-*.log
 
 # Run specific test
 go test ./internal/controller -run TestClusterReconciler
@@ -138,6 +160,8 @@ make lint                 # Run golangci-lint (strict mode)
 make lint-lenient        # Run with relaxed rules for CI
 make vet                  # Run go vet
 make security            # Run gosec security scan
+make tidy                 # Tidy go modules and verify
+make clean                # Clean build artifacts and temporary files
 ```
 
 ### Debugging & Troubleshooting
@@ -148,6 +172,10 @@ kubectl logs -n neo4j-operator deployment/neo4j-operator-controller-manager
 # Validate CRDs
 kubectl explain neo4jenterprisecluster.spec
 
+# Install and uninstall CRDs
+make install              # Install CRDs into the K8s cluster
+make uninstall           # Uninstall CRDs from the K8s cluster
+
 # Troubleshoot OOM issues
 kubectl describe pod <pod-name> | grep -E "(OOMKilled|Memory|Exit.*137)"
 kubectl top pod <pod-name> --containers  # Check memory usage
@@ -156,6 +184,27 @@ kubectl logs <pod-name> --previous | tail  # Check logs before restart
 # Test Neo4j database operations
 kubectl exec <pod-name> -c neo4j -- cypher-shell -u neo4j -p <password> "SHOW SERVERS"
 kubectl exec <pod-name> -c neo4j -- cypher-shell -u neo4j -p <password> "CREATE DATABASE testdb TOPOLOGY 1 PRIMARY"
+```
+
+### Bundle and Catalog Management (Operator SDK)
+```bash
+# Bundle generation and management
+make bundle               # Generate bundle manifests and metadata, validate files
+make bundle-build         # Build the bundle image
+make bundle-push          # Push the bundle image
+
+# Catalog image management
+make catalog-build        # Build a catalog image
+make catalog-push         # Push a catalog image
+
+# Dependency tools
+make operator-sdk         # Download operator-sdk locally if necessary
+make opm                  # Download opm (Operator Package Manager) locally
+make kustomize            # Download kustomize locally if necessary
+make controller-gen       # Download controller-gen locally if necessary
+make envtest             # Download setup-envtest locally if necessary
+make golangci-lint       # Download golangci-lint locally if necessary
+make ginkgo              # Download ginkgo locally if necessary
 ```
 
 ## CRITICAL Current Architecture (August 2025)
