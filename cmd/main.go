@@ -476,9 +476,8 @@ func configureDevelopmentCache(strategy string, _ bool) cache.Options {
 			d := 30 * time.Second
 			return &d
 		}(),
-		DefaultNamespaces: map[string]cache.Config{
-			"default": {},
-		},
+		// Watch all namespaces in development mode
+		// DefaultNamespaces is empty to enable cluster-wide watching
 	}
 
 	switch CacheStrategy(strategy) {

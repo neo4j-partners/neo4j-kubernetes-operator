@@ -288,7 +288,7 @@ See detailed implementation: `/reports/2025-08-19-server-based-architecture-impl
 
 **Property Sharding Tests** (Local Only):
 ```bash
-# Run property sharding tests locally (requires Neo4j 2025.06+ images)
+# Run property sharding tests locally (requires Neo4j 2025.07.1+ images)
 # IMPORTANT: Property sharding tests require significant resources:
 # - 16GB+ memory per server (12GB+ heap + system overhead)
 # - 2+ CPU cores per server
@@ -316,7 +316,7 @@ ginkgo run -focus "Property Sharding" ./test/integration
 - If cluster formation fails: Check discovery service and endpoints RBAC permissions
 - If pods get OOMKilled: Check memory limits - Neo4j Enterprise needs ≥ 1.5Gi for database operations
 - If database creation hangs: Verify Neo4j 5.x syntax uses `TOPOLOGY` clause, not `OPTIONS`
-- If property sharding tests fail: Ensure Neo4j 2025.06+ images available, sufficient cluster resources (5+ nodes, 16Gi+ memory per server, 2+ CPU cores per server)
+- If property sharding tests fail: Ensure Neo4j 2025.07.1+ images available, sufficient cluster resources (5+ nodes, 16Gi+ memory per server, 2+ CPU cores per server)
 
 ### Development Environment
 

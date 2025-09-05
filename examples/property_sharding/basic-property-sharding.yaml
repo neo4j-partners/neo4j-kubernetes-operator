@@ -20,10 +20,10 @@ metadata:
   name: basic-sharding-cluster
   namespace: default
 spec:
-  # Neo4j 2025.06+ required for property sharding
+  # Neo4j 2025.07.1+ required for property sharding
   image:
     repo: neo4j
-    tag: 2025.06-enterprise
+    tag: 2025.07.1-enterprise
 
   # Authentication required for property sharding
   auth:

@@ -37,9 +37,9 @@ func isRunningInCI() bool {
 
 // Property Sharding Integration Tests
 // These tests are skipped in CI environments due to large resource requirements:
-// - Neo4j 2025.06+ images are larger than standard versions
-// - Property sharding requires minimum 7 servers for production scenarios
-// - Each server needs 8Gi+ memory for property sharding workloads
+// - Neo4j 2025.07.1+ images are larger than standard versions
+// - Property sharding requires minimum 5 servers for proper shard distribution
+// - Each server needs 12Gi+ memory for property sharding workloads
 // - Total cluster resource requirements exceed typical CI limits
 //
 // To run these tests locally:
@@ -49,7 +49,7 @@ func isRunningInCI() bool {
 // Or:
 //
 //	ginkgo run -focus "Property Sharding" ./test/integration
-var _ = Describe("Property Sharding Integration Tests", func() {
+var _ = Describe("Property Sharding Integration Tests", Serial, func() {
 	var (
 		testNamespace string
 		cluster       *neo4jv1alpha1.Neo4jEnterpriseCluster
@@ -122,7 +122,7 @@ var _ = Describe("Property Sharding Integration Tests", func() {
 					Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 						Image: neo4jv1alpha1.ImageSpec{
 							Repo: "neo4j",
-							Tag:  "2025.06-enterprise", // Property sharding requires 2025.06+
+							Tag:  "2025.07.1-enterprise", // Property sharding requires 2025.07.1+
 						},
 						Auth: &neo4jv1alpha1.AuthSpec{
 							AdminSecret: "neo4j-admin-secret",
@@ -189,7 +189,7 @@ var _ = Describe("Property Sharding Integration Tests", func() {
 					Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 						Image: neo4jv1alpha1.ImageSpec{
 							Repo: "neo4j",
-							Tag:  "2025.06-enterprise",
+							Tag:  "2025.07.1-enterprise",
 						},
 						Auth: &neo4jv1alpha1.AuthSpec{
 							AdminSecret: "neo4j-admin-secret",
@@ -220,7 +220,7 @@ var _ = Describe("Property Sharding Integration Tests", func() {
 				}).Should(Equal("Failed"))
 
 				By("Checking failure message mentions server requirement")
-				Expect(cluster.Status.Message).Should(ContainSubstring("minimum 3 servers"))
+				Expect(cluster.Status.Message).Should(ContainSubstring("minimum 5 servers"))
 			})
 
 			It("should fail validation for unsupported Neo4j version", func() {
@@ -263,7 +263,7 @@ var _ = Describe("Property Sharding Integration Tests", func() {
 				}).Should(Equal("Failed"))
 
 				By("Checking failure message mentions version requirement")
-				Expect(cluster.Status.Message).Should(ContainSubstring("2025.06+"))
+				Expect(cluster.Status.Message).Should(ContainSubstring("2025.07.1+"))
 			})
 		})
 	})
@@ -285,7 +285,7 @@ var _ = Describe("Property Sharding Integration Tests", func() {
 						AdminSecret: "neo4j-admin-secret",
 					},
 					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Servers: 7, // Minimum required for property sharding
+						Servers: 5, // Property sharding test configuration
 					},
 					Storage: neo4jv1alpha1.StorageSpec{
 						Size:      "1Gi",
@@ -347,14 +347,14 @@ var _ = Describe("Property Sharding Integration Tests", func() {
 						Name:                  "products",
 						DefaultCypherLanguage: "25",
 						PropertySharding: neo4jv1alpha1.PropertyShardingConfiguration{
-							PropertyShards: 4,
+							PropertyShards: 3,
 							HashFunction:   "murmur3",
 							GraphShard: neo4jv1alpha1.DatabaseTopology{
-								Primaries:   3,
-								Secondaries: 2,
+								Primaries:   1,
+								Secondaries: 1,
 							},
 							PropertyShardTopology: neo4jv1alpha1.DatabaseTopology{
-								Primaries:   2,
+								Primaries:   1,
 								Secondaries: 0,
 							},
 						},
@@ -444,7 +444,7 @@ var _ = Describe("Property Sharding Integration Tests", func() {
 					Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 						Image: neo4jv1alpha1.ImageSpec{
 							Repo: "neo4j",
-							Tag:  "2025.06-enterprise",
+							Tag:  "2025.07.1-enterprise",
 						},
 						Auth: &neo4jv1alpha1.AuthSpec{
 							AdminSecret: "neo4j-admin-secret",
@@ -494,13 +494,13 @@ var _ = Describe("Property Sharding Integration Tests", func() {
 						Name:                  "products",
 						DefaultCypherLanguage: "25",
 						PropertySharding: neo4jv1alpha1.PropertyShardingConfiguration{
-							PropertyShards: 4,
+							PropertyShards: 3,
 							GraphShard: neo4jv1alpha1.DatabaseTopology{
-								Primaries:   3,
-								Secondaries: 2,
+								Primaries:   1,
+								Secondaries: 1,
 							},
 							PropertyShardTopology: neo4jv1alpha1.DatabaseTopology{
-								Primaries:   2,
+								Primaries:   1,
 								Secondaries: 0,
 							},
 						},

@@ -352,6 +352,14 @@ func cleanupCustomResourcesInNamespace(namespace string) {
 		}
 	}
 
+	// Clean up Neo4j Sharded Databases
+	shardedDBList := &neo4jv1alpha1.Neo4jShardedDatabaseList{}
+	if err := k8sClient.List(ctx, shardedDBList, client.InNamespace(namespace)); err == nil {
+		for _, item := range shardedDBList.Items {
+			cleanupResource(&item, namespace, "Neo4jShardedDatabase")
+		}
+	}
+
 	// Clean up Neo4j Plugins
 	pluginList := &neo4jv1alpha1.Neo4jPluginList{}
 	if err := k8sClient.List(ctx, pluginList, client.InNamespace(namespace)); err == nil {

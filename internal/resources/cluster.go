@@ -1134,6 +1134,8 @@ func BuildPodSpecForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, se
 		Value: serverName,
 	})
 
+	// NOTE: Property sharding config is handled via neo4j.conf, not environment variables
+
 	// Add custom environment variables (can override JVM settings if needed)
 	// Filter out NEO4J_AUTH and NEO4J_ACCEPT_LICENSE_AGREEMENT as they are managed by the operator
 	if cluster.Spec.Env != nil {
@@ -1441,6 +1443,8 @@ server.cluster.raft.listen_address=0.0.0.0:7000
 # Note: Single RAFT and cluster discovery settings are dynamically added by startup script
 `, memoryConfig.HeapInitialSize, memoryConfig.HeapMaxSize, memoryConfig.PageCacheSize)
 
+	// NOTE: Property sharding configuration moved to end of config file
+
 	// Add transaction memory limits for stability
 	// These prevent OOM kills from runaway queries
 	config += fmt.Sprintf(`
@@ -1530,6 +1534,25 @@ server.bolt.tls_level=OPTIONAL
 		}
 	}
 
+	// Property sharding configuration - placed at the very end to avoid startup script overwrites
+	if cluster.Spec.PropertySharding != nil && cluster.Spec.PropertySharding.Enabled {
+		config += "\n# Property Sharding Configuration (CRITICAL: placed at end to avoid script overwrites)\n"
+
+		if cluster.Spec.PropertySharding.Config != nil {
+			// Sort keys to ensure deterministic order
+			var propertyShardingKeys []string
+			for key := range cluster.Spec.PropertySharding.Config {
+				propertyShardingKeys = append(propertyShardingKeys, key)
+			}
+			sort.Strings(propertyShardingKeys)
+
+			// Add property sharding configuration in sorted order
+			for _, key := range propertyShardingKeys {
+				config += fmt.Sprintf("%s=%s\n", key, cluster.Spec.PropertySharding.Config[key])
+			}
+		}
+	}
+
 	return config
 }
 
@@ -1542,6 +1565,43 @@ func isNeo4jVersion526OrHigher(imageTag string) bool {
 		if strings.Contains(imageTag, version) {
 			return true
 		}
+	}
+
+	return false
+}
+
+// IsNeo4jVersion2025071OrHigher checks if the Neo4j version supports property sharding
+// Property sharding requires Neo4j 2025.07.1+ (calver only - no semver versions support it)
+func IsNeo4jVersion2025071OrHigher(imageTag string) bool {
+	// CRITICAL: Property sharding is ONLY available in Neo4j 2025.07.1+ calver versions
+	// No semver versions (5.x) support property sharding
+
+	// Check for 2025.07.1+ specifically (minimum supported version)
+	if strings.Contains(imageTag, "2025.07.1") ||
+		strings.Contains(imageTag, "2025.07.2") ||
+		strings.Contains(imageTag, "2025.07.3") ||
+		strings.Contains(imageTag, "2025.07.4") ||
+		strings.Contains(imageTag, "2025.07.5") ||
+		strings.Contains(imageTag, "2025.07.6") ||
+		strings.Contains(imageTag, "2025.07.7") ||
+		strings.Contains(imageTag, "2025.07.8") ||
+		strings.Contains(imageTag, "2025.07.9") {
+		return true
+	}
+
+	// Check for all future calver versions (2025.08+, 2025.09+, etc.)
+	// All future Neo4j calver versions support property sharding
+	if strings.Contains(imageTag, "2025.08") ||
+		strings.Contains(imageTag, "2025.09") ||
+		strings.Contains(imageTag, "2025.10") ||
+		strings.Contains(imageTag, "2025.11") ||
+		strings.Contains(imageTag, "2025.12") ||
+		strings.Contains(imageTag, "2026.") ||
+		strings.Contains(imageTag, "2027.") ||
+		strings.Contains(imageTag, "2028.") ||
+		strings.Contains(imageTag, "2029.") ||
+		strings.Contains(imageTag, "2030.") {
+		return true
 	}
 
 	return false
