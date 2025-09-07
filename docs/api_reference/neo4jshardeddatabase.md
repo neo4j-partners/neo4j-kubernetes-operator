@@ -69,7 +69,7 @@ status:
 1. Cluster phase is "Ready"
 2. Neo4j version is 2025.07.1+
 3. Minimum 5 servers configured (property sharding requirement)
-4. Minimum 6GB memory per server (12GB+ recommended for production)
+4. Minimum 4GB memory per server (8GB+ recommended for production)
 5. Minimum 1 CPU core per server (2+ cores recommended for cross-shard queries)
 6. All required configuration applied
 7. Authentication configured (admin secret required)
@@ -82,7 +82,7 @@ topology:
   servers: 5
 resources:
   requests:
-    memory: 6Gi    # Absolute minimum for property sharding
+    memory: 4Gi    # Absolute minimum for property sharding
     cpu: 1000m     # Basic operation
   limits:
     memory: 8Gi
@@ -95,10 +95,10 @@ topology:
   servers: 5      # or 7 for larger datasets
 resources:
   requests:
-    memory: 12Gi   # Recommended minimum for production
+    memory: 8Gi    # Recommended for production
     cpu: 2000m     # Cross-shard query performance
   limits:
-    memory: 16Gi   # Allow headroom for peak loads
+    memory: 8Gi    # Allow headroom for peak loads
     cpu: 4000m     # Handle concurrent operations
 ```
 
@@ -108,7 +108,7 @@ topology:
   servers: 7      # Better shard distribution
 resources:
   requests:
-    memory: 16Gi   # Optimal performance
+    memory: 8Gi    # Production performance
     cpu: 4000m     # Maximum throughput
   limits:
     memory: 20Gi   # Peak load handling
@@ -352,7 +352,7 @@ queryMetrics:
 
 - Neo4j version must be 2025.07.1+ when property sharding enabled
 - Minimum 5 servers required for property sharding (proper shard distribution)
-- Minimum 6GB memory per server (12GB+ recommended for production)
+- Minimum 4GB memory per server (8GB+ recommended for production)
 - Minimum 1 CPU core per server (2+ cores recommended for cross-shard queries)
 - Authentication required (admin secret must be configured)
 - Storage class must be specified
@@ -377,7 +377,7 @@ queryMetrics:
 |-------|-------|------------|
 | `property sharding requires Neo4j 2025.07.1+` | Old Neo4j version | Upgrade to 2025.07.1+ |
 | `property sharding requires minimum 5 servers` | Insufficient servers | Increase server count to 5+ |
-| `property sharding requires minimum 6GB memory` | Insufficient memory | Increase memory to 12GB+ (recommended) |
+| `property sharding requires minimum 4GB memory` | Insufficient memory | Increase memory to 8GB+ (recommended) |
 | `defaultCypherLanguage must be '25'` | Wrong Cypher version | Set to "25" |
 | `cluster does not support property sharding` | Cluster not configured | Enable property sharding on cluster |
 | `propertyShards must be at least 1` | Invalid shard count | Set to valid range (1-64) |

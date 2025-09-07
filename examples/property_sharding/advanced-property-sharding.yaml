@@ -42,14 +42,14 @@ spec:
     size: 100Gi
     className: fast-ssd  # High-performance storage class
 
-  # Production resource allocation
+  # High-performance resource allocation (minimum 4GB, this is for large datasets)
   resources:
     requests:
-      memory: 16Gi   # Higher allocation for production property sharding
-      cpu: 4000m     # 4+ cores for optimal performance
+      memory: 16Gi   # High-performance allocation for large datasets
+      cpu: 4000m     # 4+ cores for optimal cross-shard performance
     limits:
-      memory: 20Gi   # Production memory allocation for maximum performance
-      cpu: 6000m     # Additional CPU for high-throughput workloads
+      memory: 20Gi   # Maximum performance for enterprise workloads
+      cpu: 6000m     # Additional CPU for high-throughput shard coordination
 
   # Property sharding with performance tuning
   propertySharding:

@@ -27,7 +27,7 @@ Property Sharding decouples data into:
 
 | Component | Minimum (Basic) | Recommended (Production) | Notes |
 |-----------|----------------|-------------------------|-------|
-| **Memory** | 6GB total | 16GB+ total | 12GB+ heap + 4GB+ system |
+| **Memory** | 4GB total | 8GB+ total | 4GB minimum, 8GB+ recommended |
 | **CPU** | 1 core | 2+ cores | Cross-shard queries are CPU intensive |
 | **Storage** | 10GB | 100GB+ | Depends on data volume and shard count |
 | **Network** | 1Gbps | 10Gbps+ | Low latency critical for transaction log sync |
@@ -53,10 +53,10 @@ topology:
   servers: 5
 resources:
   requests:
-    memory: 6Gi    # Absolute minimum
-    cpu: 1000m     # Basic operation
+    memory: 4Gi    # Absolute minimum for dev/test
+    cpu: 2000m     # 2 cores for cross-shard queries
   limits:
-    memory: 8Gi
+    memory: 8Gi    # Recommended for production
     cpu: 2000m
 ```
 
@@ -66,10 +66,10 @@ topology:
   servers: 5      # or 7 for larger datasets
 resources:
   requests:
-    memory: 12Gi   # Recommended minimum
+    memory: 4Gi    # Minimum for dev/test
     cpu: 2000m     # Cross-shard performance
   limits:
-    memory: 16Gi   # Allow headroom
+    memory: 8Gi    # Recommended for production
     cpu: 4000m     # Handle peak loads
 ```
 
@@ -79,7 +79,7 @@ topology:
   servers: 7      # Better distribution
 resources:
   requests:
-    memory: 16Gi   # Optimal performance
+    memory: 8Gi    # Production recommendation
     cpu: 4000m     # Maximum throughput
   limits:
     memory: 20Gi   # Peak load handling
@@ -126,10 +126,10 @@ spec:
 
   resources:
     requests:
-      memory: 12Gi   # Property sharding requires 12GB+ heap per server
+      memory: 4Gi    # Minimum 4GB for dev/test environments
       cpu: 2000m     # 2+ cores required for cross-shard queries
     limits:
-      memory: 16Gi   # Account for total memory needs beyond heap
+      memory: 8Gi    # Recommended 8GB for production
       cpu: 4000m     # Higher CPU for shard coordination overhead (20-30% increase)
 
   # Enable property sharding
@@ -255,13 +255,13 @@ config:
 
 **Development/Testing**:
 - 5 servers minimum (property sharding requirement)
-- 12GB heap per server (absolute minimum for property sharding)
-- 16GB+ total RAM per server (recommended for stable operation)
+- 4GB heap per server (absolute minimum for property sharding)
+- 8GB+ total RAM per server (recommended for stable production operation)
 - Property shards: 2-4
 
 **Production**:
 - 5+ servers recommended (property sharding benefits from scale)
-- 12-16GB+ heap per server (for optimal performance)
+- 4-8GB+ heap per server (4GB minimum, 8GB for production)
 - 20GB+ total RAM per server (accounting for system overhead)
 - 2+ CPU cores per server (cross-shard query requirements)
 - Property shards: 4-16 (start conservatively)
@@ -385,15 +385,15 @@ Solution: Upgrade to Neo4j 2025.06 or later.
 
 **2. Insufficient Memory**
 ```
-Error: property sharding requires minimum 6GB memory for basic operation, got 4096MB (recommended: 12GB+)
+Error: property sharding requires minimum 4GB memory for basic operation, got XXXMB (recommended: 8GB+)
 ```
-**Solution**: Increase memory allocation to at least 6GB, recommended 12GB+:
+**Solution**: Increase memory allocation to at least 4GB, recommended 8GB+ for production:
 ```yaml
 resources:
   requests:
-    memory: 12Gi  # Recommended minimum
+    memory: 4Gi   # Minimum requirement
   limits:
-    memory: 16Gi  # Allow headroom for peak operations
+    memory: 8Gi   # Recommended for production
 ```
 
 **3. Insufficient CPU Resources**
@@ -533,7 +533,7 @@ propertySharding:
 - **Servers**: 5 minimum (fault tolerance)
 
 *Production (Recommended):*
-- **Memory**: 12-16GB per server (optimal performance)
+- **Memory**: 4-8GB per server (4GB minimum, 8GB recommended)
 - **CPU**: 2-4 cores per server (cross-shard query performance)
 - **Network**: High-speed networking (10Gbps+, low latency)
 - **Servers**: 5-7 servers (better shard distribution)

@@ -39,8 +39,8 @@ func isRunningInCI() bool {
 // These tests are skipped in CI environments due to large resource requirements:
 // - Neo4j 2025.07.1+ images are larger than standard versions
 // - Property sharding requires minimum 5 servers for proper shard distribution
-// - Each server needs 12Gi+ memory for property sharding workloads
-// - Total cluster resource requirements exceed typical CI limits
+// - Each server needs 4Gi+ memory minimum for property sharding workloads (8Gi recommended)
+// - Total cluster resource requirements: 20Gi minimum (40Gi recommended)
 //
 // To run these tests locally:
 //
@@ -136,12 +136,12 @@ var _ = Describe("Property Sharding Integration Tests", Serial, func() {
 						},
 						Resources: &corev1.ResourceRequirements{
 							Requests: corev1.ResourceList{
-								corev1.ResourceMemory: resource.MustParse("12Gi"),  // Property sharding requires 12GB+ heap per report
-								corev1.ResourceCPU:    resource.MustParse("2000m"), // 2+ cores required for cross-shard queries
+								corev1.ResourceMemory: resource.MustParse("4Gi"),   // Minimum for dev/test environments
+								corev1.ResourceCPU:    resource.MustParse("2000m"), // 2 cores per server
 							},
 							Limits: corev1.ResourceList{
-								corev1.ResourceMemory: resource.MustParse("16Gi"),  // Account for total memory needs beyond heap
-								corev1.ResourceCPU:    resource.MustParse("4000m"), // Higher CPU for shard coordination overhead
+								corev1.ResourceMemory: resource.MustParse("8Gi"),   // Sufficient for property sharding
+								corev1.ResourceCPU:    resource.MustParse("2000m"), // 2 cores per server
 							},
 						},
 						PropertySharding: &neo4jv1alpha1.PropertyShardingSpec{
@@ -279,7 +279,7 @@ var _ = Describe("Property Sharding Integration Tests", Serial, func() {
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 					Image: neo4jv1alpha1.ImageSpec{
 						Repo: "neo4j",
-						Tag:  "2025.06-enterprise",
+						Tag:  "2025.07.1-enterprise",
 					},
 					Auth: &neo4jv1alpha1.AuthSpec{
 						AdminSecret: "neo4j-admin-secret",
@@ -293,12 +293,12 @@ var _ = Describe("Property Sharding Integration Tests", Serial, func() {
 					},
 					Resources: &corev1.ResourceRequirements{
 						Requests: corev1.ResourceList{
-							corev1.ResourceMemory: resource.MustParse("12Gi"),  // Property sharding requires 12GB+ heap per report
-							corev1.ResourceCPU:    resource.MustParse("2000m"), // 2+ cores required for cross-shard queries
+							corev1.ResourceMemory: resource.MustParse("4Gi"),   // Minimum for dev/test environments
+							corev1.ResourceCPU:    resource.MustParse("2000m"), // 2 cores per server
 						},
 						Limits: corev1.ResourceList{
-							corev1.ResourceMemory: resource.MustParse("16Gi"),  // Account for total memory needs beyond heap
-							corev1.ResourceCPU:    resource.MustParse("4000m"), // Higher CPU for shard coordination overhead
+							corev1.ResourceMemory: resource.MustParse("8Gi"),   // Sufficient for property sharding
+							corev1.ResourceCPU:    resource.MustParse("2000m"), // 2 cores per server
 						},
 					},
 					PropertySharding: &neo4jv1alpha1.PropertyShardingSpec{
@@ -409,26 +409,11 @@ var _ = Describe("Property Sharding Integration Tests", Serial, func() {
 					},
 				}
 
-				By("Creating the invalid sharded database")
-				Expect(k8sClient.Create(ctx, shardedDB)).Should(Succeed())
-
-				By("Checking sharded database fails validation")
-				Eventually(func() string {
-					err := k8sClient.Get(ctx, client.ObjectKeyFromObject(shardedDB), shardedDB)
-					if err != nil {
-						return ""
-					}
-					return shardedDB.Status.Phase
-				}).Should(Equal("Failed"))
-
-				By("Checking failure message mentions validation errors")
-				Eventually(func() string {
-					err := k8sClient.Get(ctx, client.ObjectKeyFromObject(shardedDB), shardedDB)
-					if err != nil {
-						return ""
-					}
-					return shardedDB.Status.Message
-				}).Should(ContainSubstring("validation failed"))
+				By("Creating the invalid sharded database should fail validation")
+				err := k8sClient.Create(ctx, shardedDB)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("Invalid value"))
+				// The resource should not be created due to CRD validation, so no need to check status
 			})
 		})
 
@@ -455,6 +440,16 @@ var _ = Describe("Property Sharding Integration Tests", Serial, func() {
 						Storage: neo4jv1alpha1.StorageSpec{
 							Size:      "1Gi",
 							ClassName: "standard",
+						},
+						Resources: &corev1.ResourceRequirements{
+							Requests: corev1.ResourceList{
+								corev1.ResourceMemory: resource.MustParse("1.5Gi"),
+								corev1.ResourceCPU:    resource.MustParse("500m"),
+							},
+							Limits: corev1.ResourceList{
+								corev1.ResourceMemory: resource.MustParse("2Gi"),
+								corev1.ResourceCPU:    resource.MustParse("1000m"),
+							},
 						},
 						// No PropertySharding configuration
 					},

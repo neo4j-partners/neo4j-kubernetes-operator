@@ -302,7 +302,7 @@ ginkgo run -focus "Property Sharding" ./test/integration
 
 **✅ Property Sharding Test Results** (Updated based on Implementation Report 2025-09-05):
 - **Minimum servers**: 5 servers (validated working configuration)
-- **Memory requirements**: 12-16Gi per server (60-80Gi total cluster memory)
+- **Memory requirements**: 4-8Gi per server (20-40Gi total cluster memory)
 - **CPU requirements**: 2+ cores per server for cross-shard query processing
 - **Resource overhead**: 20-30% additional CPU and 2-4GB extra memory for shard coordination
 - **Network requirements**: Low-latency networking essential for transaction log synchronization
@@ -316,7 +316,7 @@ ginkgo run -focus "Property Sharding" ./test/integration
 - If cluster formation fails: Check discovery service and endpoints RBAC permissions
 - If pods get OOMKilled: Check memory limits - Neo4j Enterprise needs ≥ 1.5Gi for database operations
 - If database creation hangs: Verify Neo4j 5.x syntax uses `TOPOLOGY` clause, not `OPTIONS`
-- If property sharding tests fail: Ensure Neo4j 2025.07.1+ images available, sufficient cluster resources (5+ nodes, 16Gi+ memory per server, 2+ CPU cores per server)
+- If property sharding tests fail: Ensure Neo4j 2025.07.1+ images available, sufficient cluster resources (5+ nodes, 4Gi+ memory per server minimum, 8Gi recommended, 2+ CPU cores per server)
 
 ### Development Environment
 

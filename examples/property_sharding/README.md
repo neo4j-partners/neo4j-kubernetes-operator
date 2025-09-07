@@ -132,22 +132,22 @@ excludedProperties:
 ```yaml
 resources:
   requests:
-    memory: 12Gi   # Property sharding requires 12GB+ heap even in development
+    memory: 4Gi    # Property sharding requires 4GB+ memory (minimum)
     cpu: 2000m     # 2+ cores required for cross-shard queries
   limits:
-    memory: 16Gi   # Account for total memory needs beyond heap
-    cpu: 4000m     # Higher CPU for shard coordination overhead
+    memory: 8Gi    # Recommended for stable property sharding performance
+    cpu: 2000m     # Consistent performance for development
 ```
 
-**Production**:
+**Production (High-Performance)**:
 ```yaml
 resources:
   requests:
-    memory: 16Gi   # Higher allocation for production property sharding
-    cpu: 4000m     # 4+ cores for optimal performance
+    memory: 16Gi   # High-performance allocation for large datasets (minimum 4GB supported)
+    cpu: 4000m     # 4+ cores for optimal cross-shard performance
   limits:
-    memory: 20Gi   # Production memory allocation for maximum performance
-    cpu: 6000m     # Additional CPU for high-throughput workloads
+    memory: 20Gi   # Maximum performance for enterprise workloads
+    cpu: 6000m     # Additional CPU for high-throughput shard coordination
 ```
 
 ## Verification Commands

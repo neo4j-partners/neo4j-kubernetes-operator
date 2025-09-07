@@ -3,7 +3,7 @@
 #
 # DEVELOPMENT NOTES:
 # - Still requires 5 servers minimum (property sharding constraint)
-# - Uses minimum viable resource allocation (6GB memory, 1-2 CPU cores)
+# - Uses minimum viable resource allocation (4GB memory, 2 CPU cores)
 # - Suitable for learning, testing, and small-scale development
 # - NOT recommended for production workloads
 # - Consider using regular Neo4j clusters for basic development
@@ -45,11 +45,11 @@ spec:
   # Development resources (minimum viable for property sharding)
   resources:
     requests:
-      memory: 6Gi    # Absolute minimum for property sharding (12GB+ recommended)
-      cpu: 1000m     # Basic operation (2+ cores recommended for performance)
+      memory: 4Gi    # Absolute minimum for property sharding (8GB+ recommended for production)
+      cpu: 2000m     # 2 cores for cross-shard queries
     limits:
-      memory: 8Gi    # Allow some headroom
-      cpu: 2000m     # Allow burst capacity
+      memory: 8Gi    # Recommended for property sharding workloads
+      cpu: 2000m     # Stable performance
 
   # Enable property sharding with development-friendly settings
   propertySharding:

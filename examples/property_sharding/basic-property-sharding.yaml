@@ -40,11 +40,11 @@ spec:
   # Resources must be sufficient for property sharding
   resources:
     requests:
-      memory: 12Gi   # Property sharding requires 12GB+ heap per server
+      memory: 4Gi    # Property sharding requires 4GB+ memory (8GB+ recommended for production)
       cpu: 2000m     # 2+ cores required for cross-shard queries
     limits:
-      memory: 16Gi   # Account for total memory needs beyond heap
-      cpu: 4000m     # Higher CPU for shard coordination overhead
+      memory: 8Gi    # Recommended for property sharding workloads
+      cpu: 2000m     # Stable performance for production
 
   # Enable property sharding with default configuration
   propertySharding:

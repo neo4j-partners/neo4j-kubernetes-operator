@@ -246,7 +246,7 @@ Configures property sharding for horizontal scaling of large datasets. Property 
 
 - **Neo4j Version**: 2025.07.1+ Enterprise
 - **Minimum Servers**: 5 servers (for proper shard distribution)
-- **Memory**: 6GB minimum, 12GB+ recommended per server
+- **Memory**: 4GB minimum, 8GB+ recommended per server
 - **CPU**: 1+ core minimum, 2+ cores recommended per server
 - **Authentication**: Admin secret required
 - **Storage**: Persistent storage class required
@@ -285,10 +285,10 @@ propertySharding:
 ```yaml
 resources:
   requests:
-    memory: 6Gi    # Absolute minimum
-    cpu: 1000m     # Basic operation
+    memory: 4Gi    # Absolute minimum for dev/test
+    cpu: 2000m     # 2 cores for cross-shard queries
   limits:
-    memory: 8Gi
+    memory: 8Gi    # Recommended for production
     cpu: 2000m
 ```
 
@@ -296,10 +296,10 @@ resources:
 ```yaml
 resources:
   requests:
-    memory: 12Gi   # Recommended minimum
+    memory: 4Gi    # Minimum requirement
     cpu: 2000m     # Cross-shard performance
   limits:
-    memory: 16Gi   # Allow headroom
+    memory: 8Gi    # Recommended for production
     cpu: 4000m     # Handle peak loads
 ```
 
@@ -309,7 +309,7 @@ resources:
 |-------|-------|------------|
 | `property sharding requires Neo4j 2025.07.1+` | Old Neo4j version | Upgrade to 2025.07.1+ Enterprise |
 | `property sharding requires minimum 5 servers` | Insufficient servers | Increase server count to 5+ |
-| `property sharding requires minimum 6GB memory` | Insufficient memory | Increase memory to 12GB+ (recommended) |
+| `property sharding requires minimum 4GB memory` | Insufficient memory | Increase memory to 8GB+ (recommended) |
 | `property sharding requires minimum 1 CPU core` | Insufficient CPU | Increase CPU to 2+ cores (recommended) |
 
 For detailed configuration, see the [Property Sharding Guide](../user_guide/property_sharding.md).

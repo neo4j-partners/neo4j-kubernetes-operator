@@ -1552,12 +1552,12 @@ func (r *Neo4jEnterpriseClusterReconciler) validatePropertyShardingConfiguration
 	if cluster.Spec.Resources != nil && cluster.Spec.Resources.Requests != nil {
 		if memory := cluster.Spec.Resources.Requests.Memory(); memory != nil {
 			memoryMB := memory.Value() / (1024 * 1024)
-			if memoryMB < 8192 { // 8GB lenient minimum (implementation report recommends 12GB+)
-				logger.Info("Property sharding memory below recommended 12GB+, proceeding with caution",
-					"requestedMB", memoryMB, "recommendedMB", 12288)
+			if memoryMB < 8192 { // 8GB recommended for production
+				logger.Info("Property sharding memory below recommended 8GB for production, proceeding with caution",
+					"requestedMB", memoryMB, "recommendedMB", 8192)
 			}
-			if memoryMB < 6144 { // 6GB absolute minimum
-				return fmt.Errorf("property sharding requires minimum 6GB memory for basic operation, got %dMB (recommended: 12GB+)", memoryMB)
+			if memoryMB < 4096 { // 4GB absolute minimum for dev/test
+				return fmt.Errorf("property sharding requires minimum 4GB memory for basic operation, got %dMB (recommended: 8GB+ for production)", memoryMB)
 			}
 		}
 

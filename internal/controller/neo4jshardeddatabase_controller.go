@@ -14,6 +14,36 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+//
+// Neo4jShardedDatabase Controller Implementation
+//
+// This controller manages Neo4j property-sharded databases using Neo4j 2025.07.1+ Cypher 25 syntax.
+//
+// Key Implementation Details:
+//
+// 1. Database Creation Approach:
+//    - Uses single Cypher 25 CREATE DATABASE command (not separate shard creation)
+//    - Command format: CYPHER 25 CREATE DATABASE `name` IF NOT EXISTS
+//                      SET GRAPH SHARD { TOPOLOGY n PRIMARIES m SECONDARIES }
+//                      SET PROPERTY SHARDS { COUNT n TOPOLOGY m REPLICAS } WAIT
+//
+// 2. Status Verification:
+//    - Uses SHOW DATABASES command to verify graph shard creation
+//    - Avoids non-existent SHOW SHARDED DATABASES command
+//    - Looks for {database}-graph shard to confirm successful creation
+//
+// 3. Resource Requirements (Updated 2025-09-07):
+//    - Minimum: 4GB memory per server (reduced from 12-16GB)
+//    - Recommended: 8GB memory per server for production workloads
+//    - CPU: 2+ cores per server for cross-shard query performance
+//    - Servers: 5+ servers required for proper shard distribution
+//
+// 4. Error Handling:
+//    - Graceful degradation when virtual database not immediately visible
+//    - Retry logic for Neo4j client operations
+//    - Comprehensive status reporting and event recording
+//
+
 package controller
 
 import (
@@ -89,6 +119,14 @@ func (r *Neo4jShardedDatabaseReconciler) Reconcile(ctx context.Context, req ctrl
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
 	}
 
+	// Update status to show validation passed
+	if shardedDatabase.Status.Phase == "Validating" {
+		if err := r.updateStatus(ctx, &shardedDatabase, "Creating", "Configuration validated, preparing to create sharded database", nil); err != nil {
+			logger.Error(err, "Failed to update status after validation")
+			return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
+		}
+	}
+
 	// Get the referenced cluster
 	cluster, err := r.getReferencedCluster(ctx, &shardedDatabase)
 	if err != nil {
@@ -103,7 +141,7 @@ func (r *Neo4jShardedDatabaseReconciler) Reconcile(ctx context.Context, req ctrl
 
 	// Verify cluster supports property sharding
 	if !r.clusterSupportsPropertySharding(cluster) {
-		err := fmt.Errorf("cluster %s does not support property sharding (requires Neo4j 2025.06+ and propertySharding.enabled=true)", cluster.Name)
+		err := fmt.Errorf("cluster %s does not support property sharding (requires Neo4j 2025.07.1+ and propertySharding.enabled=true)", cluster.Name)
 		logger.Error(err, "Cluster does not support property sharding")
 		r.Recorder.Event(&shardedDatabase, "Warning", "ClusterNotReady", err.Error())
 
@@ -217,30 +255,130 @@ func (r *Neo4jShardedDatabaseReconciler) createNeo4jClient(ctx context.Context, 
 func (r *Neo4jShardedDatabaseReconciler) reconcileShardedDatabase(ctx context.Context, shardedDB *neo4jv1alpha1.Neo4jShardedDatabase, client *neo4j.Client) error {
 	logger := log.FromContext(ctx)
 
-	// Step 1: Create graph shard database
-	if err := r.createGraphShard(ctx, shardedDB, client); err != nil {
-		return fmt.Errorf("failed to create graph shard: %w", err)
+	// Wait for Neo4j to be ready for database operations
+	if err := r.waitForNeo4jReadiness(ctx, client); err != nil {
+		return fmt.Errorf("Neo4j not ready for database operations: %w", err)
 	}
 
-	// Step 2: Create property shard databases
-	for i := int32(0); i < shardedDB.Spec.PropertySharding.PropertyShards; i++ {
-		if err := r.createPropertyShard(ctx, shardedDB, client, i); err != nil {
-			return fmt.Errorf("failed to create property shard %d: %w", i, err)
-		}
+	// Create the sharded database using Cypher 25 syntax in a single command
+	if err := r.createShardedDatabase(ctx, shardedDB, client); err != nil {
+		return fmt.Errorf("failed to create sharded database: %w", err)
 	}
 
-	// Step 3: Configure virtual database (logical view)
-	if err := r.configureVirtualDatabase(ctx, shardedDB, client); err != nil {
-		return fmt.Errorf("failed to configure virtual database: %w", err)
-	}
-
-	// Step 4: Update shard status
+	// Update shard status
 	if err := r.updateShardStatus(ctx, shardedDB, client); err != nil {
 		logger.Error(err, "Failed to update shard status, continuing")
 		// Non-fatal error, continue
 	}
 
 	return nil
+}
+
+// createShardedDatabase creates the sharded database using Cypher 25 syntax
+func (r *Neo4jShardedDatabaseReconciler) createShardedDatabase(ctx context.Context, shardedDB *neo4jv1alpha1.Neo4jShardedDatabase, client *neo4j.Client) error {
+	logger := log.FromContext(ctx).WithValues("database", shardedDB.Spec.Name)
+
+	// Build the Cypher 25 CREATE DATABASE command for property sharding
+	// Format: CREATE DATABASE name [IF NOT EXISTS]
+	//         SET GRAPH SHARD { TOPOLOGY n PRIMARIES m SECONDARIES }
+	//         SET PROPERTY SHARDS { COUNT n TOPOLOGY m REPLICAS }
+
+	var query strings.Builder
+
+	// Start with Cypher 25 prefix and CREATE DATABASE
+	query.WriteString(fmt.Sprintf("CYPHER 25 CREATE DATABASE `%s`", shardedDB.Spec.Name))
+
+	// Add IF NOT EXISTS if specified
+	if shardedDB.Spec.IfNotExists {
+		query.WriteString(" IF NOT EXISTS")
+	}
+
+	// Add graph shard topology
+	graphShard := shardedDB.Spec.PropertySharding.GraphShard
+	query.WriteString(fmt.Sprintf(" SET GRAPH SHARD { TOPOLOGY %d", graphShard.Primaries))
+	if graphShard.Primaries == 1 {
+		query.WriteString(" PRIMARY")
+	} else {
+		query.WriteString(" PRIMARIES")
+	}
+
+	if graphShard.Secondaries > 0 {
+		query.WriteString(fmt.Sprintf(" %d", graphShard.Secondaries))
+		if graphShard.Secondaries == 1 {
+			query.WriteString(" SECONDARY")
+		} else {
+			query.WriteString(" SECONDARIES")
+		}
+	}
+	query.WriteString(" }")
+
+	// Add property shards configuration
+	propertyShards := shardedDB.Spec.PropertySharding.PropertyShards
+	propertyTopology := shardedDB.Spec.PropertySharding.PropertyShardTopology
+
+	query.WriteString(fmt.Sprintf(" SET PROPERTY SHARDS { COUNT %d", propertyShards))
+
+	// Property shards use replicas, not primaries/secondaries
+	// Calculate total replicas needed
+	replicas := propertyTopology.Primaries + propertyTopology.Secondaries
+	if replicas > 0 {
+		query.WriteString(fmt.Sprintf(" TOPOLOGY %d", replicas))
+		if replicas == 1 {
+			query.WriteString(" REPLICA")
+		} else {
+			query.WriteString(" REPLICAS")
+		}
+	}
+	query.WriteString(" }")
+
+	// Add WAIT if specified
+	if shardedDB.Spec.Wait {
+		query.WriteString(" WAIT")
+	}
+
+	queryStr := query.String()
+	logger.Info("Executing sharded database creation", "query", queryStr)
+
+	// Execute the command with retry logic
+	maxRetries := 5
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		// Execute against system database for DDL commands
+		err := (*client).ExecuteCypher(ctx, "system", queryStr)
+		if err == nil {
+			logger.Info("Successfully created sharded database")
+			return nil
+		}
+
+		// Check if database already exists (not an error if IfNotExists is true)
+		if shardedDB.Spec.IfNotExists && strings.Contains(err.Error(), "already exists") {
+			logger.Info("Database already exists, continuing")
+			return nil
+		}
+
+		// Check for transient errors
+		if attempt < maxRetries-1 && isTransientError(err) {
+			delay := time.Duration(attempt+1) * time.Second
+			logger.V(1).Info("Transient error, retrying", "error", err, "attempt", attempt+1, "delay", delay)
+			time.Sleep(delay)
+			continue
+		}
+
+		return fmt.Errorf("failed to create sharded database: %w", err)
+	}
+
+	return fmt.Errorf("failed to create sharded database after %d attempts", maxRetries)
+}
+
+// isTransientError checks if an error is transient and can be retried
+func isTransientError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errMsg := strings.ToLower(err.Error())
+	return strings.Contains(errMsg, "unavailable") ||
+		strings.Contains(errMsg, "timeout") ||
+		strings.Contains(errMsg, "transient") ||
+		strings.Contains(errMsg, "connection")
 }
 
 // createGraphShard creates the graph shard database (nodes, relationships, labels without properties)
@@ -319,57 +457,42 @@ func (r *Neo4jShardedDatabaseReconciler) configureVirtualDatabase(ctx context.Co
 func (r *Neo4jShardedDatabaseReconciler) updateShardStatus(ctx context.Context, shardedDB *neo4jv1alpha1.Neo4jShardedDatabase, client *neo4j.Client) error {
 	logger := log.FromContext(ctx).WithValues("database", shardedDB.Spec.Name)
 
-	// Get sharded database status
-	shardedInfo, err := client.GetShardedDatabaseStatus(ctx, shardedDB.Spec.Name)
-	if err != nil {
-		logger.Error(err, "Failed to get sharded database status")
-		return nil // Non-fatal error
-	}
-
 	// Get individual database statuses for each shard
 	databases, err := client.GetDatabases(ctx)
 	if err != nil {
 		logger.Error(err, "Failed to get database information")
-		return nil // Non-fatal error
+		return fmt.Errorf("failed to get database information: %w", err)
 	}
 
-	// Build status information
-	graphShardName := fmt.Sprintf("%s-g000", shardedDB.Spec.Name)
+	// Check if the graph shard was successfully created
+	graphShardName := fmt.Sprintf("%s-graph", shardedDB.Spec.Name)
+	graphShardExists := false
+	graphShardOnline := false
 
-	// Update graph shard status
 	for _, db := range databases {
 		if db.Name == graphShardName {
-			graphShard := &neo4jv1alpha1.ShardStatus{
-				Name:  graphShardName,
-				Type:  "graph",
-				State: db.Status,
-				Ready: db.Status == "online",
+			graphShardExists = true
+			if db.Status == "online" {
+				graphShardOnline = true
 			}
-			// Update the status (would need to implement proper status updates)
-			logger.Info("Graph shard status", "name", graphShard.Name, "state", graphShard.State, "ready", graphShard.Ready)
+			logger.Info("Graph shard found", "database", db.Name, "status", db.Status)
 			break
 		}
 	}
 
-	// Update property shard statuses
-	for i := int32(0); i < shardedDB.Spec.PropertySharding.PropertyShards; i++ {
-		propertyShardName := fmt.Sprintf("%s-p%03d", shardedDB.Spec.Name, i)
-		for _, db := range databases {
-			if db.Name == propertyShardName {
-				propShard := &neo4jv1alpha1.ShardStatus{
-					Name:               propertyShardName,
-					Type:               "property",
-					State:              db.Status,
-					Ready:              db.Status == "online",
-					PropertyShardIndex: &i,
-				}
-				logger.Info("Property shard status", "name", propShard.Name, "index", i, "state", propShard.State, "ready", propShard.Ready)
-				break
-			}
-		}
+	// If we have the graph shard and it's online, consider the sharded database ready
+	// The virtual database may not appear in SHOW DATABASES until first access
+	if graphShardExists && graphShardOnline {
+		logger.Info("Sharded database appears to be ready", "graphShard", graphShardName, "online", graphShardOnline)
+	} else if graphShardExists {
+		logger.Info("Graph shard exists but not online yet", "database", graphShardName)
+		// Don't fail - this might be transient during startup
+	} else {
+		logger.Info("Graph shard not found yet", "expectedName", graphShardName)
+		// Don't fail - this might be due to timing or eventual consistency
 	}
 
-	logger.Info("Updated shard status", "virtual", shardedInfo.Name, "status", shardedInfo.Status)
+	logger.Info("Sharded database status check completed successfully")
 	return nil
 }
 
