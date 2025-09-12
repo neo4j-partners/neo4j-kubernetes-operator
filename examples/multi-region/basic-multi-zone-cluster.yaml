@@ -1,0 +1,53 @@
+# Basic Multi-Zone Neo4j Cluster
+# This example shows a cluster distributed across three availability zones
+# with zone anti-affinity and basic server tagging
+apiVersion: neo4j.com/v1alpha1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: multi-zone-cluster
+  namespace: neo4j
+spec:
+  image:
+    repo: neo4j
+    tag: "5.26-enterprise"
+    pullPolicy: IfNotPresent
+
+  topology:
+    servers: 6
+    # Zone anti-affinity ensures servers are distributed across zones
+    antiAffinity:
+      type: zone
+      required: false  # Soft anti-affinity (preferred)
+      weight: 100
+
+  storage:
+    className: fast-ssd
+    size: 20Gi
+
+  resources:
+    requests:
+      cpu: "2"
+      memory: "8Gi"
+    limits:
+      cpu: "4"
+      memory: "16Gi"
+
+  auth:
+    adminSecret: neo4j-admin-secret
+
+  service:
+    type: LoadBalancer
+    annotations:
+      service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+
+---
+# Admin credentials secret
+apiVersion: v1
+kind: Secret
+metadata:
+  name: neo4j-admin-secret
+  namespace: neo4j
+type: Opaque
+stringData:
+  username: neo4j
+  password: changeme123!

@@ -1,0 +1,193 @@
+# Example Routing Policies for Multi-Region Deployments
+# This file demonstrates various routing policy configurations
+apiVersion: neo4j.com/v1alpha1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: routing-demo
+  namespace: neo4j
+spec:
+  image:
+    repo: neo4j
+    tag: "2025.01.0-enterprise"
+    pullPolicy: IfNotPresent
+
+  topology:
+    servers: 9
+    serverGroups:
+      - name: region-a
+        count: 3
+        serverTags: ["region-a", "primary", "tier1"]
+        nodeSelector:
+          region: region-a
+      - name: region-b
+        count: 3
+        serverTags: ["region-b", "secondary", "tier2"]
+        nodeSelector:
+          region: region-b
+      - name: region-c
+        count: 3
+        serverTags: ["region-c", "tertiary", "tier3"]
+        nodeSelector:
+          region: region-c
+
+  routing:
+    loadBalancingPolicy: server_policies
+
+    # Various routing policy examples
+    policies:
+      # 1. Local preference with fallback
+      local-preference: |
+        tags(region-a)->min(2);
+        tags(region-b)->min(1);
+        tags(region-c);
+        all();
+
+      # 2. Strict primary region only
+      primary-only: |
+        tags(primary)->min(3);
+        halt();
+
+      # 3. Read from secondaries, write to primary
+      read-replicas: |
+        tags(secondary,tertiary);
+        tags(primary)->min(1);
+        all();
+
+      # 4. Tiered approach
+      tiered-routing: |
+        tags(tier1)->min(2);
+        tags(tier2)->min(1);
+        tags(tier3);
+        all();
+
+      # 5. Geographic distribution
+      geo-distributed: |
+        tags(region-a)->min(1);
+        tags(region-b)->min(1);
+        tags(region-c)->min(1);
+        all();
+
+      # 6. Failover scenario
+      failover-mode: |
+        tags(region-b,region-c)->min(2);
+        all();
+
+      # 7. Analytics workload (secondary only)
+      analytics: |
+        tags(secondary);
+        tags(tertiary);
+        halt();
+
+      # 8. Critical writes (high availability)
+      critical-writes: |
+        tags(primary)->min(3);
+        tags(tier1)->min(2);
+        halt();
+
+    # Set default policy
+    defaultPolicy: local-preference
+
+    # Database-specific routing
+    databasePolicies:
+      - database: "transactional"
+        policy: "primary-only"
+      - database: "analytics"
+        policy: "analytics"
+      - database: "cache"
+        policy: "read-replicas"
+      - database: "critical"
+        policy: "critical-writes"
+
+    # Catchup strategy for secondaries
+    catchupStrategy: USER_DEFINED
+    userDefinedCatchupStrategy: |
+      tags(local)->min(1);
+      tags(primary);
+      tags(secondary);
+      all();
+
+  storage:
+    className: fast-ssd
+    size: 20Gi
+
+  resources:
+    requests:
+      cpu: "2"
+      memory: "8Gi"
+    limits:
+      cpu: "4"
+      memory: "16Gi"
+
+  config:
+    # Additional routing-related configuration
+    dbms.routing.default_router: "SERVER"
+    dbms.routing.client_side_routing_timeout: "30s"
+    dbms.routing.load_balancing.shuffle_enabled: "true"
+
+  auth:
+    adminSecret: neo4j-routing-admin
+
+---
+# Admin credentials
+apiVersion: v1
+kind: Secret
+metadata:
+  name: neo4j-routing-admin
+  namespace: neo4j
+type: Opaque
+stringData:
+  username: neo4j
+  password: Routing123!
+
+---
+# Example databases with specific routing policies
+apiVersion: neo4j.com/v1alpha1
+kind: Neo4jDatabase
+metadata:
+  name: transactional-database
+  namespace: neo4j
+spec:
+  clusterRef: routing-demo
+  name: transactional
+  topology:
+    primaries: 3
+    secondaries: 3
+
+---
+apiVersion: neo4j.com/v1alpha1
+kind: Neo4jDatabase
+metadata:
+  name: analytics-database
+  namespace: neo4j
+spec:
+  clusterRef: routing-demo
+  name: analytics
+  topology:
+    primaries: 1
+    secondaries: 8
+
+---
+apiVersion: neo4j.com/v1alpha1
+kind: Neo4jDatabase
+metadata:
+  name: cache-database
+  namespace: neo4j
+spec:
+  clusterRef: routing-demo
+  name: cache
+  topology:
+    primaries: 2
+    secondaries: 4
+
+---
+apiVersion: neo4j.com/v1alpha1
+kind: Neo4jDatabase
+metadata:
+  name: critical-database
+  namespace: neo4j
+spec:
+  clusterRef: routing-demo
+  name: critical
+  topology:
+    primaries: 5
+    secondaries: 2

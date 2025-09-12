@@ -1,0 +1,154 @@
+# Advanced Multi-Region Cluster with Server Groups
+# This example demonstrates server groups with different tags, resources,
+# and node selectors for a true multi-region deployment
+apiVersion: neo4j.com/v1alpha1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: global-cluster
+  namespace: neo4j
+spec:
+  image:
+    repo: neo4j
+    tag: "2025.01.0-enterprise"
+    pullPolicy: IfNotPresent
+
+  topology:
+    servers: 9  # Total servers across all groups
+    serverGroups:
+      # US East primary region
+      - name: us-east
+        count: 3
+        serverTags:
+          - "us"
+          - "us-east"
+          - "primary-dc"
+        nodeSelector:
+          topology.kubernetes.io/region: us-east-1
+          topology.kubernetes.io/zone: us-east-1a
+        roleHint: PRIMARY_PREFERRED
+        resources:
+          requests:
+            cpu: "4"
+            memory: "16Gi"
+          limits:
+            cpu: "8"
+            memory: "32Gi"
+
+      # US West secondary region
+      - name: us-west
+        count: 3
+        serverTags:
+          - "us"
+          - "us-west"
+          - "secondary-dc"
+        nodeSelector:
+          topology.kubernetes.io/region: us-west-2
+          topology.kubernetes.io/zone: us-west-2a
+        roleHint: SECONDARY_PREFERRED
+        resources:
+          requests:
+            cpu: "2"
+            memory: "8Gi"
+          limits:
+            cpu: "4"
+            memory: "16Gi"
+
+      # EU West tertiary region
+      - name: eu-west
+        count: 3
+        serverTags:
+          - "eu"
+          - "eu-west"
+          - "tertiary-dc"
+        nodeSelector:
+          topology.kubernetes.io/region: eu-west-1
+          topology.kubernetes.io/zone: eu-west-1a
+        roleHint: SECONDARY_PREFERRED
+        resources:
+          requests:
+            cpu: "2"
+            memory: "8Gi"
+          limits:
+            cpu: "4"
+            memory: "16Gi"
+
+    # Region-level anti-affinity
+    antiAffinity:
+      type: region
+      required: true  # Hard anti-affinity across regions
+
+  # Routing configuration for multi-region
+  routing:
+    loadBalancingPolicy: server_policies
+    policies:
+      # Prefer local region, then fallback
+      local-first: |
+        tags(primary-dc)->min(2);
+        tags(secondary-dc);
+        tags(tertiary-dc);
+        all();
+      # Read from secondaries only
+      read-only: |
+        tags(secondary-dc,tertiary-dc);
+        all();
+      # Write to primary DC only
+      write-only: |
+        tags(primary-dc)->min(3);
+        halt();
+    defaultPolicy: local-first
+    catchupStrategy: CONNECT_RANDOMLY_TO_PRIMARY_SERVER
+
+  storage:
+    className: regional-ssd
+    size: 100Gi
+    retentionPolicy: Retain
+
+  config:
+    # Additional Neo4j configuration for multi-region
+    dbms.cluster.raft.log_pruning_frequency: "10m"
+    dbms.cluster.raft.log_reader_pool_size: "8"
+    server.cluster.system_database_mode: "PRIMARY"
+
+  auth:
+    adminSecret: neo4j-global-admin
+
+  service:
+    type: LoadBalancer
+    annotations:
+      # AWS NLB for cross-region connectivity
+      service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+      service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+
+  tls:
+    mode: cert-manager
+    issuerRef:
+      name: letsencrypt-prod
+      kind: ClusterIssuer
+
+---
+# Admin credentials
+apiVersion: v1
+kind: Secret
+metadata:
+  name: neo4j-global-admin
+  namespace: neo4j
+type: Opaque
+stringData:
+  username: neo4j
+  password: GlobalSecureP@ssw0rd!
+
+---
+# Example database with specific routing policy
+apiVersion: neo4j.com/v1alpha1
+kind: Neo4jDatabase
+metadata:
+  name: transactional-db
+  namespace: neo4j
+spec:
+  clusterRef: global-cluster
+  name: transactions
+  topology:
+    primaries: 3
+    secondaries: 6
+  options:
+    existingData: use

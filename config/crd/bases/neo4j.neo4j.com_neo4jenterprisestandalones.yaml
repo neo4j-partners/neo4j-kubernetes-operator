@@ -1438,6 +1438,50 @@ spec:
                     - Retain
                     type: string
                 type: object
+              placement:
+                description: Placement defines zone/region placement preferences
+                properties:
+                  antiAffinity:
+                    description: AntiAffinity configures anti-affinity rules
+                    properties:
+                      required:
+                        default: false
+                        description: Required indicates whether anti-affinity is required
+                          (hard) or preferred (soft)
+                        type: boolean
+                      topologyKey:
+                        description: |-
+                          TopologyKey specifies the Kubernetes topology key to use
+                          Defaults based on type: zone -> topology.kubernetes.io/zone
+                        type: string
+                      type:
+                        default: zone
+                        description: 'Type specifies the anti-affinity type: zone,
+                          region, or node'
+                        enum:
+                        - zone
+                        - region
+                        - node
+                        type: string
+                      weight:
+                        default: 100
+                        description: |-
+                          Weight specifies the weight for preferred anti-affinity (1-100)
+                          Only used when Required=false
+                        format: int32
+                        maximum: 100
+                        minimum: 1
+                        type: integer
+                    required:
+                    - type
+                    type: object
+                  region:
+                    description: Region specifies the region preference
+                    type: string
+                  zone:
+                    description: Zone specifies the availability zone preference
+                    type: string
+                type: object
               queryMonitoring:
                 description: Query performance monitoring
                 properties:
@@ -1618,6 +1662,13 @@ spec:
                     - type
                     type: object
                 type: object
+              serverTags:
+                description: |-
+                  ServerTags defines Neo4j server tags for this standalone instance
+                  Used for routing and load balancing policies in multi-region setups
+                items:
+                  type: string
+                type: array
               service:
                 description: ServiceSpec defines service configuration
                 properties:
@@ -2144,6 +2195,9 @@ spec:
                   podName:
                     description: PodName is the name of the Neo4j pod
                     type: string
+                  region:
+                    description: Region is the region where the pod is running
+                    type: string
                   restartCount:
                     description: RestartCount is the number of times the pod has been
                       restarted
@@ -2152,6 +2206,9 @@ spec:
                   startTime:
                     description: StartTime is when the pod was started
                     format: date-time
+                    type: string
+                  zone:
+                    description: Zone is the availability zone where the pod is running
                     type: string
                 type: object
               ready:

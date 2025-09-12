@@ -1,0 +1,108 @@
+# Multi-Region Standalone Deployment
+# This example shows standalone instances with server tags for routing
+apiVersion: neo4j.com/v1alpha1
+kind: Neo4jEnterpriseStandalone
+metadata:
+  name: edge-node-us-east
+  namespace: neo4j
+spec:
+  image:
+    repo: neo4j
+    tag: "5.26-enterprise"
+    pullPolicy: IfNotPresent
+
+  storage:
+    className: local-ssd
+    size: 10Gi
+
+  resources:
+    requests:
+      cpu: "1"
+      memory: "4Gi"
+    limits:
+      cpu: "2"
+      memory: "8Gi"
+
+  # Server tags for routing identification
+  serverTags:
+    - "edge"
+    - "us-east"
+    - "standalone"
+
+  # Placement configuration
+  placement:
+    zone: us-east-1a
+    region: us-east-1
+    antiAffinity:
+      type: node
+      required: false
+
+  nodeSelector:
+    node-type: edge
+    topology.kubernetes.io/zone: us-east-1a
+
+  auth:
+    adminSecret: neo4j-edge-secret
+
+  service:
+    type: NodePort
+
+---
+apiVersion: neo4j.com/v1alpha1
+kind: Neo4jEnterpriseStandalone
+metadata:
+  name: edge-node-us-west
+  namespace: neo4j
+spec:
+  image:
+    repo: neo4j
+    tag: "5.26-enterprise"
+    pullPolicy: IfNotPresent
+
+  storage:
+    className: local-ssd
+    size: 10Gi
+
+  resources:
+    requests:
+      cpu: "1"
+      memory: "4Gi"
+    limits:
+      cpu: "2"
+      memory: "8Gi"
+
+  # Server tags for routing identification
+  serverTags:
+    - "edge"
+    - "us-west"
+    - "standalone"
+
+  # Placement configuration
+  placement:
+    zone: us-west-2a
+    region: us-west-2
+    antiAffinity:
+      type: node
+      required: false
+
+  nodeSelector:
+    node-type: edge
+    topology.kubernetes.io/zone: us-west-2a
+
+  auth:
+    adminSecret: neo4j-edge-secret
+
+  service:
+    type: NodePort
+
+---
+# Shared admin credentials for edge nodes
+apiVersion: v1
+kind: Secret
+metadata:
+  name: neo4j-edge-secret
+  namespace: neo4j
+type: Opaque
+stringData:
+  username: neo4j
+  password: EdgeNode123!

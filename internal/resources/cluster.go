@@ -1324,6 +1324,9 @@ func BuildPodSpecForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, se
 	// Add affinity if specified
 	if cluster.Spec.Affinity != nil {
 		podSpec.Affinity = cluster.Spec.Affinity
+	} else {
+		// Add anti-affinity if configured in topology
+		podSpec.Affinity = buildAntiAffinityForCluster(cluster)
 	}
 
 	// --- Plugin Management ---
@@ -1398,6 +1401,90 @@ func getServiceAccountNameForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCl
 	}
 
 	return "default"
+}
+
+// buildAntiAffinityForCluster creates anti-affinity rules based on topology configuration
+func buildAntiAffinityForCluster(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) *corev1.Affinity {
+	if cluster.Spec.Topology.AntiAffinity == nil {
+		return nil
+	}
+
+	antiAffinity := cluster.Spec.Topology.AntiAffinity
+	topologyKey := antiAffinity.TopologyKey
+
+	// Set default topology key based on type
+	if topologyKey == "" {
+		switch antiAffinity.Type {
+		case "zone":
+			topologyKey = "topology.kubernetes.io/zone"
+		case "region":
+			topologyKey = "topology.kubernetes.io/region"
+		case "node":
+			topologyKey = "kubernetes.io/hostname"
+		default:
+			topologyKey = "topology.kubernetes.io/zone"
+		}
+	}
+
+	labelSelector := &metav1.LabelSelector{
+		MatchLabels: map[string]string{
+			"neo4j.com/cluster": cluster.Name,
+		},
+	}
+
+	if antiAffinity.Required {
+		// Hard anti-affinity
+		return &corev1.Affinity{
+			PodAntiAffinity: &corev1.PodAntiAffinity{
+				RequiredDuringSchedulingIgnoredDuringExecution: []corev1.PodAffinityTerm{
+					{
+						LabelSelector: labelSelector,
+						TopologyKey:   topologyKey,
+					},
+				},
+			},
+		}
+	}
+
+	// Soft anti-affinity with weight
+	weight := antiAffinity.Weight
+	if weight == 0 {
+		weight = 100
+	}
+
+	return &corev1.Affinity{
+		PodAntiAffinity: &corev1.PodAntiAffinity{
+			PreferredDuringSchedulingIgnoredDuringExecution: []corev1.WeightedPodAffinityTerm{
+				{
+					Weight: weight,
+					PodAffinityTerm: corev1.PodAffinityTerm{
+						LabelSelector: labelSelector,
+						TopologyKey:   topologyKey,
+					},
+				},
+			},
+		},
+	}
+}
+
+// getServerTagsForIndex returns the server tags for a specific server index based on server groups
+func getServerTagsForIndex(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, serverIndex int32) []string {
+	var tags []string
+	currentIndex := int32(0)
+
+	// If server groups are defined, find which group this server belongs to
+	if cluster.Spec.Topology.ServerGroups != nil {
+		for _, group := range cluster.Spec.Topology.ServerGroups {
+			if serverIndex >= currentIndex && serverIndex < currentIndex+group.Count {
+				// This server belongs to this group
+				tags = append(tags, group.ServerTags...)
+				break
+			}
+			currentIndex += group.Count
+		}
+	}
+
+	return tags
 }
 
 func buildNeo4jConfigForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) string {
@@ -1507,6 +1594,38 @@ dbms.ssl.policy.cluster.tls_versions=TLSv1.3,TLSv1.2
 # Enable TLS for connectors
 server.bolt.tls_level=OPTIONAL
 `
+	}
+
+	// Add routing configuration if specified
+	if cluster.Spec.Routing != nil {
+		config += "\n# Multi-Region Routing Configuration\n"
+
+		// Set load balancing policy
+		if cluster.Spec.Routing.LoadBalancingPolicy != "" {
+			config += fmt.Sprintf("dbms.routing.load_balancing.plugin=%s\n", cluster.Spec.Routing.LoadBalancingPolicy)
+		}
+
+		// Add routing policies
+		if cluster.Spec.Routing.Policies != nil {
+			for policyName, policyDSL := range cluster.Spec.Routing.Policies {
+				config += fmt.Sprintf("dbms.routing.load_balancing.config.server_policies.%s=%s\n", policyName, policyDSL)
+			}
+		}
+
+		// Set default policy
+		if cluster.Spec.Routing.DefaultPolicy != "" {
+			config += fmt.Sprintf("dbms.routing.default_policy=%s\n", cluster.Spec.Routing.DefaultPolicy)
+		}
+
+		// Set catchup strategy
+		if cluster.Spec.Routing.CatchupStrategy != "" {
+			config += fmt.Sprintf("server.cluster.catchup.upstream_strategy=%s\n", cluster.Spec.Routing.CatchupStrategy)
+		}
+
+		// Set user-defined catchup strategy if specified
+		if cluster.Spec.Routing.UserDefinedCatchupStrategy != "" && cluster.Spec.Routing.CatchupStrategy == "USER_DEFINED" {
+			config += fmt.Sprintf("server.cluster.catchup.user_defined_upstream_strategy=%s\n", cluster.Spec.Routing.UserDefinedCatchupStrategy)
+		}
 	}
 
 	// Add custom configuration (excluding memory settings already added above)
@@ -1786,12 +1905,55 @@ EOF
 # Add server mode constraint if specified
 ` + buildServerModeConstraintConfig(cluster) + `
 
+# Add server tags if specified
+` + buildServerTagsConfig(cluster) + `
+
 # Set NEO4J config directory
 export NEO4J_CONF=/tmp/neo4j-config
 
 # Start Neo4j
 exec /startup/docker-entrypoint.sh neo4j
 `
+}
+
+// buildServerTagsConfig generates server tags configuration for multi-region routing
+func buildServerTagsConfig(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) string {
+	config := ""
+
+	// Check if we have server groups with tags
+	if len(cluster.Spec.Topology.ServerGroups) > 0 {
+		config += `
+# Server tags for multi-region routing
+SERVER_TAGS=""
+`
+		currentIndex := int32(0)
+		for _, group := range cluster.Spec.Topology.ServerGroups {
+			if len(group.ServerTags) > 0 {
+				tags := strings.Join(group.ServerTags, ",")
+				for i := int32(0); i < group.Count; i++ {
+					serverIdx := currentIndex + i
+					config += fmt.Sprintf(`if [ "$SERVER_INDEX" = "%d" ]; then
+    SERVER_TAGS="%s"
+    echo "Server %d: Setting tags to %s (group: %s)"
+fi
+`, serverIdx, tags, serverIdx, tags, group.Name)
+				}
+			}
+			currentIndex += group.Count
+		}
+
+		config += `
+# Apply server tags if set
+if [ -n "$SERVER_TAGS" ]; then
+cat >> /tmp/neo4j-config/neo4j.conf << EOF
+# Server tags for routing and load balancing
+server.tags=$SERVER_TAGS
+EOF
+fi
+`
+	}
+
+	return config
 }
 
 // buildServerModeConstraintConfig generates server mode constraint configuration

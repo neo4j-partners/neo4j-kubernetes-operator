@@ -316,6 +316,103 @@ func (r *Neo4jEnterpriseStandaloneReconciler) reconcileIngress(ctx context.Conte
 	return nil
 }
 
+// buildNodeSelector builds the node selector for the standalone deployment
+func (r *Neo4jEnterpriseStandaloneReconciler) buildNodeSelector(standalone *neo4jv1alpha1.Neo4jEnterpriseStandalone) map[string]string {
+	nodeSelector := make(map[string]string)
+
+	// Add base node selector
+	if standalone.Spec.NodeSelector != nil {
+		for k, v := range standalone.Spec.NodeSelector {
+			nodeSelector[k] = v
+		}
+	}
+
+	// Add placement zone/region if specified
+	if standalone.Spec.Placement != nil {
+		if standalone.Spec.Placement.Zone != "" {
+			nodeSelector["topology.kubernetes.io/zone"] = standalone.Spec.Placement.Zone
+		}
+		if standalone.Spec.Placement.Region != "" {
+			nodeSelector["topology.kubernetes.io/region"] = standalone.Spec.Placement.Region
+		}
+	}
+
+	if len(nodeSelector) == 0 {
+		return nil
+	}
+	return nodeSelector
+}
+
+// buildAffinity builds the affinity rules for the standalone deployment
+func (r *Neo4jEnterpriseStandaloneReconciler) buildAffinity(standalone *neo4jv1alpha1.Neo4jEnterpriseStandalone) *corev1.Affinity {
+	// If user specified affinity, use it
+	if standalone.Spec.Affinity != nil {
+		return standalone.Spec.Affinity
+	}
+
+	// Check for placement anti-affinity
+	if standalone.Spec.Placement != nil && standalone.Spec.Placement.AntiAffinity != nil {
+		antiAffinity := standalone.Spec.Placement.AntiAffinity
+		topologyKey := antiAffinity.TopologyKey
+
+		// Set default topology key based on type
+		if topologyKey == "" {
+			switch antiAffinity.Type {
+			case "zone":
+				topologyKey = "topology.kubernetes.io/zone"
+			case "region":
+				topologyKey = "topology.kubernetes.io/region"
+			case "node":
+				topologyKey = "kubernetes.io/hostname"
+			default:
+				topologyKey = "topology.kubernetes.io/zone"
+			}
+		}
+
+		labelSelector := &metav1.LabelSelector{
+			MatchLabels: map[string]string{
+				"neo4j.com/standalone": standalone.Name,
+			},
+		}
+
+		if antiAffinity.Required {
+			// Hard anti-affinity
+			return &corev1.Affinity{
+				PodAntiAffinity: &corev1.PodAntiAffinity{
+					RequiredDuringSchedulingIgnoredDuringExecution: []corev1.PodAffinityTerm{
+						{
+							LabelSelector: labelSelector,
+							TopologyKey:   topologyKey,
+						},
+					},
+				},
+			}
+		}
+
+		// Soft anti-affinity with weight
+		weight := antiAffinity.Weight
+		if weight == 0 {
+			weight = 100
+		}
+
+		return &corev1.Affinity{
+			PodAntiAffinity: &corev1.PodAntiAffinity{
+				PreferredDuringSchedulingIgnoredDuringExecution: []corev1.WeightedPodAffinityTerm{
+					{
+						Weight: weight,
+						PodAffinityTerm: corev1.PodAffinityTerm{
+							LabelSelector: labelSelector,
+							TopologyKey:   topologyKey,
+						},
+					},
+				},
+			},
+		}
+	}
+
+	return nil
+}
+
 // createConfigMap creates a ConfigMap for the standalone deployment
 func (r *Neo4jEnterpriseStandaloneReconciler) createConfigMap(standalone *neo4jv1alpha1.Neo4jEnterpriseStandalone) *corev1.ConfigMap {
 	// Build neo4j.conf content
@@ -358,6 +455,13 @@ func (r *Neo4jEnterpriseStandaloneReconciler) createConfigMap(standalone *neo4jv
 		configLines = append(configLines, "dbms.ssl.policy.bolt.public_certificate=tls.crt")
 		configLines = append(configLines, "dbms.ssl.policy.bolt.client_auth=NONE")
 		configLines = append(configLines, "dbms.ssl.policy.bolt.tls_versions=TLSv1.3,TLSv1.2")
+		configLines = append(configLines, "")
+	}
+
+	// Add server tags if specified
+	if len(standalone.Spec.ServerTags) > 0 {
+		configLines = append(configLines, "# Server Tags for Multi-Region Routing")
+		configLines = append(configLines, fmt.Sprintf("server.tags=%s", strings.Join(standalone.Spec.ServerTags, ",")))
 		configLines = append(configLines, "")
 	}
 
@@ -521,9 +625,9 @@ func (r *Neo4jEnterpriseStandaloneReconciler) createStatefulSet(standalone *neo4
 						r.buildBackupSidecarContainer(standalone),
 					},
 					Volumes:      r.buildVolumes(standalone),
-					NodeSelector: standalone.Spec.NodeSelector,
+					NodeSelector: r.buildNodeSelector(standalone),
 					Tolerations:  standalone.Spec.Tolerations,
-					Affinity:     standalone.Spec.Affinity,
+					Affinity:     r.buildAffinity(standalone),
 				},
 			},
 			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{

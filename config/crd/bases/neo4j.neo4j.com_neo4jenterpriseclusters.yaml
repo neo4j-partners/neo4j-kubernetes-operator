@@ -1614,6 +1614,62 @@ spec:
                     - type
                     type: object
                 type: object
+              routing:
+                description: Routing defines load balancing and routing configuration
+                properties:
+                  catchupStrategy:
+                    default: CONNECT_RANDOMLY_TO_PRIMARY_SERVER
+                    description: CatchupStrategy defines how secondaries synchronize
+                      with primaries
+                    enum:
+                    - CONNECT_RANDOMLY_TO_PRIMARY_SERVER
+                    - CONNECT_RANDOMLY_TO_SECONDARY_SERVER
+                    - USER_DEFINED
+                    type: string
+                  databasePolicies:
+                    description: DatabasePolicies maps databases to specific routing
+                      policies
+                    items:
+                      description: DatabaseRoutingPolicy maps a database to a routing
+                        policy
+                      properties:
+                        database:
+                          description: Database name or pattern (supports wildcards)
+                          type: string
+                        policy:
+                          description: Policy name to use for this database
+                          type: string
+                      required:
+                      - database
+                      - policy
+                      type: object
+                    type: array
+                  defaultPolicy:
+                    description: DefaultPolicy specifies which policy to use as default
+                    type: string
+                  loadBalancingPolicy:
+                    default: server_policies
+                    description: LoadBalancingPolicy specifies the load balancing
+                      plugin to use
+                    enum:
+                    - server_policies
+                    - client_policies
+                    - least_connected
+                    type: string
+                  policies:
+                    additionalProperties:
+                      type: string
+                    description: |-
+                      Policies defines named routing policies using Neo4j DSL
+                      Key is the policy name, value is the DSL expression
+                      Example: "tags(primary-dc)->min(2);tags(secondary-dc);all();"
+                    type: object
+                  userDefinedCatchupStrategy:
+                    description: |-
+                      UserDefinedCatchupStrategy provides custom catchup configuration
+                      Used when CatchupStrategy is USER_DEFINED
+                    type: string
+                type: object
               service:
                 description: ServiceSpec defines service configuration
                 properties:
@@ -1847,6 +1903,41 @@ spec:
               topology:
                 description: TopologyConfiguration defines cluster topology requirements
                 properties:
+                  antiAffinity:
+                    description: AntiAffinity configures anti-affinity rules for server
+                      distribution
+                    properties:
+                      required:
+                        default: false
+                        description: Required indicates whether anti-affinity is required
+                          (hard) or preferred (soft)
+                        type: boolean
+                      topologyKey:
+                        description: |-
+                          TopologyKey specifies the Kubernetes topology key to use
+                          Defaults based on type: zone -> topology.kubernetes.io/zone
+                        type: string
+                      type:
+                        default: zone
+                        description: 'Type specifies the anti-affinity type: zone,
+                          region, or node'
+                        enum:
+                        - zone
+                        - region
+                        - node
+                        type: string
+                      weight:
+                        default: 100
+                        description: |-
+                          Weight specifies the weight for preferred anti-affinity (1-100)
+                          Only used when Required=false
+                        format: int32
+                        maximum: 100
+                        minimum: 1
+                        type: integer
+                    required:
+                    - type
+                    type: object
                   availabilityZones:
                     description: AvailabilityZones specifies the expected availability
                       zones for distribution
@@ -1913,6 +2004,152 @@ spec:
                             type: string
                         type: object
                     type: object
+                  serverGroups:
+                    description: |-
+                      ServerGroups allows organizing servers into logical groups for multi-region deployment
+                      Each group can have its own placement, tags, and node selectors
+                    items:
+                      description: ServerGroup defines a logical group of servers
+                        with shared configuration
+                      properties:
+                        count:
+                          description: Count specifies the number of servers in this
+                            group
+                          format: int32
+                          minimum: 1
+                          type: integer
+                        name:
+                          description: Name identifies this server group
+                          type: string
+                        nodeSelector:
+                          additionalProperties:
+                            type: string
+                          description: NodeSelector specifies Kubernetes node selection
+                            constraints for this group
+                          type: object
+                        resources:
+                          description: Resources allows overriding resource requirements
+                            for this group
+                          properties:
+                            claims:
+                              description: |-
+                                Claims lists the names of resources, defined in spec.resourceClaims,
+                                that are used by this container.
+
+                                This is an alpha field and requires enabling the
+                                DynamicResourceAllocation feature gate.
+
+                                This field is immutable. It can only be set for containers.
+                              items:
+                                description: ResourceClaim references one entry in
+                                  PodSpec.ResourceClaims.
+                                properties:
+                                  name:
+                                    description: |-
+                                      Name must match the name of one entry in pod.spec.resourceClaims of
+                                      the Pod where this field is used. It makes that resource available
+                                      inside a container.
+                                    type: string
+                                  request:
+                                    description: |-
+                                      Request is the name chosen for a request in the referenced claim.
+                                      If empty, everything from the claim is made available, otherwise
+                                      only the result of this request.
+                                    type: string
+                                required:
+                                - name
+                                type: object
+                              type: array
+                              x-kubernetes-list-map-keys:
+                              - name
+                              x-kubernetes-list-type: map
+                            limits:
+                              additionalProperties:
+                                anyOf:
+                                - type: integer
+                                - type: string
+                                pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                x-kubernetes-int-or-string: true
+                              description: |-
+                                Limits describes the maximum amount of compute resources allowed.
+                                More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                              type: object
+                            requests:
+                              additionalProperties:
+                                anyOf:
+                                - type: integer
+                                - type: string
+                                pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                x-kubernetes-int-or-string: true
+                              description: |-
+                                Requests describes the minimum amount of compute resources required.
+                                If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+                                otherwise to an implementation-defined value. Requests cannot exceed Limits.
+                                More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                              type: object
+                          type: object
+                        roleHint:
+                          default: NONE
+                          description: |-
+                            RoleHint suggests a preferred role for servers in this group
+                            Valid values: "PRIMARY_PREFERRED", "SECONDARY_PREFERRED", "NONE"
+                          enum:
+                          - NONE
+                          - PRIMARY_PREFERRED
+                          - SECONDARY_PREFERRED
+                          type: string
+                        serverTags:
+                          description: |-
+                            ServerTags defines Neo4j server tags for servers in this group
+                            Used for routing and load balancing policies
+                          items:
+                            type: string
+                          type: array
+                        tolerations:
+                          description: Tolerations allows overriding tolerations for
+                            this group
+                          items:
+                            description: |-
+                              The pod this Toleration is attached to tolerates any taint that matches
+                              the triple <key,value,effect> using the matching operator <operator>.
+                            properties:
+                              effect:
+                                description: |-
+                                  Effect indicates the taint effect to match. Empty means match all taint effects.
+                                  When specified, allowed values are NoSchedule, PreferNoSchedule and NoExecute.
+                                type: string
+                              key:
+                                description: |-
+                                  Key is the taint key that the toleration applies to. Empty means match all taint keys.
+                                  If the key is empty, operator must be Exists; this combination means to match all values and all keys.
+                                type: string
+                              operator:
+                                description: |-
+                                  Operator represents a key's relationship to the value.
+                                  Valid operators are Exists and Equal. Defaults to Equal.
+                                  Exists is equivalent to wildcard for value, so that a pod can
+                                  tolerate all taints of a particular category.
+                                type: string
+                              tolerationSeconds:
+                                description: |-
+                                  TolerationSeconds represents the period of time the toleration (which must be
+                                  of effect NoExecute, otherwise this field is ignored) tolerates the taint. By default,
+                                  it is not set, which means tolerate the taint forever (do not evict). Zero and
+                                  negative values will be treated as 0 (evict immediately) by the system.
+                                format: int64
+                                type: integer
+                              value:
+                                description: |-
+                                  Value is the taint value the toleration matches to.
+                                  If the operator is Exists, the value should be empty, otherwise just a regular string.
+                                type: string
+                            type: object
+                          type: array
+                      required:
+                      - count
+                      - name
+                      type: object
+                    type: array
                   serverModeConstraint:
                     default: NONE
                     description: |-
@@ -2159,6 +2396,10 @@ spec:
                   - type
                   type: object
                 type: array
+              disasterRecoveryCapable:
+                description: DisasterRecoveryCapable indicates if the cluster can
+                  survive zone/region failures
+                type: boolean
               endpoints:
                 description: Endpoints provides connection information
                 properties:
@@ -2209,6 +2450,10 @@ spec:
                 description: Message provides additional information about the current
                   state
                 type: string
+              minimumQuorumAvailable:
+                description: MinimumQuorumAvailable indicates if the cluster has minimum
+                  quorum for writes
+                type: boolean
               phase:
                 description: Phase represents the current phase of the cluster
                 type: string
@@ -2235,6 +2480,96 @@ spec:
                   servers:
                     format: int32
                     type: integer
+                type: object
+              serverDistribution:
+                description: ServerDistribution shows the distribution of servers
+                  across zones/regions
+                properties:
+                  distributionBalance:
+                    description: DistributionBalance indicates if servers are evenly
+                      distributed
+                    type: string
+                  healthyServers:
+                    description: HealthyServers is the number of healthy servers
+                    format: int32
+                    type: integer
+                  regions:
+                    additionalProperties:
+                      description: RegionDistribution shows server distribution in
+                        a region
+                      properties:
+                        healthy:
+                          description: Healthy is the number of healthy servers in
+                            this region
+                          format: int32
+                          type: integer
+                        primaries:
+                          description: Primaries is the number of primary databases
+                            hosted
+                          format: int32
+                          type: integer
+                        secondaries:
+                          description: Secondaries is the number of secondary databases
+                            hosted
+                          format: int32
+                          type: integer
+                        servers:
+                          description: Servers is the number of servers in this region
+                          format: int32
+                          type: integer
+                        zones:
+                          description: Zones lists the zones in this region
+                          items:
+                            type: string
+                          type: array
+                      required:
+                      - healthy
+                      - servers
+                      type: object
+                    description: Regions maps region names to server distribution
+                      info
+                    type: object
+                  totalServers:
+                    description: TotalServers is the total number of servers in the
+                      cluster
+                    format: int32
+                    type: integer
+                  zones:
+                    additionalProperties:
+                      description: ZoneDistribution shows server distribution in a
+                        zone
+                      properties:
+                        healthy:
+                          description: Healthy is the number of healthy servers in
+                            this zone
+                          format: int32
+                          type: integer
+                        primaries:
+                          description: Primaries is the number of primary databases
+                            hosted
+                          format: int32
+                          type: integer
+                        secondaries:
+                          description: Secondaries is the number of secondary databases
+                            hosted
+                          format: int32
+                          type: integer
+                        serverNames:
+                          description: ServerNames lists the server pod names in this
+                            zone
+                          items:
+                            type: string
+                          type: array
+                        servers:
+                          description: Servers is the number of servers in this zone
+                          format: int32
+                          type: integer
+                      required:
+                      - healthy
+                      - servers
+                      type: object
+                    description: Zones maps zone names to server distribution info
+                    type: object
                 type: object
               upgradeStatus:
                 description: UpgradeStatus provides detailed upgrade progress information

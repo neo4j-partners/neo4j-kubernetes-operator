@@ -78,6 +78,10 @@ type Neo4jEnterpriseClusterSpec struct {
 	// Enables support for creating sharded databases that separate
 	// graph topology from node/relationship properties
 	PropertySharding *PropertyShardingSpec `json:"propertySharding,omitempty"`
+
+	// Routing defines load balancing and routing configuration
+	// +optional
+	Routing *RoutingSpec `json:"routing,omitempty"`
 }
 
 // ImageSpec defines the Neo4j image configuration
@@ -511,6 +515,18 @@ type Neo4jEnterpriseClusterStatus struct {
 	// - Property sharding configuration applied successfully
 	// - All required Neo4j configuration settings validated
 	PropertyShardingReady *bool `json:"propertyShardingReady,omitempty"`
+
+	// ServerDistribution shows the distribution of servers across zones/regions
+	// +optional
+	ServerDistribution *ServerDistributionStatus `json:"serverDistribution,omitempty"`
+
+	// DisasterRecoveryCapable indicates if the cluster can survive zone/region failures
+	// +optional
+	DisasterRecoveryCapable *bool `json:"disasterRecoveryCapable,omitempty"`
+
+	// MinimumQuorumAvailable indicates if the cluster has minimum quorum for writes
+	// +optional
+	MinimumQuorumAvailable *bool `json:"minimumQuorumAvailable,omitempty"`
 }
 
 // UpgradeStatus tracks the progress of an ongoing upgrade
@@ -743,6 +759,11 @@ type TopologyConfiguration struct {
 	// +optional
 	ServerRoles []ServerRoleHint `json:"serverRoles,omitempty"`
 
+	// ServerGroups allows organizing servers into logical groups for multi-region deployment
+	// Each group can have its own placement, tags, and node selectors
+	// +optional
+	ServerGroups []ServerGroup `json:"serverGroups,omitempty"`
+
 	// Placement defines how instances should be distributed across the cluster
 	// +optional
 	Placement *PlacementConfig `json:"placement,omitempty"`
@@ -754,6 +775,10 @@ type TopologyConfiguration struct {
 	// EnforceDistribution ensures servers are distributed across topology domains
 	// +optional
 	EnforceDistribution bool `json:"enforceDistribution,omitempty"`
+
+	// AntiAffinity configures anti-affinity rules for server distribution
+	// +optional
+	AntiAffinity *AntiAffinitySpec `json:"antiAffinity,omitempty"`
 }
 
 // ServerRoleHint specifies a preferred role constraint for a specific server
@@ -771,6 +796,68 @@ type ServerRoleHint struct {
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Enum=NONE;PRIMARY;SECONDARY
 	ModeConstraint string `json:"modeConstraint"`
+}
+
+// ServerGroup defines a logical group of servers with shared configuration
+type ServerGroup struct {
+	// Name identifies this server group
+	// +kubebuilder:validation:Required
+	Name string `json:"name"`
+
+	// Count specifies the number of servers in this group
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Minimum=1
+	Count int32 `json:"count"`
+
+	// ServerTags defines Neo4j server tags for servers in this group
+	// Used for routing and load balancing policies
+	// +optional
+	ServerTags []string `json:"serverTags,omitempty"`
+
+	// NodeSelector specifies Kubernetes node selection constraints for this group
+	// +optional
+	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
+
+	// RoleHint suggests a preferred role for servers in this group
+	// Valid values: "PRIMARY_PREFERRED", "SECONDARY_PREFERRED", "NONE"
+	// +kubebuilder:validation:Enum=NONE;PRIMARY_PREFERRED;SECONDARY_PREFERRED
+	// +kubebuilder:default=NONE
+	// +optional
+	RoleHint string `json:"roleHint,omitempty"`
+
+	// Resources allows overriding resource requirements for this group
+	// +optional
+	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
+
+	// Tolerations allows overriding tolerations for this group
+	// +optional
+	Tolerations []corev1.Toleration `json:"tolerations,omitempty"`
+}
+
+// AntiAffinitySpec defines anti-affinity configuration for server distribution
+type AntiAffinitySpec struct {
+	// Type specifies the anti-affinity type: zone, region, or node
+	// +kubebuilder:validation:Enum=zone;region;node
+	// +kubebuilder:default=zone
+	Type string `json:"type"`
+
+	// TopologyKey specifies the Kubernetes topology key to use
+	// Defaults based on type: zone -> topology.kubernetes.io/zone
+	// +optional
+	TopologyKey string `json:"topologyKey,omitempty"`
+
+	// Required indicates whether anti-affinity is required (hard) or preferred (soft)
+	// +kubebuilder:default=false
+	// +optional
+	Required bool `json:"required,omitempty"`
+
+	// Weight specifies the weight for preferred anti-affinity (1-100)
+	// Only used when Required=false
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=100
+	// +kubebuilder:default=100
+	// +optional
+	Weight int32 `json:"weight,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -858,6 +945,108 @@ type PropertyShardingSpec struct {
 	// Applied when propertySharding.enabled is true
 	// These settings are required for Neo4j property sharding functionality
 	Config map[string]string `json:"config,omitempty"`
+}
+
+// RoutingSpec defines load balancing and routing configuration
+type RoutingSpec struct {
+	// LoadBalancingPolicy specifies the load balancing plugin to use
+	// +kubebuilder:validation:Enum=server_policies;client_policies;least_connected
+	// +kubebuilder:default=server_policies
+	// +optional
+	LoadBalancingPolicy string `json:"loadBalancingPolicy,omitempty"`
+
+	// Policies defines named routing policies using Neo4j DSL
+	// Key is the policy name, value is the DSL expression
+	// Example: "tags(primary-dc)->min(2);tags(secondary-dc);all();"
+	// +optional
+	Policies map[string]string `json:"policies,omitempty"`
+
+	// DefaultPolicy specifies which policy to use as default
+	// +optional
+	DefaultPolicy string `json:"defaultPolicy,omitempty"`
+
+	// DatabasePolicies maps databases to specific routing policies
+	// +optional
+	DatabasePolicies []DatabaseRoutingPolicy `json:"databasePolicies,omitempty"`
+
+	// CatchupStrategy defines how secondaries synchronize with primaries
+	// +kubebuilder:validation:Enum=CONNECT_RANDOMLY_TO_PRIMARY_SERVER;CONNECT_RANDOMLY_TO_SECONDARY_SERVER;USER_DEFINED
+	// +kubebuilder:default=CONNECT_RANDOMLY_TO_PRIMARY_SERVER
+	// +optional
+	CatchupStrategy string `json:"catchupStrategy,omitempty"`
+
+	// UserDefinedCatchupStrategy provides custom catchup configuration
+	// Used when CatchupStrategy is USER_DEFINED
+	// +optional
+	UserDefinedCatchupStrategy string `json:"userDefinedCatchupStrategy,omitempty"`
+}
+
+// DatabaseRoutingPolicy maps a database to a routing policy
+type DatabaseRoutingPolicy struct {
+	// Database name or pattern (supports wildcards)
+	// +kubebuilder:validation:Required
+	Database string `json:"database"`
+
+	// Policy name to use for this database
+	// +kubebuilder:validation:Required
+	Policy string `json:"policy"`
+}
+
+// ServerDistributionStatus shows server distribution across zones/regions
+type ServerDistributionStatus struct {
+	// Zones maps zone names to server distribution info
+	// +optional
+	Zones map[string]*ZoneDistribution `json:"zones,omitempty"`
+
+	// Regions maps region names to server distribution info
+	// +optional
+	Regions map[string]*RegionDistribution `json:"regions,omitempty"`
+
+	// TotalServers is the total number of servers in the cluster
+	TotalServers int32 `json:"totalServers,omitempty"`
+
+	// HealthyServers is the number of healthy servers
+	HealthyServers int32 `json:"healthyServers,omitempty"`
+
+	// DistributionBalance indicates if servers are evenly distributed
+	// +optional
+	DistributionBalance string `json:"distributionBalance,omitempty"`
+}
+
+// ZoneDistribution shows server distribution in a zone
+type ZoneDistribution struct {
+	// Servers is the number of servers in this zone
+	Servers int32 `json:"servers"`
+
+	// Healthy is the number of healthy servers in this zone
+	Healthy int32 `json:"healthy"`
+
+	// Primaries is the number of primary databases hosted
+	Primaries int32 `json:"primaries,omitempty"`
+
+	// Secondaries is the number of secondary databases hosted
+	Secondaries int32 `json:"secondaries,omitempty"`
+
+	// ServerNames lists the server pod names in this zone
+	ServerNames []string `json:"serverNames,omitempty"`
+}
+
+// RegionDistribution shows server distribution in a region
+type RegionDistribution struct {
+	// Servers is the number of servers in this region
+	Servers int32 `json:"servers"`
+
+	// Healthy is the number of healthy servers in this region
+	Healthy int32 `json:"healthy"`
+
+	// Zones lists the zones in this region
+	Zones []string `json:"zones,omitempty"`
+
+	// Primaries is the number of primary databases hosted
+	Primaries int32 `json:"primaries,omitempty"`
+
+	// Secondaries is the number of secondary databases hosted
+	Secondaries int32 `json:"secondaries,omitempty"`
 }
 
 func init() {

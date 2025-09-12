@@ -67,6 +67,15 @@ type Neo4jEnterpriseStandaloneSpec struct {
 
 	// Persistence configuration for standalone deployment
 	Persistence *PersistenceSpec `json:"persistence,omitempty"`
+
+	// ServerTags defines Neo4j server tags for this standalone instance
+	// Used for routing and load balancing policies in multi-region setups
+	// +optional
+	ServerTags []string `json:"serverTags,omitempty"`
+
+	// Placement defines zone/region placement preferences
+	// +optional
+	Placement *StandalonePlacementSpec `json:"placement,omitempty"`
 }
 
 // PersistenceSpec defines persistence configuration for standalone deployments
@@ -83,6 +92,21 @@ type PersistenceSpec struct {
 	// Access modes for the PVC
 	// +kubebuilder:default={"ReadWriteOnce"}
 	AccessModes []corev1.PersistentVolumeAccessMode `json:"accessModes,omitempty"`
+}
+
+// StandalonePlacementSpec defines placement preferences for standalone instances
+type StandalonePlacementSpec struct {
+	// Zone specifies the availability zone preference
+	// +optional
+	Zone string `json:"zone,omitempty"`
+
+	// Region specifies the region preference
+	// +optional
+	Region string `json:"region,omitempty"`
+
+	// AntiAffinity configures anti-affinity rules
+	// +optional
+	AntiAffinity *AntiAffinitySpec `json:"antiAffinity,omitempty"`
 }
 
 // Neo4jEnterpriseStandaloneStatus defines the observed state of Neo4jEnterpriseStandalone
@@ -125,6 +149,12 @@ type StandalonePodStatus struct {
 
 	// NodeName is the name of the Kubernetes node hosting the pod
 	NodeName string `json:"nodeName,omitempty"`
+
+	// Zone is the availability zone where the pod is running
+	Zone string `json:"zone,omitempty"`
+
+	// Region is the region where the pod is running
+	Region string `json:"region,omitempty"`
 
 	// Phase is the current phase of the pod
 	Phase corev1.PodPhase `json:"phase,omitempty"`

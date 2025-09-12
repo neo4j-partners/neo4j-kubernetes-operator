@@ -1,0 +1,159 @@
+# Disaster Recovery Configuration
+# This example shows a cluster optimized for disaster recovery
+# with primary region and two backup regions
+apiVersion: neo4j.com/v1alpha1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: dr-cluster
+  namespace: neo4j
+spec:
+  image:
+    repo: neo4j
+    tag: "5.26-enterprise"
+    pullPolicy: IfNotPresent
+
+  topology:
+    servers: 7  # Odd number for quorum
+    serverGroups:
+      # Primary production region (3 servers)
+      - name: prod-primary
+        count: 3
+        serverTags:
+          - "production"
+          - "primary"
+          - "tier1"
+        nodeSelector:
+          topology.kubernetes.io/region: us-east-1
+          node-role: production
+        roleHint: PRIMARY_PREFERRED
+
+      # DR region 1 (2 servers)
+      - name: dr-region-1
+        count: 2
+        serverTags:
+          - "dr"
+          - "backup1"
+          - "tier2"
+        nodeSelector:
+          topology.kubernetes.io/region: us-west-2
+          node-role: dr
+
+      # DR region 2 (2 servers)
+      - name: dr-region-2
+        count: 2
+        serverTags:
+          - "dr"
+          - "backup2"
+          - "tier2"
+        nodeSelector:
+          topology.kubernetes.io/region: eu-west-1
+          node-role: dr
+
+    # Ensure servers are spread across regions
+    antiAffinity:
+      type: region
+      required: true
+
+  # Routing optimized for DR scenarios
+  routing:
+    loadBalancingPolicy: server_policies
+    policies:
+      # Normal operations - primary only
+      normal-ops: |
+        tags(production)->min(2);
+        halt();
+      # Degraded mode - allow DR reads
+      degraded-mode: |
+        tags(production)->min(1);
+        tags(dr);
+        all();
+      # DR failover - use backup regions
+      dr-failover: |
+        tags(dr)->min(2);
+        all();
+    defaultPolicy: normal-ops
+    # Optimize catch-up for DR scenarios
+    catchupStrategy: USER_DEFINED
+    userDefinedCatchupStrategy: |
+      tags(production)->min(1);
+      tags(dr,backup1);
+      tags(dr,backup2);
+      all();
+
+  storage:
+    className: fast-ssd
+    size: 50Gi
+    retentionPolicy: Retain
+
+  # Backups configuration for DR
+  backups:
+    defaultStorage:
+      type: s3
+      bucket: neo4j-dr-backups
+      path: /backups/dr-cluster
+    cloud:
+      provider: aws
+      identity:
+        provider: aws
+        serviceAccount: neo4j-backup-sa
+
+  resources:
+    requests:
+      cpu: "2"
+      memory: "8Gi"
+    limits:
+      cpu: "4"
+      memory: "16Gi"
+
+  config:
+    # DR-optimized settings
+    dbms.cluster.raft.membership.join_timeout: "5m"
+    dbms.cluster.raft.log_shipping.buffer.max_size: "256m"
+    dbms.cluster.minimum_initial_system_primaries_count: "2"
+    server.cluster.catchup.pull_interval: "5s"
+
+  auth:
+    adminSecret: neo4j-dr-admin
+
+  service:
+    type: LoadBalancer
+    annotations:
+      # Enable cross-zone load balancing for DR
+      service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+      service.beta.kubernetes.io/aws-load-balancer-connection-draining-enabled: "true"
+      service.beta.kubernetes.io/aws-load-balancer-connection-draining-timeout: "60"
+
+---
+# Admin credentials
+apiVersion: v1
+kind: Secret
+metadata:
+  name: neo4j-dr-admin
+  namespace: neo4j
+type: Opaque
+stringData:
+  username: neo4j
+  password: DR-SecureP@ss2024!
+
+---
+# Backup schedule for DR
+apiVersion: neo4j.com/v1alpha1
+kind: Neo4jBackup
+metadata:
+  name: dr-backup-schedule
+  namespace: neo4j
+spec:
+  clusterRef: dr-cluster
+  schedule: "0 */4 * * *"  # Every 4 hours
+  databases:
+    - neo4j
+    - system
+  storage:
+    type: s3
+    bucket: neo4j-dr-backups
+    path: /scheduled-backups
+  retention:
+    keepLast: 10
+    keepDaily: 7
+    keepWeekly: 4
+    keepMonthly: 6
