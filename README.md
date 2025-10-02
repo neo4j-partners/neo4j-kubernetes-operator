@@ -61,10 +61,16 @@ Installation requires cloning from source:
    # Deploy the operator (choose based on your environment)
    make deploy-prod        # Production deployment (uses local neo4j-operator:latest image)
    make deploy-dev         # Development deployment (uses local neo4j-operator:dev image)
-   # or (for registry-based deployment)
-   make deploy-prod-registry  # Deploy from ghcr.io registry (requires authentication)
-   make deploy-dev-registry   # Deploy dev overlay with registry image
+
+   # Registry-based deployment (requires cluster-admin permissions)
+   make deploy-prod-registry  # Deploy from Docker Hub registry (auto-checks RBAC)
+   make deploy-dev-registry   # Deploy dev overlay with registry image (auto-checks RBAC)
+
+   # For users without cluster-admin permissions
+   make deploy-namespace-scoped  # Deploy with namespace-only permissions (limited functionality)
    ```
+
+   **Note**: Registry deployments automatically check and help set up RBAC permissions. If you encounter permission errors, the operator will guide you through the setup process.
 
 3. **Create admin credentials** (Required for authentication):
 

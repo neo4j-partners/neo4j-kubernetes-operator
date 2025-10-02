@@ -67,9 +67,9 @@ make deploy-dev-local     # Build and deploy controller with local dev image to 
 make deploy-prod-local    # Build and deploy controller with local prod image to Kind cluster
 make operator-setup       # Deploy operator to available Kind cluster
 
-# Registry-based deployment (requires ghcr.io access)
+# Registry-based deployment (uses Docker Hub)
 make deploy-dev-registry  # Deploy dev overlay with registry image
-make deploy-prod-registry # Deploy prod overlay with ghcr.io image
+make deploy-prod-registry # Deploy prod overlay with Docker Hub image
 
 # Undeployment
 make undeploy-dev         # Undeploy development controller from cluster

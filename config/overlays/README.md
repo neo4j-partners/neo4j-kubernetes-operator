@@ -62,7 +62,7 @@ make undeploy-prod
 ### Production Environment (`config/overlays/prod/`)
 
 **Image Configuration:**
-- Image: `ghcr.io/neo4j-labs/neo4j-kubernetes-operator:$(VERSION)`
+- Image: `neotechnology/neo4j-kubernetes-operator:$(VERSION)`
 - Version determined by Makefile VERSION variable or command line
 - Published production image from registry
 

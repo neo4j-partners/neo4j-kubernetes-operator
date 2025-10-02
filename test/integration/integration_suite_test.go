@@ -577,15 +577,15 @@ func getCIAppropriateResourceRequirements() *corev1.ResourceRequirements {
 			},
 		}
 	} else {
-		// Local/development environment: Use standard Neo4j Enterprise requirements
+		// Local/development environment: Use memory sufficient for scaling tests (clusters >3 servers require 2GB minimum)
 		return &corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{
 				corev1.ResourceCPU:    resource.MustParse("100m"),  // Standard CPU request
 				corev1.ResourceMemory: resource.MustParse("1.5Gi"), // Neo4j Enterprise recommended minimum
 			},
 			Limits: corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("500m"),  // Standard CPU limit
-				corev1.ResourceMemory: resource.MustParse("1.5Gi"), // Neo4j Enterprise recommended minimum
+				corev1.ResourceCPU:    resource.MustParse("500m"), // Standard CPU limit
+				corev1.ResourceMemory: resource.MustParse("2Gi"),  // 2GB minimum required for clusters >3 servers (cluster lifecycle test scaling)
 			},
 		}
 	}

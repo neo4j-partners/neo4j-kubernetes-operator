@@ -29,7 +29,7 @@ BUNDLE_METADATA_OPTS ?= $(BUNDLE_CHANNELS) $(BUNDLE_DEFAULT_CHANNEL)
 #
 # For example, running 'make bundle-build bundle-push catalog-build catalog-push' will build and push both
 # neo4j.com/neo4j-operator-bundle:$VERSION and neo4j.com/neo4j-operator-catalog:$VERSION.
-IMAGE_TAG_BASE ?= neo4j.com/neo4j-operator
+IMAGE_TAG_BASE ?= neotechnology/neo4j-kubernetes-operator
 
 # BUNDLE_IMG defines the image:tag used for the bundle.
 # You can use it as an arg. (E.g make bundle-build BUNDLE_IMG=<some-registry>/<project-name-bundle>:<tag>)
@@ -50,7 +50,7 @@ endif
 # This is useful for CI or a project to utilize a specific version of the operator-sdk toolkit.
 OPERATOR_SDK_VERSION ?= v1.39.1
 # Image URL to use all building/pushing image targets
-IMG ?= controller:latest
+IMG ?= neotechnology/neo4j-kubernetes-operator:latest
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.31.0
 
@@ -366,12 +366,26 @@ deploy-prod-local: manifests kustomize ## Build and deploy controller with local
 	$(KUSTOMIZE) build config/overlays/prod | $(KUBECTL) apply -f -
 
 .PHONY: deploy-dev-registry
-deploy-dev-registry: manifests kustomize ## Deploy controller with development configuration using registry image.
+deploy-dev-registry: manifests kustomize check-rbac ## Deploy controller with development configuration using registry image.
 	$(KUSTOMIZE) build config/overlays/dev | $(KUBECTL) apply -f -
 
 .PHONY: deploy-prod-registry
-deploy-prod-registry: manifests kustomize ## Deploy controller with production configuration using registry image.
+deploy-prod-registry: manifests kustomize check-rbac ## Deploy controller with production configuration using registry image.
 	$(KUSTOMIZE) build config/overlays/prod-registry | $(KUBECTL) apply -f -
+
+.PHONY: check-rbac
+check-rbac: ## Check and setup RBAC permissions if needed
+	@./scripts/setup-rbac.sh
+
+.PHONY: deploy-namespace-scoped
+deploy-namespace-scoped: manifests kustomize ## Deploy controller with namespace-scoped permissions only (no ClusterRole required)
+	@echo "Deploying namespace-scoped operator (limited functionality)..."
+	@echo "Note: This deployment only manages resources within the neo4j-operator-dev namespace"
+	$(KUSTOMIZE) build config/overlays/namespace-scoped | $(KUBECTL) apply -f -
+
+.PHONY: undeploy-namespace-scoped
+undeploy-namespace-scoped: kustomize ## Undeploy namespace-scoped controller
+	$(KUSTOMIZE) build config/overlays/namespace-scoped | $(KUBECTL) delete --ignore-not-found=true -f -
 
 .PHONY: undeploy-dev
 undeploy-dev: kustomize ## Undeploy development controller from the K8s cluster.

@@ -96,7 +96,7 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 	})
 
 	Context("End-to-end cluster lifecycle", func() {
-		It("Should create, scale, upgrade, and delete cluster successfully", func() {
+		It("Should create, scale, upgrade, and delete cluster successfully", SpecTimeout(25*time.Minute), func(ctx SpecContext) {
 			// Skip this test if no operator is running (requires full cluster setup)
 			if !isOperatorRunning() {
 				Skip("End-to-end cluster lifecycle test requires operator to be running")
