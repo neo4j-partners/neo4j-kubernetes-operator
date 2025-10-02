@@ -44,9 +44,9 @@ runs:
     - name: Build and deploy operator
       shell: bash
       run: |
-        make docker-build IMG=neo4j-operator:test
-        kind load docker-image neo4j-operator:test --name neo4j-operator-test
-        make deploy-prod IMG=neo4j-operator:test
+        make docker-build IMG=neo4j-operator:latest
+        kind load docker-image neo4j-operator:latest --name neo4j-operator-test
+        make deploy-prod
 
     - name: Wait for operator to be ready
       shell: bash

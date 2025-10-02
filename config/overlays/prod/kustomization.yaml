@@ -5,7 +5,7 @@ kind: Kustomization
 resources:
 - ../../default
 
-# Production-specific image (using local build by default)
+# Production-specific image (using local build)
 images:
 - name: controller
   newName: neo4j-operator
