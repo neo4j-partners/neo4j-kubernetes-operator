@@ -12,5 +12,5 @@ rules:
     spaces: 2
 
 ignore: |
-  charts/neo4j-operator/templates/
-  charts/neo4j-operator/crds/
+  **/charts/neo4j-operator/templates/*
+  **/charts/neo4j-operator/crds/*
