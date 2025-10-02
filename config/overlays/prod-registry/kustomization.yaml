@@ -5,10 +5,10 @@ kind: Kustomization
 resources:
 - ../../default
 
-# Production-specific image (using Docker Hub)
+# Production-specific image (using GitHub Container Registry)
 images:
 - name: controller
-  newName: neotechnology/neo4j-kubernetes-operator
+  newName: ghcr.io/neo4j-labs/neo4j-kubernetes-operator
   newTag: latest
 
 # Production-specific patches
