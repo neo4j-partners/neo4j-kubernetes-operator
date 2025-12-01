@@ -1,12 +1,10 @@
 # Neo4j Enterprise Operator for Kubernetes
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Go Report Card](https://goreportcard.com/badge/github.com/neo4j-labs/neo4j-kubernetes-operator)](https://goreportcard.com/report/github.com/neo4j-labs/neo4j-kubernetes-operator)
-[![GitHub Release](https://img.shields.io/github/release/neo4j-labs/neo4j-kubernetes-operator.svg)](https://github.com/neo4j-labs/neo4j-kubernetes-operator/releases)
+[![Go Report Card](https://goreportcard.com/badge/github.com/priyolahiri/neo4j-kubernetes-operator)](https://goreportcard.com/report/github.com/priyolahiri/neo4j-kubernetes-operator)
+[![GitHub Release](https://img.shields.io/github/release/priyolahiri/neo4j-kubernetes-operator.svg)](https://github.com/priyolahiri/neo4j-kubernetes-operator/releases)
 
 The Neo4j Enterprise Operator for Kubernetes provides a complete solution for deploying, managing, and scaling Neo4j Enterprise instances (v5.26+) in Kubernetes environments. Built with the Kubebuilder framework, it supports both clustered and standalone deployments for cloud-native graph database operations.
-
-> ⚠️ **ALPHA SOFTWARE WARNING**: This operator is currently in **alpha stage**. There may be breaking changes at any time due to ongoing development. For production use or evaluation, please use the [latest alpha release](https://github.com/neo4j-labs/neo4j-kubernetes-operator/releases/latest) rather than the main branch code.
 
 ## 📑 Table of Contents
 
@@ -648,10 +646,4 @@ See the [Contributing Guide](docs/developer_guide/contributing.md) for detailed 
 ## 📞 Support & Community
 
 - **Documentation**: [docs/](docs/)
-- **Issues**: [GitHub Issues](https://github.com/neo4j-labs/neo4j-kubernetes-operator/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/neo4j-labs/neo4j-kubernetes-operator/discussions)
 - **Neo4j Community**: [Neo4j Community Site](https://community.neo4j.com/)
-
-## 📄 License
-
-Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for details.
