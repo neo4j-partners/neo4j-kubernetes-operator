@@ -26,3 +26,13 @@ The operator can automatically create Kubernetes `NetworkPolicy` resources to re
 ## RBAC
 
 The operator itself runs with a specific `ServiceAccount` that is bound to a `ClusterRole` with the minimum necessary permissions to do its job. For end-users, the operator also provides a set of `ClusterRoles` (`neo4j-viewer`, `neo4j-editor`) that administrators can bind to users or groups to grant them appropriate levels of access to the Neo4j custom resources.
+
+## Pod Security Defaults
+
+The operator now hardens all Neo4j data-plane pods (servers, centralized backup, standalone, restore jobs, and hook jobs) with strict security contexts by default:
+
+- `runAsNonRoot: true` with UID/GID `7474` (Neo4j user) and matching `fsGroup`.
+- `allowPrivilegeEscalation: false`, `capabilities.drop: ["ALL"]`, `seccompProfile: RuntimeDefault`.
+- Root filesystem remains writable to support Neo4j startup scripts and tmp usage; keep volumes for data/logs/plugins mounted as before.
+
+These defaults are applied automatically; customization is not yet exposed via CRD fields. If you add sidecars, align their security contexts with these defaults.

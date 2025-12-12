@@ -965,11 +965,10 @@ func (r *Neo4jEnterpriseClusterReconciler) isUpgradeRequired(ctx context.Context
 		return false
 	}
 
-	// Check if any server StatefulSet exists and has different image
-	// Check server-0 as a representative
+	// Check the unified server StatefulSet for image drift
 	serverSts := &appsv1.StatefulSet{}
 	if err := r.Get(ctx, types.NamespacedName{
-		Name:      fmt.Sprintf("%s-server-0", cluster.Name),
+		Name:      fmt.Sprintf("%s-server", cluster.Name),
 		Namespace: cluster.Namespace,
 	}, serverSts); err != nil {
 		return false // StatefulSet doesn't exist yet

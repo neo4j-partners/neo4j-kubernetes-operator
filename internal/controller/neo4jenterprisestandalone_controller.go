@@ -33,6 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -52,6 +53,33 @@ type Neo4jEnterpriseStandaloneReconciler struct {
 	RequeueAfter     time.Duration
 	Validator        *validation.StandaloneValidator
 	ConfigMapManager *ConfigMapManager
+}
+
+func hardenedPodSecurityContext() *corev1.PodSecurityContext {
+	uid := int64(7474)
+	return &corev1.PodSecurityContext{
+		RunAsUser:    ptr.To(uid),
+		RunAsGroup:   ptr.To(uid),
+		FSGroup:      ptr.To(uid),
+		RunAsNonRoot: ptr.To(true),
+		SeccompProfile: &corev1.SeccompProfile{
+			Type: corev1.SeccompProfileTypeRuntimeDefault,
+		},
+	}
+}
+
+func hardenedContainerSecurityContext() *corev1.SecurityContext {
+	uid := int64(7474)
+	return &corev1.SecurityContext{
+		RunAsUser:                ptr.To(uid),
+		RunAsGroup:               ptr.To(uid),
+		RunAsNonRoot:             ptr.To(true),
+		AllowPrivilegeEscalation: ptr.To(false),
+		ReadOnlyRootFilesystem:   ptr.To(false),
+		Capabilities: &corev1.Capabilities{
+			Drop: []corev1.Capability{"ALL"},
+		},
+	}
 }
 
 const (
@@ -485,8 +513,9 @@ func (r *Neo4jEnterpriseStandaloneReconciler) createStatefulSet(standalone *neo4
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Name:  "neo4j",
-							Image: fmt.Sprintf("%s:%s", standalone.Spec.Image.Repo, standalone.Spec.Image.Tag),
+							Name:            "neo4j",
+							Image:           fmt.Sprintf("%s:%s", standalone.Spec.Image.Repo, standalone.Spec.Image.Tag),
+							SecurityContext: hardenedContainerSecurityContext(),
 							Ports: []corev1.ContainerPort{
 								{
 									Name:          "http",
@@ -520,10 +549,11 @@ func (r *Neo4jEnterpriseStandaloneReconciler) createStatefulSet(standalone *neo4
 						},
 						r.buildBackupSidecarContainer(standalone),
 					},
-					Volumes:      r.buildVolumes(standalone),
-					NodeSelector: standalone.Spec.NodeSelector,
-					Tolerations:  standalone.Spec.Tolerations,
-					Affinity:     standalone.Spec.Affinity,
+					SecurityContext: hardenedPodSecurityContext(),
+					Volumes:         r.buildVolumes(standalone),
+					NodeSelector:    standalone.Spec.NodeSelector,
+					Tolerations:     standalone.Spec.Tolerations,
+					Affinity:        standalone.Spec.Affinity,
 				},
 			},
 			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{
@@ -833,6 +863,7 @@ func (r *Neo4jEnterpriseStandaloneReconciler) buildBackupSidecarContainer(standa
 		Name:            "backup-sidecar",
 		Image:           fmt.Sprintf("%s:%s", standalone.Spec.Image.Repo, standalone.Spec.Image.Tag),
 		ImagePullPolicy: corev1.PullPolicy(standalone.Spec.Image.PullPolicy),
+		SecurityContext: hardenedContainerSecurityContext(),
 		Command: []string{
 			"/bin/bash",
 			"-c",

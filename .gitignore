@@ -29,6 +29,7 @@ go.work.sum
 /tmp/
 /logs/
 /dist/
+/.gocache/
 samples/
 .air.toml
 build-errors.log

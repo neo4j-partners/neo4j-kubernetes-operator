@@ -31,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/utils/ptr"
 
 	certv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	cmmeta "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
@@ -87,6 +88,33 @@ const (
 
 	// TLS modes
 	CertManagerMode = "cert-manager"
+
+	// Default non-root UID/GID for Neo4j containers
+	defaultNeo4jUID int64 = 7474
+)
+
+var (
+	defaultPodSecurityContext = &corev1.PodSecurityContext{
+		RunAsUser:    ptr.To(defaultNeo4jUID),
+		RunAsGroup:   ptr.To(defaultNeo4jUID),
+		FSGroup:      ptr.To(defaultNeo4jUID),
+		RunAsNonRoot: ptr.To(true),
+		SeccompProfile: &corev1.SeccompProfile{
+			Type: corev1.SeccompProfileTypeRuntimeDefault,
+		},
+	}
+
+	defaultContainerSecurityContext = &corev1.SecurityContext{
+		RunAsUser:                ptr.To(defaultNeo4jUID),
+		RunAsGroup:               ptr.To(defaultNeo4jUID),
+		RunAsNonRoot:             ptr.To(true),
+		AllowPrivilegeEscalation: ptr.To(false),
+		// Neo4j requires writable root for scripts/tmp; keep root FS writable but drop capabilities.
+		ReadOnlyRootFilesystem: ptr.To(false),
+		Capabilities: &corev1.Capabilities{
+			Drop: []corev1.Capability{"ALL"},
+		},
+	}
 )
 
 // BuildServerStatefulSetForEnterprise creates a single StatefulSet for all Neo4j servers
@@ -1005,9 +1033,7 @@ done`
 
 	return corev1.PodSpec{
 		ServiceAccountName: getServiceAccountNameForEnterprise(cluster),
-		SecurityContext: &corev1.PodSecurityContext{
-			FSGroup: &[]int64{7474}[0], // Neo4j user group
-		},
+		SecurityContext:    defaultPodSecurityContext,
 		Containers: []corev1.Container{
 			{
 				Name:            "backup",
@@ -1017,6 +1043,7 @@ done`
 				Resources:       resources,
 				Command:         []string{"/bin/bash", "-c"},
 				Args:            []string{backupScript},
+				SecurityContext: defaultContainerSecurityContext,
 				VolumeMounts: []corev1.VolumeMount{
 					{
 						Name:      "backup-storage",
@@ -1188,6 +1215,7 @@ func BuildPodSpecForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, se
 		Image:           fmt.Sprintf("%s:%s", cluster.Spec.Image.Repo, cluster.Spec.Image.Tag),
 		ImagePullPolicy: corev1.PullPolicy(cluster.Spec.Image.PullPolicy),
 		Env:             env,
+		SecurityContext: defaultContainerSecurityContext,
 		VolumeMounts:    volumeMounts,
 		Ports: []corev1.ContainerPort{
 			{
@@ -1304,11 +1332,9 @@ func BuildPodSpecForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, se
 	// Build pod spec - backup is now handled by centralized StatefulSet, not sidecars
 	podSpec := corev1.PodSpec{
 		ServiceAccountName: getDiscoveryServiceAccountNameForEnterprise(cluster),
-		SecurityContext: &corev1.PodSecurityContext{
-			FSGroup: func() *int64 { gid := int64(7474); return &gid }(),
-		},
-		Containers: []corev1.Container{neo4jContainer}, // Only Neo4j container, no backup sidecar
-		Volumes:    volumes,
+		SecurityContext:    defaultPodSecurityContext,
+		Containers:         []corev1.Container{neo4jContainer}, // Only Neo4j container, no backup sidecar
+		Volumes:            volumes,
 	}
 
 	// Add node selector if specified
@@ -1354,6 +1380,7 @@ func BuildPodSpecForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, se
 				ContainerPort: 2004,
 				Protocol:      corev1.ProtocolTCP,
 			}},
+			SecurityContext: defaultContainerSecurityContext,
 		}
 		podSpec.Containers = append(podSpec.Containers, exporterContainer)
 	}

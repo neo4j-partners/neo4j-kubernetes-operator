@@ -8,6 +8,12 @@ The operator supports rolling upgrades to minimize downtime. To upgrade your clu
 
 The operator will then perform a rolling upgrade, one pod at a time, to ensure that the cluster remains available during the upgrade process.
 
+Behind the scenes the operator manages a single StatefulSet named `<cluster>-server` and walks its ordinals with StatefulSet partitions so that pods roll one at a time (best effort keeping the current leader until the end). You can watch progress with:
+
+```bash
+kubectl rollout status statefulset/<cluster>-server -n <namespace>
+```
+
 ## Upgrade Strategy
 
 You can configure the upgrade strategy using the `spec.upgradeStrategy` field. The operator supports two strategies:

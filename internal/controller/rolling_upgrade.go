@@ -27,6 +27,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -180,28 +181,21 @@ func (r *RollingUpgradeOrchestrator) upgradePrimaries(
 
 	r.updateUpgradeStatus(ctx, cluster, "InProgress", "Upgrading primary nodes", "")
 
-	// Step 1: Upgrade non-leader primaries
-	if err := r.upgradeNonLeaderPrimaries(ctx, cluster, neo4jClient); err != nil {
-		return fmt.Errorf("non-leader primary upgrade failed: %w", err)
-	}
-
-	// Step 2: Upgrade leader last
-	if err := r.upgradeLeader(ctx, cluster, neo4jClient); err != nil {
-		return fmt.Errorf("leader upgrade failed: %w", err)
+	if err := r.upgradeServers(ctx, cluster, neo4jClient); err != nil {
+		return fmt.Errorf("server upgrade failed: %w", err)
 	}
 
 	logger.Info("Primary nodes upgrade completed")
 	return nil
 }
 
-func (r *RollingUpgradeOrchestrator) upgradeNonLeaderPrimaries(
+func (r *RollingUpgradeOrchestrator) upgradeServers(
 	ctx context.Context,
 	cluster *neo4jv1alpha1.Neo4jEnterpriseCluster,
 	neo4jClient *neo4jclient.Client,
 ) error {
 	logger := log.FromContext(ctx)
 
-	// Get current leader
 	leader, err := neo4jClient.GetLeader(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get current leader: %w", err)
@@ -211,164 +205,153 @@ func (r *RollingUpgradeOrchestrator) upgradeNonLeaderPrimaries(
 		return fmt.Errorf("no leader found in cluster")
 	}
 
-	// Update progress with current leader (simplified for server architecture)
-	cluster.Status.UpgradeStatus.CurrentStep = fmt.Sprintf("Upgrading non-leader primaries (preserving leader: %s)", leader.ID)
-	if err := r.Status().Update(ctx, cluster); err != nil {
-		logger.Error(err, "Failed to update cluster status with leader info")
+	serverSts, err := r.getServerStatefulSet(ctx, cluster)
+	if err != nil {
+		return fmt.Errorf("failed to get server StatefulSet: %w", err)
 	}
 
-	logger.Info("Upgrading non-leader primaries", "leader", leader.ID)
+	if len(serverSts.Spec.Template.Spec.Containers) == 0 {
+		return fmt.Errorf("server StatefulSet has no containers defined")
+	}
 
-	// Extract leader ordinal from member ID
+	replicas := int32(0)
+	if serverSts.Spec.Replicas != nil {
+		replicas = *serverSts.Spec.Replicas
+	}
+	if replicas == 0 {
+		return fmt.Errorf("server StatefulSet has zero replicas configured")
+	}
+
 	leaderOrdinal := r.extractOrdinalFromMemberID(leader.ID)
-	if leaderOrdinal < 0 || leaderOrdinal >= int(cluster.Spec.Topology.Servers) {
-		return fmt.Errorf("invalid leader ordinal: %d", leaderOrdinal)
+	if leaderOrdinal < 0 || leaderOrdinal >= int(replicas) {
+		logger.Info("Unable to parse leader ordinal from member ID, proceeding with best-effort rolling upgrade", "memberID", leader.ID)
+		leaderOrdinal = int(replicas) - 1
 	}
 
-	// Update image for all server StatefulSets except the leader
 	newImage := fmt.Sprintf("%s:%s", cluster.Spec.Image.Repo, cluster.Spec.Image.Tag)
+	if serverSts.Spec.Template.Spec.Containers[0].Image == newImage {
+		logger.Info("Server StatefulSet already has target image")
+		return nil
+	}
 	timeout := r.getUpgradeTimeout(cluster)
 
-	for i := int32(0); i < cluster.Spec.Topology.Servers; i++ {
-		if int32(leaderOrdinal) == i {
-			continue // Skip leader, upgrade it last
+	// Prime the StatefulSet with the target image and freeze updates via partition
+	serverSts, err = r.updateServerStatefulSet(ctx, cluster, func(sts *appsv1.StatefulSet) {
+		sts.Spec.Template.Spec.Containers[0].Image = newImage
+		if sts.Spec.Template.Annotations == nil {
+			sts.Spec.Template.Annotations = make(map[string]string)
 		}
+		sts.Spec.Template.Annotations["neo4j.com/upgrade-timestamp"] = time.Now().Format(time.RFC3339)
 
-		serverSts := &appsv1.StatefulSet{}
-		if err := r.Get(ctx, types.NamespacedName{
-			Name:      fmt.Sprintf("%s-server-%d", cluster.Name, i),
-			Namespace: cluster.Namespace,
-		}, serverSts); err != nil {
-			return fmt.Errorf("failed to get server-%d StatefulSet: %w", i, err)
+		if sts.Spec.UpdateStrategy.RollingUpdate == nil {
+			sts.Spec.UpdateStrategy.RollingUpdate = &appsv1.RollingUpdateStatefulSetStrategy{}
 		}
+		partition := replicas
+		sts.Spec.UpdateStrategy.RollingUpdate.Partition = &partition
+	})
+	if err != nil {
+		return fmt.Errorf("failed to stage server StatefulSet for upgrade: %w", err)
+	}
 
-		// Check if already upgraded
-		if len(serverSts.Spec.Template.Spec.Containers) == 0 {
-			return fmt.Errorf("server-%d StatefulSet has no containers defined", i)
-		}
-		if serverSts.Spec.Template.Spec.Containers[0].Image == newImage {
-			logger.Info("Server StatefulSet already has target image", "server", i)
+	// Upgrade non-leader ordinals from highest to lowest to keep rollout controlled
+	for ord := replicas - 1; ord >= 0; ord-- {
+		if int(ord) == leaderOrdinal {
 			continue
 		}
-
-		// Update the StatefulSet image
-		serverSts.Spec.Template.Spec.Containers[0].Image = newImage
-
-		// Add upgrade annotation
-		if serverSts.Spec.Template.Annotations == nil {
-			serverSts.Spec.Template.Annotations = make(map[string]string)
+		if err := r.updatePartitionAndWait(ctx, cluster, ord, timeout); err != nil {
+			return fmt.Errorf("failed to roll ordinal %d: %w", ord, err)
 		}
-		serverSts.Spec.Template.Annotations["neo4j.com/upgrade-timestamp"] = time.Now().Format(time.RFC3339)
-
-		if err := r.Update(ctx, serverSts); err != nil {
-			return fmt.Errorf("failed to update server-%d StatefulSet: %w", i, err)
-		}
-
-		// Wait for this server to be ready
-		if err := r.waitForStatefulSetRollout(ctx, serverSts, timeout); err != nil {
-			return fmt.Errorf("server-%d rollout failed: %w", i, err)
-		}
-
-		logger.Info("Upgraded non-leader server", "server", i)
 	}
 
-	// Verify cluster stability after non-leader upgrade
-	stabilizationTimeout := r.getStabilizationTimeout(cluster)
-	if err := neo4jClient.WaitForClusterStabilization(ctx, stabilizationTimeout); err != nil {
-		return fmt.Errorf("cluster failed to stabilize after non-leader primary upgrade: %w", err)
+	// Upgrade leader last
+	if err := r.updatePartitionAndWait(ctx, cluster, int32(leaderOrdinal), timeout); err != nil {
+		return fmt.Errorf("failed to roll leader ordinal %d: %w", leaderOrdinal, err)
 	}
 
-	// Update progress (simplified for server architecture)
-	upgradedCount := cluster.Spec.Topology.Servers - 1 // All except leader
-	cluster.Status.UpgradeStatus.Progress.Upgraded += upgradedCount
-	cluster.Status.UpgradeStatus.Progress.Pending -= upgradedCount
-
-	if err := r.Status().Update(ctx, cluster); err != nil {
-		logger.Error(err, "Failed to update cluster status after non-leader primary upgrade")
-	}
-	logger.Info("Non-leader primary upgrade completed successfully")
-
-	return nil
-}
-
-func (r *RollingUpgradeOrchestrator) upgradeLeader(
-	ctx context.Context,
-	cluster *neo4jv1alpha1.Neo4jEnterpriseCluster,
-	neo4jClient *neo4jclient.Client,
-) error {
-	logger := log.FromContext(ctx)
-
-	// Get current leader before upgrade
-	originalLeader, err := neo4jClient.GetLeader(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get current leader: %w", err)
-	}
-
-	cluster.Status.UpgradeStatus.CurrentStep = "Upgrading leader: " + originalLeader.ID
-	if err := r.Status().Update(ctx, cluster); err != nil {
-		logger.Error(err, "Failed to update cluster status before leader upgrade")
-	}
-
-	logger.Info("Upgrading leader", "leaderId", originalLeader.ID)
-
-	// Extract leader ordinal from member ID
-	leaderOrdinal := r.extractOrdinalFromMemberID(originalLeader.ID)
-	if leaderOrdinal < 0 || leaderOrdinal >= int(cluster.Spec.Topology.Servers) {
-		return fmt.Errorf("invalid leader ordinal: %d", leaderOrdinal)
-	}
-
-	// Get leader's StatefulSet
-	leaderSts := &appsv1.StatefulSet{}
-	if err := r.Get(ctx, types.NamespacedName{
-		Name:      fmt.Sprintf("%s-server-%d", cluster.Name, leaderOrdinal),
-		Namespace: cluster.Namespace,
-	}, leaderSts); err != nil {
-		return fmt.Errorf("failed to get leader StatefulSet server-%d: %w", leaderOrdinal, err)
-	}
-
-	// Update the leader StatefulSet image
-	newImage := fmt.Sprintf("%s:%s", cluster.Spec.Image.Repo, cluster.Spec.Image.Tag)
-	if len(leaderSts.Spec.Template.Spec.Containers) > 0 {
-		leaderSts.Spec.Template.Spec.Containers[0].Image = newImage
-	}
-
-	// Add upgrade annotation
-	if leaderSts.Spec.Template.Annotations == nil {
-		leaderSts.Spec.Template.Annotations = make(map[string]string)
-	}
-	leaderSts.Spec.Template.Annotations["neo4j.com/upgrade-timestamp"] = time.Now().Format(time.RFC3339)
-
-	if err := r.Update(ctx, leaderSts); err != nil {
-		return fmt.Errorf("failed to update leader StatefulSet: %w", err)
-	}
-
-	// Wait for leader rollout
-	timeout := r.getUpgradeTimeout(cluster)
-	if err := r.waitForStatefulSetRollout(ctx, leaderSts, timeout); err != nil {
-		return fmt.Errorf("leader rollout failed: %w", err)
-	}
-
-	// Wait for leader election to complete
-	if err := r.waitForLeaderElection(ctx, neo4jClient, "", 5*time.Minute); err != nil {
-		return fmt.Errorf("leader election failed after upgrade: %w", err)
+	// Reset partition to 0 to allow future full rollouts
+	if err := r.updatePartitionAndWait(ctx, cluster, 0, timeout); err != nil {
+		return fmt.Errorf("failed to finalize rollout: %w", err)
 	}
 
 	// Final cluster stabilization
 	stabilizationTimeout := r.getStabilizationTimeout(cluster)
 	if err := neo4jClient.WaitForClusterStabilization(ctx, stabilizationTimeout); err != nil {
-		return fmt.Errorf("cluster failed to stabilize after leader upgrade: %w", err)
+		return fmt.Errorf("cluster failed to stabilize after server upgrade: %w", err)
 	}
 
 	// Update progress - all servers upgraded
-	cluster.Status.UpgradeStatus.Progress.Upgraded++ // Just the leader
-	cluster.Status.UpgradeStatus.Progress.Pending--
+	cluster.Status.UpgradeStatus.Progress.Upgraded = replicas
+	cluster.Status.UpgradeStatus.Progress.Pending = 0
 
 	if err := r.Status().Update(ctx, cluster); err != nil {
-		logger.Error(err, "Failed to update cluster status after leader upgrade")
+		logger.Error(err, "Failed to update cluster status after server upgrade")
 	}
-	logger.Info("Leader upgrade completed successfully")
+	logger.Info("Server StatefulSet upgrade completed", "leaderOrdinal", leaderOrdinal)
 
 	return nil
+}
+
+func (r *RollingUpgradeOrchestrator) updatePartitionAndWait(
+	ctx context.Context,
+	cluster *neo4jv1alpha1.Neo4jEnterpriseCluster,
+	partition int32,
+	timeout time.Duration,
+) error {
+	sts, err := r.updateServerStatefulSet(ctx, cluster, func(sts *appsv1.StatefulSet) {
+		if sts.Spec.UpdateStrategy.RollingUpdate == nil {
+			sts.Spec.UpdateStrategy.RollingUpdate = &appsv1.RollingUpdateStatefulSetStrategy{}
+		}
+		p := partition
+		sts.Spec.UpdateStrategy.RollingUpdate.Partition = &p
+	})
+	if err != nil {
+		return err
+	}
+
+	return r.waitForPartialStatefulSetRollout(ctx, sts, partition, timeout)
+}
+
+func (r *RollingUpgradeOrchestrator) updateServerStatefulSet(
+	ctx context.Context,
+	cluster *neo4jv1alpha1.Neo4jEnterpriseCluster,
+	mutate func(*appsv1.StatefulSet),
+) (*appsv1.StatefulSet, error) {
+	key := types.NamespacedName{
+		Name:      fmt.Sprintf("%s-server", cluster.Name),
+		Namespace: cluster.Namespace,
+	}
+
+	sts := &appsv1.StatefulSet{}
+	if err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+		if err := r.Get(ctx, key, sts); err != nil {
+			return err
+		}
+		mutate(sts)
+		return r.Update(ctx, sts)
+	}); err != nil {
+		return nil, err
+	}
+
+	if err := r.Get(ctx, key, sts); err != nil {
+		return nil, err
+	}
+
+	return sts, nil
+}
+
+func (r *RollingUpgradeOrchestrator) getServerStatefulSet(
+	ctx context.Context,
+	cluster *neo4jv1alpha1.Neo4jEnterpriseCluster,
+) (*appsv1.StatefulSet, error) {
+	sts := &appsv1.StatefulSet{}
+	if err := r.Get(ctx, types.NamespacedName{
+		Name:      fmt.Sprintf("%s-server", cluster.Name),
+		Namespace: cluster.Namespace,
+	}, sts); err != nil {
+		return nil, err
+	}
+
+	return sts, nil
 }
 
 func (r *RollingUpgradeOrchestrator) postUpgradeValidations(
@@ -617,20 +600,21 @@ func (r *RollingUpgradeOrchestrator) validateStatefulSetsReady(
 	ctx context.Context,
 	cluster *neo4jv1alpha1.Neo4jEnterpriseCluster,
 ) error {
-	// Check each individual server StatefulSet
-	for i := int32(0); i < cluster.Spec.Topology.Servers; i++ {
-		serverSts := &appsv1.StatefulSet{}
-		if err := r.Get(ctx, types.NamespacedName{
-			Name:      fmt.Sprintf("%s-server-%d", cluster.Name, i),
-			Namespace: cluster.Namespace,
-		}, serverSts); err != nil {
-			return fmt.Errorf("failed to get server-%d StatefulSet: %w", i, err)
-		}
+	serverSts := &appsv1.StatefulSet{}
+	if err := r.Get(ctx, types.NamespacedName{
+		Name:      fmt.Sprintf("%s-server", cluster.Name),
+		Namespace: cluster.Namespace,
+	}, serverSts); err != nil {
+		return fmt.Errorf("failed to get server StatefulSet: %w", err)
+	}
 
-		if serverSts.Status.ReadyReplicas != *serverSts.Spec.Replicas {
-			return fmt.Errorf("server-%d StatefulSet not ready: %d/%d replicas ready",
-				i, serverSts.Status.ReadyReplicas, *serverSts.Spec.Replicas)
-		}
+	if serverSts.Spec.Replicas == nil {
+		return fmt.Errorf("server StatefulSet has no replicas configured")
+	}
+
+	if serverSts.Status.ReadyReplicas != *serverSts.Spec.Replicas {
+		return fmt.Errorf("server StatefulSet not ready: %d/%d replicas ready",
+			serverSts.Status.ReadyReplicas, *serverSts.Spec.Replicas)
 	}
 
 	// Check backup sidecar StatefulSet if configured
@@ -687,7 +671,7 @@ func (r *RollingUpgradeOrchestrator) waitForStatefulSetRollout(
 func (r *RollingUpgradeOrchestrator) waitForPartialStatefulSetRollout(
 	ctx context.Context,
 	sts *appsv1.StatefulSet,
-	preserveOrdinal int,
+	partition int32,
 	timeout time.Duration,
 ) error {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
@@ -710,9 +694,12 @@ func (r *RollingUpgradeOrchestrator) waitForPartialStatefulSetRollout(
 			}
 
 			// For partition updates, we expect UpdatedReplicas to be total - partition
-			expectedUpdated := *current.Spec.Replicas - int32(preserveOrdinal)
-			if expectedUpdated <= 0 {
-				expectedUpdated = *current.Spec.Replicas - 1 // At least upgrade all but one
+			if current.Spec.Replicas == nil {
+				continue
+			}
+			expectedUpdated := *current.Spec.Replicas - partition
+			if expectedUpdated < 0 {
+				expectedUpdated = 0
 			}
 
 			if current.Status.ObservedGeneration >= current.Generation &&

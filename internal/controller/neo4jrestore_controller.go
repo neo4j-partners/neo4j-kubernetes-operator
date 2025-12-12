@@ -67,6 +67,33 @@ type Neo4jRestoreReconciler struct {
 	RequeueAfter            time.Duration
 }
 
+func hardenedRestorePodSecurityContext() *corev1.PodSecurityContext {
+	uid := int64(7474)
+	return &corev1.PodSecurityContext{
+		RunAsUser:    ptr.To(uid),
+		RunAsGroup:   ptr.To(uid),
+		FSGroup:      ptr.To(uid),
+		RunAsNonRoot: ptr.To(true),
+		SeccompProfile: &corev1.SeccompProfile{
+			Type: corev1.SeccompProfileTypeRuntimeDefault,
+		},
+	}
+}
+
+func hardenedRestoreContainerSecurityContext() *corev1.SecurityContext {
+	uid := int64(7474)
+	return &corev1.SecurityContext{
+		RunAsUser:                ptr.To(uid),
+		RunAsGroup:               ptr.To(uid),
+		RunAsNonRoot:             ptr.To(true),
+		AllowPrivilegeEscalation: ptr.To(false),
+		ReadOnlyRootFilesystem:   ptr.To(false),
+		Capabilities: &corev1.Capabilities{
+			Drop: []corev1.Capability{"ALL"},
+		},
+	}
+}
+
 const (
 	// RestoreFinalizer is the finalizer for Neo4j restore resources
 	RestoreFinalizer = "neo4j.com/restore-finalizer"
@@ -372,13 +399,15 @@ func (r *Neo4jRestoreReconciler) createRestoreJob(ctx context.Context, restore *
 			BackoffLimit: func(i int32) *int32 { return &i }(1), // Restore should not retry
 			Template: corev1.PodTemplateSpec{
 				Spec: corev1.PodSpec{
-					RestartPolicy: corev1.RestartPolicyNever,
+					RestartPolicy:   corev1.RestartPolicyNever,
+					SecurityContext: hardenedRestorePodSecurityContext(),
 					Containers: []corev1.Container{
 						{
-							Name:    "neo4j-restore",
-							Image:   fmt.Sprintf("%s:%s", cluster.Spec.Image.Repo, cluster.Spec.Image.Tag),
-							Command: []string{"/bin/sh"},
-							Args:    []string{"-c", restoreCmd},
+							Name:            "neo4j-restore",
+							Image:           fmt.Sprintf("%s:%s", cluster.Spec.Image.Repo, cluster.Spec.Image.Tag),
+							SecurityContext: hardenedRestoreContainerSecurityContext(),
+							Command:         []string{"/bin/sh"},
+							Args:            []string{"-c", restoreCmd},
 							Env: []corev1.EnvVar{
 								{
 									Name: "NEO4J_ADMIN_PASSWORD",
@@ -892,14 +921,16 @@ func (r *Neo4jRestoreReconciler) runHookJob(ctx context.Context, restore *neo4jv
 		Spec: batchv1.JobSpec{
 			Template: corev1.PodTemplateSpec{
 				Spec: corev1.PodSpec{
-					RestartPolicy: corev1.RestartPolicyNever,
+					RestartPolicy:   corev1.RestartPolicyNever,
+					SecurityContext: hardenedRestorePodSecurityContext(),
 					Containers: []corev1.Container{
 						{
-							Name:    "hook",
-							Image:   hookSpec.Template.Container.Image,
-							Command: hookSpec.Template.Container.Command,
-							Args:    hookSpec.Template.Container.Args,
-							Env:     convertEnvVars(hookSpec.Template.Container.Env),
+							Name:            "hook",
+							Image:           hookSpec.Template.Container.Image,
+							Command:         hookSpec.Template.Container.Command,
+							Args:            hookSpec.Template.Container.Args,
+							Env:             convertEnvVars(hookSpec.Template.Container.Env),
+							SecurityContext: hardenedRestoreContainerSecurityContext(),
 						},
 					},
 				},
