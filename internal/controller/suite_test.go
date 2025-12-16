@@ -37,9 +37,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1"
-	"github.com/neo4j-labs/neo4j-kubernetes-operator/internal/controller"
-	"github.com/neo4j-labs/neo4j-kubernetes-operator/internal/validation"
+	neo4jv1alpha1 "github.com/priyolahiri/neo4j-kubernetes-operator/api/v1alpha1"
+	"github.com/priyolahiri/neo4j-kubernetes-operator/internal/controller"
+	"github.com/priyolahiri/neo4j-kubernetes-operator/internal/validation"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"

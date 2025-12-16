@@ -839,7 +839,7 @@ The troubleshooting guide includes:
 - **[Performance Tuning](../performance.md)** - Optimize backup/restore performance
 
 ### Community & Support
-- **[GitHub Issues](https://github.com/neo4j-labs/neo4j-kubernetes-operator/issues)** - Report bugs and request features
+- **[GitHub Issues](https://github.com/priyolahiri/neo4j-kubernetes-operator/issues)** - Report bugs and request features
 - **[Neo4j Community](https://community.neo4j.com/)** - Get help from the community
 - **[Neo4j Documentation](https://neo4j.com/docs/)** - Official Neo4j documentation
 

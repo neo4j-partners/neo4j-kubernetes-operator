@@ -20,7 +20,7 @@ git clone https://github.com/<your-username>/neo4j-kubernetes-operator.git
 cd neo4j-kubernetes-operator
 
 # Add upstream remote for pulling updates
-git remote add upstream https://github.com/neo4j-labs/neo4j-kubernetes-operator.git
+git remote add upstream https://github.com/priyolahiri/neo4j-kubernetes-operator.git
 
 # Create a feature branch
 git checkout -b feature/my-awesome-feature

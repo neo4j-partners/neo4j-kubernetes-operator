@@ -72,11 +72,11 @@ ServiceMonitor has been created for Prometheus Operator integration.
 ## Documentation
 
 For more information, visit:
-- GitHub: https://github.com/neo4j-labs/neo4j-kubernetes-operator
+- GitHub: https://github.com/priyolahiri/neo4j-kubernetes-operator
 - Neo4j Documentation: https://neo4j.com/docs/
 
 ## Support
 
 For issues and support:
-- GitHub Issues: https://github.com/neo4j-labs/neo4j-kubernetes-operator/issues
+- GitHub Issues: https://github.com/priyolahiri/neo4j-kubernetes-operator/issues
 - Neo4j Community: https://community.neo4j.com/

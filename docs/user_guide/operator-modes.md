@@ -40,7 +40,7 @@ Production mode is the default operational mode, designed for running the operat
 |---------|--------------|
 | **Default Mode** | Yes (when no `--mode` flag specified) |
 | **Namespace** | `neo4j-operator-system` |
-| **Image** | `ghcr.io/neo4j-labs/neo4j-kubernetes-operator:latest` |
+| **Image** | `ghcr.io/priyolahiri/neo4j-kubernetes-operator:latest` |
 | **Resource Limits** | CPU: 100m-500m, Memory: 64Mi-128Mi |
 | **Cache Strategy** | OnDemand (optimized for RBAC) |
 | **Security** | Full security context, runAsNonRoot, seccomp profiles |

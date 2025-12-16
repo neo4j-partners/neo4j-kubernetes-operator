@@ -8,7 +8,7 @@ resources:
 # Production-specific image (using GitHub Container Registry)
 images:
 - name: controller
-  newName: ghcr.io/neo4j-labs/neo4j-kubernetes-operator
+  newName: ghcr.io/priyolahiri/neo4j-kubernetes-operator
   newTag: latest
 
 # Production-specific patches

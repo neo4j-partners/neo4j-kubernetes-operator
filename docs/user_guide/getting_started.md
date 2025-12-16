@@ -18,7 +18,7 @@ Since this is a private repository, installation requires cloning from source:
 
 ```bash
 # Clone the repository and checkout latest tag
-git clone https://github.com/neo4j-labs/neo4j-kubernetes-operator.git
+git clone https://github.com/priyolahiri/neo4j-kubernetes-operator.git
 cd neo4j-kubernetes-operator
 LATEST_TAG=$(git describe --tags --abbrev=0)
 git checkout $LATEST_TAG

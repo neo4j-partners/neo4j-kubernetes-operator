@@ -236,5 +236,5 @@ For detailed troubleshooting information, see:
 ## Support
 
 - **Documentation**: [Neo4j Operator Documentation](../../docs/)
-- **Issues**: [GitHub Issues](https://github.com/neo4j-labs/neo4j-kubernetes-operator/issues)
+- **Issues**: [GitHub Issues](https://github.com/priyolahiri/neo4j-kubernetes-operator/issues)
 - **Community**: [Neo4j Community Forum](https://community.neo4j.com/)

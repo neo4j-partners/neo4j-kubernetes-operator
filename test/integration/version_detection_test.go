@@ -22,7 +22,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/neo4j-labs/neo4j-kubernetes-operator/internal/neo4j"
+	"github.com/priyolahiri/neo4j-kubernetes-operator/internal/neo4j"
 )
 
 var _ = Describe("Version Detection Integration Tests", func() {

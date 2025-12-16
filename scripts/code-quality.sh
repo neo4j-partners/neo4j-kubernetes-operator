@@ -133,7 +133,7 @@ format_code() {
     # Import organization with gci
     if command_exists gci; then
         log_info "Organizing imports with gci..."
-        if gci write --skip-generated -s standard -s default -s "prefix(github.com/neo4j-labs/neo4j-kubernetes-operator)" .; then
+        if gci write --skip-generated -s standard -s default -s "prefix(github.com/priyolahiri/neo4j-kubernetes-operator)" .; then
             log_success "gci completed"
         else
             log_warning "gci had issues"

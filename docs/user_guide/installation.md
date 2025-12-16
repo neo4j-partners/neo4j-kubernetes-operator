@@ -1,16 +1,92 @@
 # Installation Guide
 
-This guide provides detailed instructions for installing the Neo4j Enterprise Operator for Kubernetes. Since this is a private repository, installation requires cloning from source.
+This guide provides detailed instructions for installing the Neo4j Enterprise Operator for Kubernetes.
 
 ## Quick Installation
 
-### Method 1: Git Clone (Recommended)
+### Method 1: Quick Install from GitHub Release (Recommended)
 
-The primary installation method using git clone:
+The fastest way to install the operator for production use is directly from a GitHub release:
+
+```bash
+# Install the latest release (includes CRDs and operator)
+RELEASE_VERSION=v1.0.0  # Replace with desired version
+
+kubectl apply -f https://github.com/priyolahiri/neo4j-kubernetes-operator/releases/download/${RELEASE_VERSION}/neo4j-kubernetes-operator-complete.yaml
+```
+
+**What this installs**:
+- Custom Resource Definitions (CRDs)
+- Operator Deployment (using multi-arch images from ghcr.io)
+- All required RBAC permissions (ClusterRole, ClusterRoleBinding, ServiceAccount)
+- Deployed to `neo4j-operator-system` namespace
+
+**To find available releases**:
+```bash
+# Visit: https://github.com/priyolahiri/neo4j-kubernetes-operator/releases
+# Or use the GitHub CLI:
+gh release list --repo priyolahiri/neo4j-kubernetes-operator
+```
+
+**CRDs Only Installation** (if you want to manage the operator deployment separately):
+```bash
+kubectl apply -f https://github.com/priyolahiri/neo4j-kubernetes-operator/releases/download/${RELEASE_VERSION}/neo4j-kubernetes-operator.yaml
+```
+
+**Supported Architectures**: linux/amd64, linux/arm64
+
+### Method 2: Helm Installation (from cloned repository)
+
+Install using Helm for simplified configuration management:
+
+> **Note**: Helm charts are not yet published to a Helm repository. You must clone the repository to use this installation method. We plan to publish Helm charts to an OCI registry (e.g., ghcr.io) in a future release.
 
 ```bash
 # Clone the repository
-git clone https://github.com/neo4j-labs/neo4j-kubernetes-operator.git
+git clone https://github.com/priyolahiri/neo4j-kubernetes-operator.git
+cd neo4j-kubernetes-operator
+
+# Checkout the latest release tag
+LATEST_TAG=$(git describe --tags --abbrev=0)
+git checkout $LATEST_TAG
+
+# Install using Helm (automatically handles RBAC)
+helm install neo4j-operator ./charts/neo4j-operator \
+  --namespace neo4j-operator-system \
+  --create-namespace
+```
+
+**Helm Installation Benefits**:
+- Simplified configuration through values.yaml
+- Easy upgrades with `helm upgrade`
+- Automatic RBAC setup
+- Customizable installation parameters
+
+**Customize Helm installation**:
+```bash
+# View available configuration options
+helm show values ./charts/neo4j-operator
+
+# Install with custom values
+helm install neo4j-operator ./charts/neo4j-operator \
+  --namespace neo4j-operator-system \
+  --create-namespace \
+  --set image.tag=v1.0.0 \
+  --set resources.limits.memory=512Mi
+```
+
+**Uninstall via Helm**:
+```bash
+helm uninstall neo4j-operator --namespace neo4j-operator-system
+```
+
+### Method 3: Git Clone with Make Targets
+
+For development, customization, or when you need to build from source:
+
+```bash
+# Clone the repository
+git clone https://github.com/priyolahiri/neo4j-kubernetes-operator.git
 cd neo4j-kubernetes-operator
 
 # Checkout the latest release tag
@@ -18,33 +94,33 @@ LATEST_TAG=$(git describe --tags --abbrev=0)
 git checkout $LATEST_TAG
 
 # Install CRDs and operator
-make install      # Install CRDs
+make install      # Install CRDs into your cluster
 make deploy-prod  # Deploy operator (builds and uses local image)
 
 # Alternative deployment options:
-make deploy-prod-local     # Explicit local build and deploy
+make deploy-prod-local     # Explicit local build and deploy to Kind cluster
 make deploy-prod-registry  # Deploy from ghcr.io registry (requires authentication)
 ```
 
-This installs:
+**What this installs**:
 - Custom Resource Definitions (CRDs)
 - Operator Deployment
 - All required RBAC permissions
 - ServiceAccount and ClusterRole bindings
 
-### Method 2: Development Installation
+## Development Installation
 
-For development and testing with local images:
+For active development and testing with local images:
 
 ```bash
 # Clone and setup development environment
-git clone https://github.com/neo4j-labs/neo4j-kubernetes-operator.git
+git clone https://github.com/priyolahiri/neo4j-kubernetes-operator.git
 cd neo4j-kubernetes-operator
 
-# Create development cluster
+# Create development cluster (uses Kind)
 make dev-cluster
 
-# Deploy operator (recommended)
+# Deploy operator (recommended for in-cluster testing)
 make operator-setup  # Automated setup (detects cluster and deploys)
 
 # Manual deployment options:
@@ -58,9 +134,9 @@ make deploy-prod-registry  # Deploy from ghcr.io registry
 
 ## Advanced Installation Methods
 
-### Method 3: Custom Kustomize Configuration
+### Custom Kustomize Configuration
 
-For customized deployments:
+For customized deployments with specific namespace, labels, or resource configurations:
 
 ```bash
 # After cloning and checking out the latest tag
@@ -79,27 +155,31 @@ namespace: my-neo4j-operator
 commonLabels:
   environment: production
   team: database
+
+# Customize images (optional)
+images:
+- name: ghcr.io/priyolahiri/neo4j-kubernetes-operator
+  newTag: v1.0.0
 EOF
 
 # Apply custom configuration
 kubectl apply -k .
 ```
 
-### Alternative Deployment Options
+### Alternative Deployment Configurations
 
-After cloning the repository, you can use different deployment configurations:
+After cloning the repository, you can use different deployment configurations based on your environment:
 
 ```bash
-# Production deployment (optimized resource limits)
+# Production deployment (optimized resource limits, no debug logging)
 make deploy-prod           # Builds and deploys local image
 # or
 make deploy-prod-registry  # Deploy from ghcr.io registry
 
-# Development deployment (with debugging enabled)
+# Development deployment (with debug logging enabled, relaxed resource limits)
 make deploy-dev            # Builds and deploys local dev image
 # or
 make deploy-dev-registry   # Deploy from registry
-
 ```
 
 ## Verifying the Installation
@@ -169,7 +249,39 @@ After cloning the repository, you have access to these make targets:
 
 ## Getting Started with Examples
 
-After installing the operator, examples are available in the local `examples/` directory:
+After installing the operator, you can deploy your first Neo4j instance using examples.
+
+### Option 1: Using Examples from GitHub Release
+
+Download example configurations from the release:
+
+```bash
+# Download examples archive
+RELEASE_VERSION=v1.0.0  # Replace with your installed version
+curl -LO https://github.com/priyolahiri/neo4j-kubernetes-operator/releases/download/${RELEASE_VERSION}/examples-${RELEASE_VERSION#v}.tar.gz
+
+# Extract examples
+tar -xzf examples-${RELEASE_VERSION#v}.tar.gz
+
+# Create admin secret (required for Neo4j authentication)
+kubectl create secret generic neo4j-admin-secret \
+  --from-literal=username=neo4j \
+  --from-literal=password=your-secure-password
+
+# Deploy your first Neo4j instance
+kubectl apply -f examples/standalone/single-node-standalone.yaml
+
+# Check deployment status
+kubectl get neo4jenterprisestandalone
+kubectl get pods
+
+# Access Neo4j Browser
+kubectl port-forward svc/standalone-neo4j-service 7474:7474
+```
+
+### Option 2: Using Examples from Cloned Repository
+
+If you cloned the repository, examples are available in the local `examples/` directory:
 
 ```bash
 # Create admin secret (required for Neo4j authentication)
@@ -186,6 +298,76 @@ kubectl get pods
 
 # Access Neo4j Browser
 kubectl port-forward svc/standalone-neo4j-service 7474:7474
+```
+
+## Uninstalling the Operator
+
+### Quick Install Uninstallation
+
+If you installed using Method 1 (GitHub Release):
+
+```bash
+# Get the release version you installed
+RELEASE_VERSION=v1.0.0  # Replace with your installed version
+
+# Delete the operator and CRDs
+kubectl delete -f https://github.com/priyolahiri/neo4j-kubernetes-operator/releases/download/${RELEASE_VERSION}/neo4j-kubernetes-operator-complete.yaml
+```
+
+**Warning**: Deleting CRDs will also delete all Neo4j instances managed by the operator.
+
+### Helm Uninstallation
+
+If you installed using Method 2 (Helm):
+
+```bash
+# Uninstall the Helm release
+helm uninstall neo4j-operator --namespace neo4j-operator-system
+
+# Optionally delete the namespace
+kubectl delete namespace neo4j-operator-system
+
+# Note: CRDs are not automatically deleted by Helm uninstall
+# To remove CRDs manually (WARNING: This deletes all Neo4j instances):
+kubectl delete crd neo4jbackups.neo4j.neo4j.com
+kubectl delete crd neo4jdatabases.neo4j.neo4j.com
+kubectl delete crd neo4jenterpriseclusters.neo4j.neo4j.com
+kubectl delete crd neo4jenterprisestandalones.neo4j.neo4j.com
+kubectl delete crd neo4jplugins.neo4j.neo4j.com
+kubectl delete crd neo4jrestores.neo4j.neo4j.com
+```
+
+### Make Targets Uninstallation
+
+If you installed using Method 3 (Git Clone with Make):
+
+```bash
+# From the cloned repository directory
+cd neo4j-kubernetes-operator
+
+# Undeploy operator (keeps CRDs and Neo4j instances)
+make undeploy-prod  # If you used deploy-prod
+# or
+make undeploy-dev   # If you used deploy-dev
+
+# Uninstall CRDs (WARNING: This deletes all Neo4j instances)
+make uninstall
+```
+
+**Complete Cleanup** (removes everything):
+```bash
+# Remove all Neo4j instances first (if you want to preserve data, backup first)
+kubectl delete neo4jenterpriseclusters --all -A
+kubectl delete neo4jenterprisestandalones --all -A
+
+# Undeploy operator
+make undeploy-prod  # or make undeploy-dev
+
+# Uninstall CRDs
+make uninstall
+
+# Delete namespace (optional)
+kubectl delete namespace neo4j-operator-system
 ```
 
 ## Troubleshooting Installation
@@ -220,6 +402,47 @@ kubectl get clusterrole | grep neo4j-operator
 kubectl get clusterrolebinding | grep neo4j-operator
 ```
 
+#### 4. Image Pull Errors
+
+If the operator pod shows `ImagePullBackOff` or `ErrImagePull`:
+
+```bash
+# Check pod events for image pull errors
+kubectl describe pod -n neo4j-operator-system -l app.kubernetes.io/name=neo4j-operator
+
+# Verify image exists and is accessible
+docker pull ghcr.io/priyolahiri/neo4j-kubernetes-operator:latest
+
+# For private registries, create image pull secret
+kubectl create secret docker-registry ghcr-secret \
+  --docker-server=ghcr.io \
+  --docker-username=<github-username> \
+  --docker-password=<github-token> \
+  --namespace=neo4j-operator-system
+
+# Add imagePullSecrets to deployment
+kubectl patch deployment neo4j-operator-controller-manager \
+  -n neo4j-operator-system \
+  --type='json' \
+  -p='[{"op": "add", "path": "/spec/template/spec/imagePullSecrets", "value": [{"name": "ghcr-secret"}]}]'
+```
+
+**Note**: The ghcr.io images are public for this operator, so authentication should not be required for pulling images.
+
+#### 5. Manifest URL Not Found (404 Error)
+
+If you get a 404 error when applying manifests from GitHub releases:
+
+```bash
+# Verify the release exists
+gh release list --repo priyolahiri/neo4j-kubernetes-operator
+
+# Or visit: https://github.com/priyolahiri/neo4j-kubernetes-operator/releases
+
+# Ensure you're using the correct version format (with 'v' prefix)
+# Correct: v1.0.0
+# Incorrect: 1.0.0
+```
 
 ### Installation Requirements
 

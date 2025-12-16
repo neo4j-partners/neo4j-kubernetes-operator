@@ -44,7 +44,7 @@ Installation requires cloning from source:
 
    ```bash
    # Clone the repository
-   git clone https://github.com/neo4j-labs/neo4j-kubernetes-operator.git
+   git clone https://github.com/priyolahiri/neo4j-kubernetes-operator.git
    cd neo4j-kubernetes-operator
 
    # Checkout the latest release tag
@@ -603,7 +603,7 @@ For detailed installation instructions, see our [Contributing Guide](CONTRIBUTIN
 ### Quick Contribution Setup
 ```bash
 # Clone and setup development environment
-git clone https://github.com/neo4j-labs/neo4j-kubernetes-operator.git
+git clone https://github.com/priyolahiri/neo4j-kubernetes-operator.git
 cd neo4j-kubernetes-operator
 
 # Create local Kind cluster for development

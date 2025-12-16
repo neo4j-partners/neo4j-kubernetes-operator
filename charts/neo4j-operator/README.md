@@ -15,7 +15,7 @@ This Helm chart deploys the Neo4j Enterprise Operator for Kubernetes, which mana
 ### Add Helm Repository (when published)
 
 ```bash
-helm repo add neo4j-operator https://neo4j-labs.github.io/neo4j-kubernetes-operator
+helm repo add neo4j-operator https://priyolahiri.github.io/neo4j-kubernetes-operator
 helm repo update
 ```
 
@@ -23,7 +23,7 @@ helm repo update
 
 ```bash
 # Clone the repository
-git clone https://github.com/neo4j-labs/neo4j-kubernetes-operator.git
+git clone https://github.com/priyolahiri/neo4j-kubernetes-operator.git
 cd neo4j-kubernetes-operator
 
 # Install the chart (automatically creates ClusterRole and RBAC permissions)
@@ -305,6 +305,6 @@ helm get values neo4j-operator -n neo4j-operator-system
 
 ## Support
 
-- GitHub Issues: https://github.com/neo4j-labs/neo4j-kubernetes-operator/issues
+- GitHub Issues: https://github.com/priyolahiri/neo4j-kubernetes-operator/issues
 - Neo4j Community: https://community.neo4j.com/
 - Documentation: https://neo4j.com/docs/

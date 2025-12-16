@@ -380,8 +380,8 @@ We follow [Conventional Commits](https://www.conventionalcommits.org/):
 ## Getting Help
 
 - **Slack**: Join our [Neo4j Community Slack](https://neo4j.com/slack/)
-- **Issues**: Check existing [GitHub Issues](https://github.com/neo4j-labs/neo4j-kubernetes-operator/issues)
-- **Discussions**: Start a [GitHub Discussion](https://github.com/neo4j-labs/neo4j-kubernetes-operator/discussions)
+- **Issues**: Check existing [GitHub Issues](https://github.com/priyolahiri/neo4j-kubernetes-operator/issues)
+- **Discussions**: Start a [GitHub Discussion](https://github.com/priyolahiri/neo4j-kubernetes-operator/discussions)
 
 ## License
 

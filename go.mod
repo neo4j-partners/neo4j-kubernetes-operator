@@ -1,4 +1,4 @@
-module github.com/neo4j-labs/neo4j-kubernetes-operator
+module github.com/priyolahiri/neo4j-kubernetes-operator
 
 go 1.24.0
 

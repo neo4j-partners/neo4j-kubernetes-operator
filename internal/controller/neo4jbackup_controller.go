@@ -39,9 +39,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	neo4jv1alpha1 "github.com/neo4j-labs/neo4j-kubernetes-operator/api/v1alpha1"
-	"github.com/neo4j-labs/neo4j-kubernetes-operator/internal/neo4j"
-	"github.com/neo4j-labs/neo4j-kubernetes-operator/internal/validation"
+	neo4jv1alpha1 "github.com/priyolahiri/neo4j-kubernetes-operator/api/v1alpha1"
+	"github.com/priyolahiri/neo4j-kubernetes-operator/internal/neo4j"
+	"github.com/priyolahiri/neo4j-kubernetes-operator/internal/validation"
 )
 
 // Neo4jBackupReconciler reconciles a Neo4jBackup object

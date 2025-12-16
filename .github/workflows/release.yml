@@ -13,7 +13,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: neo4j-labs/neo4j-kubernetes-operator
+  IMAGE_NAME: priyolahiri/neo4j-kubernetes-operator
   GO_VERSION: '1.22'
 
 jobs:
@@ -151,12 +151,12 @@ jobs:
 
         ### Quick Install (Complete Operator)
         \`\`\`bash
-        kubectl apply -f https://github.com/neo4j-labs/neo4j-kubernetes-operator/releases/download/$TAG_NAME/neo4j-kubernetes-operator-complete.yaml
+        kubectl apply -f https://github.com/priyolahiri/neo4j-kubernetes-operator/releases/download/$TAG_NAME/neo4j-kubernetes-operator-complete.yaml
         \`\`\`
 
         ### CRDs Only
         \`\`\`bash
-        kubectl apply -f https://github.com/neo4j-labs/neo4j-kubernetes-operator/releases/download/$TAG_NAME/neo4j-kubernetes-operator.yaml
+        kubectl apply -f https://github.com/priyolahiri/neo4j-kubernetes-operator/releases/download/$TAG_NAME/neo4j-kubernetes-operator.yaml
         \`\`\`
 
         ## 📦 Release Assets
@@ -174,8 +174,8 @@ jobs:
 
         ## 🔗 Container Images
 
-        - \`ghcr.io/neo4j-labs/neo4j-kubernetes-operator:$TAG_NAME\`
-        - \`ghcr.io/neo4j-labs/neo4j-kubernetes-operator:latest\`
+        - \`ghcr.io/priyolahiri/neo4j-kubernetes-operator:$TAG_NAME\`
+        - \`ghcr.io/priyolahiri/neo4j-kubernetes-operator:latest\`
 
         ## 📚 Documentation
 
@@ -185,7 +185,7 @@ jobs:
 
         ## 🐛 Bug Reports
 
-        Please report issues at [GitHub Issues](https://github.com/neo4j-labs/neo4j-kubernetes-operator/issues)
+        Please report issues at [GitHub Issues](https://github.com/priyolahiri/neo4j-kubernetes-operator/issues)
         EOF
 
 

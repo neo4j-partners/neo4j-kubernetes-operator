@@ -38,7 +38,7 @@ For production environments:
 
 ```bash
 # Clone and install
-git clone https://github.com/neo4j-labs/neo4j-kubernetes-operator.git
+git clone https://github.com/priyolahiri/neo4j-kubernetes-operator.git
 cd neo4j-kubernetes-operator
 
 # Install CRDs
@@ -74,7 +74,7 @@ The `-local` targets provide the most reliable deployment experience:
 ### Registry-Based Deployment
 
 **`make deploy-prod`**:
-- Uses `ghcr.io/neo4j-labs/neo4j-kubernetes-operator:latest`
+- Uses `ghcr.io/priyolahiri/neo4j-kubernetes-operator:latest`
 - Requires authenticated access to ghcr.io
 - Suitable for production environments with registry access
 - Automatic updates when new versions are released

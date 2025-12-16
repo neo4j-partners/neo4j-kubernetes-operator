@@ -42,9 +42,9 @@ LABEL org.opencontainers.image.vendor="Priyo Lahiri"
 LABEL org.opencontainers.image.licenses="Apache-2.0"
 LABEL org.opencontainers.image.version="${VERSION}"
 LABEL org.opencontainers.image.created="${BUILD_DATE}"
-LABEL org.opencontainers.image.source="https://github.com/neo4j-labs/neo4j-kubernetes-operator"
+LABEL org.opencontainers.image.source="https://github.com/priyolahiri/neo4j-kubernetes-operator"
 LABEL org.opencontainers.image.revision="${VCS_REF}"
-LABEL org.opencontainers.image.documentation="https://github.com/neo4j-labs/neo4j-kubernetes-operator/blob/main/README.md"
+LABEL org.opencontainers.image.documentation="https://github.com/priyolahiri/neo4j-kubernetes-operator/blob/main/README.md"
 
 # Enterprise-only metadata
 LABEL neo4j.edition="enterprise-only"

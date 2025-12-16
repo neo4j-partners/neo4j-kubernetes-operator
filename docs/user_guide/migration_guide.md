@@ -502,7 +502,7 @@ If you encounter issues during migration:
    ```
 
 3. **Community support**:
-   - [GitHub Issues](https://github.com/neo4j-labs/neo4j-kubernetes-operator/issues)
+   - [GitHub Issues](https://github.com/priyolahiri/neo4j-kubernetes-operator/issues)
    - [Neo4j Community](https://community.neo4j.com/)
 
 ## What's Next
