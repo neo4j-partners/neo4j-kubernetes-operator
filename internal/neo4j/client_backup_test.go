@@ -16,9 +16,9 @@ func TestBuildBackupArgsIncludesNewFlags(t *testing.T) {
 
 	args := client.buildBackupArgs("neo4j", "backup", "/data/backups", options)
 
-	assertContains(t, args, "--parallel-download")
-	assertContains(t, args, "--remote-address-resolution")
-	assertContains(t, args, "--skip-recovery")
+	assertContains(t, args, "--parallel-download=true")
+	assertContains(t, args, "--remote-address-resolution=true")
+	assertContains(t, args, "--skip-recovery=true")
 	assertContains(t, args, "--compress")
 	assertContains(t, args, "--check-consistency")
 }

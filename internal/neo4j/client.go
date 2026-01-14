@@ -2230,15 +2230,15 @@ func (c *Client) buildBackupArgs(databaseName, backupName, backupPath string, op
 	}
 
 	if options.ParallelDownload {
-		args = append(args, "--parallel-download")
+		args = append(args, "--parallel-download=true")
 	}
 
 	if options.RemoteAddressResolution {
-		args = append(args, "--remote-address-resolution")
+		args = append(args, "--remote-address-resolution=true")
 	}
 
 	if options.SkipRecovery {
-		args = append(args, "--skip-recovery")
+		args = append(args, "--skip-recovery=true")
 	}
 
 	// Add verification if enabled

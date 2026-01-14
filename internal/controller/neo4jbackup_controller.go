@@ -624,13 +624,13 @@ func (r *Neo4jBackupReconciler) buildBackupCommand(backup *neo4jv1alpha1.Neo4jBa
 	}
 	if backup.Spec.Options != nil {
 		if backup.Spec.Options.ParallelDownload {
-			cmd += " --parallel-download"
+			cmd += " --parallel-download=true"
 		}
 		if backup.Spec.Options.RemoteAddressResolution {
-			cmd += " --remote-address-resolution"
+			cmd += " --remote-address-resolution=true"
 		}
 		if backup.Spec.Options.SkipRecovery {
-			cmd += " --skip-recovery"
+			cmd += " --skip-recovery=true"
 		}
 	}
 
