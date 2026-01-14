@@ -64,7 +64,7 @@ jobs:
     name: OpenShift SNO OLM Smoke
     needs: bundle-and-catalog
     runs-on: ubuntu-latest
-    if: ${{ secrets.OCP_API != '' && secrets.OCP_TOKEN != '' }}
+    if: ${{ env.OCP_API != '' && env.OCP_TOKEN != '' }}
     env:
       OCP_API: ${{ secrets.OCP_API }}
       OCP_TOKEN: ${{ secrets.OCP_TOKEN }}
@@ -121,6 +121,6 @@ jobs:
   openshift-sno-olm-smoke-skip:
     name: OpenShift SNO OLM Smoke (Skipped - missing OCP_API/OCP_TOKEN)
     runs-on: ubuntu-latest
-    if: ${{ !(secrets.OCP_API != '' && secrets.OCP_TOKEN != '') }}
+    if: ${{ !(env.OCP_API != '' && env.OCP_TOKEN != '') }}
     steps:
       - run: echo "Skipping OpenShift SNO smoke run because OCP_API/OCP_TOKEN secrets are not provided."
