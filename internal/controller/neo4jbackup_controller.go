@@ -574,6 +574,11 @@ func (r *Neo4jBackupReconciler) buildBackupCommand(backup *neo4jv1alpha1.Neo4jBa
 	}
 
 	// Add correct flags based on Neo4j 5.26+ documentation
+	if backup.Spec.Options != nil {
+		if (backup.Spec.Options.ParallelDownload || backup.Spec.Options.RemoteAddressResolution || backup.Spec.Options.SkipRecovery) && !version.SupportsAdvancedBackupFlags() {
+			return "", fmt.Errorf("parallel-download, remote-address-resolution, and skip-recovery require Neo4j 2025.11+ (cluster image %s)", cluster.Spec.Image.Tag)
+		}
+	}
 
 	// Add backup type if specified (FULL, DIFF, AUTO)
 	if backup.Spec.Options != nil && backup.Spec.Options.BackupType != "" {
@@ -615,6 +620,17 @@ func (r *Neo4jBackupReconciler) buildBackupCommand(backup *neo4jv1alpha1.Neo4jBa
 	if backup.Spec.Options != nil && len(backup.Spec.Options.AdditionalArgs) > 0 {
 		for _, arg := range backup.Spec.Options.AdditionalArgs {
 			cmd += " " + arg
+		}
+	}
+	if backup.Spec.Options != nil {
+		if backup.Spec.Options.ParallelDownload {
+			cmd += " --parallel-download"
+		}
+		if backup.Spec.Options.RemoteAddressResolution {
+			cmd += " --remote-address-resolution"
+		}
+		if backup.Spec.Options.SkipRecovery {
+			cmd += " --skip-recovery"
 		}
 	}
 

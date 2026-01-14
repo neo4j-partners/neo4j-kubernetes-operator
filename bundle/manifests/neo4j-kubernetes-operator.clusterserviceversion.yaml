@@ -37,7 +37,7 @@ metadata:
       : {\n      \"name\": \"shardeddb\",\n      \"clusterRef\": \"example-cluster\"\
       ,\n      \"shards\": 3\n    }\n  }\n]"
     capabilities: Basic Install
-    createdAt: '2026-01-14T13:14:33Z'
+    createdAt: '2026-01-14T13:19:38Z'
     operators.operatorframework.io/builder: operator-sdk-v1.39.1
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
   name: neo4j-kubernetes-operator.v0.0.0-ci

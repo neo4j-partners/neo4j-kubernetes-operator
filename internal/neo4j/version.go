@@ -210,6 +210,18 @@ func (v *Version) SupportsCypherLanguageVersion() bool {
 	return v.IsCalver
 }
 
+// SupportsAdvancedBackupFlags checks if version supports flags like --parallel-download and --skip-recovery
+func (v *Version) SupportsAdvancedBackupFlags() bool {
+	if !v.IsCalver {
+		return false
+	}
+	// 2025.11+ (and any later calver) supports these flags
+	if v.Major > 2025 {
+		return true
+	}
+	return v.Major == 2025 && v.Minor >= 11
+}
+
 // SupportsSourceDatabaseFilter checks if version supports --source-database in restore
 func (v *Version) SupportsSourceDatabaseFilter() bool {
 	// Available from 2025.02+
