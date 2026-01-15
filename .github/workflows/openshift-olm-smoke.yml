@@ -18,6 +18,23 @@ env:
   CATALOG_NAMESPACE: openshift-marketplace
 
 jobs:
+  preflight:
+    name: Preflight secrets check
+    runs-on: ubuntu-latest
+    outputs:
+      has_ocp_secrets: ${{ steps.check.outputs.has_ocp_secrets }}
+    steps:
+      - id: check
+        run: |
+          if [[ -n "${OCP_API}" && -n "${OCP_TOKEN}" ]]; then
+            echo "has_ocp_secrets=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_ocp_secrets=false" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          OCP_API: ${{ secrets.OCP_API }}
+          OCP_TOKEN: ${{ secrets.OCP_TOKEN }}
+
   bundle-and-catalog:
     name: Build & Push OLM Bundle
     runs-on: ubuntu-latest
@@ -62,9 +79,9 @@ jobs:
 
   openshift-sno-olm-smoke:
     name: OpenShift SNO OLM Smoke
-    needs: bundle-and-catalog
+    needs: [bundle-and-catalog, preflight]
     runs-on: ubuntu-latest
-    if: ${{ secrets.OCP_API != '' && secrets.OCP_TOKEN != '' }}
+    if: ${{ needs.preflight.outputs.has_ocp_secrets == 'true' }}
     env:
       OCP_API: ${{ secrets.OCP_API }}
       OCP_TOKEN: ${{ secrets.OCP_TOKEN }}
@@ -121,6 +138,7 @@ jobs:
   openshift-sno-olm-smoke-skip:
     name: OpenShift SNO OLM Smoke (Skipped - missing OCP_API/OCP_TOKEN)
     runs-on: ubuntu-latest
-    if: ${{ secrets.OCP_API == '' || secrets.OCP_TOKEN == '' }}
+    needs: preflight
+    if: ${{ needs.preflight.outputs.has_ocp_secrets != 'true' }}
     steps:
       - run: echo "Skipping OpenShift SNO smoke run because OCP_API/OCP_TOKEN secrets are not provided."
