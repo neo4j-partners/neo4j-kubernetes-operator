@@ -545,6 +545,8 @@ kubectl logs -l app.kubernetes.io/name=neo4j-operator
 - **Compliance-ready** logging and auditing
 - **Resource quotas** and governance controls
 
+Note: "Compliance-ready logging and auditing" means the operator exposes Neo4j logging/audit controls via `spec.config` and emits Kubernetes Events for key actions; you still need to enable the desired Neo4j log settings and ship/retain logs per your compliance requirements.
+
 ## 🎯 Recent Improvements
 
 ### Latest Version Enhancements
@@ -647,7 +649,7 @@ make operator-setup
 
 See the [Contributing Guide](docs/developer_guide/contributing.md) for detailed instructions.
 
-## 📞 Support & Community
+## 📞 Support
 
 - **Documentation**: [docs/](docs/)
-- **Neo4j Community**: [Neo4j Community Site](https://community.neo4j.com/)
+- **GitHub Issues**: https://github.com/neo4j-partners/neo4j-kubernetes-operator/issues
