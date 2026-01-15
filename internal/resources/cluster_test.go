@@ -1,6 +1,7 @@
 package resources_test
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -83,30 +84,19 @@ func TestBuildPodSpecForEnterprise_WithQueryMonitoring(t *testing.T) {
 
 	podSpec := resources.BuildPodSpecForEnterprise(cluster, "server", "neo4j-admin-secret")
 
-	// Test that Prometheus exporter sidecar is added (no backup sidecar due to centralized backup architecture)
-	require.Len(t, podSpec.Containers, 2, "should have 2 containers (main + exporter)")
+	// Query monitoring should expose metrics on the main container.
+	require.Len(t, podSpec.Containers, 1, "should have only main container")
+	assert.Equal(t, "neo4j", podSpec.Containers[0].Name)
 
-	// Find the exporter container (it should be the last one)
-	var exporterContainer corev1.Container
-	for _, c := range podSpec.Containers {
-		if c.Name == "prometheus-exporter" {
-			exporterContainer = c
+	var metricsPort *corev1.ContainerPort
+	for i := range podSpec.Containers[0].Ports {
+		if podSpec.Containers[0].Ports[i].Name == "metrics" {
+			metricsPort = &podSpec.Containers[0].Ports[i]
 			break
 		}
 	}
-	assert.Equal(t, "prometheus-exporter", exporterContainer.Name)
-	assert.Equal(t, "neo4j/prometheus-exporter:4.0.0", exporterContainer.Image)
-	assert.Contains(t, exporterContainer.Args[0], "bolt://localhost:7687")
-
-	// Test exporter port
-	require.Len(t, exporterContainer.Ports, 1)
-	assert.Equal(t, int32(2004), exporterContainer.Ports[0].ContainerPort)
-	assert.Equal(t, "metrics", exporterContainer.Ports[0].Name)
-
-	// Test that exporter has access to Neo4j auth
-	require.Len(t, exporterContainer.Env, 1)
-	assert.Equal(t, "NEO4J_AUTH", exporterContainer.Env[0].Name)
-	assert.Equal(t, "neo4j-admin-secret", exporterContainer.Env[0].ValueFrom.SecretKeyRef.Name)
+	require.NotNil(t, metricsPort)
+	assert.Equal(t, int32(resources.MetricsPort), metricsPort.ContainerPort)
 }
 
 func TestBuildPodSpecForEnterprise_WithoutFeatures(t *testing.T) {
@@ -170,7 +160,7 @@ func TestBuildStatefulSetForEnterprise_WithFeatures(t *testing.T) {
 	// Test that pod template has the features
 	podSpec := sts.Spec.Template.Spec
 	assert.Len(t, podSpec.InitContainers, 0, "should have no init containers as plugins are managed via Neo4jPlugin CRD")
-	assert.Len(t, podSpec.Containers, 2, "should have main container + exporter (no backup due to centralized backup architecture)")
+	assert.Len(t, podSpec.Containers, 1, "should have only main container (no backup sidecar)")
 
 	// Test pod management policy
 	assert.Equal(t, appsv1.ParallelPodManagement, sts.Spec.PodManagementPolicy, "should use parallel pod management")
@@ -178,7 +168,7 @@ func TestBuildStatefulSetForEnterprise_WithFeatures(t *testing.T) {
 	// Test Prometheus annotations
 	annotations := sts.Spec.Template.Annotations
 	assert.Equal(t, "true", annotations["prometheus.io/scrape"])
-	assert.Equal(t, "2004", annotations["prometheus.io/port"])
+	assert.Equal(t, fmt.Sprintf("%d", resources.MetricsPort), annotations["prometheus.io/port"])
 	assert.Equal(t, "/metrics", annotations["prometheus.io/path"])
 }
 

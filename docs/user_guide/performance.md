@@ -228,21 +228,11 @@ Monitor these critical metrics for performance optimization:
 
 ```yaml
 spec:
-  monitoring:
+  queryMonitoring:
     enabled: true
-    prometheusExporter:
-      enabled: true
-      port: 2004
-
   config:
-    # Enable detailed metrics
-    metrics.enabled: "true"
-    metrics.graphite.enabled: "true"
-    metrics.csv.enabled: "false"
-
-    # Query monitoring
-    db.query.monitoring.enabled: "true"
-    db.query.monitoring.sample_rate: "0.1"
+    # Prometheus metrics endpoint (overrides default if needed)
+    server.metrics.prometheus.endpoint: "0.0.0.0:2004"
 ```
 
 ## Performance Testing and Benchmarking

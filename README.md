@@ -25,7 +25,7 @@ The Operator deploys Neo4j EE v5.26+.  It supports both clustered and standalone
 - [Common Use Cases](#️-common-use-cases)
 - [Recent Improvements](#-recent-improvements)
 - [Contributing](#-contributing)
-- [Support & Community](#-support--community)
+- [Support](#-support)
 
 ## 📋 Requirements
 
@@ -501,7 +501,7 @@ Complete CRD documentation for all custom resources:
 - **Smart Status Updates**: Status updates only when cluster state actually changes
 - **ConfigMap Debouncing**: 2-minute debounce prevents restart loops from configuration changes
 - **Resource Validation**: Automatic validation ensures optimal Neo4j memory settings
-- **Built-in Monitoring**: Real-time resource monitoring with operational insights
+- **Prometheus Metrics**: Neo4j built-in metrics endpoint exposed via `spec.queryMonitoring`
 
 ### 🔧 Deployment Management
 Manage your Neo4j deployments using standard kubectl commands:

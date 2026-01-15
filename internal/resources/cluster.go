@@ -57,11 +57,11 @@ const (
 	TransactionPort = 7689
 	// BackupPort is the default port for Neo4j backup operations
 	BackupPort = 6362
+	// MetricsPort is the default port for Neo4j Prometheus metrics
+	MetricsPort = 2004
 
 	// Neo4jContainer is the name of the main Neo4j container
 	Neo4jContainer = "neo4j"
-	// SidecarContainer is the name of the sidecar container
-	SidecarContainer = "prometheus-exporter"
 	// InitContainer is the name of the init container
 	InitContainer = "init"
 
@@ -214,12 +214,8 @@ func buildStatefulSetForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: getLabelsForEnterpriseServer(cluster, serverName),
-					Annotations: map[string]string{
-						"prometheus.io/scrape": "true",
-						"prometheus.io/port":   "2004",
-						"prometheus.io/path":   "/metrics",
-					},
+					Labels:      getLabelsForEnterpriseServer(cluster, serverName),
+					Annotations: buildMetricsAnnotations(cluster),
 				},
 				Spec: BuildPodSpecForEnterprise(cluster, serverName, adminSecret),
 			},
@@ -501,6 +497,41 @@ func BuildClientServiceForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseClust
 	}
 
 	return svc
+}
+
+// BuildMetricsServiceForEnterprise creates a service for Prometheus scraping.
+func BuildMetricsServiceForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) *corev1.Service {
+	if cluster.Spec.QueryMonitoring == nil || !cluster.Spec.QueryMonitoring.Enabled {
+		return nil
+	}
+
+	labels := getLabelsForEnterprise(cluster, "metrics")
+	labels["neo4j.com/service-type"] = "metrics"
+
+	selector := map[string]string{
+		"app.kubernetes.io/name": "neo4j",
+		"neo4j.com/cluster":      cluster.Name,
+	}
+
+	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-metrics", cluster.Name),
+			Namespace: cluster.Namespace,
+			Labels:    labels,
+		},
+		Spec: corev1.ServiceSpec{
+			Type:     corev1.ServiceTypeClusterIP,
+			Selector: selector,
+			Ports: []corev1.ServicePort{
+				{
+					Name:       "metrics",
+					Port:       MetricsPort,
+					TargetPort: intstr.FromInt(MetricsPort),
+					Protocol:   corev1.ProtocolTCP,
+				},
+			},
+		},
+	}
 }
 
 // BuildConfigMapForEnterprise creates a ConfigMap with Neo4j configuration
@@ -881,6 +912,18 @@ func getLabelsForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, role 
 	}
 
 	return labels
+}
+
+func buildMetricsAnnotations(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) map[string]string {
+	if cluster.Spec.QueryMonitoring == nil || !cluster.Spec.QueryMonitoring.Enabled {
+		return nil
+	}
+
+	return map[string]string{
+		"prometheus.io/scrape": "true",
+		"prometheus.io/port":   strconv.Itoa(MetricsPort),
+		"prometheus.io/path":   "/metrics",
+	}
 }
 
 // buildBackupSidecarStatefulSet creates a separate StatefulSet for backup sidecar
@@ -1288,6 +1331,14 @@ func BuildPodSpecForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, se
 		},
 	}
 
+	if cluster.Spec.QueryMonitoring != nil && cluster.Spec.QueryMonitoring.Enabled {
+		neo4jContainer.Ports = append(neo4jContainer.Ports, corev1.ContainerPort{
+			Name:          "metrics",
+			ContainerPort: MetricsPort,
+			Protocol:      corev1.ProtocolTCP,
+		})
+	}
+
 	// Set resource limits
 	if cluster.Spec.Resources != nil {
 		neo4jContainer.Resources = *cluster.Spec.Resources
@@ -1369,35 +1420,6 @@ func BuildPodSpecForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, se
 	// --- Plugin Management ---
 	// NOTE: Plugins are now managed through the Neo4jPlugin CRD instead of embedded configuration.
 	// The Neo4jPlugin controller handles plugin installation and management separately.
-
-	// --- Query Monitoring: Add Prometheus exporter sidecar ---
-	if cluster.Spec.QueryMonitoring != nil && cluster.Spec.QueryMonitoring.Enabled {
-		exporterContainer := corev1.Container{
-			Name:  "prometheus-exporter",
-			Image: "neo4j/prometheus-exporter:4.0.0",
-			Args:  []string{"--neo4j.uri=bolt://localhost:7687", "--neo4j.user=neo4j", "--neo4j.password=$(NEO4J_AUTH)"},
-			Env: []corev1.EnvVar{
-				{
-					Name: "NEO4J_AUTH",
-					ValueFrom: &corev1.EnvVarSource{
-						SecretKeyRef: &corev1.SecretKeySelector{
-							LocalObjectReference: corev1.LocalObjectReference{
-								Name: adminSecret,
-							},
-							Key: "password",
-						},
-					},
-				},
-			},
-			Ports: []corev1.ContainerPort{{
-				Name:          "metrics",
-				ContainerPort: 2004,
-				Protocol:      corev1.ProtocolTCP,
-			}},
-			SecurityContext: containerSecurityContextForCluster(cluster),
-		}
-		podSpec.Containers = append(podSpec.Containers, exporterContainer)
-	}
 
 	return podSpec
 }
@@ -1550,6 +1572,11 @@ server.bolt.tls_level=OPTIONAL
 `
 	}
 
+	if cluster.Spec.QueryMonitoring != nil && cluster.Spec.QueryMonitoring.Enabled {
+		config += "\n# Query Monitoring and Metrics\n"
+		config += BuildQueryMonitoringConfig(cluster.Spec.QueryMonitoring)
+	}
+
 	// Add custom configuration (excluding memory settings already added above)
 	if cluster.Spec.Config != nil {
 		// Memory settings that are already set by memoryConfig
@@ -1595,6 +1622,37 @@ server.bolt.tls_level=OPTIONAL
 	}
 
 	return config
+}
+
+// BuildQueryMonitoringConfig generates Neo4j config lines for query monitoring and metrics exposure.
+func BuildQueryMonitoringConfig(queryMonitoring *neo4jv1alpha1.QueryMonitoringSpec) string {
+	slowThreshold := "5s"
+	explainPlan := true
+	indexRecommendations := true
+	if queryMonitoring != nil {
+		if queryMonitoring.SlowQueryThreshold != "" {
+			slowThreshold = queryMonitoring.SlowQueryThreshold
+		}
+		explainPlan = queryMonitoring.ExplainPlan
+		indexRecommendations = queryMonitoring.IndexRecommendations
+	}
+
+	lines := []string{
+		"# Prometheus metrics exposure",
+		"server.metrics.prometheus.enabled=true",
+		fmt.Sprintf("server.metrics.prometheus.endpoint=0.0.0.0:%d", MetricsPort),
+		"",
+		"# Query logging defaults",
+		"db.logs.query.enabled=INFO",
+		"db.logs.query.threshold=1s",
+		fmt.Sprintf("db.logs.query.slow_threshold=%s", slowThreshold),
+		fmt.Sprintf("db.logs.query.plan_description_enabled=%t", explainPlan),
+		"db.logs.query.parameter_logging_enabled=true",
+		fmt.Sprintf("dbms.index.recommendations.enabled=%t", indexRecommendations),
+		"",
+	}
+
+	return strings.Join(lines, "\n")
 }
 
 // isNeo4jVersion526OrHigher checks if the Neo4j version is 5.26 or higher

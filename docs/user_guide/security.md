@@ -520,20 +520,8 @@ spec:
 
 ```yaml
 spec:
-  monitoring:
+  queryMonitoring:
     enabled: true
-    prometheusExporter:
-      enabled: true
-      port: 2004
-
-    # Security metrics
-    securityMetrics:
-      enabled: true
-      authentication:
-        enabled: true
-      authorization:
-        enabled: true
-
   config:
     # Security metrics configuration
     metrics.security.authentication.enabled: "true"

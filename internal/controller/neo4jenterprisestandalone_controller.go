@@ -461,6 +461,11 @@ func (r *Neo4jEnterpriseStandaloneReconciler) createConfigMap(standalone *neo4jv
 		configLines = append(configLines, "")
 	}
 
+	if standalone.Spec.QueryMonitoring != nil && standalone.Spec.QueryMonitoring.Enabled {
+		configLines = append(configLines, strings.Split(resources.BuildQueryMonitoringConfig(standalone.Spec.QueryMonitoring), "\n")...)
+		configLines = append(configLines, "")
+	}
+
 	// Add user-provided configuration
 	for key, value := range standalone.Spec.Config {
 		configLines = append(configLines, fmt.Sprintf("%s=%s", key, value))
@@ -508,6 +513,15 @@ func (r *Neo4jEnterpriseStandaloneReconciler) createService(standalone *neo4jv1a
 			TargetPort: intstr.FromInt(7687),
 			Protocol:   corev1.ProtocolTCP,
 		},
+	}
+
+	if standalone.Spec.QueryMonitoring != nil && standalone.Spec.QueryMonitoring.Enabled {
+		ports = append(ports, corev1.ServicePort{
+			Name:       "metrics",
+			Port:       resources.MetricsPort,
+			TargetPort: intstr.FromInt(resources.MetricsPort),
+			Protocol:   corev1.ProtocolTCP,
+		})
 	}
 
 	// Add HTTPS port if TLS is enabled
@@ -563,6 +577,43 @@ func (r *Neo4jEnterpriseStandaloneReconciler) createService(standalone *neo4jv1a
 // createStatefulSet creates a StatefulSet for the standalone deployment
 func (r *Neo4jEnterpriseStandaloneReconciler) createStatefulSet(standalone *neo4jv1alpha1.Neo4jEnterpriseStandalone) *appsv1.StatefulSet {
 	replicas := int32(1)
+	annotations := map[string]string{}
+	if standalone.Spec.QueryMonitoring != nil && standalone.Spec.QueryMonitoring.Enabled {
+		annotations["prometheus.io/scrape"] = "true"
+		annotations["prometheus.io/port"] = fmt.Sprintf("%d", resources.MetricsPort)
+		annotations["prometheus.io/path"] = "/metrics"
+	}
+
+	ports := []corev1.ContainerPort{
+		{
+			Name:          "http",
+			ContainerPort: 7474,
+			Protocol:      corev1.ProtocolTCP,
+		},
+		{
+			Name:          "https",
+			ContainerPort: 7473,
+			Protocol:      corev1.ProtocolTCP,
+		},
+		{
+			Name:          "bolt",
+			ContainerPort: 7687,
+			Protocol:      corev1.ProtocolTCP,
+		},
+		{
+			Name:          "backup",
+			ContainerPort: 6362,
+			Protocol:      corev1.ProtocolTCP,
+		},
+	}
+
+	if standalone.Spec.QueryMonitoring != nil && standalone.Spec.QueryMonitoring.Enabled {
+		ports = append(ports, corev1.ContainerPort{
+			Name:          "metrics",
+			ContainerPort: resources.MetricsPort,
+			Protocol:      corev1.ProtocolTCP,
+		})
+	}
 
 	return &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -581,6 +632,7 @@ func (r *Neo4jEnterpriseStandaloneReconciler) createStatefulSet(standalone *neo4
 					Labels: map[string]string{
 						"app": standalone.Name,
 					},
+					Annotations: annotations,
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
@@ -588,30 +640,9 @@ func (r *Neo4jEnterpriseStandaloneReconciler) createStatefulSet(standalone *neo4
 							Name:            "neo4j",
 							Image:           fmt.Sprintf("%s:%s", standalone.Spec.Image.Repo, standalone.Spec.Image.Tag),
 							SecurityContext: containerSecurityContextForStandalone(standalone),
-							Ports: []corev1.ContainerPort{
-								{
-									Name:          "http",
-									ContainerPort: 7474,
-									Protocol:      corev1.ProtocolTCP,
-								},
-								{
-									Name:          "https",
-									ContainerPort: 7473,
-									Protocol:      corev1.ProtocolTCP,
-								},
-								{
-									Name:          "bolt",
-									ContainerPort: 7687,
-									Protocol:      corev1.ProtocolTCP,
-								},
-								{
-									Name:          "backup",
-									ContainerPort: 6362,
-									Protocol:      corev1.ProtocolTCP,
-								},
-							},
-							Env:          r.buildEnvVars(standalone),
-							VolumeMounts: r.buildVolumeMounts(standalone),
+							Ports:           ports,
+							Env:             r.buildEnvVars(standalone),
+							VolumeMounts:    r.buildVolumeMounts(standalone),
 							Resources: func() corev1.ResourceRequirements {
 								if standalone.Spec.Resources != nil {
 									return *standalone.Spec.Resources
