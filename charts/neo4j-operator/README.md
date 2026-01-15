@@ -79,7 +79,7 @@ The following table lists the configurable parameters of the Neo4j Operator char
 | Parameter | Description | Default |
 |-----------|-------------|---------|
 | `operatorMode` | Operator mode: `cluster`, `namespace`, or `namespaces` | `cluster` |
-| `watchNamespaces` | Namespaces to watch (when mode is `namespaces`) | `[]` |
+| `watchNamespaces` | Namespaces/patterns to watch (when mode is `namespaces`) | `[]` |
 | `developmentMode` | Enable development mode | `false` |
 | `logLevel` | Log level: `debug`, `info`, `warn`, `error` | `info` |
 
@@ -173,6 +173,49 @@ watchNamespaces:
   - neo4j-dev
   - neo4j-staging
   - neo4j-prod
+```
+
+### Multi-namespace Mode with Patterns
+
+Pattern entries are supported when `operatorMode: namespaces`:
+
+```yaml
+operatorMode: namespaces
+watchNamespaces:
+  - team-*
+  - regex:^prod-
+  - label:{env=prod,tier=backend}
+```
+
+Pattern support requires ClusterRole access because the operator must list/watch namespaces.
+
+## Install Without Helm (Kustomize)
+
+```bash
+# Install CRDs
+kubectl apply -f config/crd/bases/
+
+# Production overlay
+kubectl apply -k config/overlays/prod
+
+# Development overlay (Kind only)
+kubectl apply -k config/overlays/dev
+```
+
+Pattern-based namespace watching (non-Helm):
+
+```yaml
+# In your kustomization overlay
+patches:
+- patch: |-
+    - op: add
+      path: /spec/template/spec/containers/0/env/-
+      value:
+        name: WATCH_NAMESPACE
+        value: team-*,regex:^prod-,label:{env=prod}
+  target:
+    kind: Deployment
+    name: controller-manager
 ```
 
 ## Upgrading

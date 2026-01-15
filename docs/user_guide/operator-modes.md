@@ -157,6 +157,13 @@ Scope determines where the operator watches CRs, and RBAC determines what it can
 - **Non-Helm**: set `WATCH_NAMESPACE=team-a,team-b` (comma-separated).
 - **Adding namespaces**: update `watchNamespaces` (or `WATCH_NAMESPACE`) and upgrade/redeploy the operator.
 
+**Pattern support (dynamic):**
+- **Globs**: `glob:team-*` or `team-*`
+- **Regex**: `regex:^team-.*$`
+- **Labels**: `label:{env=prod,tier=backend}` (braces allow commas)
+- Patterns require cluster-scope RBAC because the operator must list/watch namespaces.
+- The operator restarts its manager when namespace matches change.
+
 Note: backup workflows create per-namespace RBAC (ServiceAccount/Role/RoleBinding) as needed for backup jobs.
 
 ## Helm Configuration
@@ -212,6 +219,11 @@ If you deploy with Kustomize or raw manifests, configure scope and mode explicit
 ```yaml
 - name: WATCH_NAMESPACE
   value: team-a,team-b
+```
+
+Pattern examples:
+```bash
+WATCH_NAMESPACE=team-*,regex:^prod-,label:{env=prod}
 ```
 
 **Mode (args):**
