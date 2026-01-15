@@ -91,6 +91,7 @@ Installation requires cloning from source:
    - **Helm chart** automatically creates all necessary RBAC permissions
    - **Registry deployments** automatically check and help set up RBAC permissions
    - If you encounter permission errors, the operator will guide you through the setup process
+   - **RBAC scope**: `operatorMode=cluster` and `operatorMode=namespaces` install ClusterRole/ClusterRoleBinding; `operatorMode=namespace` installs Role/RoleBinding in a single namespace (details: docs/user_guide/operator-modes.md)
 
 3. **Create admin credentials** (Required for authentication):
 

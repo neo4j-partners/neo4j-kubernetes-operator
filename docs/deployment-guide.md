@@ -61,8 +61,7 @@ The `-local` targets provide the most reliable deployment experience:
 - Builds `neo4j-operator:dev` image locally
 - Loads image into Kind cluster automatically
 - Deploys to `neo4j-operator-dev` namespace
-- Enables debug features and development mode
-- Includes `DEVELOPMENT_MODE=true` environment variable
+- Runs the operator with `--mode=dev`
 
 **`make deploy-prod-local`**:
 - Builds `neo4j-operator:latest` image locally

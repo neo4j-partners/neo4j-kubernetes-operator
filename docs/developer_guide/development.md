@@ -533,12 +533,12 @@ When adding new CRDs:
 # Development cluster configuration
 export KUBECONFIG=~/.kube/config
 
-# Operator debugging
-export ZAP_LOG_LEVEL=debug
+# Optional scope restriction
+export WATCH_NAMESPACE=team-a
 
-# Development mode settings
-export DEVELOPMENT_MODE=true
-export OPERATOR_NAMESPACE=neo4j-operator
+# Go runtime tuning
+export GOMEMLIMIT=500MiB
+export GOMAXPROCS=4
 ```
 
 ### Testing Environment Variables

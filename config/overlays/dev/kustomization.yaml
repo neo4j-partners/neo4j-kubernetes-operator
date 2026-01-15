@@ -15,10 +15,8 @@ images:
 patches:
 - patch: |-
     - op: add
-      path: /spec/template/spec/containers/0/env
-      value:
-        - name: DEVELOPMENT_MODE
-          value: "true"
+      path: /spec/template/spec/containers/0/args/0
+      value: --mode=dev
   target:
     kind: Deployment
     name: controller-manager

@@ -50,8 +50,8 @@ make undeploy-prod
 - Image: `neo4j-operator:dev`
 - Built locally with `make docker-build`
 
-**Environment Variables:**
-- `DEVELOPMENT_MODE=true`
+**Manager Args:**
+- `--mode=dev`
 
 **Namespace:**
 - `neo4j-operator-dev`
