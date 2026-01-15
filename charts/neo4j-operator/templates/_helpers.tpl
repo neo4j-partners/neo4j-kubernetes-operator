@@ -122,6 +122,7 @@ Get container args based on configuration
 {{- define "neo4j-operator.args" -}}
 - --leader-elect={{ .Values.leaderElection.enabled }}
 {{- if .Values.developmentMode }}
+- --mode=dev
 - --zap-devel=true
 {{- end }}
 - --zap-log-level={{ .Values.logLevel }}

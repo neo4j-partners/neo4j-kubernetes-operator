@@ -38,7 +38,7 @@ Verify CRDs are installed:
    metadata:
      name: my-neo4j
    spec:
-     image: neo4j:{{ .Values.neo4j.defaultImage }}
+     image: {{ .Values.neo4j.defaultImage }}
      auth:
        adminSecret: neo4j-admin-secret
    EOF
@@ -50,7 +50,7 @@ Verify CRDs are installed:
    metadata:
      name: my-cluster
    spec:
-     image: neo4j:{{ .Values.neo4j.defaultImage }}
+     image: {{ .Values.neo4j.defaultImage }}
      topology:
        servers: 3
      auth:

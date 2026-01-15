@@ -215,6 +215,12 @@ func main() {
 		setupLog.Info("production mode enabled - using standard settings")
 	}
 
+	watchNamespaces := parseWatchNamespaces(os.Getenv("WATCH_NAMESPACE"))
+	if len(watchNamespaces) > 0 {
+		applyWatchNamespaces(&cacheOpts, watchNamespaces)
+		setupLog.Info("limiting cache to watch namespaces", "namespaces", watchNamespaces)
+	}
+
 	// Create manager with optimized cache
 	var mgr ctrl.Manager
 	var err error
@@ -696,8 +702,45 @@ func parseControllers(controllersStr string) []string {
 	return controllers
 }
 
+func parseWatchNamespaces(value string) []string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return nil
+	}
+
+	seen := make(map[string]struct{})
+	var namespaces []string
+	for _, entry := range strings.Split(trimmed, ",") {
+		namespace := strings.TrimSpace(entry)
+		if namespace == "" {
+			continue
+		}
+		if _, exists := seen[namespace]; exists {
+			continue
+		}
+		seen[namespace] = struct{}{}
+		namespaces = append(namespaces, namespace)
+	}
+
+	return namespaces
+}
+
+func applyWatchNamespaces(cacheOpts *cache.Options, namespaces []string) {
+	if len(namespaces) == 0 {
+		return
+	}
+
+	if cacheOpts.DefaultNamespaces == nil {
+		cacheOpts.DefaultNamespaces = make(map[string]cache.Config, len(namespaces))
+	}
+
+	for _, namespace := range namespaces {
+		cacheOpts.DefaultNamespaces[namespace] = cache.Config{}
+	}
+}
+
 // createDirectClientManager creates a manager that bypasses informer caching
-func createDirectClientManager(config *rest.Config, _ cache.Options, metricsAddr, probeAddr string, secureMetrics bool, mode OperatorMode, enableLeaderElection bool) (ctrl.Manager, error) {
+func createDirectClientManager(config *rest.Config, cacheOpts cache.Options, metricsAddr, probeAddr string, secureMetrics bool, mode OperatorMode, enableLeaderElection bool) (ctrl.Manager, error) {
 	setupLog.Info("creating direct client manager - bypassing informer cache for ultra-fast startup")
 
 	// Create a cache that doesn't watch anything by default for direct API mode
@@ -706,6 +749,7 @@ func createDirectClientManager(config *rest.Config, _ cache.Options, metricsAddr
 		// Don't watch any resources by default - everything will be direct API calls
 		ByObject: map[client.Object]cache.ByObject{},
 	}
+	directCacheOpts.DefaultNamespaces = cacheOpts.DefaultNamespaces
 
 	return ctrl.NewManager(config, ctrl.Options{
 		Scheme: scheme,
