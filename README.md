@@ -61,6 +61,14 @@ Installation requires cloning from source:
      --namespace neo4j-operator-system \
      --create-namespace
    ```
+   ```bash
+   # Install from GHCR OCI registry
+   helm install neo4j-operator oci://ghcr.io/neo4j-partners/charts/neo4j-operator \
+     --version <release-version> \
+     --namespace neo4j-operator-system \
+     --create-namespace
+   ```
+   Note: use the chart version without the `v` prefix (for example, `0.2.0`).
 
    **Make Targets**:
    ```bash
