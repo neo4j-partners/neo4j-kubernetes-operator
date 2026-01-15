@@ -322,6 +322,10 @@ helm-template: ## Generate Kubernetes manifests from Helm chart
 	helm template neo4j-operator charts/neo4j-operator \
 		--namespace neo4j-operator-system
 
+.PHONY: helm-install-test
+helm-install-test: ## Validate Helm chart installation in Kind test cluster
+	./scripts/helm-install-test.sh
+
 .PHONY: helm-install
 helm-install: ## Install the operator using Helm chart
 	helm install neo4j-operator charts/neo4j-operator \

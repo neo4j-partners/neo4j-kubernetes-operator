@@ -67,7 +67,7 @@ The following table lists the configurable parameters of the Neo4j Operator char
 | Parameter | Description | Default |
 |-----------|-------------|---------|
 | `replicaCount` | Number of operator replicas | `1` |
-| `image.repository` | Operator image repository | `neo4j-operator` |
+| `image.repository` | Operator image repository | `ghcr.io/neo4j-partners/neo4j-kubernetes-operator` |
 | `image.tag` | Operator image tag | `""` (uses chart appVersion) |
 | `image.pullPolicy` | Image pull policy | `IfNotPresent` |
 | `imagePullSecrets` | Image pull secrets | `[]` |
@@ -91,7 +91,6 @@ The following table lists the configurable parameters of the Neo4j Operator char
 | `serviceAccount.annotations` | Service account annotations | `{}` |
 | `serviceAccount.name` | Service account name | `""` (generated) |
 | `rbac.create` | Create RBAC resources | `true` |
-| `rbac.clusterScoped` | Create cluster-scoped RBAC | `true` |
 
 ### Security Configuration
 
@@ -140,7 +139,6 @@ The following table lists the configurable parameters of the Neo4j Operator char
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
-| `installCRDs` | Install CRDs with chart | `true` |
 | `leaderElection.enabled` | Enable leader election | `true` |
 | `nodeSelector` | Node selector | `{}` |
 | `tolerations` | Pod tolerations | `[]` |
@@ -163,8 +161,6 @@ The operator only watches its own namespace (requires only Role, not ClusterRole
 
 ```yaml
 operatorMode: namespace
-rbac:
-  clusterScoped: false
 ```
 
 ### Multi-namespace Mode

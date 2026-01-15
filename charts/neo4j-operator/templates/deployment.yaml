@@ -50,10 +50,6 @@ spec:
         - name: WATCH_NAMESPACE
           value: {{ join "," .Values.watchNamespaces }}
         {{- end }}
-        {{- if .Values.developmentMode }}
-        - name: DEVELOPMENT_MODE
-          value: "true"
-        {{- end }}
         - name: OPERATOR_NAME
           value: {{ include "neo4j-operator.fullname" . }}
         - name: POD_NAME

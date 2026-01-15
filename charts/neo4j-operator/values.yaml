@@ -40,9 +40,6 @@ serviceAccount:
 rbac:
   # Specifies whether RBAC resources should be created
   create: true
-  # Create ClusterRole/ClusterRoleBinding (for cluster/namespaces mode)
-  # or Role/RoleBinding (for namespace mode)
-  clusterScoped: true
 
 podAnnotations: {}
 
@@ -113,9 +110,6 @@ metrics:
 leaderElection:
   enabled: true
   namespace: ""  # Uses Release.Namespace if not specified
-
-# CRD installation
-installCRDs: true
 
 # Webhook configuration (future support)
 webhook:
