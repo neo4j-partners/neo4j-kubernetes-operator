@@ -25,6 +25,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -89,6 +90,7 @@ const (
 //+kubebuilder:rbac:groups=external-secrets.io,resources=secretstores,verbs=get;list;watch
 //+kubebuilder:rbac:groups=external-secrets.io,resources=clustersecretstores,verbs=get;list;watch
 //+kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=route.openshift.io,resources=routes,verbs=get;list;watch;create;update;patch;delete
 
 func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
@@ -309,6 +311,13 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 				return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 			}
 		}
+	}
+
+	// Create Route if configured (OpenShift)
+	if err := r.reconcileRoute(ctx, cluster); err != nil {
+		logger.Error(err, "Failed to reconcile Route")
+		_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Failed to reconcile Route: %v", err))
+		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 	}
 
 	// Calculate topology placement if topology scheduler is available
@@ -1610,6 +1619,42 @@ func (r *Neo4jEnterpriseClusterReconciler) updatePropertyShardingStatus(ctx cont
 
 		return nil
 	})
+}
+
+// reconcileRoute ensures an OpenShift Route exists when requested
+func (r *Neo4jEnterpriseClusterReconciler) reconcileRoute(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) error {
+	logger := log.FromContext(ctx)
+
+	route := resources.BuildRouteForEnterprise(cluster)
+	if route == nil {
+		return nil
+	}
+
+	if err := controllerutil.SetControllerReference(cluster, route, r.Scheme); err != nil {
+		return fmt.Errorf("failed to set owner reference on route: %w", err)
+	}
+
+	desired := route.DeepCopy()
+
+	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, route, func() error {
+		route.SetLabels(desired.GetLabels())
+		route.SetAnnotations(desired.GetAnnotations())
+		route.Object["spec"] = desired.Object["spec"]
+		return nil
+	})
+	if err != nil {
+		if meta.IsNoMatchError(err) {
+			logger.Info("Route API not available; skipping Route reconciliation")
+			if r.Recorder != nil {
+				r.Recorder.Event(cluster, corev1.EventTypeWarning, "RouteAPINotFound", "route.openshift.io/v1 not available; skipping Route reconciliation")
+			}
+			return nil
+		}
+		return fmt.Errorf("failed to create or update Route: %w", err)
+	}
+
+	logger.Info("Successfully reconciled Route", "name", route.GetName())
+	return nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

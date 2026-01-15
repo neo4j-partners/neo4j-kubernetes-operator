@@ -480,6 +480,7 @@ Complete CRD documentation for all custom resources:
 - **High Availability**: Multi-server clusters with automatic leader election and V2_ONLY discovery
 - **Persistent Storage**: Configurable storage classes and volume management
 - **Rolling Updates**: Zero-downtime Neo4j version upgrades
+- **OpenShift Route Support**: Optional OpenShift Routes via `spec.service.route` for cluster and standalone services
 
 ### 🔐 Security & Authentication
 - **TLS/SSL**: Configurable TLS encryption for client and cluster communications
