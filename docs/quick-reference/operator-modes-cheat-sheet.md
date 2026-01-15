@@ -24,6 +24,7 @@ CLI flags override these defaults.
 - `operatorMode: cluster|namespace|namespaces`.
 - `watchNamespaces` is used only when `operatorMode=namespaces`.
 - Non-Helm deployments use `WATCH_NAMESPACE=team-a,team-b` (empty = all namespaces).
+- Patterns are supported: `glob:team-*`, `regex:^prod-`, `label:{env=prod}` (requires cluster-scope RBAC).
 
 ## Essential Commands
 
