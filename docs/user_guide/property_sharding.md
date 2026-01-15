@@ -14,9 +14,10 @@ Property Sharding decouples data into:
 ### System Requirements
 
 **Neo4j Version Requirements:**
-- **Minimum**: Neo4j 2025.06.0-enterprise (first version with property sharding support)
-- **Recommended**: Neo4j 2025.08.0+ (includes stability improvements and performance optimizations)
+- **Minimum**: Neo4j 2025.10-enterprise (feature GA as of 2025.12)
+- **Recommended**: Neo4j 2025.12+ (latest GA fixes and tooling)
 - **Note**: Property sharding is an enterprise-only feature and requires valid licensing
+- **Not available on Aura**
 
 **Cluster Infrastructure Requirements:**
 - **Minimum Servers**: 5 servers (required for proper shard distribution and fault tolerance)
@@ -88,7 +89,7 @@ resources:
 
 ## Quick Start
 
-> **✅ Tested Configuration**: The examples below have been successfully tested with Neo4j 2025.06-enterprise on Kubernetes clusters with the specified resource requirements. Property sharding cluster creation typically completes in 2-3 minutes with proper resources.
+> **✅ Tested Configuration**: The examples below have been tested with Neo4j 2025.12-enterprise on Kubernetes clusters with the specified resource requirements. Property sharding cluster creation typically completes in 2-3 minutes with proper resources.
 
 ### 0. Prerequisites
 
@@ -111,7 +112,7 @@ metadata:
 spec:
   image:
     repo: neo4j
-    tag: 2025.06-enterprise  # Required for property sharding
+    tag: 2025.12-enterprise  # Requires 2025.10+ for property sharding (GA in 2025.12)
 
   # Authentication required for property sharding
   auth:
@@ -139,7 +140,6 @@ spec:
       # Required configuration (applied automatically if not specified)
       internal.dbms.sharded_property_database.enabled: "true"
       db.query.default_language: "CYPHER_25"
-      internal.dbms.cluster.experimental_protocol_version.dbms_enabled: "true"
       internal.dbms.sharded_property_database.allow_external_shard_access: "false"
 
       # Performance tuning (optional)
@@ -212,7 +212,6 @@ When `propertySharding.enabled` is `true`, these settings are automatically appl
 config:
   internal.dbms.sharded_property_database.enabled: "true"
   db.query.default_language: "CYPHER_25"
-  internal.dbms.cluster.experimental_protocol_version.dbms_enabled: "true"
   internal.dbms.sharded_property_database.allow_external_shard_access: "false"
 ```
 
@@ -379,9 +378,9 @@ SHOW DATABASES
 
 **1. Version Mismatch**
 ```
-Error: property sharding requires Neo4j 2025.06+
+Error: property sharding requires Neo4j 2025.10+
 ```
-Solution: Upgrade to Neo4j 2025.06 or later.
+Solution: Upgrade to Neo4j 2025.10 or later.
 
 **2. Insufficient Memory**
 ```
@@ -645,7 +644,7 @@ See [migration guide](migration.md) for detailed procedures.
 ## Limitations
 
 - **Fixed shard count**: Cannot change property shard count after creation
-- **Neo4j version**: Requires 2025.06+ enterprise
+- **Neo4j version**: Requires 2025.10+ enterprise
 - **Cypher version**: Must use Cypher 25
 - **No dynamic resharding**: Plan shard count carefully
 - **Increased complexity**: More monitoring and operational overhead

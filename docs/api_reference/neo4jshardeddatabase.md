@@ -1,12 +1,12 @@
 # Neo4jShardedDatabase API Reference
 
-The `Neo4jShardedDatabase` Custom Resource Definition (CRD) manages sharded databases with property sharding for horizontal scaling of large datasets in Neo4j 2025.07.1+ clusters.
+The `Neo4jShardedDatabase` Custom Resource Definition (CRD) manages sharded databases with property sharding for horizontal scaling of large datasets in Neo4j 2025.10+ clusters (feature GA as of Neo4j 2025.12).
 
 ## Overview
 
 - **API Version**: `neo4j.com/v1alpha1`
 - **Kind**: `Neo4jShardedDatabase`
-- **Supported Neo4j Versions**: 2025.07.1+ (requires property sharding support)
+- **Supported Neo4j Versions**: 2025.10+ (requires property sharding support)
 - **Prerequisites**: Neo4jEnterpriseCluster with `propertySharding.enabled: true`
 
 This document provides detailed API specifications for both Neo4jShardedDatabase and the property sharding configuration in Neo4jEnterpriseCluster.
@@ -38,7 +38,6 @@ When `enabled: true`, these settings are automatically applied:
 config:
   internal.dbms.sharded_property_database.enabled: "true"
   db.query.default_language: "CYPHER_25"
-  internal.dbms.cluster.experimental_protocol_version.dbms_enabled: "true"
   internal.dbms.sharded_property_database.allow_external_shard_access: "false"
 ```
 
@@ -48,7 +47,6 @@ config:
 |-----|------|---------|-------------|
 | `internal.dbms.sharded_property_database.enabled` | string | "true" | Enable property sharding database feature |
 | `db.query.default_language` | string | "CYPHER_25" | Default Cypher language version |
-| `internal.dbms.cluster.experimental_protocol_version.dbms_enabled` | string | "true" | Enable experimental protocol features |
 | `internal.dbms.sharded_property_database.allow_external_shard_access` | string | "false" | Allow external access to individual shards |
 | `db.tx_log.rotation.retention_policy` | string | "7 days" | Transaction log retention policy |
 | `internal.dbms.sharded_property_database.property_pull_interval` | string | "10ms" | Property synchronization interval |
@@ -67,7 +65,7 @@ status:
 #### Prerequisites for propertyShardingReady=true
 
 1. Cluster phase is "Ready"
-2. Neo4j version is 2025.07.1+
+2. Neo4j version is 2025.10+
 3. Minimum 5 servers configured (property sharding requirement)
 4. Minimum 4GB memory per server (8GB+ recommended for production)
 5. Minimum 1 CPU core per server (2+ cores recommended for cross-shard queries)
@@ -350,7 +348,7 @@ queryMetrics:
 
 ### Neo4jEnterpriseCluster Validation
 
-- Neo4j version must be 2025.07.1+ when property sharding enabled
+- Neo4j version must be 2025.10+ when property sharding enabled
 - Minimum 5 servers required for property sharding (proper shard distribution)
 - Minimum 4GB memory per server (8GB+ recommended for production)
 - Minimum 1 CPU core per server (2+ cores recommended for cross-shard queries)
@@ -375,7 +373,7 @@ queryMetrics:
 
 | Error | Cause | Resolution |
 |-------|-------|------------|
-| `property sharding requires Neo4j 2025.07.1+` | Old Neo4j version | Upgrade to 2025.07.1+ |
+| `property sharding requires Neo4j 2025.10+` | Old Neo4j version | Upgrade to 2025.10+ |
 | `property sharding requires minimum 5 servers` | Insufficient servers | Increase server count to 5+ |
 | `property sharding requires minimum 4GB memory` | Insufficient memory | Increase memory to 8GB+ (recommended) |
 | `defaultCypherLanguage must be '25'` | Wrong Cypher version | Set to "25" |

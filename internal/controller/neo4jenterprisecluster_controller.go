@@ -19,13 +19,13 @@ package controller
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"golang.org/x/time/rate"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -90,6 +90,7 @@ const (
 //+kubebuilder:rbac:groups=external-secrets.io,resources=secretstores,verbs=get;list;watch
 //+kubebuilder:rbac:groups=external-secrets.io,resources=clustersecretstores,verbs=get;list;watch
 //+kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=route.openshift.io,resources=routes,verbs=get;list;watch;create;update;patch;delete
 
 func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
@@ -310,6 +311,13 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 				return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 			}
 		}
+	}
+
+	// Create Route if configured (OpenShift)
+	if err := r.reconcileRoute(ctx, cluster); err != nil {
+		logger.Error(err, "Failed to reconcile Route")
+		_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Failed to reconcile Route: %v", err))
+		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 	}
 
 	// Calculate topology placement if topology scheduler is available
@@ -1518,7 +1526,7 @@ func (qm *QueryMonitor) setupAlertingRules(ctx context.Context, cluster *neo4jv1
 func (r *Neo4jEnterpriseClusterReconciler) validatePropertyShardingConfiguration(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) error {
 	logger := log.FromContext(ctx)
 
-	// Validate Neo4j version supports property sharding (2025.06+)
+	// Validate Neo4j version supports property sharding (2025.10+)
 	if err := validatePropertyShardingVersion(cluster.Spec.Image.Tag); err != nil {
 		return fmt.Errorf("property sharding version validation failed: %w", err)
 	}
@@ -1532,13 +1540,12 @@ func (r *Neo4jEnterpriseClusterReconciler) validatePropertyShardingConfiguration
 	requiredSettings := map[string]string{
 		"internal.dbms.sharded_property_database.enabled":                     "true",
 		"db.query.default_language":                                           "CYPHER_25",
-		"internal.dbms.cluster.experimental_protocol_version.dbms_enabled":    "true",
 		"internal.dbms.sharded_property_database.allow_external_shard_access": "false",
 	}
 
 	if cluster.Spec.PropertySharding.Config != nil {
 		for key, expectedValue := range requiredSettings {
-			if actualValue, exists := cluster.Spec.PropertySharding.Config[key]; !exists || actualValue != expectedValue {
+			if actualValue, exists := cluster.Spec.PropertySharding.Config[key]; exists && actualValue != expectedValue {
 				return fmt.Errorf("property sharding requires %s=%s, got %s=%s", key, expectedValue, key, actualValue)
 			}
 		}
@@ -1579,40 +1586,15 @@ func (r *Neo4jEnterpriseClusterReconciler) validatePropertyShardingConfiguration
 
 // validatePropertyShardingVersion checks if Neo4j version supports property sharding
 func validatePropertyShardingVersion(imageTag string) error {
-	// Property sharding requires Neo4j 2025.06+
 	if imageTag == "" {
 		return fmt.Errorf("image tag is required for property sharding")
 	}
 
-	// Handle calver format (2025.MM.DD)
-	if strings.HasPrefix(imageTag, "2025.") {
-		// Extract month portion
-		parts := strings.Split(imageTag, ".")
-		if len(parts) >= 2 {
-			month := parts[1]
-			if month < "06" {
-				return fmt.Errorf("property sharding requires Neo4j 2025.06+, got %s", imageTag)
-			}
-		}
+	if resources.IsNeo4jVersion202510OrHigher(imageTag) {
 		return nil
 	}
 
-	// Handle future years (2026+)
-	if contains([]string{"2026.", "2027.", "2028.", "2029."}, imageTag) {
-		return nil
-	}
-
-	return fmt.Errorf("property sharding requires Neo4j 2025.06+, got %s", imageTag)
-}
-
-// contains checks if string starts with any of the prefixes
-func contains(prefixes []string, s string) bool {
-	for _, prefix := range prefixes {
-		if len(s) >= len(prefix) && s[:len(prefix)] == prefix {
-			return true
-		}
-	}
-	return false
+	return fmt.Errorf("property sharding requires Neo4j 2025.10+ Enterprise, got %s", imageTag)
 }
 
 // updatePropertyShardingStatus updates the property sharding ready status
@@ -1637,6 +1619,42 @@ func (r *Neo4jEnterpriseClusterReconciler) updatePropertyShardingStatus(ctx cont
 
 		return nil
 	})
+}
+
+// reconcileRoute ensures an OpenShift Route exists when requested
+func (r *Neo4jEnterpriseClusterReconciler) reconcileRoute(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) error {
+	logger := log.FromContext(ctx)
+
+	route := resources.BuildRouteForEnterprise(cluster)
+	if route == nil {
+		return nil
+	}
+
+	if err := controllerutil.SetControllerReference(cluster, route, r.Scheme); err != nil {
+		return fmt.Errorf("failed to set owner reference on route: %w", err)
+	}
+
+	desired := route.DeepCopy()
+
+	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, route, func() error {
+		route.SetLabels(desired.GetLabels())
+		route.SetAnnotations(desired.GetAnnotations())
+		route.Object["spec"] = desired.Object["spec"]
+		return nil
+	})
+	if err != nil {
+		if meta.IsNoMatchError(err) {
+			logger.Info("Route API not available; skipping Route reconciliation")
+			if r.Recorder != nil {
+				r.Recorder.Event(cluster, corev1.EventTypeWarning, "RouteAPINotFound", "route.openshift.io/v1 not available; skipping Route reconciliation")
+			}
+			return nil
+		}
+		return fmt.Errorf("failed to create or update Route: %w", err)
+	}
+
+	logger.Info("Successfully reconciled Route", "name", route.GetName())
+	return nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

@@ -27,7 +27,7 @@ The `Neo4jEnterpriseCluster` Custom Resource Definition (CRD) manages Neo4j Ente
 - Multi-database deployments with different topology requirements
 - Workloads needing horizontal read scaling
 - Enterprise features like advanced backup, security, and monitoring
-- Large datasets requiring property sharding (Neo4j 2025.07.1+)
+- Large datasets requiring property sharding (Neo4j 2025.10+)
 
 **For single-node deployments**, use [`Neo4jEnterpriseStandalone`](neo4jenterprisestandalone.md) instead.
 
@@ -106,7 +106,7 @@ The `Neo4jEnterpriseClusterSpec` defines the desired state of a Neo4j Enterprise
 | `tls` | [`TLSSpec`](#tlsspec) | TLS configuration |
 | `plugins` | `[]PluginSpec` | **DEPRECATED:** Plugin configuration (use Neo4jPlugin CRD instead) |
 | `monitoring` | [`MonitoringSpec`](#monitoringspec) | Monitoring configuration |
-| `propertySharding` | [`PropertyShardingSpec`](#propertyshardingspec) | Property sharding configuration (Neo4j 2025.06+) |
+| `propertySharding` | [`PropertyShardingSpec`](#propertyshardingspec) | Property sharding configuration (Neo4j 2025.10+) |
 | `queryMonitoring` | [`QueryMonitoringSpec`](#querymonitoringspec) | Query monitoring configuration |
 | `podManagementPolicy` | `string` | Pod management policy: `"Parallel"` or `"OrderedReady"` |
 | `updateStrategy` | `*appsv1.StatefulSetUpdateStrategy` | StatefulSet update strategy |
@@ -235,7 +235,7 @@ Specifies role constraints for individual servers.
 
 ### PropertyShardingSpec
 
-Configures property sharding for horizontal scaling of large datasets. Property sharding separates graph structure from properties, distributing properties across multiple databases for better scalability. Available in Neo4j 2025.07.1+ Enterprise only.
+Configures property sharding for horizontal scaling of large datasets. Property sharding separates graph structure from properties, distributing properties across multiple databases for better scalability. Available in Neo4j 2025.10+ Enterprise (feature GA as of 2025.12).
 
 | Field | Type | Description |
 |---|---|---|
@@ -244,7 +244,7 @@ Configures property sharding for horizontal scaling of large datasets. Property 
 
 **System Requirements** (validated by operator):
 
-- **Neo4j Version**: 2025.07.1+ Enterprise
+- **Neo4j Version**: 2025.10+ Enterprise
 - **Minimum Servers**: 5 servers (for proper shard distribution)
 - **Memory**: 4GB minimum, 8GB+ recommended per server
 - **CPU**: 1+ core minimum, 2+ cores recommended per server
@@ -255,7 +255,6 @@ Configures property sharding for horizontal scaling of large datasets. Property 
 
 - `internal.dbms.sharded_property_database.enabled: "true"`
 - `db.query.default_language: "CYPHER_25"`
-- `internal.dbms.cluster.experimental_protocol_version.dbms_enabled: "true"`
 - `internal.dbms.sharded_property_database.allow_external_shard_access: "false"`
 
 **Performance Tuning Options**:
@@ -307,7 +306,7 @@ resources:
 
 | Error | Cause | Resolution |
 |-------|-------|------------|
-| `property sharding requires Neo4j 2025.07.1+` | Old Neo4j version | Upgrade to 2025.07.1+ Enterprise |
+| `property sharding requires Neo4j 2025.10+` | Old Neo4j version | Upgrade to 2025.10+ Enterprise |
 | `property sharding requires minimum 5 servers` | Insufficient servers | Increase server count to 5+ |
 | `property sharding requires minimum 4GB memory` | Insufficient memory | Increase memory to 8GB+ (recommended) |
 | `property sharding requires minimum 1 CPU core` | Insufficient CPU | Increase CPU to 2+ cores (recommended) |
@@ -839,7 +838,7 @@ spec:
     mode: disabled
 
 ---
-# Property Sharding cluster (Neo4j 2025.07.1+)
+# Property Sharding cluster (Neo4j 2025.10+)
 apiVersion: neo4j.com/v1alpha1
 kind: Neo4jEnterpriseCluster
 metadata:
@@ -847,7 +846,7 @@ metadata:
 spec:
   image:
     repo: neo4j
-    tag: 2025.07.1-enterprise
+    tag: 2025.12-enterprise
   topology:
     servers: 7  # Sufficient for property sharding workloads
   storage:

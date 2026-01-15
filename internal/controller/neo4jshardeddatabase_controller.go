@@ -17,7 +17,7 @@ limitations under the License.
 //
 // Neo4jShardedDatabase Controller Implementation
 //
-// This controller manages Neo4j property-sharded databases using Neo4j 2025.07.1+ Cypher 25 syntax.
+// This controller manages Neo4j property-sharded databases using Neo4j 2025.10+ Cypher 25 syntax.
 //
 // Key Implementation Details:
 //
@@ -141,7 +141,7 @@ func (r *Neo4jShardedDatabaseReconciler) Reconcile(ctx context.Context, req ctrl
 
 	// Verify cluster supports property sharding
 	if !r.clusterSupportsPropertySharding(cluster) {
-		err := fmt.Errorf("cluster %s does not support property sharding (requires Neo4j 2025.07.1+ and propertySharding.enabled=true)", cluster.Name)
+		err := fmt.Errorf("cluster %s does not support property sharding (requires Neo4j 2025.10+ and propertySharding.enabled=true)", cluster.Name)
 		logger.Error(err, "Cluster does not support property sharding")
 		r.Recorder.Event(&shardedDatabase, "Warning", "ClusterNotReady", err.Error())
 

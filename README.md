@@ -16,7 +16,7 @@ The Operator deploys Neo4j EE v5.26+.  It supports both clustered and standalone
   - [Cleanup](#cleanup)
   - [Development Installation](#development-installation)
 - [Database Management](#-database-management)
-- [Property Sharding](#-property-sharding-preview)
+- [Property Sharding](#-property-sharding-infinigraph-ga)
 - [Backup and Restore](#-backup-and-restore)
 - [Examples](#-examples)
 - [Authentication](#-authentication)
@@ -211,23 +211,20 @@ EOF
 - [Database from S3 backup](examples/databases/database-from-s3-seed.yaml)
 - [Database from existing backup](examples/databases/database-dump-vs-backup-seed.yaml)
 
-## 🔄 Property Sharding (PREVIEW)
+## 🔄 Property Sharding (Infinigraph GA)
 
-> ⚠️ **PREVIEW FEATURE**: Property Sharding is a preview feature available in Neo4j 2025.06+. It enables massive scale graph databases by separating graph structure and properties into specialized shards.
-
-Property sharding separates your graph data into:
-- **Graph shards**: Store nodes and relationships (no properties)
-- **Property shards**: Store node and relationship properties
+Property sharding (Infinigraph) is GA as of Neo4j 2025.12; the operator supports the feature on 2025.10+ calver builds. It keeps the graph shard (nodes/relationships) in a Raft group while distributing properties across property shards for horizontal scale.
 
 ### Requirements
 
-- **Neo4j Version**: 2025.06+ (CalVer format)
-- **Minimum Servers**: 5 servers required (property sharding minimum)
-- **Memory**: 4GB+ memory per server (8GB+ recommended for production)
-- **CPU**: 2+ cores per server (cross-shard queries require additional overhead)
+- **Neo4j Version**: 2025.10+ Enterprise (GA in 2025.12; not available on Aura)
+- **Minimum Servers**: 5 servers required (shard distribution and fault tolerance)
+- **Memory**: 4Gi minimum, 8Gi+ recommended per server
+- **CPU**: 2+ cores per server for cross-shard queries
 - **Authentication**: Admin secret required
 - **Storage**: Storage class must be specified
-- **Network**: Low-latency networking essential for transaction log sync
+- **Network**: Low-latency networking for transaction log shipping
+- **Cypher**: `db.query.default_language=CYPHER_25` is required for sharded databases
 
 ### Quick Start
 
@@ -249,23 +246,27 @@ metadata:
 spec:
   image:
     repo: neo4j
-    tag: 2025.06-enterprise
+    tag: 2025.12-enterprise  # Requires 2025.10+ for property sharding
   auth:
-    adminSecret: neo4j-admin-secret  # Required
+    adminSecret: neo4j-admin-secret
   topology:
     servers: 5  # Minimum 5 servers for property sharding
   storage:
     size: 10Gi
-    className: standard  # Storage class must be specified
+    className: standard
   resources:
     requests:
-      memory: 12Gi   # Property sharding requires 12GB+ heap per server
-      cpu: 2000m     # 2+ cores required for cross-shard queries
+      memory: 8Gi
+      cpu: 2000m
     limits:
-      memory: 16Gi   # Account for total memory needs beyond heap
-      cpu: 4000m     # Higher CPU for shard coordination overhead
+      memory: 16Gi
+      cpu: 4000m
   propertySharding:
     enabled: true
+    config:
+      internal.dbms.sharded_property_database.enabled: "true"
+      internal.dbms.sharded_property_database.allow_external_shard_access: "false"
+      db.query.default_language: "CYPHER_25"
 ```
 
 3. **Create a sharded database:**
@@ -388,7 +389,7 @@ After cloning the repository, ready-to-use configurations are available in the `
 - **[Standalone plugin example](examples/plugins/standalone-plugin-example.yaml)** - Install Graph Data Science on standalone
 - **[Plugin documentation](examples/plugins/README.md)** - Complete guide to plugin management
 
-### Property Sharding (PREVIEW - Neo4j 2025.06+)
+### Property Sharding (Infinigraph GA - Neo4j 2025.12+, supports 2025.10+)
 - **[Basic property sharding](examples/property_sharding/basic-property-sharding.yaml)** - Simple property sharded database setup
 - **[Advanced property sharding](examples/property_sharding/advanced-property-sharding.yaml)** - Production configuration with multiple shards
 - **[Development property sharding](examples/property_sharding/development-property-sharding.yaml)** - Development setup with minimal resources
@@ -466,7 +467,7 @@ Complete CRD documentation for all custom resources:
 - [Neo4jEnterpriseStandalone](docs/api_reference/neo4jenterprisestandalone.md) - Single-node deployments
 - [Neo4jBackup](docs/api_reference/neo4jbackup.md) & [Neo4jRestore](docs/api_reference/neo4jrestore.md)
 - [Neo4jDatabase](docs/api_reference/neo4jdatabase.md)
-- [Neo4jShardedDatabase](docs/api_reference/neo4jshardeddatabase.md) - Property sharded databases (PREVIEW)
+- [Neo4jShardedDatabase](docs/api_reference/neo4jshardeddatabase.md) - Property sharded databases (Infinigraph GA in 2025.12, supports 2025.10+)
 - [Neo4jPlugin](docs/api_reference/neo4jplugin.md)
 
 ## ✨ Key Features
@@ -475,10 +476,11 @@ Complete CRD documentation for all custom resources:
 - **Dual Deployment Modes**: Choose between clustered (Neo4jEnterpriseCluster) or standalone (Neo4jEnterpriseStandalone) deployments
 - **Server-Based Architecture**: Enterprise clusters use unified server StatefulSets where servers self-organize into database primary/secondary roles
 - **Flexible Topology**: Specify total server count and let Neo4j automatically assign database hosting roles based on requirements
-- **Property Sharding**: Neo4j 2025.06+ property sharding support for massive scale graph databases (PREVIEW)
+- **Property Sharding**: Neo4j property sharding (Infinigraph) GA in 2025.12, supported on 2025.10+ for massive scale graph databases
 - **High Availability**: Multi-server clusters with automatic leader election and V2_ONLY discovery
 - **Persistent Storage**: Configurable storage classes and volume management
 - **Rolling Updates**: Zero-downtime Neo4j version upgrades
+- **OpenShift Route Support**: Optional OpenShift Routes via `spec.service.route` for cluster and standalone services
 
 ### 🔐 Security & Authentication
 - **TLS/SSL**: Configurable TLS encryption for client and cluster communications
@@ -546,11 +548,11 @@ kubectl logs -l app.kubernetes.io/name=neo4j-operator
 ## 🎯 Recent Improvements
 
 ### Latest Version Enhancements
-- **Property Sharding Support (PREVIEW)**: Neo4j 2025.06+ property sharding integration for massive scale deployments
-  - **Automatic Configuration**: Property sharding clusters configured with required settings automatically
-  - **Version Validation**: Ensures Neo4j 2025.06+ versions for property sharding compatibility
+- **Property Sharding Support (GA)**: Neo4j property sharding (Infinigraph) GA in 2025.12, supported on 2025.10+
+  - **Automatic Configuration**: Applies required sharding settings (CYPHER_25 default language, sharded database enablement)
+  - **Version Validation**: Ensures Neo4j 2025.10+ for property sharding compatibility
   - **Topology Requirements**: Validates minimum 5 servers for property sharding clusters
-  - **Neo4jShardedDatabase CRD**: New CRD for creating and managing property-sharded databases
+  - **Neo4jShardedDatabase CRD**: CRD for creating and managing property-sharded databases
 - **Neo4j 5.26+ Plugin Compatibility**: Complete rework of plugin system for Neo4j 5.26+ compatibility
   - **APOC Environment Variables**: APOC configuration now uses environment variables (no longer supported in neo4j.conf)
   - **Automatic Security Settings**: Plugin-specific procedure security applied automatically

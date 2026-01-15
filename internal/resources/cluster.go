@@ -1565,18 +1565,18 @@ server.bolt.tls_level=OPTIONAL
 	if cluster.Spec.PropertySharding != nil && cluster.Spec.PropertySharding.Enabled {
 		config += "\n# Property Sharding Configuration (CRITICAL: placed at end to avoid script overwrites)\n"
 
-		if cluster.Spec.PropertySharding.Config != nil {
-			// Sort keys to ensure deterministic order
-			var propertyShardingKeys []string
-			for key := range cluster.Spec.PropertySharding.Config {
-				propertyShardingKeys = append(propertyShardingKeys, key)
-			}
-			sort.Strings(propertyShardingKeys)
+		propertyShardingConfig := buildPropertyShardingConfig(cluster)
 
-			// Add property sharding configuration in sorted order
-			for _, key := range propertyShardingKeys {
-				config += fmt.Sprintf("%s=%s\n", key, cluster.Spec.PropertySharding.Config[key])
-			}
+		// Sort keys to ensure deterministic order
+		var propertyShardingKeys []string
+		for key := range propertyShardingConfig {
+			propertyShardingKeys = append(propertyShardingKeys, key)
+		}
+		sort.Strings(propertyShardingKeys)
+
+		// Add property sharding configuration in sorted order
+		for _, key := range propertyShardingKeys {
+			config += fmt.Sprintf("%s=%s\n", key, propertyShardingConfig[key])
 		}
 	}
 
@@ -1597,41 +1597,52 @@ func isNeo4jVersion526OrHigher(imageTag string) bool {
 	return false
 }
 
-// IsNeo4jVersion2025071OrHigher checks if the Neo4j version supports property sharding
-// Property sharding requires Neo4j 2025.07.1+ (calver only - no semver versions support it)
-func IsNeo4jVersion2025071OrHigher(imageTag string) bool {
-	// CRITICAL: Property sharding is ONLY available in Neo4j 2025.07.1+ calver versions
-	// No semver versions (5.x) support property sharding
+// IsNeo4jVersion202510OrHigher checks if the Neo4j version supports property sharding
+// Property sharding requires Neo4j 2025.10+ (calver only - no semver versions support it)
+func IsNeo4jVersion202510OrHigher(imageTag string) bool {
+	if imageTag == "" {
+		return false
+	}
 
-	// Check for 2025.07.1+ specifically (minimum supported version)
-	if strings.Contains(imageTag, "2025.07.1") ||
-		strings.Contains(imageTag, "2025.07.2") ||
-		strings.Contains(imageTag, "2025.07.3") ||
-		strings.Contains(imageTag, "2025.07.4") ||
-		strings.Contains(imageTag, "2025.07.5") ||
-		strings.Contains(imageTag, "2025.07.6") ||
-		strings.Contains(imageTag, "2025.07.7") ||
-		strings.Contains(imageTag, "2025.07.8") ||
-		strings.Contains(imageTag, "2025.07.9") {
+	// Extract the calver portion before any qualifiers (e.g., "-enterprise")
+	version := strings.Split(imageTag, "-")[0]
+	parts := strings.Split(version, ".")
+	if len(parts) < 2 {
+		return false
+	}
+
+	year, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return false
+	}
+
+	month, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return false
+	}
+
+	if year > 2025 {
 		return true
 	}
 
-	// Check for all future calver versions (2025.08+, 2025.09+, etc.)
-	// All future Neo4j calver versions support property sharding
-	if strings.Contains(imageTag, "2025.08") ||
-		strings.Contains(imageTag, "2025.09") ||
-		strings.Contains(imageTag, "2025.10") ||
-		strings.Contains(imageTag, "2025.11") ||
-		strings.Contains(imageTag, "2025.12") ||
-		strings.Contains(imageTag, "2026.") ||
-		strings.Contains(imageTag, "2027.") ||
-		strings.Contains(imageTag, "2028.") ||
-		strings.Contains(imageTag, "2029.") ||
-		strings.Contains(imageTag, "2030.") {
-		return true
+	return year == 2025 && month >= 10
+}
+
+// buildPropertyShardingConfig merges required property sharding settings with user overrides
+func buildPropertyShardingConfig(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) map[string]string {
+	config := map[string]string{
+		"internal.dbms.sharded_property_database.enabled":                     "true",
+		"internal.dbms.sharded_property_database.allow_external_shard_access": "false",
+		"db.query.default_language":                                           "CYPHER_25",
 	}
 
-	return false
+	if cluster.Spec.PropertySharding != nil && cluster.Spec.PropertySharding.Config != nil {
+		for key, value := range cluster.Spec.PropertySharding.Config {
+			config[key] = value
+		}
+	}
+
+	return config
 }
 
 // getKubernetesDiscoveryParameter returns the correct Kubernetes discovery parameter based on Neo4j version

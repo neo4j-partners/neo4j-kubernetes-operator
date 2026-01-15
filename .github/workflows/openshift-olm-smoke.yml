@@ -1,0 +1,126 @@
+name: OpenShift OLM Smoke (SNO)
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Bundle version tag (e.g., 0.0.0-ci)"
+        required: false
+        default: "0.0.0-ci"
+
+env:
+  GO_VERSION: "1.22"
+  VERSION: ${{ inputs.version }}
+  OPERATOR_IMG: ghcr.io/${{ github.repository_owner }}/neo4j-kubernetes-operator:latest
+  BUNDLE_IMG: ghcr.io/${{ github.repository_owner }}/neo4j-operator-bundle:${{ github.sha }}
+  CATALOG_IMG: ghcr.io/${{ github.repository_owner }}/neo4j-operator-catalog:${{ github.sha }}
+  OPERATOR_NAMESPACE: neo4j-operator-system
+  CATALOG_NAMESPACE: openshift-marketplace
+
+jobs:
+  bundle-and-catalog:
+    name: Build & Push OLM Bundle
+    runs-on: ubuntu-latest
+    outputs:
+      bundle_image: ${{ steps.out.outputs.bundle_image }}
+      catalog_image: ${{ steps.out.outputs.catalog_image }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: ./.github/actions/setup-go
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build bundle manifests
+        run: |
+          make bundle IMG=${{ env.OPERATOR_IMG }} VERSION=${{ env.VERSION }}
+
+      - name: Build and push bundle image
+        run: |
+          make bundle-build BUNDLE_IMG=${{ env.BUNDLE_IMG }}
+          make bundle-push BUNDLE_IMG=${{ env.BUNDLE_IMG }}
+
+      - name: Build and push catalog image
+        run: |
+          make catalog-build BUNDLE_IMGS=${{ env.BUNDLE_IMG }} CATALOG_IMG=${{ env.CATALOG_IMG }}
+          make catalog-push CATALOG_IMG=${{ env.CATALOG_IMG }}
+
+      - name: Export image outputs
+        id: out
+        run: |
+          echo "bundle_image=${BUNDLE_IMG}" >> $GITHUB_OUTPUT
+          echo "catalog_image=${CATALOG_IMG}" >> $GITHUB_OUTPUT
+
+  openshift-sno-olm-smoke:
+    name: OpenShift SNO OLM Smoke
+    needs: bundle-and-catalog
+    runs-on: ubuntu-latest
+    if: ${{ secrets.OCP_API != '' && secrets.OCP_TOKEN != '' }}
+    env:
+      OCP_API: ${{ secrets.OCP_API }}
+      OCP_TOKEN: ${{ secrets.OCP_TOKEN }}
+      OCP_INSECURE: ${{ secrets.OCP_INSECURE }}
+      CATALOG_IMG: ${{ needs.bundle-and-catalog.outputs.catalog_image }}
+      OPERATOR_NAMESPACE: neo4j-operator-system
+      CATALOG_NAMESPACE: openshift-marketplace
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install oc CLI
+        run: |
+          curl -sSL https://mirror.openshift.com/pub/openshift-v4/clients/ocp/latest/openshift-client-linux.tar.gz \
+            | tar -xz oc
+          sudo mv oc /usr/local/bin/oc
+
+      - name: Login to OpenShift SNO
+        run: |
+          oc login "${OCP_API}" --token="${OCP_TOKEN}" ${OCP_INSECURE:+--insecure-skip-tls-verify}
+
+      - name: Prepare OLM manifests
+        run: |
+          mkdir -p /tmp/olm
+          sed "s|quay.io/your-org/neo4j-operator-catalog:latest|${CATALOG_IMG}|" config/samples/olm/catalogsource.yaml > /tmp/olm/catalogsource.yaml
+          cp config/samples/olm/subscription.yaml /tmp/olm/subscription.yaml
+          cat /tmp/olm/catalogsource.yaml
+
+      - name: Install CatalogSource and Subscription
+        run: |
+          oc apply -f /tmp/olm/catalogsource.yaml -n ${CATALOG_NAMESPACE}
+          oc new-project ${OPERATOR_NAMESPACE} || true
+          oc apply -f /tmp/olm/subscription.yaml -n ${OPERATOR_NAMESPACE}
+
+      - name: Wait for CSV to succeed
+        run: |
+          echo "Waiting for CSV to reach Succeeded..."
+          for i in {1..60}; do
+            phase=$(oc get csv -n ${OPERATOR_NAMESPACE} -o jsonpath='{.items[0].status.phase}' 2>/dev/null || true)
+            if [ "$phase" = "Succeeded" ]; then
+              echo "CSV Succeeded"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "CSV did not reach Succeeded" >&2
+          oc get csv -n ${OPERATOR_NAMESPACE} || true
+          exit 1
+
+      - name: Wait for operator deployment
+        run: |
+          oc rollout status -n ${OPERATOR_NAMESPACE} deployment/neo4j-operator-controller-manager --timeout=180s
+
+  openshift-sno-olm-smoke-skip:
+    name: OpenShift SNO OLM Smoke (Skipped - missing OCP_API/OCP_TOKEN)
+    runs-on: ubuntu-latest
+    if: ${{ secrets.OCP_API == '' || secrets.OCP_TOKEN == '' }}
+    steps:
+      - run: echo "Skipping OpenShift SNO smoke run because OCP_API/OCP_TOKEN secrets are not provided."
