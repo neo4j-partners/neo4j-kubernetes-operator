@@ -93,6 +93,11 @@ var _ = Describe("Neo4jDatabase Seed URI Integration Tests", func() {
 			// Apply CI-specific optimizations (reduces 3 servers to 2 in CI)
 			applyCIOptimizations(testCluster)
 
+			// Seed URI tests rely on stable cluster formation; keep at least 3 servers
+			if testCluster.Spec.Topology.Servers < 3 {
+				testCluster.Spec.Topology.Servers = 3
+			}
+
 			Expect(k8sClient.Create(context.Background(), testCluster)).To(Succeed())
 
 			// Create test credentials secret

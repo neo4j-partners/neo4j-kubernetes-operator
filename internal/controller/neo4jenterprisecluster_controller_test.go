@@ -76,10 +76,10 @@ var _ = Describe("Neo4jEnterpriseCluster Controller - Property Sharding", func()
 				// Validate property sharding configuration
 				err := reconciler.validatePropertyShardingConfiguration(ctx, cluster)
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("requires Neo4j 2025.06"))
+				Expect(err.Error()).To(ContainSubstring("requires Neo4j 2025.10"))
 			})
 
-			It("should accept valid Neo4j 2025.06+ version", func() {
+			It("should accept valid Neo4j 2025.10+ version", func() {
 				cluster := &neo4jv1alpha1.Neo4jEnterpriseCluster{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-cluster",
@@ -88,7 +88,7 @@ var _ = Describe("Neo4jEnterpriseCluster Controller - Property Sharding", func()
 					Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 						Image: neo4jv1alpha1.ImageSpec{
 							Repo: "neo4j",
-							Tag:  "2025.06-enterprise",
+							Tag:  "2025.12-enterprise",
 						},
 						Topology: neo4jv1alpha1.TopologyConfiguration{
 							Servers: int32(7),
@@ -118,7 +118,7 @@ var _ = Describe("Neo4jEnterpriseCluster Controller - Property Sharding", func()
 					Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 						Image: neo4jv1alpha1.ImageSpec{
 							Repo: "neo4j",
-							Tag:  "2025.06-enterprise",
+							Tag:  "2025.12-enterprise",
 						},
 						Topology: neo4jv1alpha1.TopologyConfiguration{
 							Servers: int32(2), // Too few servers
@@ -149,7 +149,7 @@ var _ = Describe("Neo4jEnterpriseCluster Controller - Property Sharding", func()
 					Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 						Image: neo4jv1alpha1.ImageSpec{
 							Repo: "neo4j",
-							Tag:  "2025.06-enterprise",
+							Tag:  "2025.12-enterprise",
 						},
 						Topology: neo4jv1alpha1.TopologyConfiguration{
 							Servers: int32(5),
@@ -176,13 +176,11 @@ var _ = Describe("Neo4jEnterpriseCluster Controller - Property Sharding", func()
 				// Simulate what applyPropertyShardingConfig would do
 				cluster.Spec.Config["internal.dbms.sharded_property_database.enabled"] = "true"
 				cluster.Spec.Config["db.query.default_language"] = "CYPHER_25"
-				cluster.Spec.Config["internal.dbms.cluster.experimental_protocol_version.dbms_enabled"] = "true"
 				cluster.Spec.Config["internal.dbms.sharded_property_database.allow_external_shard_access"] = "false"
 
 				// Check required settings are applied
 				Expect(cluster.Spec.Config["internal.dbms.sharded_property_database.enabled"]).To(Equal("true"))
 				Expect(cluster.Spec.Config["db.query.default_language"]).To(Equal("CYPHER_25"))
-				Expect(cluster.Spec.Config["internal.dbms.cluster.experimental_protocol_version.dbms_enabled"]).To(Equal("true"))
 				Expect(cluster.Spec.Config["internal.dbms.sharded_property_database.allow_external_shard_access"]).To(Equal("false"))
 			})
 
@@ -195,7 +193,7 @@ var _ = Describe("Neo4jEnterpriseCluster Controller - Property Sharding", func()
 					Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 						Image: neo4jv1alpha1.ImageSpec{
 							Repo: "neo4j",
-							Tag:  "2025.06-enterprise",
+							Tag:  "2025.12-enterprise",
 						},
 						Topology: neo4jv1alpha1.TopologyConfiguration{
 							Servers: int32(5),
@@ -228,7 +226,6 @@ var _ = Describe("Neo4jEnterpriseCluster Controller - Property Sharding", func()
 				// Apply required settings
 				cluster.Spec.Config["internal.dbms.sharded_property_database.enabled"] = "true"
 				cluster.Spec.Config["db.query.default_language"] = "CYPHER_25"
-				cluster.Spec.Config["internal.dbms.cluster.experimental_protocol_version.dbms_enabled"] = "true"
 				cluster.Spec.Config["internal.dbms.sharded_property_database.allow_external_shard_access"] = "false"
 
 				// Apply custom settings from PropertySharding.Config
@@ -291,7 +288,7 @@ var _ = Describe("Neo4jEnterpriseCluster Controller - Property Sharding", func()
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 					Image: neo4jv1alpha1.ImageSpec{
 						Repo: "neo4j",
-						Tag:  "2025.06-enterprise",
+						Tag:  "2025.12-enterprise",
 					},
 					Topology: neo4jv1alpha1.TopologyConfiguration{
 						Servers: int32(3),
@@ -342,7 +339,7 @@ var _ = Describe("Neo4jEnterpriseCluster Controller - Property Sharding", func()
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 					Image: neo4jv1alpha1.ImageSpec{
 						Repo: "neo4j",
-						Tag:  "2025.06-enterprise",
+						Tag:  "2025.12-enterprise",
 					},
 					Topology: neo4jv1alpha1.TopologyConfiguration{
 						Servers: int32(3),
@@ -399,14 +396,14 @@ var _ = Describe("Neo4jEnterpriseCluster Controller - Property Sharding", func()
 
 			err := validatePropertyShardingVersion(cluster.Spec.Image.Tag)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("requires Neo4j 2025.06"))
+			Expect(err.Error()).To(ContainSubstring("requires Neo4j 2025.10"))
 		})
 
 		It("should correctly parse calver versions", func() {
 			cluster := &neo4jv1alpha1.Neo4jEnterpriseCluster{
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 					Image: neo4jv1alpha1.ImageSpec{
-						Tag: "2025.06.0-enterprise",
+						Tag: "2025.10.0-enterprise",
 					},
 				},
 			}
@@ -421,7 +418,7 @@ var _ = Describe("Neo4jEnterpriseCluster Controller - Property Sharding", func()
 			cluster := &neo4jv1alpha1.Neo4jEnterpriseCluster{
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 					Image: neo4jv1alpha1.ImageSpec{
-						Tag: "2025.07-enterprise",
+						Tag: "2025.12-enterprise",
 					},
 				},
 			}
@@ -436,7 +433,7 @@ var _ = Describe("Neo4jEnterpriseCluster Controller - Property Sharding", func()
 			cluster := &neo4jv1alpha1.Neo4jEnterpriseCluster{
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 					Image: neo4jv1alpha1.ImageSpec{
-						Tag: "2025.05.0-enterprise",
+						Tag: "2025.09.0-enterprise",
 					},
 				},
 			}
@@ -445,7 +442,7 @@ var _ = Describe("Neo4jEnterpriseCluster Controller - Property Sharding", func()
 
 			err := validatePropertyShardingVersion(cluster.Spec.Image.Tag)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("requires Neo4j 2025.06"))
+			Expect(err.Error()).To(ContainSubstring("requires Neo4j 2025.10"))
 		})
 	})
 })

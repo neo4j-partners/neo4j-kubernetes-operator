@@ -37,7 +37,7 @@ func isRunningInCI() bool {
 
 // Property Sharding Integration Tests
 // These tests are skipped in CI environments due to large resource requirements:
-// - Neo4j 2025.07.1+ images are larger than standard versions
+// - Neo4j 2025.10+ images are larger than standard versions
 // - Property sharding requires minimum 5 servers for proper shard distribution
 // - Each server needs 4Gi+ memory minimum for property sharding workloads (8Gi recommended)
 // - Total cluster resource requirements: 20Gi minimum (40Gi recommended)
@@ -122,7 +122,7 @@ var _ = Describe("Property Sharding Integration Tests", Serial, func() {
 					Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 						Image: neo4jv1alpha1.ImageSpec{
 							Repo: "neo4j",
-							Tag:  "2025.07.1-enterprise", // Property sharding requires 2025.07.1+
+							Tag:  "2025.11.2-enterprise", // Property sharding requires 2025.10+ (using 2025.11.2)
 						},
 						Auth: &neo4jv1alpha1.AuthSpec{
 							AdminSecret: "neo4j-admin-secret",
@@ -149,7 +149,6 @@ var _ = Describe("Property Sharding Integration Tests", Serial, func() {
 							Config: map[string]string{
 								"internal.dbms.sharded_property_database.enabled":                     "true",
 								"db.query.default_language":                                           "CYPHER_25",
-								"internal.dbms.cluster.experimental_protocol_version.dbms_enabled":    "true",
 								"internal.dbms.sharded_property_database.allow_external_shard_access": "false",
 							},
 						},
@@ -189,7 +188,7 @@ var _ = Describe("Property Sharding Integration Tests", Serial, func() {
 					Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 						Image: neo4jv1alpha1.ImageSpec{
 							Repo: "neo4j",
-							Tag:  "2025.07.1-enterprise",
+							Tag:  "2025.11.2-enterprise",
 						},
 						Auth: &neo4jv1alpha1.AuthSpec{
 							AdminSecret: "neo4j-admin-secret",
@@ -263,7 +262,7 @@ var _ = Describe("Property Sharding Integration Tests", Serial, func() {
 				}).Should(Equal("Failed"))
 
 				By("Checking failure message mentions version requirement")
-				Expect(cluster.Status.Message).Should(ContainSubstring("2025.07.1+"))
+				Expect(cluster.Status.Message).Should(ContainSubstring("2025.10+"))
 			})
 		})
 	})
@@ -279,7 +278,7 @@ var _ = Describe("Property Sharding Integration Tests", Serial, func() {
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 					Image: neo4jv1alpha1.ImageSpec{
 						Repo: "neo4j",
-						Tag:  "2025.07.1-enterprise",
+						Tag:  "2025.11.2-enterprise",
 					},
 					Auth: &neo4jv1alpha1.AuthSpec{
 						AdminSecret: "neo4j-admin-secret",
@@ -306,7 +305,6 @@ var _ = Describe("Property Sharding Integration Tests", Serial, func() {
 						Config: map[string]string{
 							"internal.dbms.sharded_property_database.enabled":                     "true",
 							"db.query.default_language":                                           "CYPHER_25",
-							"internal.dbms.cluster.experimental_protocol_version.dbms_enabled":    "true",
 							"internal.dbms.sharded_property_database.allow_external_shard_access": "false",
 						},
 					},
@@ -429,7 +427,7 @@ var _ = Describe("Property Sharding Integration Tests", Serial, func() {
 					Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 						Image: neo4jv1alpha1.ImageSpec{
 							Repo: "neo4j",
-							Tag:  "2025.07.1-enterprise",
+							Tag:  "2025.12-enterprise",
 						},
 						Auth: &neo4jv1alpha1.AuthSpec{
 							AdminSecret: "neo4j-admin-secret",

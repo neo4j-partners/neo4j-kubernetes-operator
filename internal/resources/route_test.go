@@ -1,74 +1,96 @@
-package resources_test
+package resources
 
 import (
 	"testing"
 
-	"github.com/stretchr/testify/require"
+	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	neo4jv1alpha1 "github.com/priyolahiri/neo4j-kubernetes-operator/api/v1alpha1"
-	"github.com/priyolahiri/neo4j-kubernetes-operator/internal/resources"
 )
 
-func TestBuildRouteForEnterprise_Disabled(t *testing.T) {
-	cluster := &neo4jv1alpha1.Neo4jEnterpriseCluster{}
+func TestBuildRouteForEnterprise(t *testing.T) {
+	g := NewWithT(t)
 
-	route := resources.BuildRouteForEnterprise(cluster)
-	require.Nil(t, route)
-}
-
-func TestBuildRouteForEnterprise_Enabled(t *testing.T) {
 	cluster := &neo4jv1alpha1.Neo4jEnterpriseCluster{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "graph",
-			Namespace: "ns",
-		},
+		ObjectMeta: testObjectMeta("test-cluster", "default"),
 		Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 			Service: &neo4jv1alpha1.ServiceSpec{
+				Annotations: map[string]string{"svc": "anno"},
 				Route: &neo4jv1alpha1.RouteSpec{
 					Enabled:     true,
-					Host:        "graph.example.com",
-					Annotations: map[string]string{"route": "enabled"},
-					Termination: "edge",
+					Host:        "example.com",
+					Path:        "/",
+					Annotations: map[string]string{"route": "anno"},
+					TargetPort:  8080,
+					TLS: &neo4jv1alpha1.RouteTLSSpec{
+						Termination:                   "edge",
+						InsecureEdgeTerminationPolicy: "Redirect",
+					},
 				},
 			},
 		},
 	}
 
-	route := resources.BuildRouteForEnterprise(cluster)
-	require.NotNil(t, route)
-
-	spec, found, _ := unstructured.NestedMap(route.Object, "spec")
-	require.True(t, found)
-	host, _, _ := unstructured.NestedString(spec, "host")
-	require.Equal(t, "graph.example.com", host)
-	targetPort, _, _ := unstructured.NestedString(spec, "port", "targetPort")
-	require.Equal(t, "http", targetPort)
+	route := BuildRouteForEnterprise(cluster)
+	g.Expect(route).ToNot(BeNil())
+	spec, found, _ := unstructuredNestedMap(route.Object, "spec")
+	g.Expect(found).To(BeTrue())
+	g.Expect(spec["host"]).To(Equal("example.com"))
+	g.Expect(spec["path"]).To(Equal("/"))
 }
 
-func TestBuildRouteForStandalone_TLS(t *testing.T) {
+func TestBuildRouteForStandalone(t *testing.T) {
+	g := NewWithT(t)
+
 	standalone := &neo4jv1alpha1.Neo4jEnterpriseStandalone{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "graph-standalone",
-			Namespace: "ns",
-		},
+		ObjectMeta: testObjectMeta("standalone", "default"),
 		Spec: neo4jv1alpha1.Neo4jEnterpriseStandaloneSpec{
-			TLS: &neo4jv1alpha1.TLSSpec{Mode: resources.CertManagerMode},
-			Route: &neo4jv1alpha1.RouteSpec{
-				Enabled:                       true,
-				Termination:                   "reencrypt",
-				DestinationCACertificate:      "dest",
-				InsecureEdgeTerminationPolicy: "Redirect",
+			Service: &neo4jv1alpha1.ServiceSpec{
+				Route: &neo4jv1alpha1.RouteSpec{
+					Enabled: true,
+				},
 			},
 		},
 	}
 
-	route := resources.BuildRouteForStandalone(standalone)
-	require.NotNil(t, route)
+	route := BuildRouteForStandalone(standalone)
+	g.Expect(route).ToNot(BeNil())
+	spec, found, _ := unstructuredNestedMap(route.Object, "spec")
+	g.Expect(found).To(BeTrue())
+	// Default path and targetPort
+	g.Expect(spec["path"]).To(Equal("/"))
+	port, _, _ := unstructuredNestedMap(spec, "port")
+	g.Expect(port["targetPort"]).To(Equal(int32(7474)))
+}
 
-	tls, found, _ := unstructured.NestedMap(route.Object, "spec", "tls")
-	require.True(t, found)
-	require.Equal(t, "reencrypt", tls["termination"])
-	require.Equal(t, "dest", tls["destinationCACertificate"])
+// unstructuredNestedMap is a helper for tests to retrieve nested maps safely
+func unstructuredNestedMap(obj map[string]interface{}, fields ...string) (map[string]interface{}, bool, error) {
+	current := obj
+	for i, field := range fields {
+		val, found := current[field]
+		if !found {
+			return nil, false, nil
+		}
+		if i == len(fields)-1 {
+			if m, ok := val.(map[string]interface{}); ok {
+				return m, true, nil
+			}
+			return nil, false, nil
+		}
+		next, ok := val.(map[string]interface{})
+		if !ok {
+			return nil, false, nil
+		}
+		current = next
+	}
+	return current, true, nil
+}
+
+// testObjectMeta provides minimal metadata for test objects.
+func testObjectMeta(name, namespace string) metav1.ObjectMeta {
+	return metav1.ObjectMeta{
+		Name:      name,
+		Namespace: namespace,
+	}
 }

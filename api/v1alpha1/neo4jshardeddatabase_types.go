@@ -34,7 +34,7 @@ type Neo4jShardedDatabaseSpec struct {
 	Name string `json:"name"`
 
 	// +kubebuilder:validation:Required
-	// Default Cypher language version for sharded database (Neo4j 2025.06+ only)
+	// Default Cypher language version for sharded database (Neo4j 2025.10+ only)
 	// +kubebuilder:validation:Enum="25"
 	//
 	// Property sharding requires Cypher 25 syntax for multi-database operations.

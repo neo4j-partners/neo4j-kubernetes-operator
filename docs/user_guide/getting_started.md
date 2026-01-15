@@ -264,7 +264,7 @@ EOF
 
 ### Property Sharding for Large Datasets
 
-For large datasets that require horizontal scaling, you can enable property sharding (Neo4j 2025.06+):
+For large datasets that require horizontal scaling, you can enable property sharding (Neo4j 2025.10+, GA as of 2025.12):
 
 ```bash
 # Create a property sharding enabled cluster
@@ -279,6 +279,7 @@ metadata:
 spec:
   clusterRef: basic-sharding-cluster
   name: largedata
+  defaultCypherLanguage: "25"
   propertySharding:
     propertyShards: 4
     includedProperties:

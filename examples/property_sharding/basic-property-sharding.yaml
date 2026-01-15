@@ -3,7 +3,7 @@
 #
 # IMPORTANT: Property sharding has specific resource requirements:
 # - Minimum 5 servers for proper shard distribution
-# - 6GB+ memory per server (12GB+ recommended for production)
+# - 4Gi+ memory per server (8Gi+ recommended for production)
 # - 2+ CPU cores per server for cross-shard query performance
 # - Authentication required via admin secret
 # - Storage class must be specified
@@ -20,10 +20,10 @@ metadata:
   name: basic-sharding-cluster
   namespace: default
 spec:
-  # Neo4j 2025.07.1+ required for property sharding
+  # Requires Neo4j 2025.10+ for property sharding (using 2025.12 here)
   image:
     repo: neo4j
-    tag: 2025.07.1-enterprise
+    tag: 2025.12-enterprise
 
   # Authentication required for property sharding
   auth:
@@ -52,7 +52,6 @@ spec:
     # Default config is applied automatically:
     # - internal.dbms.sharded_property_database.enabled: "true"
     # - db.query.default_language: "CYPHER_25"
-    # - internal.dbms.cluster.experimental_protocol_version.dbms_enabled: "true"
     # - internal.dbms.sharded_property_database.allow_external_shard_access: "false"
 
 ---
