@@ -209,7 +209,10 @@ Monitor these critical metrics for performance optimization:
 
 1. **Resource Utilization**:
    ```bash
-   kubectl top pods -l app.kubernetes.io/name=neo4j
+   # Clusters
+   kubectl top pods -l neo4j.com/cluster=<cluster-name>
+   # Standalone
+   kubectl top pods -l app=<standalone-name>
    kubectl top nodes
    ```
 

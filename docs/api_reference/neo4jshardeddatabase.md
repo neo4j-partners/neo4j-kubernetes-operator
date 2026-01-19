@@ -4,7 +4,7 @@ The `Neo4jShardedDatabase` Custom Resource Definition (CRD) manages sharded data
 
 ## Overview
 
-- **API Version**: `neo4j.com/v1alpha1`
+- **API Version**: `neo4j.neo4j.com/v1alpha1`
 - **Kind**: `Neo4jShardedDatabase`
 - **Supported Neo4j Versions**: 2025.10+ (requires property sharding support)
 - **Prerequisites**: Neo4jEnterpriseCluster with `propertySharding.enabled: true`
@@ -122,7 +122,7 @@ Manages property-sharded databases on Neo4j Enterprise clusters.
 ### Neo4jShardedDatabaseSpec
 
 ```yaml
-apiVersion: neo4j.com/v1alpha1
+apiVersion: neo4j.neo4j.com/v1alpha1
 kind: Neo4jShardedDatabase
 metadata:
   name: string

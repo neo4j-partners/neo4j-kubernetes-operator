@@ -44,14 +44,14 @@ The `Neo4jPlugin` controller implements Neo4j's recommended installation approac
 
 ### Environment Variable Mapping
 
-**Example Configuration**:
+**Example Configuration (APOC)**:
 ```yaml
 config:
   "apoc.export.file.enabled": "true"
   "apoc.import.file.enabled": "true"
 ```
 
-**Applied Environment Variables**:
+**Applied Environment Variables (APOC)**:
 ```yaml
 env:
 - name: NEO4J_PLUGINS
@@ -62,11 +62,10 @@ env:
   value: 'true'
 ```
 
-**Benefits**:
-- No external jobs or volume mounts required
-- Follows Neo4j Docker best practices
-- Automatic dependency resolution
-- Controlled rolling updates
+**Notes**:
+- APOC settings are applied via environment variables in Neo4j 5.26+
+- Bloom/GDS/GenAI settings are applied via ConfigMap (standalone) or runtime configuration (cluster)
+- Automatic dependency resolution and security defaults are applied as needed
 
 ## API Version
 
@@ -98,6 +97,7 @@ kind: Neo4jPlugin
 | `registry` | `PluginRegistry` | Registry configuration for custom sources |
 | `url` | `string` | Direct URL for "url" source type |
 | `checksum` | `string` | Checksum for URL sources (format: "sha256:hash") |
+| `authSecret` | `string` | Secret containing auth for private registries/URLs |
 
 ### PluginDependency
 
@@ -112,6 +112,7 @@ kind: Neo4jPlugin
 | Field | Type | Description |
 |-------|------|-------------|
 | `allowedProcedures` | `[]string` | List of allowed procedures/functions |
+| `deniedProcedures` | `[]string` | List of denied procedures/functions |
 | `securityPolicy` | `string` | Security policy: "open", "restricted" |
 | `sandbox` | `boolean` | Enable sandbox mode |
 

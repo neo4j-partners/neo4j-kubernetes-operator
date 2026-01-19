@@ -18,8 +18,12 @@ kubectl describe neo4jenterprisestandalone <standalone-name>
 kubectl describe neo4jdatabase <database-name>
 
 # Check pod status
-kubectl get pods -l app.kubernetes.io/name=neo4j
-kubectl logs -l app.kubernetes.io/name=neo4j
+# Clusters
+kubectl get pods -l neo4j.com/cluster=<cluster-name>
+kubectl logs -l neo4j.com/cluster=<cluster-name>
+# Standalone
+kubectl get pods -l app=<standalone-name>
+kubectl logs -l app=<standalone-name>
 
 # Check events
 kubectl get events --sort-by=.metadata.creationTimestamp
@@ -315,8 +319,8 @@ kubectl describe svc <service-name>
 kubectl get neo4jenterprisecluster <cluster-name> -o yaml
 
 # Check individual pod logs
-kubectl logs <cluster-name>-0
-kubectl logs <cluster-name>-1
+kubectl logs <cluster-name>-server-0
+kubectl logs <cluster-name>-server-1
 ```
 
 **Solutions:**
@@ -358,8 +362,8 @@ kubectl logs <cluster-name>-1
 
 4. **Verify Discovery Labels:**
    ```bash
-   # Check that only headless service has clustering label
-   kubectl get svc -l neo4j.com/cluster=<cluster-name> -o yaml | grep -A 3 -B 3 "neo4j.com/clustering"
+   # Check that only the discovery service has clustering label
+kubectl get svc -l neo4j.com/cluster=<cluster-name> -o yaml | grep -A 3 -B 3 "neo4j.com/clustering"
    ```
 
 #### Problem: Scaling Issues
@@ -533,12 +537,13 @@ kubectl describe clusterrole neo4j-operator-manager-role | grep -E "pods/exec|po
 #### Problem: Backup path not found
 Neo4j 5.26+ requires backup destination path to exist.
 
-**Solution**: The operator's backup sidecar automatically creates paths. Check sidecar is running:
+**Solution**: The operator's backup pod (clusters) or backup sidecar (standalone) automatically creates paths. Check the backup container is running:
 ```bash
-# Check backup sidecar is present
-kubectl get pod <neo4j-pod> -o yaml | grep backup-sidecar
+# Cluster backup pod
+kubectl get pod <cluster>-backup-0 -o yaml | grep backup
+kubectl logs <cluster>-backup-0 -c backup
 
-# Check sidecar logs
+# Standalone backup sidecar
 kubectl logs <neo4j-pod> -c backup-sidecar
 ```
 
@@ -847,8 +852,12 @@ echo "=== Standalone Resources ==="
 kubectl get neo4jenterprisestandalone
 echo
 
-echo "=== Pods ==="
-kubectl get pods -l app.kubernetes.io/name=neo4j
+echo "=== Cluster Pods ==="
+kubectl get pods -l neo4j.com/cluster=<cluster-name>
+echo
+
+echo "=== Standalone Pods ==="
+kubectl get pods -l app=<standalone-name>
 echo
 
 echo "=== Services ==="
@@ -856,15 +865,15 @@ kubectl get svc -l app.kubernetes.io/name=neo4j
 echo
 
 echo "=== PVCs ==="
-kubectl get pvc -l app.kubernetes.io/name=neo4j
+kubectl get pvc
 echo
 
 echo "=== ConfigMaps ==="
-kubectl get configmap -l app.kubernetes.io/name=neo4j
+kubectl get configmap
 echo
 
 echo "=== Secrets ==="
-kubectl get secret -l app.kubernetes.io/name=neo4j
+kubectl get secret
 echo
 
 echo "=== Recent Events ==="

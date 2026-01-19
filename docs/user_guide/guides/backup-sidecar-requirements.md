@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Neo4j Kubernetes Operator uses a backup sidecar container to handle backup operations for both Neo4jEnterpriseCluster and Neo4jEnterpriseStandalone deployments. This document outlines the resource requirements and configuration considerations.
+Standalone deployments use a backup sidecar container. Cluster deployments use a centralized `{cluster}-backup` pod instead of per-pod sidecars. This document focuses on the backup sidecar resources for `Neo4jEnterpriseStandalone`, and notes the cluster backup pod defaults for reference.
 
 ## Resource Requirements
 
@@ -10,11 +10,17 @@ The Neo4j Kubernetes Operator uses a backup sidecar container to handle backup o
 
 The backup sidecar requires sufficient memory to run `neo4j-admin` backup commands, which can be memory-intensive operations.
 
-**Current Configuration:**
+**Current Configuration (Standalone Sidecar):**
 - **Memory Limits**: 1Gi
 - **Memory Requests**: 512Mi
 - **CPU Limits**: 500m
 - **CPU Requests**: 200m
+
+**Cluster Backup Pod Defaults:**
+- **Memory Limits**: 1Gi
+- **Memory Requests**: 256Mi
+- **CPU Limits**: 500m
+- **CPU Requests**: 100m
 
 ### Why These Memory Limits?
 
@@ -35,14 +41,11 @@ With the current resource allocation:
 
 ### Neo4jEnterpriseCluster
 
-Backup sidecar is automatically added to:
-- **Primary pods**: Can perform cluster-wide backups
-- **Secondary pods**: Can perform backups from secondary nodes (recommended)
+Clusters use a centralized `{cluster}-backup` pod (container name: `backup`). There is no backup sidecar on server pods.
 
 ### Neo4jEnterpriseStandalone
 
-Backup sidecar is automatically added to:
-- **Standalone pods**: Single-node database backups
+Backup sidecar is automatically added to the standalone pod and handles backup requests via `/backup-requests`.
 
 ## Version Support
 
@@ -63,7 +66,7 @@ Backup sidecar is automatically added to:
 
 ### Automatic Configuration
 
-The backup sidecar is **automatically configured** for all enterprise deployments:
+The backup sidecar is **automatically configured** for standalone deployments:
 - **No manual setup required**
 - **Automatic resource allocation**
 - **Shared environment variables** with main Neo4j container

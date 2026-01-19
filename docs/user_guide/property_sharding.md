@@ -104,7 +104,7 @@ kubectl create secret generic neo4j-admin-secret \
 ### 1. Create Property Sharding Enabled Cluster
 
 ```yaml
-apiVersion: neo4j.com/v1alpha1
+apiVersion: neo4j.neo4j.com/v1alpha1
 kind: Neo4jEnterpriseCluster
 metadata:
   name: property-sharding-cluster
@@ -150,7 +150,7 @@ spec:
 ### 2. Create Sharded Database
 
 ```yaml
-apiVersion: neo4j.com/v1alpha1
+apiVersion: neo4j.neo4j.com/v1alpha1
 kind: Neo4jShardedDatabase
 metadata:
   name: products-sharded-db
@@ -451,7 +451,7 @@ kubectl exec property-sharding-cluster-server-0 -- \
 Property sharding backup coordinates across all shards:
 
 ```yaml
-apiVersion: neo4j.com/v1alpha1
+apiVersion: neo4j.neo4j.com/v1alpha1
 kind: Neo4jBackup
 metadata:
   name: sharded-backup

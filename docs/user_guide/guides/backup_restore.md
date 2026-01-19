@@ -140,7 +140,7 @@ spec:
     pvc:
       name: backup-storage
       size: 50Gi
-      storageClass: standard
+      storageClassName: standard
   options:
     compress: true
     verify: true
@@ -169,7 +169,6 @@ spec:
     path: neo4j-backups/cluster
     cloud:
       provider: aws
-      region: us-east-1
   options:
     compress: true
     verify: true
@@ -199,7 +198,6 @@ spec:
     path: neo4j-backups/myapp
     cloud:
       provider: gcp
-      region: us-central1
   options:
     compress: true
     encryption:
@@ -229,7 +227,6 @@ spec:
     path: neo4j/production
     cloud:
       provider: azure
-      region: eastus
   options:
     compress: true
     verify: true
@@ -254,7 +251,7 @@ spec:
     type: pvc
     pvc:
       name: backup-storage
-      storageClass: fast-ssd
+      storageClassName: fast-ssd
       size: 100Gi
   options:
     compress: true
@@ -282,7 +279,6 @@ spec:
     path: daily
     cloud:
       provider: aws
-      region: us-west-2
   retention:
     maxAge: "7d"
     maxCount: 7
@@ -315,7 +311,6 @@ spec:
     path: weekly
     cloud:
       provider: gcp
-      region: us-central1
   retention:
     maxAge: "90d"
     maxCount: 12
@@ -445,7 +440,6 @@ spec:
         path: neo4j-logs/production
         cloud:
           provider: aws
-          region: us-east-1
       logRetention: "7d"
       recoveryPointObjective: "5m"
       validateLogIntegrity: true
@@ -713,7 +707,6 @@ spec:
     bucket: my-bucket
     cloud:
       provider: aws
-      region: us-east-1
       # IAM role will be used via service account
 
 ---
@@ -747,7 +740,6 @@ spec:
     bucket: my-gcs-bucket
     cloud:
       provider: gcp
-      region: us-central1
       # Service account will be mounted automatically
 ```
 
@@ -771,7 +763,6 @@ spec:
     bucket: my-container
     cloud:
       provider: azure
-      region: eastus
 ```
 
 ### Custom Backup Arguments

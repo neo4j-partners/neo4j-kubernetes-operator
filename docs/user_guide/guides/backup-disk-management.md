@@ -10,28 +10,26 @@ Neo4j backups can consume significant disk space, especially in production envir
 - Multiple backup types (FULL, DIFF, AUTO)
 - Long retention policies
 
+**Note**: Commands referencing `backup-sidecar` apply to standalone deployments. For clusters, use the centralized `{cluster}-backup-0` pod (container `backup`) and the `/backups` mount.
+
 ## Automatic Cleanup
 
 ### Backup Sidecar Retention
 
-The backup sidecar container automatically manages disk space with configurable retention policies:
+Standalone deployments use a backup sidecar that manages disk space with configurable retention policies. Cluster backups run in a centralized `{cluster}-backup` pod and keep the most recent backups by default.
 
 ```yaml
 apiVersion: neo4j.neo4j.com/v1alpha1
-kind: Neo4jEnterpriseCluster
+kind: Neo4jEnterpriseStandalone
 metadata:
-  name: production-cluster
+  name: production-standalone
 spec:
   # ... other configuration ...
-  podTemplate:
-    spec:
-      containers:
-      - name: backup-sidecar
-        env:
-        - name: BACKUP_RETENTION_DAYS
-          value: "14"  # Keep backups for 14 days
-        - name: BACKUP_RETENTION_COUNT
-          value: "20"  # Keep maximum 20 backups
+  env:
+    - name: BACKUP_RETENTION_DAYS
+      value: "14"  # Keep backups for 14 days
+    - name: BACKUP_RETENTION_COUNT
+      value: "20"  # Keep maximum 20 backups
 ```
 
 Default retention settings:
@@ -197,8 +195,9 @@ java.io.IOException: No space left on device
 
 Quick fixes:
 1. Run cleanup script: `./hack/cleanup-test-resources.sh`
-2. Delete old backups: `kubectl exec <pod> -c backup-sidecar -- rm -rf /data/backups/old-*`
-3. Increase PVC size (if storage class supports expansion)
+2. Delete old backups (cluster): `kubectl exec <cluster>-backup-0 -c backup -- rm -rf /backups/old-*`
+3. Delete old backups (standalone): `kubectl exec <standalone-pod> -c backup-sidecar -- rm -rf /data/backups/old-*`
+4. Increase PVC size (if storage class supports expansion)
 
 ### Prevention
 

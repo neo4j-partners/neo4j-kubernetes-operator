@@ -60,9 +60,10 @@ The operator automatically creates these permissions in the discovery role.
    - RoleBinding: `{cluster-name}-discovery`
 
 2. **Creates server services**:
-   - Server headless service: `{cluster-name}-headless` (for all servers)
-   - Server discovery service: `{cluster-name}-discovery`
-   - Client service: `{cluster-name}-client` (for external access)
+   - Server headless service: `{cluster-name}-headless` (StatefulSet identity)
+   - Internals service: `{cluster-name}-internals` (cluster-internal routing)
+   - Discovery service: `{cluster-name}-discovery` (K8s discovery)
+   - Client service: `{cluster-name}-client` (external access)
 
 3. **Configures Neo4j automatically** with version-specific settings:
 
@@ -261,8 +262,8 @@ The operator uses the following default ports:
 - **Bolt**: 7687 (client connections)
 - **HTTP**: 7474 (HTTP API)
 - **HTTPS**: 7473 (HTTPS API)
-- **Cluster**: 5000 (cluster communication)
-- **Discovery**: 6000 (discovery service)
+- **Cluster**: 5000 (cluster communication and V2_ONLY discovery)
+- **Discovery (legacy tcp-tx)**: 6000 (unused in V2_ONLY mode)
 - **Routing**: 7688 (routing service)
 - **Raft**: 7000 (consensus protocol)
 
@@ -272,7 +273,7 @@ You can customize these ports in the cluster configuration:
 spec:
   config:
     server.cluster.listen_address: 0.0.0.0:5000
-    server.discovery.listen_address: 0.0.0.0:6000
+    server.discovery.listen_address: 0.0.0.0:6000  # Ignored in V2_ONLY mode
     server.routing.listen_address: 0.0.0.0:7688
 ```
 

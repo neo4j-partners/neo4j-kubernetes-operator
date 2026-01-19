@@ -13,6 +13,8 @@ Neo4j Enterprise clusters use a consensus protocol (Raft) among primary nodes to
 - **Quorum Definition**: More than half of the primary nodes must be available for the cluster to remain operational
 - **Calculation**: Quorum = (Number of Primaries / 2) + 1
 
+**Note**: With the server-based architecture, cluster size is defined by `Neo4jEnterpriseCluster.spec.topology.servers`. The primary/secondary counts below refer to `Neo4jDatabase.spec.topology` (database-level roles) and require a cluster with enough servers.
+
 ## Primary Node Topology Options
 
 ### 1. Single Node (1 Primary, 0 Secondaries)

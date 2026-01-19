@@ -78,9 +78,9 @@ kubectl get pods -l app.kubernetes.io/name=neo4j -w
 
 ### Trigger Operator Reconciliation
 ```bash
-# Force operator to re-examine cluster
+# Force operator to re-examine cluster with a no-op annotation change
 kubectl annotate neo4jenterprisecluster CLUSTER_NAME \
-  "operator.neo4j.com/force-reconcile=$(date +%s)"
+  "troubleshooting.neo4j.com/reconcile=$(date +%s)" --overwrite
 ```
 
 ## Common Symptoms

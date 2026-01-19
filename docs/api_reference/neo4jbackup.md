@@ -58,7 +58,8 @@ Cloud identity configuration.
 | Field | Type | Description |
 |---|---|---|
 | `provider` | `string` | **Required**. Identity provider: `"aws"`, `"gcp"`, `"azure"` |
-| Additional fields depend on provider type |
+| `serviceAccount` | `string` | Service account name for cloud identity |
+| `autoCreate` | `*AutoCreateSpec` | Auto-create service account and annotations |
 
 ### PVCSpec
 
@@ -66,10 +67,16 @@ PVC configuration for local storage.
 
 | Field | Type | Description |
 |---|---|---|
-| `claimName` | `string` | Name of existing PVC to use |
-| `size` | `string` | Size for new PVC (e.g., `"100Gi"`) |
 | `storageClassName` | `string` | Storage class name |
-| `accessModes` | `[]string` | Access modes |
+| `name` | `string` | Name of existing PVC to use |
+| `size` | `string` | Size for new PVC (e.g., `"100Gi"`) |
+
+### AutoCreateSpec
+
+| Field | Type | Description |
+|---|---|---|
+| `enabled` | `bool` | Enable auto-creation of service account (default: `true`) |
+| `annotations` | `map[string]string` | Annotations to apply to auto-created service account |
 
 ### RetentionPolicy
 
@@ -92,6 +99,9 @@ Backup-specific options.
 | `verify` | `bool` | Verify backup integrity after creation |
 | `backupType` | `string` | Backup type: `"FULL"`, `"DIFF"`, `"AUTO"` (default) |
 | `pageCache` | `string` | Page cache size (e.g., `"4G"`) - must match pattern `^[0-9]+[KMG]?$` |
+| `parallelDownload` | `bool` | Enable parallel download for remote backups |
+| `remoteAddressResolution` | `bool` | Resolve remote addresses for backups |
+| `skipRecovery` | `bool` | Skip recovery step after backup |
 | `additionalArgs` | `[]string` | Additional neo4j-admin backup arguments |
 
 ### EncryptionSpec
@@ -190,7 +200,7 @@ spec:
   storage:
     type: pvc
     pvc:
-      claimName: backup-storage
+      name: backup-storage
     path: backups/manual/
   options:
     compress: true

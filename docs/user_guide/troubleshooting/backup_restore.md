@@ -8,7 +8,7 @@ The Neo4j Kubernetes Operator provides comprehensive backup and restore capabili
 - **Automated backups** with scheduling and retention policies
 - **Point-in-Time Recovery (PITR)** for Neo4j 2025.x
 - **Multi-cloud storage** support (S3, GCS, Azure Blob)
-- **Backup sidecars** automatically added to all pods
+- **Centralized backup pod** for clusters (standalone uses a backup sidecar)
 - **Automatic RBAC** management for backup operations
 
 ## Common Backup Issues
@@ -30,21 +30,21 @@ kubectl describe neo4jbackup production-backup
 # Check operator logs for backup controller errors
 kubectl logs -n neo4j-operator-system deployment/neo4j-operator-controller-manager | grep -i backup
 
-# Verify RBAC permissions
-kubectl auth can-i create jobs --as=system:serviceaccount:default:production-cluster-backup
+# Verify RBAC permissions (default backup job service account)
+kubectl auth can-i create pods/exec --as=system:serviceaccount:<namespace>:neo4j-backup-sa
 ```
 
 **Common Causes & Solutions:**
 
 1. **Missing RBAC Permissions**:
    ```bash
-   # The operator automatically creates RBAC - check if it exists
-   kubectl get serviceaccount production-cluster-backup
-   kubectl get role production-cluster-backup-role
-   kubectl get rolebinding production-cluster-backup-binding
+# The operator automatically creates RBAC - check if it exists
+kubectl get serviceaccount neo4j-backup-sa
+kubectl get role neo4j-backup-role
+kubectl get rolebinding neo4j-backup-rolebinding
 
-   # If missing, trigger operator reconciliation
-   kubectl annotate neo4jenterprisecluster production-cluster operator.neo4j.com/force-reconcile="$(date +%s)"
+# If missing, trigger operator reconciliation with a no-op annotation change
+kubectl annotate neo4jenterprisecluster production-cluster troubleshooting.neo4j.com/reconcile="$(date +%s)" --overwrite
    ```
 
 2. **Storage Configuration Issues**:
@@ -52,10 +52,14 @@ kubectl auth can-i create jobs --as=system:serviceaccount:default:production-clu
    # Verify storage configuration in backup spec
    spec:
      storage:
-       s3:
-         bucket: "valid-bucket-name"    # Must exist
-         region: "us-west-2"            # Correct region
-         # Credentials must be valid
+       type: s3
+       bucket: "valid-bucket-name"    # Must exist
+       path: "backups/"
+       cloud:
+         provider: aws
+         identity:
+           provider: aws
+       # Credentials must be valid
    ```
 
 3. **Cluster Reference Problems**:
@@ -72,8 +76,8 @@ kubectl auth can-i create jobs --as=system:serviceaccount:default:production-clu
 # Check backup job logs
 kubectl logs job/production-backup-$(date +%Y%m%d)-001
 
-# Check backup sidecar logs
-kubectl logs production-cluster-server-0 -c backup-sidecar
+# Check centralized backup pod logs (clusters)
+kubectl logs production-cluster-backup-0 -c backup
 
 # Check Neo4j server logs for backup-related errors
 kubectl logs production-cluster-server-0 -c neo4j | grep -i backup
@@ -84,9 +88,9 @@ kubectl logs production-cluster-server-0 -c neo4j | grep -i backup
 1. **Insufficient Disk Space**:
    ```bash
    # Check available storage
-   kubectl exec production-cluster-server-0 -c backup-sidecar -- df -h /backup-staging
+   kubectl exec production-cluster-backup-0 -c backup -- df -h /backups
 
-   # Solution: Increase backup sidecar storage or cleanup old backups
+   # Solution: Increase backup storage or cleanup old backups
    ```
 
 2. **Database Lock Issues**:
@@ -95,21 +99,11 @@ kubectl logs production-cluster-server-0 -c neo4j | grep -i backup
    kubectl exec production-cluster-server-0 -- cypher-shell -u neo4j -p password \
      "CALL db.listTransactions() YIELD transactionId, elapsedTimeMillis WHERE elapsedTimeMillis > 30000"
 
-   # Solution: Wait for transactions to complete or consider using secondary for backup
+   # Solution: Wait for transactions to complete or schedule backups off-peak
    ```
 
 3. **Memory Issues in Backup Process**:
-   ```yaml
-   # Increase backup sidecar resources
-   spec:
-     backups:
-       sidecar:
-         resources:
-           requests:
-             memory: "1Gi"      # Increase from default 512Mi
-           limits:
-             memory: "2Gi"      # Increase from default 1Gi
-   ```
+   Backup pod resources are fixed by the operator. Prefer off-peak scheduling, smaller backup scope, or larger cluster nodes.
 
 ### Cloud Storage Issues
 
@@ -117,11 +111,11 @@ kubectl logs production-cluster-server-0 -c neo4j | grep -i backup
 
 **Authentication Issues:**
 ```bash
-# Check AWS credentials
-kubectl exec production-cluster-server-0 -c backup-sidecar -- aws sts get-caller-identity
+# Check AWS credentials using the backup service account (default: neo4j-backup-sa)
+kubectl run backup-auth-check --rm -it --image=amazon/aws-cli --serviceaccount=<backup-serviceaccount> -- aws sts get-caller-identity
 
 # Test S3 access
-kubectl exec production-cluster-server-0 -c backup-sidecar -- aws s3 ls s3://your-backup-bucket/
+kubectl run backup-auth-check --rm -it --image=amazon/aws-cli --serviceaccount=<backup-serviceaccount> -- aws s3 ls s3://your-backup-bucket/
 ```
 
 **Solutions:**
@@ -129,10 +123,15 @@ kubectl exec production-cluster-server-0 -c backup-sidecar -- aws s3 ls s3://you
    ```yaml
    # Use IAM roles for service accounts (IRSA)
    spec:
-     serviceAccount:
-       name: production-cluster-backup
-       annotations:
-         eks.amazonaws.com/role-arn: "arn:aws:iam::123456789:role/Neo4jBackupRole"
+     backups:
+       cloud:
+         provider: aws
+         identity:
+           provider: aws
+           autoCreate:
+             enabled: true
+             annotations:
+               eks.amazonaws.com/role-arn: "arn:aws:iam::123456789:role/Neo4jBackupRole"
    ```
 
 2. **Bucket Policy Problems**:
@@ -164,32 +163,37 @@ kubectl exec production-cluster-server-0 -c backup-sidecar -- aws s3 ls s3://you
 
 **Service Account Problems:**
 ```bash
-# Check GCP credentials
-kubectl exec production-cluster-server-0 -c backup-sidecar -- gcloud auth list
+# Check GCP credentials using the backup service account (default: neo4j-backup-sa)
+kubectl run backup-auth-check --rm -it --image=google/cloud-sdk:slim --serviceaccount=<backup-serviceaccount> -- gcloud auth list
 
 # Test GCS access
-kubectl exec production-cluster-server-0 -c backup-sidecar -- gsutil ls gs://your-backup-bucket/
+kubectl run backup-auth-check --rm -it --image=google/cloud-sdk:slim --serviceaccount=<backup-serviceaccount> -- gsutil ls gs://your-backup-bucket/
 ```
 
 **Solutions:**
 ```yaml
 # Use Workload Identity
 spec:
-  serviceAccount:
-    name: production-cluster-backup
-    annotations:
-      iam.gke.io/gcp-service-account: "neo4j-backup@project.iam.gserviceaccount.com"
+  backups:
+    cloud:
+      provider: gcp
+      identity:
+        provider: gcp
+        autoCreate:
+          enabled: true
+          annotations:
+            iam.gke.io/gcp-service-account: "neo4j-backup@project.iam.gserviceaccount.com"
 ```
 
 #### Azure Blob Storage Issues
 
 **Authentication Problems:**
 ```bash
-# Check Azure credentials
-kubectl exec production-cluster-server-0 -c backup-sidecar -- az account show
+# Check Azure credentials using the backup service account (default: neo4j-backup-sa)
+kubectl run backup-auth-check --rm -it --image=mcr.microsoft.com/azure-cli --serviceaccount=<backup-serviceaccount> -- az account show
 
 # Test storage access
-kubectl exec production-cluster-server-0 -c backup-sidecar -- az storage blob list --account-name storageaccount --container-name backups
+kubectl run backup-auth-check --rm -it --image=mcr.microsoft.com/azure-cli --serviceaccount=<backup-serviceaccount> -- az storage blob list --account-name storageaccount --container-name backups
 ```
 
 ### Scheduled Backup Issues
@@ -266,7 +270,7 @@ kubectl logs -n neo4j-operator-system deployment/neo4j-operator-controller-manag
 3. **Storage Access Problems**:
    ```bash
    # Test access to backup storage location
-   kubectl exec target-cluster-server-0 -c backup-sidecar -- \
+   kubectl exec target-cluster-backup-0 -c backup -- \
      aws s3 ls s3://backup-bucket/path/to/backup/
    ```
 
@@ -340,68 +344,56 @@ kubectl exec production-cluster-server-0 -- neo4j-admin database info system
    # PITR only available in Neo4j 2025.x
    spec:
      image:
-       repository: "neo4j"
+       repo: "neo4j"
        tag: "2025.01.0-enterprise"
    ```
 
-## Backup Sidecar Issues
+## Backup Pod Issues (Cluster)
 
-### Sidecar Container Problems
+### Backup Pod Problems
 
-#### Symptom: Backup sidecar fails to start
+#### Symptom: Backup pod fails to start
 
 **Diagnosis:**
 ```bash
-# Check sidecar status
+# Check backup pod status
 kubectl get pods -l neo4j.com/cluster=production-cluster -o wide
-kubectl describe pod production-cluster-server-0
+kubectl describe pod production-cluster-backup-0
 
-# Check sidecar logs
-kubectl logs production-cluster-server-0 -c backup-sidecar
+# Check backup pod logs
+kubectl logs production-cluster-backup-0 -c backup
 ```
 
 **Common Solutions:**
 
 1. **Resource Constraints**:
-   ```yaml
-   # Increase sidecar resources
-   spec:
-     backups:
-       sidecar:
-         resources:
-           requests:
-             memory: "512Mi"
-             cpu: "200m"
-           limits:
-             memory: "1Gi"
-             cpu: "500m"
-   ```
+   Backup pod resources are fixed by the operator. Prefer off-peak scheduling or larger cluster nodes if backups are OOM-killed.
 
 2. **Storage Mount Issues**:
    ```bash
    # Check volume mounts
-   kubectl describe pod production-cluster-server-0 | grep -A 10 "Mounts:"
+   kubectl describe pod production-cluster-backup-0 | grep -A 10 "Mounts:"
    ```
 
 3. **Permission Problems**:
    ```bash
    # Check file permissions
-   kubectl exec production-cluster-server-0 -c backup-sidecar -- ls -la /backup-requests
-   kubectl exec production-cluster-server-0 -c backup-sidecar -- id
+   kubectl exec production-cluster-backup-0 -c backup -- ls -la /backup-requests
+   kubectl exec production-cluster-backup-0 -c backup -- id
    ```
 
 ### Backup Request Processing Issues
 
-#### Symptom: Backup requests not processed by sidecar
+#### Symptom: Backup requests not processed by backup pod
 
 **Diagnosis:**
 ```bash
 # Check backup request queue
-kubectl exec production-cluster-server-0 -c backup-sidecar -- ls -la /backup-requests/
+kubectl exec production-cluster-backup-0 -c backup -- ls -la /backup-requests/
 
 # Test manual backup request
-kubectl exec production-cluster-server-0 -c backup-sidecar -- sh -c \
-  'echo "{\"path\":\"/data/backups/manual-test\",\"type\":\"FULL\"}" > /backup-requests/test.request'
+kubectl exec production-cluster-backup-0 -c backup -- sh -c \
+  'echo "{\"type\":\"FULL\"}" > /backup-requests/test.request'
 ```
 
 **Solutions:**
@@ -416,11 +408,10 @@ kubectl exec production-cluster-server-0 -c backup-sidecar -- sh -c \
    }
    ```
 
-2. **Sidecar Communication Problems**:
+2. **Request Volume Problems**:
    ```bash
-   # Check shared volume
-   kubectl exec production-cluster-server-0 -c neo4j -- ls -la /backup-requests/
-   kubectl exec production-cluster-server-0 -c backup-sidecar -- ls -la /backup-requests/
+   # Check backup request volume
+   kubectl exec production-cluster-backup-0 -c backup -- ls -la /backup-requests/
    ```
 
 ## Performance Issues
@@ -438,28 +429,18 @@ kubectl top pod production-cluster-server-0
 
 **Optimization Strategies:**
 
-1. **Use Secondary Servers for Backup**:
-   ```yaml
-   spec:
-     backupSource: "secondary"  # Backup from secondary to reduce primary load
-   ```
+1. **Reduce primary load**: Use database-specific backups and schedule during low-traffic windows.
 
-2. **Parallel Backup Processing**:
-   ```yaml
-   spec:
-     backups:
-       parallelism: 2           # Multiple backup jobs can run simultaneously
-   ```
+2. **Avoid overlapping backups**: Stagger `Neo4jBackup` schedules so only one job runs per cluster at a time.
 
 3. **Storage Performance Tuning**:
    ```yaml
    # Use high-performance storage for backup staging
    spec:
-     backups:
-       sidecar:
-         storage:
-           className: "fast-ssd"
-           size: "100Gi"
+     storage:
+       backupStorage:
+         className: "fast-ssd"
+         size: "100Gi"
    ```
 
 4. **Network Optimization**:

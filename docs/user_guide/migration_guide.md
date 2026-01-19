@@ -21,8 +21,7 @@ metadata:
   name: single-node-cluster
 spec:
   topology:
-    primaries: 1
-    secondaries: 0
+    servers: 1
 ```
 
 **New behavior** - Choose one of these options:
@@ -52,8 +51,7 @@ metadata:
   name: minimal-cluster
 spec:
   topology:
-    primaries: 1
-    secondaries: 1  # Minimum required
+    servers: 2  # Minimum required
   # ... other configuration
 ```
 
@@ -68,21 +66,18 @@ spec:
 ```yaml
 # ❌ This will fail validation
 topology:
-  primaries: 1
-  secondaries: 0
+  servers: 1
 ```
 
 **Valid configurations**:
 ```yaml
 # ✅ Minimum cluster topology
 topology:
-  primaries: 1
-  secondaries: 1
+  servers: 2
 
-# ✅ Multi-primary cluster
+# ✅ Larger cluster
 topology:
-  primaries: 3
-  secondaries: 2
+  servers: 5
 ```
 
 ### 3. Discovery Mode Changes
@@ -101,8 +96,7 @@ metadata:
   name: dev-neo4j
 spec:
   topology:
-    primaries: 1
-    secondaries: 0
+    servers: 1
   image:
     repo: neo4j
     tag: "5.26-enterprise"
@@ -149,8 +143,7 @@ metadata:
   name: prod-neo4j
 spec:
   topology:
-    primaries: 1
-    secondaries: 0
+    servers: 1
   image:
     repo: neo4j
     tag: "5.26-enterprise"
@@ -176,8 +169,7 @@ metadata:
   name: prod-neo4j
 spec:
   topology:
-    primaries: 1
-    secondaries: 1  # Add secondary for minimum cluster topology
+    servers: 2  # Minimum cluster topology
   image:
     repo: neo4j
     tag: "5.26-enterprise"
@@ -206,8 +198,7 @@ metadata:
   name: prod-cluster
 spec:
   topology:
-    primaries: 3
-    secondaries: 2
+    servers: 5
   # ... rest of configuration unchanged
 ```
 
@@ -222,7 +213,7 @@ First, identify what you currently have:
 kubectl get neo4jenterprisecluster -A
 
 # Check topology of each cluster
-kubectl get neo4jenterprisecluster -A -o custom-columns=NAME:.metadata.name,NAMESPACE:.metadata.namespace,PRIMARIES:.spec.topology.primaries,SECONDARIES:.spec.topology.secondaries
+kubectl get neo4jenterprisecluster -A -o custom-columns=NAME:.metadata.name,NAMESPACE:.metadata.namespace,SERVERS:.spec.topology.servers
 ```
 
 ### 2. Backup Your Data
@@ -239,7 +230,7 @@ metadata:
   namespace: <your-namespace>
 spec:
   target:
-    kind: Neo4jEnterpriseCluster
+    kind: Cluster
     name: <your-cluster-name>
   storage:
     type: pvc
@@ -256,10 +247,10 @@ For clusters that need to stay clustered:
 
 1. **Update the cluster topology**:
    ```bash
-   kubectl patch neo4jenterprisecluster <cluster-name> -p '{"spec":{"topology":{"secondaries":1}}}'
+   kubectl patch neo4jenterprisecluster <cluster-name> -p '{"spec":{"topology":{"servers":2}}}'
    ```
 
-2. **Wait for the secondary to be ready**:
+2. **Wait for the additional server to be ready**:
    ```bash
    kubectl wait neo4jenterprisecluster <cluster-name> --for=condition=Ready --timeout=600s
    ```
@@ -370,7 +361,10 @@ kubectl get neo4jenterprisecluster
 kubectl get neo4jenterprisestandalone
 
 # Check pod status
-kubectl get pods -l app.kubernetes.io/name=neo4j
+# Clusters
+kubectl get pods -l neo4j.com/cluster=<cluster-name>
+# Standalone
+kubectl get pods -l app=<standalone-name>
 
 # Check service endpoints
 kubectl get svc -l app.kubernetes.io/name=neo4j
@@ -406,11 +400,11 @@ MATCH ()-[r]->() RETURN count(r) as relationshipCount;
 
 **Error**: `Neo4jEnterpriseCluster requires minimum cluster topology`
 
-**Solution**: Either add a secondary node or migrate to `Neo4jEnterpriseStandalone`:
+**Solution**: Either add another server or migrate to `Neo4jEnterpriseStandalone`:
 
 ```bash
-# Option 1: Add secondary
-kubectl patch neo4jenterprisecluster <name> -p '{"spec":{"topology":{"secondaries":1}}}'
+# Option 1: Add server
+kubectl patch neo4jenterprisecluster <name> -p '{"spec":{"topology":{"servers":2}}}'
 
 # Option 2: Migrate to standalone
 kubectl apply -f standalone-replacement.yaml
@@ -446,7 +440,10 @@ kubectl apply -f standalone-replacement.yaml
 
 ```bash
 # Check PVC status
-kubectl get pvc -l app.kubernetes.io/name=neo4j
+# Clusters
+kubectl get pvc -l neo4j.com/cluster=<cluster-name>
+# Standalone
+kubectl get pvc neo4j-data-<standalone-name>-0
 
 # If needed, manually migrate data
 kubectl exec -it <old-pod> -- neo4j-admin dump --to=/tmp/migration.dump
@@ -492,7 +489,8 @@ If you encounter issues during migration:
 1. **Check logs**:
    ```bash
    kubectl logs -l app.kubernetes.io/name=neo4j-operator
-   kubectl logs -l app.kubernetes.io/name=neo4j
+   kubectl logs -l neo4j.com/cluster=<cluster-name>
+   kubectl logs -l app=<standalone-name>
    ```
 
 2. **Check status**:

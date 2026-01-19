@@ -84,9 +84,9 @@ kubectl exec <cluster>-server-2 -- cypher-shell -u neo4j -p <password> "SHOW SER
 
 # All pods should show the same server list
 # Example healthy output (all pods see all 3 servers):
-# "server-0", "pod-0.headless:7687", "Enabled", "Available"
-# "server-1", "pod-1.headless:7687", "Enabled", "Available"
-# "server-2", "pod-2.headless:7687", "Enabled", "Available"
+# "server-0", "<cluster>-server-0.<cluster>-headless:7687", "Enabled", "Available"
+# "server-1", "<cluster>-server-1.<cluster>-headless:7687", "Enabled", "Available"
+# "server-2", "<cluster>-server-2.<cluster>-headless:7687", "Enabled", "Available"
 ```
 
 ## Automatic Repair Actions
@@ -155,15 +155,15 @@ kubectl get events -n <namespace> --sort-by=.metadata.creationTimestamp
 kubectl logs -n neo4j-operator-system deployment/neo4j-operator-controller-manager --tail=50
 
 # 5. Test connectivity between pods
-kubectl exec <pod-1> -- nc -z <pod-2>.headless 7687
+kubectl exec <pod-1> -- nc -z <pod-2>.<cluster>-headless 7687
 ```
 
 ### Manual Verification Steps
 
 1. **Verify Pod-to-Pod Connectivity**:
 ```bash
-kubectl exec <cluster>-server-0 -- nc -z <cluster>-server-1.headless 7687
-kubectl exec <cluster>-server-0 -- nc -z <cluster>-server-2.headless 7687
+kubectl exec <cluster>-server-0 -- nc -z <cluster>-server-1.<cluster>-headless 7687
+kubectl exec <cluster>-server-0 -- nc -z <cluster>-server-2.<cluster>-headless 7687
 ```
 
 2. **Check Neo4j Cluster Formation**:

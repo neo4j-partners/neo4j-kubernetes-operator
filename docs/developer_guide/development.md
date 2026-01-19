@@ -371,7 +371,7 @@ kubectl apply -f examples/standalone/single-node-standalone.yaml
 
 # Verify deployment
 kubectl get neo4jenterprisestandalone
-kubectl get pods -l app=standalone
+kubectl get pods -l app=standalone-neo4j
 
 # Test database creation
 kubectl apply -f examples/database/database-standalone.yaml

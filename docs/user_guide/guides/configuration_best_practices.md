@@ -288,7 +288,12 @@ kind: Neo4jEnterpriseCluster
 metadata:
   name: production-cluster
 spec:
-  serviceAccountName: neo4j-backup-reader  # Uses IAM role
+  backups:
+    cloud:
+      provider: aws
+      identity:
+        provider: aws
+        serviceAccount: neo4j-backup-reader  # Uses IAM role
   # ... other cluster configuration
 ---
 apiVersion: neo4j.neo4j.com/v1alpha1

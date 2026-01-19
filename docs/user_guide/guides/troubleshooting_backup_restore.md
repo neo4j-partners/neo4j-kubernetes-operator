@@ -2,6 +2,8 @@
 
 This guide provides comprehensive troubleshooting information for Neo4j backup and restore operations using the Kubernetes operator. It covers common issues, diagnostic steps, and solutions for various backup and restore scenarios.
 
+**Note**: Cluster deployments use a centralized `{cluster}-backup` pod (container `backup`). Backup sidecar references apply to standalone deployments.
+
 ## Prerequisites
 
 Before troubleshooting, ensure you have:
@@ -214,7 +216,7 @@ kubectl get storageclass
        pvc:
          name: backup-storage
          size: 100Gi
-         storageClass: fast-ssd  # Ensure this exists
+        storageClassName: fast-ssd  # Ensure this exists
    ```
 
 2. **Check Available Storage:**
@@ -234,18 +236,18 @@ Message: Failed to create backup job: pods "backup-job-xyz" is forbidden
 
 **Diagnosis:**
 ```bash
-# Check RBAC permissions
-kubectl auth can-i create jobs --as=system:serviceaccount:neo4j:neo4j-operator
+# Check RBAC permissions for backup job service account
+kubectl auth can-i create pods/exec --as=system:serviceaccount:<namespace>:neo4j-backup-sa
 
 # Check service account
-kubectl get serviceaccount neo4j-operator -o yaml
+kubectl get serviceaccount neo4j-backup-sa -o yaml
 ```
 
 **Solutions:**
 1. **Verify RBAC:**
    ```yaml
    apiVersion: rbac.authorization.k8s.io/v1
-   kind: ClusterRole
+   kind: Role
    metadata:
      name: neo4j-backup-role
    rules:
@@ -257,15 +259,15 @@ kubectl get serviceaccount neo4j-operator -o yaml
 2. **Check Service Account Binding:**
    ```yaml
    apiVersion: rbac.authorization.k8s.io/v1
-   kind: ClusterRoleBinding
+   kind: RoleBinding
    metadata:
-     name: neo4j-backup-binding
+     name: neo4j-backup-rolebinding
    subjects:
    - kind: ServiceAccount
-     name: neo4j-operator
-     namespace: neo4j
+     name: neo4j-backup-sa
+     namespace: <namespace>
    roleRef:
-     kind: ClusterRole
+     kind: Role
      name: neo4j-backup-role
      apiGroup: rbac.authorization.k8s.io
    ```
@@ -280,7 +282,7 @@ Message: org.neo4j.cli.CommandFailedException: Path '/data/backups/test-backup' 
 
 **If you encounter this with an older operator version:**
 
-**Diagnosis:**
+**Diagnosis (standalone only):**
 ```bash
 # Check operator version
 kubectl get deployment -n neo4j-operator neo4j-operator-controller-manager -o jsonpath='{.spec.template.spec.containers[0].image}'
@@ -305,6 +307,11 @@ kubectl logs <neo4j-pod> -c backup-sidecar
    # Check that backup sidecar includes mkdir command
    kubectl get pod <neo4j-pod> -o jsonpath='{.spec.containers[?(@.name=="backup-sidecar")].command}' | grep "mkdir -p"
    ```
+
+For clusters, check the centralized backup pod instead:
+```
+kubectl logs <cluster>-backup-0 -c backup
+```
 
 #### Problem: Backup Times Out
 ```

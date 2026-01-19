@@ -46,7 +46,6 @@ The `Neo4jDatabase` Custom Resource Definition (CRD) provides declarative databa
 | `seedURI` | `string` | Backup URI for database creation (**mutually exclusive with `initialData`**) |
 | `seedConfig` | [`SeedConfiguration`](#seedconfiguration) | Advanced seed URI configuration |
 | `seedCredentials` | [`SeedCredentials`](#seedcredentials) | Seed URI access credentials |
-| `state` | `string` | Desired database state: `"online"` (default), `"offline"` |
 
 ### DatabaseTopology
 
@@ -66,8 +65,11 @@ The `Neo4jDatabase` Custom Resource Definition (CRD) provides declarative databa
 
 | Field | Type | Description |
 |---|---|---|
-| `source` | `string` | Source type for initial data. Currently supports: `"cypher"` |
-| `cypherStatements` | `[]string` | List of Cypher statements to execute on database creation. |
+| `source` | `string` | Source type for initial data: `"cypher"`, `"dump"`, `"csv"` |
+| `cypherStatements` | `[]string` | Cypher statements to execute on database creation |
+| `configMapRef` | `string` | ConfigMap containing data or statements |
+| `secretRef` | `string` | Secret containing data or statements |
+| `storage` | [`*StorageLocation`](#storagelocation) | Storage location for data files |
 
 ### SeedConfiguration
 
@@ -100,7 +102,47 @@ Advanced configuration for creating databases from seed URIs using Neo4j's Cloud
 
 | Field | Type | Description |
 |---|---|---|
-| `secretRef` | `string` | **Required**. Name of Kubernetes secret containing credentials for seed URI access. |
+| `secretRef` | `string` | Name of Kubernetes secret containing credentials for seed URI access |
+
+### StorageLocation
+
+| Field | Type | Description |
+|---|---|---|
+| `type` | `string` | Storage type: `"s3"`, `"gcs"`, `"azure"`, `"pvc"` |
+| `bucket` | `string` | Bucket name (for cloud storage) |
+| `path` | `string` | Path within bucket or PVC |
+| `pvc` | [`*PVCSpec`](#pvcspec) | PVC configuration (for `pvc` type) |
+| `cloud` | [`*CloudBlock`](#cloudblock) | Cloud provider configuration |
+
+### PVCSpec
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | `string` | Name of existing PVC to use |
+| `storageClassName` | `string` | Storage class name |
+| `size` | `string` | Size for new PVC (e.g., `"100Gi"`) |
+
+### CloudBlock
+
+| Field | Type | Description |
+|---|---|---|
+| `provider` | `string` | Cloud provider: `"aws"`, `"gcp"`, `"azure"` |
+| `identity` | [`*CloudIdentity`](#cloudidentity) | Cloud identity configuration |
+
+### CloudIdentity
+
+| Field | Type | Description |
+|---|---|---|
+| `provider` | `string` | Identity provider: `"aws"`, `"gcp"`, `"azure"` |
+| `serviceAccount` | `string` | Service account name for cloud identity |
+| `autoCreate` | [`*AutoCreateSpec`](#autocreatespec) | Auto-create service account and annotations |
+
+### AutoCreateSpec
+
+| Field | Type | Description |
+|---|---|---|
+| `enabled` | `bool` | Enable auto-creation of service account (default: `true`) |
+| `annotations` | `map[string]string` | Annotations to apply to auto-created service account |
 
 #### Required Secret Keys by URI Scheme
 
@@ -127,12 +169,16 @@ Advanced configuration for creating databases from seed URIs using Neo4j's Cloud
 
 | Field | Type | Description |
 |---|---|---|
-| `phase` | `string` | Current phase of the database. Values: `"Pending"`, `"Creating"`, `"Ready"`, `"Failed"` |
-| `state` | `string` | Current database state. Values: `"online"`, `"offline"`, `"starting"`, `"stopping"` |
-| `servers` | `[]string` | List of servers hosting the database. |
-| `dataImported` | `boolean` | Whether initial data has been imported. |
-| `message` | `string` | Human-readable status message. |
-| `lastUpdated` | `Time` | Timestamp of last status update. |
+| `conditions` | `[]metav1.Condition` | Current status conditions |
+| `phase` | `string` | Current phase of the database |
+| `message` | `string` | Human-readable status message |
+| `observedGeneration` | `int64` | Generation observed by the controller |
+| `dataImported` | `boolean` | Whether initial data has been imported |
+| `creationTime` | `*metav1.Time` | When the database was created |
+| `size` | `string` | Database size |
+| `lastBackupTime` | `*metav1.Time` | Last backup time |
+| `state` | `string` | Current database state: `"online"`, `"offline"`, `"starting"`, `"stopping"` |
+| `servers` | `[]string` | Servers hosting the database |
 
 ## Examples
 

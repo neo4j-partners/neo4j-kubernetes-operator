@@ -42,7 +42,7 @@ Defines the source of the backup to restore from.
 | `backupRef` | `string` | ❌ | Reference to Neo4jBackup resource (when type="backup") |
 | `storage` | [`StorageLocation`](#storagelocation) | ❌ | Direct storage location (when type="storage") |
 | `backupPath` | `string` | ❌ | Specific backup path within storage |
-| `pointInTime` | `string` | ❌ | Point in time for restore using --restore-until (RFC3339 format) |
+| `pointInTime` | `*metav1.Time` | ❌ | Point in time for restore using --restore-until (RFC3339 format) |
 | `pitr` | [`PITRConfig`](#pitrconfig) | ❌ | Point-in-time recovery configuration (when type="pitr") |
 
 **Examples:**
@@ -183,6 +183,36 @@ Storage backend configuration (shared with Neo4jBackup).
 | `cloud` | [`CloudBlock`](#cloudblock) | ❌ | Cloud provider configuration |
 | `pvc` | [`PVCSpec`](#pvcspec) | ❌ | PVC configuration (when type is "pvc") |
 
+### PVCSpec
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | `string` | ❌ | Name of existing PVC to use |
+| `storageClassName` | `string` | ❌ | Storage class name |
+| `size` | `string` | ❌ | Size for new PVC (e.g., `"100Gi"`) |
+
+### CloudBlock
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `provider` | `string` | ❌ | Cloud provider: `"aws"`, `"gcp"`, `"azure"` |
+| `identity` | [`*CloudIdentity`](#cloudidentity) | ❌ | Cloud identity configuration |
+
+### CloudIdentity
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `provider` | `string` | ✅ | Identity provider: `"aws"`, `"gcp"`, `"azure"` |
+| `serviceAccount` | `string` | ❌ | Service account name for cloud identity |
+| `autoCreate` | [`*AutoCreateSpec`](#autocreatespec) | ❌ | Auto-create service account and annotations |
+
+### AutoCreateSpec
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `enabled` | `bool` | ❌ | Enable auto-creation of service account (default: `true`) |
+| `annotations` | `map[string]string` | ❌ | Annotations to apply to auto-created service account |
+
 ## Neo4jRestore Status
 
 The `Neo4jRestore` status provides information about restore operations and their current state.
@@ -273,7 +303,6 @@ spec:
         path: production/logs/
         cloud:
           provider: aws
-          region: us-east-1
       logRetention: "7d"
       recoveryPointObjective: "5m"
       validateLogIntegrity: true
@@ -339,7 +368,6 @@ spec:
       path: snapshots/
       cloud:
         provider: aws
-        region: us-west-2
     backupPath: /backups/dev-app/backup-20250120-103000
 
   options:
@@ -377,7 +405,6 @@ spec:
       path: disaster-recovery/
       cloud:
         provider: gcp
-        region: us-central1
     backupPath: /backups/critical-app/latest.backup
 
   options:
@@ -485,7 +512,6 @@ spec:
       path: production/encrypted/
       cloud:
         provider: azure
-        region: eastus2
     backupPath: /backups/customer-data/backup-20250120-020000.backup
 
   options:

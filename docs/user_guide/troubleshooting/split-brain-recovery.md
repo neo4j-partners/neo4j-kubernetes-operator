@@ -295,7 +295,7 @@ check_cluster_health() {
 if ! check_cluster_health; then
   echo "🔄 Triggering operator reconciliation..."
   kubectl annotate neo4jenterprisecluster $CLUSTER_NAME -n $NAMESPACE \
-    "operator.neo4j.com/force-reconcile=$(date +%s)"
+    "troubleshooting.neo4j.com/reconcile=$(date +%s)" --overwrite
 fi
 ```
 

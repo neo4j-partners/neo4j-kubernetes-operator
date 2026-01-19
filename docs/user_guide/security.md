@@ -363,11 +363,6 @@ spec:
     className: "encrypted-ssd"   # Use encrypted storage class
     size: "500Gi"
 
-    # Storage encryption parameters
-    parameters:
-      encrypted: "true"
-      kmsKeyId: "arn:aws:kms:region:account:key/key-id"  # AWS example
-
   config:
     # Enable transparent data encryption (Neo4j Enterprise)
     dbms.security.transparent_data_encryption.enabled: "true"
@@ -382,33 +377,27 @@ kind: Neo4jBackup
 metadata:
   name: secure-backup
 spec:
-  clusterRef: secure-cluster
+  target:
+    kind: Cluster
+    name: secure-cluster
 
   # Secure backup storage configuration
   storage:
-    s3:
-      bucket: "secure-neo4j-backups"
-      region: "us-west-2"
-
-      # Encryption configuration
-      encryption:
-        type: "SSE-KMS"
-        kmsKeyId: "arn:aws:kms:us-west-2:account:key/backup-key"
-
-      # Access control
-      roleArn: "arn:aws:iam::account:role/Neo4jBackupRole"
+    type: s3
+    bucket: "secure-neo4j-backups"
+    path: "backups/"
+    cloud:
+      provider: aws
 
   # Backup encryption
-  encryption:
-    enabled: true
-    keySecret: backup-encryption-key
+  options:
+    encryption:
+      enabled: true
+      keySecret: backup-encryption-key
 
   # Retention policy for compliance
-  retentionPolicy:
-    keepLast: 30
-    keepDaily: 7
-    keepWeekly: 4
-    keepMonthly: 12
+  retention:
+    maxCount: 30
 ```
 
 ## Secrets Management

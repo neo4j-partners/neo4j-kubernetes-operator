@@ -172,7 +172,8 @@ The operator will now create several Kubernetes resources to bring your cluster 
 
 *   A **StatefulSet** to manage the Neo4j pods.
 *   **PersistentVolumeClaims** for storing data and logs.
-*   A **headless Service** for internal cluster discovery.
+*   A **headless Service** for StatefulSet pod identity.
+*   A **discovery Service** for Kubernetes-based cluster formation.
 *   A **client-facing Service** for applications to connect to.
 *   A **ConfigMap** with your Neo4j configuration.
 
@@ -272,7 +273,7 @@ kubectl apply -f examples/property_sharding/basic-property-sharding.yaml
 
 # Create a sharded database with property distribution
 kubectl apply -f - <<EOF
-apiVersion: neo4j.com/v1alpha1
+apiVersion: neo4j.neo4j.com/v1alpha1
 kind: Neo4jShardedDatabase
 metadata:
   name: large-dataset-db

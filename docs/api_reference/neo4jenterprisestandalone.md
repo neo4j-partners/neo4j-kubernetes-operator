@@ -196,6 +196,7 @@ backups:
   cloud:
     provider: aws
     identity:
+      provider: aws
       serviceAccount: neo4j-backup-sa
 ```
 
@@ -722,8 +723,8 @@ kubectl get pods -l app=<standalone-name>
 kubectl describe pod <pod-name>
 
 # Check PVC
-kubectl get pvc -l app=<standalone-name>
-kubectl describe pvc <pvc-name>
+kubectl get pvc neo4j-data-<standalone-name>-0
+kubectl describe pvc neo4j-data-<standalone-name>-0
 ```
 
 #### Validation Errors
@@ -740,7 +741,7 @@ kubectl describe neo4jenterprisestandalone <name>
 #### Connection Issues
 ```bash
 # Check service endpoints
-kubectl get svc -l app=<standalone-name>
+kubectl get svc -l app.kubernetes.io/instance=<standalone-name>
 kubectl describe svc <service-name>
 
 # Check pod status

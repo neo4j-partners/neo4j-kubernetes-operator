@@ -56,41 +56,25 @@ The `Neo4jEnterpriseClusterSpec` defines the desired state of a Neo4j Enterprise
 
 | Field | Type | Description |
 |---|---|---|
-| `resources` | `corev1.ResourceRequirements` | CPU and memory resources |
+| `resources` | `*corev1.ResourceRequirements` | CPU and memory resources |
+| `env` | `[]corev1.EnvVar` | Environment variables for Neo4j pods |
 | `nodeSelector` | `map[string]string` | Node selector constraints |
-| `podSecurityContext` | `*corev1.PodSecurityContext` | Pod-level security settings |
-| `securityContext` | `*corev1.SecurityContext` | Container-level security settings |
-| `imagePullSecrets` | `[]corev1.LocalObjectReference` | Image pull secrets |
-| `affinity` | `*corev1.Affinity` | Pod affinity rules |
 | `tolerations` | `[]corev1.Toleration` | Pod tolerations |
-| `topologySpreadConstraints` | `[]corev1.TopologySpreadConstraint` | Topology spread constraints |
-| `placement` | [`PlacementSpec`](#placementspec) | Advanced placement configuration |
-| `priorityClassName` | `string` | Priority class name |
-| `serviceAccountName` | `string` | Service account name |
-| `sidecarContainers` | `[]corev1.Container` | Additional sidecar containers |
-| `initContainers` | `[]corev1.Container` | Init containers |
-| `volumes` | `[]corev1.Volume` | Additional volumes |
-| `volumeMounts` | `[]corev1.VolumeMount` | Additional volume mounts |
+| `affinity` | `*corev1.Affinity` | Pod affinity rules |
+| `securityContext` | [`*SecurityContextSpec`](#securitycontextspec) | Pod/container security overrides |
 
 ### Neo4j Configuration
 
 | Field | Type | Description |
 |---|---|---|
 | `config` | `map[string]string` | Custom Neo4j configuration |
-| `additionalConfig` | `[]string` | Additional config lines |
-| `configMap` | `string` | ConfigMap with Neo4j configuration |
-| `logLevel` | `string` | Neo4j log level |
-| `jvmOptions` | `[]string` | JVM options |
-| `env` | `[]corev1.EnvVar` | Environment variables |
-| `envFrom` | `[]corev1.EnvFromSource` | Environment from sources |
 
 ### Operations
 
 | Field | Type | Description |
 |---|---|---|
-| `restoreFromBackup` | [`RestoreSpec`](#restorespec) | Restore from backup configuration |
+| `restoreFrom` | [`RestoreSpec`](#restorespec) | Restore from backup configuration |
 | `backups` | [`BackupsSpec`](#backupsspec) | Backup configuration |
-| `maintenance` | [`MaintenanceSpec`](#maintenancespec) | Maintenance mode configuration |
 | `upgradeStrategy` | [`UpgradeStrategySpec`](#upgradestrategyspec) | Upgrade strategy configuration |
 
 ### Networking
@@ -104,15 +88,9 @@ The `Neo4jEnterpriseClusterSpec` defines the desired state of a Neo4j Enterprise
 | Field | Type | Description |
 |---|---|---|
 | `tls` | [`TLSSpec`](#tlsspec) | TLS configuration |
-| `plugins` | `[]PluginSpec` | **DEPRECATED:** Plugin configuration (use Neo4jPlugin CRD instead) |
+| `ui` | [`UISpec`](#uispec) | Neo4j UI configuration |
 | `propertySharding` | [`PropertyShardingSpec`](#propertyshardingspec) | Property sharding configuration (Neo4j 2025.10+) |
 | `queryMonitoring` | [`QueryMonitoringSpec`](#querymonitoringspec) | Query monitoring configuration |
-| `podManagementPolicy` | `string` | Pod management policy: `"Parallel"` or `"OrderedReady"` |
-| `updateStrategy` | `*appsv1.StatefulSetUpdateStrategy` | StatefulSet update strategy |
-| `annotations` | `map[string]string` | Additional annotations |
-| `labels` | `map[string]string` | Additional labels |
-| `podAnnotations` | `map[string]string` | Pod annotations |
-| `podLabels` | `map[string]string` | Pod labels |
 
 ## Type Definitions
 
@@ -120,9 +98,10 @@ The `Neo4jEnterpriseClusterSpec` defines the desired state of a Neo4j Enterprise
 
 | Field | Type | Description |
 |---|---|---|
-| `repository` | `string` | Image repository (default: `"neo4j"`) |
+| `repo` | `string` | Image repository (default: `"neo4j"`) |
 | `tag` | `string` | Image tag |
 | `pullPolicy` | `string` | Pull policy: `"Always"`, `"IfNotPresent"`, `"Never"` |
+| `pullSecrets` | `[]string` | Image pull secrets |
 
 ### TopologyConfiguration
 
@@ -163,13 +142,17 @@ Specifies role constraints for individual servers.
 
 | Field | Type | Description |
 |---|---|---|
+| `className` | `string` | Storage class name |
 | `size` | `string` | Storage size (e.g., `"10Gi"`) |
-| `storageClassName` | `string` | Storage class name |
-| `selector` | `*metav1.LabelSelector` | PVC label selector |
-| `volumeName` | `string` | Volume name |
-| `accessModes` | `[]corev1.PersistentVolumeAccessMode` | Access modes |
-| `volumeMode` | `*corev1.PersistentVolumeMode` | Volume mode |
-| `dataSource` | `*corev1.TypedLocalObjectReference` | Data source |
+| `retentionPolicy` | `string` | PVC retention policy: `"Delete"` (default) or `"Retain"` |
+| `backupStorage` | [`*BackupStorageSpec`](#backupstoragespec) | Additional storage for backups |
+
+### BackupStorageSpec
+
+| Field | Type | Description |
+|---|---|---|
+| `className` | `string` | Storage class name for backup volumes |
+| `size` | `string` | Storage size for backup volumes |
 
 ### AuthSpec
 
@@ -180,57 +163,132 @@ Specifies role constraints for individual servers.
 | `secretRef` | `string` | Secret containing provider-specific configuration |
 | `externalSecrets` | [`*ExternalSecretsConfig`](#externalsecretsconfig) | External secrets configuration |
 | `passwordPolicy` | [`*PasswordPolicySpec`](#passwordpolicyspec) | Password policy configuration |
+| `jwt` | [`*JWTAuthSpec`](#jwtauthspec) | JWT authentication configuration |
+| `ldap` | [`*LDAPAuthSpec`](#ldapauthspec) | LDAP authentication configuration |
+| `kerberos` | [`*KerberosAuthSpec`](#kerberosauthspec) | Kerberos authentication configuration |
 
 ### JWTAuthSpec
 
 | Field | Type | Description |
 |---|---|---|
-| `secretName` | `string` | Secret containing JWT keys |
-| `publicKeyPath` | `string` | Path to public key in secret |
-| `audience` | `string` | Expected audience claim |
-| `issuer` | `string` | Expected issuer claim |
-| `realm` | `string` | Authentication realm |
+| `validation` | [`*JWTValidationSpec`](#jwtvalidationspec) | JWT validation settings |
+| `claimsMapping` | `map[string]string` | Claims mapping |
+
+### JWTValidationSpec
+
+| Field | Type | Description |
+|---|---|---|
+| `jwksUrl` | `string` | JWKS endpoint URL |
+| `issuer` | `string` | JWT issuer |
+| `audience` | `[]string` | JWT audience |
 
 ### LDAPAuthSpec
 
 | Field | Type | Description |
 |---|---|---|
-| `host` | `string` | LDAP server host |
-| `port` | `int32` | LDAP server port |
-| `useTLS` | `bool` | Use TLS connection |
-| `bindDN` | `string` | Bind DN |
-| `bindPasswordSecret` | `string` | Secret containing bind password |
-| `userSearchBase` | `string` | User search base |
-| `userSearchFilter` | `string` | User search filter |
-| `groupSearchBase` | `string` | Group search base |
-| `groupSearchFilter` | `string` | Group search filter |
+| `server` | [`*LDAPServerSpec`](#ldapserverspec) | LDAP server settings |
+| `userSearch` | [`*LDAPSearchSpec`](#ldapsearchspec) | User search settings |
+| `groupSearch` | [`*LDAPSearchSpec`](#ldapsearchspec) | Group search settings |
+
+### LDAPServerSpec
+
+| Field | Type | Description |
+|---|---|---|
+| `urls` | `[]string` | LDAP server URLs |
+| `tls` | `bool` | Enable TLS for LDAP connection |
+| `insecureSkipVerify` | `bool` | Skip TLS certificate verification |
+
+### LDAPSearchSpec
+
+| Field | Type | Description |
+|---|---|---|
+| `baseDN` | `string` | Search base DN |
+| `filter` | `string` | Search filter |
+| `scope` | `string` | Search scope: `"base"`, `"one"`, `"sub"` |
 
 ### KerberosAuthSpec
 
 | Field | Type | Description |
 |---|---|---|
 | `realm` | `string` | Kerberos realm |
-| `kdcAddress` | `string` | KDC address |
 | `servicePrincipal` | `string` | Service principal |
-| `keytabSecret` | `string` | Secret containing keytab |
+| `keytab` | [`*KerberosKeytabSpec`](#kerberoskeytabspec) | Keytab configuration |
+
+### KerberosKeytabSpec
+
+| Field | Type | Description |
+|---|---|---|
+| `secretRef` | `string` | Secret containing keytab file |
+| `key` | `string` | Key in secret containing keytab (default: `"keytab"`) |
+
+### SecurityContextSpec
+
+| Field | Type | Description |
+|---|---|---|
+| `podSecurityContext` | `*corev1.PodSecurityContext` | Pod-level security settings |
+| `containerSecurityContext` | `*corev1.SecurityContext` | Container-level security settings |
 
 ### TLSSpec
 
 | Field | Type | Description |
 |---|---|---|
-| `mode` | `string` | TLS mode: `"cert-manager"`, `"manual"`, `"external-secrets"` |
-| `issuerRef` | `*cmmeta.ObjectReference` | cert-manager issuer reference |
-| `certificateSpec` | `*cmapi.CertificateSpec` | cert-manager certificate spec |
-| `secretName` | `string` | TLS secret name (for manual mode) |
-| `externalSecrets` | [`*ExternalSecretsSpec`](#externalsecretsspec) | External Secrets configuration |
+| `mode` | `string` | TLS mode: `"cert-manager"` (default) or `"disabled"` |
+| `issuerRef` | [`*IssuerRef`](#issuerref) | cert-manager issuer reference |
+| `certificateSecret` | `string` | TLS secret name (manual certificates) |
+| `externalSecrets` | [`*ExternalSecretsConfig`](#externalsecretsconfig) | External Secrets configuration |
+| `duration` | `*string` | Certificate duration (e.g., `"2160h"`) |
+| `renewBefore` | `*string` | Renewal window before expiry (e.g., `"360h"`) |
+| `subject` | [`*CertificateSubject`](#certificatesubject) | Certificate subject fields |
+| `usages` | `[]string` | Certificate usages |
 
-### ExternalSecretsSpec
+### IssuerRef
 
 | Field | Type | Description |
 |---|---|---|
-| `secretStoreRef` | `string` | External Secrets store reference |
+| `name` | `string` | Issuer name |
+| `kind` | `string` | Issuer kind: `"Issuer"` or `"ClusterIssuer"` |
+| `group` | `string` | Issuer API group (default: `cert-manager.io`) |
+
+### CertificateSubject
+
+| Field | Type | Description |
+|---|---|---|
+| `organizations` | `[]string` | Organization names |
+| `countries` | `[]string` | Country codes |
+| `organizationalUnits` | `[]string` | Organizational units |
+| `localities` | `[]string` | Localities |
+| `provinces` | `[]string` | Provinces/States |
+
+### ExternalSecretsConfig
+
+| Field | Type | Description |
+|---|---|---|
+| `enabled` | `bool` | Enable External Secrets integration |
+| `secretStoreRef` | [`*SecretStoreRef`](#secretstoreref) | SecretStore or ClusterSecretStore reference |
 | `refreshInterval` | `string` | Refresh interval (e.g., `"1h"`) |
-| `keyMapping` | `map[string]string` | Key mapping |
+| `data` | [`[]ExternalSecretData`](#externalsecretdata) | External secret data mappings |
+
+### SecretStoreRef
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | `string` | SecretStore name |
+| `kind` | `string` | `"SecretStore"` or `"ClusterSecretStore"` |
+
+### ExternalSecretData
+
+| Field | Type | Description |
+|---|---|---|
+| `secretKey` | `string` | Target secret key |
+| `remoteRef` | [`*ExternalSecretRemoteRef`](#externalsecretremoteref) | Remote secret reference |
+
+### ExternalSecretRemoteRef
+
+| Field | Type | Description |
+|---|---|---|
+| `key` | `string` | External secret key |
+| `property` | `string` | Property within the secret |
+| `version` | `string` | Secret version |
 
 ### PropertyShardingSpec
 
@@ -238,8 +296,8 @@ Configures property sharding for horizontal scaling of large datasets. Property 
 
 | Field | Type | Description |
 |---|---|---|
-| `enabled` | `bool` | **Required**. Enable property sharding for this cluster |
-| `config` | `map[string]string` | Optional advanced property sharding configuration |
+| `enabled` | `bool` | Enable property sharding for this cluster (default: `false`) |
+| `config` | `map[string]string` | Advanced property sharding configuration |
 
 **System Requirements** (validated by operator):
 
@@ -316,19 +374,48 @@ For detailed configuration, see the [Property Sharding Guide](../user_guide/prop
 
 | Field | Type | Description |
 |---|---|---|
-| `enabled` | `bool` | Enable automatic backups |
-| `type` | `string` | Backup type: `"full"`, `"incremental"`, `"auto"` |
-| `schedule` | `string` | Cron schedule for backups |
-| `retention` | [`RetentionSpec`](#retentionspec) | Backup retention policy |
-| `storage` | [`BackupStorageSpec`](#backupstoragespec) | Backup storage configuration |
-| `consistencyCheck` | `bool` | Enable consistency check before backup |
-| `pauseDatabase` | `bool` | Pause database during backup |
-| `parallelism` | `int32` | Backup parallelism |
-| `compression` | `string` | Compression type |
-| `encryption` | [`*EncryptionSpec`](#encryptionspec) | Backup encryption |
-| `includeTransactionLogs` | `bool` | Include transaction logs |
-| `backupWindow` | [`*BackupWindowSpec`](#backupwindowspec) | Backup window |
-| `fromSecondary` | `bool` | Backup from secondary nodes (servers will self-organize roles) |
+| `defaultStorage` | [`*StorageLocation`](#storagelocation) | Default storage location for backups |
+| `cloud` | [`*CloudBlock`](#cloudblock) | Cloud provider configuration (credentials/identity) |
+
+### StorageLocation
+
+| Field | Type | Description |
+|---|---|---|
+| `type` | `string` | Storage type: `"s3"`, `"gcs"`, `"azure"`, `"pvc"` |
+| `bucket` | `string` | Bucket name (for cloud storage) |
+| `path` | `string` | Path within bucket or PVC |
+| `pvc` | [`*PVCSpec`](#pvcspec) | PVC configuration (for `pvc` type) |
+| `cloud` | [`*CloudBlock`](#cloudblock) | Cloud provider configuration |
+
+### PVCSpec
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | `string` | Name of existing PVC to use |
+| `storageClassName` | `string` | Storage class name |
+| `size` | `string` | Size for new PVC (e.g., `"100Gi"`) |
+
+### CloudBlock
+
+| Field | Type | Description |
+|---|---|---|
+| `provider` | `string` | Cloud provider: `"aws"`, `"gcp"`, `"azure"` |
+| `identity` | [`*CloudIdentity`](#cloudidentity) | Cloud identity configuration |
+
+### CloudIdentity
+
+| Field | Type | Description |
+|---|---|---|
+| `provider` | `string` | Identity provider: `"aws"`, `"gcp"`, `"azure"` |
+| `serviceAccount` | `string` | Service account name for cloud identity |
+| `autoCreate` | [`*AutoCreateSpec`](#autocreatespec) | Auto-create service account and annotations |
+
+### AutoCreateSpec
+
+| Field | Type | Description |
+|---|---|---|
+| `enabled` | `bool` | Enable auto-creation of service account (default: `true`) |
+| `annotations` | `map[string]string` | Annotations to apply to auto-created service account |
 
 ### QueryMonitoringSpec
 
@@ -407,6 +494,7 @@ Configures how Neo4j is exposed outside the Kubernetes cluster.
 | `loadBalancerSourceRanges` | `[]string` | IP ranges allowed to access LoadBalancer |
 | `externalTrafficPolicy` | `string` | External traffic policy: `"Cluster"` or `"Local"` |
 | `ingress` | [`IngressSpec`](#ingressspec) | Ingress configuration |
+| `route` | [`RouteSpec`](#routespec) | OpenShift Route configuration |
 
 ### IngressSpec
 
@@ -416,8 +504,36 @@ Configures an Ingress resource for HTTP(S) access to Neo4j Browser.
 |---|---|---|
 | `enabled` | `bool` | Enable Ingress creation |
 | `className` | `string` | Ingress class name (e.g., `"nginx"`) |
+| `annotations` | `map[string]string` | Ingress annotations |
 | `host` | `string` | Hostname for the Ingress |
-| `path` | `string` | Path prefix (default: `"/"`) |
+| `tlsSecretName` | `string` | TLS secret name for Ingress |
+
+### RouteSpec
+
+| Field | Type | Description |
+|---|---|---|
+| `enabled` | `bool` | Enable OpenShift Route creation |
+| `host` | `string` | Hostname for the Route (optional) |
+| `path` | `string` | Path for the Route (default: `"/"`) |
+| `annotations` | `map[string]string` | Route annotations |
+| `tls` | [`*RouteTLSSpec`](#routetlsspec) | TLS settings for the Route |
+| `targetPort` | `int32` | Target service port (default: `7474`) |
+
+### RouteTLSSpec
+
+| Field | Type | Description |
+|---|---|---|
+| `termination` | `string` | TLS termination: `"edge"`, `"reencrypt"`, `"passthrough"` |
+| `insecureEdgeTerminationPolicy` | `string` | `"None"`, `"Allow"`, `"Redirect"` |
+| `secretName` | `string` | Secret containing certificate (reencrypt/passthrough) |
+
+### UISpec
+
+| Field | Type | Description |
+|---|---|---|
+| `enabled` | `bool` | Enable Neo4j UI deployment |
+| `ingress` | [`*IngressSpec`](#ingressspec) | UI ingress configuration |
+| `resources` | `*corev1.ResourceRequirements` | Resource requirements for UI pods |
 | `pathType` | `string` | Path type: `"Prefix"`, `"Exact"`, `"ImplementationSpecific"` |
 | `tlsEnabled` | `bool` | Enable TLS on the Ingress |
 | `tlsSecretName` | `string` | TLS certificate secret name |
@@ -754,7 +870,7 @@ kubectl patch neo4jenterprisecluster my-cluster -p '{"spec":{"image":{"tag":"5.2
 kubectl exec my-cluster-server-0 -- cypher-shell -u neo4j -p password "SHOW SERVERS"
 
 # Monitor server pods
-kubectl get pods -l app=my-cluster
+kubectl get pods -l neo4j.com/cluster=my-cluster
 kubectl logs my-cluster-server-0 -c neo4j
 ```
 
@@ -838,7 +954,7 @@ spec:
 
 ---
 # Property Sharding cluster (Neo4j 2025.10+)
-apiVersion: neo4j.com/v1alpha1
+apiVersion: neo4j.neo4j.com/v1alpha1
 kind: Neo4jEnterpriseCluster
 metadata:
   name: sharding-cluster
@@ -931,7 +1047,7 @@ spec:
 kubectl exec my-cluster-server-0 -- cypher-shell -u neo4j -p password "SHOW SERVERS"
 
 # Check pod status
-kubectl get pods -l app=my-cluster
+kubectl get pods -l neo4j.com/cluster=my-cluster
 kubectl describe pod my-cluster-server-0
 
 # Check operator logs
@@ -947,9 +1063,9 @@ kubectl get events --field-selector reason=SplitBrainDetected
 # Check resource version conflicts
 kubectl get events --field-selector reason=UpdateConflict
 
-# Force reconciliation
+# Force reconciliation with a no-op annotation change
 kubectl annotate neo4jenterprisecluster my-cluster \
-  operator.neo4j.com/force-reconcile="$(date)"
+  troubleshooting.neo4j.com/reconcile="$(date +%s)" --overwrite
 ```
 
 For more information:
