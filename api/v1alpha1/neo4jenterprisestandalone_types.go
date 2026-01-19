@@ -71,6 +71,9 @@ type Neo4jEnterpriseStandaloneSpec struct {
 	// Query performance monitoring
 	QueryMonitoring *QueryMonitoringSpec `json:"queryMonitoring,omitempty"`
 
+	// MCP server configuration for this standalone deployment
+	MCP *MCPServerSpec `json:"mcp,omitempty"`
+
 	// Persistence configuration for standalone deployment
 	Persistence *PersistenceSpec `json:"persistence,omitempty"`
 }

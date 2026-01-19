@@ -168,6 +168,9 @@ func (v *ClusterValidator) validateCluster(ctx context.Context, cluster *neo4jv1
 	// Cloud identity validation (least critical, do last)
 	allErrs = append(allErrs, v.cloudValidator.Validate(cluster)...)
 
+	// MCP server validation
+	allErrs = append(allErrs, validateMCPConfig(cluster.Spec.MCP, field.NewPath("spec", "mcp"))...)
+
 	return allErrs
 }
 

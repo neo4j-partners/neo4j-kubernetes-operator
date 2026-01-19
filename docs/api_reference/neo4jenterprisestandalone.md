@@ -173,6 +173,24 @@ service:
     tlsSecretName: neo4j-tls
 ```
 
+#### `mcp` (MCPServerSpec)
+Optional MCP server deployment for this standalone instance. MCP requires the APOC plugin (managed via Neo4jPlugin). HTTP transport uses per-request auth; STDIO transport reads credentials from a secret.
+
+```yaml
+mcp:
+  enabled: true
+  image:
+    repo: ghcr.io/priyolahiri/neo4j-kubernetes-operator-mcp
+    tag: vX.Y.Z
+  transport: http
+  readOnly: true
+  http:
+    service:
+      type: ClusterIP
+```
+
+For full MCP field definitions (HTTP, TLS, service exposure, and STDIO auth), see the [`MCPServerSpec`](neo4jenterprisecluster.md#mcpserverspec) section.
+
 #### `persistence` (PersistenceSpec)
 Persistence configuration for standalone deployments.
 

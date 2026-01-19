@@ -14,6 +14,8 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: priyolahiri/neo4j-kubernetes-operator
+  MCP_IMAGE_NAME: priyolahiri/neo4j-kubernetes-operator-mcp
+  MCP_REPO: https://github.com/neo4j/mcp.git
   CHART_REGISTRY: ghcr.io/priyolahiri/charts
   GO_VERSION: '1.22'
 
@@ -76,6 +78,20 @@ jobs:
         echo "tag_name=${TAG_NAME}" >> $GITHUB_OUTPUT
         echo "clean_tag=${CLEAN_TAG}" >> $GITHUB_OUTPUT
 
+    - name: Determine MCP release tag
+      id: mcp-tag
+      run: |
+        MCP_TAG=$(git ls-remote --tags --refs "${{ env.MCP_REPO }}" \
+          | awk '{print $2}' \
+          | sed 's#refs/tags/##' \
+          | sort -V \
+          | tail -n 1)
+        if [ -z "$MCP_TAG" ]; then
+          echo "Failed to resolve MCP release tag" >&2
+          exit 1
+        fi
+        echo "mcp_tag=${MCP_TAG}" >> $GITHUB_OUTPUT
+
     - name: Extract metadata
       id: meta
       uses: docker/metadata-action@v5
@@ -87,6 +103,14 @@ jobs:
           type=semver,pattern={{major}}.{{minor}}
           type=semver,pattern={{major}}
 
+    - name: Extract MCP metadata
+      id: meta-mcp
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.MCP_IMAGE_NAME }}
+        tags: |
+          type=raw,value=${{ steps.mcp-tag.outputs.mcp_tag }}
+
     - name: Build and push container image
       uses: docker/build-push-action@v5
       with:
@@ -95,6 +119,22 @@ jobs:
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
         platforms: linux/amd64,linux/arm64
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Build and push MCP image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: images/neo4j-mcp/Dockerfile
+        push: true
+        tags: ${{ steps.meta-mcp.outputs.tags }}
+        labels: ${{ steps.meta-mcp.outputs.labels }}
+        platforms: linux/amd64,linux/arm64
+        build-args: |
+          MCP_REPO=${{ env.MCP_REPO }}
+          MCP_REF=${{ steps.mcp-tag.outputs.mcp_tag }}
+          MCP_VERSION=${{ steps.mcp-tag.outputs.mcp_tag }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
@@ -168,6 +208,7 @@ jobs:
         if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
           TAG_NAME="${{ github.event.inputs.tag }}"
         fi
+        MCP_TAG="${{ steps.mcp-tag.outputs.mcp_tag }}"
 
         echo "TAG_NAME=$TAG_NAME" >> $GITHUB_OUTPUT
 
@@ -216,6 +257,7 @@ jobs:
 
         - \`ghcr.io/priyolahiri/neo4j-kubernetes-operator:$TAG_NAME\`
         - \`ghcr.io/priyolahiri/neo4j-kubernetes-operator:latest\`
+        - \`ghcr.io/priyolahiri/neo4j-kubernetes-operator-mcp:$MCP_TAG\`
 
         ## 📚 Documentation
 

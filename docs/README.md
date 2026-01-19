@@ -66,8 +66,10 @@ Complete deployment examples demonstrating real-world scenarios:
 *   **Database Management**: Create databases with `IF NOT EXISTS`, `WAIT`/`NOWAIT` options
 *   **🆕 Seed URI Functionality**: Create databases directly from existing backups stored in cloud storage
 *   **🆕 Property Sharding**: Horizontal scaling for large datasets with separate graph and property shards
+*   **🆕 MCP Server Support**: Optional MCP server deployment for Neo4j clusters and standalone workloads (HTTP/STDIO with TLS support)
 *   **Topology Constraints**: Specify primary/secondary distribution for databases
 *   **Version Detection**: Automatic adaptation for Neo4j 5.26.x (SemVer) and 2025.x (CalVer)
+*   **CalVer Acceptance Note**: 2025.x+ (including 2026.x) is accepted by default, but new CalVer features may need operator updates for full compatibility
 *   **Cypher Language**: Support for Cypher 25 in Neo4j 2025.x
 *   **Backup Improvements**: FULL/DIFF/AUTO backup types, backup from secondaries
 *   **Point-in-Time Recovery**: Restore to specific timestamps with `--restore-until`

@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation/field"
 
 	neo4jv1alpha1 "github.com/priyolahiri/neo4j-kubernetes-operator/api/v1alpha1"
+	"github.com/priyolahiri/neo4j-kubernetes-operator/internal/neo4j"
 )
 
 // StandaloneValidator validates Neo4j standalone configuration
@@ -75,6 +76,9 @@ func (v *StandaloneValidator) ValidateCreate(standalone *neo4jv1alpha1.Neo4jEnte
 	if errs := v.validateConfig(standalone); len(errs) > 0 {
 		allErrs = append(allErrs, errs...)
 	}
+
+	// Validate MCP configuration
+	allErrs = append(allErrs, validateMCPConfig(standalone.Spec.MCP, field.NewPath("spec", "mcp"))...)
 
 	return allErrs
 }
@@ -317,11 +321,8 @@ func (v *StandaloneValidator) validateStorageChanges(oldStandalone, newStandalon
 func (v *StandaloneValidator) validateNeo4jVersion(tag string) []error {
 	var errs []error
 
-	// Simple validation for Neo4j 5.26+
-	if !strings.Contains(tag, "5.26") && !strings.Contains(tag, "5.27") && !strings.Contains(tag, "5.28") && !strings.Contains(tag, "5.29") && !strings.Contains(tag, "5.30") &&
-		!strings.Contains(tag, "2025.01") && !strings.Contains(tag, "2025.02") && !strings.Contains(tag, "2025.03") && !strings.Contains(tag, "2025.04") && !strings.Contains(tag, "2025.05") &&
-		!strings.Contains(tag, "2025.06") && !strings.Contains(tag, "2025.07") && !strings.Contains(tag, "2025.08") && !strings.Contains(tag, "2025.09") && !strings.Contains(tag, "2025.10") &&
-		!strings.Contains(tag, "2025.11") && !strings.Contains(tag, "2025.12") {
+	version, err := neo4j.ParseVersion(tag)
+	if err != nil || !version.IsSupported() {
 		errs = append(errs, fmt.Errorf("Neo4j version must be 5.26+ (semver) or 2025.01+ (calver), got: %s", tag))
 	}
 

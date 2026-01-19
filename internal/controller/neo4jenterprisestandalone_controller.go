@@ -104,6 +104,7 @@ const (
 //+kubebuilder:rbac:groups=neo4j.neo4j.com,resources=neo4jenterprisestandalones,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=neo4j.neo4j.com,resources=neo4jenterprisestandalones/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=neo4j.neo4j.com,resources=neo4jenterprisestandalones/finalizers,verbs=update
+//+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=cert-manager.io,resources=certificates,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=cert-manager.io,resources=issuers,verbs=get;list;watch
 //+kubebuilder:rbac:groups=cert-manager.io,resources=clusterissuers,verbs=get;list;watch
@@ -214,6 +215,11 @@ func (r *Neo4jEnterpriseStandaloneReconciler) reconcileStandalone(ctx context.Co
 	// Reconcile Service
 	if err := r.reconcileService(ctx, standalone); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to reconcile Service: %w", err)
+	}
+
+	// Reconcile MCP resources if enabled
+	if err := r.reconcileMCP(ctx, standalone); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to reconcile MCP resources: %w", err)
 	}
 
 	// Reconcile StatefulSet
@@ -414,6 +420,118 @@ func (r *Neo4jEnterpriseStandaloneReconciler) reconcileRoute(ctx context.Context
 
 	logger.Info("Successfully reconciled Route", "name", route.GetName())
 	return nil
+}
+
+func (r *Neo4jEnterpriseStandaloneReconciler) reconcileMCP(ctx context.Context, standalone *neo4jv1alpha1.Neo4jEnterpriseStandalone) error {
+	if standalone.Spec.MCP == nil || !standalone.Spec.MCP.Enabled {
+		return nil
+	}
+
+	if certificate := resources.BuildMCPCertificateForStandalone(standalone); certificate != nil {
+		if err := r.createOrUpdateMCPResource(ctx, certificate, standalone); err != nil {
+			return fmt.Errorf("failed to reconcile MCP certificate: %w", err)
+		}
+	}
+
+	if service := resources.BuildMCPServiceForStandalone(standalone); service != nil {
+		if err := r.createOrUpdateMCPResource(ctx, service, standalone); err != nil {
+			return fmt.Errorf("failed to reconcile MCP service: %w", err)
+		}
+	}
+
+	if deployment := resources.BuildMCPDeploymentForStandalone(standalone); deployment != nil {
+		if err := r.createOrUpdateMCPResource(ctx, deployment, standalone); err != nil {
+			return fmt.Errorf("failed to reconcile MCP deployment: %w", err)
+		}
+	}
+
+	if ingress := resources.BuildMCPIngressForStandalone(standalone); ingress != nil {
+		if err := r.createOrUpdateMCPResource(ctx, ingress, standalone); err != nil {
+			return fmt.Errorf("failed to reconcile MCP ingress: %w", err)
+		}
+	}
+
+	if err := r.reconcileMCPRoute(ctx, standalone); err != nil {
+		return err
+	}
+
+	r.warnIfMCPMissingAPOC(ctx, standalone)
+	return nil
+}
+
+func (r *Neo4jEnterpriseStandaloneReconciler) reconcileMCPRoute(ctx context.Context, standalone *neo4jv1alpha1.Neo4jEnterpriseStandalone) error {
+	logger := log.FromContext(ctx)
+
+	route := resources.BuildMCPRouteForStandalone(standalone)
+	if route == nil {
+		return nil
+	}
+
+	if err := controllerutil.SetControllerReference(standalone, route, r.Scheme); err != nil {
+		return fmt.Errorf("failed to set owner reference on MCP route: %w", err)
+	}
+
+	desired := route.DeepCopy()
+
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		_, err := controllerutil.CreateOrUpdate(ctx, r.Client, route, func() error {
+			route.SetLabels(desired.GetLabels())
+			route.SetAnnotations(desired.GetAnnotations())
+			route.Object["spec"] = desired.Object["spec"]
+			return nil
+		})
+		return err
+	})
+	if err != nil {
+		if meta.IsNoMatchError(err) {
+			logger.Info("Route API not available; skipping MCP Route reconciliation")
+			if r.Recorder != nil {
+				r.Recorder.Event(standalone, corev1.EventTypeWarning, "RouteAPINotFound", "route.openshift.io/v1 not available; skipping MCP Route reconciliation")
+			}
+			return nil
+		}
+		return fmt.Errorf("failed to create or update MCP Route: %w", err)
+	}
+
+	logger.Info("Successfully reconciled MCP Route", "name", route.GetName())
+	return nil
+}
+
+func (r *Neo4jEnterpriseStandaloneReconciler) createOrUpdateMCPResource(ctx context.Context, obj client.Object, owner client.Object) error {
+	if err := controllerutil.SetControllerReference(owner, obj, r.Scheme); err != nil {
+		return err
+	}
+
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		_, err := controllerutil.CreateOrUpdate(ctx, r.Client, obj, func() error {
+			return nil
+		})
+		return err
+	})
+}
+
+func (r *Neo4jEnterpriseStandaloneReconciler) warnIfMCPMissingAPOC(ctx context.Context, standalone *neo4jv1alpha1.Neo4jEnterpriseStandalone) {
+	if standalone.Spec.MCP == nil || !standalone.Spec.MCP.Enabled || r.Recorder == nil {
+		return
+	}
+
+	plugins := &neo4jv1alpha1.Neo4jPluginList{}
+	if err := r.List(ctx, plugins, client.InNamespace(standalone.Namespace)); err != nil {
+		log.FromContext(ctx).V(1).Info("Unable to list plugins for MCP APOC check", "error", err)
+		return
+	}
+
+	for _, plugin := range plugins.Items {
+		if plugin.Spec.ClusterRef != standalone.Name || !plugin.Spec.Enabled {
+			continue
+		}
+		if isAPOCPluginName(plugin.Spec.Name) {
+			return
+		}
+	}
+
+	r.Recorder.Event(standalone, corev1.EventTypeWarning, "MCPApocMissing",
+		"MCP is enabled but APOC is not configured via Neo4jPlugin; MCP may fail in stdio mode and some tools may be unavailable.")
 }
 
 // createConfigMap creates a ConfigMap for the standalone deployment
@@ -1179,6 +1297,7 @@ func (r *Neo4jEnterpriseStandaloneReconciler) createOrUpdateUnstructured(ctx con
 func (r *Neo4jEnterpriseStandaloneReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	builder := ctrl.NewControllerManagedBy(mgr).
 		For(&neo4jv1alpha1.Neo4jEnterpriseStandalone{}).
+		Owns(&appsv1.Deployment{}).
 		Owns(&appsv1.StatefulSet{}).
 		Owns(&corev1.Service{}).
 		Owns(&corev1.ConfigMap{}).

@@ -51,6 +51,12 @@ endif
 OPERATOR_SDK_VERSION ?= v1.39.1
 # Image URL to use all building/pushing image targets
 IMG ?= ghcr.io/priyolahiri/neo4j-kubernetes-operator:latest
+# MCP image settings
+MCP_REF ?= v1.1.1
+MCP_VERSION ?= $(MCP_REF)
+MCP_REPO ?= https://github.com/neo4j/mcp.git
+MCP_IMAGE ?= $(IMAGE_TAG_BASE)-mcp:$(MCP_VERSION)
+MCP_DOCKERFILE ?= images/neo4j-mcp/Dockerfile
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.31.0
 
@@ -310,6 +316,41 @@ docker-build: ## Build docker image with the manager.
 .PHONY: docker-push
 docker-push: ## Push docker image with the manager.
 	$(CONTAINER_TOOL) push ${IMG}
+
+.PHONY: mcp-docker-build
+mcp-docker-build: ## Build Neo4j MCP server image.
+	$(CONTAINER_TOOL) build -f $(MCP_DOCKERFILE) \
+		--build-arg MCP_REPO=$(MCP_REPO) \
+		--build-arg MCP_REF=$(MCP_REF) \
+		--build-arg MCP_VERSION=$(MCP_VERSION) \
+		-t $(MCP_IMAGE) .
+
+.PHONY: mcp-latest-ref
+mcp-latest-ref: ## Print the latest Neo4j MCP release tag.
+	@latest=$$(git ls-remote --tags --refs $(MCP_REPO) \
+		| awk '{print $$2}' \
+		| sed 's#refs/tags/##' \
+		| sort -V \
+		| tail -n 1); \
+	if [ -z "$$latest" ]; then \
+		echo "Failed to resolve MCP release tag" >&2; \
+		exit 1; \
+	fi; \
+	echo "$$latest"
+
+.PHONY: mcp-docker-build-latest
+mcp-docker-build-latest: ## Build Neo4j MCP server image from the latest MCP release.
+	@latest=$$($(MAKE) --no-print-directory mcp-latest-ref); \
+	$(MAKE) mcp-docker-build MCP_REF=$$latest MCP_VERSION=$$latest MCP_IMAGE=$(IMAGE_TAG_BASE)-mcp:$$latest
+
+.PHONY: mcp-docker-push
+mcp-docker-push: ## Push Neo4j MCP server image.
+	$(CONTAINER_TOOL) push $(MCP_IMAGE)
+
+.PHONY: mcp-docker-push-latest
+mcp-docker-push-latest: ## Push Neo4j MCP server image built from latest MCP release.
+	@latest=$$($(MAKE) --no-print-directory mcp-latest-ref); \
+	$(MAKE) mcp-docker-push MCP_REF=$$latest MCP_VERSION=$$latest MCP_IMAGE=$(IMAGE_TAG_BASE)-mcp:$$latest
 
 ##@ Helm Chart (Recommended Installation Method)
 

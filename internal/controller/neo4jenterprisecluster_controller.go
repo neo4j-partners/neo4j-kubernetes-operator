@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -73,6 +74,7 @@ const (
 //+kubebuilder:rbac:groups=neo4j.neo4j.com,resources=neo4jenterpriseclusters,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=neo4j.neo4j.com,resources=neo4jenterpriseclusters/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=neo4j.neo4j.com,resources=neo4jenterpriseclusters/finalizers,verbs=update
+//+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
@@ -321,6 +323,13 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 	if err := r.reconcileRoute(ctx, cluster); err != nil {
 		logger.Error(err, "Failed to reconcile Route")
 		_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Failed to reconcile Route: %v", err))
+		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
+	}
+
+	// Reconcile MCP resources if enabled
+	if err := r.reconcileMCP(ctx, cluster); err != nil {
+		logger.Error(err, "Failed to reconcile MCP resources")
+		_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Failed to reconcile MCP resources: %v", err))
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 	}
 
@@ -1577,10 +1586,115 @@ func (r *Neo4jEnterpriseClusterReconciler) reconcileRoute(ctx context.Context, c
 	return nil
 }
 
+func (r *Neo4jEnterpriseClusterReconciler) reconcileMCP(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) error {
+	if cluster.Spec.MCP == nil || !cluster.Spec.MCP.Enabled {
+		return nil
+	}
+
+	// MCP TLS certificate (cert-manager)
+	if certificate := resources.BuildMCPCertificateForCluster(cluster); certificate != nil {
+		if err := r.createOrUpdateResource(ctx, certificate, cluster); err != nil {
+			return fmt.Errorf("failed to reconcile MCP certificate: %w", err)
+		}
+	}
+
+	if service := resources.BuildMCPServiceForCluster(cluster); service != nil {
+		if err := r.createOrUpdateResource(ctx, service, cluster); err != nil {
+			return fmt.Errorf("failed to reconcile MCP service: %w", err)
+		}
+	}
+
+	if deployment := resources.BuildMCPDeploymentForCluster(cluster); deployment != nil {
+		if err := r.createOrUpdateResource(ctx, deployment, cluster); err != nil {
+			return fmt.Errorf("failed to reconcile MCP deployment: %w", err)
+		}
+	}
+
+	if ingress := resources.BuildMCPIngressForCluster(cluster); ingress != nil {
+		if err := r.createOrUpdateResource(ctx, ingress, cluster); err != nil {
+			return fmt.Errorf("failed to reconcile MCP ingress: %w", err)
+		}
+	}
+
+	if err := r.reconcileMCPRoute(ctx, cluster); err != nil {
+		return err
+	}
+
+	r.warnIfMCPMissingAPOC(ctx, cluster)
+	return nil
+}
+
+func (r *Neo4jEnterpriseClusterReconciler) reconcileMCPRoute(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) error {
+	logger := log.FromContext(ctx)
+
+	route := resources.BuildMCPRouteForCluster(cluster)
+	if route == nil {
+		return nil
+	}
+
+	if err := controllerutil.SetControllerReference(cluster, route, r.Scheme); err != nil {
+		return fmt.Errorf("failed to set owner reference on MCP route: %w", err)
+	}
+
+	desired := route.DeepCopy()
+
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		_, err := controllerutil.CreateOrUpdate(ctx, r.Client, route, func() error {
+			route.SetLabels(desired.GetLabels())
+			route.SetAnnotations(desired.GetAnnotations())
+			route.Object["spec"] = desired.Object["spec"]
+			return nil
+		})
+		return err
+	})
+	if err != nil {
+		if meta.IsNoMatchError(err) {
+			logger.Info("Route API not available; skipping MCP Route reconciliation")
+			if r.Recorder != nil {
+				r.Recorder.Event(cluster, corev1.EventTypeWarning, "RouteAPINotFound", "route.openshift.io/v1 not available; skipping MCP Route reconciliation")
+			}
+			return nil
+		}
+		return fmt.Errorf("failed to create or update MCP Route: %w", err)
+	}
+
+	logger.Info("Successfully reconciled MCP Route", "name", route.GetName())
+	return nil
+}
+
+func (r *Neo4jEnterpriseClusterReconciler) warnIfMCPMissingAPOC(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) {
+	if cluster.Spec.MCP == nil || !cluster.Spec.MCP.Enabled || r.Recorder == nil {
+		return
+	}
+
+	plugins := &neo4jv1alpha1.Neo4jPluginList{}
+	if err := r.List(ctx, plugins, client.InNamespace(cluster.Namespace)); err != nil {
+		log.FromContext(ctx).V(1).Info("Unable to list plugins for MCP APOC check", "error", err)
+		return
+	}
+
+	for _, plugin := range plugins.Items {
+		if plugin.Spec.ClusterRef != cluster.Name || !plugin.Spec.Enabled {
+			continue
+		}
+		if isAPOCPluginName(plugin.Spec.Name) {
+			return
+		}
+	}
+
+	r.Recorder.Event(cluster, corev1.EventTypeWarning, "MCPApocMissing",
+		"MCP is enabled but APOC is not configured via Neo4jPlugin; MCP may fail in stdio mode and some tools may be unavailable.")
+}
+
+func isAPOCPluginName(name string) bool {
+	return strings.EqualFold(name, "apoc") || strings.EqualFold(name, "apoc-extended")
+}
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *Neo4jEnterpriseClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	builder := ctrl.NewControllerManagedBy(mgr).
 		For(&neo4jv1alpha1.Neo4jEnterpriseCluster{}).
+		Owns(&appsv1.Deployment{}).
 		Owns(&appsv1.StatefulSet{}).
 		Owns(&corev1.Service{}).
 		// Note: Removed ConfigMap from Owns() to prevent reconciliation feedback loops

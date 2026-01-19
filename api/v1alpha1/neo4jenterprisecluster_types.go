@@ -77,6 +77,9 @@ type Neo4jEnterpriseClusterSpec struct {
 	// Query performance monitoring
 	QueryMonitoring *QueryMonitoringSpec `json:"queryMonitoring,omitempty"`
 
+	// MCP server configuration for this cluster
+	MCP *MCPServerSpec `json:"mcp,omitempty"`
+
 	// Property Sharding configuration for Neo4j 2025.10+
 	// Enables support for creating sharded databases that separate
 	// graph topology from node/relationship properties

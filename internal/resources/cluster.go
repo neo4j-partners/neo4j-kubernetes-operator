@@ -36,6 +36,7 @@ import (
 	certv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	cmmeta "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
 	neo4jv1alpha1 "github.com/priyolahiri/neo4j-kubernetes-operator/api/v1alpha1"
+	"github.com/priyolahiri/neo4j-kubernetes-operator/internal/neo4j"
 )
 
 const (
@@ -1676,28 +1677,16 @@ func IsNeo4jVersion202510OrHigher(imageTag string) bool {
 		return false
 	}
 
-	// Extract the calver portion before any qualifiers (e.g., "-enterprise")
-	version := strings.Split(imageTag, "-")[0]
-	parts := strings.Split(version, ".")
-	if len(parts) < 2 {
+	version, err := neo4j.ParseVersion(imageTag)
+	if err != nil || !version.IsCalver {
 		return false
 	}
 
-	year, err := strconv.Atoi(parts[0])
-	if err != nil {
-		return false
-	}
-
-	month, err := strconv.Atoi(parts[1])
-	if err != nil {
-		return false
-	}
-
-	if year > 2025 {
+	if version.Major > 2025 {
 		return true
 	}
 
-	return year == 2025 && month >= 10
+	return version.Major == 2025 && version.Minor >= 10
 }
 
 // buildPropertyShardingConfig merges required property sharding settings with user overrides
@@ -1733,25 +1722,28 @@ func getKubernetesDiscoveryParameter(cluster *neo4jv1alpha1.Neo4jEnterpriseClust
 
 	// For Neo4j 5.x (semver): Always use V2_ONLY discovery for 5.26+
 	// For Neo4j 2025.x+ (calver): use dbms.kubernetes.discovery.service_port_name
-	if strings.HasPrefix(imageTag, "5.") {
-		// For Neo4j 5.26+, always use V2_ONLY discovery
-		// CRITICAL: Must use tcp-discovery (port 5000) not tcp-tx (port 6000)
-		// because V2_ONLY mode disables the discovery port (6000)
-		if isNeo4jVersion526OrHigher(imageTag) {
-			return `dbms.kubernetes.discovery.v2.service_port_name=tcp-discovery
+	if imageTag != "" {
+		version, err := neo4j.ParseVersion(imageTag)
+		if err == nil {
+			if version.IsCalver {
+				return `dbms.kubernetes.discovery.service_port_name=tcp-discovery
+dbms.kubernetes.cluster_domain=cluster.local`
+			}
+			if version.Major == 5 {
+				// For Neo4j 5.26+, always use V2_ONLY discovery
+				// CRITICAL: Must use tcp-discovery (port 5000) not tcp-tx (port 6000)
+				// because V2_ONLY mode disables the discovery port (6000)
+				if version.Minor >= 26 {
+					return `dbms.kubernetes.discovery.v2.service_port_name=tcp-discovery
 dbms.cluster.discovery.version=V2_ONLY
 dbms.kubernetes.cluster_domain=cluster.local`
+				}
+				// For other 5.x versions (pre-5.26) - not supported by this operator
+				return `dbms.kubernetes.service_port_name=discovery
+dbms.cluster.discovery.version=V2_ONLY
+dbms.kubernetes.cluster_domain=cluster.local`
+			}
 		}
-		// For other 5.x versions (pre-5.26) - not supported by this operator
-		return `dbms.kubernetes.service_port_name=discovery
-dbms.cluster.discovery.version=V2_ONLY
-dbms.kubernetes.cluster_domain=cluster.local`
-	} else if strings.HasPrefix(imageTag, "2025.") || strings.Contains(imageTag, "2025") {
-		// For Neo4j 2025.x+ (calver), use the new parameter name
-		// V2_ONLY is default in 2025.x, so don't set it explicitly
-		// CRITICAL: Must use tcp-discovery (port 5000) - same as 5.26.x
-		return `dbms.kubernetes.discovery.service_port_name=tcp-discovery
-dbms.kubernetes.cluster_domain=cluster.local`
 	}
 
 	// Default to 5.26+ configuration for maximum compatibility

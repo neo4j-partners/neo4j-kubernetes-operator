@@ -17,11 +17,10 @@ limitations under the License.
 package validation
 
 import (
-	"strings"
-
 	"k8s.io/apimachinery/pkg/util/validation/field"
 
 	neo4jv1alpha1 "github.com/priyolahiri/neo4j-kubernetes-operator/api/v1alpha1"
+	"github.com/priyolahiri/neo4j-kubernetes-operator/internal/neo4j"
 )
 
 // ImageValidator validates Neo4j image configuration
@@ -53,7 +52,8 @@ func (v *ImageValidator) Validate(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster)
 
 	// Validate Neo4j version (must be 5.26+)
 	if cluster.Spec.Image.Tag != "" {
-		if !v.isVersionSupported(cluster.Spec.Image.Tag) {
+		version, err := neo4j.ParseVersion(cluster.Spec.Image.Tag)
+		if err != nil || !version.IsSupported() {
 			allErrs = append(allErrs, field.Invalid(
 				imagePath.Child("tag"),
 				cluster.Spec.Image.Tag,
@@ -84,42 +84,10 @@ func (v *ImageValidator) Validate(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster)
 	return allErrs
 }
 
-// isVersionSupported checks if the Neo4j version is supported
 func (v *ImageValidator) isVersionSupported(version string) bool {
-	// Remove any prefix like "v" and suffixes like "-enterprise"
-	cleanVersion := strings.TrimPrefix(version, "v")
-	if idx := strings.Index(cleanVersion, "-"); idx != -1 {
-		cleanVersion = cleanVersion[:idx]
-	}
-
-	parts := strings.Split(cleanVersion, ".")
-	if len(parts) < 2 {
+	parsed, err := neo4j.ParseVersion(version)
+	if err != nil {
 		return false
 	}
-
-	// Check for CalVer format (2025.x.x and up)
-	if strings.HasPrefix(cleanVersion, "2025.") {
-		return true // All 2025.x.x versions are supported
-	}
-
-	// Check for SemVer format (5.26.x and up)
-	if strings.HasPrefix(cleanVersion, "5.") {
-		if len(parts) >= 2 {
-			if minorStr := parts[1]; minorStr != "" {
-				// Parse minor version
-				if len(minorStr) == 2 {
-					// Handle versions like 5.26, 5.27, etc.
-					switch minorStr {
-					case "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39":
-						return true
-					}
-				} else if len(minorStr) >= 3 {
-					// Handle versions like 5.100+ (future versions)
-					return true
-				}
-			}
-		}
-	}
-
-	return false
+	return parsed.IsSupported()
 }

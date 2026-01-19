@@ -20,8 +20,86 @@ Below are some of the most important fields you will use to configure your clust
 *   `spec.backups`: (Deprecated) Use the separate Neo4jBackup CRD for backup management. The operator now uses a centralized backup StatefulSet for resource efficiency.
 *   `spec.queryMonitoring`: Enable query monitoring and Prometheus metrics exposure.
 *   **Plugin management**: Use separate Neo4jPlugin CRDs to install plugins like APOC, GDS, Bloom, GenAI, and N10s. The operator automatically handles Neo4j 5.26+ compatibility requirements (see [Neo4jPlugin API Reference](../api_reference/neo4jplugin.md)).
+*   `spec.mcp`: Optional Neo4j MCP server deployment for client integrations (HTTP or STDIO). Requires the APOC plugin via Neo4jPlugin; HTTP uses per-request auth and supports Service/Ingress/Route exposure with optional TLS.
 *   `spec.tls`: Configure TLS/SSL encryption. Set mode to `cert-manager` and provide an issuerRef for automatic certificate management.
 *   `spec.config`: Add custom Neo4j configuration settings as key-value pairs. These are added to neo4j.conf.
 *   `spec.env`: Add environment variables to Neo4j pods. Note that NEO4J_AUTH and NEO4J_ACCEPT_LICENSE_AGREEMENT are managed by the operator.
 *   `spec.service`: Configure service type (ClusterIP, NodePort, LoadBalancer), annotations, and external access settings (Ingress; OpenShift Route).
 *   `spec.propertySharding`: (Neo4j 2025.10+, GA in 2025.12) Enable property sharding for horizontal scaling of large datasets. See the [Property Sharding Guide](property_sharding.md) for detailed configuration options.
+
+## MCP Server
+
+The operator can deploy an optional Neo4j MCP server alongside a cluster or standalone deployment. The MCP server runs as a separate Deployment and connects to the Neo4j service inside the namespace.
+
+### Requirements
+
+*   **APOC**: MCP relies on APOC. Install APOC using the Neo4jPlugin CRD (see [Neo4jPlugin API Reference](../api_reference/neo4jplugin.md)).
+*   **Image**: Set `spec.mcp.image.repo` and `spec.mcp.image.tag`. Use the MCP image published with the operator release.
+
+### Transport Modes
+
+*   **HTTP (default)**: No static credentials in the MCP pod. Clients send Basic Auth or Bearer tokens per request. The operator can create a Service, Ingress, and OpenShift Route for exposure. The HTTP endpoint path is `/mcp`.
+*   **STDIO**: MCP reads credentials from a Kubernetes Secret. Set `spec.mcp.auth.secretName` (defaults to the Neo4j admin secret) and key names if they differ. No Service/Ingress/Route is created for STDIO.
+
+### TLS for HTTP
+
+Configure TLS via `spec.mcp.http.tls`:
+*   `mode: disabled` (default)
+*   `mode: secret` with `secretName`
+*   `mode: cert-manager` with `issuerRef`
+
+When TLS is enabled, the operator mounts the TLS secret and configures MCP to use it. Default ports are `8080` for HTTP and `8443` when TLS is enabled (override with `spec.mcp.http.port`).
+
+### Example: Cluster MCP (HTTP)
+
+```yaml
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: graph-prod
+spec:
+  image:
+    repo: neo4j
+    tag: 2025.01.0-enterprise
+  topology:
+    servers: 3
+  storage:
+    className: standard
+    size: 50Gi
+  mcp:
+    enabled: true
+    image:
+      repo: ghcr.io/priyolahiri/neo4j-kubernetes-operator-mcp
+      tag: vX.Y.Z
+    transport: http
+    readOnly: true
+    http:
+      service:
+        type: ClusterIP
+```
+
+### Example: Standalone MCP (STDIO)
+
+```yaml
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jEnterpriseStandalone
+metadata:
+  name: graph-dev
+spec:
+  image:
+    repo: neo4j
+    tag: 5.26.0-enterprise
+  storage:
+    className: standard
+    size: 10Gi
+  auth:
+    adminSecret: neo4j-admin-secret
+  mcp:
+    enabled: true
+    image:
+      repo: ghcr.io/priyolahiri/neo4j-kubernetes-operator-mcp
+      tag: vX.Y.Z
+    transport: stdio
+    auth:
+      secretName: neo4j-admin-secret
+```

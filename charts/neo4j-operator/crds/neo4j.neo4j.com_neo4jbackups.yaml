@@ -132,6 +132,17 @@ spec:
                     description: Page cache size for backup operation (e.g., "4G")
                     pattern: ^[0-9]+[KMG]?$
                     type: string
+                  parallelDownload:
+                    description: Enable parallel download for remote backups
+                    type: boolean
+                  remoteAddressResolution:
+                    description: Resolve remote addresses for backups (useful in multi-homed
+                      environments)
+                    type: boolean
+                  skipRecovery:
+                    description: Skip recovery step after backup (advanced; use when
+                      recovery is handled separately)
+                    type: boolean
                   verify:
                     description: Verify backup integrity after creation
                     type: boolean

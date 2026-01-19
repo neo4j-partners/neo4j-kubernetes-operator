@@ -89,6 +89,7 @@ The `Neo4jEnterpriseClusterSpec` defines the desired state of a Neo4j Enterprise
 |---|---|---|
 | `tls` | [`TLSSpec`](#tlsspec) | TLS configuration |
 | `ui` | [`UISpec`](#uispec) | Neo4j UI configuration |
+| `mcp` | [`MCPServerSpec`](#mcpserverspec) | MCP server deployment and exposure settings |
 | `propertySharding` | [`PropertyShardingSpec`](#propertyshardingspec) | Property sharding configuration (Neo4j 2025.10+) |
 | `queryMonitoring` | [`QueryMonitoringSpec`](#querymonitoringspec) | Query monitoring configuration |
 
@@ -526,6 +527,72 @@ Configures an Ingress resource for HTTP(S) access to Neo4j Browser.
 | `termination` | `string` | TLS termination: `"edge"`, `"reencrypt"`, `"passthrough"` |
 | `insecureEdgeTerminationPolicy` | `string` | `"None"`, `"Allow"`, `"Redirect"` |
 | `secretName` | `string` | Secret containing certificate (reencrypt/passthrough) |
+
+### MCPServerSpec
+
+Optional MCP server deployment for the cluster. MCP requires the APOC plugin.
+HTTP transport uses per-request auth and can be exposed via Service/Ingress/Route on the `/mcp` path. STDIO transport reads credentials from a secret and does not expose a Service.
+
+| Field | Type | Description |
+|---|---|---|
+| `enabled` | `bool` | Enable MCP server deployment (default: `false`) |
+| `image` | [`*ImageSpec`](#imagespec) | MCP server image (required when enabled) |
+| `transport` | `string` | Transport mode: `"http"` (default) or `"stdio"` |
+| `readOnly` | `bool` | Disable write tools when `true` (default: `true`) |
+| `telemetry` | `bool` | Enable anonymous telemetry (default: `false`) |
+| `database` | `string` | Default Neo4j database |
+| `schemaSampleSize` | `*int32` | Schema sampling size |
+| `logLevel` | `string` | MCP log level |
+| `logFormat` | `string` | MCP log format |
+| `http` | [`*MCPHTTPConfig`](#mcphttpconfig) | HTTP transport configuration |
+| `auth` | [`*MCPAuthSpec`](#mcpauthspec) | STDIO auth configuration |
+| `replicas` | `*int32` | MCP pod replicas (default: `1`) |
+| `resources` | `*corev1.ResourceRequirements` | Resource requirements |
+| `env` | `[]corev1.EnvVar` | Extra environment variables for MCP |
+| `securityContext` | [`*SecurityContextSpec`](#securitycontextspec) | Pod/container security overrides |
+
+### MCPHTTPConfig
+
+| Field | Type | Description |
+|---|---|---|
+| `host` | `string` | HTTP bind host (default: `0.0.0.0`) |
+| `port` | `int32` | HTTP bind port (default: `8080`, or `8443` when TLS enabled) |
+| `allowedOrigins` | `string` | CORS allowed origins (comma-separated or `*`) |
+| `tls` | [`*MCPTLSSpec`](#mcptlsspec) | TLS settings for HTTP transport |
+| `service` | [`*MCPServiceSpec`](#mcpservicespec) | Service exposure settings |
+
+### MCPTLSSpec
+
+| Field | Type | Description |
+|---|---|---|
+| `mode` | `string` | TLS mode: `"disabled"` (default), `"secret"`, `"cert-manager"` |
+| `secretName` | `string` | Secret with `tls.crt` and `tls.key` (for `secret` mode) |
+| `issuerRef` | [`*IssuerRef`](#issuerref) | cert-manager issuer reference |
+| `duration` | `*string` | Certificate duration |
+| `renewBefore` | `*string` | Certificate renew window |
+| `subject` | [`*CertificateSubject`](#certificatesubject) | Certificate subject details |
+| `usages` | `[]string` | Certificate usages |
+
+### MCPServiceSpec
+
+| Field | Type | Description |
+|---|---|---|
+| `type` | `string` | Service type: `"ClusterIP"`, `"NodePort"`, `"LoadBalancer"` |
+| `annotations` | `map[string]string` | Service annotations |
+| `loadBalancerIP` | `string` | Static LoadBalancer IP |
+| `loadBalancerSourceRanges` | `[]string` | Allowed source ranges |
+| `externalTrafficPolicy` | `string` | External traffic policy: `"Cluster"` or `"Local"` |
+| `port` | `int32` | Service port for MCP HTTP |
+| `ingress` | [`*IngressSpec`](#ingressspec) | Ingress configuration (uses `/mcp` path) |
+| `route` | [`*RouteSpec`](#routespec) | OpenShift Route configuration |
+
+### MCPAuthSpec
+
+| Field | Type | Description |
+|---|---|---|
+| `secretName` | `string` | Secret with username/password keys |
+| `usernameKey` | `string` | Username key name (default: `username`) |
+| `passwordKey` | `string` | Password key name (default: `password`) |
 
 ### UISpec
 
