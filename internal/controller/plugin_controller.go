@@ -38,6 +38,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/utils/ptr"
 )
 
 const (
@@ -526,6 +527,33 @@ func (r *Neo4jPluginReconciler) applySecurityConfiguration(ctx context.Context, 
 	return nil
 }
 
+func hardenedPluginPodSecurityContext() *corev1.PodSecurityContext {
+	uid := int64(7474)
+	return &corev1.PodSecurityContext{
+		RunAsUser:    ptr.To(uid),
+		RunAsGroup:   ptr.To(uid),
+		FSGroup:      ptr.To(uid),
+		RunAsNonRoot: ptr.To(true),
+		SeccompProfile: &corev1.SeccompProfile{
+			Type: corev1.SeccompProfileTypeRuntimeDefault,
+		},
+	}
+}
+
+func hardenedPluginContainerSecurityContext() *corev1.SecurityContext {
+	uid := int64(7474)
+	return &corev1.SecurityContext{
+		RunAsUser:                ptr.To(uid),
+		RunAsGroup:               ptr.To(uid),
+		RunAsNonRoot:             ptr.To(true),
+		AllowPrivilegeEscalation: ptr.To(false),
+		ReadOnlyRootFilesystem:   ptr.To(false),
+		Capabilities: &corev1.Capabilities{
+			Drop: []corev1.Capability{"ALL"},
+		},
+	}
+}
+
 func (r *Neo4jPluginReconciler) uninstallPlugin(ctx context.Context, plugin *neo4jv1alpha1.Neo4jPlugin) error {
 	logger := log.FromContext(ctx)
 
@@ -570,7 +598,8 @@ func (r *Neo4jPluginReconciler) removePluginFromDeployment(ctx context.Context, 
 		Spec: batchv1.JobSpec{
 			Template: corev1.PodTemplateSpec{
 				Spec: corev1.PodSpec{
-					RestartPolicy: corev1.RestartPolicyNever,
+					SecurityContext: hardenedPluginPodSecurityContext(),
+					RestartPolicy:   corev1.RestartPolicyNever,
 					Containers: []corev1.Container{
 						{
 							Name:    "plugin-remover",
@@ -584,6 +613,7 @@ func (r *Neo4jPluginReconciler) removePluginFromDeployment(ctx context.Context, 
 									echo "Plugin removal completed"
 								`, plugin.Spec.Name, deployment.Type, deployment.Name, plugin.Spec.Name),
 							},
+							SecurityContext: hardenedPluginContainerSecurityContext(),
 							VolumeMounts: []corev1.VolumeMount{
 								{
 									Name:      "plugins",

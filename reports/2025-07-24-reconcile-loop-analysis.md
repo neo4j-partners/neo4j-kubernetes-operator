@@ -10,7 +10,7 @@ This report provides a comprehensive analysis of the reconciliation loops in the
 
 1. **Neo4jEnterpriseClusterReconciler** (`internal/controller/neo4jenterprisecluster_controller.go:91`)
    - Manages high-availability Neo4j clusters
-   - Supports minimum 1 primary + 1 secondary OR 2+ primaries
+   - Supports minimum 2 servers (server-based topology)
    - Handles rolling upgrades and topology placement
 
 2. **Neo4jEnterpriseStandaloneReconciler** (`internal/controller/neo4jenterprisestandalone_controller.go:66`)
@@ -156,19 +156,21 @@ if r.TopologyScheduler != nil {
 
 #### g. StatefulSets
 ```go
-// Create primary StatefulSet
-primarySts := resources.BuildPrimaryStatefulSetForEnterprise(cluster)
-if err := r.createOrUpdateResource(ctx, primarySts, cluster); err != nil {
-    _ = r.updateClusterStatus(ctx, cluster, "Failed", "Failed to create primary StatefulSet")
+// Create single server StatefulSet for all cluster members
+serverSts := resources.BuildServerStatefulSetForEnterprise(cluster)
+if err := r.createOrUpdateResource(ctx, serverSts, cluster); err != nil {
+    _ = r.updateClusterStatus(ctx, cluster, "Failed", "Failed to create server StatefulSet")
     return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 }
 
-// Create secondary StatefulSet if needed (parallel creation)
-if cluster.Spec.Topology.Secondaries > 0 {
-    secondarySts := resources.BuildSecondaryStatefulSetForEnterprise(cluster)
-    if err := r.createOrUpdateResource(ctx, secondarySts, cluster); err != nil {
-        _ = r.updateClusterStatus(ctx, cluster, "Failed", "Failed to create secondary StatefulSet")
-        return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
+// Create centralized backup StatefulSet when backups are enabled
+if cluster.Spec.Backups != nil {
+    backupSts := resources.BuildBackupStatefulSet(cluster)
+    if backupSts != nil {
+        if err := r.createOrUpdateResource(ctx, backupSts, cluster); err != nil {
+            _ = r.updateClusterStatus(ctx, cluster, "Failed", "Failed to create backup StatefulSet")
+            return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
+        }
     }
 }
 ```
@@ -310,7 +312,7 @@ Status updates use optimistic concurrency control:
 ## Performance Optimizations
 
 1. **Status Update Optimization**: Skip updates if status unchanged
-2. **Parallel Resource Creation**: Primary and secondary StatefulSets created simultaneously
+2. **Parallel Resource Creation**: Server StatefulSet and centralized backup StatefulSet created independently
 3. **Event Deduplication**: Only emit events on actual status changes
 4. **Resource Caching**: Controller-runtime's shared cache reduces API calls
 

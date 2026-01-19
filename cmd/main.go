@@ -94,6 +94,7 @@ type managerSettings struct {
 	controllersToLoad    string
 	skipCacheWait        bool
 	useDirectClient      bool
+	useCacheManager      bool
 }
 
 type watchNamespaceConfig struct {
@@ -270,6 +271,7 @@ func main() {
 		controllersToLoad:    *controllersToLoad,
 		skipCacheWait:        *skipCacheWait,
 		useDirectClient:      useDirectClient,
+		useCacheManager:      !useDirectClient && CacheStrategy(*cacheStrategy) == SelectiveCache,
 	}
 
 	ctx := ctrl.SetupSignalHandler()
@@ -561,7 +563,17 @@ func runManagerWithNamespaceDiscovery(ctx context.Context, settings managerSetti
 
 func runManager(ctx context.Context, settings managerSettings, selection watchNamespaceSelection) error {
 	cacheOpts := settings.baseCacheOpts
-	applyWatchNamespaces(&cacheOpts, selection)
+	var cacheManager *controller.CacheManager
+	if settings.useCacheManager {
+		var err error
+		cacheManager, err = buildCacheManager(selection)
+		if err != nil {
+			return err
+		}
+		cacheOpts = mergeCacheOptions(cacheOpts, cacheManager.GetCacheOptions())
+	} else {
+		applyWatchNamespaces(&cacheOpts, selection)
+	}
 
 	var mgr ctrl.Manager
 	var err error
@@ -592,6 +604,11 @@ func runManager(ctx context.Context, settings managerSettings, selection watchNa
 
 	// +kubebuilder:scaffold:builder
 
+	if cacheManager != nil {
+		cacheManager.SetClient(mgr.GetClient())
+		cacheManager.StartMemoryMonitoring(ctx)
+	}
+
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		return fmt.Errorf("unable to set up health check: %w", err)
 	}
@@ -617,6 +634,35 @@ func runManager(ctx context.Context, settings managerSettings, selection watchNa
 	}
 
 	return nil
+}
+
+func buildCacheManager(selection watchNamespaceSelection) (*controller.CacheManager, error) {
+	cacheManager := controller.NewCacheManager(scheme, "", selection.all)
+
+	if selection.all {
+		return cacheManager, nil
+	}
+
+	for _, namespace := range selection.namespaces {
+		if err := cacheManager.AddNamespace(namespace); err != nil {
+			return nil, fmt.Errorf("failed to add namespace to cache manager: %w", err)
+		}
+	}
+
+	return cacheManager, nil
+}
+
+func mergeCacheOptions(base, override cache.Options) cache.Options {
+	if override.Scheme != nil {
+		base.Scheme = override.Scheme
+	}
+	if override.ByObject != nil {
+		base.ByObject = override.ByObject
+	}
+	if override.DefaultNamespaces != nil {
+		base.DefaultNamespaces = override.DefaultNamespaces
+	}
+	return base
 }
 
 // configureDevelopmentCache sets up optimized caching for development mode

@@ -53,6 +53,7 @@ const (
 // CacheManager manages dynamic cache filtering and memory monitoring
 type CacheManager struct {
 	scheme           *runtime.Scheme
+	client           client.Client
 	watchModePrefix  string
 	watchAllModes    bool
 	memoryThreshold  int64
@@ -118,6 +119,13 @@ func NewCacheManager(scheme *runtime.Scheme, watchModePrefix string, watchAllMod
 	return cm
 }
 
+// SetClient configures the client used for resource checks during cleanup.
+func (cm *CacheManager) SetClient(c client.Client) {
+	cm.mutex.Lock()
+	defer cm.mutex.Unlock()
+	cm.client = c
+}
+
 // SetMemoryThresholds configures memory monitoring thresholds
 func (cm *CacheManager) SetMemoryThresholds(warningMB, criticalMB int64) {
 	cm.mutex.Lock()
@@ -146,10 +154,13 @@ func (cm *CacheManager) GetCacheOptions() cache.Options {
 		Scheme: cm.scheme,
 		ByObject: map[client.Object]cache.ByObject{
 			// Neo4j CRDs - always watch these
-			&neo4jv1alpha1.Neo4jEnterpriseCluster{}: {},
-			&neo4jv1alpha1.Neo4jDatabase{}:          {},
-			&neo4jv1alpha1.Neo4jBackup{}:            {},
-			&neo4jv1alpha1.Neo4jRestore{}:           {},
+			&neo4jv1alpha1.Neo4jEnterpriseCluster{}:    {},
+			&neo4jv1alpha1.Neo4jEnterpriseStandalone{}: {},
+			&neo4jv1alpha1.Neo4jDatabase{}:             {},
+			&neo4jv1alpha1.Neo4jBackup{}:               {},
+			&neo4jv1alpha1.Neo4jRestore{}:              {},
+			&neo4jv1alpha1.Neo4jPlugin{}:               {},
+			&neo4jv1alpha1.Neo4jShardedDatabase{}:      {},
 
 			// Core Kubernetes resources - filtered by labels
 			&corev1.Secret{}: {
@@ -417,37 +428,55 @@ func (cm *CacheManager) cacheCleanupLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			cm.performRoutineCleanup()
+			cm.performRoutineCleanup(ctx)
 			log.V(1).Info("Performed routine cache cleanup", "watched_namespaces", len(cm.watchedNamespaces))
 		}
 	}
 }
 
-func (cm *CacheManager) performRoutineCleanup() {
-	cm.mutex.Lock()
-	defer cm.mutex.Unlock()
+func (cm *CacheManager) performRoutineCleanup(ctx context.Context) {
+	if cm.watchAllModes {
+		if cm.isMemoryAboveThreshold() {
+			goruntime.GC()
+		}
+		return
+	}
 
 	// Remove old namespace entries (older than 24 hours with no activity)
 	cutoff := time.Now().Add(-24 * time.Hour)
-	var namespacesToRemove []string
+	var candidates []string
 
+	cm.mutex.RLock()
 	for ns, timestamp := range cm.watchedNamespaces {
 		if timestamp.Before(cutoff) {
-			// Check if namespace still has active Neo4j resources
-			// For now, we'll keep all namespaces to avoid missing resources
-			// TODO: Implement proper resource checking before removal
-			namespacesToRemove = append(namespacesToRemove, ns)
+			candidates = append(candidates, ns)
 		}
 	}
+	cm.mutex.RUnlock()
 
-	// Actually remove the namespaces that are safe to remove
-	for _, ns := range namespacesToRemove {
-		// For safety, we'll keep the namespace but log that it's a candidate for removal
-		log.Log.V(1).Info("Namespace is candidate for cleanup", "namespace", ns, "last_activity", cm.watchedNamespaces[ns])
+	for _, ns := range candidates {
+		if cm.client == nil {
+			log.Log.V(1).Info("Cleanup skipped: cache manager client not configured", "namespace", ns)
+			continue
+		}
+
+		hasResources, err := cm.namespaceHasNeo4jResources(ctx, ns)
+		if err != nil {
+			log.Log.V(1).Info("Cleanup check failed, keeping namespace", "namespace", ns, "error", err)
+			continue
+		}
+
+		if hasResources {
+			cm.touchNamespace(ns)
+			log.Log.V(1).Info("Namespace has active Neo4j resources, keeping watch", "namespace", ns)
+			continue
+		}
+
+		cm.RemoveNamespace(ns)
 	}
 
-	if len(namespacesToRemove) > 0 {
-		log.Log.Info("Found old namespace watches", "candidates", namespacesToRemove, "count", len(namespacesToRemove))
+	if len(candidates) > 0 {
+		log.Log.Info("Processed old namespace watches", "candidates", candidates, "count", len(candidates))
 	}
 
 	// Force garbage collection if memory is getting high
@@ -512,6 +541,62 @@ func (cm *CacheManager) triggerAlert(level AlertLevel, message string, stats Mem
 	// Call external callback if configured
 	if cm.alertCallback != nil {
 		go cm.alertCallback(alert)
+	}
+}
+
+func (cm *CacheManager) touchNamespace(namespace string) {
+	cm.mutex.Lock()
+	defer cm.mutex.Unlock()
+
+	if _, exists := cm.watchedNamespaces[namespace]; exists {
+		cm.watchedNamespaces[namespace] = time.Now()
+	}
+}
+
+func (cm *CacheManager) namespaceHasNeo4jResources(ctx context.Context, namespace string) (bool, error) {
+	checks := []struct {
+		name string
+		list client.ObjectList
+	}{
+		{name: "Neo4jEnterpriseCluster", list: &neo4jv1alpha1.Neo4jEnterpriseClusterList{}},
+		{name: "Neo4jEnterpriseStandalone", list: &neo4jv1alpha1.Neo4jEnterpriseStandaloneList{}},
+		{name: "Neo4jDatabase", list: &neo4jv1alpha1.Neo4jDatabaseList{}},
+		{name: "Neo4jPlugin", list: &neo4jv1alpha1.Neo4jPluginList{}},
+		{name: "Neo4jBackup", list: &neo4jv1alpha1.Neo4jBackupList{}},
+		{name: "Neo4jRestore", list: &neo4jv1alpha1.Neo4jRestoreList{}},
+		{name: "Neo4jShardedDatabase", list: &neo4jv1alpha1.Neo4jShardedDatabaseList{}},
+	}
+
+	for _, check := range checks {
+		if err := cm.client.List(ctx, check.list, client.InNamespace(namespace), client.Limit(1)); err != nil {
+			return true, fmt.Errorf("list %s: %w", check.name, err)
+		}
+		if listHasItems(check.list) {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+func listHasItems(list client.ObjectList) bool {
+	switch typed := list.(type) {
+	case *neo4jv1alpha1.Neo4jEnterpriseClusterList:
+		return len(typed.Items) > 0
+	case *neo4jv1alpha1.Neo4jEnterpriseStandaloneList:
+		return len(typed.Items) > 0
+	case *neo4jv1alpha1.Neo4jDatabaseList:
+		return len(typed.Items) > 0
+	case *neo4jv1alpha1.Neo4jPluginList:
+		return len(typed.Items) > 0
+	case *neo4jv1alpha1.Neo4jBackupList:
+		return len(typed.Items) > 0
+	case *neo4jv1alpha1.Neo4jRestoreList:
+		return len(typed.Items) > 0
+	case *neo4jv1alpha1.Neo4jShardedDatabaseList:
+		return len(typed.Items) > 0
+	default:
+		return false
 	}
 }
 

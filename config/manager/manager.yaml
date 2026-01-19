@@ -45,6 +45,8 @@ spec:
                     - linux
       securityContext:
         runAsNonRoot: true
+        runAsUser: 65532
+        fsGroup: 65532
         # Set seccomp profile for enhanced security
         seccompProfile:
           type: RuntimeDefault
@@ -60,6 +62,7 @@ spec:
         name: manager
         securityContext:
           allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
           capabilities:
             drop:
             - "ALL"
