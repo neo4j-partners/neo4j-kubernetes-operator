@@ -6,7 +6,7 @@ This directory contains examples demonstrating how to configure Neo4j Property S
 
 - Neo4j Kubernetes Operator deployed
 - Neo4j Enterprise 2025.10+ images (GA as of 2025.12; examples use 2025.12)
-- Kubernetes cluster with minimum 5 nodes
+- Kubernetes cluster with at least 1 node (3+ recommended for HA graph shard primaries)
 - Storage class supporting persistent volumes
 - Admin secret for Neo4j authentication
 
@@ -17,7 +17,7 @@ This directory contains examples demonstrating how to configure Neo4j Property S
 **Use Case**: Getting started with property sharding
 
 **Features**:
-- Minimal 5-server cluster (required minimum)
+- Minimal 3-server cluster (recommended for HA primaries)
 - Basic sharded database with 2 property shards
 - Authentication and storage class configuration
 - Suitable for learning and small datasets
@@ -65,8 +65,8 @@ cypher-shell -a bolt://localhost:7687 -u neo4j -p development123
 **Use Case**: Production deployments with high availability
 
 **Features**:
-- 5-server cluster with high availability
-- 8 property shards with strategic property placement
+- 3+ server cluster with high availability
+- 8 property shards with replica topology
 - TLS encryption
 - Performance tuning
 - Backup integration
@@ -83,8 +83,9 @@ kubectl apply -f advanced-property-sharding.yaml
 **Use Case**: Demonstrating backup strategies for sharded databases
 
 **Features**:
-- Coordinated multi-shard backups
-- Both scheduled and manual backup configurations
+- Coordinated multi-shard backups using `Neo4jBackup`
+
+Note: `backupConfig` on `Neo4jShardedDatabase` is not orchestrated yet; use explicit backup resources.
 - S3 storage integration
 - Consistency guarantees across shards
 - Retention policies
@@ -108,23 +109,7 @@ kubectl apply -f property-sharding-with-backup.yaml
 
 ### Property Distribution Strategy
 
-**Include in Property Shards**:
-```yaml
-includedProperties:
-  - "description"           # Large text
-  - "full_specifications"   # Detailed data
-  - "analytics_data"       # Analytics payloads
-  - "user_preferences"     # JSON documents
-```
-
-**Keep in Graph Shard**:
-```yaml
-excludedProperties:
-  - "id"                   # Primary keys
-  - "name"                 # Frequently accessed
-  - "category"             # Used in WHERE clauses
-  - "price"                # Indexed fields
-```
+Property distribution across shards is automatic; there are no per-property controls in the operator.
 
 ### Resource Sizing
 
@@ -192,7 +177,7 @@ MATCH (n) RETURN n LIMIT 10;
 SHOW DATABASES;
 
 // Check virtual databases
-SHOW SHARDED DATABASES;
+SHOW DATABASES;
 
 // Verify shard topology
 SHOW DATABASES WHERE name STARTS WITH '<db-name>-'

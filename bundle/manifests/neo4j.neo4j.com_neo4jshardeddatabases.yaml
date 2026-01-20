@@ -1,9 +1,9 @@
+---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.19.0
-  creationTimestamp: null
   name: neo4jshardeddatabases.neo4j.neo4j.com
 spec:
   group: neo4j.neo4j.com
@@ -163,7 +163,7 @@ spec:
                 type: string
               defaultCypherLanguage:
                 description: |-
-                  Default Cypher language version for sharded database (Neo4j 2025.06+ only)
+                  Default Cypher language version for sharded database (Neo4j 2025.10+ only)
 
                   Property sharding requires Cypher 25 syntax for multi-database operations.
                   This field ensures compatibility with sharded database queries.
@@ -174,116 +174,12 @@ spec:
                 default: true
                 description: Create database only if it doesn't exist
                 type: boolean
-              initialGraphData:
-                description: |-
-                  Initial data configuration for graph shard
-                  Applied only to the graph shard database during creation
-                properties:
-                  configMapRef:
-                    description: Configuration map reference containing data
-                    type: string
-                  cypherStatements:
-                    description: Cypher statements for initial data
-                    items:
-                      type: string
-                    type: array
-                  secretRef:
-                    description: Secret reference containing sensitive data
-                    type: string
-                  source:
-                    description: Source type for initial data
-                    enum:
-                    - cypher
-                    - dump
-                    - csv
-                    type: string
-                  storage:
-                    description: Storage location for data files
-                    properties:
-                      bucket:
-                        type: string
-                      cloud:
-                        description: Cloud provider configuration
-                        properties:
-                          identity:
-                            description: CloudIdentity defines cloud identity configuration
-                            properties:
-                              autoCreate:
-                                description: AutoCreateSpec defines auto-creation
-                                  of service accounts
-                                properties:
-                                  annotations:
-                                    additionalProperties:
-                                      type: string
-                                    type: object
-                                  enabled:
-                                    default: true
-                                    type: boolean
-                                type: object
-                              provider:
-                                enum:
-                                - aws
-                                - gcp
-                                - azure
-                                type: string
-                              serviceAccount:
-                                type: string
-                            required:
-                            - provider
-                            type: object
-                          provider:
-                            enum:
-                            - aws
-                            - gcp
-                            - azure
-                            type: string
-                        type: object
-                      path:
-                        type: string
-                      pvc:
-                        description: PVC configuration
-                        properties:
-                          name:
-                            description: Name of the PVC to use (for referencing existing
-                              PVCs)
-                            type: string
-                          size:
-                            type: string
-                          storageClassName:
-                            type: string
-                        type: object
-                      type:
-                        enum:
-                        - s3
-                        - gcs
-                        - azure
-                        - pvc
-                        type: string
-                    required:
-                    - type
-                    type: object
-                type: object
               name:
                 description: Name of the sharded database to create
                 type: string
               propertySharding:
                 description: Property sharding configuration
                 properties:
-                  config:
-                    additionalProperties:
-                      type: string
-                    description: Advanced property sharding configuration
-                    type: object
-                  excludedProperties:
-                    description: |-
-                      Property keys to exclude from sharding
-
-                      These properties always remain in the graph shard.
-                      Useful for frequently accessed properties or small values.
-                      Takes precedence over includedProperties.
-                    items:
-                      type: string
-                    type: array
                   graphShard:
                     description: |-
                       Graph shard topology specification
@@ -310,28 +206,6 @@ spec:
                         minimum: 0
                         type: integer
                     type: object
-                  hashFunction:
-                    default: murmur3
-                    description: |-
-                      Hash function used for property distribution
-
-                      Algorithm for distributing properties across shards:
-                      - murmur3: Fast, good distribution (recommended)
-                      - sha256: Cryptographically secure, slower
-                    enum:
-                    - murmur3
-                    - sha256
-                    type: string
-                  includedProperties:
-                    description: |-
-                      Property keys to include in sharding
-
-                      If specified, only these property keys are distributed across shards.
-                      All other properties remain in the graph shard.
-                      If empty, all properties are sharded.
-                    items:
-                      type: string
-                    type: array
                   propertyShardTopology:
                     description: |-
                       Property shard topology specification
@@ -339,23 +213,11 @@ spec:
                       Defines the replication topology for each property shard database.
                       All property shards use the same topology configuration.
                     properties:
-                      primaries:
-                        description: |-
-                          Number of primary replicas for this database
-
-                          Primaries handle both read and write operations for the database.
-                          At least 1 primary is required for database operation.
+                      replicas:
+                        default: 1
+                        description: Number of replicas per property shard.
                         format: int32
                         minimum: 1
-                        type: integer
-                      secondaries:
-                        description: |-
-                          Number of secondary replicas for this database
-
-                          Secondaries provide read-only access for horizontal scaling.
-                          Secondaries are optional but improve read performance and availability.
-                        format: int32
-                        minimum: 0
                         type: integer
                     type: object
                   propertyShards:
@@ -366,7 +228,7 @@ spec:
                       More shards enable better parallelization but increase complexity.
                       Recommended: 4-16 shards for most use cases.
                     format: int32
-                    maximum: 64
+                    maximum: 1000
                     minimum: 1
                     type: integer
                 required:
@@ -436,6 +298,29 @@ spec:
                       - AUTH_HEADER: (optional) custom authorization header
                     type: string
                 type: object
+              seedSourceDatabase:
+                description: |-
+                  Optional source database name for seed metadata lookup.
+                  Used when seeding from backups with a different database name.
+                type: string
+              seedURI:
+                description: |-
+                  Seed URI for creating the sharded database from backups or dumps.
+                  When provided as a single URI, Neo4j expects backup artifacts to be named
+                  using shard suffixes (e.g., <db>-g000, <db>-p000).
+                type: string
+              seedURIs:
+                additionalProperties:
+                  type: string
+                description: |-
+                  Seed URIs keyed by shard name for dump-based seeding or multi-location backups.
+                  Keys must match shard names (e.g., <db>-g000, <db>-p000).
+                type: object
+              txLogEnrichment:
+                description: |-
+                  Transaction log enrichment for sharded database creation.
+                  Valid values are Neo4j-supported txLogEnrichment options (e.g., "FULL").
+                type: string
               wait:
                 default: true
                 description: Wait for database creation to complete
@@ -705,9 +590,3 @@ spec:
     storage: true
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: null
-  storedVersions: null

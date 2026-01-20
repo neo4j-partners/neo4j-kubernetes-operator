@@ -2,7 +2,7 @@
 # This example is optimized for development and testing environments
 #
 # DEVELOPMENT NOTES:
-# - Still requires 5 servers minimum (property sharding constraint)
+# - Requires at least 2 servers (3+ recommended for HA)
 # - Uses minimum viable resource allocation (4GB memory, 2 CPU cores)
 # - Suitable for learning, testing, and small-scale development
 # - NOT recommended for production workloads
@@ -36,7 +36,7 @@ spec:
 
   # Minimum required servers for property sharding
   topology:
-    servers: 5  # Property sharding requires 5+ servers
+    servers: 3  # 3+ recommended for HA graph shard primaries
 
   storage:
     size: 2Gi  # Small storage for dev
@@ -89,27 +89,13 @@ spec:
     # Small number of shards for testing
     propertyShards: 2
 
-    hashFunction: murmur3
-
-    # Test property distribution
-    includedProperties:
-      - "description"      # Test large text fields
-      - "metadata"        # Test JSON data
-      - "test_payload"    # Test data for experiments
-
-    excludedProperties:
-      - "id"              # Keep IDs in graph
-      - "name"            # Frequently accessed
-      - "type"            # Used in queries
-
     # Simple topology for development
     graphShard:
       primaries: 1    # Single primary for dev
       secondaries: 1  # One backup
 
     propertyShardTopology:
-      primaries: 1    # Single primary per shard
-      secondaries: 0  # No replicas in dev
+      replicas: 1     # Single replica per shard
 
   wait: true
   ifNotExists: true

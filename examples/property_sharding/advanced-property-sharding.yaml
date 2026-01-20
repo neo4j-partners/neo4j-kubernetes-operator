@@ -3,12 +3,12 @@
 # with high-performance resource allocation, TLS, and comprehensive monitoring
 #
 # PRODUCTION REQUIREMENTS:
-# - 5+ servers for optimal shard distribution
+# - 3+ servers for HA graph shard primaries (5+ for larger datasets)
 # - 16-20GB memory per server for high performance
 # - 4+ CPU cores per server for concurrent cross-shard queries
 # - High-speed, low-latency networking (10Gbps+)
 # - TLS encryption for security
-# - Comprehensive monitoring and backup integration
+# - Comprehensive monitoring
 
 # Prerequisites: Create admin secret (REQUIRED)
 # kubectl create secret generic neo4j-admin-secret \
@@ -34,9 +34,9 @@ spec:
   auth:
     adminSecret: neo4j-admin-secret
 
-  # Production cluster sizing (5+ servers for optimal property sharding)
+  # Production cluster sizing (3+ servers for HA; 5+ for larger datasets)
   topology:
-    servers: 5  # Minimum for property sharding, consider 7 for larger datasets
+    servers: 5  # 3+ recommended for HA, consider 7 for larger datasets
 
   storage:
     size: 100Gi
@@ -101,33 +101,6 @@ spec:
     # Optimal shard count for large dataset
     propertyShards: 8
 
-    # Use murmur3 for best performance
-    hashFunction: murmur3
-
-    # Strategic property distribution
-    includedProperties:
-      # Large, infrequently accessed properties go to property shards
-      - "description"           # Product descriptions
-      - "full_specifications"   # Detailed specs
-      - "reviews"              # Customer reviews
-      - "images_metadata"      # Image information
-      - "analytics_data"       # Usage analytics
-      - "marketing_content"    # Marketing materials
-      - "inventory_history"    # Historical inventory data
-      - "user_preferences"     # Personalization data
-
-    excludedProperties:
-      # Frequently accessed properties stay in graph shard for performance
-      - "id"                   # Primary keys
-      - "name"                 # Product names
-      - "price"                # Current price
-      - "category"             # Category classification
-      - "brand"                # Brand information
-      - "availability"         # Stock status
-      - "rating"               # Average rating
-      - "created_at"           # Timestamps
-      - "updated_at"           # Update timestamps
-
     # High-availability graph shard (critical path)
     graphShard:
       primaries: 3     # Raft consensus with fault tolerance
@@ -135,8 +108,7 @@ spec:
 
     # Fault-tolerant property shards
     propertyShardTopology:
-      primaries: 2     # Redundant primaries
-      secondaries: 1   # Read replicas
+      replicas: 2      # Redundant replicas
 
     # Advanced property sharding configuration
     config:
@@ -150,27 +122,16 @@ spec:
       internal.dbms.sharded_property_database.batch_size: "1000"
       internal.dbms.sharded_property_database.flush_interval: "1s"
 
-  # Initial data loading from backup
-  initialGraphData:
-    source: "s3://ecommerce-backups/initial-graph-data.dump"
-    credentials:
-      secretRef: "s3-credentials"
-
-  # Backup configuration for sharded database
-  backupConfig:
-    enabled: true
-    schedule: "0 2 * * *"  # Daily at 2 AM
-    consistency: "strict"   # Consistent point-in-time backups
-    timeout: "2h"          # Allow time for large backups
-    retention: "30d"       # Keep backups for 30 days
-    storage:
-      type: "s3"
-      location: "s3://ecommerce-backups/sharded/"
-      credentials:
-        secretRef: "backup-s3-credentials"
+  # Seed from backups (shard-suffixed artifacts required in the bucket)
+  seedURI: "s3://ecommerce-backups/sharded/"
+  seedConfig:
+    config:
+      region: "us-east-1"
+  seedCredentials:
+    secretRef: "s3-credentials"
 
 ---
-# Secret for S3 access
+# Secret for seed URI access
 apiVersion: v1
 kind: Secret
 metadata:
@@ -181,19 +142,6 @@ data:
   # Base64 encoded credentials
   access-key-id: <base64-encoded-access-key>
   secret-access-key: <base64-encoded-secret-key>
-
----
-# Secret for backup S3 access
-apiVersion: v1
-kind: Secret
-metadata:
-  name: backup-s3-credentials
-  namespace: default
-type: Opaque
-data:
-  # Base64 encoded backup credentials
-  access-key-id: <base64-encoded-backup-access-key>
-  secret-access-key: <base64-encoded-backup-secret-key>
 
 ---
 # Admin secret for Neo4j authentication

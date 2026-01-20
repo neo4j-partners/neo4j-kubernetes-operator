@@ -53,15 +53,28 @@ type Neo4jShardedDatabaseSpec struct {
 	// +kubebuilder:default=true
 	IfNotExists bool `json:"ifNotExists,omitempty"`
 
-	// Initial data configuration for graph shard
-	// Applied only to the graph shard database during creation
-	InitialGraphData *InitialDataSpec `json:"initialGraphData,omitempty"`
+	// Seed URI for creating the sharded database from backups or dumps.
+	// When provided as a single URI, Neo4j expects backup artifacts to be named
+	// using shard suffixes (e.g., <db>-g000, <db>-p000).
+	SeedURI string `json:"seedURI,omitempty"`
+
+	// Seed URIs keyed by shard name for dump-based seeding or multi-location backups.
+	// Keys must match shard names (e.g., <db>-g000, <db>-p000).
+	SeedURIs map[string]string `json:"seedURIs,omitempty"`
+
+	// Optional source database name for seed metadata lookup.
+	// Used when seeding from backups with a different database name.
+	SeedSourceDatabase string `json:"seedSourceDatabase,omitempty"`
 
 	// Seed configuration for advanced initialization
 	SeedConfig *SeedConfiguration `json:"seedConfig,omitempty"`
 
 	// Seed credentials for URI access when system-wide auth is not available
 	SeedCredentials *SeedCredentials `json:"seedCredentials,omitempty"`
+
+	// Transaction log enrichment for sharded database creation.
+	// Valid values are Neo4j-supported txLogEnrichment options (e.g., "FULL").
+	TxLogEnrichment string `json:"txLogEnrichment,omitempty"`
 
 	// Backup configuration for sharded database
 	//
@@ -75,35 +88,12 @@ type PropertyShardingConfiguration struct {
 	// Number of property shards to create
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Minimum=1
-	// +kubebuilder:validation:Maximum=64
+	// +kubebuilder:validation:Maximum=1000
 	//
 	// Determines how node and relationship properties are distributed.
 	// More shards enable better parallelization but increase complexity.
 	// Recommended: 4-16 shards for most use cases.
 	PropertyShards int32 `json:"propertyShards"`
-
-	// Hash function used for property distribution
-	// +kubebuilder:validation:Enum=murmur3;sha256
-	// +kubebuilder:default=murmur3
-	//
-	// Algorithm for distributing properties across shards:
-	// - murmur3: Fast, good distribution (recommended)
-	// - sha256: Cryptographically secure, slower
-	HashFunction string `json:"hashFunction,omitempty"`
-
-	// Property keys to include in sharding
-	//
-	// If specified, only these property keys are distributed across shards.
-	// All other properties remain in the graph shard.
-	// If empty, all properties are sharded.
-	IncludedProperties []string `json:"includedProperties,omitempty"`
-
-	// Property keys to exclude from sharding
-	//
-	// These properties always remain in the graph shard.
-	// Useful for frequently accessed properties or small values.
-	// Takes precedence over includedProperties.
-	ExcludedProperties []string `json:"excludedProperties,omitempty"`
 
 	// Graph shard topology specification
 	//
@@ -115,10 +105,15 @@ type PropertyShardingConfiguration struct {
 	//
 	// Defines the replication topology for each property shard database.
 	// All property shards use the same topology configuration.
-	PropertyShardTopology DatabaseTopology `json:"propertyShardTopology"`
+	PropertyShardTopology PropertyShardTopology `json:"propertyShardTopology"`
+}
 
-	// Advanced property sharding configuration
-	Config map[string]string `json:"config,omitempty"`
+// PropertyShardTopology defines replica topology for property shards.
+type PropertyShardTopology struct {
+	// Number of replicas per property shard.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:default=1
+	Replicas int32 `json:"replicas,omitempty"`
 }
 
 // ShardedDatabaseBackupConfig defines backup coordination across shards

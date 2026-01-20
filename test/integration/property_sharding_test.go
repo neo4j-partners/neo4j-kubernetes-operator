@@ -25,7 +25,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/yaml"
 
 	neo4jv1alpha1 "github.com/neo4j-partners/neo4j-kubernetes-operator/api/v1alpha1"
 )
@@ -37,10 +39,10 @@ func isRunningInCI() bool {
 
 // Property Sharding Integration Tests
 // These tests are skipped in CI environments due to large resource requirements:
-// - Neo4j 2025.10+ images are larger than standard versions
-// - Property sharding requires minimum 5 servers for proper shard distribution
+// - Neo4j 2025.12 images are larger than standard versions
+// - Property sharding requires at least 1 server (3+ recommended for HA)
 // - Each server needs 4Gi+ memory minimum for property sharding workloads (8Gi recommended)
-// - Total cluster resource requirements: 20Gi minimum (40Gi recommended)
+// - Total cluster resource requirements: 12Gi minimum (24Gi recommended)
 //
 // To run these tests locally:
 //
@@ -50,6 +52,10 @@ func isRunningInCI() bool {
 //
 //	ginkgo run -focus "Property Sharding" ./test/integration
 var _ = Describe("Property Sharding Integration Tests", Serial, func() {
+	const propertyShardingImageTag = "2025.12-enterprise"
+	const shardedDBReadyTimeout = 10 * time.Minute
+	const shardedDBPollInterval = 5 * time.Second
+
 	var (
 		testNamespace string
 		cluster       *neo4jv1alpha1.Neo4jEnterpriseCluster
@@ -84,6 +90,10 @@ var _ = Describe("Property Sharding Integration Tests", Serial, func() {
 	})
 
 	AfterEach(func() {
+		if CurrentSpecReport().Failed() {
+			dumpNamespaceDiagnostics(testNamespace)
+		}
+
 		// Critical: Clean up resources immediately to prevent CI resource exhaustion
 		if shardedDB != nil {
 			By("Cleaning up sharded database resource")
@@ -122,13 +132,13 @@ var _ = Describe("Property Sharding Integration Tests", Serial, func() {
 					Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 						Image: neo4jv1alpha1.ImageSpec{
 							Repo: "neo4j",
-							Tag:  "2025.11.2-enterprise", // Property sharding requires 2025.10+ (using 2025.11.2)
+							Tag:  propertyShardingImageTag, // Property sharding requires 2025.10+ (using 2025.12)
 						},
 						Auth: &neo4jv1alpha1.AuthSpec{
 							AdminSecret: "neo4j-admin-secret",
 						},
 						Topology: neo4jv1alpha1.TopologyConfiguration{
-							Servers: 5, // Property sharding test configuration
+							Servers: 3, // Property sharding test configuration
 						},
 						Storage: neo4jv1alpha1.StorageSpec{
 							Size:      "1Gi",
@@ -179,7 +189,7 @@ var _ = Describe("Property Sharding Integration Tests", Serial, func() {
 		})
 
 		Context("when property sharding configuration is invalid", func() {
-			It("should fail validation for insufficient servers", func() {
+			It("should fail validation for invalid server count", func() {
 				cluster = &neo4jv1alpha1.Neo4jEnterpriseCluster{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "invalid-sharding-cluster",
@@ -188,13 +198,13 @@ var _ = Describe("Property Sharding Integration Tests", Serial, func() {
 					Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 						Image: neo4jv1alpha1.ImageSpec{
 							Repo: "neo4j",
-							Tag:  "2025.11.2-enterprise",
+							Tag:  propertyShardingImageTag,
 						},
 						Auth: &neo4jv1alpha1.AuthSpec{
 							AdminSecret: "neo4j-admin-secret",
 						},
 						Topology: neo4jv1alpha1.TopologyConfiguration{
-							Servers: 2, // Too few for property sharding
+							Servers: 0, // Invalid for property sharding
 						},
 						Storage: neo4jv1alpha1.StorageSpec{
 							Size:      "1Gi",
@@ -206,38 +216,29 @@ var _ = Describe("Property Sharding Integration Tests", Serial, func() {
 					},
 				}
 
-				By("Creating the cluster with insufficient servers")
-				Expect(k8sClient.Create(ctx, cluster)).Should(Succeed())
-
-				By("Checking cluster fails validation")
-				Eventually(func() string {
-					err := k8sClient.Get(ctx, client.ObjectKeyFromObject(cluster), cluster)
-					if err != nil {
-						return ""
-					}
-					return cluster.Status.Phase
-				}).Should(Equal("Failed"))
-
-				By("Checking failure message mentions server requirement")
-				Expect(cluster.Status.Message).Should(ContainSubstring("minimum 5 servers"))
+				By("Creating the cluster with invalid server count")
+				err := k8sClient.Create(ctx, cluster)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("spec.topology.servers"))
+				cluster = nil
 			})
 
-			It("should fail validation for unsupported Neo4j version", func() {
+			It("should fail validation for invalid property sharding config", func() {
 				cluster = &neo4jv1alpha1.Neo4jEnterpriseCluster{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "old-version-cluster",
+						Name:      "invalid-config-cluster",
 						Namespace: testNamespace,
 					},
 					Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 						Image: neo4jv1alpha1.ImageSpec{
 							Repo: "neo4j",
-							Tag:  "5.26-enterprise", // Too old for property sharding
+							Tag:  propertyShardingImageTag,
 						},
 						Auth: &neo4jv1alpha1.AuthSpec{
 							AdminSecret: "neo4j-admin-secret",
 						},
 						Topology: neo4jv1alpha1.TopologyConfiguration{
-							Servers: 5,
+							Servers: 3,
 						},
 						Storage: neo4jv1alpha1.StorageSpec{
 							Size:      "1Gi",
@@ -245,11 +246,14 @@ var _ = Describe("Property Sharding Integration Tests", Serial, func() {
 						},
 						PropertySharding: &neo4jv1alpha1.PropertyShardingSpec{
 							Enabled: true,
+							Config: map[string]string{
+								"internal.dbms.sharded_property_database.allow_external_shard_access": "true",
+							},
 						},
 					},
 				}
 
-				By("Creating the cluster with old Neo4j version")
+				By("Creating the cluster with invalid property sharding config")
 				Expect(k8sClient.Create(ctx, cluster)).Should(Succeed())
 
 				By("Checking cluster fails validation")
@@ -261,8 +265,8 @@ var _ = Describe("Property Sharding Integration Tests", Serial, func() {
 					return cluster.Status.Phase
 				}).Should(Equal("Failed"))
 
-				By("Checking failure message mentions version requirement")
-				Expect(cluster.Status.Message).Should(ContainSubstring("2025.10+"))
+				By("Checking failure message mentions required config")
+				Expect(cluster.Status.Message).Should(ContainSubstring("allow_external_shard_access"))
 			})
 		})
 	})
@@ -278,13 +282,13 @@ var _ = Describe("Property Sharding Integration Tests", Serial, func() {
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 					Image: neo4jv1alpha1.ImageSpec{
 						Repo: "neo4j",
-						Tag:  "2025.11.2-enterprise",
+						Tag:  propertyShardingImageTag,
 					},
 					Auth: &neo4jv1alpha1.AuthSpec{
 						AdminSecret: "neo4j-admin-secret",
 					},
 					Topology: neo4jv1alpha1.TopologyConfiguration{
-						Servers: 5, // Property sharding test configuration
+						Servers: 3, // Property sharding test configuration
 					},
 					Storage: neo4jv1alpha1.StorageSpec{
 						Size:      "1Gi",
@@ -346,14 +350,12 @@ var _ = Describe("Property Sharding Integration Tests", Serial, func() {
 						DefaultCypherLanguage: "25",
 						PropertySharding: neo4jv1alpha1.PropertyShardingConfiguration{
 							PropertyShards: 3,
-							HashFunction:   "murmur3",
 							GraphShard: neo4jv1alpha1.DatabaseTopology{
 								Primaries:   1,
 								Secondaries: 1,
 							},
-							PropertyShardTopology: neo4jv1alpha1.DatabaseTopology{
-								Primaries:   1,
-								Secondaries: 0,
+							PropertyShardTopology: neo4jv1alpha1.PropertyShardTopology{
+								Replicas: 1,
 							},
 						},
 						Wait:        true,
@@ -371,7 +373,7 @@ var _ = Describe("Property Sharding Integration Tests", Serial, func() {
 						return ""
 					}
 					return shardedDB.Status.Phase
-				}).Should(Equal("Ready"))
+				}, shardedDBReadyTimeout, shardedDBPollInterval).Should(Equal("Ready"))
 
 				By("Verifying sharding readiness")
 				Eventually(func() bool {
@@ -380,7 +382,7 @@ var _ = Describe("Property Sharding Integration Tests", Serial, func() {
 						return false
 					}
 					return shardedDB.Status.ShardingReady != nil && *shardedDB.Status.ShardingReady
-				}).Should(BeTrue())
+				}, shardedDBReadyTimeout, shardedDBPollInterval).Should(BeTrue())
 			})
 
 			It("should validate sharded database configuration", func() {
@@ -399,9 +401,8 @@ var _ = Describe("Property Sharding Integration Tests", Serial, func() {
 								Primaries:   1,
 								Secondaries: 0,
 							},
-							PropertyShardTopology: neo4jv1alpha1.DatabaseTopology{
-								Primaries:   1,
-								Secondaries: 0,
+							PropertyShardTopology: neo4jv1alpha1.PropertyShardTopology{
+								Replicas: 0,
 							},
 						},
 					},
@@ -427,7 +428,7 @@ var _ = Describe("Property Sharding Integration Tests", Serial, func() {
 					Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 						Image: neo4jv1alpha1.ImageSpec{
 							Repo: "neo4j",
-							Tag:  "2025.12-enterprise",
+							Tag:  propertyShardingImageTag,
 						},
 						Auth: &neo4jv1alpha1.AuthSpec{
 							AdminSecret: "neo4j-admin-secret",
@@ -492,9 +493,8 @@ var _ = Describe("Property Sharding Integration Tests", Serial, func() {
 								Primaries:   1,
 								Secondaries: 1,
 							},
-							PropertyShardTopology: neo4jv1alpha1.DatabaseTopology{
-								Primaries:   1,
-								Secondaries: 0,
+							PropertyShardTopology: neo4jv1alpha1.PropertyShardTopology{
+								Replicas: 1,
 							},
 						},
 					},
@@ -510,7 +510,7 @@ var _ = Describe("Property Sharding Integration Tests", Serial, func() {
 						return ""
 					}
 					return shardedDB.Status.Phase
-				}).Should(Equal("Failed"))
+				}, shardedDBReadyTimeout, shardedDBPollInterval).Should(Equal("Failed"))
 
 				By("Checking failure message mentions cluster sharding support")
 				Eventually(func() string {
@@ -519,8 +519,125 @@ var _ = Describe("Property Sharding Integration Tests", Serial, func() {
 						return ""
 					}
 					return shardedDB.Status.Message
-				}).Should(ContainSubstring("does not support property sharding"))
+				}, shardedDBReadyTimeout, shardedDBPollInterval).Should(ContainSubstring("property sharding enabled"))
 			})
 		})
 	})
 })
+
+func dumpNamespaceDiagnostics(namespace string) {
+	if namespace == "" {
+		return
+	}
+
+	GinkgoWriter.Printf("\n=== Diagnostics for namespace %s ===\n", namespace)
+
+	podList := &corev1.PodList{}
+	if err := k8sClient.List(ctx, podList, client.InNamespace(namespace)); err != nil {
+		GinkgoWriter.Printf("Failed to list pods: %v\n", err)
+	} else {
+		for _, pod := range podList.Items {
+			GinkgoWriter.Printf("Pod %s phase=%s reason=%s message=%s\n",
+				pod.Name, pod.Status.Phase, pod.Status.Reason, pod.Status.Message)
+			for _, condition := range pod.Status.Conditions {
+				GinkgoWriter.Printf("Pod %s condition %s=%s reason=%s message=%s\n",
+					pod.Name, condition.Type, condition.Status, condition.Reason, condition.Message)
+			}
+			for _, cs := range pod.Status.ContainerStatuses {
+				if cs.State.Waiting != nil {
+					GinkgoWriter.Printf("Pod %s container %s waiting: %s - %s\n",
+						pod.Name, cs.Name, cs.State.Waiting.Reason, cs.State.Waiting.Message)
+				}
+				if cs.State.Terminated != nil {
+					GinkgoWriter.Printf("Pod %s container %s terminated: %s - %s\n",
+						pod.Name, cs.Name, cs.State.Terminated.Reason, cs.State.Terminated.Message)
+				}
+			}
+		}
+	}
+
+	eventList := &corev1.EventList{}
+	if err := k8sClient.List(ctx, eventList, client.InNamespace(namespace)); err != nil {
+		GinkgoWriter.Printf("Failed to list events: %v\n", err)
+	} else if len(eventList.Items) == 0 {
+		GinkgoWriter.Printf("No events found for namespace %s\n", namespace)
+	} else {
+		for _, event := range eventList.Items {
+			GinkgoWriter.Printf("Event %s/%s %s: %s\n",
+				event.InvolvedObject.Kind, event.InvolvedObject.Name, event.Reason, event.Message)
+		}
+	}
+
+	clusterList := &neo4jv1alpha1.Neo4jEnterpriseClusterList{}
+	if err := k8sClient.List(ctx, clusterList, client.InNamespace(namespace)); err == nil {
+		for _, item := range clusterList.Items {
+			ready := "nil"
+			if item.Status.PropertyShardingReady != nil {
+				if *item.Status.PropertyShardingReady {
+					ready = "true"
+				} else {
+					ready = "false"
+				}
+			}
+			GinkgoWriter.Printf("Cluster %s phase=%s shardingReady=%s message=%s\n",
+				item.Name, item.Status.Phase, ready, item.Status.Message)
+			dumpObjectYAML("Neo4jEnterpriseCluster", &item)
+		}
+	}
+
+	shardedDBList := &neo4jv1alpha1.Neo4jShardedDatabaseList{}
+	if err := k8sClient.List(ctx, shardedDBList, client.InNamespace(namespace)); err == nil {
+		for _, item := range shardedDBList.Items {
+			ready := "nil"
+			if item.Status.ShardingReady != nil {
+				if *item.Status.ShardingReady {
+					ready = "true"
+				} else {
+					ready = "false"
+				}
+			}
+			GinkgoWriter.Printf("ShardedDB %s phase=%s shardingReady=%s message=%s\n",
+				item.Name, item.Status.Phase, ready, item.Status.Message)
+			dumpObjectYAML("Neo4jShardedDatabase", &item)
+		}
+	}
+
+	if len(podList.Items) == 0 {
+		return
+	}
+
+	clientset, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		GinkgoWriter.Printf("Failed to create clientset for logs: %v\n", err)
+		return
+	}
+
+	var tailLines int64 = 200
+	for _, pod := range podList.Items {
+		for _, container := range pod.Spec.Containers {
+			req := clientset.CoreV1().Pods(namespace).GetLogs(pod.Name, &corev1.PodLogOptions{
+				Container: container.Name,
+				TailLines: &tailLines,
+			})
+			data, err := req.Do(ctx).Raw()
+			if err != nil {
+				GinkgoWriter.Printf("Failed to get logs for %s/%s: %v\n", pod.Name, container.Name, err)
+				continue
+			}
+			if len(data) == 0 {
+				GinkgoWriter.Printf("Logs for %s/%s: <empty>\n", pod.Name, container.Name)
+				continue
+			}
+			GinkgoWriter.Printf("Logs for %s/%s:\n%s\n", pod.Name, container.Name, string(data))
+		}
+	}
+}
+
+func dumpObjectYAML(kind string, obj interface{}) {
+	data, err := yaml.Marshal(obj)
+	if err != nil {
+		GinkgoWriter.Printf("Failed to marshal %s: %v\n", kind, err)
+		return
+	}
+	GinkgoWriter.Printf("%s YAML:\n%s\n", kind, string(data))
+}

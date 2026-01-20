@@ -2,7 +2,7 @@
 # This example demonstrates the minimal but functional configuration for property sharding
 #
 # IMPORTANT: Property sharding has specific resource requirements:
-# - Minimum 5 servers for proper shard distribution
+# - Minimum 2 servers (3+ recommended for HA)
 # - 4Gi+ memory per server (8Gi+ recommended for production)
 # - 2+ CPU cores per server for cross-shard query performance
 # - Authentication required via admin secret
@@ -29,9 +29,9 @@ spec:
   auth:
     adminSecret: neo4j-admin-secret
 
-  # Minimum 5 servers required for property sharding
+  # 3+ servers recommended for HA graph shard primaries
   topology:
-    servers: 5
+    servers: 3
 
   storage:
     size: 5Gi
@@ -84,8 +84,7 @@ spec:
 
     # Property shard topology (properties only)
     propertyShardTopology:
-      primaries: 1    # Simple setup
-      secondaries: 1
+      replicas: 1     # Simple setup
 
   # Standard database options
   wait: true          # Wait for creation
@@ -130,7 +129,7 @@ spec:
 # SHOW DATABASES WHERE name STARTS WITH "products-"
 #
 # Verify virtual database:
-# SHOW SHARDED DATABASES
+# SHOW DATABASES WHERE name = "products"
 
 # Monitoring commands:
 #

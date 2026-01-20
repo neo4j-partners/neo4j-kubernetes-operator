@@ -133,7 +133,7 @@ func main() {
 		secureMetrics        = flag.Bool("metrics-secure", false, "If set the metrics endpoint is served securely")
 
 		// Development mode specific flags
-		controllersToLoad = flag.String("controllers", "cluster,standalone,database,backup,restore,plugin", "Comma-separated list of controllers to load (dev mode only)")
+		controllersToLoad = flag.String("controllers", "cluster,standalone,database,backup,restore,plugin,shardeddatabase", "Comma-separated list of controllers to load (dev mode only)")
 
 		// Cache optimization flags
 		cacheStrategy = flag.String("cache-strategy", "", "Cache strategy: standard, lazy, selective, on-demand, none (auto-selected based on mode if empty)")

@@ -66,7 +66,7 @@ status:
 
 1. Cluster phase is "Ready"
 2. Neo4j version is 2025.10+
-3. Minimum 5 servers configured (property sharding requirement)
+3. Minimum 2 servers configured (3+ recommended for HA graph shard primaries)
 4. Minimum 4GB memory per server (8GB+ recommended for production)
 5. Minimum 1 CPU core per server (2+ cores recommended for cross-shard queries)
 6. All required configuration applied
@@ -77,7 +77,7 @@ status:
 **Development Environment:**
 ```yaml
 topology:
-  servers: 5
+  servers: 3
 resources:
   requests:
     memory: 4Gi    # Absolute minimum for property sharding
@@ -90,7 +90,7 @@ resources:
 **Production Environment:**
 ```yaml
 topology:
-  servers: 5      # or 7 for larger datasets
+  servers: 3      # or 5+ for larger datasets
 resources:
   requests:
     memory: 8Gi    # Recommended for production
@@ -133,9 +133,12 @@ spec:
   propertySharding: PropertyShardingConfiguration  # Required
   wait: boolean                                  # Optional: true
   ifNotExists: boolean                          # Optional: true
-  initialGraphData: InitialDataSpec             # Optional
+  seedURI: string                               # Optional
+  seedURIs: map[string]string                   # Optional
+  seedSourceDatabase: string                    # Optional
   seedConfig: SeedConfiguration                 # Optional
   seedCredentials: SeedCredentials              # Optional
+  txLogEnrichment: string                       # Optional
   backupConfig: ShardedDatabaseBackupConfig     # Optional
 ```
 
@@ -149,52 +152,35 @@ spec:
 | `propertySharding` | `PropertyShardingConfiguration` | Yes | - | Property sharding configuration |
 | `wait` | `boolean` | No | true | Wait for database creation to complete |
 | `ifNotExists` | `boolean` | No | true | Create database only if it doesn't exist |
-| `initialGraphData` | `InitialDataSpec` | No | - | Initial data for graph shard |
+| `seedURI` | `string` | No | - | Seed URI for creating the sharded database |
+| `seedURIs` | `map[string]string` | No | - | Seed URIs keyed by shard name |
+| `seedSourceDatabase` | `string` | No | - | Seed source database name for metadata lookup |
 | `seedConfig` | `SeedConfiguration` | No | - | Seed configuration for initialization |
 | `seedCredentials` | `SeedCredentials` | No | - | Credentials for seed URI access |
+| `txLogEnrichment` | `string` | No | - | Transaction log enrichment option |
 | `backupConfig` | `ShardedDatabaseBackupConfig` | No | - | Backup configuration |
+
+**Seed URI Notes**:
+- `seedURI` is for a single backup location (expects shard-suffixed artifacts).
+- `seedURIs` is for per-shard URIs (e.g., dump files or multi-location backups).
+- `seedConfig.restoreUntil` maps to the `seedRestoreUntil` CREATE DATABASE option for sharded databases.
 
 ### PropertyShardingConfiguration
 
 ```yaml
 propertySharding:
-  propertyShards: int32                    # Required: 1-64
-  hashFunction: string                     # Optional: "murmur3"|"sha256"
-  includedProperties: []string             # Optional
-  excludedProperties: []string             # Optional
+  propertyShards: int32                    # Required: 1-1000
   graphShard: DatabaseTopology             # Required
-  propertyShardTopology: DatabaseTopology  # Required
-  config: map[string]string               # Optional
+  propertyShardTopology: PropertyShardTopology  # Required
 ```
 
 #### Fields
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `propertyShards` | `int32` | Yes | - | Number of property shards (1-64) |
-| `hashFunction` | `string` | No | "murmur3" | Hash function: "murmur3" or "sha256" |
-| `includedProperties` | `[]string` | No | [] | Only these properties are sharded |
-| `excludedProperties` | `[]string` | No | [] | These properties stay in graph shard |
+| `propertyShards` | `int32` | Yes | - | Number of property shards (1-1000) |
 | `graphShard` | `DatabaseTopology` | Yes | - | Topology for graph shard database |
-| `propertyShardTopology` | `DatabaseTopology` | Yes | - | Topology for property shard databases |
-| `config` | `map[string]string` | No | {} | Advanced configuration options |
-
-#### Hash Functions
-
-| Value | Description | Performance | Use Case |
-|-------|-------------|-------------|----------|
-| `murmur3` | Fast, good distribution | High | General purpose (recommended) |
-| `sha256` | Cryptographically secure | Lower | Security-sensitive environments |
-
-#### Property Filtering
-
-**includedProperties**: If specified, only these properties are distributed to property shards. All others remain in graph shard.
-
-**excludedProperties**: These properties always stay in graph shard. Takes precedence over `includedProperties`.
-
-**Best Practices**:
-- Include: Large text, JSON, blob data, metadata
-- Exclude: IDs, frequently accessed properties, indexed fields
+| `propertyShardTopology` | `PropertyShardTopology` | Yes | - | Replica topology for property shard databases |
 
 ### DatabaseTopology
 
@@ -209,6 +195,17 @@ topology:
 | `primaries` | `int32` | Yes | Number of primary replicas |
 | `secondaries` | `int32` | Yes | Number of secondary replicas |
 
+### PropertyShardTopology
+
+```yaml
+propertyShardTopology:
+  replicas: int32   # Required: Number of replicas per property shard
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `replicas` | `int32` | Yes | Number of replicas per property shard |
+
 #### Topology Guidelines
 
 **Graph Shard** (stores nodes/relationships):
@@ -216,10 +213,12 @@ topology:
 - Uses Raft consensus for consistency
 
 **Property Shards** (store properties):
-- Recommended: 2+ primaries for fault tolerance
+- Recommended: 2+ replicas for fault tolerance
 - Uses replica-based replication
 
 ### ShardedDatabaseBackupConfig
+
+Note: The operator does not yet orchestrate `backupConfig` for sharded databases. Use `Neo4jBackup` resources for coordinated shard backups.
 
 ```yaml
 backupConfig:
@@ -349,7 +348,7 @@ queryMetrics:
 ### Neo4jEnterpriseCluster Validation
 
 - Neo4j version must be 2025.10+ when property sharding enabled
-- Minimum 5 servers required for property sharding (proper shard distribution)
+- Minimum 2 servers required for property sharding (3+ recommended for HA graph shard primaries)
 - Minimum 4GB memory per server (8GB+ recommended for production)
 - Minimum 1 CPU core per server (2+ cores recommended for cross-shard queries)
 - Authentication required (admin secret must be configured)
@@ -360,12 +359,12 @@ queryMetrics:
 
 - `clusterRef` must reference existing Neo4jEnterpriseCluster with property sharding enabled
 - `defaultCypherLanguage` must be "25"
-- `propertyShards` must be 1-64
-- `hashFunction` must be "murmur3" or "sha256"
+- `propertyShards` must be 1-1000
+- `propertyShardTopology.replicas` must be >= 1
+- `seedURI` and `seedURIs` cannot both be set
+- `seedSourceDatabase`, `seedConfig`, and `seedCredentials` require `seedURI` or `seedURIs`
 - Target cluster must be in "Ready" phase with `propertyShardingReady: true`
 - `graphShard.primaries` should be >= 3 for high availability
-- Cannot have duplicate property indices
-- `excludedProperties` takes precedence over `includedProperties`
 
 ## Error Conditions
 
@@ -374,20 +373,18 @@ queryMetrics:
 | Error | Cause | Resolution |
 |-------|-------|------------|
 | `property sharding requires Neo4j 2025.10+` | Old Neo4j version | Upgrade to 2025.10+ |
-| `property sharding requires minimum 5 servers` | Insufficient servers | Increase server count to 5+ |
+| `spec.topology.servers in body should be greater than or equal to 2` | Invalid server count | Increase server count to 2+ (3+ recommended for HA) |
 | `property sharding requires minimum 4GB memory` | Insufficient memory | Increase memory to 8GB+ (recommended) |
 | `defaultCypherLanguage must be '25'` | Wrong Cypher version | Set to "25" |
-| `cluster does not support property sharding` | Cluster not configured | Enable property sharding on cluster |
-| `propertyShards must be at least 1` | Invalid shard count | Set to valid range (1-64) |
+| `referenced cluster does not have property sharding enabled` | Cluster not configured | Enable property sharding on cluster |
+| `propertyShards must be at least 1` | Invalid shard count | Set to valid range (1-1000) |
 
 ### Runtime Errors
 
 | Error | Cause | Resolution |
 |-------|-------|------------|
-| `failed to create graph shard` | Cluster capacity issues | Check cluster resources |
-| `property shard creation failed` | Network or storage issues | Check cluster connectivity |
-| `virtual database creation failed` | Neo4j configuration issues | Verify cluster configuration |
-| `shard synchronization failed` | Transaction log issues | Check retention policies |
+| `failed to create sharded database` | Cluster capacity or configuration issues | Check cluster resources and options |
+| `failed to prepare cloud credentials` | Missing or invalid seed credentials | Verify seed credentials secret and URI scheme |
 
 ## Examples
 

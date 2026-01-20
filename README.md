@@ -227,7 +227,7 @@ Property sharding (Infinigraph) is GA as of Neo4j 2025.12; the operator supports
 ### Requirements
 
 - **Neo4j Version**: 2025.10+ Enterprise (GA in 2025.12; not available on Aura)
-- **Minimum Servers**: 5 servers required (shard distribution and fault tolerance)
+- **Minimum Servers**: 2 servers minimum (3+ recommended for HA graph shard primaries)
 - **Memory**: 4Gi minimum, 8Gi+ recommended per server
 - **CPU**: 2+ cores per server for cross-shard queries
 - **Authentication**: Admin secret required
@@ -259,7 +259,7 @@ spec:
   auth:
     adminSecret: neo4j-admin-secret
   topology:
-    servers: 5  # Minimum 5 servers for property sharding
+    servers: 3  # 3+ recommended for HA graph shard primaries
   storage:
     size: 10Gi
     className: standard
@@ -295,8 +295,7 @@ spec:
       primaries: 2
       secondaries: 1
     propertyShardTopology:
-      primaries: 1
-      secondaries: 1
+      replicas: 1
 ```
 
 ### Examples
@@ -307,6 +306,7 @@ spec:
 - **[With backup](examples/property_sharding/property-sharding-with-backup.yaml)** - Backup configuration for sharded databases
 
 For complete documentation, see [Property Sharding Guide](examples/property_sharding/README.md).
+Note: `backupConfig` on `Neo4jShardedDatabase` is not orchestrated yet; use `Neo4jBackup` resources for shard backups.
 
 ## 💾 Backup and Restore
 
@@ -562,7 +562,7 @@ Note: "Compliance-ready logging and auditing" means the operator exposes Neo4j l
 - **Property Sharding Support (GA)**: Neo4j property sharding (Infinigraph) GA in 2025.12, supported on 2025.10+
   - **Automatic Configuration**: Applies required sharding settings (CYPHER_25 default language, sharded database enablement)
   - **Version Validation**: Ensures Neo4j 2025.10+ for property sharding compatibility
-  - **Topology Requirements**: Validates minimum 5 servers for property sharding clusters
+  - **Topology Requirements**: Validates minimum 2 servers for property sharding clusters (3+ recommended for HA)
   - **Neo4jShardedDatabase CRD**: CRD for creating and managing property-sharded databases
 - **Neo4j 5.26+ Plugin Compatibility**: Complete rework of plugin system for Neo4j 5.26+ compatibility
   - **APOC Environment Variables**: APOC configuration now uses environment variables (no longer supported in neo4j.conf)

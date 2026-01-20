@@ -110,6 +110,7 @@ Development mode is optimized for faster iteration, but it **must run in-cluster
 - **Cache strategy**: `on-demand` (or `none` if `--ultra-fast`)
 - **skip-cache-wait**: auto-enabled if not explicitly set
 - **API rate limits**: QPS 100, Burst 200
+- **Controllers loaded**: cluster, standalone, database, backup, restore, plugin, shardeddatabase
 
 Helm always sets `--metrics-bind-address` and `--health-probe-bind-address`, so the dev-mode defaults above only apply when you run the binary directly or override those values.
 
@@ -277,7 +278,7 @@ Valid controller names:
 - `plugin`
 - `shardeddatabase`
 
-The default dev list does **not** include `shardeddatabase`; add it explicitly when needed.
+The default dev list includes `shardeddatabase`; override with `--controllers` to narrow scope.
 
 ## Logging and Metrics
 

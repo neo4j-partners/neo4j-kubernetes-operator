@@ -154,37 +154,58 @@ func (v *ShardedDatabaseValidator) validatePropertyShardingConfig(shardedDB *neo
 			shardingPath.Child("propertyShards"),
 			config.PropertyShards,
 			"propertyShards must be at least 1"))
-	} else if config.PropertyShards > 64 {
+	} else if config.PropertyShards > 1000 {
 		result.Errors = append(result.Errors, field.Invalid(
 			shardingPath.Child("propertyShards"),
 			config.PropertyShards,
-			"propertyShards cannot exceed 64"))
-	}
-
-	// Validate hash function
-	validHashFunctions := []string{"murmur3", "sha256"}
-	if config.HashFunction != "" && !containsStringItem(validHashFunctions, config.HashFunction) {
-		result.Errors = append(result.Errors, field.NotSupported(
-			shardingPath.Child("hashFunction"),
-			config.HashFunction,
-			validHashFunctions))
-	}
-
-	// Validate included/excluded properties don't conflict
-	if len(config.IncludedProperties) > 0 && len(config.ExcludedProperties) > 0 {
-		for _, included := range config.IncludedProperties {
-			if containsStringItem(config.ExcludedProperties, included) {
-				result.Errors = append(result.Errors, field.Invalid(
-					shardingPath.Child("includedProperties"),
-					included,
-					"property cannot be both included and excluded"))
-			}
-		}
+			"propertyShards cannot exceed 1000"))
 	}
 
 	// Performance warnings
 	if config.PropertyShards > 16 {
 		result.Warnings = append(result.Warnings, "using more than 16 property shards may impact query performance")
+	}
+
+	// Validate seed options
+	specPath := field.NewPath("spec")
+	if shardedDB.Spec.SeedURI != "" && len(shardedDB.Spec.SeedURIs) > 0 {
+		result.Errors = append(result.Errors, field.Invalid(
+			specPath.Child("seedURI"),
+			shardedDB.Spec.SeedURI,
+			"seedURI and seedURIs cannot be specified together"))
+	}
+
+	if shardedDB.Spec.SeedSourceDatabase != "" && shardedDB.Spec.SeedURI == "" && len(shardedDB.Spec.SeedURIs) == 0 {
+		result.Errors = append(result.Errors, field.Invalid(
+			specPath.Child("seedSourceDatabase"),
+			shardedDB.Spec.SeedSourceDatabase,
+			"seedSourceDatabase requires seedURI or seedURIs"))
+	}
+
+	if shardedDB.Spec.SeedConfig != nil && shardedDB.Spec.SeedURI == "" && len(shardedDB.Spec.SeedURIs) == 0 {
+		result.Errors = append(result.Errors, field.Invalid(
+			specPath.Child("seedConfig"),
+			"",
+			"seedConfig requires seedURI or seedURIs"))
+	}
+
+	if shardedDB.Spec.SeedCredentials != nil && shardedDB.Spec.SeedURI == "" && len(shardedDB.Spec.SeedURIs) == 0 {
+		result.Errors = append(result.Errors, field.Invalid(
+			specPath.Child("seedCredentials"),
+			"",
+			"seedCredentials requires seedURI or seedURIs"))
+	}
+
+	if strings.HasSuffix(shardedDB.Spec.SeedURI, ".dump") {
+		result.Warnings = append(result.Warnings,
+			"Using dump file format. For better performance with large databases, consider using Neo4j backup format (.backup) instead.")
+	}
+	for _, uri := range shardedDB.Spec.SeedURIs {
+		if strings.HasSuffix(uri, ".dump") {
+			result.Warnings = append(result.Warnings,
+				"Using dump file format. For better performance with large databases, consider using Neo4j backup format (.backup) instead.")
+			break
+		}
 	}
 }
 
@@ -200,8 +221,11 @@ func (v *ShardedDatabaseValidator) validateTopologyConfig(shardedDB *neo4jv1alph
 
 	// Validate property shard topology
 	propertyPath := shardingPath.Child("propertyShardTopology")
-	if err := v.validateDatabaseTopology(&shardedDB.Spec.PropertySharding.PropertyShardTopology, propertyPath, result); err != nil {
-		// Error already added to result
+	if shardedDB.Spec.PropertySharding.PropertyShardTopology.Replicas < 1 {
+		result.Errors = append(result.Errors, field.Invalid(
+			propertyPath.Child("replicas"),
+			shardedDB.Spec.PropertySharding.PropertyShardTopology.Replicas,
+			"replicas must be at least 1"))
 	}
 }
 
@@ -241,14 +265,13 @@ func (v *ShardedDatabaseValidator) validateClusterCapacity(cluster *neo4jv1alpha
 	}
 
 	// Calculate total required servers for property shards
-	propertyShard := &shardedDB.Spec.PropertySharding.PropertyShardTopology
-	propertyServers := propertyShard.Primaries + propertyShard.Secondaries
+	propertyReplicas := shardedDB.Spec.PropertySharding.PropertyShardTopology.Replicas
 
-	if propertyServers > clusterServers {
+	if propertyReplicas > clusterServers {
 		result.Errors = append(result.Errors, field.Invalid(
 			shardingPath.Child("propertyShardTopology"),
-			fmt.Sprintf("primaries(%d) + secondaries(%d)", propertyShard.Primaries, propertyShard.Secondaries),
-			fmt.Sprintf("property shard requires %d servers but cluster only has %d", propertyServers, clusterServers)))
+			fmt.Sprintf("replicas(%d)", propertyReplicas),
+			fmt.Sprintf("property shard requires %d servers but cluster only has %d", propertyReplicas, clusterServers)))
 	}
 
 	// Warn about resource utilization

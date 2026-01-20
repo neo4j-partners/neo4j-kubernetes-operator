@@ -303,7 +303,7 @@ Configures property sharding for horizontal scaling of large datasets. Property 
 **System Requirements** (validated by operator):
 
 - **Neo4j Version**: 2025.10+ Enterprise
-- **Minimum Servers**: 5 servers (for proper shard distribution)
+- **Minimum Servers**: 2 servers (3+ recommended for HA graph shard primaries)
 - **Memory**: 4GB minimum, 8GB+ recommended per server
 - **CPU**: 1+ core minimum, 2+ cores recommended per server
 - **Authentication**: Admin secret required
@@ -365,7 +365,7 @@ resources:
 | Error | Cause | Resolution |
 |-------|-------|------------|
 | `property sharding requires Neo4j 2025.10+` | Old Neo4j version | Upgrade to 2025.10+ Enterprise |
-| `property sharding requires minimum 5 servers` | Insufficient servers | Increase server count to 5+ |
+| `spec.topology.servers in body should be greater than or equal to 2` | Invalid server count | Increase server count to 2+ (3+ recommended for HA) |
 | `property sharding requires minimum 4GB memory` | Insufficient memory | Increase memory to 8GB+ (recommended) |
 | `property sharding requires minimum 1 CPU core` | Insufficient CPU | Increase CPU to 2+ cores (recommended) |
 

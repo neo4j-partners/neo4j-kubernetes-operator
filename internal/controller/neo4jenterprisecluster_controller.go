@@ -1461,8 +1461,12 @@ func (r *Neo4jEnterpriseClusterReconciler) validatePropertyShardingConfiguration
 	}
 
 	// Validate minimum cluster size for property sharding
-	if cluster.Spec.Topology.Servers < 5 {
-		return fmt.Errorf("property sharding requires minimum 5 servers for proper shard distribution, got %d", cluster.Spec.Topology.Servers)
+	if cluster.Spec.Topology.Servers < 1 {
+		return fmt.Errorf("property sharding requires at least 1 server, got %d", cluster.Spec.Topology.Servers)
+	}
+	if cluster.Spec.Topology.Servers < 3 {
+		logger.Info("Property sharding running without HA (recommended: 3+ graph shard primaries)",
+			"servers", cluster.Spec.Topology.Servers)
 	}
 
 	// Validate required configuration settings

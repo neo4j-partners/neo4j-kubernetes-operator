@@ -20,8 +20,8 @@ Property Sharding decouples data into:
 - **Not available on Aura**
 
 **Cluster Infrastructure Requirements:**
-- **Minimum Servers**: 5 servers (required for proper shard distribution and fault tolerance)
-- **Recommended Servers**: 5-7 servers (odd numbers provide better consensus characteristics)
+- **Minimum Servers**: 2 servers minimum (3+ recommended for HA graph shard primaries)
+- **Recommended Servers**: 3-7 servers (odd numbers provide better consensus characteristics)
 - **Maximum Recommended**: 20+ servers for very large deployments
 
 **Resource Requirements per Server:**
@@ -51,7 +51,7 @@ Property Sharding decouples data into:
 *Development/Testing:*
 ```yaml
 topology:
-  servers: 5
+  servers: 3
 resources:
   requests:
     memory: 4Gi    # Absolute minimum for dev/test
@@ -64,7 +64,7 @@ resources:
 *Production:*
 ```yaml
 topology:
-  servers: 5      # or 7 for larger datasets
+  servers: 3      # or 5+ for larger datasets
 resources:
   requests:
     memory: 4Gi    # Minimum for dev/test
@@ -119,7 +119,7 @@ spec:
     adminSecret: neo4j-admin-secret
 
   topology:
-    servers: 5  # Minimum 5 servers required for property sharding
+    servers: 3  # 3+ recommended for HA graph shard primaries
 
   storage:
     size: 10Gi
@@ -168,7 +168,6 @@ spec:
   # Property sharding configuration
   propertySharding:
     propertyShards: 4        # Number of property shards
-    hashFunction: murmur3    # Hash function for distribution
 
     # Graph shard topology (stores nodes/relationships)
     graphShard:
@@ -177,22 +176,26 @@ spec:
 
     # Property shard topology (stores properties)
     propertyShardTopology:
-      primaries: 2
-      secondaries: 1
-
-    # Optional: Property filtering
-    includedProperties:      # Only these properties are sharded
-      - description
-      - metadata
-      - large_text_field
-
-    excludedProperties:      # These properties stay in graph shard
-      - id                   # Keep IDs in graph shard for performance
-      - name                 # Frequently accessed properties
+      replicas: 2
 
   # Database creation options
   wait: true          # Wait for creation to complete
   ifNotExists: true   # Don't fail if database exists
+```
+
+### Seeding from Backups (Optional)
+
+Use `seedURI` for a single backup location that contains shard-suffixed artifacts
+(for example, `products-g000` and `products-p000`). Use `seedURIs` for per-shard
+URIs when seeding from dumps or multiple locations.
+
+```yaml
+spec:
+  seedURI: "s3://backups/products/"
+  seedConfig:
+    restoreUntil: "2025-06-01T10:30:00Z"
+  seedCredentials:
+    secretRef: "seed-credentials"
 ```
 
 ## Configuration Reference
@@ -234,12 +237,9 @@ config:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `propertyShards` | int32 | Yes | Number of property shards (1-64) |
-| `hashFunction` | string | No | Hash function: `murmur3` (default) or `sha256` |
-| `includedProperties` | []string | No | Only these properties are sharded |
-| `excludedProperties` | []string | No | These properties stay in graph shard |
+| `propertyShards` | int32 | Yes | Number of property shards (1-1000) |
 | `graphShard` | DatabaseTopology | Yes | Topology for graph shard |
-| `propertyShardTopology` | DatabaseTopology | Yes | Topology for property shards |
+| `propertyShardTopology` | PropertyShardTopology | Yes | Replica topology for property shards |
 
 #### DatabaseTopology
 
@@ -248,18 +248,24 @@ config:
 | `primaries` | int32 | Number of primary replicas |
 | `secondaries` | int32 | Number of secondary replicas |
 
+#### PropertyShardTopology
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `replicas` | int32 | Number of replicas per property shard |
+
 ## Best Practices
 
 ### Cluster Sizing
 
 **Development/Testing**:
-- 5 servers minimum (property sharding requirement)
+- 2 servers minimum (3+ recommended for HA graph shard primaries)
 - 4GB heap per server (absolute minimum for property sharding)
 - 8GB+ total RAM per server (recommended for stable production operation)
 - Property shards: 2-4
 
 **Production**:
-- 5+ servers recommended (property sharding benefits from scale)
+- 3+ servers recommended (HA graph shard primaries)
 - 4-8GB+ heap per server (4GB minimum, 8GB for production)
 - 20GB+ total RAM per server (accounting for system overhead)
 - 2+ CPU cores per server (cross-shard query requirements)
@@ -267,17 +273,7 @@ config:
 
 ### Property Distribution Strategy
 
-**Include in Property Shards**:
-- Large text fields
-- JSON/blob data
-- Infrequently accessed metadata
-- Analytics properties
-
-**Keep in Graph Shard**:
-- Primary keys and IDs
-- Frequently accessed properties
-- Small properties used in WHERE clauses
-- Properties used for indexing
+Property distribution across shards is automatic; the operator does not provide per-property controls.
 
 ### Shard Count Recommendations
 
@@ -288,7 +284,7 @@ config:
 | 10M-100M nodes | 8-16 | Better parallelization |
 | 100M+ nodes | 16-32 | Maximum distribution |
 
-**Note**: Property shard count is fixed at creation and cannot be changed later.
+**Note**: Resharding requires an offline `neo4j-admin database copy` and recreating the database; the operator does not automate resharding.
 
 ## Monitoring and Observability
 
@@ -408,22 +404,22 @@ resources:
     cpu: 4000m    # Allow burst capacity
 ```
 
-**4. Too Few Servers**
+**4. Invalid Server Count**
 ```
-Error: property sharding requires minimum 5 servers for proper shard distribution, got 3
+Error: spec.topology.servers in body should be greater than or equal to 2
 ```
-**Solution**: Scale cluster to at least 5 servers for proper shard distribution:
+**Solution**: Set at least 2 servers, and consider 3+ for HA graph shard primaries:
 ```yaml
-topology:
-  servers: 5  # Minimum for property sharding
+  topology:
+    servers: 3  # 3+ recommended for HA graph shard primaries
   # Consider 7 servers for larger datasets
 ```
 
-**4. Cluster Not Ready**
+**5. Cluster Not Configured for Property Sharding**
 ```
-Error: cluster does not support property sharding
+Error: referenced cluster does not have property sharding enabled
 ```
-Solution: Ensure `propertySharding.enabled: true` and cluster is Ready.
+Solution: Ensure `propertySharding.enabled: true` on the referenced cluster and that it is Ready.
 
 ### Debugging Commands
 
@@ -443,10 +439,12 @@ kubectl exec property-sharding-cluster-server-0 -- \
 
 # Check virtual database
 kubectl exec property-sharding-cluster-server-0 -- \
-  cypher-shell -u neo4j -p password "SHOW SHARDED DATABASES"
+  cypher-shell -u neo4j -p password "SHOW DATABASES"
 ```
 
 ## Backup and Recovery
+
+Note: The operator does not orchestrate `backupConfig` for `Neo4jShardedDatabase`. Use explicit `Neo4jBackup` resources to back up each shard.
 
 Property sharding backup coordinates across all shards:
 
@@ -506,22 +504,9 @@ RETURN p.name, p.specifications                  // Property shard data
 
 ### Performance Optimization Strategies
 
-**1. Strategic Property Distribution:**
-```yaml
-propertySharding:
-  includedProperties:      # Move to property shards
-    - "description"        # Large text fields
-    - "specifications"     # JSON documents
-    - "reviews"           # User-generated content
-    - "metadata"          # Analytics data
+**1. Automatic Property Distribution:**
 
-  excludedProperties:      # Keep in graph shard
-    - "id"                # Primary keys (indexing)
-    - "name"              # Frequently accessed
-    - "category"          # Used in WHERE clauses
-    - "price"             # Numerical queries
-    - "created_at"        # Timestamps
-```
+Property distribution is automatic for sharded databases. Focus on shard count, replica topology, and resource sizing.
 
 **2. Resource Scaling Recommendations:**
 
@@ -529,13 +514,13 @@ propertySharding:
 - **Memory**: 6-8GB per server (basic functionality)
 - **CPU**: 1-2 cores per server (acceptable for development)
 - **Network**: Standard Kubernetes networking (1Gbps)
-- **Servers**: 5 minimum (fault tolerance)
+- **Servers**: 2 minimum (3+ recommended for HA)
 
 *Production (Recommended):*
 - **Memory**: 4-8GB per server (4GB minimum, 8GB recommended)
 - **CPU**: 2-4 cores per server (cross-shard query performance)
 - **Network**: High-speed networking (10Gbps+, low latency)
-- **Servers**: 5-7 servers (better shard distribution)
+- **Servers**: 3-7 servers (better shard distribution)
 
 *High-Performance (Enterprise):*
 - **Memory**: 16-20GB+ per server (maximum throughput)
@@ -643,10 +628,10 @@ See [migration guide](migration.md) for detailed procedures.
 
 ## Limitations
 
-- **Fixed shard count**: Cannot change property shard count after creation
+- **No in-operator resharding**: Resharding requires offline `neo4j-admin database copy` and recreation
 - **Neo4j version**: Requires 2025.10+ enterprise
 - **Cypher version**: Must use Cypher 25
-- **No dynamic resharding**: Plan shard count carefully
+- **No online resharding**: Plan shard count carefully
 - **Increased complexity**: More monitoring and operational overhead
 
 ## Related Documentation

@@ -24,19 +24,21 @@ limitations under the License.
 // 1. Database Creation Approach:
 //    - Uses single Cypher 25 CREATE DATABASE command (not separate shard creation)
 //    - Command format: CYPHER 25 CREATE DATABASE `name` IF NOT EXISTS
+//                      SET DEFAULT LANGUAGE CYPHER 25
 //                      SET GRAPH SHARD { TOPOLOGY n PRIMARIES m SECONDARIES }
-//                      SET PROPERTY SHARDS { COUNT n TOPOLOGY m REPLICAS } WAIT
+//                      SET PROPERTY SHARDS { COUNT n TOPOLOGY m REPLICAS }
+//                      OPTIONS { seedURI: ..., seedConfig: ..., seedSourceDatabase: ..., seedRestoreUntil: ..., txLogEnrichment: ... } WAIT
 //
 // 2. Status Verification:
 //    - Uses SHOW DATABASES command to verify graph shard creation
 //    - Avoids non-existent SHOW SHARDED DATABASES command
-//    - Looks for {database}-graph shard to confirm successful creation
+//    - Looks for {database}-g000 shard to confirm successful creation
 //
 // 3. Resource Requirements (Updated 2025-09-07):
 //    - Minimum: 4GB memory per server (reduced from 12-16GB)
 //    - Recommended: 8GB memory per server for production workloads
 //    - CPU: 2+ cores per server for cross-shard query performance
-//    - Servers: 5+ servers required for proper shard distribution
+//    - Servers: 1+ server (3+ recommended for HA graph shard primaries)
 //
 // 4. Error Handling:
 //    - Graceful degradation when virtual database not immediately visible
@@ -49,6 +51,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -207,6 +210,18 @@ func (r *Neo4jShardedDatabaseReconciler) validateShardedDatabase(ctx context.Con
 	if shardedDB.Spec.DefaultCypherLanguage != "25" {
 		return fmt.Errorf("defaultCypherLanguage must be '25' for property sharding")
 	}
+	if shardedDB.Spec.PropertySharding.PropertyShardTopology.Replicas < 1 {
+		return fmt.Errorf("propertyShardTopology.replicas must be at least 1")
+	}
+	if shardedDB.Spec.SeedURI != "" && len(shardedDB.Spec.SeedURIs) > 0 {
+		return fmt.Errorf("seedURI and seedURIs cannot be specified together")
+	}
+	if shardedDB.Spec.SeedSourceDatabase != "" && shardedDB.Spec.SeedURI == "" && len(shardedDB.Spec.SeedURIs) == 0 {
+		return fmt.Errorf("seedSourceDatabase requires seedURI or seedURIs")
+	}
+	if shardedDB.Spec.SeedCredentials != nil && shardedDB.Spec.SeedURI == "" && len(shardedDB.Spec.SeedURIs) == 0 {
+		return fmt.Errorf("seedCredentials requires seedURI or seedURIs")
+	}
 
 	return nil
 }
@@ -261,6 +276,12 @@ func (r *Neo4jShardedDatabaseReconciler) reconcileShardedDatabase(ctx context.Co
 	}
 
 	// Create the sharded database using Cypher 25 syntax in a single command
+	if (shardedDB.Spec.SeedURI != "" || len(shardedDB.Spec.SeedURIs) > 0) && shardedDB.Spec.SeedCredentials != nil {
+		if err := client.PrepareCloudCredentialsForShardedDatabase(ctx, r.Client, shardedDB); err != nil {
+			return fmt.Errorf("failed to prepare cloud credentials: %w", err)
+		}
+	}
+
 	if err := r.createShardedDatabase(ctx, shardedDB, client); err != nil {
 		return fmt.Errorf("failed to create sharded database: %w", err)
 	}
@@ -280,8 +301,10 @@ func (r *Neo4jShardedDatabaseReconciler) createShardedDatabase(ctx context.Conte
 
 	// Build the Cypher 25 CREATE DATABASE command for property sharding
 	// Format: CREATE DATABASE name [IF NOT EXISTS]
+	//         SET DEFAULT LANGUAGE CYPHER 25
 	//         SET GRAPH SHARD { TOPOLOGY n PRIMARIES m SECONDARIES }
 	//         SET PROPERTY SHARDS { COUNT n TOPOLOGY m REPLICAS }
+	//         OPTIONS { seedURI: ..., seedConfig: ..., seedSourceDatabase: ..., seedRestoreUntil: ..., txLogEnrichment: ... }
 
 	var query strings.Builder
 
@@ -291,6 +314,11 @@ func (r *Neo4jShardedDatabaseReconciler) createShardedDatabase(ctx context.Conte
 	// Add IF NOT EXISTS if specified
 	if shardedDB.Spec.IfNotExists {
 		query.WriteString(" IF NOT EXISTS")
+	}
+
+	// Add default Cypher language
+	if shardedDB.Spec.DefaultCypherLanguage != "" {
+		query.WriteString(fmt.Sprintf(" SET DEFAULT LANGUAGE CYPHER %s", shardedDB.Spec.DefaultCypherLanguage))
 	}
 
 	// Add graph shard topology
@@ -319,8 +347,7 @@ func (r *Neo4jShardedDatabaseReconciler) createShardedDatabase(ctx context.Conte
 	query.WriteString(fmt.Sprintf(" SET PROPERTY SHARDS { COUNT %d", propertyShards))
 
 	// Property shards use replicas, not primaries/secondaries
-	// Calculate total replicas needed
-	replicas := propertyTopology.Primaries + propertyTopology.Secondaries
+	replicas := propertyTopology.Replicas
 	if replicas > 0 {
 		query.WriteString(fmt.Sprintf(" TOPOLOGY %d", replicas))
 		if replicas == 1 {
@@ -330,6 +357,17 @@ func (r *Neo4jShardedDatabaseReconciler) createShardedDatabase(ctx context.Conte
 		}
 	}
 	query.WriteString(" }")
+
+	// Add supported options for sharded databases
+	options, err := buildShardedDatabaseOptions(shardedDB)
+	if err != nil {
+		return err
+	}
+	if options != "" {
+		query.WriteString(" OPTIONS { ")
+		query.WriteString(options)
+		query.WriteString(" }")
+	}
 
 	// Add WAIT if specified
 	if shardedDB.Spec.Wait {
@@ -369,6 +407,65 @@ func (r *Neo4jShardedDatabaseReconciler) createShardedDatabase(ctx context.Conte
 	return fmt.Errorf("failed to create sharded database after %d attempts", maxRetries)
 }
 
+func buildShardedDatabaseOptions(shardedDB *neo4jv1alpha1.Neo4jShardedDatabase) (string, error) {
+	var options []string
+
+	if shardedDB.Spec.SeedURI != "" && len(shardedDB.Spec.SeedURIs) > 0 {
+		return "", fmt.Errorf("seedURI and seedURIs cannot be specified together")
+	}
+
+	if shardedDB.Spec.SeedURI != "" {
+		options = append(options, fmt.Sprintf("seedURI: '%s'", shardedDB.Spec.SeedURI))
+	}
+
+	if len(shardedDB.Spec.SeedURIs) > 0 {
+		keys := make([]string, 0, len(shardedDB.Spec.SeedURIs))
+		for key := range shardedDB.Spec.SeedURIs {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		var entries []string
+		for _, key := range keys {
+			entries = append(entries, fmt.Sprintf("`%s`: '%s'", key, shardedDB.Spec.SeedURIs[key]))
+		}
+		options = append(options, "seedURI: { "+strings.Join(entries, ", ")+" }")
+	}
+
+	if shardedDB.Spec.SeedSourceDatabase != "" {
+		options = append(options, fmt.Sprintf("seedSourceDatabase: '%s'", shardedDB.Spec.SeedSourceDatabase))
+	}
+
+	if shardedDB.Spec.SeedConfig != nil {
+		if shardedDB.Spec.SeedConfig.RestoreUntil != "" {
+			restoreUntil := shardedDB.Spec.SeedConfig.RestoreUntil
+			if strings.HasPrefix(restoreUntil, "txId:") {
+				options = append(options, fmt.Sprintf("seedRestoreUntil: %s", restoreUntil))
+			} else {
+				options = append(options, fmt.Sprintf("seedRestoreUntil: '%s'", restoreUntil))
+			}
+		}
+
+		if len(shardedDB.Spec.SeedConfig.Config) > 0 {
+			keys := make([]string, 0, len(shardedDB.Spec.SeedConfig.Config))
+			for key := range shardedDB.Spec.SeedConfig.Config {
+				keys = append(keys, key)
+			}
+			sort.Strings(keys)
+			var entries []string
+			for _, key := range keys {
+				entries = append(entries, fmt.Sprintf("%s: '%s'", key, shardedDB.Spec.SeedConfig.Config[key]))
+			}
+			options = append(options, "seedConfig: { "+strings.Join(entries, ", ")+" }")
+		}
+	}
+
+	if shardedDB.Spec.TxLogEnrichment != "" {
+		options = append(options, fmt.Sprintf("txLogEnrichment: '%s'", shardedDB.Spec.TxLogEnrichment))
+	}
+
+	return strings.Join(options, ", "), nil
+}
+
 // isTransientError checks if an error is transient and can be retried
 func isTransientError(err error) bool {
 	if err == nil {
@@ -379,78 +476,6 @@ func isTransientError(err error) bool {
 		strings.Contains(errMsg, "timeout") ||
 		strings.Contains(errMsg, "transient") ||
 		strings.Contains(errMsg, "connection")
-}
-
-// createGraphShard creates the graph shard database (nodes, relationships, labels without properties)
-func (r *Neo4jShardedDatabaseReconciler) createGraphShard(ctx context.Context, shardedDB *neo4jv1alpha1.Neo4jShardedDatabase, client *neo4j.Client) error {
-	logger := log.FromContext(ctx).WithValues("shard", "graph")
-
-	graphShardName := fmt.Sprintf("%s-graph", shardedDB.Spec.Name)
-	topology := shardedDB.Spec.PropertySharding.GraphShard
-
-	// Wait for Neo4j to be ready for database operations
-	if err := r.waitForNeo4jReadiness(ctx, client); err != nil {
-		return fmt.Errorf("Neo4j not ready for database operations: %w", err)
-	}
-
-	// Create database with topology using proper method with retry logic
-	if err := r.createDatabaseWithRetry(ctx, client, graphShardName, topology.Primaries, topology.Secondaries); err != nil {
-		return fmt.Errorf("failed to create graph shard database: %w", err)
-	}
-
-	logger.Info("Successfully created graph shard database", "database", graphShardName)
-	return nil
-}
-
-// createPropertyShard creates a property shard database
-func (r *Neo4jShardedDatabaseReconciler) createPropertyShard(ctx context.Context, shardedDB *neo4jv1alpha1.Neo4jShardedDatabase, client *neo4j.Client, shardIndex int32) error {
-	logger := log.FromContext(ctx).WithValues("shard", "property", "index", shardIndex)
-
-	propertyShardName := fmt.Sprintf("%s-properties-%d", shardedDB.Spec.Name, shardIndex)
-	topology := shardedDB.Spec.PropertySharding.PropertyShardTopology
-
-	// Create database with topology using proper method with retry logic
-	if err := r.createDatabaseWithRetry(ctx, client, propertyShardName, topology.Primaries, topology.Secondaries); err != nil {
-		return fmt.Errorf("failed to create property shard database: %w", err)
-	}
-
-	logger.Info("Successfully created property shard database", "database", propertyShardName, "index", shardIndex)
-	return nil
-}
-
-// configureVirtualDatabase sets up the virtual database (logical view combining all shards)
-func (r *Neo4jShardedDatabaseReconciler) configureVirtualDatabase(ctx context.Context, shardedDB *neo4jv1alpha1.Neo4jShardedDatabase, client *neo4j.Client) error {
-	logger := log.FromContext(ctx).WithValues("virtual", shardedDB.Spec.Name)
-
-	// Generate shard names
-	graphShardName := fmt.Sprintf("%s-g000", shardedDB.Spec.Name)
-	var propertyShardNames []string
-	for i := int32(0); i < shardedDB.Spec.PropertySharding.PropertyShards; i++ {
-		propertyShardNames = append(propertyShardNames, fmt.Sprintf("%s-p%03d", shardedDB.Spec.Name, i))
-	}
-
-	// Create sharded database using new client method
-	options := make(map[string]string)
-	if shardedDB.Spec.PropertySharding.Config != nil {
-		for k, v := range shardedDB.Spec.PropertySharding.Config {
-			options[k] = v
-		}
-	}
-
-	if err := client.CreateShardedDatabase(
-		ctx,
-		shardedDB.Spec.Name, // Virtual database name
-		graphShardName,
-		propertyShardNames,
-		options,
-		shardedDB.Spec.Wait,
-		shardedDB.Spec.IfNotExists,
-	); err != nil {
-		return fmt.Errorf("failed to create sharded database: %w", err)
-	}
-
-	logger.Info("Virtual database configuration completed", "database", shardedDB.Spec.Name)
-	return nil
 }
 
 // updateShardStatus updates the status with current shard information
@@ -465,7 +490,7 @@ func (r *Neo4jShardedDatabaseReconciler) updateShardStatus(ctx context.Context, 
 	}
 
 	// Check if the graph shard was successfully created
-	graphShardName := fmt.Sprintf("%s-graph", shardedDB.Spec.Name)
+	graphShardName := fmt.Sprintf("%s-g000", shardedDB.Spec.Name)
 	graphShardExists := false
 	graphShardOnline := false
 

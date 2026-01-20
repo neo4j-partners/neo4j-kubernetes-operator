@@ -121,7 +121,7 @@ var _ = Describe("Neo4jEnterpriseCluster Controller - Property Sharding", func()
 							Tag:  "2025.12-enterprise",
 						},
 						Topology: neo4jv1alpha1.TopologyConfiguration{
-							Servers: int32(2), // Too few servers
+							Servers: int32(0), // Invalid server count
 						},
 						PropertySharding: &neo4jv1alpha1.PropertyShardingSpec{
 							Enabled: true,
@@ -137,7 +137,7 @@ var _ = Describe("Neo4jEnterpriseCluster Controller - Property Sharding", func()
 
 				err := reconciler.validatePropertyShardingConfiguration(ctx, cluster)
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("minimum 5 servers"))
+				Expect(err.Error()).To(ContainSubstring("at least 1 server"))
 			})
 
 			It("should apply required configuration settings", func() {

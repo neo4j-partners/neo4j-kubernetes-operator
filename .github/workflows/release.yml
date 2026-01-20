@@ -302,6 +302,6 @@ jobs:
         files: |
           release-artifacts/*
         draft: false
-        prerelease: ${{ contains(steps.release-notes.outputs.TAG_NAME, '-') }}
+        prerelease: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

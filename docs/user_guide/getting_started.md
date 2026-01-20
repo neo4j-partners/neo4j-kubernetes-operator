@@ -283,12 +283,11 @@ spec:
   defaultCypherLanguage: "25"
   propertySharding:
     propertyShards: 4
-    includedProperties:
-      - "description"
-      - "large_payload"
-    excludedProperties:
-      - "id"
-      - "name"
+    graphShard:
+      primaries: 3
+      secondaries: 0
+    propertyShardTopology:
+      replicas: 1
   wait: true
 EOF
 ```

@@ -1,5 +1,6 @@
 # Property Sharding with Coordinated Backup Example
-# This example shows how to configure backups for sharded databases
+# This example shows how to configure backups for sharded databases.
+# Note: backupConfig is not orchestrated for Neo4jShardedDatabase; use Neo4jBackup resources.
 
 # Property sharding cluster
 apiVersion: neo4j.com/v1alpha1
@@ -58,40 +59,12 @@ spec:
   propertySharding:
     propertyShards: 4
 
-    # Properties that should be backed up consistently
-    includedProperties:
-      - "user_profile"
-      - "preferences"
-      - "history"
-      - "documents"
-
-    excludedProperties:
-      - "id"
-      - "username"
-      - "email"
-      - "created_at"
-
     graphShard:
       primaries: 3
       secondaries: 1
 
     propertyShardTopology:
-      primaries: 2
-      secondaries: 1
-
-  # Integrated backup configuration
-  backupConfig:
-    enabled: true
-    schedule: "0 3 * * *"     # Daily at 3 AM
-    consistency: "strict"      # Ensure consistent backups across shards
-    timeout: "1h"             # Allow sufficient time
-    retention: "14d"          # Keep backups for 2 weeks
-
-    storage:
-      type: "s3"
-      location: "s3://neo4j-backups/sharded-userdata/"
-      credentials:
-        secretRef: "backup-credentials"
+      replicas: 2
 
 ---
 # Manual backup job for immediate backup

@@ -83,7 +83,7 @@ shardeddatabase  # Neo4jShardedDatabase
 --controllers=cluster
 ```
 
-The default dev list does not include `shardeddatabase`; add it explicitly when needed.
+The default dev list includes `shardeddatabase`; override with `--controllers` to narrow scope.
 
 ## Environment Variables
 
