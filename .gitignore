@@ -76,6 +76,8 @@ docker-compose.override.yml
 config/manifests/*
 !config/manifests/
 !config/manifests/kustomization.yaml
+!config/manifests/bases/
+!config/manifests/bases/**
 
 # Generated reports and coverage
 # Note: /reports/ is tracked in git for documentation purposes
