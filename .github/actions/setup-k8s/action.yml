@@ -46,7 +46,23 @@ runs:
       run: |
         make docker-build IMG=neo4j-operator:latest
         kind load docker-image neo4j-operator:latest --name neo4j-operator-test
-        make deploy-prod
+        make kustomize
+
+        # Create a temporary overlay to force the local image
+        mkdir -p config/overlays/ci-temp
+        cat <<EOF > config/overlays/ci-temp/kustomization.yaml
+        apiVersion: kustomize.config.k8s.io/v1beta1
+        kind: Kustomization
+        namespace: neo4j-operator-system
+        resources:
+        - ../../default
+        images:
+        - name: controller
+          newName: neo4j-operator
+          newTag: latest
+        EOF
+
+        ./bin/kustomize build config/overlays/ci-temp | kubectl apply -f -
 
     - name: Wait for operator to be ready
       shell: bash
