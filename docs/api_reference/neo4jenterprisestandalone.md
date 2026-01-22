@@ -174,7 +174,8 @@ service:
 ```
 
 #### `mcp` (MCPServerSpec)
-Optional MCP server deployment for this standalone instance. MCP requires the APOC plugin (managed via Neo4jPlugin). HTTP transport uses per-request auth; STDIO transport reads credentials from a secret.
+Optional MCP server deployment for this standalone instance. MCP requires the APOC plugin (managed via Neo4jPlugin). HTTP transport uses per-request auth; STDIO transport reads credentials from a secret. MCP image defaults to the operator MCP image repo and `OPERATOR_VERSION` tag, or `latest`.
+For client configuration, see the [MCP Client Setup Guide](../user_guide/guides/mcp_client_setup.md).
 
 ```yaml
 mcp:

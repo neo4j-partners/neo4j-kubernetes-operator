@@ -30,16 +30,18 @@ Below are some of the most important fields you will use to configure your clust
 ## MCP Server
 
 The operator can deploy an optional Neo4j MCP server alongside a cluster or standalone deployment. The MCP server runs as a separate Deployment and connects to the Neo4j service inside the namespace.
+For client configuration and HTTP/STDIO usage, see the [MCP Client Setup Guide](guides/mcp_client_setup.md).
 
 ### Requirements
 
 *   **APOC**: MCP relies on APOC. Install APOC using the Neo4jPlugin CRD (see [Neo4jPlugin API Reference](../api_reference/neo4jplugin.md)).
-*   **Image**: Set `spec.mcp.image.repo` and `spec.mcp.image.tag`. Use the MCP image published with the operator release.
+*   **Image**: If `spec.mcp.image` is omitted, the operator uses the default MCP image repo and a tag matching `OPERATOR_VERSION` (when set), otherwise `latest`. You can always pin a specific MCP version via `spec.mcp.image.repo` and `spec.mcp.image.tag`.
 
 ### Transport Modes
 
-*   **HTTP (default)**: No static credentials in the MCP pod. Clients send Basic Auth or Bearer tokens per request. The operator can create a Service, Ingress, and OpenShift Route for exposure. The HTTP endpoint path is `/mcp`.
-*   **STDIO**: MCP reads credentials from a Kubernetes Secret. Set `spec.mcp.auth.secretName` (defaults to the Neo4j admin secret) and key names if they differ. No Service/Ingress/Route is created for STDIO.
+*   **HTTPS (default, preferred)**: No static credentials in the MCP pod. Clients send Basic Auth or Bearer tokens per request. The operator can create a Service, Ingress, and OpenShift Route for exposure. The endpoint path is `/mcp`.
+    *   **Benefits**: standard TLS, per-request auth, works well with desktop clients and external access policies.
+*   **STDIO (in-cluster only)**: MCP reads credentials from a Kubernetes Secret. Set `spec.mcp.auth.secretName` (defaults to the Neo4j admin secret) and key names if they differ. No Service/Ingress/Route is created for STDIO.
 
 ### TLS for HTTP
 

@@ -29,25 +29,7 @@ func validateMCPConfig(spec *neo4jv1alpha1.MCPServerSpec, path *field.Path) fiel
 		return allErrs
 	}
 
-	if spec.Image == nil {
-		allErrs = append(allErrs, field.Required(
-			path.Child("image"),
-			"image configuration is required when MCP is enabled",
-		))
-	} else {
-		if spec.Image.Repo == "" {
-			allErrs = append(allErrs, field.Required(
-				path.Child("image", "repo"),
-				"image repository is required when MCP is enabled",
-			))
-		}
-		if spec.Image.Tag == "" {
-			allErrs = append(allErrs, field.Required(
-				path.Child("image", "tag"),
-				"image tag is required when MCP is enabled",
-			))
-		}
-	}
+	// Image is optional; defaults are applied when omitted.
 
 	transport := spec.Transport
 	if transport == "" {

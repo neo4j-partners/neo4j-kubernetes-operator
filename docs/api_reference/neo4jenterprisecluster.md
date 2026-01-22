@@ -532,11 +532,12 @@ Configures an Ingress resource for HTTP(S) access to Neo4j Browser.
 
 Optional MCP server deployment for the cluster. MCP requires the APOC plugin.
 HTTP transport uses per-request auth and can be exposed via Service/Ingress/Route on the `/mcp` path. STDIO transport reads credentials from a secret and does not expose a Service.
+For client configuration, see the [MCP Client Setup Guide](../user_guide/guides/mcp_client_setup.md).
 
 | Field | Type | Description |
 |---|---|---|
 | `enabled` | `bool` | Enable MCP server deployment (default: `false`) |
-| `image` | [`*ImageSpec`](#imagespec) | MCP server image (required when enabled) |
+| `image` | [`*ImageSpec`](#imagespec) | MCP server image (defaults to the operator MCP image repo and `OPERATOR_VERSION` tag, or `latest`) |
 | `transport` | `string` | Transport mode: `"http"` (default) or `"stdio"` |
 | `readOnly` | `bool` | Disable write tools when `true` (default: `true`) |
 | `telemetry` | `bool` | Enable anonymous telemetry (default: `false`) |

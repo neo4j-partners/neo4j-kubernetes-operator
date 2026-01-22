@@ -18,6 +18,7 @@ package resources
 
 import (
 	"fmt"
+	"os"
 	"strconv"
 	"time"
 
@@ -42,6 +43,9 @@ const (
 	mcpTLSMountPath       = "/tls"
 	mcpTLSCertFile        = "/tls/tls.crt"
 	mcpTLSKeyFile         = "/tls/tls.key"
+	mcpImageRepoDefault   = "ghcr.io/neo4j-partners/neo4j-kubernetes-operator-mcp"
+	mcpImageTagDefault    = "latest"
+	mcpOperatorVersionEnv = "OPERATOR_VERSION"
 )
 
 var (
@@ -572,17 +576,29 @@ func mcpSelectorLabels(name string) map[string]string {
 }
 
 func mcpImage(spec *neo4jv1alpha1.MCPServerSpec) string {
-	if spec == nil || spec.Image == nil || spec.Image.Repo == "" || spec.Image.Tag == "" {
+	repo := mcpImageRepo(spec)
+	tag := mcpImageTag(spec)
+	if repo == "" || tag == "" {
 		return ""
 	}
-	return fmt.Sprintf("%s:%s", spec.Image.Repo, spec.Image.Tag)
+	return fmt.Sprintf("%s:%s", repo, tag)
 }
 
 func mcpImageTag(spec *neo4jv1alpha1.MCPServerSpec) string {
-	if spec == nil || spec.Image == nil {
-		return ""
+	if spec != nil && spec.Image != nil && spec.Image.Tag != "" {
+		return spec.Image.Tag
 	}
-	return spec.Image.Tag
+	if operatorVersion := os.Getenv(mcpOperatorVersionEnv); operatorVersion != "" {
+		return operatorVersion
+	}
+	return mcpImageTagDefault
+}
+
+func mcpImageRepo(spec *neo4jv1alpha1.MCPServerSpec) string {
+	if spec != nil && spec.Image != nil && spec.Image.Repo != "" {
+		return spec.Image.Repo
+	}
+	return mcpImageRepoDefault
 }
 
 func mcpTransport(spec *neo4jv1alpha1.MCPServerSpec) string {

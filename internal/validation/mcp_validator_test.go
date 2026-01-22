@@ -37,10 +37,8 @@ func TestValidateMCPConfig(t *testing.T) {
 			spec: &neo4jv1alpha1.MCPServerSpec{Enabled: false},
 		},
 		{
-			name:           "missing image",
-			spec:           &neo4jv1alpha1.MCPServerSpec{Enabled: true},
-			expectedErrors: 1,
-			errorTypes:     []field.ErrorType{field.ErrorTypeRequired},
+			name: "missing image",
+			spec: &neo4jv1alpha1.MCPServerSpec{Enabled: true},
 		},
 		{
 			name: "missing image repo and tag",
@@ -48,8 +46,6 @@ func TestValidateMCPConfig(t *testing.T) {
 				Enabled: true,
 				Image:   &neo4jv1alpha1.ImageSpec{},
 			},
-			expectedErrors: 2,
-			errorTypes:     []field.ErrorType{field.ErrorTypeRequired},
 		},
 		{
 			name: "invalid transport",
