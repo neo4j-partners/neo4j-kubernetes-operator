@@ -18,6 +18,7 @@ The [User Guide](user_guide) is for users of the Neo4j Enterprise Operator. It c
     *   [Configuration Best Practices](user_guide/guides/configuration_best_practices.md) - Neo4j 5.26+ configuration guidelines and **seed URI best practices**
     *   [Backup and Restore](user_guide/guides/backup_restore.md) - Comprehensive backup and restore operations including PITR
     *   [Backup & Restore Troubleshooting](user_guide/guides/troubleshooting_backup_restore.md) - Troubleshooting guide for backup/restore issues
+    *   [MCP Client Setup](user_guide/guides/mcp_client_setup.md) - Connect VSCode/Claude to MCP over HTTP
     *   [Security](user_guide/guides/security.md)
     *   [Performance](user_guide/guides/performance.md)
     *   [Monitoring](user_guide/guides/monitoring.md)
@@ -66,7 +67,7 @@ Complete deployment examples demonstrating real-world scenarios:
 *   **Database Management**: Create databases with `IF NOT EXISTS`, `WAIT`/`NOWAIT` options
 *   **🆕 Seed URI Functionality**: Create databases directly from existing backups stored in cloud storage
 *   **🆕 Property Sharding**: Horizontal scaling for large datasets with separate graph and property shards
-*   **🆕 MCP Server Support**: Optional MCP server deployment for Neo4j clusters and standalone workloads (HTTP/STDIO with TLS support)
+*   **🆕 MCP Server Support**: Optional MCP server deployment for Neo4j clusters and standalone workloads (HTTPS preferred, STDIO for in-cluster use)
 *   **Topology Constraints**: Specify primary/secondary distribution for databases
 *   **Version Detection**: Automatic adaptation for Neo4j 5.26.x (SemVer) and 2025.x (CalVer)
 *   **CalVer Acceptance Note**: 2025.x+ (including 2026.x) is accepted by default, but new CalVer features may need operator updates for full compatibility

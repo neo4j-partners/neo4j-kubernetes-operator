@@ -23,6 +23,9 @@ jobs:
     name: Extended Integration Tests
     runs-on: ubuntu-latest
     timeout-minutes: ${{ fromJson(github.event.inputs.timeout-minutes || '90') }}
+    permissions:
+      contents: read
+      packages: read
 
     steps:
     - name: Checkout code
@@ -132,6 +135,8 @@ jobs:
         NEO4J_VERSION: ${{ github.event.inputs.neo4j-version || '5.26-enterprise' }}
         FORCE_COLOR: 1
         GOMAXPROCS: 1
+        MCP_REGISTRY_USERNAME: ${{ github.actor }}
+        MCP_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Collect cluster state
       if: always()

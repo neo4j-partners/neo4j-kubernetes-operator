@@ -118,6 +118,9 @@ jobs:
       contains(github.event.head_commit.message, '[run-integration]') ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.run-integration-tests == 'true')
     timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: read
 
     steps:
     - name: Checkout code
@@ -147,6 +150,8 @@ jobs:
         KUBECONFIG: /home/runner/.kube/config
         FORCE_COLOR: 1
         GOMAXPROCS: 1
+        MCP_REGISTRY_USERNAME: ${{ github.actor }}
+        MCP_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Collect cluster state
       if: always()
