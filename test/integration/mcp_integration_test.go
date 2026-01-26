@@ -472,17 +472,17 @@ func hasContainerPort(ports []corev1.ContainerPort, port int32) bool {
 
 func buildMCPCurlJob(namespace, name, url, username, password string) *batchv1.Job {
 	script := strings.Join([]string{
-		"response=\"\"",
+		"payload='{\"jsonrpc\":\"2.0\",\"method\":\"tools/list\",\"id\":1}'",
 		"i=0",
 		"while [ $i -lt 30 ]; do",
-		fmt.Sprintf("response=$(curl -sS -u %s:%s -H \"Content-Type: application/json\" -d '{\"jsonrpc\":\"2.0\",\"method\":\"tools/list\",\"id\":1}' %s || true)", username, password, url),
+		fmt.Sprintf("response=$(curl -sS -u %s:%s -H \"Content-Type: application/json\" -d \"$payload\" %s || true)", username, password, url),
 		"echo \"$response\"",
 		"echo \"$response\" | grep -q '\"tools\"' && exit 0",
 		"i=$((i+1))",
 		"sleep 5",
 		"done",
 		"exit 1",
-	}, "; ")
+	}, "\n")
 
 	backoffLimit := int32(0)
 	return &batchv1.Job{
