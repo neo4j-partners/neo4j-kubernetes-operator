@@ -209,65 +209,30 @@ func (cm *ConfigMapManager) updateConfigMapImmediate(ctx context.Context, cluste
 	return nil
 }
 
-// triggerRollingRestartForConfigChange triggers a rolling restart when configuration changes
+// triggerRollingRestartForConfigChange triggers a rolling restart when configuration changes.
+// It stamps a config-hash annotation on the pod template of each server StatefulSet, which
+// causes Kubernetes to perform a rolling restart without any image change.
 func (cm *ConfigMapManager) triggerRollingRestartForConfigChange(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, configHash string) error {
 	logger := log.FromContext(ctx)
 
-	// Get primary StatefulSet
-	primarySts := &appsv1.StatefulSet{}
-	primaryKey := types.NamespacedName{
-		Name:      fmt.Sprintf("%s-primary", cluster.Name),
-		Namespace: cluster.Namespace,
-	}
-
-	if err := cm.Get(ctx, primaryKey, primarySts); err != nil {
-		if errors.IsNotFound(err) {
-			logger.Info("Primary StatefulSet not found, skipping restart", "name", primaryKey.Name)
-			return nil
-		}
-		return fmt.Errorf("failed to get primary StatefulSet: %w", err)
-	}
-
-	// Update primary StatefulSet with config hash annotation
-	if err := cm.updateStatefulSetWithConfigHash(ctx, primarySts, configHash); err != nil {
-		return fmt.Errorf("failed to update primary StatefulSet: %w", err)
-	}
-
-	// Get server StatefulSet (servers self-organize into primaries/secondaries)
+	// The current architecture uses a single {cluster}-server StatefulSet.
+	// Update it so Kubernetes rolls the pods to pick up the new neo4j.conf.
 	serverSts := &appsv1.StatefulSet{}
 	serverKey := types.NamespacedName{
 		Name:      fmt.Sprintf("%s-server", cluster.Name),
 		Namespace: cluster.Namespace,
 	}
 
-	if err := cm.Get(ctx, serverKey, serverSts); err == nil {
-		// Update server StatefulSet with config hash annotation
-		if err := cm.updateStatefulSetWithConfigHash(ctx, serverSts, configHash); err != nil {
-			return fmt.Errorf("failed to update server StatefulSet: %w", err)
+	if err := cm.Get(ctx, serverKey, serverSts); err != nil {
+		if errors.IsNotFound(err) {
+			logger.Info("Server StatefulSet not found, skipping restart", "name", serverKey.Name)
+			return nil
 		}
-	} else if !errors.IsNotFound(err) {
 		return fmt.Errorf("failed to get server StatefulSet: %w", err)
 	}
 
-	// Legacy check for secondary StatefulSet (for backward compatibility)
-	if false { // No secondaries in new architecture
-		secondarySts := &appsv1.StatefulSet{}
-		secondaryKey := types.NamespacedName{
-			Name:      fmt.Sprintf("%s-secondary", cluster.Name),
-			Namespace: cluster.Namespace,
-		}
-
-		if err := cm.Get(ctx, secondaryKey, secondarySts); err != nil {
-			if !errors.IsNotFound(err) {
-				return fmt.Errorf("failed to get secondary StatefulSet: %w", err)
-			}
-			// Secondary doesn't exist yet, that's okay
-		} else {
-			// Update secondary StatefulSet with config hash annotation
-			if err := cm.updateStatefulSetWithConfigHash(ctx, secondarySts, configHash); err != nil {
-				return fmt.Errorf("failed to update secondary StatefulSet: %w", err)
-			}
-		}
+	if err := cm.updateStatefulSetWithConfigHash(ctx, serverSts, configHash); err != nil {
+		return fmt.Errorf("failed to update server StatefulSet: %w", err)
 	}
 
 	logger.Info("Rolling restart triggered for configuration change",
