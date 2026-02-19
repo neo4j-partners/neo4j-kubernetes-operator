@@ -39,88 +39,28 @@ jobs:
       with:
         kind-version: ${{ env.KIND_VERSION }}
 
-    - name: Setup test cluster and deploy operator
+    - name: Create cluster and deploy operator
       run: |
-        echo "Creating test cluster and deploying operator..."
+        NEO4J_VERSION="${{ github.event.inputs.neo4j-version || '5.26-enterprise' }}"
+
+        echo "▶ Creating test cluster..."
         make test-cluster
 
-    - name: Pre-load Neo4j images to avoid Docker rate limits
-      run: |
-        echo "Pre-loading Neo4j image to avoid Docker rate limits..."
+        echo "▶ Installing CRDs..."
+        make manifests install
 
-        # Define the Neo4j version to use for all tests
-        NEO4J_VERSION="${{ github.event.inputs.neo4j-version || '5.26-enterprise' }}"
-        echo "Neo4j version for tests: ${NEO4J_VERSION}"
-
-        # Copy only the linux/amd64 manifest into the Docker daemon using skopeo.
-        #
-        # Why not `docker pull --platform linux/amd64`?
-        # On Docker versions with the containerd image store enabled, --platform
-        # still stores the full multi-platform manifest index locally. When
-        # `kind load docker-image` then runs `ctr images import --all-platforms`,
-        # containerd walks every digest in the index and fails on blobs for
-        # platforms that were never downloaded:
-        #   ctr: content digest sha256:044f...: not found
-        #
-        # `skopeo copy --override-arch amd64` copies ONLY the single-platform
-        # manifest into the Docker daemon (docker-daemon: transport), so
-        # docker save produces a clean single-platform archive that ctr can import.
-        # skopeo is pre-installed on ubuntu-latest GitHub Actions runners.
-        echo "Copying Neo4j image (linux/amd64 only): neo4j:${NEO4J_VERSION}"
-        if ! skopeo copy \
-            --override-arch amd64 \
-            --override-os linux \
-            docker://neo4j:${NEO4J_VERSION} \
-            docker-daemon:neo4j:${NEO4J_VERSION}; then
-          echo "❌ ERROR: Failed to copy neo4j:${NEO4J_VERSION} into Docker daemon"
-          echo "This image is required for integration tests to run."
-          exit 1
-        fi
-        echo "✅ Successfully pulled neo4j:${NEO4J_VERSION}"
-
-        # Load the image into Kind cluster
-        echo "Loading neo4j:${NEO4J_VERSION} into Kind cluster..."
-        if ! kind load docker-image neo4j:${NEO4J_VERSION} --name neo4j-operator-test; then
-          echo "❌ ERROR: Failed to load image into Kind cluster"
-          exit 1
-        fi
-        echo "✅ Successfully loaded neo4j:${NEO4J_VERSION} into Kind"
-
-        # Verify the image is available in the cluster
-        echo "Verifying image availability in Kind cluster:"
-        if docker exec neo4j-operator-test-control-plane crictl images | grep -q "neo4j.*${NEO4J_VERSION}"; then
-          echo "✅ Image neo4j:${NEO4J_VERSION} is available in Kind cluster"
-        else
-          echo "⚠️ Warning: Could not verify image in Kind cluster"
-          docker exec neo4j-operator-test-control-plane crictl images | grep neo4j || echo "No Neo4j images found"
-        fi
-
-    - name: Run extended integration tests
-      run: |
-        # Enable line-buffered output for real-time progress
-        export PYTHONUNBUFFERED=1
-        export FORCE_COLOR=1
-
-        echo "Running extended integration tests with custom Neo4j version..."
-        echo "📊 Neo4j version: ${{ github.event.inputs.neo4j-version || '5.26-enterprise' }}"
-        echo "🔗 Running full integration test suite..."
-
-        # Install ginkgo CLI for running tests
-        go install github.com/onsi/ginkgo/v2/ginkgo@latest
-
-        # Deploy operator with correct image and run tests
+        echo "▶ Building operator image..."
         make docker-build IMG=neo4j-operator:integration-test
         kind load docker-image neo4j-operator:integration-test --name neo4j-operator-test
+
+        echo "▶ Building MCP image..."
         make mcp-docker-build MCP_IMAGE=neo4j-operator-mcp:integration-test
         kind load docker-image neo4j-operator-mcp:integration-test --name neo4j-operator-test
 
-        # Deploy to neo4j-operator-system namespace (where tests expect it)
-        # Ensure kustomize is available
+        echo "▶ Deploying operator to neo4j-operator-system..."
         make kustomize
-
-        # Create a temporary kustomization overlay directory for CI with local image
         mkdir -p config/overlays/ci-temp
-        cat <<EOF > config/overlays/ci-temp/kustomization.yaml
+        cat > config/overlays/ci-temp/kustomization.yaml <<EOF
         apiVersion: kustomize.config.k8s.io/v1beta1
         kind: Kustomization
         namespace: neo4j-operator-system
@@ -131,22 +71,44 @@ jobs:
           newName: neo4j-operator
           newTag: integration-test
         EOF
-
-        # Verify the overlay produces the correct image
-        echo "Verifying kustomize overlay produces correct image..."
-        ./bin/kustomize build config/overlays/ci-temp | grep "image:" | grep -v "description:" || true
-
-        # Deploy using the temporary overlay
         ./bin/kustomize build config/overlays/ci-temp | kubectl apply -f -
 
-        # Wait for deployment and verify the image
-        kubectl wait --for=condition=available --timeout=120s deployment/neo4j-operator-controller-manager -n neo4j-operator-system || true
-        kubectl describe deployment neo4j-operator-controller-manager -n neo4j-operator-system | grep -A 2 "Image:" || true
+        echo "▶ Waiting for operator to be ready..."
+        kubectl wait --for=condition=available --timeout=120s \
+          deployment/neo4j-operator-controller-manager -n neo4j-operator-system
+        kubectl describe deployment neo4j-operator-controller-manager \
+          -n neo4j-operator-system | grep -A2 "Image:" || true
 
-        # Run all integration tests
-        # Use pipefail to ensure test failures are properly propagated through the pipe
+        echo "▶ Pre-loading Neo4j image: neo4j:${NEO4J_VERSION}"
+        # Use skopeo to copy only the linux/amd64 manifest into the Docker daemon.
+        # docker pull --platform, even with the flag, still stores the full
+        # multi-platform manifest index on Docker with containerd image store
+        # enabled, causing `kind load` → `ctr import --all-platforms` to fail on
+        # missing blobs for other platforms. skopeo resolves only the requested
+        # platform, so docker save produces a clean single-platform archive.
+        if ! skopeo copy \
+            --override-arch amd64 \
+            --override-os linux \
+            docker://neo4j:${NEO4J_VERSION} \
+            docker-daemon:neo4j:${NEO4J_VERSION}; then
+          echo "❌ Failed to copy neo4j:${NEO4J_VERSION} — image is required for tests"
+          exit 1
+        fi
+        kind load docker-image neo4j:${NEO4J_VERSION} --name neo4j-operator-test
+        echo "✅ neo4j:${NEO4J_VERSION} loaded into Kind"
+
+    - name: Run extended integration tests
+      run: |
+        export FORCE_COLOR=1
+        echo "📊 Neo4j version: ${{ github.event.inputs.neo4j-version || '5.26-enterprise' }}"
+        echo "🔗 Running full integration test suite..."
+
+        # Use the project-pinned ginkgo binary (make ginkgo downloads to ./bin/ginkgo)
+        make ginkgo
+
         set -o pipefail
-        MCP_TEST_IMAGE=neo4j-operator-mcp:integration-test ginkgo run -v --timeout=60m ./test/integration/... | tee integration-test-output.log
+        MCP_TEST_IMAGE=neo4j-operator-mcp:integration-test \
+          ./bin/ginkgo run -v --timeout=60m ./test/integration/... | tee integration-test-output.log
       env:
         KUBECONFIG: /home/runner/.kube/config
         NEO4J_VERSION: ${{ github.event.inputs.neo4j-version || '5.26-enterprise' }}
