@@ -52,9 +52,14 @@ jobs:
         NEO4J_VERSION="${{ github.event.inputs.neo4j-version || '5.26-enterprise' }}"
         echo "Neo4j version for tests: ${NEO4J_VERSION}"
 
-        # Pull the specific Neo4j image
-        echo "Pulling Neo4j image: neo4j:${NEO4J_VERSION}"
-        if ! docker pull neo4j:${NEO4J_VERSION}; then
+        # Pull the specific Neo4j image for linux/amd64 only.
+        # Pulling without --platform fetches a multi-platform manifest but only the
+        # local platform's blobs. When kind load then pipes the image to
+        # "ctr images import --all-platforms", containerd fails looking for blobs
+        # of other platforms that were never downloaded. Pinning the platform
+        # produces a single-platform manifest that kind can import without error.
+        echo "Pulling Neo4j image: neo4j:${NEO4J_VERSION} (linux/amd64)"
+        if ! docker pull --platform linux/amd64 neo4j:${NEO4J_VERSION}; then
           echo "❌ ERROR: Failed to pull neo4j:${NEO4J_VERSION}"
           echo "This image is required for integration tests to run."
           exit 1
