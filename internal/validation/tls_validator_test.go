@@ -102,7 +102,7 @@ func TestTLSValidator_Validate(t *testing.T) {
 			wantErrors: true,
 		},
 		{
-			name: "cert-manager mode invalid issuer kind",
+			name: "cert-manager mode third-party issuer kind is accepted",
 			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-cluster",
@@ -112,13 +112,14 @@ func TestTLSValidator_Validate(t *testing.T) {
 					TLS: &neo4jv1alpha1.TLSSpec{
 						Mode: "cert-manager",
 						IssuerRef: &neo4jv1alpha1.IssuerRef{
-							Name: "ca-cluster-issuer",
-							Kind: "InvalidKind",
+							Name:  "aws-pca-issuer",
+							Kind:  "AWSPCAClusterIssuer",
+							Group: "awspca.cert-manager.io",
 						},
 					},
 				},
 			},
-			wantErrors: true,
+			wantErrors: false,
 		},
 		{
 			name: "cert-manager mode invalid duration",
@@ -445,10 +446,23 @@ func TestTLSValidator_ValidUsages(t *testing.T) {
 func TestTLSValidator_ValidIssuerKinds(t *testing.T) {
 	validator := NewTLSValidator()
 
-	validKinds := []string{"Issuer", "ClusterIssuer"}
+	// Any kind is accepted — cert-manager's external issuer interface is open.
+	cases := []struct {
+		kind  string
+		group string
+	}{
+		// Standard cert-manager issuers
+		{kind: "Issuer"},
+		{kind: "ClusterIssuer"},
+		// Third-party external issuers (GitHub issue #26)
+		{kind: "AWSPCAClusterIssuer", group: "awspca.cert-manager.io"},
+		{kind: "AWSPCAIssuer", group: "awspca.cert-manager.io"},
+		{kind: "VaultIssuer", group: "cert.cert-manager.io"},
+		{kind: "GoogleCASIssuer", group: "cas-issuer.jetstack.io"},
+	}
 
-	for _, kind := range validKinds {
-		t.Run("valid issuer kind: "+kind, func(t *testing.T) {
+	for _, tc := range cases {
+		t.Run("valid issuer kind: "+tc.kind, func(t *testing.T) {
 			cluster := &neo4jv1alpha1.Neo4jEnterpriseCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-cluster",
@@ -458,15 +472,16 @@ func TestTLSValidator_ValidIssuerKinds(t *testing.T) {
 					TLS: &neo4jv1alpha1.TLSSpec{
 						Mode: "cert-manager",
 						IssuerRef: &neo4jv1alpha1.IssuerRef{
-							Name: "ca-cluster-issuer",
-							Kind: kind,
+							Name:  "my-issuer",
+							Kind:  tc.kind,
+							Group: tc.group,
 						},
 					},
 				},
 			}
 
 			errors := validator.Validate(cluster)
-			assert.Empty(t, errors, "Expected no validation errors for valid issuer kind %q but got: %v", kind, errors)
+			assert.Empty(t, errors, "Expected no validation errors for issuer kind %q but got: %v", tc.kind, errors)
 		})
 	}
 }

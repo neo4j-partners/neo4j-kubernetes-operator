@@ -74,24 +74,10 @@ func (v *TLSValidator) Validate(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) f
 					"issuer name must be specified when using cert-manager",
 				))
 			}
-
-			validKinds := []string{"Issuer", "ClusterIssuer"}
-			if cluster.Spec.TLS.IssuerRef.Kind != "" {
-				valid := false
-				for _, kind := range validKinds {
-					if cluster.Spec.TLS.IssuerRef.Kind == kind {
-						valid = true
-						break
-					}
-				}
-				if !valid {
-					allErrs = append(allErrs, field.NotSupported(
-						tlsPath.Child("issuerRef", "kind"),
-						cluster.Spec.TLS.IssuerRef.Kind,
-						validKinds,
-					))
-				}
-			}
+			// kind is intentionally not restricted to a fixed allowlist: cert-manager's
+			// external issuer interface allows any registered CRD (e.g. AWSPCAClusterIssuer,
+			// VaultIssuer) to act as an issuer. Restricting to Issuer/ClusterIssuer would
+			// block third-party issuers that are fully supported by cert-manager.
 		}
 
 		// Validate certificate duration and renewal settings

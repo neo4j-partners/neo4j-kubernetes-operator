@@ -1069,8 +1069,9 @@ func (r *Neo4jEnterpriseStandaloneReconciler) createTLSCertificate(standalone *n
 		Spec: certmanagerv1.CertificateSpec{
 			SecretName: fmt.Sprintf("%s-tls-secret", standalone.Name),
 			IssuerRef: cmmeta.ObjectReference{
-				Name: standalone.Spec.TLS.IssuerRef.Name,
-				Kind: standalone.Spec.TLS.IssuerRef.Kind,
+				Name:  standalone.Spec.TLS.IssuerRef.Name,
+				Kind:  standalone.Spec.TLS.IssuerRef.Kind,
+				Group: standalone.Spec.TLS.IssuerRef.Group,
 			},
 			DNSNames: []string{
 				fmt.Sprintf("%s-service", standalone.Name),

@@ -1672,16 +1672,24 @@ spec:
                             description: Certificate duration and renewal settings.
                             type: string
                           issuerRef:
-                            description: IssuerRef references a cert-manager issuer
+                            description: |-
+                              IssuerRef references a cert-manager-compatible issuer.
+                              Supports standard cert-manager issuers (Issuer, ClusterIssuer) as well as
+                              third-party external issuers (e.g. AWSPCAClusterIssuer, VaultIssuer) by
+                              specifying the appropriate kind and group.
                             properties:
                               group:
-                                description: Group of the issuer (defaults to cert-manager.io)
+                                description: |-
+                                  Group of the issuer's API. Defaults to cert-manager.io for standard
+                                  cert-manager issuers. Set to the external issuer's API group for
+                                  third-party issuers (e.g. awspca.cert-manager.io).
                                 type: string
                               kind:
                                 default: ClusterIssuer
-                                enum:
-                                - Issuer
-                                - ClusterIssuer
+                                description: |-
+                                  Kind of the issuer resource. Defaults to ClusterIssuer for standard
+                                  cert-manager usage. Set to the custom resource kind for external issuers
+                                  (e.g. AWSPCAClusterIssuer).
                                 type: string
                               name:
                                 type: string
@@ -3131,16 +3139,24 @@ spec:
                         type: object
                     type: object
                   issuerRef:
-                    description: IssuerRef references a cert-manager issuer
+                    description: |-
+                      IssuerRef references a cert-manager-compatible issuer.
+                      Supports standard cert-manager issuers (Issuer, ClusterIssuer) as well as
+                      third-party external issuers (e.g. AWSPCAClusterIssuer, VaultIssuer) by
+                      specifying the appropriate kind and group.
                     properties:
                       group:
-                        description: Group of the issuer (defaults to cert-manager.io)
+                        description: |-
+                          Group of the issuer's API. Defaults to cert-manager.io for standard
+                          cert-manager issuers. Set to the external issuer's API group for
+                          third-party issuers (e.g. awspca.cert-manager.io).
                         type: string
                       kind:
                         default: ClusterIssuer
-                        enum:
-                        - Issuer
-                        - ClusterIssuer
+                        description: |-
+                          Kind of the issuer resource. Defaults to ClusterIssuer for standard
+                          cert-manager usage. Set to the custom resource kind for external issuers
+                          (e.g. AWSPCAClusterIssuer).
                         type: string
                       name:
                         type: string

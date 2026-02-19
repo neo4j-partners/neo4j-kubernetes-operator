@@ -216,16 +216,23 @@ type SecurityContextSpec struct {
 	ContainerSecurityContext *corev1.SecurityContext `json:"containerSecurityContext,omitempty"`
 }
 
-// IssuerRef references a cert-manager issuer
+// IssuerRef references a cert-manager-compatible issuer.
+// Supports standard cert-manager issuers (Issuer, ClusterIssuer) as well as
+// third-party external issuers (e.g. AWSPCAClusterIssuer, VaultIssuer) by
+// specifying the appropriate kind and group.
 type IssuerRef struct {
 	// +kubebuilder:validation:Required
 	Name string `json:"name"`
 
-	// +kubebuilder:validation:Enum=Issuer;ClusterIssuer
+	// Kind of the issuer resource. Defaults to ClusterIssuer for standard
+	// cert-manager usage. Set to the custom resource kind for external issuers
+	// (e.g. AWSPCAClusterIssuer).
 	// +kubebuilder:default=ClusterIssuer
 	Kind string `json:"kind,omitempty"`
 
-	// Group of the issuer (defaults to cert-manager.io)
+	// Group of the issuer's API. Defaults to cert-manager.io for standard
+	// cert-manager issuers. Set to the external issuer's API group for
+	// third-party issuers (e.g. awspca.cert-manager.io).
 	Group string `json:"group,omitempty"`
 }
 
