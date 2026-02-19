@@ -52,15 +52,27 @@ jobs:
         NEO4J_VERSION="${{ github.event.inputs.neo4j-version || '5.26-enterprise' }}"
         echo "Neo4j version for tests: ${NEO4J_VERSION}"
 
-        # Pull the specific Neo4j image for linux/amd64 only.
-        # Pulling without --platform fetches a multi-platform manifest but only the
-        # local platform's blobs. When kind load then pipes the image to
-        # "ctr images import --all-platforms", containerd fails looking for blobs
-        # of other platforms that were never downloaded. Pinning the platform
-        # produces a single-platform manifest that kind can import without error.
-        echo "Pulling Neo4j image: neo4j:${NEO4J_VERSION} (linux/amd64)"
-        if ! docker pull --platform linux/amd64 neo4j:${NEO4J_VERSION}; then
-          echo "❌ ERROR: Failed to pull neo4j:${NEO4J_VERSION}"
+        # Copy only the linux/amd64 manifest into the Docker daemon using skopeo.
+        #
+        # Why not `docker pull --platform linux/amd64`?
+        # On Docker versions with the containerd image store enabled, --platform
+        # still stores the full multi-platform manifest index locally. When
+        # `kind load docker-image` then runs `ctr images import --all-platforms`,
+        # containerd walks every digest in the index and fails on blobs for
+        # platforms that were never downloaded:
+        #   ctr: content digest sha256:044f...: not found
+        #
+        # `skopeo copy --override-arch amd64` copies ONLY the single-platform
+        # manifest into the Docker daemon (docker-daemon: transport), so
+        # docker save produces a clean single-platform archive that ctr can import.
+        # skopeo is pre-installed on ubuntu-latest GitHub Actions runners.
+        echo "Copying Neo4j image (linux/amd64 only): neo4j:${NEO4J_VERSION}"
+        if ! skopeo copy \
+            --override-arch amd64 \
+            --override-os linux \
+            docker://neo4j:${NEO4J_VERSION} \
+            docker-daemon:neo4j:${NEO4J_VERSION}; then
+          echo "❌ ERROR: Failed to copy neo4j:${NEO4J_VERSION} into Docker daemon"
           echo "This image is required for integration tests to run."
           exit 1
         fi
