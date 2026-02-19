@@ -885,3 +885,63 @@ func TestBuildPodSpecForEnterprise_CustomSecurityContext(t *testing.T) {
 		assert.Equal(t, customContainerSC, container.SecurityContext)
 	}
 }
+
+// TestBuildServerStatefulSet_CustomAdminSecret verifies that spec.auth.adminSecret is
+// respected when building the server StatefulSet (regression test for GitHub issue #27).
+func TestBuildServerStatefulSet_CustomAdminSecret(t *testing.T) {
+	clusterWithCustomSecret := &neo4jv1alpha1.Neo4jEnterpriseCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-cluster", Namespace: "default"},
+		Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
+			Image:    neo4jv1alpha1.ImageSpec{Repo: "neo4j", Tag: "5.26-enterprise"},
+			Topology: neo4jv1alpha1.TopologyConfiguration{Servers: 3},
+			Storage:  neo4jv1alpha1.StorageSpec{ClassName: "standard", Size: "10Gi"},
+			Auth: &neo4jv1alpha1.AuthSpec{
+				AdminSecret: "my-custom-secret",
+			},
+		},
+	}
+
+	clusterWithDefaultSecret := &neo4jv1alpha1.Neo4jEnterpriseCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-cluster", Namespace: "default"},
+		Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
+			Image:    neo4jv1alpha1.ImageSpec{Repo: "neo4j", Tag: "5.26-enterprise"},
+			Topology: neo4jv1alpha1.TopologyConfiguration{Servers: 3},
+			Storage:  neo4jv1alpha1.StorageSpec{ClassName: "standard", Size: "10Gi"},
+		},
+	}
+
+	assertSecretName := func(t *testing.T, sts *appsv1.StatefulSet, expectedSecret string) {
+		t.Helper()
+		containers := sts.Spec.Template.Spec.Containers
+		require.NotEmpty(t, containers)
+		var dbUser, dbPass *corev1.EnvVar
+		for i := range containers[0].Env {
+			switch containers[0].Env[i].Name {
+			case "DB_USERNAME":
+				dbUser = &containers[0].Env[i]
+			case "DB_PASSWORD":
+				dbPass = &containers[0].Env[i]
+			}
+		}
+		require.NotNil(t, dbUser, "DB_USERNAME env var must be present")
+		require.NotNil(t, dbPass, "DB_PASSWORD env var must be present")
+		require.NotNil(t, dbUser.ValueFrom)
+		require.NotNil(t, dbPass.ValueFrom)
+		assert.Equal(t, expectedSecret, dbUser.ValueFrom.SecretKeyRef.Name,
+			"DB_USERNAME should reference secret %q", expectedSecret)
+		assert.Equal(t, expectedSecret, dbPass.ValueFrom.SecretKeyRef.Name,
+			"DB_PASSWORD should reference secret %q", expectedSecret)
+	}
+
+	t.Run("custom adminSecret is used", func(t *testing.T) {
+		sts := resources.BuildServerStatefulSetForEnterprise(clusterWithCustomSecret)
+		require.NotNil(t, sts)
+		assertSecretName(t, sts, "my-custom-secret")
+	})
+
+	t.Run("default adminSecret is used when auth is nil", func(t *testing.T) {
+		sts := resources.BuildServerStatefulSetForEnterprise(clusterWithDefaultSecret)
+		require.NotNil(t, sts)
+		assertSecretName(t, sts, resources.DefaultAdminSecret)
+	})
+}

@@ -184,6 +184,9 @@ func BuildBackupStatefulSet(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) *apps
 // buildStatefulSetForEnterprise is a helper function to create StatefulSet for individual Neo4j server
 func buildStatefulSetForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, serverName string, replicas int32) *appsv1.StatefulSet {
 	adminSecret := DefaultAdminSecret
+	if cluster.Spec.Auth != nil && cluster.Spec.Auth.AdminSecret != "" {
+		adminSecret = cluster.Spec.Auth.AdminSecret
+	}
 
 	// Configure rolling update strategy
 	updateStrategy := appsv1.StatefulSetUpdateStrategy{
