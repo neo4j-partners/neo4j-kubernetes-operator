@@ -15,6 +15,7 @@ on:
 
 env:
   GO_VERSION: '1.24'
+  KIND_VERSION: 'v0.20.0'
 
 jobs:
   unit-tests:
@@ -132,7 +133,7 @@ jobs:
     - name: Setup Kubernetes environment
       uses: ./.github/actions/setup-k8s
       with:
-        kind-version: 'v0.20.0'
+        kind-version: ${{ env.KIND_VERSION }}
 
     - name: Run integration tests
       run: |

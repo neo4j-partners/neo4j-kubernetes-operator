@@ -1,15 +1,11 @@
 name: 'Setup Kubernetes Environment'
-description: 'Sets up Kind cluster with kubectl for testing'
+description: 'Installs Kind, kubectl, and Docker Buildx. Does NOT create a cluster or deploy the operator — callers are responsible for that so each workflow controls its own setup without duplication.'
 
 inputs:
   kind-version:
     description: 'Kind version to use'
     required: false
     default: 'v0.20.0'
-  cluster-name:
-    description: 'Kind cluster name'
-    required: false
-    default: 'neo4j-operator-test'
 
 runs:
   using: 'composite'
@@ -23,6 +19,7 @@ runs:
         curl -Lo ./kind https://kind.sigs.k8s.io/dl/${{ inputs.kind-version }}/kind-linux-amd64
         chmod +x ./kind
         sudo mv ./kind /usr/local/bin/kind
+        kind version
 
     - name: Install kubectl
       shell: bash
@@ -30,52 +27,4 @@ runs:
         curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
         chmod +x kubectl
         sudo mv kubectl /usr/local/bin/
-
-    - name: Create test cluster
-      shell: bash
-      run: make test-cluster
-
-    - name: Install CRDs and operator setup
-      shell: bash
-      run: |
-        make manifests
-        make install
-
-    - name: Build and deploy operator
-      shell: bash
-      run: |
-        make docker-build IMG=neo4j-operator:latest
-        kind load docker-image neo4j-operator:latest --name neo4j-operator-test
-        make kustomize
-
-        # Create a temporary overlay to force the local image
-        mkdir -p config/overlays/ci-temp
-        cat <<EOF > config/overlays/ci-temp/kustomization.yaml
-        apiVersion: kustomize.config.k8s.io/v1beta1
-        kind: Kustomization
-        namespace: neo4j-operator-system
-        resources:
-        - ../../default
-        images:
-        - name: ghcr.io/neo4j-partners/neo4j-kubernetes-operator
-          newName: neo4j-operator
-          newTag: latest
-        EOF
-
-        ./bin/kustomize build config/overlays/ci-temp | kubectl apply -f -
-
-    - name: Wait for operator to be ready
-      shell: bash
-      run: |
-        kubectl wait --for=condition=Ready nodes --all --timeout=300s
-        kubectl get nodes
-        echo "Waiting for operator deployment to be ready..."
-        kubectl wait --for=condition=available deployment/neo4j-operator-controller-manager -n neo4j-operator-system --timeout=300s || {
-          echo "Deployment failed to become ready. Checking pod status..."
-          kubectl get pods -n neo4j-operator-system
-          echo "Checking pod logs..."
-          kubectl logs -n neo4j-operator-system -l control-plane=controller-manager --tail=100 || true
-          echo "Describing pods..."
-          kubectl describe pods -n neo4j-operator-system
-          exit 1
-        }
+        kubectl version --client
