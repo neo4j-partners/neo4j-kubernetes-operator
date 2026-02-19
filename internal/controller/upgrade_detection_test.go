@@ -15,6 +15,114 @@ import (
 	neo4jv1alpha1 "github.com/neo4j-partners/neo4j-kubernetes-operator/api/v1alpha1"
 )
 
+// TestValidateVersionCompatibility covers the version-check logic in the rolling
+// upgrade orchestrator, including the fix that allows an empty Status.Version so
+// that the first upgrade after a fresh operator deployment is not blocked.
+func TestValidateVersionCompatibility(t *testing.T) {
+	orch := &RollingUpgradeOrchestrator{}
+
+	cases := []struct {
+		name        string
+		current     string
+		target      string
+		wantErr     bool
+		errContains string
+	}{
+		{
+			name:    "empty current version is allowed (first upgrade)",
+			current: "", target: "5.27.0-enterprise",
+			wantErr: false,
+		},
+		{
+			name:    "valid SemVer patch upgrade",
+			current: "5.26.0-enterprise", target: "5.26.3-enterprise",
+			wantErr: false,
+		},
+		{
+			name:    "valid SemVer minor upgrade",
+			current: "5.26.0-enterprise", target: "5.27.0-enterprise",
+			wantErr: false,
+		},
+		{
+			name:    "valid CalVer upgrade",
+			current: "2025.01.0-enterprise", target: "2025.02.0-enterprise",
+			wantErr: false,
+		},
+		{
+			name:    "SemVer to CalVer upgrade is allowed",
+			current: "5.26.0-enterprise", target: "2025.01.0-enterprise",
+			wantErr: false,
+		},
+		{
+			name:    "SemVer downgrade is rejected",
+			current: "5.27.0-enterprise", target: "5.26.0-enterprise",
+			wantErr:     true,
+			errContains: "downgrade",
+		},
+		{
+			name:    "CalVer to SemVer downgrade is rejected",
+			current: "2025.01.0-enterprise", target: "5.27.0-enterprise",
+			wantErr:     true,
+			errContains: "downgrade",
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			err := orch.validateVersionCompatibility(tc.current, tc.target)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected error for current=%q target=%q, got nil", tc.current, tc.target)
+				}
+				if tc.errContains != "" {
+					msg := err.Error()
+					found := false
+					for _, seg := range []string{tc.errContains} {
+						if len(msg) > 0 && containsIgnoreCase(msg, seg) {
+							found = true
+						}
+					}
+					if !found {
+						t.Fatalf("expected error to contain %q, got: %v", tc.errContains, err)
+					}
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("unexpected error for current=%q target=%q: %v", tc.current, tc.target, err)
+				}
+			}
+		})
+	}
+}
+
+func containsIgnoreCase(s, sub string) bool {
+	return len(s) >= len(sub) && (s == sub || len(sub) == 0 ||
+		func() bool {
+			ls, lsub := len(s), len(sub)
+			for i := 0; i <= ls-lsub; i++ {
+				match := true
+				for j := 0; j < lsub; j++ {
+					cs, csub := s[i+j], sub[j]
+					if cs >= 'A' && cs <= 'Z' {
+						cs += 32
+					}
+					if csub >= 'A' && csub <= 'Z' {
+						csub += 32
+					}
+					if cs != csub {
+						match = false
+						break
+					}
+				}
+				if match {
+					return true
+				}
+			}
+			return false
+		}())
+}
+
 func TestIsUpgradeRequiredSingleStatefulSet(t *testing.T) {
 	scheme := runtime.NewScheme()
 	_ = neo4jv1alpha1.AddToScheme(scheme)
