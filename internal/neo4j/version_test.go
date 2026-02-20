@@ -17,6 +17,7 @@ limitations under the License.
 package neo4j
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -200,12 +201,105 @@ func TestGetKubernetesDiscoveryParameter(t *testing.T) {
 func TestGetBackupCommand(t *testing.T) {
 	v, _ := ParseVersion("5.26.0-enterprise")
 
-	cmd := GetBackupCommand(v, "mydb", "/backups/mydb", false)
+	cmd := GetBackupCommand(v, "mydb", "/backups/mydb", false, "")
 	if !containsStr(cmd, "--to-path=/backups/mydb") {
 		t.Errorf("expected --to-path flag in backup command: %q", cmd)
 	}
 	if !containsStr(cmd, "mydb") {
 		t.Errorf("expected database name in backup command: %q", cmd)
+	}
+}
+
+func TestGetBackupCommandArgumentOrder(t *testing.T) {
+	v, _ := ParseVersion("5.26.0-enterprise")
+	cmd := GetBackupCommand(v, "mydb", "/backups/mydb", false, "server-0:6362")
+	toPathIdx := strings.Index(cmd, "--to-path")
+	dbIdx := strings.LastIndex(cmd, "mydb")
+	if toPathIdx < 0 || dbIdx < 0 || toPathIdx > dbIdx {
+		t.Errorf("--to-path must appear before database name, got: %q", cmd)
+	}
+}
+
+func TestGetBackupCommandAllDatabases(t *testing.T) {
+	v, _ := ParseVersion("5.26.0-enterprise")
+	cmd := GetBackupCommand(v, "", "/backups/all", true, "server-0:6362")
+	if !strings.Contains(cmd, `"*"`) {
+		t.Errorf(`expected wildcard "*" for all-databases backup, got: %q`, cmd)
+	}
+	if strings.Contains(cmd, "--include-metadata") {
+		t.Errorf("--include-metadata should not be in base backup command, got: %q", cmd)
+	}
+}
+
+func TestGetBackupCommandFromFlag(t *testing.T) {
+	v, _ := ParseVersion("5.26.0-enterprise")
+	cmd := GetBackupCommand(v, "mydb", "/backups/mydb", false, "host1:6362,host2:6362")
+	if !strings.Contains(cmd, "--from=host1:6362,host2:6362") {
+		t.Errorf("expected --from flag, got: %q", cmd)
+	}
+}
+
+func TestGetBackupCommandNoFromWhenEmpty(t *testing.T) {
+	v, _ := ParseVersion("5.26.0-enterprise")
+	cmd := GetBackupCommand(v, "mydb", "/backups/mydb", false, "")
+	if strings.Contains(cmd, "--from") {
+		t.Errorf("should not include --from when fromAddresses is empty, got: %q", cmd)
+	}
+}
+
+func TestSupportsRemoteAddressResolution(t *testing.T) {
+	cases := []struct {
+		version string
+		want    bool
+	}{
+		{"2025.09.0-enterprise", true},
+		{"2025.10.0-enterprise", true},
+		{"2026.01.0-enterprise", true},
+		{"2025.08.0-enterprise", false},
+		{"5.26.0-enterprise", false},
+	}
+	for _, tc := range cases {
+		v, _ := ParseVersion(tc.version)
+		if v.SupportsRemoteAddressResolution() != tc.want {
+			t.Errorf("SupportsRemoteAddressResolution(%s) = %v, want %v", tc.version, !tc.want, tc.want)
+		}
+	}
+}
+
+func TestSupportsPreferDiffAsParent(t *testing.T) {
+	cases := []struct {
+		version string
+		want    bool
+	}{
+		{"2025.04.0-enterprise", true},
+		{"2025.05.0-enterprise", true},
+		{"2026.01.0-enterprise", true},
+		{"2025.03.0-enterprise", false},
+		{"5.26.0-enterprise", false},
+	}
+	for _, tc := range cases {
+		v, _ := ParseVersion(tc.version)
+		if v.SupportsPreferDiffAsParent() != tc.want {
+			t.Errorf("SupportsPreferDiffAsParent(%s) = %v, want %v", tc.version, !tc.want, tc.want)
+		}
+	}
+}
+
+func TestSupportsParallelDownload(t *testing.T) {
+	cases := []struct {
+		version string
+		want    bool
+	}{
+		{"2025.11.0-enterprise", true},
+		{"2026.01.0-enterprise", true},
+		{"2025.10.0-enterprise", false},
+		{"5.26.0-enterprise", false},
+	}
+	for _, tc := range cases {
+		v, _ := ParseVersion(tc.version)
+		if v.SupportsParallelDownload() != tc.want {
+			t.Errorf("SupportsParallelDownload(%s) = %v, want %v", tc.version, !tc.want, tc.want)
+		}
 	}
 }
 
