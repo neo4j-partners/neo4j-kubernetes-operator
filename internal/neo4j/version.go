@@ -163,21 +163,22 @@ func GetKubernetesDiscoveryParameter(version *Version) string {
 	return "dbms.kubernetes.discovery.v2.service_port_name"
 }
 
-// GetBackupCommand generates the correct backup command based on version
-func GetBackupCommand(version *Version, databaseName string, backupPath string, includeAllDatabases bool) string {
-	// Base command is the same for both versions
+// GetBackupCommand generates the correct neo4j-admin database backup command.
+// fromAddresses is a comma-separated list of host:port backup endpoints (port 6362).
+// If fromAddresses is empty, the --from flag is omitted (local backup).
+func GetBackupCommand(version *Version, databaseName string, backupPath string, allDatabases bool, fromAddresses string) string {
 	cmd := "neo4j-admin database backup"
 
-	if includeAllDatabases {
-		// Backup all databases with metadata
-		cmd += " --include-metadata=all"
-	} else {
-		// Backup specific database
+	if fromAddresses != "" {
+		cmd += " --from=" + fromAddresses
+	}
+	cmd += " --to-path=" + backupPath
+
+	if allDatabases {
+		cmd += ` "*"`
+	} else if databaseName != "" {
 		cmd += " " + databaseName
 	}
-
-	// Add destination path with --to-path flag (Neo4j 5.26+ syntax)
-	cmd += " --to-path=" + backupPath
 
 	return cmd
 }
@@ -208,16 +209,48 @@ func (v *Version) SupportsCypherLanguageVersion() bool {
 	return v.IsCalver
 }
 
-// SupportsAdvancedBackupFlags checks if version supports flags like --parallel-download and --skip-recovery
-func (v *Version) SupportsAdvancedBackupFlags() bool {
+// SupportsRemoteAddressResolution checks if version supports --remote-address-resolution flag (2025.09+).
+func (v *Version) SupportsRemoteAddressResolution() bool {
 	if !v.IsCalver {
 		return false
 	}
-	// 2025.11+ (and any later calver) supports these flags
+	if v.Major > 2025 {
+		return true
+	}
+	return v.Major == 2025 && v.Minor >= 9
+}
+
+// SupportsPreferDiffAsParent checks if version supports --prefer-diff-as-parent flag (2025.04+).
+func (v *Version) SupportsPreferDiffAsParent() bool {
+	if !v.IsCalver {
+		return false
+	}
+	if v.Major > 2025 {
+		return true
+	}
+	return v.Major == 2025 && v.Minor >= 4
+}
+
+// SupportsParallelDownload checks if version supports --parallel-download flag (2025.11+).
+func (v *Version) SupportsParallelDownload() bool {
+	if !v.IsCalver {
+		return false
+	}
 	if v.Major > 2025 {
 		return true
 	}
 	return v.Major == 2025 && v.Minor >= 11
+}
+
+// SupportsSkipRecovery checks if version supports --skip-recovery flag (2025.11+).
+func (v *Version) SupportsSkipRecovery() bool {
+	return v.SupportsParallelDownload()
+}
+
+// SupportsAdvancedBackupFlags checks if version supports flags like --parallel-download and --skip-recovery.
+// Deprecated: use SupportsParallelDownload instead.
+func (v *Version) SupportsAdvancedBackupFlags() bool {
+	return v.SupportsParallelDownload()
 }
 
 // SupportsSourceDatabaseFilter checks if version supports --source-database in restore

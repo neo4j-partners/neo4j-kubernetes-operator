@@ -564,13 +564,13 @@ func (r *Neo4jBackupReconciler) buildBackupCommand(backup *neo4jv1alpha1.Neo4jBa
 	switch backup.Spec.Target.Kind {
 	case "Cluster":
 		// For cluster backups, backup all databases with metadata
-		cmd = neo4j.GetBackupCommand(version, "", backupPath, true)
+		cmd = neo4j.GetBackupCommand(version, "", backupPath, true, "")
 	case "Database":
 		// For database-specific backups
-		cmd = neo4j.GetBackupCommand(version, backup.Spec.Target.Name, backupPath, false)
+		cmd = neo4j.GetBackupCommand(version, backup.Spec.Target.Name, backupPath, false, "")
 	default:
 		// Default to all databases
-		cmd = neo4j.GetBackupCommand(version, "", backupPath, true)
+		cmd = neo4j.GetBackupCommand(version, "", backupPath, true, "")
 	}
 
 	// Add correct flags based on Neo4j 5.26+ documentation
