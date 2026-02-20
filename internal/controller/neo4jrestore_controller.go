@@ -385,7 +385,7 @@ func (r *Neo4jRestoreReconciler) createRestoreJob(ctx context.Context, restore *
 	jobName := restore.Name + "-restore"
 
 	// Build restore command
-	restoreCmd, err := r.buildRestoreCommand(ctx, restore)
+	restoreCmd, err := r.buildRestoreCommand(ctx, restore, cluster)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build restore command: %w", err)
 	}
@@ -450,8 +450,7 @@ func (r *Neo4jRestoreReconciler) createRestoreJob(ctx context.Context, restore *
 	return job, nil
 }
 
-func (r *Neo4jRestoreReconciler) buildRestoreCommand(ctx context.Context, restore *neo4jv1alpha1.Neo4jRestore) (string, error) {
-	var cmd string
+func (r *Neo4jRestoreReconciler) buildRestoreCommand(ctx context.Context, restore *neo4jv1alpha1.Neo4jRestore, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) (string, error) {
 	var backupPath string
 
 	// Determine backup path based on source type
@@ -463,41 +462,32 @@ func (r *Neo4jRestoreReconciler) buildRestoreCommand(ctx context.Context, restor
 		if err := r.Get(ctx, backupKey, backup); err != nil {
 			return "", fmt.Errorf("failed to get backup %s: %w", restore.Spec.Source.BackupRef, err)
 		}
-		// Use backup storage configuration to build path
 		backupPath = fmt.Sprintf("/backup/%s", restore.Spec.Source.BackupRef)
-	case "storage":
+	case "storage", SourceTypeS3, SourceTypeGCS, "azure":
 		backupPath = restore.Spec.Source.BackupPath
 	case "pitr":
-		// Point-in-Time Recovery implementation
-		return r.buildPITRRestoreCommand(ctx, restore)
-	}
-
-	// Get cluster to extract version
-	clusterKey := types.NamespacedName{Name: restore.Spec.TargetCluster, Namespace: restore.Namespace}
-	cluster := &neo4jv1alpha1.Neo4jEnterpriseCluster{}
-	if err := r.Get(ctx, clusterKey, cluster); err != nil {
-		return "", fmt.Errorf("failed to get cluster: %w", err)
+		return r.buildPITRRestoreCommand(ctx, restore, cluster)
 	}
 
 	// Extract Neo4j version from cluster image
 	imageTag := fmt.Sprintf("%s:%s", cluster.Spec.Image.Repo, cluster.Spec.Image.Tag)
 	version, err := neo4j.GetImageVersion(imageTag)
 	if err != nil {
-		// Default to 5.26 behavior if we can't parse version
 		version = &neo4j.Version{Major: 5, Minor: 26, Patch: 0}
 	}
 
 	// Build the neo4j-admin restore command with correct Neo4j 5.26+ syntax
-	cmd = neo4j.GetRestoreCommand(version, restore.Spec.DatabaseName, backupPath)
+	cmd := neo4j.GetRestoreCommand(version, restore.Spec.DatabaseName, backupPath)
 
-	// Add --overwrite-destination flag if force is specified (replaces --force)
+	// Add --overwrite-destination flag if force is specified
 	if restore.Spec.Force {
 		cmd += " --overwrite-destination=true"
 	}
 
 	// Add point-in-time restore if specified
 	if restore.Spec.Source.PointInTime != nil {
-		cmd += fmt.Sprintf(" --restore-until=\"%s\"", restore.Spec.Source.PointInTime.Format("2006-01-02T15:04:05"))
+		t := restore.Spec.Source.PointInTime.Time.UTC()
+		cmd += fmt.Sprintf(` --restore-until="%s"`, t.Format("2006-01-02 15:04:05"))
 	}
 
 	// Add additional arguments if specified
@@ -510,76 +500,48 @@ func (r *Neo4jRestoreReconciler) buildRestoreCommand(ctx context.Context, restor
 	return cmd, nil
 }
 
-// buildPITRRestoreCommand builds a Point-in-Time Recovery restore command
-func (r *Neo4jRestoreReconciler) buildPITRRestoreCommand(ctx context.Context, restore *neo4jv1alpha1.Neo4jRestore) (string, error) {
-	if restore.Spec.Source.PITR == nil {
-		return "", fmt.Errorf("PITR configuration is required for PITR restore type")
+// buildPITRRestoreCommand builds a Point-in-Time Recovery restore command.
+// PITR in Neo4j is implemented via the --restore-until flag on neo4j-admin database restore;
+// there is no separate log-replay step.
+func (r *Neo4jRestoreReconciler) buildPITRRestoreCommand(_ context.Context, restore *neo4jv1alpha1.Neo4jRestore, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) (string, error) {
+	pitrConfig := restore.Spec.Source.PITR
+	if pitrConfig == nil {
+		return "", fmt.Errorf("PITR configuration is required for PITR restore")
 	}
 
-	pitrConfig := restore.Spec.Source.PITR
-	var cmd string
+	imageTag := fmt.Sprintf("%s:%s", cluster.Spec.Image.Repo, cluster.Spec.Image.Tag)
+	version, err := neo4j.GetImageVersion(imageTag)
+	if err != nil {
+		version = &neo4j.Version{Major: 5, Minor: 26, Patch: 0}
+	}
 
-	// Step 1: Restore base backup if specified
+	// Determine backup source path from base backup
+	var backupPath string
 	if pitrConfig.BaseBackup != nil {
-		var baseBackupPath string
 		switch pitrConfig.BaseBackup.Type {
 		case "backup":
-			backup := &neo4jv1alpha1.Neo4jBackup{}
-			backupKey := types.NamespacedName{Name: pitrConfig.BaseBackup.BackupRef, Namespace: restore.Namespace}
-			if err := r.Get(ctx, backupKey, backup); err != nil {
-				return "", fmt.Errorf("failed to get base backup %s: %w", pitrConfig.BaseBackup.BackupRef, err)
-			}
-			baseBackupPath = fmt.Sprintf("/backup/%s", pitrConfig.BaseBackup.BackupRef)
+			backupPath = fmt.Sprintf("/backup/%s", pitrConfig.BaseBackup.BackupRef)
 		case "storage":
-			baseBackupPath = pitrConfig.BaseBackup.BackupPath
+			backupPath = pitrConfig.BaseBackup.BackupPath
 		default:
 			return "", fmt.Errorf("invalid base backup type: %s", pitrConfig.BaseBackup.Type)
 		}
-
-		// Verify base backup if validation is enabled
-		if pitrConfig.ValidateLogIntegrity {
-			cmd = fmt.Sprintf("neo4j-admin inspect-backup --from=%s && ", baseBackupPath)
-		}
-
-		// Get cluster to extract version
-		clusterKey := types.NamespacedName{Name: restore.Spec.TargetCluster, Namespace: restore.Namespace}
-		cluster := &neo4jv1alpha1.Neo4jEnterpriseCluster{}
-		if err := r.Get(ctx, clusterKey, cluster); err != nil {
-			return "", fmt.Errorf("failed to get cluster: %w", err)
-		}
-
-		// Extract Neo4j version from cluster image
-		imageTag := fmt.Sprintf("%s:%s", cluster.Spec.Image.Repo, cluster.Spec.Image.Tag)
-		version, err := neo4j.GetImageVersion(imageTag)
-		if err != nil {
-			// Default to 5.26 behavior if we can't parse version
-			version = &neo4j.Version{Major: 5, Minor: 26, Patch: 0}
-		}
-
-		// Restore base backup with correct syntax
-		cmd += neo4j.GetRestoreCommand(version, restore.Spec.DatabaseName, baseBackupPath)
-
-		// Add --overwrite-destination flag if force is specified
-		if restore.Spec.Force {
-			cmd += " --overwrite-destination=true"
-		}
 	}
 
-	// Step 2: Apply transaction logs if point-in-time is specified
+	if backupPath == "" {
+		return "", fmt.Errorf("no backup source path could be determined for PITR restore")
+	}
+
+	cmd := neo4j.GetRestoreCommand(version, restore.Spec.DatabaseName, backupPath)
+
+	if restore.Spec.Force {
+		cmd += " --overwrite-destination=true"
+	}
+
+	// --restore-until is the Neo4j PITR mechanism
 	if restore.Spec.Source.PointInTime != nil {
-		// Validate transaction log integrity if enabled
-		if pitrConfig.ValidateLogIntegrity {
-			cmd += " && neo4j-admin validate-transaction-logs --from=/transaction-logs"
-		}
-
-		// Apply transaction logs up to the specified time
-		cmd += fmt.Sprintf(" && neo4j-admin apply-transaction-logs --database=%s --from=/transaction-logs --to-time=%s",
-			restore.Spec.DatabaseName, restore.Spec.Source.PointInTime.Format("2006-01-02T15:04:05Z"))
-
-		// Add recovery point objective validation
-		if pitrConfig.RecoveryPointObjective != "" {
-			cmd += fmt.Sprintf(" --rpo=%s", pitrConfig.RecoveryPointObjective)
-		}
+		t := restore.Spec.Source.PointInTime.Time.UTC()
+		cmd += fmt.Sprintf(` --restore-until="%s"`, t.Format("2006-01-02 15:04:05"))
 	}
 
 	return cmd, nil
