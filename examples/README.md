@@ -321,6 +321,7 @@ kubectl logs -n neo4j-operator-system deployment/neo4j-operator-controller-manag
 - **`standalone/`** - Single-node Neo4j deployments for development
 - **`backup-restore/`** - Backup and restore operation examples
 - **`database/`** - Database creation and management examples
+- **`fleet-management/`** - Aura Fleet Management integration examples
 - **`end-to-end/`** - Complete deployment scenarios for production use
 - **`testing/`** - Test configurations used for operator development and validation
 

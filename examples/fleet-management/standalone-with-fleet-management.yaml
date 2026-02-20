@@ -1,0 +1,41 @@
+# Neo4jEnterpriseStandalone with Aura Fleet Management
+#
+# This example shows a single-node deployment registered with Neo4j Aura Fleet Management.
+#
+# Prerequisites:
+#   1. Generate a token in the Aura console:
+#      Instances → Self-managed → Add deployment → Monitor deployment
+#   2. Create the token secret:
+#      kubectl create secret generic aura-fleet-token --from-literal=token='<your-token>'
+#   3. Create the admin secret:
+#      kubectl create secret generic neo4j-admin-secret \
+#        --from-literal=username=neo4j --from-literal=password=admin123
+---
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jEnterpriseStandalone
+metadata:
+  name: my-standalone
+spec:
+  image:
+    repo: neo4j
+    tag: 5.26-enterprise
+    pullPolicy: IfNotPresent
+
+  storage:
+    size: 10Gi
+
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "2Gi"
+    limits:
+      cpu: "2"
+      memory: "4Gi"
+
+  auth:
+    adminSecret: neo4j-admin-secret
+
+  auraFleetManagement:
+    enabled: true
+    tokenSecretRef:
+      name: aura-fleet-token

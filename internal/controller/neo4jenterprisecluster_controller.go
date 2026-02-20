@@ -334,6 +334,17 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 	}
 
+	// Reconcile Aura Fleet Management registration if enabled
+	if cluster.Spec.AuraFleetManagement != nil && cluster.Spec.AuraFleetManagement.Enabled {
+		if err := r.reconcileAuraFleetManagement(ctx, cluster); err != nil {
+			// Fleet management registration failures are non-fatal: the cluster is operational,
+			// only the Aura monitoring registration failed. Log and surface via status.
+			logger.Error(err, "Failed to reconcile Aura Fleet Management registration")
+			r.Recorder.Eventf(cluster, corev1.EventTypeWarning, "AuraFleetManagementFailed",
+				"Aura Fleet Management registration failed: %v", err)
+		}
+	}
+
 	// Calculate topology placement if topology scheduler is available
 	var topologyPlacement *TopologyPlacement
 	if r.TopologyScheduler != nil {
@@ -783,23 +794,52 @@ func (r *Neo4jEnterpriseClusterReconciler) containerSecurityContextEqual(current
 }
 
 func (r *Neo4jEnterpriseClusterReconciler) envVarsEqual(current, desired []corev1.EnvVar) bool {
-	if len(current) != len(desired) {
-		return false
-	}
-
-	// Create maps for easier comparison
+	// Intentionally NOT checking len(current) == len(desired).
+	//
+	// The Neo4jPlugin controller (and reconcileAuraFleetManagement) live-patches the StatefulSet
+	// to add env vars (e.g. NEO4J_PLUGINS, NEO4J_APOC_*) that are not part of the cluster
+	// controller's desired template. A strict count equality check would make those additions
+	// look like a "significant change" and cause the cluster controller to overwrite the
+	// StatefulSet template on every reconcile, removing plugin-controller env vars and creating
+	// an infinite oscillation between the two controllers.
+	//
+	// The correct invariant is: every env var the cluster controller *wants* must be present
+	// in the current StatefulSet with the correct value. Extra env vars in the current
+	// StatefulSet (added by plugin controllers) are intentionally tolerated.
 	currentMap := make(map[string]corev1.EnvVar)
 	for _, env := range current {
 		currentMap[env.Name] = env
 	}
 
 	for _, env := range desired {
-		if currentEnv, exists := currentMap[env.Name]; !exists || currentEnv.Value != env.Value {
+		currentEnv, exists := currentMap[env.Name]
+		if !exists {
+			// A desired env var is absent from current — needs update.
+			return false
+		}
+		if currentEnv.Value != env.Value {
+			// Desired env var present but with wrong value — needs update.
+			return false
+		}
+		if !envVarSourceEqual(currentEnv.ValueFrom, env.ValueFrom) {
+			// SecretKeyRef / ConfigMapKeyRef / FieldRef mismatch — needs update.
 			return false
 		}
 	}
 
 	return true
+}
+
+// envVarSourceEqual compares two EnvVarSource pointers for the purposes of template
+// change detection. Nil == Nil, and non-nil sources are compared structurally.
+func envVarSourceEqual(a, b *corev1.EnvVarSource) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if (a == nil) != (b == nil) {
+		return false
+	}
+	return equality.Semantic.DeepEqual(a, b)
 }
 
 func (r *Neo4jEnterpriseClusterReconciler) volumesEqual(current, desired []corev1.Volume) bool {
@@ -1693,6 +1733,169 @@ func (r *Neo4jEnterpriseClusterReconciler) warnIfMCPMissingAPOC(ctx context.Cont
 
 func isAPOCPluginName(name string) bool {
 	return strings.EqualFold(name, "apoc") || strings.EqualFold(name, "apoc-extended")
+}
+
+// reconcileAuraFleetManagement handles Aura Fleet Management in two phases:
+//
+// Phase 1 — Plugin installation (runs unconditionally when enabled):
+//
+//	Merges "fleet-management" into the NEO4J_PLUGINS env var on the live StatefulSet via a
+//	targeted patch. This is identical to how Neo4jPlugin controller installs plugins, so it
+//	coexists safely: both controllers read the current list and append only if not present.
+//	The updated StatefulSet triggers a rolling pod restart; the Docker entrypoint copies the
+//	pre-bundled jar from /var/lib/neo4j/products/ to /plugins/ (no internet access needed).
+//
+// Phase 2 — Token registration (runs only when cluster is Ready):
+//
+//	Reads the Aura token from the referenced Kubernetes Secret and calls
+//	CALL fleetManagement.registerToken($token). Registration is idempotent.
+func (r *Neo4jEnterpriseClusterReconciler) reconcileAuraFleetManagement(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) error {
+	logger := log.FromContext(ctx)
+	spec := cluster.Spec.AuraFleetManagement
+
+	// --- Phase 1: ensure the plugin jar is loaded ---
+	// Merge "fleet-management" into NEO4J_PLUGINS on the live StatefulSet.
+	// This is always done (regardless of Ready state) so pods restart promptly after
+	// the feature is first enabled, before we attempt token registration.
+	stsName := fmt.Sprintf("%s-server", cluster.Name)
+	if err := r.mergeFleetManagementPlugin(ctx, stsName, cluster.Namespace); err != nil {
+		// Non-fatal for the reconcile: the cluster is functional, plugin patching failed.
+		logger.Error(err, "Failed to patch StatefulSet NEO4J_PLUGINS for fleet-management")
+		r.Recorder.Eventf(cluster, corev1.EventTypeWarning, "AuraFleetManagementPluginPatchFailed",
+			"Failed to add fleet-management to NEO4J_PLUGINS: %v", err)
+		return nil
+	}
+
+	// --- Phase 2: token registration ---
+	if spec.TokenSecretRef == nil {
+		logger.Info("Aura Fleet Management enabled but no tokenSecretRef configured; plugin installed, registration deferred")
+		return nil
+	}
+
+	if cluster.Status.Phase != "Ready" {
+		logger.Info("Cluster not yet Ready; fleet-management plugin patch applied, registration deferred",
+			"phase", cluster.Status.Phase)
+		return nil
+	}
+
+	if cluster.Status.AuraFleetManagement != nil && cluster.Status.AuraFleetManagement.Registered {
+		logger.V(1).Info("Aura Fleet Management already registered; nothing to do")
+		return nil
+	}
+
+	secretName := spec.TokenSecretRef.Name
+	secretKey := spec.TokenSecretRef.Key
+	if secretKey == "" {
+		secretKey = "token"
+	}
+
+	secret := &corev1.Secret{}
+	if err := r.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: secretName}, secret); err != nil {
+		return r.setFleetManagementStatus(ctx, cluster, false, fmt.Sprintf("cannot read token secret %s: %v", secretName, err))
+	}
+
+	tokenBytes, ok := secret.Data[secretKey]
+	if !ok || len(tokenBytes) == 0 {
+		return r.setFleetManagementStatus(ctx, cluster, false, fmt.Sprintf("key %q not found in secret %s", secretKey, secretName))
+	}
+	token := strings.TrimSpace(string(tokenBytes))
+
+	neo4jClient, err := neo4jclient.NewClientForEnterprise(cluster, r.Client, getClusterAdminSecretName(cluster))
+	if err != nil {
+		return r.setFleetManagementStatus(ctx, cluster, false, fmt.Sprintf("cannot connect to Neo4j: %v", err))
+	}
+	defer neo4jClient.Close()
+
+	installed, err := neo4jClient.IsFleetManagementInstalled(ctx)
+	if err != nil {
+		return r.setFleetManagementStatus(ctx, cluster, false, fmt.Sprintf("cannot check fleet management plugin: %v", err))
+	}
+	if !installed {
+		// Pods may still be mid-restart after the NEO4J_PLUGINS patch above.
+		logger.Info("Fleet management plugin not yet loaded; will retry on next reconcile")
+		return nil
+	}
+
+	if err := neo4jClient.RegisterFleetManagementToken(ctx, token); err != nil {
+		return r.setFleetManagementStatus(ctx, cluster, false, fmt.Sprintf("token registration failed: %v", err))
+	}
+
+	logger.Info("Aura Fleet Management token registered successfully")
+	r.Recorder.Event(cluster, corev1.EventTypeNormal, "AuraFleetManagementRegistered",
+		"Successfully registered with Aura Fleet Management")
+	return r.setFleetManagementStatus(ctx, cluster, true, "Registered with Aura Fleet Management")
+}
+
+// mergeFleetManagementPlugin patches the named StatefulSet to ensure "fleet-management"
+// appears in the NEO4J_PLUGINS env var of the neo4j container. The merge is idempotent:
+// if "fleet-management" is already present, the StatefulSet is not touched.
+// Uses retry.RetryOnConflict to handle concurrent update conflicts.
+func (r *Neo4jEnterpriseClusterReconciler) mergeFleetManagementPlugin(ctx context.Context, stsName, namespace string) error {
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		sts := &appsv1.StatefulSet{}
+		if err := r.Get(ctx, types.NamespacedName{Name: stsName, Namespace: namespace}, sts); err != nil {
+			return fmt.Errorf("get StatefulSet %s: %w", stsName, err)
+		}
+
+		containerIdx := -1
+		for i, c := range sts.Spec.Template.Spec.Containers {
+			if c.Name == "neo4j" {
+				containerIdx = i
+				break
+			}
+		}
+		if containerIdx < 0 {
+			return fmt.Errorf("neo4j container not found in StatefulSet %s", stsName)
+		}
+
+		envs := sts.Spec.Template.Spec.Containers[containerIdx].Env
+		pluginsIdx := -1
+		for i, e := range envs {
+			if e.Name == "NEO4J_PLUGINS" {
+				pluginsIdx = i
+				break
+			}
+		}
+
+		var updated string
+		var err error
+		if pluginsIdx < 0 {
+			updated = `["fleet-management"]`
+		} else {
+			current := envs[pluginsIdx].Value
+			updated, err = MergeNeo4jPluginList(current, "fleet-management")
+			if err != nil {
+				return fmt.Errorf("merge plugin list: %w", err)
+			}
+			if updated == current {
+				return nil // already present — nothing to patch
+			}
+		}
+
+		stsCopy := sts.DeepCopy()
+		if pluginsIdx < 0 {
+			stsCopy.Spec.Template.Spec.Containers[containerIdx].Env = append(
+				stsCopy.Spec.Template.Spec.Containers[containerIdx].Env,
+				corev1.EnvVar{Name: "NEO4J_PLUGINS", Value: updated},
+			)
+		} else {
+			stsCopy.Spec.Template.Spec.Containers[containerIdx].Env[pluginsIdx].Value = updated
+		}
+		return r.Update(ctx, stsCopy)
+	})
+}
+
+func (r *Neo4jEnterpriseClusterReconciler) setFleetManagementStatus(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, registered bool, message string) error {
+	now := metav1.Now()
+	status := &neo4jv1alpha1.AuraFleetManagementStatus{
+		Registered: registered,
+		Message:    message,
+	}
+	if registered {
+		status.LastRegistrationTime = &now
+	}
+	cluster.Status.AuraFleetManagement = status
+	return r.Status().Update(ctx, cluster)
 }
 
 // SetupWithManager sets up the controller with the Manager.

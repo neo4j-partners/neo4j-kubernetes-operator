@@ -362,8 +362,8 @@ kubectl patch -n neo4j-operator-dev deployment/neo4j-operator-controller-manager
 ## Key Features
 
 ### Plugin Installation Testing
-- **APOC Core is pre-bundled**: Every Neo4j enterprise image ships APOC Core at `/var/lib/neo4j/labs/`. The operator uses `server.directories.plugins=/var/lib/neo4j/labs` — no internet download required.
-- **`NEO4J_PLUGINS` download**: Works in both 5.26.x and all CalVer releases but requires pod egress internet access at startup. Tests soft-skip when APOC is absent (pod had no egress) — this is correct CI behavior, not a version incompatibility.
+- **APOC Core is pre-bundled**: Every Neo4j enterprise image ships APOC Core at `/var/lib/neo4j/labs/apoc-*-core.jar`. The operator sets `NEO4J_PLUGINS=["apoc"]` on the StatefulSet; the Docker entrypoint copies the bundled jar to the `/plugins` EmptyDir volume at pod startup — **no internet access required**.
+- **Plugin directory flow**: Cluster StatefulSets mount an `EmptyDir` volume at `/plugins`. `server.directories.plugins=/plugins` is set in the base neo4j.conf so Neo4j loads from there. The Docker entrypoint detects `/plugins` exists and copies labs jars into it.
 - **APOC runtime config**: Behavioral settings (`apoc.export.file.enabled`, etc.) use env vars (`NEO4J_APOC_*`), not `neo4j.conf`, in Neo4j 5.26+
 - **Neo4j Config Plugins**: Graph Data Science, Bloom require neo4j.conf configuration with automatic security settings
 - **Dual Deployment Support**: Plugin tests verify both cluster and standalone deployment architectures
@@ -450,25 +450,18 @@ spec:
 
 ### Plugin Types and Configuration
 
-**APOC Installation Methods** (both 5.26.x and 2025.x+/2026.x+):
+**APOC Installation** (both 5.26.x and 2025.x+/2026.x+):
 
-There are two ways to get APOC into the pods — the second is strongly preferred for Kubernetes:
+The operator sets `NEO4J_PLUGINS=["apoc"]` on the StatefulSet. This triggers the Neo4j Docker entrypoint's plugin installation logic at pod startup:
 
-1. **`NEO4J_PLUGINS` automatic download** (development only):
-   - The Docker image entrypoint downloads APOC from the internet at pod startup when `NEO4J_PLUGINS='["apoc"]'` is set
-   - Works identically in 5.26.x and all CalVer releases (2025.x+, 2026.x+)
-   - **Requires pod egress internet access** — pods without outbound internet will start with no APOC
-   - Not recommended for production (download may fail, adds startup latency)
+1. The entrypoint reads `/startup/neo4j-plugins.json` which specifies APOC's `"location": "/var/lib/neo4j/labs/apoc-*-core.jar"`
+2. It finds the bundled jar (e.g. `apoc-5.26.19-core.jar`) in the labs directory
+3. Because the operator mounts an `EmptyDir` volume at `/plugins`, the entrypoint copies the jar to `/plugins/apoc.jar`
+4. The operator's base `neo4j.conf` sets `server.directories.plugins=/plugins`, so Neo4j loads APOC from there
 
-2. **Pre-bundled labs jar** ✅ **Recommended for Kubernetes**:
-   - APOC Core ships pre-bundled inside every Neo4j enterprise image at `/var/lib/neo4j/labs/apoc-*.jar`
-   - No internet required, no download — already present in the image
-   - Enable by pointing the plugins directory at the labs folder:
-     ```
-     server.directories.plugins=/var/lib/neo4j/labs
-     dbms.security.procedures.unrestricted=apoc.*
-     ```
-   - Works identically in 5.26.x and all CalVer releases
+**No internet access required** — APOC comes bundled in every Neo4j Enterprise image. This works identically in 5.26.x and all CalVer releases (2025.x+, 2026.x+).
+
+For `apoc-extended` (not bundled in labs), the entrypoint does fall back to downloading — this plugin requires egress internet access.
 
 **APOC runtime configuration** (all versions 5.26+):
 - APOC behavioral settings (`apoc.export.file.enabled`, etc.) go via **environment variables** (`NEO4J_APOC_EXPORT_FILE_ENABLED`), NOT `neo4j.conf`
@@ -483,9 +476,9 @@ There are two ways to get APOC into the pods — the second is strongly preferre
 
 ### Plugin Usage Examples
 
-**APOC Plugin** (recommended: uses pre-bundled labs jar, no download):
+**APOC Plugin** (no internet required — uses pre-bundled labs jar via EmptyDir volume):
 ```yaml
-apiVersion: neo4j.com/v1alpha1
+apiVersion: neo4j.neo4j.com/v1alpha1
 kind: Neo4jPlugin
 metadata:
   name: apoc-plugin
@@ -497,8 +490,10 @@ spec:
     # APOC behavioral settings become NEO4J_APOC_* environment variables
     apoc.export.file.enabled: "true"
     apoc.import.file.enabled: "true"
-    # server.directories.plugins=/var/lib/neo4j/labs is set automatically
-    # dbms.security.procedures.unrestricted=apoc.* is set automatically
+    # Operator automatically sets NEO4J_PLUGINS=["apoc"] on the StatefulSet.
+    # At pod startup, the Docker entrypoint copies /var/lib/neo4j/labs/apoc-*-core.jar
+    # to /plugins/apoc.jar (the operator's EmptyDir volume).
+    # neo4j.conf has server.directories.plugins=/plugins so Neo4j loads it from there.
 ```
 
 **Graph Data Science Plugin** (Neo4j Config):
@@ -590,6 +585,56 @@ kubectl get statefulset <cluster-name>-server -o jsonpath='{.spec.template.spec.
 - **Cluster Tests**: Verify plugin installation via StatefulSet environment variables
 - **Standalone Tests**: Verify plugin configuration via ConfigMap where Neo4j reads settings
 - **Critical Fix Applied**: Plugin tests now correctly validate configuration source based on deployment type
+
+## Aura Fleet Management
+
+Register operator-deployed Neo4j instances with Neo4j Aura Fleet Management for centralised monitoring.
+
+**CRD field** (both `Neo4jEnterpriseCluster` and `Neo4jEnterpriseStandalone`):
+```yaml
+spec:
+  auraFleetManagement:
+    enabled: true
+    tokenSecretRef:
+      name: aura-fleet-token   # Kubernetes Secret
+      key: token               # Default: "token"
+```
+
+**Create the secret**:
+```bash
+kubectl create secret generic aura-fleet-token --from-literal=token=<YOUR_AURA_TOKEN>
+```
+
+**How it works**:
+1. The cluster/standalone controller detects `spec.auraFleetManagement.enabled: true`.
+2. It live-patches `NEO4J_PLUGINS` on the StatefulSet to include `"fleet-management"` (using `MergeNeo4jPluginList` — does NOT overwrite other plugins).
+3. At the next pod restart the Docker entrypoint copies the pre-bundled `fleet-management-*.jar` from `/var/lib/neo4j/products/` into the `/plugins` EmptyDir.
+4. Once the cluster reaches `status.phase = Ready`, the controller reads the token and calls `CALL fleetManagement.registerToken($token)` via the Bolt client.
+5. Registration status is reported in `status.auraFleetManagement`.
+
+**Verify**:
+```bash
+kubectl describe neo4jenterprisecluster <name> | grep -A5 "Aura Fleet"
+kubectl exec <pod> -c neo4j -- cypher-shell -u neo4j -p <password> "CALL fleetManagement.status()"
+```
+
+**Plugin-only mode** (install without token — useful when token will be provided later):
+```yaml
+spec:
+  auraFleetManagement:
+    enabled: true
+    # tokenSecretRef omitted → plugin loads but registration deferred
+```
+
+**Key implementation files**:
+- `internal/controller/neo4jenterprisecluster_controller.go` — `reconcileAuraFleetManagement`, `mergeFleetManagementPlugin`
+- `internal/controller/neo4jenterprisestandalone_controller.go` — standalone equivalents
+- `internal/controller/plugin_controller.go` — `MergeNeo4jPluginList` utility, `fleet-management` plugin type registration
+- `internal/resources/cluster.go` — `neo4j.conf` security settings for fleet management
+- `internal/validation/fleet_validator.go` — `validateAuraFleetManagement`
+- `internal/neo4j/client.go` — `RegisterFleetManagementToken`, `IsFleetManagementInstalled`
+- `docs/user_guide/aura_fleet_management.md` — full user guide
+- `examples/fleet-management/` — example YAML files
 
 ## Neo4j Database Syntax Reference (5.26+ and 2025.x)
 
@@ -892,6 +937,9 @@ AfterEach(func() {
 15. **Status Phase Validation**: Always check `status.phase="Ready"` for clusters before database operations - don't rely solely on conditions as phase is more reliable for readiness
 16. **TLS Scheme Consistency**: TLS-enabled clusters must use `bolt+s://` scheme, TLS-disabled use `bolt://` - critical for Neo4j client connections and seed URI functionality
 17. **Backup Path Syntax**: Neo4j 5.26+ requires correct `--to-path` syntax for backup operations with automated path creation to prevent backup failures
+18. **`envVarsEqual` Subset Semantics**: The cluster controller's `envVarsEqual` function is intentionally a *subset* check — it verifies all *desired* env vars are present in current, but tolerates extra env vars added by the `Neo4jPlugin` controller or fleet management reconciler. Never revert this to a strict length+value equality check or the controllers will oscillate.
+19. **NEO4J_PLUGINS Live-Patching via `MergeNeo4jPluginList`**: Do NOT bake `NEO4J_PLUGINS` into the static StatefulSet template in `internal/resources/cluster.go`. Plugin names must be added via the `MergeNeo4jPluginList` helper (live-patch on the running StatefulSet) so that multiple controllers (plugin controller, fleet management reconciler) can each add their plugin without overwriting the other's entry.
+20. **Fleet Management Two-Phase Reconciliation**: `reconcileAuraFleetManagement` has two independent phases: Phase 1 (install plugin via `mergeFleetManagementPlugin`) runs on every reconcile when enabled; Phase 2 (register Aura token) runs only when cluster is `Ready` and token not yet registered. Never collapse these into one step — the plugin needs a pod restart to load before registration is attempted.
 
 ## Reports
 

@@ -84,6 +84,14 @@ type Neo4jEnterpriseClusterSpec struct {
 	// Enables support for creating sharded databases that separate
 	// graph topology from node/relationship properties
 	PropertySharding *PropertyShardingSpec `json:"propertySharding,omitempty"`
+
+	// AuraFleetManagement enables integration with Neo4j Aura Fleet Management
+	// for monitoring and managing this cluster from the Aura console.
+	// The fleet-management plugin is pre-bundled in all Neo4j Enterprise images
+	// and does not require internet access to install.
+	// See: https://neo4j.com/docs/aura/fleet-management/
+	// +optional
+	AuraFleetManagement *AuraFleetManagementSpec `json:"auraFleetManagement,omitempty"`
 }
 
 // ImageSpec defines the Neo4j image configuration
@@ -569,6 +577,25 @@ type Neo4jEnterpriseClusterStatus struct {
 	// - Property sharding configuration applied successfully
 	// - All required Neo4j configuration settings validated
 	PropertyShardingReady *bool `json:"propertyShardingReady,omitempty"`
+
+	// AuraFleetManagementStatus reports the current state of the Aura Fleet Management integration.
+	AuraFleetManagement *AuraFleetManagementStatus `json:"auraFleetManagement,omitempty"`
+}
+
+// AuraFleetManagementStatus reports the registration state of the Aura Fleet Management plugin.
+type AuraFleetManagementStatus struct {
+	// Registered is true once the deployment has successfully called
+	// fleetManagement.registerToken and been acknowledged by Aura.
+	Registered bool `json:"registered"`
+
+	// LastRegistrationTime records when the token was last successfully registered.
+	// +optional
+	LastRegistrationTime *metav1.Time `json:"lastRegistrationTime,omitempty"`
+
+	// Message provides additional information about the registration state,
+	// including error details when registration fails.
+	// +optional
+	Message string `json:"message,omitempty"`
 }
 
 // UpgradeStatus tracks the progress of an ongoing upgrade
@@ -903,6 +930,52 @@ type QueryMetricsExportConfig struct {
 
 	// Export interval
 	Interval string `json:"interval,omitempty"`
+}
+
+// AuraFleetManagementSpec defines configuration for Neo4j Aura Fleet Management integration.
+//
+// Fleet Management allows you to monitor all Neo4j deployments (both Aura-managed and
+// self-managed) from a single Neo4j Aura console view. The operator installs the
+// pre-bundled fleet-management plugin and registers the provided Aura token automatically.
+//
+// Setup workflow:
+//  1. In the Aura console, navigate to Instances → Self-managed → Add deployment
+//  2. Follow the wizard to generate a registration token
+//  3. Store the token in a Kubernetes Secret
+//  4. Reference the Secret in this spec
+//
+// See: https://neo4j.com/docs/aura/fleet-management/setup/
+type AuraFleetManagementSpec struct {
+	// Enabled activates Aura Fleet Management integration.
+	// When true, the fleet-management plugin is installed automatically
+	// (from the pre-bundled jar in the Neo4j Enterprise image) and the
+	// registration token is applied after the cluster becomes ready.
+	// +kubebuilder:default=false
+	Enabled bool `json:"enabled"`
+
+	// TokenSecretRef references a Kubernetes Secret containing the Aura
+	// Fleet Management registration token obtained from the Aura console wizard.
+	//
+	// The Secret must be in the same namespace as the cluster and contain
+	// the key specified by tokenSecretRef.key (defaults to "token").
+	//
+	// Example:
+	//   kubectl create secret generic aura-fleet-token --from-literal=token='<token-from-aura>'
+	// +optional
+	TokenSecretRef *AuraTokenSecretRef `json:"tokenSecretRef,omitempty"`
+}
+
+// AuraTokenSecretRef specifies the Kubernetes Secret holding the Aura Fleet Management token.
+type AuraTokenSecretRef struct {
+	// Name of the Kubernetes Secret containing the registration token.
+	// +kubebuilder:validation:Required
+	Name string `json:"name"`
+
+	// Key within the Secret whose value is the registration token.
+	// Defaults to "token" if not specified.
+	// +kubebuilder:default=token
+	// +optional
+	Key string `json:"key,omitempty"`
 }
 
 // PropertyShardingSpec defines property sharding configuration

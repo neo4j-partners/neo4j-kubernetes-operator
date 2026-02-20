@@ -63,3 +63,9 @@ spec:
   config:
     server.metrics.prometheus.endpoint: "0.0.0.0:2004"
 ```
+
+## Aura Fleet Management (cloud monitoring)
+
+For a hosted monitoring experience, you can register your deployment with [Neo4j Aura Fleet Management](https://neo4j.com/docs/aura/fleet-management/). This lets you view topology, status, and metrics for all self-managed Neo4j instances alongside your Aura-managed instances in the Aura console.
+
+The operator handles plugin installation and token registration automatically. See the [Aura Fleet Management Guide](../aura_fleet_management.md) for setup instructions.

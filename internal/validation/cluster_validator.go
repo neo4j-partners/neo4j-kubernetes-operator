@@ -171,6 +171,9 @@ func (v *ClusterValidator) validateCluster(ctx context.Context, cluster *neo4jv1
 	// MCP server validation
 	allErrs = append(allErrs, validateMCPConfig(cluster.Spec.MCP, field.NewPath("spec", "mcp"))...)
 
+	// Aura Fleet Management validation
+	allErrs = append(allErrs, validateAuraFleetManagement(cluster.Spec.AuraFleetManagement, field.NewPath("spec", "auraFleetManagement"))...)
+
 	return allErrs
 }
 

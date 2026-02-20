@@ -9,6 +9,7 @@ The `Neo4jPlugin` Custom Resource Definition (CRD) provides automated plugin ins
 - **Target Deployments**: Both `Neo4jEnterpriseCluster` and `Neo4jEnterpriseStandalone`
 - **Installation Method**: Neo4j's `NEO4J_PLUGINS` environment variable approach
 - **Supported Plugins**: APOC, Graph Data Science, Bloom, GraphQL, GenAI, N10s, and custom plugins
+- **Note**: Fleet Management is managed via `spec.auraFleetManagement` on the cluster/standalone CRD, not via `Neo4jPlugin`. Both coexist without conflict.
 - **Automatic Configuration**: Plugin-specific settings and security policies
 
 ## Architecture
@@ -36,11 +37,13 @@ The `Neo4jPlugin` controller implements Neo4j's recommended installation approac
 
 1. **Target Discovery**: Automatically detects whether `clusterRef` points to a cluster or standalone
 2. **Plugin Collection**: Gathers main plugin and all dependencies into a unified list
-3. **Environment Variable Setup**: Configures `NEO4J_PLUGINS` with plugin names and versions
+3. **Environment Variable Setup**: Merges plugin names into the existing `NEO4J_PLUGINS` JSON array (additive — does not overwrite entries added by other controllers such as the Aura Fleet Management reconciler)
 4. **Configuration Application**: Adds plugin-specific settings as `NEO4J_*` environment variables
 5. **StatefulSet Update**: Patches the target StatefulSet with new configuration
 6. **Rolling Restart**: Triggers controlled pod restarts to apply changes
 7. **Verification**: Confirms plugin installation and updates status
+
+> **Multi-plugin coexistence**: The plugin controller, the cluster/standalone controller, and the Aura Fleet Management reconciler all use an additive merge strategy for `NEO4J_PLUGINS`. Installing APOC via `Neo4jPlugin` and enabling Fleet Management via `spec.auraFleetManagement` simultaneously results in `["apoc","fleet-management"]` — neither entry is overwritten on subsequent reconciles.
 
 ### Environment Variable Mapping
 

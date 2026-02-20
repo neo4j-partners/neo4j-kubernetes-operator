@@ -1088,6 +1088,8 @@ func (r *Neo4jPluginReconciler) mapPluginName(pluginName string) string {
 		return "n10s"
 	case "graphql":
 		return "graphql"
+	case "fleet-management":
+		return "fleet-management"
 	default:
 		return pluginName // Use as-is for custom plugins
 	}
@@ -1125,6 +1127,10 @@ func (r *Neo4jPluginReconciler) getRequiredProcedureSecuritySettings(pluginName 
 		// GraphQL plugin procedures
 		settings["dbms.security.procedures.unrestricted"] = "graphql.*"
 		settings["dbms.security.procedures.allowlist"] = "graphql.*"
+	case "fleet-management":
+		// Fleet management plugin procedures
+		settings["dbms.security.procedures.unrestricted"] = "fleetManagement.*"
+		settings["dbms.security.procedures.allowlist"] = "fleetManagement.*"
 	}
 
 	return settings
@@ -1192,12 +1198,17 @@ func (r *Neo4jPluginReconciler) isDeploymentFunctional(ctx context.Context, depl
 	return false
 }
 
-// addPluginToList parses the existing NEO4J_PLUGINS JSON array and adds a new plugin
+// addPluginToList is a method shim that delegates to the package-level MergeNeo4jPluginList.
 func (r *Neo4jPluginReconciler) addPluginToList(existing string, newPlugin string) (string, error) {
-	// Simple JSON array manipulation for plugin list
-	// Expected format: ["plugin1", "plugin2"]
+	return MergeNeo4jPluginList(existing, newPlugin)
+}
 
-	// Remove existing brackets and quotes, split by comma
+// MergeNeo4jPluginList parses the existing NEO4J_PLUGINS JSON array value and adds
+// newPlugin if it is not already present. Returns the (possibly unchanged) JSON array.
+// Expected format: ["plugin1","plugin2"]
+// This is intentionally exported so other controllers (e.g. fleet management reconciler)
+// can perform the same idempotent merge without duplicating the logic.
+func MergeNeo4jPluginList(existing string, newPlugin string) (string, error) {
 	cleaned := strings.Trim(existing, "[]")
 	cleaned = strings.ReplaceAll(cleaned, "\"", "")
 
@@ -1209,22 +1220,18 @@ func (r *Neo4jPluginReconciler) addPluginToList(existing string, newPlugin strin
 		}
 	}
 
-	// Check if plugin already exists
 	for _, plugin := range plugins {
 		if plugin == newPlugin {
-			return existing, nil // Plugin already in list
+			return existing, nil // already present — no change
 		}
 	}
 
-	// Add new plugin
 	plugins = append(plugins, newPlugin)
 
-	// Rebuild JSON array
 	var quotedPlugins []string
 	for _, plugin := range plugins {
 		quotedPlugins = append(quotedPlugins, fmt.Sprintf("\"%s\"", plugin))
 	}
-
 	return fmt.Sprintf("[%s]", strings.Join(quotedPlugins, ",")), nil
 }
 
@@ -1370,6 +1377,11 @@ func (r *Neo4jPluginReconciler) getPluginType(pluginName string) PluginType {
 	case "graphql":
 		// GraphQL plugin uses neo4j.conf for configuration
 		return PluginTypeNeo4jConfig
+	case "fleet-management":
+		// Fleet management plugin requires procedure security configuration.
+		// NEO4J_PLUGINS=["fleet-management"] copies the pre-bundled jar from
+		// /var/lib/neo4j/products/ — no internet access required.
+		return PluginTypeNeo4jConfig
 	default:
 		// Default to neo4j.conf configuration for unknown plugins
 		return PluginTypeNeo4jConfig
@@ -1394,6 +1406,11 @@ func (r *Neo4jPluginReconciler) requiresAutomaticSecurityConfiguration(pluginNam
 		// GDS requires automatic security configuration:
 		// - dbms.security.procedures.unrestricted=gds.* (or allowlist based on sandbox setting)
 		return true
+	case "fleet-management":
+		// Fleet management requires automatic security configuration:
+		// - dbms.security.procedures.unrestricted=fleetManagement.*
+		// - dbms.security.procedures.allowlist=fleetManagement.*
+		return true
 	default:
 		return false
 	}
@@ -1412,6 +1429,9 @@ func (r *Neo4jPluginReconciler) getAutomaticSecuritySettings(pluginName string) 
 	case "graph-data-science", "gds":
 		// GDS default automatic security (can be overridden by user security settings)
 		settings["dbms.security.procedures.unrestricted"] = "gds.*,apoc.load.*"
+	case "fleet-management":
+		settings["dbms.security.procedures.unrestricted"] = "fleetManagement.*"
+		settings["dbms.security.procedures.allowlist"] = "fleetManagement.*"
 	}
 
 	return settings

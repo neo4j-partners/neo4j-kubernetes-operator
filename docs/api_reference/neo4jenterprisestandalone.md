@@ -192,6 +192,21 @@ mcp:
 
 For full MCP field definitions (HTTP, TLS, service exposure, and STDIO auth), see the [`MCPServerSpec`](neo4jenterprisecluster.md#mcpserverspec) section.
 
+#### `auraFleetManagement` (AuraFleetManagementSpec)
+
+Enables integration with [Neo4j Aura Fleet Management](https://neo4j.com/docs/aura/fleet-management/). The operator installs the pre-bundled fleet-management plugin and registers the Aura token automatically once the deployment is Ready.
+
+```yaml
+auraFleetManagement:
+  enabled: true
+  tokenSecretRef:
+    name: aura-fleet-token   # Secret with key "token" holding the Aura registration token
+    key: token               # optional; defaults to "token"
+```
+
+For full setup instructions see [Aura Fleet Management Guide](../user_guide/aura_fleet_management.md).
+For the full type definition see [`AuraFleetManagementSpec`](neo4jenterprisecluster.md#aurafleetmanagementspec).
+
 #### `persistence` (PersistenceSpec)
 Persistence configuration for standalone deployments.
 

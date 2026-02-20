@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 
@@ -35,9 +36,17 @@ import (
 
 var _ = Describe("Neo4jPlugin Integration Tests", func() {
 	const (
-		timeout  = time.Second * 300 // 5 minutes should be sufficient for standalone + plugin
+		timeout  = time.Second * 300 // 5 minutes for initial resource creation / cluster ready
 		interval = time.Second * 5
 	)
+
+	// pluginTimeout is longer than clusterTimeout because plugin installation on a cluster
+	// involves a full rolling restart (NEO4J_PLUGINS env var change → all pods restart) which
+	// can take 4-8 minutes on top of the cluster formation time.
+	// CI sets clusterTimeout=20m so this is still bounded there.
+	pluginTimeout := func() time.Duration {
+		return clusterTimeout * 2
+	}
 
 	AfterEach(func() {
 		// Critical: Clean up any plugin test resources to prevent CI resource exhaustion
@@ -197,6 +206,9 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 			Expect(k8sClient.Create(ctx, plugin)).Should(Succeed())
 
 			By("Waiting for plugin status to be Ready")
+			// Use pluginTimeout (2× clusterTimeout) because plugin installation on a cluster involves
+			// a rolling restart of all pods (NEO4J_PLUGINS env change) which takes 4-8 min on top of
+			// the cluster formation time already consumed above.
 			Eventually(func() string {
 				currentPlugin := &neo4jv1alpha1.Neo4jPlugin{}
 				err := k8sClient.Get(ctx, types.NamespacedName{
@@ -206,8 +218,9 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 				if err != nil {
 					return ""
 				}
+				GinkgoWriter.Printf("Plugin phase: %s message: %s\n", currentPlugin.Status.Phase, currentPlugin.Status.Message)
 				return currentPlugin.Status.Phase
-			}, clusterTimeout, interval).Should(Equal("Ready"))
+			}, pluginTimeout(), interval).Should(Equal("Ready"))
 
 			By("Verifying StatefulSet has NEO4J_PLUGINS environment variable")
 			serverSts = &appsv1.StatefulSet{}
@@ -231,7 +244,7 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 					}
 				}
 				return false
-			}, clusterTimeout, interval).Should(BeTrue())
+			}, pluginTimeout(), interval).Should(BeTrue())
 
 			By("Verifying APOC configuration environment variables (Neo4j 5.26+ approach)")
 			Eventually(func() bool {
@@ -261,7 +274,7 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 					}
 				}
 				return false
-			}, clusterTimeout, interval).Should(BeTrue())
+			}, pluginTimeout(), interval).Should(BeTrue())
 
 			By("Waiting for StatefulSet rolling update to complete after plugin install")
 			// The NEO4J_PLUGINS env var triggers a rolling restart; all pods must be
@@ -282,36 +295,39 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 					serverSts.Status.ReadyReplicas, serverSts.Status.UpdatedReplicas, replicas)
 				return serverSts.Status.ReadyReplicas == replicas &&
 					serverSts.Status.UpdatedReplicas == replicas
-			}, clusterTimeout, interval).Should(BeTrue(), "StatefulSet rolling update should complete")
+			}, pluginTimeout(), interval).Should(BeTrue(), "StatefulSet rolling update should complete")
 
-			By("Checking if APOC is available via cypher-shell (soft check - requires pod egress internet access)")
-			// NEO4J_PLUGINS='["apoc"]' is supported in both Neo4j 5.26.x and 2025.x+/2026.x+ via the
-			// Docker image's entrypoint startup script (see: neo4j.com/docs/operations-manual/current/docker/plugins/).
-			// The download requires the pod to have egress internet access at startup time.
-			// In Kind-based CI environments the pods may have no outbound internet access, so APOC will
-			// not be present even though the env var was correctly set by the operator.
-			// NOTE: Production-ready APOC installation should use the pre-bundled labs jar:
-			//   server.directories.plugins=/var/lib/neo4j/labs (no download required)
-			// The operator's responsibility (setting NEO4J_PLUGINS env var) is already verified above.
+			By("Verifying APOC procedures are available via cypher-shell")
+			// NEO4J_PLUGINS=["apoc"] tells the Neo4j Docker entrypoint to load APOC from the
+			// pre-bundled jar at /var/lib/neo4j/labs/apoc-*-core.jar (no internet access required).
+			// The entrypoint copies it to /plugins/ (the operator's EmptyDir volume), and Neo4j loads
+			// it because server.directories.plugins=/plugins is set in the base config.
 			podName := fmt.Sprintf("%s-server-0", clusterName)
-			apocCheckCmd := exec.CommandContext(ctx, "kubectl", "exec",
-				podName, "-n", namespace.Name, "--",
-				"cypher-shell", "-u", "neo4j", "-p", "admin123",
-				"SHOW PROCEDURES YIELD name WHERE name STARTS WITH 'apoc' RETURN count(*) AS n",
-			)
-			apocOut, apocErr := apocCheckCmd.CombinedOutput()
-			if apocErr != nil {
-				GinkgoWriter.Printf("cypher-shell error (APOC not downloaded - pod likely has no egress internet access): %v\noutput: %s\n", apocErr, apocOut)
-			} else {
+			Eventually(func() int {
+				apocCheckCmd := exec.CommandContext(ctx, "kubectl", "exec",
+					podName, "-n", namespace.Name, "--",
+					"cypher-shell", "-u", "neo4j", "-p", "admin123",
+					"SHOW PROCEDURES YIELD name WHERE name STARTS WITH 'apoc' RETURN count(*) AS n",
+				)
+				apocOut, apocErr := apocCheckCmd.CombinedOutput()
+				if apocErr != nil {
+					GinkgoWriter.Printf("cypher-shell not yet ready: %v\n", apocErr)
+					return 0
+				}
 				outStr := string(apocOut)
 				GinkgoWriter.Printf("cypher-shell output: %s\n", outStr)
-				if strings.Contains(outStr, "n") && !strings.Contains(outStr, "\n0\n") {
-					GinkgoWriter.Printf("APOC procedures are available - NEO4J_PLUGINS download succeeded!\n")
-				} else {
-					GinkgoWriter.Printf("APOC procedures not found (0 count) - pod had no egress internet access to download APOC at startup\n")
-					Skip("Skipping APOC procedure check: pod egress internet access required for NEO4J_PLUGINS automatic download")
+				// Parse the count from output (format: "\nn\n<count>\n")
+				lines := strings.Split(strings.TrimSpace(outStr), "\n")
+				for _, line := range lines {
+					line = strings.TrimSpace(line)
+					if line != "" && line != "n" {
+						if count, err := strconv.Atoi(line); err == nil {
+							return count
+						}
+					}
 				}
-			}
+				return 0
+			}, pluginTimeout(), interval).Should(BeNumerically(">", 0), "APOC procedures should be available: NEO4J_PLUGINS copies from pre-bundled /var/lib/neo4j/labs jar")
 
 			By("Cleaning up")
 			Expect(k8sClient.Delete(ctx, plugin)).Should(Succeed())

@@ -76,6 +76,12 @@ type Neo4jEnterpriseStandaloneSpec struct {
 
 	// Persistence configuration for standalone deployment
 	Persistence *PersistenceSpec `json:"persistence,omitempty"`
+
+	// AuraFleetManagement enables integration with Neo4j Aura Fleet Management
+	// for monitoring this standalone deployment from the Aura console.
+	// See: https://neo4j.com/docs/aura/fleet-management/
+	// +optional
+	AuraFleetManagement *AuraFleetManagementSpec `json:"auraFleetManagement,omitempty"`
 }
 
 // PersistenceSpec defines persistence configuration for standalone deployments
@@ -122,6 +128,9 @@ type Neo4jEnterpriseStandaloneStatus struct {
 
 	// DatabaseStatus provides information about the Neo4j database
 	DatabaseStatus *StandaloneDatabaseStatus `json:"databaseStatus,omitempty"`
+
+	// AuraFleetManagementStatus reports the current state of the Aura Fleet Management integration.
+	AuraFleetManagement *AuraFleetManagementStatus `json:"auraFleetManagement,omitempty"`
 }
 
 // StandalonePodStatus provides information about the Neo4j pod

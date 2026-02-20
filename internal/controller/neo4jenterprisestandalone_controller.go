@@ -47,6 +47,7 @@ import (
 	certmanagerv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	cmmeta "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
 	neo4jv1alpha1 "github.com/neo4j-partners/neo4j-kubernetes-operator/api/v1alpha1"
+	neo4jclient "github.com/neo4j-partners/neo4j-kubernetes-operator/internal/neo4j"
 	"github.com/neo4j-partners/neo4j-kubernetes-operator/internal/resources"
 	"github.com/neo4j-partners/neo4j-kubernetes-operator/internal/validation"
 )
@@ -253,6 +254,17 @@ func (r *Neo4jEnterpriseStandaloneReconciler) reconcileStandalone(ctx context.Co
 	// Update status once at the end
 	if err := r.updateStatus(ctx, standalone); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to update status: %w", err)
+	}
+
+	// Reconcile Aura Fleet Management registration if enabled (non-fatal if it fails)
+	if standalone.Spec.AuraFleetManagement != nil && standalone.Spec.AuraFleetManagement.Enabled {
+		if err := r.reconcileAuraFleetManagement(ctx, standalone); err != nil {
+			logger.Error(err, "Failed to reconcile Aura Fleet Management registration")
+			if r.Recorder != nil {
+				r.Recorder.Eventf(standalone, corev1.EventTypeWarning, "AuraFleetManagementFailed",
+					"Aura Fleet Management registration failed: %v", err)
+			}
+		}
 	}
 
 	logger.Info("Successfully reconciled Neo4jEnterpriseStandalone")
@@ -581,6 +593,14 @@ func (r *Neo4jEnterpriseStandaloneReconciler) createConfigMap(standalone *neo4jv
 
 	if standalone.Spec.QueryMonitoring != nil && standalone.Spec.QueryMonitoring.Enabled {
 		configLines = append(configLines, strings.Split(resources.BuildQueryMonitoringConfig(standalone.Spec.QueryMonitoring), "\n")...)
+		configLines = append(configLines, "")
+	}
+
+	// Aura Fleet Management configuration
+	if standalone.Spec.AuraFleetManagement != nil && standalone.Spec.AuraFleetManagement.Enabled {
+		configLines = append(configLines, "# Aura Fleet Management")
+		configLines = append(configLines, "dbms.security.procedures.unrestricted=fleetManagement.*")
+		configLines = append(configLines, "dbms.security.procedures.allowlist=fleetManagement.*")
 		configLines = append(configLines, "")
 	}
 
@@ -947,6 +967,9 @@ func (r *Neo4jEnterpriseStandaloneReconciler) buildEnvVars(standalone *neo4jv1al
 
 	// Add user-provided environment variables
 	envVars = append(envVars, standalone.Spec.Env...)
+
+	// NOTE: NEO4J_PLUGINS for fleet-management is applied via a live StatefulSet patch
+	// in reconcileAuraFleetManagement, not baked here, so it merges with other plugins.
 
 	// Set the config directory (always present now)
 	envVars = append(envVars, corev1.EnvVar{
@@ -1323,4 +1346,165 @@ func (r *Neo4jEnterpriseStandaloneReconciler) SetupWithManager(mgr ctrl.Manager)
 	}
 
 	return builder.Complete(r)
+}
+
+// reconcileAuraFleetManagement handles Aura Fleet Management for standalone deployments.
+//
+// Phase 1 — Plugin installation: merges "fleet-management" into NEO4J_PLUGINS on the
+//
+//	live StatefulSet (same pattern as the Neo4jPlugin controller), triggering a pod restart
+//	so the Docker entrypoint copies the pre-bundled jar from /var/lib/neo4j/products/.
+//
+// Phase 2 — Token registration: once the standalone is Ready and the plugin is loaded,
+//
+//	reads the Aura token from the referenced Secret and calls registerToken.
+func (r *Neo4jEnterpriseStandaloneReconciler) reconcileAuraFleetManagement(ctx context.Context, standalone *neo4jv1alpha1.Neo4jEnterpriseStandalone) error {
+	logger := log.FromContext(ctx)
+	spec := standalone.Spec.AuraFleetManagement
+
+	// --- Phase 1: ensure the plugin jar is loaded ---
+	// The standalone StatefulSet name is the same as the standalone resource name.
+	if err := r.mergeFleetManagementPlugin(ctx, standalone.Name, standalone.Namespace); err != nil {
+		logger.Error(err, "Failed to patch StatefulSet NEO4J_PLUGINS for fleet-management")
+		if r.Recorder != nil {
+			r.Recorder.Eventf(standalone, corev1.EventTypeWarning, "AuraFleetManagementPluginPatchFailed",
+				"Failed to add fleet-management to NEO4J_PLUGINS: %v", err)
+		}
+		return nil
+	}
+
+	// --- Phase 2: token registration ---
+	if spec.TokenSecretRef == nil {
+		logger.Info("Aura Fleet Management enabled but no tokenSecretRef configured; plugin installed, registration deferred")
+		return nil
+	}
+
+	if standalone.Status.Phase != "Ready" {
+		logger.Info("Standalone not yet Ready; fleet-management plugin patch applied, registration deferred",
+			"phase", standalone.Status.Phase)
+		return nil
+	}
+
+	if standalone.Status.AuraFleetManagement != nil && standalone.Status.AuraFleetManagement.Registered {
+		logger.V(1).Info("Aura Fleet Management already registered; nothing to do")
+		return nil
+	}
+
+	secretName := spec.TokenSecretRef.Name
+	secretKey := spec.TokenSecretRef.Key
+	if secretKey == "" {
+		secretKey = "token"
+	}
+
+	secret := &corev1.Secret{}
+	if err := r.Get(ctx, types.NamespacedName{Namespace: standalone.Namespace, Name: secretName}, secret); err != nil {
+		return r.setFleetManagementStatus(ctx, standalone, false, fmt.Sprintf("cannot read token secret %s: %v", secretName, err))
+	}
+
+	tokenBytes, ok := secret.Data[secretKey]
+	if !ok || len(tokenBytes) == 0 {
+		return r.setFleetManagementStatus(ctx, standalone, false, fmt.Sprintf("key %q not found in secret %s", secretKey, secretName))
+	}
+	token := strings.TrimSpace(string(tokenBytes))
+
+	neo4jClient, err := neo4jclient.NewClientForEnterpriseStandalone(standalone, r.Client, getStandaloneAdminSecretName(standalone))
+	if err != nil {
+		return r.setFleetManagementStatus(ctx, standalone, false, fmt.Sprintf("cannot connect to Neo4j: %v", err))
+	}
+	defer neo4jClient.Close()
+
+	installed, err := neo4jClient.IsFleetManagementInstalled(ctx)
+	if err != nil {
+		return r.setFleetManagementStatus(ctx, standalone, false, fmt.Sprintf("cannot check fleet management plugin: %v", err))
+	}
+	if !installed {
+		logger.Info("Fleet management plugin not yet loaded; will retry on next reconcile")
+		return nil
+	}
+
+	if err := neo4jClient.RegisterFleetManagementToken(ctx, token); err != nil {
+		return r.setFleetManagementStatus(ctx, standalone, false, fmt.Sprintf("token registration failed: %v", err))
+	}
+
+	logger.Info("Aura Fleet Management token registered successfully")
+	if r.Recorder != nil {
+		r.Recorder.Event(standalone, corev1.EventTypeNormal, "AuraFleetManagementRegistered",
+			"Successfully registered with Aura Fleet Management")
+	}
+	return r.setFleetManagementStatus(ctx, standalone, true, "Registered with Aura Fleet Management")
+}
+
+// mergeFleetManagementPlugin patches the named StatefulSet so "fleet-management" is present
+// in NEO4J_PLUGINS. Idempotent: if already present, no patch is issued.
+func (r *Neo4jEnterpriseStandaloneReconciler) mergeFleetManagementPlugin(ctx context.Context, stsName, namespace string) error {
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		sts := &appsv1.StatefulSet{}
+		if err := r.Get(ctx, types.NamespacedName{Name: stsName, Namespace: namespace}, sts); err != nil {
+			return fmt.Errorf("get StatefulSet %s: %w", stsName, err)
+		}
+
+		containerIdx := -1
+		for i, c := range sts.Spec.Template.Spec.Containers {
+			if c.Name == "neo4j" {
+				containerIdx = i
+				break
+			}
+		}
+		if containerIdx < 0 {
+			return fmt.Errorf("neo4j container not found in StatefulSet %s", stsName)
+		}
+
+		envs := sts.Spec.Template.Spec.Containers[containerIdx].Env
+		pluginsIdx := -1
+		for i, e := range envs {
+			if e.Name == "NEO4J_PLUGINS" {
+				pluginsIdx = i
+				break
+			}
+		}
+
+		var updated string
+		var err error
+		if pluginsIdx < 0 {
+			updated = `["fleet-management"]`
+		} else {
+			current := envs[pluginsIdx].Value
+			updated, err = MergeNeo4jPluginList(current, "fleet-management")
+			if err != nil {
+				return fmt.Errorf("merge plugin list: %w", err)
+			}
+			if updated == current {
+				return nil // already present — nothing to patch
+			}
+		}
+
+		stsCopy := sts.DeepCopy()
+		if pluginsIdx < 0 {
+			stsCopy.Spec.Template.Spec.Containers[containerIdx].Env = append(
+				stsCopy.Spec.Template.Spec.Containers[containerIdx].Env,
+				corev1.EnvVar{Name: "NEO4J_PLUGINS", Value: updated},
+			)
+		} else {
+			stsCopy.Spec.Template.Spec.Containers[containerIdx].Env[pluginsIdx].Value = updated
+		}
+		return r.Update(ctx, stsCopy)
+	})
+}
+
+func (r *Neo4jEnterpriseStandaloneReconciler) setFleetManagementStatus(ctx context.Context, standalone *neo4jv1alpha1.Neo4jEnterpriseStandalone, registered bool, message string) error {
+	now := metav1.Now()
+	status := &neo4jv1alpha1.AuraFleetManagementStatus{
+		Registered: registered,
+		Message:    message,
+	}
+	if registered {
+		status.LastRegistrationTime = &now
+	}
+
+	latest := &neo4jv1alpha1.Neo4jEnterpriseStandalone{}
+	if err := r.Get(ctx, types.NamespacedName{Namespace: standalone.Namespace, Name: standalone.Name}, latest); err != nil {
+		return err
+	}
+	latest.Status.AuraFleetManagement = status
+	return r.Status().Update(ctx, latest)
 }

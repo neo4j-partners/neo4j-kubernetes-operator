@@ -80,6 +80,9 @@ func (v *StandaloneValidator) ValidateCreate(standalone *neo4jv1alpha1.Neo4jEnte
 	// Validate MCP configuration
 	allErrs = append(allErrs, validateMCPConfig(standalone.Spec.MCP, field.NewPath("spec", "mcp"))...)
 
+	// Aura Fleet Management validation
+	allErrs = append(allErrs, validateAuraFleetManagement(standalone.Spec.AuraFleetManagement, field.NewPath("spec", "auraFleetManagement"))...)
+
 	return allErrs
 }
 

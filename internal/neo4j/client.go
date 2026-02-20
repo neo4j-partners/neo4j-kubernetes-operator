@@ -2454,4 +2454,54 @@ type BackupMetadata struct {
 	Checksum     string
 }
 
+// RegisterFleetManagementToken calls the fleet management plugin procedure to register
+// this Neo4j deployment with Neo4j Aura Fleet Management. The token is obtained from the
+// Aura console wizard (Instances → Self-managed → Add deployment).
+//
+// This only needs to be called once per cluster; the plugin handles subsequent re-connections
+// automatically. If auto-rotation is enabled in Aura, the plugin renews the token before expiry.
+func (c *Client) RegisterFleetManagementToken(ctx context.Context, token string) error {
+	session := c.driver.NewSession(ctx, neo4j.SessionConfig{
+		AccessMode:   neo4j.AccessModeWrite,
+		DatabaseName: "system",
+	})
+	defer session.Close(ctx)
+
+	_, err := session.Run(ctx, "CALL fleetManagement.registerToken($token)", map[string]interface{}{
+		"token": token,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to register Aura Fleet Management token: %w", err)
+	}
+	return nil
+}
+
+// IsFleetManagementInstalled checks whether the fleet management plugin is loaded and responding.
+// Returns true if the plugin is available, false if not (e.g. jar not yet copied to /plugins).
+func (c *Client) IsFleetManagementInstalled(ctx context.Context) (bool, error) {
+	session := c.driver.NewSession(ctx, neo4j.SessionConfig{
+		AccessMode:   neo4j.AccessModeRead,
+		DatabaseName: "system",
+	})
+	defer session.Close(ctx)
+
+	result, err := session.Run(ctx,
+		"SHOW PROCEDURES YIELD name WHERE name = 'fleetManagement.status' RETURN count(*) AS n",
+		nil,
+	)
+	if err != nil {
+		return false, fmt.Errorf("failed to check fleet management procedures: %w", err)
+	}
+
+	if result.Next(ctx) {
+		record := result.Record()
+		if n, ok := record.Get("n"); ok {
+			if count, ok := n.(int64); ok {
+				return count > 0, nil
+			}
+		}
+	}
+	return false, nil
+}
+
 // ===== Property Sharding Support =====

@@ -245,6 +245,94 @@ func TestGetExpectedReplicas(t *testing.T) {
 	}
 }
 
+// TestMergeNeo4jPluginList tests the exported package-level function used by both the
+// plugin controller and the fleet management reconciler to safely merge plugin names into
+// the NEO4J_PLUGINS JSON array without overwriting each other's entries.
+func TestMergeNeo4jPluginList(t *testing.T) {
+	tests := []struct {
+		name      string
+		existing  string
+		newPlugin string
+		expected  string
+		wantErr   bool
+	}{
+		{
+			name:      "add fleet-management to empty list",
+			existing:  "[]",
+			newPlugin: "fleet-management",
+			expected:  `["fleet-management"]`,
+		},
+		{
+			name:      "add fleet-management when apoc already present",
+			existing:  `["apoc"]`,
+			newPlugin: "fleet-management",
+			expected:  `["apoc","fleet-management"]`,
+		},
+		{
+			name:      "add apoc when fleet-management already present",
+			existing:  `["fleet-management"]`,
+			newPlugin: "apoc",
+			expected:  `["fleet-management","apoc"]`,
+		},
+		{
+			name:      "idempotent — fleet-management already in list",
+			existing:  `["apoc","fleet-management"]`,
+			newPlugin: "fleet-management",
+			expected:  `["apoc","fleet-management"]`,
+		},
+		{
+			name:      "add to multi-plugin list",
+			existing:  `["apoc","graph-data-science"]`,
+			newPlugin: "fleet-management",
+			expected:  `["apoc","graph-data-science","fleet-management"]`,
+		},
+		{
+			name:      "handles spaces in existing list",
+			existing:  `["apoc", "bloom"]`,
+			newPlugin: "fleet-management",
+			expected:  `["apoc","bloom","fleet-management"]`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := MergeNeo4jPluginList(tt.existing, tt.newPlugin)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.expected, result)
+			}
+		})
+	}
+}
+
+// TestFleetManagementPluginType verifies that "fleet-management" is recognised as a
+// Neo4j config plugin (not environment-variable-only) and gets the correct security settings.
+func TestFleetManagementPluginType(t *testing.T) {
+	r := &Neo4jPluginReconciler{}
+
+	t.Run("fleet-management is PluginTypeNeo4jConfig", func(t *testing.T) {
+		pluginType := r.getPluginType("fleet-management")
+		assert.Equal(t, PluginTypeNeo4jConfig, pluginType)
+	})
+
+	t.Run("fleet-management needs automatic security settings", func(t *testing.T) {
+		assert.True(t, r.requiresAutomaticSecurityConfiguration("fleet-management"),
+			"fleet-management should require automatic procedure security settings")
+	})
+
+	t.Run("fleet-management security settings are correct", func(t *testing.T) {
+		settings := r.getRequiredProcedureSecuritySettings("fleet-management")
+		assert.Equal(t, "fleetManagement.*", settings["dbms.security.procedures.unrestricted"])
+		assert.Equal(t, "fleetManagement.*", settings["dbms.security.procedures.allowlist"])
+	})
+
+	t.Run("fleet-management maps to 'fleet-management' plugin name", func(t *testing.T) {
+		assert.Equal(t, "fleet-management", r.mapPluginName("fleet-management"))
+	})
+}
+
 func TestPluginSourceValidation(t *testing.T) {
 	tests := []struct {
 		name        string

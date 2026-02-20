@@ -310,6 +310,161 @@ func TestResourcesEqual(t *testing.T) {
 	})
 }
 
+// TestEnvVarsEqual validates the subset-based comparison semantics for envVarsEqual.
+//
+// The key invariant: every env var the cluster controller *wants* (desired) must be present
+// in the current StatefulSet with the correct value.  Extra env vars in current (added by
+// the Neo4jPlugin controller, fleet management reconciler, etc.) must NOT trigger a
+// "significant change", otherwise the cluster controller would oscillate with the plugin
+// controller by overwriting the StatefulSet on every reconcile.
+func TestEnvVarsEqual(t *testing.T) {
+	reconciler := &Neo4jEnterpriseClusterReconciler{}
+
+	t.Run("identical sets should be equal", func(t *testing.T) {
+		envs := []corev1.EnvVar{
+			{Name: "NEO4J_AUTH", Value: "neo4j/admin"},
+			{Name: "NEO4J_EDITION", Value: "enterprise"},
+		}
+		assert.True(t, reconciler.envVarsEqual(envs, envs))
+	})
+
+	t.Run("current has extra env vars added by plugin controller — should still be equal", func(t *testing.T) {
+		// This is the core scenario: plugin controller added NEO4J_PLUGINS and
+		// NEO4J_APOC_* env vars; desired template does not contain them.
+		// envVarsEqual must return true so the cluster controller does NOT overwrite.
+		desired := []corev1.EnvVar{
+			{Name: "NEO4J_AUTH", Value: "neo4j/admin"},
+			{Name: "NEO4J_EDITION", Value: "enterprise"},
+		}
+		current := []corev1.EnvVar{
+			{Name: "NEO4J_AUTH", Value: "neo4j/admin"},
+			{Name: "NEO4J_EDITION", Value: "enterprise"},
+			{Name: "NEO4J_PLUGINS", Value: `["apoc","fleet-management"]`},
+			{Name: "NEO4J_APOC_EXPORT_FILE_ENABLED", Value: "true"},
+		}
+		assert.True(t, reconciler.envVarsEqual(current, desired),
+			"extra plugin env vars in current must not trigger a 'not equal' result")
+	})
+
+	t.Run("desired has an env var absent from current — should not be equal", func(t *testing.T) {
+		desired := []corev1.EnvVar{
+			{Name: "NEO4J_AUTH", Value: "neo4j/admin"},
+			{Name: "NEO4J_EDITION", Value: "enterprise"},
+			{Name: "NEO4J_NEW_SETTING", Value: "value"},
+		}
+		current := []corev1.EnvVar{
+			{Name: "NEO4J_AUTH", Value: "neo4j/admin"},
+			{Name: "NEO4J_EDITION", Value: "enterprise"},
+		}
+		assert.False(t, reconciler.envVarsEqual(current, desired),
+			"a desired env var missing from current must be detected")
+	})
+
+	t.Run("desired env var present with wrong value — should not be equal", func(t *testing.T) {
+		desired := []corev1.EnvVar{
+			{Name: "NEO4J_AUTH", Value: "neo4j/newpassword"},
+		}
+		current := []corev1.EnvVar{
+			{Name: "NEO4J_AUTH", Value: "neo4j/oldpassword"},
+		}
+		assert.False(t, reconciler.envVarsEqual(current, desired),
+			"value mismatch for a desired env var must be detected")
+	})
+
+	t.Run("desired env var with ValueFrom — matched correctly", func(t *testing.T) {
+		secretRef := &corev1.EnvVarSource{
+			SecretKeyRef: &corev1.SecretKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{Name: "my-secret"},
+				Key:                  "password",
+			},
+		}
+		desired := []corev1.EnvVar{
+			{Name: "DB_PASSWORD", ValueFrom: secretRef},
+		}
+		current := []corev1.EnvVar{
+			{Name: "DB_PASSWORD", ValueFrom: secretRef},
+			{Name: "NEO4J_PLUGINS", Value: `["apoc"]`}, // extra — from plugin controller
+		}
+		assert.True(t, reconciler.envVarsEqual(current, desired),
+			"matching ValueFrom with extra env vars in current should be equal")
+	})
+
+	t.Run("desired env var with ValueFrom — different secret key", func(t *testing.T) {
+		desired := []corev1.EnvVar{
+			{
+				Name: "DB_PASSWORD",
+				ValueFrom: &corev1.EnvVarSource{
+					SecretKeyRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{Name: "new-secret"},
+						Key:                  "password",
+					},
+				},
+			},
+		}
+		current := []corev1.EnvVar{
+			{
+				Name: "DB_PASSWORD",
+				ValueFrom: &corev1.EnvVarSource{
+					SecretKeyRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{Name: "old-secret"},
+						Key:                  "password",
+					},
+				},
+			},
+		}
+		assert.False(t, reconciler.envVarsEqual(current, desired),
+			"different ValueFrom sources must be detected")
+	})
+
+	t.Run("empty desired — always equal regardless of current", func(t *testing.T) {
+		current := []corev1.EnvVar{
+			{Name: "NEO4J_PLUGINS", Value: `["apoc"]`},
+		}
+		assert.True(t, reconciler.envVarsEqual(current, nil),
+			"empty desired set is trivially satisfied by any current set")
+	})
+}
+
+// TestIsTemplateChangeSignificant_PluginAddedEnvVars ensures the full template comparison
+// pipeline correctly tolerates env vars added by the plugin controller.
+func TestIsTemplateChangeSignificant_PluginAddedEnvVars(t *testing.T) {
+	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
+	ctx := context.Background()
+	reconciler := &Neo4jEnterpriseClusterReconciler{Scheme: runtime.NewScheme()}
+
+	// desired template — what the cluster controller builds from the CRD spec
+	desired := corev1.PodTemplateSpec{
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name:  "neo4j",
+					Image: "neo4j:5.26.0-enterprise",
+					Env: []corev1.EnvVar{
+						{Name: "NEO4J_EDITION", Value: "enterprise"},
+						{Name: "NEO4J_ACCEPT_LICENSE_AGREEMENT", Value: "yes"},
+					},
+				},
+			},
+		},
+	}
+
+	// current template — same as desired PLUS plugin controller additions
+	current := desired.DeepCopy()
+	current.Spec.Containers[0].Env = append(current.Spec.Containers[0].Env,
+		corev1.EnvVar{Name: "NEO4J_PLUGINS", Value: `["apoc","fleet-management"]`},
+		corev1.EnvVar{Name: "NEO4J_APOC_EXPORT_FILE_ENABLED", Value: "true"},
+	)
+
+	stableCluster := &appsv1.StatefulSet{
+		Spec:   appsv1.StatefulSetSpec{Replicas: int32Ptr(3)},
+		Status: appsv1.StatefulSetStatus{ReadyReplicas: 3},
+	}
+
+	significant := reconciler.isTemplateChangeSignificant(ctx, *current, desired, stableCluster)
+	assert.False(t, significant,
+		"plugin-added env vars in current must not cause the cluster controller to overwrite the StatefulSet")
+}
+
 // Helper function
 func int32Ptr(i int32) *int32 {
 	return &i

@@ -92,6 +92,7 @@ The `Neo4jEnterpriseClusterSpec` defines the desired state of a Neo4j Enterprise
 | `mcp` | [`MCPServerSpec`](#mcpserverspec) | MCP server deployment and exposure settings |
 | `propertySharding` | [`PropertyShardingSpec`](#propertyshardingspec) | Property sharding configuration (Neo4j 2025.12+) |
 | `queryMonitoring` | [`QueryMonitoringSpec`](#querymonitoringspec) | Query monitoring configuration |
+| `auraFleetManagement` | [`AuraFleetManagementSpec`](#aurafleetmanagementspec) | Aura Fleet Management integration (optional) |
 
 ## Type Definitions
 
@@ -316,6 +317,46 @@ issuerRef:
 | `key` | `string` | External secret key |
 | `property` | `string` | Property within the secret |
 | `version` | `string` | Secret version |
+
+### AuraFleetManagementSpec
+
+Enables integration with [Neo4j Aura Fleet Management](https://neo4j.com/docs/aura/fleet-management/) for monitoring this cluster from the Aura console. The fleet-management plugin is pre-bundled in all Neo4j Enterprise images (no internet access required).
+
+| Field | Type | Description |
+|---|---|---|
+| `enabled` | `bool` | Enable Aura Fleet Management integration (default: `false`) |
+| `tokenSecretRef` | [`*AuraTokenSecretRef`](#auratokensecretref) | Reference to the Kubernetes Secret holding the Aura registration token (optional; registration deferred if omitted) |
+
+**Status fields** (read-only, set by the operator):
+
+| Field | Description |
+|---|---|
+| `status.auraFleetManagement.registered` | `true` once `fleetManagement.registerToken` succeeded |
+| `status.auraFleetManagement.lastRegistrationTime` | Timestamp of last successful registration |
+| `status.auraFleetManagement.message` | Human-readable status or error detail |
+
+**Example**:
+
+```yaml
+auraFleetManagement:
+  enabled: true
+  tokenSecretRef:
+    name: aura-fleet-token  # kubectl create secret generic aura-fleet-token --from-literal=token='<token>'
+    key: token              # defaults to "token"
+```
+
+See [Aura Fleet Management Guide](../user_guide/aura_fleet_management.md) for full setup instructions.
+
+---
+
+### AuraTokenSecretRef
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | `string` | **Required.** Name of the Kubernetes Secret containing the registration token |
+| `key` | `string` | Key within the Secret (default: `"token"`) |
+
+---
 
 ### PropertyShardingSpec
 

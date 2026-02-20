@@ -966,6 +966,47 @@ spec:
                         x-kubernetes-list-type: atomic
                     type: object
                 type: object
+              auraFleetManagement:
+                description: |-
+                  AuraFleetManagement enables integration with Neo4j Aura Fleet Management
+                  for monitoring this standalone deployment from the Aura console.
+                  See: https://neo4j.com/docs/aura/fleet-management/
+                properties:
+                  enabled:
+                    default: false
+                    description: |-
+                      Enabled activates Aura Fleet Management integration.
+                      When true, the fleet-management plugin is installed automatically
+                      (from the pre-bundled jar in the Neo4j Enterprise image) and the
+                      registration token is applied after the cluster becomes ready.
+                    type: boolean
+                  tokenSecretRef:
+                    description: |-
+                      TokenSecretRef references a Kubernetes Secret containing the Aura
+                      Fleet Management registration token obtained from the Aura console wizard.
+
+                      The Secret must be in the same namespace as the cluster and contain
+                      the key specified by tokenSecretRef.key (defaults to "token").
+
+                      Example:
+                        kubectl create secret generic aura-fleet-token --from-literal=token='<token-from-aura>'
+                    properties:
+                      key:
+                        default: token
+                        description: |-
+                          Key within the Secret whose value is the registration token.
+                          Defaults to "token" if not specified.
+                        type: string
+                      name:
+                        description: Name of the Kubernetes Secret containing the
+                          registration token.
+                        type: string
+                    required:
+                    - name
+                    type: object
+                required:
+                - enabled
+                type: object
               auth:
                 description: AuthSpec defines authentication configuration
                 properties:
@@ -3331,6 +3372,28 @@ spec:
             description: Neo4jEnterpriseStandaloneStatus defines the observed state
               of Neo4jEnterpriseStandalone
             properties:
+              auraFleetManagement:
+                description: AuraFleetManagementStatus reports the current state of
+                  the Aura Fleet Management integration.
+                properties:
+                  lastRegistrationTime:
+                    description: LastRegistrationTime records when the token was last
+                      successfully registered.
+                    format: date-time
+                    type: string
+                  message:
+                    description: |-
+                      Message provides additional information about the registration state,
+                      including error details when registration fails.
+                    type: string
+                  registered:
+                    description: |-
+                      Registered is true once the deployment has successfully called
+                      fleetManagement.registerToken and been acknowledged by Aura.
+                    type: boolean
+                required:
+                - registered
+                type: object
               conditions:
                 description: Conditions represent the current state of the standalone
                   deployment

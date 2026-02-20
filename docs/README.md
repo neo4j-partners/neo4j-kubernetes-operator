@@ -14,6 +14,7 @@ The [User Guide](user_guide) is for users of the Neo4j Enterprise Operator. It c
 *   **[External Access](user_guide/external_access.md)**: Expose Neo4j outside Kubernetes using LoadBalancer, NodePort, or Ingress.
 *   **[Topology Placement](user_guide/topology_placement.md)**: Configure zone distribution, anti-affinity, and advanced placement strategies.
 *   **[Property Sharding](user_guide/property_sharding.md)**: Horizontal scaling for large datasets with property sharding
+*   **[Aura Fleet Management](user_guide/aura_fleet_management.md)**: Monitor self-managed deployments from the Neo4j Aura console
 *   **[Guides](user_guide/guides)**: In-depth guides on specific topics, such as:
     *   [Configuration Best Practices](user_guide/guides/configuration_best_practices.md) - Neo4j 5.26+ configuration guidelines and **seed URI best practices**
     *   [Backup and Restore](user_guide/guides/backup_restore.md) - Comprehensive backup and restore operations including PITR
@@ -65,6 +66,7 @@ Complete deployment examples demonstrating real-world scenarios:
 
 ### Latest Features (Neo4j 5.26+ and 2025.x)
 *   **Database Management**: Create databases with `IF NOT EXISTS`, `WAIT`/`NOWAIT` options
+*   **🆕 Aura Fleet Management**: Monitor self-managed Neo4j deployments from the Aura console — operator installs the pre-bundled plugin and handles token registration automatically; works alongside any `Neo4jPlugin` CRDs
 *   **🆕 Seed URI Functionality**: Create databases directly from existing backups stored in cloud storage
 *   **🆕 Property Sharding**: Horizontal scaling for large datasets with separate graph and property shards
 *   **🆕 MCP Server Support**: Optional MCP server deployment for Neo4j clusters and standalone workloads (HTTPS preferred, STDIO for in-cluster use)

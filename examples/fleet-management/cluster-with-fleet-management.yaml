@@ -1,0 +1,52 @@
+# Neo4jEnterpriseCluster with Aura Fleet Management
+#
+# This example shows a 3-server cluster registered with Neo4j Aura Fleet Management
+# so it appears in the Aura console alongside Aura-managed instances.
+#
+# Prerequisites:
+#   1. Generate a token in the Aura console:
+#      Instances → Self-managed → Add deployment → Monitor deployment
+#   2. Create the token secret:
+#      kubectl create secret generic aura-fleet-token --from-literal=token='<your-token>'
+#   3. Create the admin secret:
+#      kubectl create secret generic neo4j-admin-secret \
+#        --from-literal=username=neo4j --from-literal=password=admin123
+#
+# The fleet-management plugin is pre-bundled in all Neo4j Enterprise images.
+# No internet access is required for installation.
+---
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: my-cluster
+spec:
+  image:
+    repo: neo4j
+    tag: 2025.12-enterprise
+    pullPolicy: IfNotPresent
+
+  topology:
+    servers: 3
+
+  storage:
+    size: 10Gi
+
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "2Gi"
+    limits:
+      cpu: "2"
+      memory: "4Gi"
+
+  auth:
+    adminSecret: neo4j-admin-secret
+
+  # Aura Fleet Management integration
+  # The operator installs the plugin automatically (no internet access needed)
+  # and registers the token once the cluster reaches Ready phase.
+  auraFleetManagement:
+    enabled: true
+    tokenSecretRef:
+      name: aura-fleet-token
+      key: token    # the key inside the secret (defaults to "token")

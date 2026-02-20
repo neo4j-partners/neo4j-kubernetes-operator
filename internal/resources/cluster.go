@@ -1239,6 +1239,11 @@ func BuildPodSpecForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, se
 		Value: serverName,
 	})
 
+	// NOTE: NEO4J_PLUGINS for fleet-management is NOT baked into the static template here.
+	// It is applied by the cluster controller via a live StatefulSet patch in
+	// reconcileAuraFleetManagement, so it merges cleanly with plugins added by the
+	// Neo4jPlugin controller rather than overwriting them.
+
 	// NOTE: Property sharding config is handled via neo4j.conf, not environment variables
 
 	// Add custom environment variables (can override JVM settings if needed)
@@ -1498,6 +1503,7 @@ server.http.listen_address=0.0.0.0:7474
 # Paths
 server.directories.data=/data
 server.directories.logs=/logs
+server.directories.plugins=/plugins
 
 # Memory settings (optimized for Neo4j 5.26+ and container resources)
 server.memory.heap.initial_size=%s
@@ -1623,6 +1629,13 @@ server.bolt.tls_level=OPTIONAL
 		for _, key := range keys {
 			config += fmt.Sprintf("%s=%s\n", key, cluster.Spec.Config[key])
 		}
+	}
+
+	// Aura Fleet Management configuration
+	if cluster.Spec.AuraFleetManagement != nil && cluster.Spec.AuraFleetManagement.Enabled {
+		config += "\n# Aura Fleet Management\n"
+		config += "dbms.security.procedures.unrestricted=fleetManagement.*\n"
+		config += "dbms.security.procedures.allowlist=fleetManagement.*\n"
 	}
 
 	// Property sharding configuration - placed at the very end to avoid startup script overwrites
