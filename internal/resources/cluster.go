@@ -170,6 +170,19 @@ func BuildServerStatefulSetsForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterprise
 	return statefulSets
 }
 
+// BuildBackupFromAddresses returns a comma-separated list of
+// "pod-fqdn:6362" addresses for all server pods in the cluster.
+// These are used as the --from flag of neo4j-admin database backup.
+func BuildBackupFromAddresses(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) string {
+	servers := int(cluster.Spec.Topology.Servers)
+	addrs := make([]string, servers)
+	for i := 0; i < servers; i++ {
+		addrs[i] = fmt.Sprintf("%s-server-%d.%s-headless.%s.svc.cluster.local:%d",
+			cluster.Name, i, cluster.Name, cluster.Namespace, BackupPort)
+	}
+	return strings.Join(addrs, ",")
+}
+
 // BuildBackupStatefulSet creates a single, centralized backup StatefulSet for the cluster
 // This is more efficient than having backup sidecars in each server pod
 func BuildBackupStatefulSet(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) *appsv1.StatefulSet {

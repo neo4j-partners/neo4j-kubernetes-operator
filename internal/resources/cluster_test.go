@@ -960,3 +960,34 @@ func TestClusterConfigContainsBackupListenAddress(t *testing.T) {
 		"backup service must listen on all interfaces so backup Jobs can connect")
 	assert.Contains(t, neo4jConf, "server.backup.enabled=true")
 }
+
+func TestBuildBackupFromAddresses(t *testing.T) {
+	cluster := &neo4jv1alpha1.Neo4jEnterpriseCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "my-cluster", Namespace: "default"},
+		Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
+			Image:    neo4jv1alpha1.ImageSpec{Repo: "neo4j", Tag: "5.26-enterprise"},
+			Topology: neo4jv1alpha1.TopologyConfiguration{Servers: 3},
+			Storage:  neo4jv1alpha1.StorageSpec{ClassName: "standard", Size: "10Gi"},
+		},
+	}
+
+	addrs := resources.BuildBackupFromAddresses(cluster)
+	expected := "my-cluster-server-0.my-cluster-headless.default.svc.cluster.local:6362," +
+		"my-cluster-server-1.my-cluster-headless.default.svc.cluster.local:6362," +
+		"my-cluster-server-2.my-cluster-headless.default.svc.cluster.local:6362"
+	assert.Equal(t, expected, addrs)
+}
+
+func TestBuildBackupFromAddressesStandaloneEquivalent(t *testing.T) {
+	cluster := &neo4jv1alpha1.Neo4jEnterpriseCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "my-cluster", Namespace: "ops"},
+		Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
+			Image:    neo4jv1alpha1.ImageSpec{Repo: "neo4j", Tag: "5.26-enterprise"},
+			Topology: neo4jv1alpha1.TopologyConfiguration{Servers: 1},
+			Storage:  neo4jv1alpha1.StorageSpec{ClassName: "standard", Size: "10Gi"},
+		},
+	}
+
+	addrs := resources.BuildBackupFromAddresses(cluster)
+	assert.Equal(t, "my-cluster-server-0.my-cluster-headless.ops.svc.cluster.local:6362", addrs)
+}
