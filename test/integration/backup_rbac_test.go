@@ -22,7 +22,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -126,7 +125,7 @@ var _ = Describe("Backup RBAC Automatic Creation", func() {
 			}, clusterTimeout, interval).Should(BeTrue())
 		})
 
-		It("should automatically create RBAC resources when backup is created", func() {
+		It("should automatically create ServiceAccount when backup is created", func() {
 			By("Creating a PVC for backup storage")
 			pvc := &corev1.PersistentVolumeClaim{
 				ObjectMeta: metav1.ObjectMeta{
@@ -177,58 +176,8 @@ var _ = Describe("Backup RBAC Automatic Creation", func() {
 				}, sa)
 			}, timeout, interval).Should(Succeed())
 
-			By("Verifying role is created automatically")
-			Eventually(func() error {
-				role := &rbacv1.Role{}
-				return k8sClient.Get(ctx, types.NamespacedName{
-					Name:      "neo4j-backup-role",
-					Namespace: testNamespace,
-				}, role)
-			}, timeout, interval).Should(Succeed())
-
-			By("Verifying role has correct permissions")
-			role := &rbacv1.Role{}
-			Expect(k8sClient.Get(ctx, types.NamespacedName{
-				Name:      "neo4j-backup-role",
-				Namespace: testNamespace,
-			}, role)).Should(Succeed())
-
-			// Check permissions
-			Expect(role.Rules).To(HaveLen(3))
-			Expect(role.Rules[0].APIGroups).To(Equal([]string{""}))
-			Expect(role.Rules[0].Resources).To(Equal([]string{"pods"}))
-			Expect(role.Rules[0].Verbs).To(ConsistOf("get", "list"))
-
-			Expect(role.Rules[1].APIGroups).To(Equal([]string{""}))
-			Expect(role.Rules[1].Resources).To(Equal([]string{"pods/exec"}))
-			Expect(role.Rules[1].Verbs).To(ConsistOf("create"))
-
-			Expect(role.Rules[2].APIGroups).To(Equal([]string{""}))
-			Expect(role.Rules[2].Resources).To(Equal([]string{"pods/log"}))
-			Expect(role.Rules[2].Verbs).To(ConsistOf("get"))
-
-			By("Verifying role binding is created automatically")
-			Eventually(func() error {
-				rb := &rbacv1.RoleBinding{}
-				return k8sClient.Get(ctx, types.NamespacedName{
-					Name:      "neo4j-backup-rolebinding",
-					Namespace: testNamespace,
-				}, rb)
-			}, timeout, interval).Should(Succeed())
-
-			By("Verifying role binding references correct service account and role")
-			rb := &rbacv1.RoleBinding{}
-			Expect(k8sClient.Get(ctx, types.NamespacedName{
-				Name:      "neo4j-backup-rolebinding",
-				Namespace: testNamespace,
-			}, rb)).Should(Succeed())
-
-			Expect(rb.RoleRef.Name).To(Equal("neo4j-backup-role"))
-			Expect(rb.RoleRef.Kind).To(Equal("Role"))
-			Expect(rb.Subjects).To(HaveLen(1))
-			Expect(rb.Subjects[0].Name).To(Equal("neo4j-backup-sa"))
-			Expect(rb.Subjects[0].Kind).To(Equal("ServiceAccount"))
-			Expect(rb.Subjects[0].Namespace).To(Equal(testNamespace))
+			// The backup Job runs neo4j-admin directly and does not need any Kubernetes API
+			// access, so no Role or RoleBinding are created — only the ServiceAccount.
 		})
 
 		It("should handle RBAC creation for scheduled backups", func() {

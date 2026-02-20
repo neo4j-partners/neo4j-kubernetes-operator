@@ -1,3 +1,11 @@
+# ============================================================
+# Scheduled Daily Backup to S3 — explicit credentials
+#
+# Create the AWS credentials secret first:
+#   kubectl create secret generic aws-backup-credentials \
+#     --from-literal=AWS_ACCESS_KEY_ID=<your-access-key-id> \
+#     --from-literal=AWS_SECRET_ACCESS_KEY=<your-secret-access-key>
+# ============================================================
 apiVersion: neo4j.neo4j.com/v1alpha1
 kind: Neo4jBackup
 metadata:
@@ -9,7 +17,8 @@ metadata:
 spec:
   target:
     kind: Cluster
-    name: single-node-cluster
+    name: single-node-cluster  # References your Neo4jEnterpriseCluster name
+  # schedule is a flat cron string — no nesting
   schedule: "0 2 * * *"  # Daily at 2 AM UTC
   storage:
     type: s3
@@ -17,21 +26,33 @@ spec:
     path: daily-backups
     cloud:
       provider: aws
-      region: us-west-2
+      credentialsSecretRef: aws-backup-credentials  # Secret with AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY
   retention:
     maxAge: "7d"
     maxCount: 7
-    deletePolicy: Delete
   options:
     compress: true
-    verify: true
-    additionalArgs:
-      - "--parallel-recovery"
-  # Suspend can be set to true to temporarily stop scheduled backups
+    backupType: AUTO   # FULL on first run, DIFF afterwards
+    tempPath: /tmp/neo4j-backup-temp
+  # Set suspend: true to temporarily pause this scheduled backup
   suspend: false
 
 ---
-# Weekly backup with longer retention
+# AWS credentials secret
+apiVersion: v1
+kind: Secret
+metadata:
+  name: aws-backup-credentials
+type: Opaque
+stringData:
+  AWS_ACCESS_KEY_ID: <your-access-key-id>
+  AWS_SECRET_ACCESS_KEY: <your-secret-access-key>
+
+---
+# ============================================================
+# Weekly Backup with longer retention — IRSA workload identity
+# (no static credentials required)
+# ============================================================
 apiVersion: neo4j.neo4j.com/v1alpha1
 kind: Neo4jBackup
 metadata:
@@ -51,15 +72,15 @@ spec:
     path: weekly-backups
     cloud:
       provider: aws
-      region: us-west-2
+      identity:
+        autoCreate:
+          annotations:
+            eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/neo4j-backup-role
   retention:
     maxAge: "90d"
     maxCount: 12
-    deletePolicy: Archive
   options:
     compress: true
-    verify: true
-    encryption:
-      enabled: true
-      keySecret: backup-encryption-key
-      algorithm: AES256
+    backupType: FULL
+    tempPath: /tmp/neo4j-backup-temp
+  suspend: false

@@ -4,17 +4,17 @@ metadata:
   name: full-backup
   namespace: default
 spec:
-  clusterRef: my-neo4j-cluster
+  # target.name references the Neo4jEnterpriseCluster name directly —
+  # there is no top-level spec.clusterRef field.
   target:
-    kind: Cluster  # Backup all databases
-  schedule:
-    cron: "0 2 * * *"  # Daily at 2 AM
+    kind: Cluster          # Backs up all databases on the cluster
+    name: my-neo4j-cluster
+  # schedule is a flat cron string — not spec.schedule.cron
+  schedule: "0 2 * * *"  # Daily at 2 AM UTC
   options:
-    # Backup type - FULL, DIFF, or AUTO
-    backupType: "FULL"
+    backupType: FULL       # FULL | DIFF | AUTO
     compress: true
-    # Page cache for backup operation
-    pageCache: "4G"
+    pageCache: "4G"        # Memory allocated to page-cache during backup
   storage:
     type: pvc
     pvc:
@@ -24,4 +24,3 @@ spec:
   retention:
     maxAge: "7d"
     maxCount: 7
-    deletePolicy: Delete
