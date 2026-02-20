@@ -1,29 +1,54 @@
+# ============================================================
+# Incremental (AUTO) Backup of a specific database to S3
+#
+# When Kind=Database:
+#   - target.name    = the Neo4j database name (e.g. "orders")
+#   - target.clusterRef = the Neo4jEnterpriseCluster name
+#
+# Create the AWS credentials secret first:
+#   kubectl create secret generic aws-backup-credentials \
+#     --from-literal=AWS_ACCESS_KEY_ID=<your-access-key-id> \
+#     --from-literal=AWS_SECRET_ACCESS_KEY=<your-secret-access-key>
+# ============================================================
 apiVersion: neo4j.neo4j.com/v1alpha1
 kind: Neo4jBackup
 metadata:
   name: incremental-backup
   namespace: default
 spec:
-  clusterRef: my-neo4j-cluster
   target:
     kind: Database
-    name: orders  # Backup specific database
-  schedule:
-    cron: "0 */6 * * *"  # Every 6 hours
+    name: orders                  # The Neo4j database to back up
+    clusterRef: my-neo4j-cluster  # The Neo4jEnterpriseCluster that hosts this database
+  # schedule is a flat cron string — not spec.schedule.cron
+  schedule: "0 */6 * * *"  # Every 6 hours
   options:
-    # AUTO will create FULL backup if no previous backup exists
-    # Otherwise creates DIFF (incremental) backup
-    backupType: "AUTO"
+    # AUTO: creates a FULL backup if none exists, otherwise creates DIFF (incremental)
+    backupType: AUTO
     compress: true
     pageCache: "2G"
+    # tempPath recommended for cloud uploads to avoid partial writes
+    tempPath: /tmp/neo4j-backup-temp
+    # preferDiffAsParent: true  # CalVer 2025.04+ only — use latest DIFF as parent for chained diffs
   storage:
     type: s3
-    s3:
-      bucket: my-neo4j-backups
-      path: "incremental/orders"
-      # Credentials from secret
-      credentialsSecret: aws-backup-credentials
-      region: us-east-1
+    bucket: my-neo4j-backups
+    path: incremental/orders      # Path/prefix within the bucket
+    cloud:
+      provider: aws
+      credentialsSecretRef: aws-backup-credentials  # Secret with AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY
   retention:
     maxAge: "3d"
     maxCount: 12  # Keep last 12 incremental backups
+
+---
+# AWS credentials secret
+apiVersion: v1
+kind: Secret
+metadata:
+  name: aws-backup-credentials
+  namespace: default
+type: Opaque
+stringData:
+  AWS_ACCESS_KEY_ID: <your-access-key-id>
+  AWS_SECRET_ACCESS_KEY: <your-secret-access-key>

@@ -58,6 +58,10 @@
 ## Testing Strategy
 - **Unit**: `make test-unit` (envtest; skips integration dirs).
 - **Integration** (`test/integration`, Ginkgo v2): `make test-integration` builds local image, loads into Kind `neo4j-operator-test`, deploys operator, runs suite (timeouts ~5m, CI extends to 10–20m). CI-friendly subsets: `make test-integration-ci`, heavy `*-ci-full`, full workflow `make test-ci-local` (logs in `logs/`).
+- **Operator mode during integration tests** — ALL paths now deploy in production mode:
+  - `make test-integration` uses `config/overlays/integration-test/kustomization.yaml` → deploys to `neo4j-operator-system` **without `--mode=dev`**. Suite finds the operator and waits for readiness before running specs.
+  - `.github/workflows/integration-tests.yml` (on-demand) does the same via its own `ci-temp` overlay.
+  - `make deploy-dev` is for manual debugging only (`neo4j-operator-dev`, `--mode=dev`); never use it as the pre-test deployment step.
 - **Cleanup rule**: every spec must `AfterEach` delete CRs, drop finalizers, and call `cleanupCustomResourcesInNamespace()`—do not rely on suite cleanup.
 - **Property sharding**: opt-in only (`test/integration/property_sharding_test.go`), requires ≥5 servers and 4–8Gi memory each.
 - **Plugin tests**: clusters expect env var config, standalone expects ConfigMap content; keep sources consistent.

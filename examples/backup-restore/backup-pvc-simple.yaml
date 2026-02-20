@@ -6,22 +6,24 @@ metadata:
     environment: development
     backup-type: one-time
 spec:
+  # target.kind=Cluster backs up all databases on the cluster
   target:
     kind: Cluster
-    name: single-node-cluster  # Reference to your Neo4j cluster
+    name: single-node-cluster  # References your Neo4jEnterpriseCluster name
   storage:
     type: pvc
     pvc:
       name: backup-storage
+      storageClassName: standard  # Must match an available StorageClass
       size: 50Gi
-      storageClass: standard
   options:
     compress: true
-    verify: true
+    backupType: FULL  # FULL | DIFF | AUTO
   retention:
     maxCount: 5
 
 ---
+# Pre-create the PVC (or let the operator create it via spec.storage.pvc)
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:

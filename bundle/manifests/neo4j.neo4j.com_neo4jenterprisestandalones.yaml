@@ -1212,6 +1212,15 @@ spec:
                   cloud:
                     description: CloudBlock defines cloud provider configuration
                     properties:
+                      credentialsSecretRef:
+                        description: |-
+                          CredentialsSecretRef is the name of a Kubernetes Secret containing
+                          cloud provider credentials as environment variables. Optional when
+                          using workload identity / IAM instance profiles.
+                          For S3:    keys AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_DEFAULT_REGION
+                          For GCS:   key  GOOGLE_APPLICATION_CREDENTIALS_JSON (base64 service-account JSON)
+                          For Azure: keys AZURE_STORAGE_ACCOUNT, AZURE_STORAGE_KEY
+                        type: string
                       identity:
                         description: CloudIdentity defines cloud identity configuration
                         properties:
@@ -1253,6 +1262,15 @@ spec:
                       cloud:
                         description: Cloud provider configuration
                         properties:
+                          credentialsSecretRef:
+                            description: |-
+                              CredentialsSecretRef is the name of a Kubernetes Secret containing
+                              cloud provider credentials as environment variables. Optional when
+                              using workload identity / IAM instance profiles.
+                              For S3:    keys AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_DEFAULT_REGION
+                              For GCS:   key  GOOGLE_APPLICATION_CREDENTIALS_JSON (base64 service-account JSON)
+                              For Azure: keys AZURE_STORAGE_ACCOUNT, AZURE_STORAGE_KEY
+                            type: string
                           identity:
                             description: CloudIdentity defines cloud identity configuration
                             properties:
@@ -1456,7 +1474,14 @@ spec:
                 description: MCP server configuration for this standalone deployment
                 properties:
                   auth:
-                    description: Auth settings (only used for STDIO transport).
+                    description: |-
+                      Auth allows overriding the Neo4j credentials used by the MCP server.
+                      Only effective for stdio transport: in STDIO mode the operator injects
+                      NEO4J_USERNAME and NEO4J_PASSWORD from this secret. When not set, the
+                      cluster/standalone admin secret is used.
+
+                      In HTTP mode credentials come from each client request (Basic Auth or
+                      Bearer token) and this field is ignored.
                     properties:
                       passwordKey:
                         default: password
@@ -1470,14 +1495,22 @@ spec:
                         type: string
                     type: object
                   database:
-                    description: Default Neo4j database for MCP.
+                    description: Database is the default Neo4j database name for MCP
+                      queries.
                     type: string
                   enabled:
                     default: false
                     description: Enable MCP server deployment.
                     type: boolean
                   env:
-                    description: Environment variables for MCP pods.
+                    description: |-
+                      Environment variables injected into MCP pods.
+                      The following operator-managed variables are silently ignored if present:
+                      NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD, NEO4J_DATABASE, NEO4J_READ_ONLY,
+                      NEO4J_SCHEMA_SAMPLE_SIZE, NEO4J_TELEMETRY, NEO4J_LOG_LEVEL, NEO4J_LOG_FORMAT,
+                      NEO4J_TRANSPORT_MODE, NEO4J_MCP_HTTP_HOST, NEO4J_MCP_HTTP_PORT,
+                      NEO4J_MCP_HTTP_TLS_ENABLED, NEO4J_MCP_HTTP_TLS_CERT_FILE,
+                      NEO4J_MCP_HTTP_TLS_KEY_FILE, NEO4J_AUTH_HEADER_NAME.
                     items:
                       description: EnvVar represents an environment variable present
                         in a Container.
@@ -1597,19 +1630,23 @@ spec:
                       type: object
                     type: array
                   http:
-                    description: HTTP settings (only used for HTTP transport).
+                    description: HTTP settings (only used when transport=http).
                     properties:
-                      allowedOrigins:
-                        description: Allowed origins for CORS (comma-separated or
-                          "*").
+                      authHeaderName:
+                        description: |-
+                          AuthHeaderName is the name of the HTTP header to read credentials from.
+                          Defaults to "Authorization" (standard Basic Auth / Bearer token header).
+                          Override when a reverse-proxy rewrites the Authorization header to a custom name.
                         type: string
                       host:
                         description: Host to bind the HTTP server to (defaults to
                           0.0.0.0).
                         type: string
                       port:
-                        description: Port to bind the HTTP server to (defaults to
-                          8080 or 8443 when TLS enabled).
+                        description: |-
+                          Port to bind the HTTP server to.
+                          Defaults to 8080 (no TLS) or 8443 (TLS) to avoid privileged ports in containers.
+                          The mcp/neo4j image's own default is 80/443; we override to Kubernetes-friendly ports.
                         format: int32
                         type: integer
                       service:
@@ -1707,83 +1744,35 @@ spec:
                             type: string
                         type: object
                       tls:
-                        description: TLS settings for MCP HTTP server.
+                        description: |-
+                          TLS enables HTTPS using the official image's built-in TLS termination.
+                          When set, the referenced Kubernetes TLS secret is mounted and
+                          NEO4J_MCP_HTTP_TLS_ENABLED=true is injected with the cert/key paths.
+                          When not set, TLS should be handled at the Ingress or LoadBalancer level instead.
                         properties:
-                          duration:
-                            description: Certificate duration and renewal settings.
+                          certKey:
+                            default: tls.crt
+                            description: CertKey is the key in the secret that contains
+                              the certificate file.
                             type: string
-                          issuerRef:
-                            description: |-
-                              IssuerRef references a cert-manager-compatible issuer.
-                              Supports standard cert-manager issuers (Issuer, ClusterIssuer) as well as
-                              third-party external issuers (e.g. AWSPCAClusterIssuer, VaultIssuer) by
-                              specifying the appropriate kind and group.
-                            properties:
-                              group:
-                                description: |-
-                                  Group of the issuer's API. Defaults to cert-manager.io for standard
-                                  cert-manager issuers. Set to the external issuer's API group for
-                                  third-party issuers (e.g. awspca.cert-manager.io).
-                                type: string
-                              kind:
-                                default: ClusterIssuer
-                                description: |-
-                                  Kind of the issuer resource. Defaults to ClusterIssuer for standard
-                                  cert-manager usage. Set to the custom resource kind for external issuers
-                                  (e.g. AWSPCAClusterIssuer).
-                                type: string
-                              name:
-                                type: string
-                            required:
-                            - name
-                            type: object
-                          mode:
-                            default: disabled
-                            enum:
-                            - cert-manager
-                            - disabled
-                            - secret
-                            type: string
-                          renewBefore:
-                            description: Certificate renewal before expiry.
+                          keyKey:
+                            default: tls.key
+                            description: KeyKey is the key in the secret that contains
+                              the private key file.
                             type: string
                           secretName:
-                            description: SecretName references a TLS secret with tls.crt
-                              and tls.key.
+                            description: |-
+                              SecretName is a Kubernetes TLS secret (type kubernetes.io/tls) containing the
+                              certificate and private key. Required when TLS is enabled.
                             type: string
-                          subject:
-                            description: Additional certificate subject fields.
-                            properties:
-                              countries:
-                                items:
-                                  type: string
-                                type: array
-                              localities:
-                                items:
-                                  type: string
-                                type: array
-                              organizationalUnits:
-                                items:
-                                  type: string
-                                type: array
-                              organizations:
-                                items:
-                                  type: string
-                                type: array
-                              provinces:
-                                items:
-                                  type: string
-                                type: array
-                            type: object
-                          usages:
-                            description: Certificate usage settings.
-                            items:
-                              type: string
-                            type: array
+                        required:
+                        - secretName
                         type: object
                     type: object
                   image:
-                    description: Image configuration for the MCP server.
+                    description: |-
+                      Image configuration for the MCP server.
+                      Defaults to mcp/neo4j:latest (the official Docker Hub image by Neo4j).
                     properties:
                       pullPolicy:
                         default: IfNotPresent
@@ -1801,17 +1790,31 @@ spec:
                     - tag
                     type: object
                   logFormat:
-                    description: LogFormat controls MCP logging format.
+                    description: LogFormat controls log output format.
+                    enum:
+                    - text
+                    - json
                     type: string
                   logLevel:
-                    description: LogLevel controls MCP logging verbosity.
+                    description: LogLevel sets the server log verbosity.
+                    enum:
+                    - debug
+                    - info
+                    - notice
+                    - warning
+                    - error
+                    - critical
+                    - alert
+                    - emergency
                     type: string
                   readOnly:
                     default: true
-                    description: ReadOnly disables write tools when true.
+                    description: ReadOnly disables the write_neo4j_cypher tool when
+                      true.
                     type: boolean
                   replicas:
-                    description: Replicas controls the number of MCP server pods.
+                    description: Replicas controls the number of MCP server pods (for
+                      HTTP mode).
                     format: int32
                     type: integer
                   resources:
@@ -1874,9 +1877,11 @@ spec:
                         type: object
                     type: object
                   schemaSampleSize:
-                    description: SchemaSampleSize controls the schema sampling size.
+                    description: |-
+                      SchemaSampleSize controls the sample size used by get-schema.
+                      Lower values are faster; use -1 to sample the entire graph.
                     format: int32
-                    minimum: 1
+                    minimum: -1
                     type: integer
                   securityContext:
                     description: SecurityContext allows overriding pod/container security
@@ -2310,12 +2315,14 @@ spec:
                         type: object
                     type: object
                   telemetry:
-                    default: false
-                    description: Telemetry enables anonymous usage data collection.
+                    description: |-
+                      Telemetry controls anonymous usage telemetry sent to Neo4j.
+                      Defaults to the server's own default (true).
+                      Set to false to disable telemetry.
                     type: boolean
                   transport:
                     default: http
-                    description: 'Transport mode for MCP: http or stdio.'
+                    description: 'Transport mode for the MCP server: http or stdio.'
                     enum:
                     - http
                     - stdio
@@ -2470,6 +2477,15 @@ spec:
                       cloud:
                         description: Cloud provider configuration
                         properties:
+                          credentialsSecretRef:
+                            description: |-
+                              CredentialsSecretRef is the name of a Kubernetes Secret containing
+                              cloud provider credentials as environment variables. Optional when
+                              using workload identity / IAM instance profiles.
+                              For S3:    keys AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_DEFAULT_REGION
+                              For GCS:   key  GOOGLE_APPLICATION_CREDENTIALS_JSON (base64 service-account JSON)
+                              For Azure: keys AZURE_STORAGE_ACCOUNT, AZURE_STORAGE_KEY
+                            type: string
                           identity:
                             description: CloudIdentity defines cloud identity configuration
                             properties:

@@ -1,0 +1,32 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Integration-test overlay — production mode, dedicated image tag.
+# Deploys to neo4j-operator-system without --mode=dev so the operator runs
+# identically to production. Used by `make test-integration` and ci.yml.
+
+resources:
+- ../../default
+
+images:
+- name: ghcr.io/neo4j-partners/neo4j-kubernetes-operator
+  newName: neo4j-operator
+  newTag: integration-test
+
+# Same resource limits as the prod overlay so we exercise realistic conditions.
+patches:
+- patch: |-
+    - op: add
+      path: /spec/template/spec/containers/0/resources
+      value:
+        requests:
+          cpu: 100m
+          memory: 256Mi
+        limits:
+          cpu: 1000m
+          memory: 1Gi
+  target:
+    kind: Deployment
+    name: controller-manager
+
+namespace: neo4j-operator-system

@@ -1,7 +1,61 @@
+# ============================================================
+# S3 Backup — Variant 1: Explicit AWS credentials via Secret
+# ============================================================
+#
+# Create the AWS credentials secret first:
+#   kubectl create secret generic aws-backup-credentials \
+#     --from-literal=AWS_ACCESS_KEY_ID=<your-access-key-id> \
+#     --from-literal=AWS_SECRET_ACCESS_KEY=<your-secret-access-key>
+#
 apiVersion: neo4j.neo4j.com/v1alpha1
 kind: Neo4jBackup
 metadata:
   name: s3-backup
+  labels:
+    environment: production
+    backup-type: cloud
+spec:
+  target:
+    kind: Cluster
+    name: single-node-cluster  # References your Neo4jEnterpriseCluster name
+  storage:
+    type: s3
+    bucket: my-neo4j-backups           # S3 bucket name
+    path: cluster-backups              # Path/prefix within the bucket
+    cloud:
+      provider: aws
+      credentialsSecretRef: aws-backup-credentials  # Secret with AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY
+  options:
+    compress: true
+    backupType: FULL
+    # tempPath is recommended for cloud uploads to avoid partial writes
+    tempPath: /tmp/neo4j-backup-temp
+  retention:
+    maxAge: "30d"
+    maxCount: 30
+
+---
+# AWS credentials secret
+apiVersion: v1
+kind: Secret
+metadata:
+  name: aws-backup-credentials
+type: Opaque
+stringData:
+  AWS_ACCESS_KEY_ID: <your-access-key-id>
+  AWS_SECRET_ACCESS_KEY: <your-secret-access-key>
+
+---
+# ============================================================
+# S3 Backup — Variant 2: Workload Identity (IRSA / EKS Pod Identity)
+#
+# Use this when your EKS nodes/pods have an IAM role that grants
+# S3 access — no static credentials needed.
+# ============================================================
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jBackup
+metadata:
+  name: s3-backup-irsa
   labels:
     environment: production
     backup-type: cloud
@@ -15,36 +69,15 @@ spec:
     path: cluster-backups
     cloud:
       provider: aws
-      region: us-east-1
+      identity:
+        autoCreate:
+          annotations:
+            # Annotate the ServiceAccount with your IAM role ARN for IRSA
+            eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/neo4j-backup-role
   options:
     compress: true
-    verify: true
-    encryption:
-      enabled: true
-      keySecret: backup-encryption-key
-      algorithm: AES256
+    backupType: FULL
+    tempPath: /tmp/neo4j-backup-temp
   retention:
     maxAge: "30d"
     maxCount: 30
-    deletePolicy: Delete
-
----
-# Create this secret with your encryption key
-apiVersion: v1
-kind: Secret
-metadata:
-  name: backup-encryption-key
-type: Opaque
-data:
-  key: <base64-encoded-encryption-key>
-
----
-# AWS credentials secret (if not using IAM roles)
-apiVersion: v1
-kind: Secret
-metadata:
-  name: aws-credentials
-type: Opaque
-data:
-  AWS_ACCESS_KEY_ID: <base64-encoded-access-key>
-  AWS_SECRET_ACCESS_KEY: <base64-encoded-secret-key>

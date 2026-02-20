@@ -350,6 +350,27 @@ git commit -m "feat: cluster changes [run-integration]"
 # Manual dispatch: Actions → CI → Run workflow → Check "Run integration tests"
 ```
 
+### Operator Mode During Integration Tests
+
+All integration test paths now deploy the operator in **production mode** to `neo4j-operator-system`:
+
+| Workflow | File | Operator namespace | Mode | Suite finds operator? |
+|---|---|---|---|---|
+| `make test-integration` (main CI / local) | `ci.yml` | `neo4j-operator-system` | **production** (no flag) | ✅ Suite waits for readiness |
+| On-demand integration tests | `integration-tests.yml` | `neo4j-operator-system` | **production** (no flag) | ✅ Suite waits for readiness |
+
+**Key facts**:
+- `make test-integration` uses `config/overlays/integration-test/kustomization.yaml` — this deploys to `neo4j-operator-system` without `--mode=dev` and with production resource limits (100m–1000m CPU, 256Mi–1Gi). Image tag is `neo4j-operator:integration-test`.
+- `.github/workflows/integration-tests.yml` (manual dispatch) builds its own `ci-temp` overlay with the same semantics.
+- The test suite's `waitForOperatorReady()` hard-codes the lookup to `neo4j-operator-system`. With the production overlay it WILL find the deployment and wait for it to be ready before running specs.
+- For manual local runs against production mode: `make test-integration` (or `make deploy-prod-local` then run ginkgo separately).
+
+**Mode differences** (`production` vs `dev`):
+- `production` (what tests use): `OnDemandCache`, does not skip cache wait, has resource limits.
+- `dev` (manual debugging only): `NoCache` or `OnDemandCache`, skips cache wait, no resource limits. Use `make deploy-dev` then inspect with `kubectl logs -n neo4j-operator-dev`.
+
+**HISTORICAL NOTE**: Before this change, `make test-integration` deployed via `deploy-dev` to `neo4j-operator-dev` with `--mode=dev`. The suite silently skipped the readiness gate because it only looks in `neo4j-operator-system`. This inconsistency has been fixed.
+
 **Debug Failed Reconciliation**:
 ```bash
 kubectl logs -n neo4j-operator deployment/neo4j-operator-controller-manager -f
