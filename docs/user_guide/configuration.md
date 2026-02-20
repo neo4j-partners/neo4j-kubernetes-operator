@@ -29,28 +29,29 @@ Below are some of the most important fields you will use to configure your clust
 
 ## MCP Server
 
-The operator can deploy an optional Neo4j MCP server alongside a cluster or standalone deployment. The MCP server runs as a separate Deployment and connects to the Neo4j service inside the namespace.
+The operator can deploy an optional Neo4j MCP server alongside a cluster or standalone deployment. It uses the **official `mcp/neo4j` image** ([Docker Hub](https://hub.docker.com/r/mcp/neo4j), [source](https://github.com/neo4j/mcp)) — the supported Neo4j product MCP server.
+
+The MCP server runs as a separate Deployment and connects to the Neo4j service inside the namespace.
 For client configuration and HTTP/STDIO usage, see the [MCP Client Setup Guide](guides/mcp_client_setup.md).
 
 ### Requirements
 
-*   **APOC**: MCP relies on APOC. Install APOC using the Neo4jPlugin CRD (see [Neo4jPlugin API Reference](../api_reference/neo4jplugin.md)).
-*   **Image**: If `spec.mcp.image` is omitted, the operator uses the default MCP image repo and a tag matching `OPERATOR_VERSION` (when set), otherwise `latest`. You can always pin a specific MCP version via `spec.mcp.image.repo` and `spec.mcp.image.tag`.
+*   **APOC**: MCP requires APOC for the `get-schema` tool. Install APOC using the Neo4jPlugin CRD (see [Neo4jPlugin API Reference](../api_reference/neo4jplugin.md)).
+*   **Image**: If `spec.mcp.image` is omitted the operator defaults to `mcp/neo4j:latest`. Pin a version with `spec.mcp.image.tag`.
 
 ### Transport Modes
 
-*   **HTTPS (default, preferred)**: No static credentials in the MCP pod. Clients send Basic Auth or Bearer tokens per request. The operator can create a Service, Ingress, and OpenShift Route for exposure. The endpoint path is `/mcp`.
-    *   **Benefits**: standard TLS, per-request auth, works well with desktop clients and external access policies.
-*   **STDIO (in-cluster only)**: MCP reads credentials from a Kubernetes Secret. Set `spec.mcp.auth.secretName` (defaults to the Neo4j admin secret) and key names if they differ. No Service/Ingress/Route is created for STDIO.
+*   **HTTP (default)**: No static credentials in the MCP pod. Each client request carries a Basic Auth or Bearer token `Authorization` header; the server uses those credentials to connect to Neo4j per-request. The operator creates a Service (`<name>-mcp:8080`) and optionally an Ingress or OpenShift Route. The endpoint path is `/mcp` (fixed).
+    *   **Benefits**: per-request auth, multi-user, works well with desktop clients (Claude Desktop, VSCode).
+*   **STDIO (in-cluster only)**: The operator injects `NEO4J_USERNAME` and `NEO4J_PASSWORD` from the admin secret (or a custom secret via `spec.mcp.auth`). No Service/Ingress/Route is created. Use for in-cluster automation.
 
 ### TLS for HTTP
 
-Configure TLS via `spec.mcp.http.tls`:
-*   `mode: disabled` (default)
-*   `mode: secret` with `secretName`
-*   `mode: cert-manager` with `issuerRef`
+The official image supports container-level TLS. Provide a Kubernetes TLS secret via `spec.mcp.http.tls.secretName`; the operator mounts it and sets `NEO4J_MCP_HTTP_TLS_ENABLED=true`.
 
-When TLS is enabled, the operator mounts the TLS secret and configures MCP to use it. Default ports are `8080` for HTTP and `8443` when TLS is enabled (override with `spec.mcp.http.port`).
+Default ports: `8080` (no TLS) or `8443` (with TLS). Override with `spec.mcp.http.port`.
+
+> **Tip**: For most deployments, terminate TLS at the Ingress layer and leave `spec.mcp.http.tls` unset.
 
 ### Example: Cluster MCP (HTTP)
 
@@ -70,14 +71,29 @@ spec:
     size: 50Gi
   mcp:
     enabled: true
-    image:
-      repo: ghcr.io/neo4j-partners/neo4j-kubernetes-operator-mcp
-      tag: vX.Y.Z
+    # image defaults to mcp/neo4j:latest — no need to specify
     transport: http
     readOnly: true
     http:
       service:
         type: ClusterIP
+```
+
+### Example: Cluster MCP (HTTP with Ingress)
+
+```yaml
+  mcp:
+    enabled: true
+    transport: http
+    readOnly: true
+    http:
+      service:
+        type: ClusterIP
+        ingress:
+          enabled: true
+          host: neo4j-mcp.example.com
+          className: nginx
+          tlsSecretName: neo4j-mcp-tls
 ```
 
 ### Example: Standalone MCP (STDIO)
@@ -98,10 +114,8 @@ spec:
     adminSecret: neo4j-admin-secret
   mcp:
     enabled: true
-    image:
-      repo: ghcr.io/neo4j-partners/neo4j-kubernetes-operator-mcp
-      tag: vX.Y.Z
     transport: stdio
-    auth:
-      secretName: neo4j-admin-secret
+    # auth defaults to the cluster admin secret; override if needed:
+    # auth:
+    #   secretName: my-readonly-user
 ```

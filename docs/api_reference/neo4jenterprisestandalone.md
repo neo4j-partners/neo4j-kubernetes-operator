@@ -174,15 +174,17 @@ service:
 ```
 
 #### `mcp` (MCPServerSpec)
-Optional MCP server deployment for this standalone instance. MCP requires the APOC plugin (managed via Neo4jPlugin). HTTP transport uses per-request auth; STDIO transport reads credentials from a secret. MCP image defaults to the operator MCP image repo and `OPERATOR_VERSION` tag, or `latest`.
+Optional MCP server deployment using the official [`mcp/neo4j`](https://hub.docker.com/r/mcp/neo4j) image ([github.com/neo4j/mcp](https://github.com/neo4j/mcp)). Requires the APOC plugin for the `get-schema` tool.
+
+HTTP transport (default): no static credentials in the pod; clients send Basic Auth or Bearer tokens per request.
+STDIO transport: operator injects credentials from the admin secret (or `spec.mcp.auth` override). No Service is created.
+
 For client configuration, see the [MCP Client Setup Guide](../user_guide/guides/mcp_client_setup.md).
 
 ```yaml
 mcp:
   enabled: true
-  image:
-    repo: ghcr.io/neo4j-partners/neo4j-kubernetes-operator-mcp
-    tag: vX.Y.Z
+  # image defaults to mcp/neo4j:latest — no need to specify
   transport: http
   readOnly: true
   http:

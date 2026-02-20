@@ -597,68 +597,74 @@ Configures an Ingress resource for HTTP(S) access to Neo4j Browser.
 
 ### MCPServerSpec
 
-Optional MCP server deployment for the cluster. MCP requires the APOC plugin.
-HTTP transport uses per-request auth and can be exposed via Service/Ingress/Route on the `/mcp` path. STDIO transport reads credentials from a secret and does not expose a Service.
+Optional MCP server deployment for the cluster using the official [`mcp/neo4j`](https://hub.docker.com/r/mcp/neo4j) image ([github.com/neo4j/mcp](https://github.com/neo4j/mcp)). Requires the APOC plugin for the `get-schema` tool.
+
+**HTTP transport** (default): no credentials stored in the pod — each client request carries a Basic Auth or Bearer token `Authorization` header. A Service is created at `<name>-mcp:8080`; the endpoint path is `/mcp` (fixed).
+
+**STDIO transport**: `NEO4J_USERNAME` and `NEO4J_PASSWORD` are injected from the admin secret (or a custom secret via `spec.mcp.auth`). No Service is created.
+
 For client configuration, see the [MCP Client Setup Guide](../user_guide/guides/mcp_client_setup.md).
 
 | Field | Type | Description |
 |---|---|---|
 | `enabled` | `bool` | Enable MCP server deployment (default: `false`) |
-| `image` | [`*ImageSpec`](#imagespec) | MCP server image (defaults to the operator MCP image repo and `OPERATOR_VERSION` tag, or `latest`) |
+| `image` | [`*ImageSpec`](#imagespec) | MCP server image. Defaults to `mcp/neo4j:latest`. Pin a version with `image.tag`. |
 | `transport` | `string` | Transport mode: `"http"` (default) or `"stdio"` |
-| `readOnly` | `bool` | Disable write tools when `true` (default: `true`) |
-| `telemetry` | `bool` | Enable anonymous telemetry (default: `false`) |
-| `database` | `string` | Default Neo4j database |
-| `schemaSampleSize` | `*int32` | Schema sampling size |
-| `logLevel` | `string` | MCP log level |
-| `logFormat` | `string` | MCP log format |
-| `http` | [`*MCPHTTPConfig`](#mcphttpconfig) | HTTP transport configuration |
-| `auth` | [`*MCPAuthSpec`](#mcpauthspec) | STDIO auth configuration |
-| `replicas` | `*int32` | MCP pod replicas (default: `1`) |
-| `resources` | `*corev1.ResourceRequirements` | Resource requirements |
-| `env` | `[]corev1.EnvVar` | Extra environment variables for MCP |
-| `securityContext` | [`*SecurityContextSpec`](#securitycontextspec) | Pod/container security overrides |
+| `readOnly` | `bool` | Disable the `write-cypher` tool when `true` (default: `true`) |
+| `database` | `string` | Default Neo4j database for MCP queries |
+| `schemaSampleSize` | `*int32` | Schema sampling size for `get-schema`. Use `-1` to sample entire graph. |
+| `telemetry` | `*bool` | Enable anonymous usage telemetry sent to Neo4j. When unset, uses the server default (`true`). Set to `false` to opt out. |
+| `logLevel` | `string` | Log verbosity: `debug`, `info`, `notice`, `warning`, `error`, `critical`, `alert`, `emergency` |
+| `logFormat` | `string` | Log output format: `text` (default) or `json` |
+| `http` | [`*MCPHTTPConfig`](#mcphttpconfig) | HTTP transport configuration (only used when `transport: http`) |
+| `auth` | [`*MCPAuthSpec`](#mcpauthspec) | Override Neo4j credentials for STDIO transport. Ignored in HTTP mode (credentials come per-request from the client). |
+| `replicas` | `*int32` | Number of MCP pod replicas (default: `1`). Only meaningful for HTTP. |
+| `resources` | `*corev1.ResourceRequirements` | Resource requirements for MCP pods |
+| `env` | `[]corev1.EnvVar` | Extra environment variables. Operator-managed vars (`NEO4J_URI`, `NEO4J_USERNAME`, `NEO4J_PASSWORD`, `NEO4J_TRANSPORT_MODE`, `NEO4J_MCP_HTTP_*`, etc.) are silently ignored. |
+| `securityContext` | [`*SecurityContextSpec`](#securitycontextspec) | Pod/container security context overrides |
 
 ### MCPHTTPConfig
+
+HTTP transport configuration. Only applied when `spec.mcp.transport: http`.
 
 | Field | Type | Description |
 |---|---|---|
 | `host` | `string` | HTTP bind host (default: `0.0.0.0`) |
-| `port` | `int32` | HTTP bind port (default: `8080`, or `8443` when TLS enabled) |
-| `allowedOrigins` | `string` | CORS allowed origins (comma-separated or `*`) |
-| `tls` | [`*MCPTLSSpec`](#mcptlsspec) | TLS settings for HTTP transport |
-| `service` | [`*MCPServiceSpec`](#mcpservicespec) | Service exposure settings |
+| `port` | `int32` | HTTP bind port. Default: `8080` without TLS, `8443` with TLS. |
+| `tls` | [`*MCPTLSSpec`](#mcptlsspec) | Optional container-level TLS. When unset, handle TLS at the Ingress layer instead. |
+| `authHeaderName` | `string` | Name of the HTTP header carrying credentials (default: `Authorization`). Override when a proxy rewrites the standard header. |
+| `service` | [`*MCPServiceSpec`](#mcpservicespec) | Kubernetes Service and Ingress/Route exposure settings |
 
 ### MCPTLSSpec
 
+Enables container-level TLS on the `mcp/neo4j` HTTP server by mounting a Kubernetes TLS secret and injecting `NEO4J_MCP_HTTP_TLS_ENABLED=true` with the cert/key file paths. For most deployments, Ingress-level TLS termination is simpler.
+
 | Field | Type | Description |
 |---|---|---|
-| `mode` | `string` | TLS mode: `"disabled"` (default), `"secret"`, `"cert-manager"` |
-| `secretName` | `string` | Secret with `tls.crt` and `tls.key` (for `secret` mode) |
-| `issuerRef` | [`*IssuerRef`](#issuerref) | cert-manager issuer reference |
-| `duration` | `*string` | Certificate duration |
-| `renewBefore` | `*string` | Certificate renew window |
-| `subject` | [`*CertificateSubject`](#certificatesubject) | Certificate subject details |
-| `usages` | `[]string` | Certificate usages |
+| `secretName` | `string` | **Required.** Name of a Kubernetes TLS secret (`type: kubernetes.io/tls`) containing the certificate and private key. |
+| `certKey` | `string` | Key in the secret for the certificate file (default: `tls.crt`) |
+| `keyKey` | `string` | Key in the secret for the private key file (default: `tls.key`) |
 
 ### MCPServiceSpec
 
 | Field | Type | Description |
 |---|---|---|
-| `type` | `string` | Service type: `"ClusterIP"`, `"NodePort"`, `"LoadBalancer"` |
+| `type` | `string` | Service type: `"ClusterIP"` (default), `"NodePort"`, `"LoadBalancer"` |
 | `annotations` | `map[string]string` | Service annotations |
 | `loadBalancerIP` | `string` | Static LoadBalancer IP |
 | `loadBalancerSourceRanges` | `[]string` | Allowed source ranges |
 | `externalTrafficPolicy` | `string` | External traffic policy: `"Cluster"` or `"Local"` |
-| `port` | `int32` | Service port for MCP HTTP |
-| `ingress` | [`*IngressSpec`](#ingressspec) | Ingress configuration (uses `/mcp` path) |
+| `port` | `int32` | Service port for MCP HTTP (default: same as container port) |
+| `ingress` | [`*IngressSpec`](#ingressspec) | Ingress configuration. Path is always `/mcp` (fixed by the official image). |
 | `route` | [`*RouteSpec`](#routespec) | OpenShift Route configuration |
 
 ### MCPAuthSpec
 
+Overrides the Neo4j credentials injected into the MCP pod. **Only effective for STDIO transport.** In HTTP mode the server authenticates per-request using the client's `Authorization` header.
+
 | Field | Type | Description |
 |---|---|---|
-| `secretName` | `string` | Secret with username/password keys |
+| `secretName` | `string` | Secret containing username/password keys. Defaults to the cluster admin secret when unset. |
 | `usernameKey` | `string` | Username key name (default: `username`) |
 | `passwordKey` | `string` | Password key name (default: `password`) |
 
