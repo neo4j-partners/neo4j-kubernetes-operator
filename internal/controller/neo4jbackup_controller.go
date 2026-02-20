@@ -576,19 +576,6 @@ func (r *Neo4jBackupReconciler) getTargetCluster(ctx context.Context, backup *ne
 	return standaloneAsCluster(standalone), nil
 }
 
-// standaloneAsCluster converts a Neo4jEnterpriseStandalone into a synthetic
-// Neo4jEnterpriseCluster used only for image/auth lookup and backup address generation.
-func standaloneAsCluster(s *neo4jv1alpha1.Neo4jEnterpriseStandalone) *neo4jv1alpha1.Neo4jEnterpriseCluster {
-	c := &neo4jv1alpha1.Neo4jEnterpriseCluster{}
-	c.Name = s.Name
-	c.Namespace = s.Namespace
-	c.Spec.Image = s.Spec.Image
-	c.Spec.Auth = s.Spec.Auth
-	c.Status.Phase = s.Status.Phase
-	c.Spec.Topology.Servers = 1
-	return c
-}
-
 func (r *Neo4jBackupReconciler) isClusterReady(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) bool {
 	return cluster.Status.Phase == "Ready"
 }

@@ -1024,17 +1024,19 @@ func convertEnvVars(envVars []neo4jv1alpha1.EnvVar) []corev1.EnvVar {
 }
 
 func (r *Neo4jRestoreReconciler) getTargetCluster(ctx context.Context, restore *neo4jv1alpha1.Neo4jRestore) (*neo4jv1alpha1.Neo4jEnterpriseCluster, error) {
+	key := types.NamespacedName{Name: restore.Spec.TargetCluster, Namespace: restore.Namespace}
+
 	cluster := &neo4jv1alpha1.Neo4jEnterpriseCluster{}
-	clusterKey := types.NamespacedName{
-		Name:      restore.Spec.TargetCluster,
-		Namespace: restore.Namespace,
+	if err := r.Get(ctx, key, cluster); err == nil {
+		return cluster, nil
 	}
 
-	if err := r.Get(ctx, clusterKey, cluster); err != nil {
-		return nil, err
+	standalone := &neo4jv1alpha1.Neo4jEnterpriseStandalone{}
+	if err := r.Get(ctx, key, standalone); err != nil {
+		return nil, fmt.Errorf("target %q not found as Neo4jEnterpriseCluster or Neo4jEnterpriseStandalone: %w",
+			restore.Spec.TargetCluster, err)
 	}
-
-	return cluster, nil
+	return standaloneAsCluster(standalone), nil
 }
 
 func (r *Neo4jRestoreReconciler) createNeo4jClient(_ context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) (*neo4j.Client, error) {
