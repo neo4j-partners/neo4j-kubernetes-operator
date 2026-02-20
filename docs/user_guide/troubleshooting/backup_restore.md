@@ -580,7 +580,8 @@ metadata:
 spec:
   targetCluster: recovery-cluster
   source:
-    backupName: production-backup-latest
+    type: backup
+    backupRef: production-backup-latest
   databaseName: neo4j
   force: true
 EOF
@@ -605,10 +606,10 @@ metadata:
 spec:
   targetCluster: recovery-cluster
   source:
-    backupName: production-backup-latest
+    type: pitr
+    backupRef: production-backup-latest
+    pointInTime: "2025-01-15T10:30:00Z"  # Before corruption occurred
   databaseName: neo4j
-  options:
-    restoreUntil: "2025-01-15T10:30:00Z"  # Before corruption occurred
   force: true
 EOF
 ```

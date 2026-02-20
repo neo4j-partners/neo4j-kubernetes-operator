@@ -66,7 +66,7 @@
 ## Documentation & Examples
 - User docs: `docs/user_guide` (install/config, external access, topology placement, property sharding, backup/restore, security, performance, monitoring, upgrades, troubleshooting).
 - Developer docs: `docs/developer_guide/` (architecture, development setup, testing instructions, Makefile reference).
-- References: `docs/quick-reference/operator-modes-cheat-sheet.md`, `docs/api_reference/` for CRDs, `docs/deployment-guide.md`, `docs/seed-uri-feature-guide.md`, `docs/split-brain-troubleshooting.md`.
+- References: `docs/quick-reference/operator-modes-cheat-sheet.md`, `docs/api_reference/` for CRDs, `docs/user_guide/deployment.md`, `docs/user_guide/guides/seed-uri.md`, `docs/user_guide/troubleshooting/split-brain.md`.
 - Examples: `examples/` for standalone/cluster mins, plugins, backup/restore, property sharding, E2E blueprints.
 
 ## Observability & Troubleshooting

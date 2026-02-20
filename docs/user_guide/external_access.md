@@ -31,7 +31,7 @@ Access Neo4j Browser at: http://localhost:7474
 ### LoadBalancer (Recommended for Cloud)
 
 ```yaml
-apiVersion: neo4j.io/v1alpha1
+apiVersion: neo4j.neo4j.com/v1alpha1
 kind: Neo4jEnterpriseCluster
 metadata:
   name: production-cluster
@@ -145,7 +145,7 @@ spec:
 ### AWS with NLB
 
 ```yaml
-apiVersion: neo4j.io/v1alpha1
+apiVersion: neo4j.neo4j.com/v1alpha1
 kind: Neo4jEnterpriseCluster
 metadata:
   name: aws-cluster

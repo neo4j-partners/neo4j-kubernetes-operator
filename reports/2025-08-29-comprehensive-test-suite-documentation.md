@@ -410,8 +410,7 @@ The integration test suite provides end-to-end validation against real Kubernete
 
 2. **Basic Standalone Creation Process**:
    - **Spec Configuration**:
-     - Edition: "enterprise" (Neo4j Enterprise only)
-     - Image: Environment-specified tag with `getNeo4jImageTag()`
+     - Image: Environment-specified tag with `getNeo4jImageTag()` (always enterprise)
      - Storage: 500Mi with standard storage class (minimal for testing)
      - Resources: CI-appropriate requirements (`getCIAppropriateResourceRequirements()`)
    - **Environment Variables**: `NEO4J_ACCEPT_LICENSE_AGREEMENT=eval`
@@ -926,8 +925,7 @@ The integration test suite provides end-to-end validation against real Kubernete
 2. **Cluster Configuration with Topology Constraints**:
 
    - **Cluster Name**: Timestamped unique name
-   - **Edition**: "enterprise"
-   - **Image**: Environment-specified version
+   - **Image**: Environment-specified version (always enterprise)
    - **Authentication**: References admin secret
    - **Topology**: 3 servers with placement constraints
    - **Storage**: 1Gi standard storage class
@@ -994,8 +992,7 @@ The integration test suite provides end-to-end validation against real Kubernete
 
 2. **Cluster Creation for Plugin Testing**:
    - **Cluster Name**: "plugin-cluster"
-   - **Edition**: "enterprise"
-   - **Image**: Environment-specified version
+   - **Image**: Environment-specified version (always enterprise)
    - **Topology**: 3 servers
    - **Storage**: 1Gi standard storage class
    - **Authentication**: References admin secret

@@ -191,8 +191,16 @@ spec:
 
 ## Recommendations by Environment
 
+The snippets below show the recommended `Neo4jDatabase.spec.topology` for each environment (database-level role distribution). The containing `Neo4jEnterpriseCluster` must have at least `servers: <primaries + secondaries>` configured.
+
 ### Development Environment
 ```yaml
+# Neo4jEnterpriseCluster
+spec:
+  topology:
+    servers: 1
+
+# Neo4jDatabase (standalone dev — no cluster needed)
 spec:
   topology:
     primaries: 1
@@ -203,6 +211,12 @@ spec:
 
 ### Staging/Testing Environment
 ```yaml
+# Neo4jEnterpriseCluster
+spec:
+  topology:
+    servers: 4
+
+# Neo4jDatabase
 spec:
   topology:
     primaries: 3
@@ -213,6 +227,12 @@ spec:
 
 ### Production Environment (Standard)
 ```yaml
+# Neo4jEnterpriseCluster
+spec:
+  topology:
+    servers: 5
+
+# Neo4jDatabase
 spec:
   topology:
     primaries: 3
@@ -223,6 +243,12 @@ spec:
 
 ### Production Environment (High Availability)
 ```yaml
+# Neo4jEnterpriseCluster
+spec:
+  topology:
+    servers: 8
+
+# Neo4jDatabase
 spec:
   topology:
     primaries: 5
@@ -233,6 +259,12 @@ spec:
 
 ### Mission-Critical Environment
 ```yaml
+# Neo4jEnterpriseCluster
+spec:
+  topology:
+    servers: 12
+
+# Neo4jDatabase
 spec:
   topology:
     primaries: 7
@@ -251,15 +283,21 @@ When deploying across availability zones, consider:
 
 ### Example: 3-Zone Deployment
 ```yaml
+# Neo4jEnterpriseCluster — 8 servers spread across 3 zones
 spec:
   topology:
-    primaries: 5
-    secondaries: 3
+    servers: 8
     placement:
       topologySpread:
         enabled: true
         topologyKey: "topology.kubernetes.io/zone"
         maxSkew: 1
+
+# Neo4jDatabase — 5 primaries + 3 secondaries hosted on those servers
+spec:
+  topology:
+    primaries: 5
+    secondaries: 3
 ```
 
 ## Monitoring and Alerting

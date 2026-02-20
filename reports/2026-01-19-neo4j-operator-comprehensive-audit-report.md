@@ -15,7 +15,6 @@ Scope:
 - Security posture in `config/rbac` and deployment manifests
 
 Sources reviewed:
-- `reports/2025-07-03-neo4j-operator-comprehensive-audit-report.md`
 - `reports/2025-11-20-security-review.md`
 - `reports/2025-07-24-reconcile-loop-analysis.md`
 - Current code in `internal/validation`, `internal/resources`, `internal/controller`

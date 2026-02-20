@@ -1,123 +1,78 @@
-# Neo4j Kubernetes Operator - Technical Reports
+# Neo4j Kubernetes Operator — Technical Reports
 
-This directory contains important technical reports documenting significant changes, investigations, and improvements to the Neo4j Kubernetes Operator.
-
-## Overview
-
-These reports serve as a historical record of major architectural decisions, implementation details, and problem resolutions. They are maintained for reference during troubleshooting, feature development, and onboarding new contributors.
+This directory contains technical reports that document significant architectural decisions, investigations, and implementation details for the Neo4j Kubernetes Operator. Reports are retained only when they provide lasting reference value.
 
 ## Naming Convention
 
-**IMPORTANT**: All report files MUST include the date in the filename using the format:
+All report files use the format: `YYYY-MM-DD-descriptive-name.md`
 
-`YYYY-MM-DD-descriptive-name.md`
-
-Examples:
-- `2025-07-23-integration-tests-fix-summary.md`
-- `2025-07-18-neo4j-discovery-milestone-summary.md`
-- `2025-07-04-backup-restore-implementation.md`
-
-This ensures proper chronological ordering and clear tracking of when reports were created.
-
-## Report Categories
+## Reports
 
 ### 🏗️ Architecture & Design
-- **[2025-08-19-server-based-architecture-implementation.md](2025-08-19-server-based-architecture-implementation.md)** - CURRENT: Server-based architecture implementation replacing primary/secondary StatefulSets
-- **[2025-07-07-neo4j-kubernetes-operator-comprehensive-prd.md](2025-07-07-neo4j-kubernetes-operator-comprehensive-prd.md)** - Complete product requirements document (updated for server architecture)
-- **[2025-07-03-neo4j-operator-comprehensive-audit-report.md](2025-07-03-neo4j-operator-comprehensive-audit-report.md)** - Full audit of operator capabilities and compliance
 
-### 🔧 Recent Major Improvements (August 2025)
-- **[2025-08-12-database-validation-oom-fix.md](2025-08-12-database-validation-oom-fix.md)** - Fixed Neo4j Enterprise memory requirements and OOM issues
-- **[2025-08-12-neo4j-syntax-modernization.md](2025-08-12-neo4j-syntax-modernization.md)** - Neo4j 5.x/2025.x database syntax modernization
-- **[2025-08-08-seed-uri-and-server-architecture-release-notes.md](2025-08-08-seed-uri-and-server-architecture-release-notes.md)** - Seed URI functionality and architecture updates
-- **[2025-08-07-project-cleanup-summary.md](2025-08-07-project-cleanup-summary.md)** - Major project cleanup and organization
+- **[2025-08-19-server-based-architecture-implementation.md](2025-08-19-server-based-architecture-implementation.md)** — Server-based architecture: single `{cluster}-server` StatefulSet replacing old primary/secondary split. **Referenced in CLAUDE.md.**
+- **[2025-08-20-neo4j-plugin-architecture-compatibility-prd.md](2025-08-20-neo4j-plugin-architecture-compatibility-prd.md)** — Plugin architecture PRD: env-var vs neo4j.conf plugin categories, dependency resolution, compatibility matrix.
+- **[2025-09-03-property-sharding-implementation-analysis.md](2025-09-03-property-sharding-implementation-analysis.md)** — Property sharding (`Neo4jShardedDatabase` CRD): implementation analysis, resource requirements (5+ servers, 4–8 Gi each).
 
-### 🧪 Testing & Quality
-- **[2025-08-05-test-cluster-configuration-analysis.md](2025-08-05-test-cluster-configuration-analysis.md)** - CURRENT: Test cluster configuration analysis
-- **[2025-07-23-test-cluster-infrastructure-fix-final-report.md](2025-07-23-test-cluster-infrastructure-fix-final-report.md)** - Resolution of namespace termination issues
-- **[2025-07-23-resource-cleanup-implementation-report.md](2025-07-23-resource-cleanup-implementation-report.md)** - Implementation of proper resource cleanup in tests
-- **[2025-07-22-unit-test-fixes-summary.md](2025-07-22-unit-test-fixes-summary.md)** - Summary of unit test improvements
-- **[2025-07-04-test-coverage-analysis.md](2025-07-04-test-coverage-analysis.md)** - Comprehensive test coverage report
-- **[2025-07-03-test-structure-cleanup-report.md](2025-07-03-test-structure-cleanup-report.md)** - Test organization improvements
+### 🔧 Neo4j Version Analysis
 
-### 🚀 Cluster Formation & Discovery
-- **[2025-08-05-resource-version-conflict-resolution-analysis.md](2025-08-05-resource-version-conflict-resolution-analysis.md)** - CURRENT: Critical cluster formation fixes for Neo4j 2025.x
-- **[2025-08-05-pod-restart-resource-version-conflict-analysis.md](2025-08-05-pod-restart-resource-version-conflict-analysis.md)** - Resource version conflict analysis
-- **[2025-07-18-neo4j-discovery-milestone-summary.md](2025-07-18-neo4j-discovery-milestone-summary.md)** - Critical discovery architecture documentation
-- **[2025-07-18-parallel-cluster-formation-milestone.md](2025-07-18-parallel-cluster-formation-milestone.md)** - Optimized cluster formation strategy (updated for server architecture)
-- **[2025-07-18-tls-cluster-formation-findings.md](2025-07-18-tls-cluster-formation-findings.md)** - TLS-specific cluster formation improvements
+- **[2025-08-05-neo4j-2025.01.0-enterprise-cluster-analysis.md](2025-08-05-neo4j-2025.01.0-enterprise-cluster-analysis.md)** — Neo4j 2025.x calver compatibility: discovery parameter differences, cluster formation requirements. **Referenced in CLAUDE.md.**
+- **[2025-08-08-seed-uri-and-server-architecture-release-notes.md](2025-08-08-seed-uri-and-server-architecture-release-notes.md)** — Seed URI feature implementation and server architecture integration notes. **Referenced in CLAUDE.md.**
+- **[2025-08-12-neo4j-syntax-modernization.md](2025-08-12-neo4j-syntax-modernization.md)** — Neo4j 5.x/2025.x Cypher syntax modernization: `TOPOLOGY` clause, deprecated 4.x syntax.
+- **[2025-07-16-deprecated-neo4j-4x-settings-audit.md](2025-07-16-deprecated-neo4j-4x-settings-audit.md)** — Audit of deprecated Neo4j 4.x settings to avoid (`causal_clustering.*`, `dbms.mode=SINGLE`, etc.).
+
+### 🚀 Cluster Formation & Reliability
+
+- **[2025-08-05-resource-version-conflict-resolution-analysis.md](2025-08-05-resource-version-conflict-resolution-analysis.md)** — Critical fix: `retry.RetryOnConflict` for Neo4j 2025.x cluster formation. Root cause and solution.
+- **[2025-07-18-neo4j-discovery-milestone-summary.md](2025-07-18-neo4j-discovery-milestone-summary.md)** — V2_ONLY discovery architecture: `tcp-discovery` port (5000), service configuration.
+- **[2025-07-24-reconcile-loop-analysis.md](2025-07-24-reconcile-loop-analysis.md)** — Reconciliation loop performance: debounce, ConfigMap manager, frequency analysis.
 
 ### 💾 Backup & Restore
-- **[2025-07-21-neo4j-5.26-2025-database-backup-restore-implementation.md](2025-07-21-neo4j-5.26-2025-database-backup-restore-implementation.md)** - Complete backup/restore implementation
-- **[2025-07-21-backup-sidecar-implementation.md](2025-07-21-backup-sidecar-implementation.md)** - Backup sidecar architecture and implementation
-- **[2025-07-21-disk-space-management-implementation.md](2025-07-21-disk-space-management-implementation.md)** - Backup disk space management features
 
-### ⚙️ Configuration & Validation
-- **[2025-08-05-neo4j-version-comparison-analysis.md](2025-08-05-neo4j-version-comparison-analysis.md)** - CURRENT: Neo4j 5.26 vs 2025.x version analysis
-- **[2025-08-05-neo4j-2025.01.0-enterprise-cluster-analysis.md](2025-08-05-neo4j-2025.01.0-enterprise-cluster-analysis.md)** - Neo4j 2025.x specific analysis
-- **[2025-08-05-neo4j-5.26-enterprise-cluster-analysis.md](2025-08-05-neo4j-5.26-enterprise-cluster-analysis.md)** - Neo4j 5.26 specific analysis
-- **[2025-07-03-neo4j-configuration-requirements-report.md](2025-07-03-neo4j-configuration-requirements-report.md)** - Neo4j 5.26+ configuration requirements
-- **[2025-07-16-deprecated-neo4j-4x-settings-audit.md](2025-07-16-deprecated-neo4j-4x-settings-audit.md)** - Audit of deprecated settings
-- **[2025-07-03-neo4j-version-enforcement-report.md](2025-07-03-neo4j-version-enforcement-report.md)** - Version validation implementation
+- **[2025-07-21-neo4j-5.26-2025-database-backup-restore-implementation.md](2025-07-21-neo4j-5.26-2025-database-backup-restore-implementation.md)** — Centralized backup StatefulSet implementation: `--to-path` syntax, automated path creation, Neo4j 5.26+ compatibility.
 
-### 🔒 Security & Compliance
-- **[2025-07-16-tls-implementation-analysis.md](2025-07-16-tls-implementation-analysis.md)** - Comprehensive TLS/SSL implementation details
-- **[2025-07-03-neo4j-526-compliance-audit-report.md](2025-07-03-neo4j-526-compliance-audit-report.md)** - Neo4j version compliance audit
+### 🔒 Security & TLS
 
-### 🎯 Performance & Optimization
-- **[2025-07-24-reconcile-loop-analysis.md](2025-07-24-reconcile-loop-analysis.md)** - CURRENT: Reconciliation loop performance analysis
-- **[2025-07-04-high-reconciliation-frequency-investigation-report.md](2025-07-04-high-reconciliation-frequency-investigation-report.md)** - Performance optimization findings
+- **[2025-07-16-tls-implementation-analysis.md](2025-07-16-tls-implementation-analysis.md)** — TLS/SSL implementation: cert-manager integration, `dbms.ssl.policy.*` configuration, cluster TLS.
+- **[2025-11-20-security-review.md](2025-11-20-security-review.md)** — Security review: RBAC, secret handling, network policies, CRD validation.
 
-### 📚 External Access & Features
-- **[2025-07-25-external-access-enhancements.md](2025-07-25-external-access-enhancements.md)** - External access improvements and enhancements
-- **[2025-07-23-documentation-updates-summary.md](2025-07-23-documentation-updates-summary.md)** - Documentation updates summary
-- **[2025-07-23-github-workflows-verification.md](2025-07-23-github-workflows-verification.md)** - CI/CD workflow verification
+### 🐛 Bug Analysis
 
-### 📚 Historical Context
-- **[2025-07-03-github-workflows-setup-report.md](2025-07-03-github-workflows-setup-report.md)** - Initial CI/CD setup documentation
-- **[2025-07-03-priority-issues-implementation-report.md](2025-07-03-priority-issues-implementation-report.md)** - Critical issues resolution
+- **[2025-08-12-database-validation-oom-fix.md](2025-08-12-database-validation-oom-fix.md)** — OOM fix: Neo4j Enterprise minimum 1.5 Gi memory requirement for database operations.
 
-## Report Guidelines
+### 🧪 Testing
+
+- **[2025-08-29-comprehensive-test-suite-documentation.md](2025-08-29-comprehensive-test-suite-documentation.md)** — Complete test suite documentation: unit, integration, e2e structure, AfterEach cleanup patterns.
+
+### 📋 Audits
+
+- **[2026-01-19-neo4j-operator-comprehensive-audit-report.md](2026-01-19-neo4j-operator-comprehensive-audit-report.md)** — Most recent comprehensive operator audit (January 2026).
+
+## Guidelines
 
 ### When to Create a Report
 
 Create a report when:
 1. Implementing significant architectural changes
-2. Resolving complex issues that required investigation
-3. Making major feature additions or modifications
-4. Conducting performance optimizations
-5. Performing security audits or compliance checks
+2. Resolving complex bugs that required investigation
+3. Conducting security or compliance audits
+4. Producing analysis that informs future decisions
+
+### When NOT to Create a Report
+
+Do NOT create a report for:
+- Brief implementation summaries (use git commit messages instead)
+- Release notes (not stored as files in this repo)
+- Cleanup or refactoring summaries
+- Routine test fixes
 
 ### Report Structure
 
-Reports should generally include:
-1. **Date**: In the filename and at the top of the document
-2. **Executive Summary**: Brief overview of the work
-3. **Problem/Context**: What prompted this work
-4. **Investigation/Analysis**: Steps taken to understand the issue
-5. **Solution/Implementation**: What was done
+1. **Date**: In the filename (`YYYY-MM-DD-`) and at the top of the document
+2. **Executive Summary**: Brief overview
+3. **Problem/Context**: What prompted the work
+4. **Analysis**: Investigation steps
+5. **Solution**: What was implemented
 6. **Results**: Outcomes and impact
-7. **Recommendations**: Future considerations
 
-### Retention Policy
-
-Reports are retained if they:
-1. Document architectural decisions or critical milestones
-2. Provide implementation details for major features
-3. Contain troubleshooting information for recurring issues
-4. Document compliance or security audits
-5. Serve as reference for future development
-
-Reports older than 6 months may be archived or removed if they are no longer relevant.
-
-**Last Cleanup**: 2025-08-19 - Removed obsolete reports and updated for server-based architecture
-
-## Contributing
-
-When adding a new report:
-1. Follow the naming convention: `YYYY-MM-DD-descriptive-name.md`
-2. Update this README.md with a link to your report
-3. Ensure the report provides value for future reference
-4. Consider if an existing report should be updated instead
-
-Last Updated: 2025-08-19
+Last Updated: 2026-01-21

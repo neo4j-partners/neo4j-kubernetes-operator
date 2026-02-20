@@ -261,7 +261,7 @@ kubectl exec -it <neo4j-pod> -- cypher-shell -u neo4j -p <password> "SHOW DATABA
 
 ## Examples
 
-See the [examples/databases/](../examples/databases/) directory for comprehensive examples:
+See the [examples/databases/](../../../examples/databases/) directory for comprehensive examples:
 
 - `database-from-s3-seed.yaml` - S3 with explicit credentials
 - `database-from-gcs-seed.yaml` - Google Cloud Storage with workload identity

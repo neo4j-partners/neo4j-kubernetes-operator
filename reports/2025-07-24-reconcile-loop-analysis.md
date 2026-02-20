@@ -297,7 +297,7 @@ Status updates use optimistic concurrency control:
 ### 3. Memory Management
 - Automatic calculation based on container resources
 - 60% heap, 30% page cache for high-memory deployments
-- Backup sidecar with fixed 512Mi-1Gi memory limits
+- Centralized backup StatefulSet (`{cluster}-backup-0`) with fixed 100m CPU / 256Mi memory limits
 
 ### 4. TLS Cluster Formation
 - `trust_all=true` for cluster SSL policy

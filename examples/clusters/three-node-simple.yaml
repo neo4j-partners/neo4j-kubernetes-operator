@@ -13,7 +13,7 @@ spec:
   # Neo4j Docker image configuration
   image:
     repo: neo4j
-    tag: "5.26-enterprise"  # Neo4j 5.26+ required
+    tag: "5.26.0-enterprise"  # Neo4j 5.26+ required
     pullPolicy: IfNotPresent
 
   # Three-server cluster topology for high availability

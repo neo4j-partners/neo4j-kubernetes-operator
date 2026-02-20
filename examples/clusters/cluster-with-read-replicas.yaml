@@ -11,7 +11,7 @@ spec:
 
   image:
     repo: neo4j
-    tag: "5.26-enterprise"
+    tag: "5.26.0-enterprise"
     pullPolicy: IfNotPresent
 
   # 5-server cluster for read scaling workloads

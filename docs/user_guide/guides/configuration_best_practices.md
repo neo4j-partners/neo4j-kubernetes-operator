@@ -101,8 +101,7 @@ metadata:
   name: production-cluster
 spec:
   topology:
-    primaries: 3
-    secondaries: 2
+    servers: 5   # servers self-organise into primary/secondary roles
   config:
     # Memory settings (using correct server.* prefix)
     server.memory.heap.initial_size: "8G"

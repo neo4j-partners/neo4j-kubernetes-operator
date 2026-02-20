@@ -159,6 +159,6 @@ kubectl run test-pod --rm -it --image=amazon/aws-cli \
 
 ## Related Documentation
 
-- [Seed URI Feature Guide](../docs/seed-uri-feature-guide.md) - Comprehensive feature documentation
+- [Seed URI Feature Guide](../../docs/user_guide/guides/seed-uri.md) - Comprehensive feature documentation
 - [Neo4j CloudSeedProvider Documentation](https://neo4j.com/docs/operations-manual/current/database-administration/standard-databases/seed-from-uri/) - Official Neo4j documentation
-- [Cluster Examples](../clusters/README.md) - Neo4j cluster configuration examples
+- [Cluster Examples](../clusters/) - Neo4j cluster configuration examples

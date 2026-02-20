@@ -295,7 +295,7 @@ EOF
 For detailed database management, see:
 - [Neo4jDatabase API Reference](../api_reference/neo4jdatabase.md)
 - [Property Sharding Guide](property_sharding.md)
-- [Database Seed URI Guide](../seed-uri-feature-guide.md)
+- [Database Seed URI Guide](guides/seed-uri.md)
 - [Database Examples](../../examples/databases/)
 - [Property Sharding Examples](../../examples/property_sharding/)
 

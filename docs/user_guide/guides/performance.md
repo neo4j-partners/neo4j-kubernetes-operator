@@ -51,11 +51,11 @@ For advanced use cases, you can tune the JVM settings for your Neo4j pods using 
 
 ```yaml
     env:
-      - name: NEO4J_dbms_memory_heap_initial__size
+      - name: NEO4J_server_memory_heap_initial__size
         value: "4G"
-      - name: NEO4J_dbms_memory_heap_max__size
+      - name: NEO4J_server_memory_heap_max__size
         value: "4G"
-      - name: NEO4J_dbms_memory_pagecache_size
+      - name: NEO4J_server_memory_pagecache_size
         value: "2G"
 ```
 

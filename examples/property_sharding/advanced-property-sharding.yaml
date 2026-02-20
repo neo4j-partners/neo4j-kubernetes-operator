@@ -28,7 +28,7 @@ spec:
   # Latest Neo4j version for best property sharding support
   image:
     repo: neo4j
-    tag: 2025.12-enterprise
+    tag: "2025.12.0-enterprise"
 
   # Authentication required for property sharding
   auth:

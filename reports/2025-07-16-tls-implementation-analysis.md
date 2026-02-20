@@ -30,7 +30,7 @@ type TLSSpec struct {
 **Comprehensive TLS Support:**
 - **Certificate Management**: Uses `BuildCertificateForEnterprise()` function that creates comprehensive certificates with multiple DNS names
 - **External Secrets**: Full support for External Secrets Operator integration
-- **Multiple Services**: Generates certificates for all cluster services (client, headless, primary-headless, secondary-headless)
+- **Multiple Services**: Generates certificates for all cluster services (client, headless) and individual server pod FQDNs
 - **Pod-level Certificates**: Includes individual pod FQDNs in certificate SANs
 - **Comprehensive Configuration**: Extensive TLS configuration in Neo4j config file
 

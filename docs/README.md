@@ -7,7 +7,7 @@ Welcome to the documentation for the Neo4j Enterprise Operator for Kubernetes.
 The [User Guide](user_guide) is for users of the Neo4j Enterprise Operator. It contains all the information you need to deploy, manage, and operate Neo4j clusters on Kubernetes.
 
 *   **[Getting Started](user_guide/getting_started.md)**: A quickstart guide to get you up and running in minutes.
-*   **[Deployment Guide](deployment-guide.md)**: Complete deployment reference with local and registry-based options.
+*   **[Deployment Guide](user_guide/deployment.md)**: Complete deployment reference with local and registry-based options.
 *   **[Operator Modes](user_guide/operator-modes.md)**: Complete guide to production and development modes, caching strategies, and performance tuning.
 *   **[Installation](user_guide/installation.md)**: Detailed installation instructions via git clone and make commands.
 *   **[Configuration](user_guide/configuration.md)**: Comprehensive configuration options.
@@ -122,5 +122,5 @@ spec:
 ### Examples and Documentation
 
 *   **[Database Seed URI Examples](../examples/databases/)** - Complete examples for all cloud providers
-*   **[Seed URI Feature Guide](seed-uri-feature-guide.md)** - Comprehensive guide with authentication, troubleshooting, and best practices
+*   **[Seed URI Feature Guide](user_guide/guides/seed-uri.md)** - Comprehensive guide with authentication, troubleshooting, and best practices
 *   **[Neo4jDatabase API Reference](api_reference/neo4jdatabase.md)** - Full API documentation with seed URI fields

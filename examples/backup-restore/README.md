@@ -39,36 +39,16 @@ kubectl get neo4jbackup simple-backup -w
 ### 🟢 Basic Backups (Start Here)
 - [`backup-pvc-simple.yaml`](backup-pvc-simple.yaml) - **Beginner**: Simple one-time backup to PVC
 - [`backup-s3-basic.yaml`](backup-s3-basic.yaml) - **Intermediate**: Basic S3 backup
-- [`backup-gcs-basic.yaml`](backup-gcs-basic.yaml) - **Intermediate**: Basic GCS backup
-- [`backup-azure-basic.yaml`](backup-azure-basic.yaml) - **Intermediate**: Basic Azure backup
 
 ### 🟡 Scheduled Backups (Production Ready)
 - [`backup-scheduled-daily.yaml`](backup-scheduled-daily.yaml) - **Intermediate**: Daily scheduled backup
-- [`backup-scheduled-weekly.yaml`](backup-scheduled-weekly.yaml) - **Intermediate**: Weekly backup with retention
-- [`backup-scheduled-multi-tier.yaml`](backup-scheduled-multi-tier.yaml) - **Advanced**: Multi-tier backup strategy
-
-### 🔴 Advanced Backups (Enterprise)
-- [`backup-encrypted.yaml`](backup-encrypted.yaml) - **Advanced**: Encrypted backup with compression
-- [`backup-cross-namespace.yaml`](backup-cross-namespace.yaml) - **Advanced**: Cross-namespace backup
-- [`backup-database-specific.yaml`](backup-database-specific.yaml) - **Intermediate**: Database-specific backup
 
 ### 🟢 Simple Restores (Start Here)
 - [`restore-from-backup.yaml`](restore-from-backup.yaml) - **Beginner**: Restore from backup reference
-- [`restore-from-storage.yaml`](restore-from-storage.yaml) - **Intermediate**: Restore from storage location
-- [`restore-with-hooks.yaml`](restore-with-hooks.yaml) - **Advanced**: Restore with pre/post hooks
 
 ### 🔴 Point-in-Time Recovery (PITR) - Enterprise
 - [`restore-pitr-basic.yaml`](restore-pitr-basic.yaml) - **Advanced**: Basic PITR restore
-- [`restore-pitr-advanced.yaml`](restore-pitr-advanced.yaml) - **Advanced**: Advanced PITR with encryption
 - [`pitr-setup-complete.yaml`](pitr-setup-complete.yaml) - **Advanced**: Complete PITR setup
-
-### Cloud Storage Examples
-- [`cloud-storage-aws.yaml`](cloud-storage-aws.yaml) - AWS S3 with IAM roles
-- [`cloud-storage-gcp.yaml`](cloud-storage-gcp.yaml) - GCP with service accounts
-- [`cloud-storage-azure.yaml`](cloud-storage-azure.yaml) - Azure with managed identity
-
-### Secrets and Authentication
-- [`secrets/`](secrets/) - Various authentication examples
 
 ## Running Examples
 

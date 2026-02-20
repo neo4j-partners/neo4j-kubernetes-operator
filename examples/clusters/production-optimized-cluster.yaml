@@ -12,7 +12,7 @@ spec:
   # Neo4j Docker image
   image:
     repo: neo4j
-    tag: "5.26-enterprise"
+    tag: "5.26.0-enterprise"
     pullPolicy: IfNotPresent
 
   # Production cluster topology

@@ -20,8 +20,8 @@ metadata:
 spec:
 
   image:
-    repository: neo4j
-    tag: "5.26-enterprise"
+    repo: neo4j
+    tag: "5.26.0-enterprise"
     pullPolicy: IfNotPresent
 
   topology:

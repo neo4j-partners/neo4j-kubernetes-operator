@@ -5,7 +5,7 @@ metadata:
 spec:
   image:
     repo: neo4j
-    tag: 5.26.0-enterprise
+    tag: "5.26.0-enterprise"
   topology:
     servers: 3
   storage:
