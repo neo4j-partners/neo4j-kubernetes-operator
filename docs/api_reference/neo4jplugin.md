@@ -26,7 +26,7 @@ The `Neo4jPlugin` Custom Resource Definition (CRD) provides automated plugin ins
 - [`Neo4jEnterpriseCluster`](neo4jenterprisecluster.md) - Target cluster deployments
 - [`Neo4jEnterpriseStandalone`](neo4jenterprisestandalone.md) - Target standalone deployments
 - [`Neo4jDatabase`](neo4jdatabase.md) - Create databases that use plugin functionality
-- [Plugin Installation Guide](../user_guide/guides/plugin_installation.md) - Detailed usage examples
+- [Plugin Examples](../../examples/plugins/README.md) - Detailed usage examples
 
 ## Plugin Installation Process
 
@@ -828,7 +828,6 @@ kubectl describe neo4jplugin <plugin-name> | grep -A 10 "Health:"
 10. **Troubleshooting**: Enable debug logging for plugin installation issues
 
 For detailed plugin-specific guides, see:
-- [APOC Plugin Guide](../user_guide/guides/apoc_plugin.md)
-- [Graph Data Science Guide](../user_guide/guides/gds_plugin.md)
-- [Plugin Troubleshooting](../user_guide/troubleshooting/plugin_issues.md)
+- [Plugin Examples](../../examples/plugins/README.md)
+- [Troubleshooting Guide](../user_guide/guides/troubleshooting.md)
 - [Performance Tuning](../user_guide/guides/performance.md)

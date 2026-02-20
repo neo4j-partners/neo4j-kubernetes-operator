@@ -37,9 +37,6 @@ spec:
     mode: disabled
 
   # Environment variables
-  env:
-    - name: NEO4J_ACCEPT_LICENSE_AGREEMENT
-      value: "yes"
 
   # Configuration optimized for read workloads
   config:

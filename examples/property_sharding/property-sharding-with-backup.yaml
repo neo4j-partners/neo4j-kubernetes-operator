@@ -3,7 +3,7 @@
 # Note: backupConfig is not orchestrated for Neo4jShardedDatabase; use Neo4jBackup resources.
 
 # Property sharding cluster
-apiVersion: neo4j.com/v1alpha1
+apiVersion: neo4j.neo4j.com/v1alpha1
 kind: Neo4jEnterpriseCluster
 metadata:
   name: backup-sharding-cluster
@@ -44,7 +44,7 @@ spec:
 
 ---
 # Sharded database with backup configuration
-apiVersion: neo4j.com/v1alpha1
+apiVersion: neo4j.neo4j.com/v1alpha1
 kind: Neo4jShardedDatabase
 metadata:
   name: backed-up-sharded-db
@@ -68,7 +68,7 @@ spec:
 
 ---
 # Manual backup job for immediate backup
-apiVersion: neo4j.com/v1alpha1
+apiVersion: neo4j.neo4j.com/v1alpha1
 kind: Neo4jBackup
 metadata:
   name: manual-sharded-backup

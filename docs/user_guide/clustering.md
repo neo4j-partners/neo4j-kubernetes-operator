@@ -18,11 +18,13 @@ A Neo4j Enterprise cluster consists of:
 
 ## Discovery Methods
 
-The operator automatically uses **Kubernetes Discovery** (recommended) for all clusters as described in the [Neo4j Operations Manual](https://neo4j.com/docs/operations-manual/current/clustering/setup/discovery/).
+The operator automatically uses **LIST discovery** with static pod FQDNs — the recommended approach for Kubernetes deployments. See the [Neo4j Operations Manual](https://neo4j.com/docs/operations-manual/current/clustering/setup/discovery/) for background.
 
-### How Neo4j Kubernetes Discovery Works
+### How Cluster Discovery Works
 
-The operator uses **LIST discovery** with static pod FQDNs via the StatefulSet headless service. Each pod's DNS name is known upfront (`{cluster}-server-{n}.{cluster}-headless.{ns}.svc.cluster.local`), so the operator pre-populates a fixed peer list at startup — no Kubernetes API calls required for discovery.
+The operator uses the **LIST resolver** with pre-computed pod FQDNs from the StatefulSet headless service. Each pod's DNS name is known upfront (`{cluster}-server-{n}.{cluster}-headless.{ns}.svc.cluster.local`), so the operator injects a fixed peer list at startup — no Kubernetes API calls required for discovery.
+
+> **Note**: Do not confuse this with the Neo4j `K8S` resolver type, which queries the Kubernetes API directly. This operator always uses the `LIST` resolver.
 
 **Discovery ports**:
 - Port **6000** (`tcp-tx`): V2 cluster communication — used by this operator for discovery endpoints

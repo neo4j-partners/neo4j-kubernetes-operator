@@ -358,8 +358,8 @@ propertySharding:
     server.memory.pagecache.size: "6G"
 
     # Connection pooling for cross-shard queries
-    dbms.connector.bolt.thread_pool_min_size: "10"
-    dbms.connector.bolt.thread_pool_max_size: "100"
+    server.bolt.thread_pool_min_size: "10"
+    server.bolt.thread_pool_max_size: "100"
 ```
 
 **Resource Recommendations**:

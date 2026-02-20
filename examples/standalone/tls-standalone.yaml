@@ -28,8 +28,6 @@ spec:
     provider: native
     adminSecret: neo4j-admin-secret
   env:
-    - name: NEO4J_ACCEPT_LICENSE_AGREEMENT
-      value: "yes"
   config:
     server.memory.heap.initial_size: "1G"
     server.memory.heap.max_size: "2G"

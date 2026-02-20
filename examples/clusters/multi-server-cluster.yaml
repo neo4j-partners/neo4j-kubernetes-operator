@@ -80,7 +80,7 @@ spec:
 
     # Performance settings
     dbms.transaction.timeout: "60s"
-    dbms.connector.bolt.thread_pool_max_size: "200"
+    server.bolt.thread_pool_max_size: "200"
 
   # Query monitoring
   queryMonitoring:

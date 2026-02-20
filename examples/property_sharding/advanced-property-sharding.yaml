@@ -16,7 +16,7 @@
 #   --from-literal=password=production-secure-password
 
 # Property sharding enabled cluster with production-grade configuration
-apiVersion: neo4j.com/v1alpha1
+apiVersion: neo4j.neo4j.com/v1alpha1
 kind: Neo4jEnterpriseCluster
 metadata:
   name: production-sharding-cluster
@@ -69,8 +69,8 @@ spec:
       server.memory.pagecache.size: "6G"
 
       # Connection pooling
-      dbms.connector.bolt.thread_pool_min_size: "10"
-      dbms.connector.bolt.thread_pool_max_size: "100"
+      server.bolt.thread_pool_min_size: "10"
+      server.bolt.thread_pool_max_size: "100"
 
   # TLS configuration for production
   tls:
@@ -81,7 +81,7 @@ spec:
 
 ---
 # Production sharded database with sophisticated property distribution
-apiVersion: neo4j.com/v1alpha1
+apiVersion: neo4j.neo4j.com/v1alpha1
 kind: Neo4jShardedDatabase
 metadata:
   name: ecommerce-sharded-db

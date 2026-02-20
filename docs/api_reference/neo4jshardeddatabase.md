@@ -392,7 +392,6 @@ See [examples directory](../../examples/property_sharding/) for complete configu
 
 ## Related APIs
 
-- [Neo4jEnterpriseCluster API](cluster_api.md)
-- [Neo4jBackup API](backup_api.md)
-- [Neo4jRestore API](restore_api.md)
-- [Storage APIs](storage_api.md)
+- [Neo4jEnterpriseCluster API](neo4jenterprisecluster.md)
+- [Neo4jBackup API](neo4jbackup.md)
+- [Neo4jRestore API](neo4jrestore.md)

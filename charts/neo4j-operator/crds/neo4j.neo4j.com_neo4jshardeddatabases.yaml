@@ -163,7 +163,7 @@ spec:
                 type: string
               defaultCypherLanguage:
                 description: |-
-                  Default Cypher language version for sharded database (Neo4j 2025.10+ only)
+                  Default Cypher language version for sharded database (Neo4j 2025.12+ only)
 
                   Property sharding requires Cypher 25 syntax for multi-database operations.
                   This field ensures compatibility with sharded database queries.

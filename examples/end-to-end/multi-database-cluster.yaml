@@ -51,9 +51,6 @@ spec:
   tls:
     mode: disabled
 
-  env:
-    - name: NEO4J_ACCEPT_LICENSE_AGREEMENT
-      value: "yes"
 
 ---
 # Database 1: Primary Application Database

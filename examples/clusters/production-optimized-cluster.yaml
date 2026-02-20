@@ -69,9 +69,6 @@ spec:
     dbms.security.procedures.unrestricted: "gds.*,apoc.*"
 
   # Environment variables
-  env:
-    - name: NEO4J_ACCEPT_LICENSE_AGREEMENT
-      value: "yes"
 
     # Optional: Override default JVM settings if needed
     # The operator sets production-ready defaults:

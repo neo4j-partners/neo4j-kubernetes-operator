@@ -17,7 +17,7 @@
 #   --from-literal=password=dev-password
 
 # Development property sharding cluster with minimal resources
-apiVersion: neo4j.com/v1alpha1
+apiVersion: neo4j.neo4j.com/v1alpha1
 kind: Neo4jEnterpriseCluster
 metadata:
   name: dev-sharding-cluster
@@ -70,7 +70,7 @@ spec:
 
 ---
 # Simple sharded database for testing
-apiVersion: neo4j.com/v1alpha1
+apiVersion: neo4j.neo4j.com/v1alpha1
 kind: Neo4jShardedDatabase
 metadata:
   name: test-sharded-db

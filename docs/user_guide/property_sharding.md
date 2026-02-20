@@ -623,7 +623,7 @@ Property sharding cannot be enabled on existing databases. Migration approaches:
 2. **Export/import with property distribution**
 3. **Application-level migration with dual-write**
 
-See [migration guide](migration.md) for detailed procedures.
+See [migration guide](migration_guide.md) for detailed procedures.
 
 ## Limitations
 

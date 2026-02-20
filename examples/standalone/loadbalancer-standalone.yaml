@@ -68,9 +68,6 @@ spec:
     adminSecret: neo4j-admin-secret
 
   # Environment variables
-  env:
-    - name: NEO4J_ACCEPT_LICENSE_AGREEMENT
-      value: "yes"
 
   # Configuration
   config:

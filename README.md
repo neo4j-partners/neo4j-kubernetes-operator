@@ -4,7 +4,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/neo4j-partners/neo4j-kubernetes-operator)](https://goreportcard.com/report/github.com/neo4j-partners/neo4j-kubernetes-operator)
 [![GitHub Release](https://img.shields.io/github/release/neo4j-partners/neo4j-kubernetes-operator.svg)](https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases)
 
-The Neo4j Kuberenetes Operator automates the deployment and management of Neo4j Enterprise Edition.
+The Neo4j Kubernetes Operator automates the deployment and management of Neo4j Enterprise Edition.
 
 The Operator deploys Neo4j EE v5.26+.  It supports both clustered and standalone deployments for cloud-native graph database operations.
 
