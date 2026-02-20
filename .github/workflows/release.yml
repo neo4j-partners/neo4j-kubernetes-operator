@@ -14,8 +14,6 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: neo4j-partners/neo4j-kubernetes-operator
-  MCP_IMAGE_NAME: neo4j-partners/neo4j-kubernetes-operator-mcp
-  MCP_REPO: https://github.com/neo4j/mcp.git
   CHART_REGISTRY: ghcr.io/neo4j-partners/charts
   GO_VERSION: '1.24'
 
@@ -80,9 +78,6 @@ jobs:
       contents: read
       packages: write
       id-token: write  # Required for Cosign keyless OIDC signing
-    outputs:
-      mcp_tag: ${{ steps.mcp-tag.outputs.mcp_tag }}
-
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -103,20 +98,6 @@ jobs:
     - name: Set up Helm
       uses: azure/setup-helm@v4
 
-    - name: Determine MCP release tag
-      id: mcp-tag
-      run: |
-        MCP_TAG=$(git ls-remote --tags --refs "${{ env.MCP_REPO }}" \
-          | awk '{print $2}' \
-          | sed 's#refs/tags/##' \
-          | sort -V \
-          | tail -n 1)
-        if [ -z "$MCP_TAG" ]; then
-          echo "Failed to resolve MCP release tag" >&2
-          exit 1
-        fi
-        echo "mcp_tag=${MCP_TAG}" >> $GITHUB_OUTPUT
-
     - name: Get build date
       id: build-date
       run: echo "date=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_OUTPUT
@@ -131,15 +112,6 @@ jobs:
           type=semver,pattern={{version}}
           type=semver,pattern={{major}}.{{minor}}
           type=semver,pattern={{major}}
-
-    - name: Extract MCP metadata
-      id: meta-mcp
-      uses: docker/metadata-action@v5
-      with:
-        images: ${{ env.REGISTRY }}/${{ env.MCP_IMAGE_NAME }}
-        tags: |
-          type=raw,value=${{ steps.mcp-tag.outputs.mcp_tag }}
-          type=raw,value=latest
 
     - name: Build and push operator image
       id: build-operator
@@ -157,23 +129,6 @@ jobs:
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
-    - name: Build and push MCP image
-      id: build-mcp
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        file: images/neo4j-mcp/Dockerfile
-        push: true
-        tags: ${{ steps.meta-mcp.outputs.tags }}
-        labels: ${{ steps.meta-mcp.outputs.labels }}
-        platforms: linux/amd64,linux/arm64
-        build-args: |
-          MCP_REPO=${{ env.MCP_REPO }}
-          MCP_REF=${{ steps.mcp-tag.outputs.mcp_tag }}
-          MCP_VERSION=${{ steps.mcp-tag.outputs.mcp_tag }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
-
     # Keyless signing using Sigstore/Cosign. No long-lived secrets required;
     # the OIDC token from the GitHub Actions workflow is used as proof of identity.
     # Signatures are published to the public Rekor transparency log.
@@ -181,11 +136,6 @@ jobs:
       run: |
         cosign sign --yes \
           ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build-operator.outputs.digest }}
-
-    - name: Sign MCP image
-      run: |
-        cosign sign --yes \
-          ${{ env.REGISTRY }}/${{ env.MCP_IMAGE_NAME }}@${{ steps.build-mcp.outputs.digest }}
 
     - name: Log in to GHCR for Helm
       run: |
@@ -205,6 +155,7 @@ jobs:
     name: Create GitHub Release
     runs-on: ubuntu-latest
     needs: [build-and-push, determine-tag]
+
     permissions:
       contents: write
 
@@ -305,7 +256,6 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         TAG_NAME: ${{ needs.determine-tag.outputs.tag_name }}
         CLEAN_TAG: ${{ needs.determine-tag.outputs.clean_tag }}
-        MCP_TAG: ${{ needs.build-and-push.outputs.mcp_tag }}
       run: |
         echo "TAG_NAME=${TAG_NAME}" >> $GITHUB_OUTPUT
 
@@ -344,7 +294,7 @@ jobs:
         | Image | Tag |
         |-------|-----|
         | \`ghcr.io/neo4j-partners/neo4j-kubernetes-operator\` | \`${TAG_NAME}\` |
-        | \`ghcr.io/neo4j-partners/neo4j-kubernetes-operator-mcp\` | \`${MCP_TAG}\` |
+        | \`mcp/neo4j-cypher\` | \`latest\` (official Docker Hub image) |
 
         Images are signed with [Sigstore Cosign](https://docs.sigstore.dev/cosign/overview/) keyless signing.
         Verify with: \`cosign verify ghcr.io/neo4j-partners/neo4j-kubernetes-operator:${TAG_NAME} --certificate-identity-regexp='github.com/neo4j-partners' --certificate-oidc-issuer='https://token.actions.githubusercontent.com'\`

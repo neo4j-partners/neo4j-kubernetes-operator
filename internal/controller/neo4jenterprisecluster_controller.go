@@ -1636,13 +1636,6 @@ func (r *Neo4jEnterpriseClusterReconciler) reconcileMCP(ctx context.Context, clu
 		return nil
 	}
 
-	// MCP TLS certificate (cert-manager)
-	if certificate := resources.BuildMCPCertificateForCluster(cluster); certificate != nil {
-		if err := r.createOrUpdateResource(ctx, certificate, cluster); err != nil {
-			return fmt.Errorf("failed to reconcile MCP certificate: %w", err)
-		}
-	}
-
 	if service := resources.BuildMCPServiceForCluster(cluster); service != nil {
 		if err := r.createOrUpdateResource(ctx, service, cluster); err != nil {
 			return fmt.Errorf("failed to reconcile MCP service: %w", err)

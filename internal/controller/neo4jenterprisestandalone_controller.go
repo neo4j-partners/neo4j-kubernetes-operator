@@ -439,12 +439,6 @@ func (r *Neo4jEnterpriseStandaloneReconciler) reconcileMCP(ctx context.Context, 
 		return nil
 	}
 
-	if certificate := resources.BuildMCPCertificateForStandalone(standalone); certificate != nil {
-		if err := r.createOrUpdateMCPResource(ctx, certificate, standalone); err != nil {
-			return fmt.Errorf("failed to reconcile MCP certificate: %w", err)
-		}
-	}
-
 	if service := resources.BuildMCPServiceForStandalone(standalone); service != nil {
 		if err := r.createOrUpdateMCPResource(ctx, service, standalone); err != nil {
 			return fmt.Errorf("failed to reconcile MCP service: %w", err)

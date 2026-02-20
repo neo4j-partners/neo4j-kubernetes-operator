@@ -29,8 +29,6 @@ func validateMCPConfig(spec *neo4jv1alpha1.MCPServerSpec, path *field.Path) fiel
 		return allErrs
 	}
 
-	// Image is optional; defaults are applied when omitted.
-
 	transport := spec.Transport
 	if transport == "" {
 		transport = "http"
@@ -43,94 +41,36 @@ func validateMCPConfig(spec *neo4jv1alpha1.MCPServerSpec, path *field.Path) fiel
 		))
 	}
 
-	if transport == "http" {
-		if spec.Auth != nil {
+	if transport == "http" && spec.HTTP != nil {
+		if spec.HTTP.Port < 0 || spec.HTTP.Port > 65535 {
 			allErrs = append(allErrs, field.Invalid(
-				path.Child("auth"),
-				"<set>",
-				"auth is only supported for stdio transport",
+				path.Child("http", "port"),
+				spec.HTTP.Port,
+				"port must be between 1 and 65535 when set",
 			))
 		}
 
-		if spec.HTTP != nil {
-			if spec.HTTP.Port < 0 || spec.HTTP.Port > 65535 {
+		if spec.HTTP.Service != nil {
+			if spec.HTTP.Service.Port < 0 || spec.HTTP.Service.Port > 65535 {
 				allErrs = append(allErrs, field.Invalid(
-					path.Child("http", "port"),
-					spec.HTTP.Port,
+					path.Child("http", "service", "port"),
+					spec.HTTP.Service.Port,
 					"port must be between 1 and 65535 when set",
 				))
-			}
-
-			if spec.HTTP.TLS != nil {
-				tlsPath := path.Child("http", "tls")
-				mode := spec.HTTP.TLS.Mode
-				if mode == "" {
-					mode = "disabled"
-				}
-
-				switch mode {
-				case "disabled":
-					if spec.HTTP.TLS.SecretName != "" {
-						allErrs = append(allErrs, field.Invalid(
-							tlsPath.Child("secretName"),
-							spec.HTTP.TLS.SecretName,
-							"secretName should not be set when TLS is disabled",
-						))
-					}
-				case "secret":
-					if spec.HTTP.TLS.SecretName == "" {
-						allErrs = append(allErrs, field.Required(
-							tlsPath.Child("secretName"),
-							"secretName is required for secret TLS mode",
-						))
-					}
-				case "cert-manager":
-					if spec.HTTP.TLS.IssuerRef == nil || spec.HTTP.TLS.IssuerRef.Name == "" {
-						allErrs = append(allErrs, field.Required(
-							tlsPath.Child("issuerRef", "name"),
-							"issuerRef.name is required for cert-manager TLS mode",
-						))
-					}
-				default:
-					allErrs = append(allErrs, field.NotSupported(
-						tlsPath.Child("mode"),
-						spec.HTTP.TLS.Mode,
-						[]string{"disabled", "secret", "cert-manager"},
-					))
-				}
-			}
-
-			if spec.HTTP.Service != nil {
-				if spec.HTTP.Service.Port < 0 || spec.HTTP.Service.Port > 65535 {
-					allErrs = append(allErrs, field.Invalid(
-						path.Child("http", "service", "port"),
-						spec.HTTP.Service.Port,
-						"port must be between 1 and 65535 when set",
-					))
-				}
 			}
 		}
 	}
 
-	if transport == "stdio" && spec.Auth != nil {
-		if spec.Auth.SecretName == "" {
-			allErrs = append(allErrs, field.Required(
-				path.Child("auth", "secretName"),
-				"secretName is required for stdio transport",
-			))
-		}
-		if spec.Auth.UsernameKey == "" {
-			allErrs = append(allErrs, field.Required(
-				path.Child("auth", "usernameKey"),
-				"usernameKey is required for stdio transport",
-			))
-		}
-		if spec.Auth.PasswordKey == "" {
-			allErrs = append(allErrs, field.Required(
-				path.Child("auth", "passwordKey"),
-				"passwordKey is required for stdio transport",
-			))
-		}
+	// spec.auth is optional for both transports:
+	//   - HTTP:  defaults to the cluster/standalone admin secret when omitted.
+	//   - STDIO: same default; explicit secretName/keys allow using a separate secret.
+	if spec.Auth != nil && spec.Auth.SecretName == "" {
+		// If auth is provided it must at least specify the secret name.
+		// When auth is nil the operator uses the cluster admin secret automatically.
+		allErrs = append(allErrs, field.Required(
+			path.Child("auth", "secretName"),
+			"secretName is required when auth is set",
+		))
 	}
 
 	return allErrs

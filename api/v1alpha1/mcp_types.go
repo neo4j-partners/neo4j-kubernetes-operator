@@ -18,13 +18,15 @@ package v1alpha1
 
 import corev1 "k8s.io/api/core/v1"
 
-// MCPServerSpec defines configuration for a Neo4j MCP server.
+// MCPServerSpec defines configuration for a Neo4j MCP server using the official
+// mcp/neo4j-cypher image (https://hub.docker.com/r/mcp/neo4j-cypher).
 type MCPServerSpec struct {
 	// Enable MCP server deployment.
 	// +kubebuilder:default=false
 	Enabled bool `json:"enabled,omitempty"`
 
 	// Image configuration for the MCP server.
+	// Defaults to mcp/neo4j-cypher:latest (the official Docker Hub image).
 	Image *ImageSpec `json:"image,omitempty"`
 
 	// Transport mode for MCP: http or stdio.
@@ -36,27 +38,27 @@ type MCPServerSpec struct {
 	// +kubebuilder:default=true
 	ReadOnly bool `json:"readOnly,omitempty"`
 
-	// Telemetry enables anonymous usage data collection.
-	// +kubebuilder:default=false
-	Telemetry bool `json:"telemetry,omitempty"`
-
-	// Default Neo4j database for MCP.
+	// Default Neo4j database for MCP queries.
 	Database string `json:"database,omitempty"`
 
-	// SchemaSampleSize controls the schema sampling size.
-	// +kubebuilder:validation:Minimum=1
+	// Namespace restricts the MCP server to a specific Neo4j namespace (label prefix).
+	Namespace string `json:"namespace,omitempty"`
+
+	// SchemaSampleSize controls the schema sampling size used by get_neo4j_schema.
+	// Lower values are faster; use -1 to sample the entire graph.
+	// +kubebuilder:validation:Minimum=-1
 	SchemaSampleSize *int32 `json:"schemaSampleSize,omitempty"`
 
-	// LogLevel controls MCP logging verbosity.
-	LogLevel string `json:"logLevel,omitempty"`
-
-	// LogFormat controls MCP logging format.
-	LogFormat string `json:"logFormat,omitempty"`
+	// ResponseTokenLimit limits the maximum number of tokens in a response.
+	// +kubebuilder:validation:Minimum=1
+	ResponseTokenLimit *int32 `json:"responseTokenLimit,omitempty"`
 
 	// HTTP settings (only used for HTTP transport).
 	HTTP *MCPHTTPConfig `json:"http,omitempty"`
 
-	// Auth settings (only used for STDIO transport).
+	// Auth allows overriding the Neo4j credentials used by the MCP server.
+	// When not set the operator uses the cluster/standalone admin secret.
+	// Applies to both http and stdio transport.
 	Auth *MCPAuthSpec `json:"auth,omitempty"`
 
 	// Replicas controls the number of MCP server pods.
@@ -66,6 +68,11 @@ type MCPServerSpec struct {
 	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
 
 	// Environment variables for MCP pods.
+	// Reserved operator-managed variables (NEO4J_URL, NEO4J_USERNAME, NEO4J_PASSWORD,
+	// NEO4J_DATABASE, NEO4J_NAMESPACE, NEO4J_READ_ONLY, NEO4J_SCHEMA_SAMPLE_SIZE,
+	// NEO4J_RESPONSE_TOKEN_LIMIT, NEO4J_TRANSPORT, NEO4J_MCP_SERVER_HOST,
+	// NEO4J_MCP_SERVER_PORT, NEO4J_MCP_SERVER_PATH, NEO4J_MCP_SERVER_ALLOW_ORIGINS,
+	// NEO4J_MCP_SERVER_ALLOWED_HOSTS, NEO4J_READ_TIMEOUT) are silently ignored.
 	Env []corev1.EnvVar `json:"env,omitempty"`
 
 	// SecurityContext allows overriding pod/container security settings.
@@ -77,41 +84,25 @@ type MCPHTTPConfig struct {
 	// Host to bind the HTTP server to (defaults to 0.0.0.0).
 	Host string `json:"host,omitempty"`
 
-	// Port to bind the HTTP server to (defaults to 8080 or 8443 when TLS enabled).
+	// Port to bind the HTTP server to (defaults to 8000).
 	Port int32 `json:"port,omitempty"`
 
-	// Allowed origins for CORS (comma-separated or "*").
+	// Path at which the MCP endpoint is served (defaults to /mcp/).
+	Path string `json:"path,omitempty"`
+
+	// AllowedOrigins restricts CORS origins (comma-separated or "*").
 	AllowedOrigins string `json:"allowedOrigins,omitempty"`
 
-	// TLS settings for MCP HTTP server.
-	TLS *MCPTLSSpec `json:"tls,omitempty"`
+	// AllowedHosts restricts which hostnames may connect to the MCP endpoint
+	// (comma-separated). Defaults to localhost,127.0.0.1.
+	AllowedHosts string `json:"allowedHosts,omitempty"`
+
+	// ReadTimeout is the maximum number of seconds to wait for a Neo4j query response.
+	// +kubebuilder:validation:Minimum=1
+	ReadTimeout *int32 `json:"readTimeout,omitempty"`
 
 	// Service exposure settings for HTTP transport.
 	Service *MCPServiceSpec `json:"service,omitempty"`
-}
-
-// MCPTLSSpec defines TLS configuration for MCP HTTP server.
-type MCPTLSSpec struct {
-	// +kubebuilder:validation:Enum=cert-manager;disabled;secret
-	// +kubebuilder:default=disabled
-	Mode string `json:"mode,omitempty"`
-
-	// SecretName references a TLS secret with tls.crt and tls.key.
-	SecretName string `json:"secretName,omitempty"`
-
-	IssuerRef *IssuerRef `json:"issuerRef,omitempty"`
-
-	// Certificate duration and renewal settings.
-	Duration *string `json:"duration,omitempty"`
-
-	// Certificate renewal before expiry.
-	RenewBefore *string `json:"renewBefore,omitempty"`
-
-	// Additional certificate subject fields.
-	Subject *CertificateSubject `json:"subject,omitempty"`
-
-	// Certificate usage settings.
-	Usages []string `json:"usages,omitempty"`
 }
 
 // MCPServiceSpec defines Service exposure for MCP HTTP server.
@@ -142,7 +133,10 @@ type MCPServiceSpec struct {
 	Route *RouteSpec `json:"route,omitempty"`
 }
 
-// MCPAuthSpec defines STDIO auth settings for MCP.
+// MCPAuthSpec allows overriding the Neo4j credentials used by the MCP server.
+// When set, the operator reads username and password from the referenced secret
+// instead of the cluster/standalone admin secret.
+// Applies to both http and stdio transport.
 type MCPAuthSpec struct {
 	// SecretName references a secret with username/password keys.
 	SecretName string `json:"secretName,omitempty"`

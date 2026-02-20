@@ -33,18 +33,18 @@ func TestValidateMCPConfig(t *testing.T) {
 		errorTypes     []field.ErrorType
 	}{
 		{
-			name: "disabled MCP",
+			name: "disabled MCP — no errors",
 			spec: &neo4jv1alpha1.MCPServerSpec{Enabled: false},
 		},
 		{
-			name: "missing image",
+			name: "enabled with no image — uses official default, no error",
 			spec: &neo4jv1alpha1.MCPServerSpec{Enabled: true},
 		},
 		{
-			name: "missing image repo and tag",
+			name: "enabled with explicit image — valid",
 			spec: &neo4jv1alpha1.MCPServerSpec{
 				Enabled: true,
-				Image:   &neo4jv1alpha1.ImageSpec{},
+				Image:   validMCPImage(),
 			},
 		},
 		{
@@ -58,24 +58,29 @@ func TestValidateMCPConfig(t *testing.T) {
 			errorTypes:     []field.ErrorType{field.ErrorTypeNotSupported},
 		},
 		{
-			name: "http with auth set",
+			name: "http auth with secretName — valid override",
 			spec: &neo4jv1alpha1.MCPServerSpec{
 				Enabled:   true,
 				Transport: "http",
-				Image:     validMCPImage(),
 				Auth: &neo4jv1alpha1.MCPAuthSpec{
-					SecretName: "auth-secret",
+					SecretName: "custom-secret",
 				},
 			},
+		},
+		{
+			name: "auth set without secretName — error",
+			spec: &neo4jv1alpha1.MCPServerSpec{
+				Enabled: true,
+				Auth:    &neo4jv1alpha1.MCPAuthSpec{},
+			},
 			expectedErrors: 1,
-			errorTypes:     []field.ErrorType{field.ErrorTypeInvalid},
+			errorTypes:     []field.ErrorType{field.ErrorTypeRequired},
 		},
 		{
 			name: "http port out of range",
 			spec: &neo4jv1alpha1.MCPServerSpec{
 				Enabled:   true,
 				Transport: "http",
-				Image:     validMCPImage(),
 				HTTP:      &neo4jv1alpha1.MCPHTTPConfig{Port: 70000},
 			},
 			expectedErrors: 1,
@@ -86,7 +91,6 @@ func TestValidateMCPConfig(t *testing.T) {
 			spec: &neo4jv1alpha1.MCPServerSpec{
 				Enabled:   true,
 				Transport: "http",
-				Image:     validMCPImage(),
 				HTTP: &neo4jv1alpha1.MCPHTTPConfig{
 					Service: &neo4jv1alpha1.MCPServiceSpec{Port: 70000},
 				},
@@ -95,67 +99,22 @@ func TestValidateMCPConfig(t *testing.T) {
 			errorTypes:     []field.ErrorType{field.ErrorTypeInvalid},
 		},
 		{
-			name: "http tls secret missing secretName",
-			spec: &neo4jv1alpha1.MCPServerSpec{
-				Enabled:   true,
-				Transport: "http",
-				Image:     validMCPImage(),
-				HTTP: &neo4jv1alpha1.MCPHTTPConfig{
-					TLS: &neo4jv1alpha1.MCPTLSSpec{Mode: "secret"},
-				},
-			},
-			expectedErrors: 1,
-			errorTypes:     []field.ErrorType{field.ErrorTypeRequired},
-		},
-		{
-			name: "http tls disabled with secretName",
-			spec: &neo4jv1alpha1.MCPServerSpec{
-				Enabled:   true,
-				Transport: "http",
-				Image:     validMCPImage(),
-				HTTP: &neo4jv1alpha1.MCPHTTPConfig{
-					TLS: &neo4jv1alpha1.MCPTLSSpec{
-						Mode:       "disabled",
-						SecretName: "mcp-tls",
-					},
-				},
-			},
-			expectedErrors: 1,
-			errorTypes:     []field.ErrorType{field.ErrorTypeInvalid},
-		},
-		{
-			name: "http tls cert-manager missing issuerRef name",
-			spec: &neo4jv1alpha1.MCPServerSpec{
-				Enabled:   true,
-				Transport: "http",
-				Image:     validMCPImage(),
-				HTTP: &neo4jv1alpha1.MCPHTTPConfig{
-					TLS: &neo4jv1alpha1.MCPTLSSpec{
-						Mode:      "cert-manager",
-						IssuerRef: &neo4jv1alpha1.IssuerRef{},
-					},
-				},
-			},
-			expectedErrors: 1,
-			errorTypes:     []field.ErrorType{field.ErrorTypeRequired},
-		},
-		{
-			name: "stdio auth missing fields",
+			name: "stdio without auth — uses cluster admin secret automatically",
 			spec: &neo4jv1alpha1.MCPServerSpec{
 				Enabled:   true,
 				Transport: "stdio",
-				Image:     validMCPImage(),
-				Auth:      &neo4jv1alpha1.MCPAuthSpec{},
 			},
-			expectedErrors: 3,
-			errorTypes:     []field.ErrorType{field.ErrorTypeRequired},
 		},
 		{
-			name: "stdio without auth",
+			name: "stdio with auth override — valid",
 			spec: &neo4jv1alpha1.MCPServerSpec{
 				Enabled:   true,
 				Transport: "stdio",
-				Image:     validMCPImage(),
+				Auth: &neo4jv1alpha1.MCPAuthSpec{
+					SecretName:  "custom-auth",
+					UsernameKey: "user",
+					PasswordKey: "pass",
+				},
 			},
 		},
 	}
@@ -180,7 +139,7 @@ func TestValidateMCPConfig(t *testing.T) {
 
 func validMCPImage() *neo4jv1alpha1.ImageSpec {
 	return &neo4jv1alpha1.ImageSpec{
-		Repo: "ghcr.io/neo4j-partners/neo4j-kubernetes-operator-mcp",
-		Tag:  "v1.0.0",
+		Repo: "mcp/neo4j-cypher",
+		Tag:  "latest",
 	}
 }

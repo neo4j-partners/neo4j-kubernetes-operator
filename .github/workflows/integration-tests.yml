@@ -53,10 +53,6 @@ jobs:
         make docker-build IMG=neo4j-operator:integration-test
         kind load docker-image neo4j-operator:integration-test --name neo4j-operator-test
 
-        echo "▶ Building MCP image..."
-        make mcp-docker-build MCP_IMAGE=neo4j-operator-mcp:integration-test
-        kind load docker-image neo4j-operator-mcp:integration-test --name neo4j-operator-test
-
         echo "▶ Deploying operator to neo4j-operator-system..."
         make kustomize
         mkdir -p config/overlays/ci-temp
@@ -112,14 +108,11 @@ jobs:
         make ginkgo
 
         set -o pipefail
-        MCP_TEST_IMAGE=neo4j-operator-mcp:integration-test \
-          ./bin/ginkgo run -v --timeout=60m ./test/integration/... | tee integration-test-output.log
+        ./bin/ginkgo run -v --timeout=60m ./test/integration/... | tee integration-test-output.log
       env:
         KUBECONFIG: /home/runner/.kube/config
         NEO4J_VERSION: ${{ github.event.inputs.neo4j-version || '5.26-enterprise' }}
         FORCE_COLOR: 1
-        MCP_REGISTRY_USERNAME: ${{ github.actor }}
-        MCP_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Collect cluster state
       if: always()

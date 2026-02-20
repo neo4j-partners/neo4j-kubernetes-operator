@@ -1456,7 +1456,10 @@ spec:
                 description: MCP server configuration for this standalone deployment
                 properties:
                   auth:
-                    description: Auth settings (only used for STDIO transport).
+                    description: |-
+                      Auth allows overriding the Neo4j credentials used by the MCP server.
+                      When not set the operator uses the cluster/standalone admin secret.
+                      Applies to both http and stdio transport.
                     properties:
                       passwordKey:
                         default: password
@@ -1470,14 +1473,20 @@ spec:
                         type: string
                     type: object
                   database:
-                    description: Default Neo4j database for MCP.
+                    description: Default Neo4j database for MCP queries.
                     type: string
                   enabled:
                     default: false
                     description: Enable MCP server deployment.
                     type: boolean
                   env:
-                    description: Environment variables for MCP pods.
+                    description: |-
+                      Environment variables for MCP pods.
+                      Reserved operator-managed variables (NEO4J_URL, NEO4J_USERNAME, NEO4J_PASSWORD,
+                      NEO4J_DATABASE, NEO4J_NAMESPACE, NEO4J_READ_ONLY, NEO4J_SCHEMA_SAMPLE_SIZE,
+                      NEO4J_RESPONSE_TOKEN_LIMIT, NEO4J_TRANSPORT, NEO4J_MCP_SERVER_HOST,
+                      NEO4J_MCP_SERVER_PORT, NEO4J_MCP_SERVER_PATH, NEO4J_MCP_SERVER_ALLOW_ORIGINS,
+                      NEO4J_MCP_SERVER_ALLOWED_HOSTS, NEO4J_READ_TIMEOUT) are silently ignored.
                     items:
                       description: EnvVar represents an environment variable present
                         in a Container.
@@ -1599,18 +1608,33 @@ spec:
                   http:
                     description: HTTP settings (only used for HTTP transport).
                     properties:
+                      allowedHosts:
+                        description: |-
+                          AllowedHosts restricts which hostnames may connect to the MCP endpoint
+                          (comma-separated). Defaults to localhost,127.0.0.1.
+                        type: string
                       allowedOrigins:
-                        description: Allowed origins for CORS (comma-separated or
-                          "*").
+                        description: AllowedOrigins restricts CORS origins (comma-separated
+                          or "*").
                         type: string
                       host:
                         description: Host to bind the HTTP server to (defaults to
                           0.0.0.0).
                         type: string
+                      path:
+                        description: Path at which the MCP endpoint is served (defaults
+                          to /mcp/).
+                        type: string
                       port:
                         description: Port to bind the HTTP server to (defaults to
-                          8080 or 8443 when TLS enabled).
+                          8000).
                         format: int32
+                        type: integer
+                      readTimeout:
+                        description: ReadTimeout is the maximum number of seconds
+                          to wait for a Neo4j query response.
+                        format: int32
+                        minimum: 1
                         type: integer
                       service:
                         description: Service exposure settings for HTTP transport.
@@ -1706,84 +1730,11 @@ spec:
                             - LoadBalancer
                             type: string
                         type: object
-                      tls:
-                        description: TLS settings for MCP HTTP server.
-                        properties:
-                          duration:
-                            description: Certificate duration and renewal settings.
-                            type: string
-                          issuerRef:
-                            description: |-
-                              IssuerRef references a cert-manager-compatible issuer.
-                              Supports standard cert-manager issuers (Issuer, ClusterIssuer) as well as
-                              third-party external issuers (e.g. AWSPCAClusterIssuer, VaultIssuer) by
-                              specifying the appropriate kind and group.
-                            properties:
-                              group:
-                                description: |-
-                                  Group of the issuer's API. Defaults to cert-manager.io for standard
-                                  cert-manager issuers. Set to the external issuer's API group for
-                                  third-party issuers (e.g. awspca.cert-manager.io).
-                                type: string
-                              kind:
-                                default: ClusterIssuer
-                                description: |-
-                                  Kind of the issuer resource. Defaults to ClusterIssuer for standard
-                                  cert-manager usage. Set to the custom resource kind for external issuers
-                                  (e.g. AWSPCAClusterIssuer).
-                                type: string
-                              name:
-                                type: string
-                            required:
-                            - name
-                            type: object
-                          mode:
-                            default: disabled
-                            enum:
-                            - cert-manager
-                            - disabled
-                            - secret
-                            type: string
-                          renewBefore:
-                            description: Certificate renewal before expiry.
-                            type: string
-                          secretName:
-                            description: SecretName references a TLS secret with tls.crt
-                              and tls.key.
-                            type: string
-                          subject:
-                            description: Additional certificate subject fields.
-                            properties:
-                              countries:
-                                items:
-                                  type: string
-                                type: array
-                              localities:
-                                items:
-                                  type: string
-                                type: array
-                              organizationalUnits:
-                                items:
-                                  type: string
-                                type: array
-                              organizations:
-                                items:
-                                  type: string
-                                type: array
-                              provinces:
-                                items:
-                                  type: string
-                                type: array
-                            type: object
-                          usages:
-                            description: Certificate usage settings.
-                            items:
-                              type: string
-                            type: array
-                        type: object
                     type: object
                   image:
-                    description: Image configuration for the MCP server.
+                    description: |-
+                      Image configuration for the MCP server.
+                      Defaults to mcp/neo4j-cypher:latest (the official Docker Hub image).
                     properties:
                       pullPolicy:
                         default: IfNotPresent
@@ -1800,11 +1751,9 @@ spec:
                     - repo
                     - tag
                     type: object
-                  logFormat:
-                    description: LogFormat controls MCP logging format.
-                    type: string
-                  logLevel:
-                    description: LogLevel controls MCP logging verbosity.
+                  namespace:
+                    description: Namespace restricts the MCP server to a specific
+                      Neo4j namespace (label prefix).
                     type: string
                   readOnly:
                     default: true
@@ -1873,10 +1822,18 @@ spec:
                           More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
                         type: object
                     type: object
-                  schemaSampleSize:
-                    description: SchemaSampleSize controls the schema sampling size.
+                  responseTokenLimit:
+                    description: ResponseTokenLimit limits the maximum number of tokens
+                      in a response.
                     format: int32
                     minimum: 1
+                    type: integer
+                  schemaSampleSize:
+                    description: |-
+                      SchemaSampleSize controls the schema sampling size used by get_neo4j_schema.
+                      Lower values are faster; use -1 to sample the entire graph.
+                    format: int32
+                    minimum: -1
                     type: integer
                   securityContext:
                     description: SecurityContext allows overriding pod/container security
@@ -2309,10 +2266,6 @@ spec:
                             type: object
                         type: object
                     type: object
-                  telemetry:
-                    default: false
-                    description: Telemetry enables anonymous usage data collection.
-                    type: boolean
                   transport:
                     default: http
                     description: 'Transport mode for MCP: http or stdio.'

@@ -109,14 +109,9 @@ var _ = Describe("MCP Integration Tests", func() {
 			}
 			cluster.Spec.Resources = getCIAppropriateResourceRequirements()
 			cluster.Spec.MCP = &neo4jv1alpha1.MCPServerSpec{
-				Enabled: true,
-				Image: &neo4jv1alpha1.ImageSpec{
-					Repo: "ghcr.io/neo4j-partners/neo4j-kubernetes-operator-mcp",
-					Tag:  "latest",
-				},
+				Enabled:   true,
 				Transport: "http",
 				ReadOnly:  true,
-				Telemetry: false,
 			}
 
 			Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
@@ -149,33 +144,39 @@ var _ = Describe("MCP Integration Tests", func() {
 					return fmt.Errorf("expected MCP label neo4j.com/cluster=%s", clusterName)
 				}
 
-				if container.Image != "ghcr.io/neo4j-partners/neo4j-kubernetes-operator-mcp:latest" {
+				// Default image is the official mcp/neo4j-cypher from Docker Hub.
+				if container.Image != "mcp/neo4j-cypher:latest" {
 					return fmt.Errorf("unexpected MCP image: %s", container.Image)
 				}
 
-				if !hasContainerPort(container.Ports, 8080) {
-					return fmt.Errorf("expected MCP container port 8080")
+				if !hasContainerPort(container.Ports, 8000) {
+					return fmt.Errorf("expected MCP container port 8000")
 				}
 
-				transport := findEnvVar(container.Env, "NEO4J_MCP_TRANSPORT")
+				transport := findEnvVar(container.Env, "NEO4J_TRANSPORT")
 				if transport == nil || transport.Value != "http" {
-					return fmt.Errorf("expected NEO4J_MCP_TRANSPORT=http")
+					return fmt.Errorf("expected NEO4J_TRANSPORT=http")
 				}
 
-				hostEnv := findEnvVar(container.Env, "NEO4J_MCP_HTTP_HOST")
+				hostEnv := findEnvVar(container.Env, "NEO4J_MCP_SERVER_HOST")
 				if hostEnv == nil || hostEnv.Value != "0.0.0.0" {
-					return fmt.Errorf("expected NEO4J_MCP_HTTP_HOST=0.0.0.0")
+					return fmt.Errorf("expected NEO4J_MCP_SERVER_HOST=0.0.0.0")
 				}
 
-				portEnv := findEnvVar(container.Env, "NEO4J_MCP_HTTP_PORT")
-				if portEnv == nil || portEnv.Value != "8080" {
-					return fmt.Errorf("expected NEO4J_MCP_HTTP_PORT=8080")
+				portEnv := findEnvVar(container.Env, "NEO4J_MCP_SERVER_PORT")
+				if portEnv == nil || portEnv.Value != "8000" {
+					return fmt.Errorf("expected NEO4J_MCP_SERVER_PORT=8000")
 				}
 
-				neo4jURI := findEnvVar(container.Env, "NEO4J_URI")
-				expectedURI := fmt.Sprintf("neo4j://%s-client.%s.svc.cluster.local:7687", clusterName, namespace.Name)
-				if neo4jURI == nil || neo4jURI.Value != expectedURI {
-					return fmt.Errorf("expected NEO4J_URI=%s", expectedURI)
+				pathEnv := findEnvVar(container.Env, "NEO4J_MCP_SERVER_PATH")
+				if pathEnv == nil || pathEnv.Value != "/mcp/" {
+					return fmt.Errorf("expected NEO4J_MCP_SERVER_PATH=/mcp/")
+				}
+
+				neo4jURL := findEnvVar(container.Env, "NEO4J_URL")
+				expectedURL := fmt.Sprintf("neo4j://%s-client.%s.svc.cluster.local:7687", clusterName, namespace.Name)
+				if neo4jURL == nil || neo4jURL.Value != expectedURL {
+					return fmt.Errorf("expected NEO4J_URL=%s", expectedURL)
 				}
 
 				readOnly := findEnvVar(container.Env, "NEO4J_READ_ONLY")
@@ -183,17 +184,15 @@ var _ = Describe("MCP Integration Tests", func() {
 					return fmt.Errorf("expected NEO4J_READ_ONLY=true")
 				}
 
-				telemetry := findEnvVar(container.Env, "NEO4J_TELEMETRY")
-				if telemetry == nil || telemetry.Value != "false" {
-					return fmt.Errorf("expected NEO4J_TELEMETRY=false")
+				// Credentials must be injected for all transports (official image requires them).
+				username := findEnvVar(container.Env, "NEO4J_USERNAME")
+				if username == nil || username.ValueFrom == nil || username.ValueFrom.SecretKeyRef == nil {
+					return fmt.Errorf("expected NEO4J_USERNAME secret ref")
 				}
 
-				if findEnvVar(container.Env, "NEO4J_USERNAME") != nil {
-					return fmt.Errorf("NEO4J_USERNAME should not be set for HTTP transport")
-				}
-
-				if findEnvVar(container.Env, "NEO4J_MCP_HTTP_TLS_ENABLED") != nil {
-					return fmt.Errorf("NEO4J_MCP_HTTP_TLS_ENABLED should not be set without TLS")
+				password := findEnvVar(container.Env, "NEO4J_PASSWORD")
+				if password == nil || password.ValueFrom == nil || password.ValueFrom.SecretKeyRef == nil {
+					return fmt.Errorf("expected NEO4J_PASSWORD secret ref")
 				}
 
 				return nil
@@ -218,8 +217,8 @@ var _ = Describe("MCP Integration Tests", func() {
 					return fmt.Errorf("expected service selector neo4j.com/cluster=%s", clusterName)
 				}
 
-				if len(service.Spec.Ports) == 0 || service.Spec.Ports[0].Port != 8080 {
-					return fmt.Errorf("expected MCP service port 8080")
+				if len(service.Spec.Ports) == 0 || service.Spec.Ports[0].Port != 8000 {
+					return fmt.Errorf("expected MCP service port 8000")
 				}
 
 				return nil
@@ -230,7 +229,6 @@ var _ = Describe("MCP Integration Tests", func() {
 	Context("MCP HTTP runtime verification", func() {
 		It("serves tools/list over HTTP with Basic Auth", func() {
 			imageSpec := mcpRuntimeImageSpec()
-			pullSecretName := createRegistryPullSecret(ctx, namespace.Name, imageSpec.Repo)
 
 			adminSecret := &corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
@@ -254,10 +252,6 @@ var _ = Describe("MCP Integration Tests", func() {
 				Image:     imageSpec,
 				Transport: "http",
 				ReadOnly:  true,
-				Telemetry: false,
-			}
-			if pullSecretName != "" {
-				standalone.Spec.MCP.Image.PullSecrets = []string{pullSecretName}
 			}
 
 			Expect(k8sClient.Create(ctx, standalone)).To(Succeed())
@@ -288,7 +282,7 @@ var _ = Describe("MCP Integration Tests", func() {
 			}, timeout, interval).Should(BeTrue())
 
 			serviceHost := fmt.Sprintf("%s-mcp.%s.svc.cluster.local", standaloneID, namespace.Name)
-			serviceURL := fmt.Sprintf("http://%s:8080/mcp", serviceHost)
+			serviceURL := fmt.Sprintf("http://%s:8000/mcp/", serviceHost)
 
 			curlJob = buildMCPCurlJob(namespace.Name, "mcp-tools-list", serviceURL, "neo4j", "admin123")
 			Expect(k8sClient.Create(ctx, curlJob)).To(Succeed())
@@ -330,14 +324,9 @@ var _ = Describe("MCP Integration Tests", func() {
 			}
 			standalone.Spec.Resources = getCIAppropriateResourceRequirements()
 			standalone.Spec.MCP = &neo4jv1alpha1.MCPServerSpec{
-				Enabled: true,
-				Image: &neo4jv1alpha1.ImageSpec{
-					Repo: "ghcr.io/neo4j-partners/neo4j-kubernetes-operator-mcp",
-					Tag:  "latest",
-				},
+				Enabled:   true,
 				Transport: "stdio",
 				ReadOnly:  true,
-				Telemetry: false,
 				Auth: &neo4jv1alpha1.MCPAuthSpec{
 					SecretName:  adminSecret.Name,
 					UsernameKey: "username",
@@ -375,29 +364,25 @@ var _ = Describe("MCP Integration Tests", func() {
 					return fmt.Errorf("expected MCP label neo4j.com/cluster=%s", standaloneID)
 				}
 
-				if container.Image != "ghcr.io/neo4j-partners/neo4j-kubernetes-operator-mcp:latest" {
+				// Default image is the official mcp/neo4j-cypher from Docker Hub.
+				if container.Image != "mcp/neo4j-cypher:latest" {
 					return fmt.Errorf("unexpected MCP image: %s", container.Image)
 				}
 
-				transport := findEnvVar(container.Env, "NEO4J_MCP_TRANSPORT")
+				transport := findEnvVar(container.Env, "NEO4J_TRANSPORT")
 				if transport == nil || transport.Value != "stdio" {
-					return fmt.Errorf("expected NEO4J_MCP_TRANSPORT=stdio")
+					return fmt.Errorf("expected NEO4J_TRANSPORT=stdio")
 				}
 
-				neo4jURI := findEnvVar(container.Env, "NEO4J_URI")
-				expectedURI := fmt.Sprintf("bolt://%s-service.%s.svc.cluster.local:7687", standaloneID, namespace.Name)
-				if neo4jURI == nil || neo4jURI.Value != expectedURI {
-					return fmt.Errorf("expected NEO4J_URI=%s", expectedURI)
+				neo4jURL := findEnvVar(container.Env, "NEO4J_URL")
+				expectedURL := fmt.Sprintf("bolt://%s-service.%s.svc.cluster.local:7687", standaloneID, namespace.Name)
+				if neo4jURL == nil || neo4jURL.Value != expectedURL {
+					return fmt.Errorf("expected NEO4J_URL=%s", expectedURL)
 				}
 
 				readOnly := findEnvVar(container.Env, "NEO4J_READ_ONLY")
 				if readOnly == nil || readOnly.Value != "true" {
 					return fmt.Errorf("expected NEO4J_READ_ONLY=true")
-				}
-
-				telemetry := findEnvVar(container.Env, "NEO4J_TELEMETRY")
-				if telemetry == nil || telemetry.Value != "false" {
-					return fmt.Errorf("expected NEO4J_TELEMETRY=false")
 				}
 
 				username := findEnvVar(container.Env, "NEO4J_USERNAME")
@@ -418,8 +403,8 @@ var _ = Describe("MCP Integration Tests", func() {
 					return fmt.Errorf("unexpected NEO4J_PASSWORD secret ref")
 				}
 
-				if findEnvVar(container.Env, "NEO4J_MCP_HTTP_PORT") != nil {
-					return fmt.Errorf("NEO4J_MCP_HTTP_PORT should not be set for STDIO")
+				if findEnvVar(container.Env, "NEO4J_MCP_SERVER_PORT") != nil {
+					return fmt.Errorf("NEO4J_MCP_SERVER_PORT should not be set for STDIO")
 				}
 
 				if len(container.Ports) != 0 {
@@ -545,30 +530,21 @@ func dumpJobLogs(namespace, jobName string) {
 	}
 }
 
+// mcpRuntimeImageSpec returns the MCP image spec for runtime tests.
+// Uses the official mcp/neo4j-cypher image unless overridden via MCP_TEST_IMAGE.
 func mcpRuntimeImageSpec() *neo4jv1alpha1.ImageSpec {
 	image := os.Getenv("MCP_TEST_IMAGE")
 	if image != "" {
 		repo, tag := splitImageTag(image)
 		return &neo4jv1alpha1.ImageSpec{
-			Repo:       repo,
-			Tag:        tag,
-			PullPolicy: "IfNotPresent",
+			Repo: repo,
+			Tag:  tag,
 		}
 	}
-
-	// In CI use the pre-built GHCR image; locally use the integration-test image
-	// already loaded into Kind by the test setup scripts.
-	if os.Getenv("GITHUB_ACTIONS") == "true" {
-		return &neo4jv1alpha1.ImageSpec{
-			Repo: "ghcr.io/neo4j-partners/neo4j-kubernetes-operator-mcp",
-			Tag:  "latest",
-		}
-	}
-
+	// Official image — no pull secret required, available on all platforms.
 	return &neo4jv1alpha1.ImageSpec{
-		Repo:       "neo4j-operator-mcp",
-		Tag:        "integration-test",
-		PullPolicy: "IfNotPresent",
+		Repo: "mcp/neo4j-cypher",
+		Tag:  "latest",
 	}
 }
 
