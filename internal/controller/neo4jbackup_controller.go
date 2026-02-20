@@ -491,11 +491,29 @@ func (r *Neo4jBackupReconciler) buildCloudEnvVars(backup *neo4jv1alpha1.Neo4jBac
 	}
 	switch cloud.Provider {
 	case "aws":
-		return []corev1.EnvVar{
+		envVars := []corev1.EnvVar{
 			{Name: "AWS_ACCESS_KEY_ID", ValueFrom: fromSecret("AWS_ACCESS_KEY_ID")},
 			{Name: "AWS_SECRET_ACCESS_KEY", ValueFrom: fromSecret("AWS_SECRET_ACCESS_KEY")},
 			{Name: "AWS_DEFAULT_REGION", ValueFrom: fromSecret("AWS_DEFAULT_REGION")},
 		}
+		// S3-compatible endpoint (MinIO, Ceph RGW, Cloudflare R2, etc.).
+		// AWS SDK v2 reads AWS_ENDPOINT_URL_S3 as the S3-specific endpoint override.
+		if cloud.EndpointURL != "" {
+			envVars = append(envVars, corev1.EnvVar{
+				Name:  "AWS_ENDPOINT_URL_S3",
+				Value: cloud.EndpointURL,
+			})
+		}
+		// Path-style addressing is required for MinIO and most self-hosted stores.
+		// neo4j-admin runs as a JVM process; JAVA_TOOL_OPTIONS is read by the JVM
+		// before main() so this system property reaches the AWS SDK reliably.
+		if cloud.ForcePathStyle {
+			envVars = append(envVars, corev1.EnvVar{
+				Name:  "JAVA_TOOL_OPTIONS",
+				Value: "-Daws.s3.forcePathStyle=true",
+			})
+		}
+		return envVars
 	case "azure":
 		return []corev1.EnvVar{
 			{Name: "AZURE_STORAGE_ACCOUNT", ValueFrom: fromSecret("AZURE_STORAGE_ACCOUNT")},

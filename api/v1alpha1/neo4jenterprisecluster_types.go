@@ -520,6 +520,19 @@ type CloudBlock struct {
 	// For GCS:   key  GOOGLE_APPLICATION_CREDENTIALS_JSON (base64 service-account JSON)
 	// For Azure: keys AZURE_STORAGE_ACCOUNT, AZURE_STORAGE_KEY
 	CredentialsSecretRef string `json:"credentialsSecretRef,omitempty"`
+
+	// EndpointURL overrides the S3 API endpoint URL. Use this to target
+	// S3-compatible stores such as MinIO, Ceph RGW, or Cloudflare R2.
+	// Example: "http://minio.minio-ns.svc:9000"
+	// Only applies to the "aws" provider; ignored for gcp and azure.
+	EndpointURL string `json:"endpointURL,omitempty"`
+
+	// ForcePathStyle forces S3 path-style addressing, where the bucket name
+	// appears in the URL path (e.g. http://endpoint/bucket/key) rather than
+	// the subdomain (e.g. http://bucket.endpoint/key).
+	// Required for MinIO and most self-hosted S3-compatible stores.
+	// Only effective when EndpointURL is set.
+	ForcePathStyle bool `json:"forcePathStyle,omitempty"`
 }
 
 // CloudIdentity defines cloud identity configuration
