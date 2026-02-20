@@ -322,28 +322,35 @@ func (r *Neo4jRestoreReconciler) validateRestore(ctx context.Context, restore *n
 	switch restore.Spec.Source.Type {
 	case SourceTypeBackup:
 		if restore.Spec.Source.BackupRef == "" {
-			return fmt.Errorf("backup reference is required when source type is 'backup'")
+			return fmt.Errorf("backupRef is required when source type is 'backup'")
 		}
-		// Check if backup exists
 		backup := &neo4jv1alpha1.Neo4jBackup{}
-		backupKey := types.NamespacedName{Name: restore.Spec.Source.BackupRef, Namespace: restore.Namespace}
-		if err := r.Get(ctx, backupKey, backup); err != nil {
-			return fmt.Errorf("backup %s not found: %w", restore.Spec.Source.BackupRef, err)
+		if err := r.Get(ctx, types.NamespacedName{
+			Name:      restore.Spec.Source.BackupRef,
+			Namespace: restore.Namespace,
+		}, backup); err != nil {
+			return fmt.Errorf("backup %q not found: %w", restore.Spec.Source.BackupRef, err)
 		}
-	case "storage":
-		if restore.Spec.Source.Storage == nil {
-			return fmt.Errorf("storage configuration is required when source type is 'storage'")
-		}
+
+	case "storage", SourceTypeS3, SourceTypeGCS, "azure":
 		if restore.Spec.Source.BackupPath == "" {
-			return fmt.Errorf("backup path is required when source type is 'storage'")
+			return fmt.Errorf("backupPath is required when source type is %q", restore.Spec.Source.Type)
 		}
+
+	case "pitr":
+		if restore.Spec.Source.PITR == nil {
+			return fmt.Errorf("pitr configuration is required when source type is 'pitr'")
+		}
+		if restore.Spec.Source.PITR.BaseBackup == nil && restore.Spec.Source.PointInTime == nil {
+			return fmt.Errorf("pitr requires baseBackup configuration or pointInTime (or both)")
+		}
+
 	default:
-		return fmt.Errorf("invalid source type: %s", restore.Spec.Source.Type)
+		return fmt.Errorf("invalid source type %q: must be one of: backup, storage, s3, gcs, azure, pitr", restore.Spec.Source.Type)
 	}
 
-	// Validate database name
 	if restore.Spec.DatabaseName == "" {
-		return fmt.Errorf("database name is required")
+		return fmt.Errorf("databaseName is required")
 	}
 
 	return nil
