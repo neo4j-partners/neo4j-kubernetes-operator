@@ -222,11 +222,11 @@ EOF
 
 ## 🔄 Property Sharding (Infinigraph GA)
 
-Property sharding (Infinigraph) is GA as of Neo4j 2025.12; the operator supports the feature on 2025.10+ calver builds. It keeps the graph shard (nodes/relationships) in a Raft group while distributing properties across property shards for horizontal scale.
+Property sharding (Infinigraph) was introduced and is GA as of Neo4j 2025.12. It keeps the graph shard (nodes/relationships) in a Raft group while distributing properties across property shards for horizontal scale.
 
 ### Requirements
 
-- **Neo4j Version**: 2025.10+ Enterprise (GA in 2025.12; not available on Aura)
+- **Neo4j Version**: 2025.12+ Enterprise (not available on Aura)
 - **Minimum Servers**: 2 servers minimum (3+ recommended for HA graph shard primaries)
 - **Memory**: 4Gi minimum, 8Gi+ recommended per server
 - **CPU**: 2+ cores per server for cross-shard queries
@@ -255,7 +255,7 @@ metadata:
 spec:
   image:
     repo: neo4j
-    tag: 2025.12-enterprise  # Requires 2025.10+ for property sharding
+    tag: 2025.12-enterprise  # Requires 2025.12+ for property sharding
   auth:
     adminSecret: neo4j-admin-secret
   topology:
@@ -398,7 +398,7 @@ After cloning the repository, ready-to-use configurations are available in the `
 - **[Standalone plugin example](examples/plugins/standalone-plugin-example.yaml)** - Install Graph Data Science on standalone
 - **[Plugin documentation](examples/plugins/README.md)** - Complete guide to plugin management
 
-### Property Sharding (Infinigraph GA - Neo4j 2025.12+, supports 2025.10+)
+### Property Sharding (Infinigraph GA - Neo4j 2025.12+)
 - **[Basic property sharding](examples/property_sharding/basic-property-sharding.yaml)** - Simple property sharded database setup
 - **[Advanced property sharding](examples/property_sharding/advanced-property-sharding.yaml)** - Production configuration with multiple shards
 - **[Development property sharding](examples/property_sharding/development-property-sharding.yaml)** - Development setup with minimal resources
@@ -476,7 +476,7 @@ Complete CRD documentation for all custom resources:
 - [Neo4jEnterpriseStandalone](docs/api_reference/neo4jenterprisestandalone.md) - Single-node deployments
 - [Neo4jBackup](docs/api_reference/neo4jbackup.md) & [Neo4jRestore](docs/api_reference/neo4jrestore.md)
 - [Neo4jDatabase](docs/api_reference/neo4jdatabase.md)
-- [Neo4jShardedDatabase](docs/api_reference/neo4jshardeddatabase.md) - Property sharded databases (Infinigraph GA in 2025.12, supports 2025.10+)
+- [Neo4jShardedDatabase](docs/api_reference/neo4jshardeddatabase.md) - Property sharded databases (Infinigraph, GA in 2025.12+)
 - [Neo4jPlugin](docs/api_reference/neo4jplugin.md)
 
 ## ✨ Key Features
@@ -485,7 +485,7 @@ Complete CRD documentation for all custom resources:
 - **Dual Deployment Modes**: Choose between clustered (Neo4jEnterpriseCluster) or standalone (Neo4jEnterpriseStandalone) deployments
 - **Server-Based Architecture**: Enterprise clusters use unified server StatefulSets where servers self-organize into database primary/secondary roles
 - **Flexible Topology**: Specify total server count and let Neo4j automatically assign database hosting roles based on requirements
-- **Property Sharding**: Neo4j property sharding (Infinigraph) GA in 2025.12, supported on 2025.10+ for massive scale graph databases
+- **Property Sharding**: Neo4j property sharding (Infinigraph, GA in 2025.12+) for massive scale graph databases
 - **High Availability**: Multi-server clusters with automatic leader election and V2_ONLY discovery
 - **Persistent Storage**: Configurable storage classes and volume management
 - **Rolling Updates**: Zero-downtime Neo4j version upgrades
@@ -559,9 +559,9 @@ Note: "Compliance-ready logging and auditing" means the operator exposes Neo4j l
 ## 🎯 Recent Improvements
 
 ### Latest Version Enhancements
-- **Property Sharding Support (GA)**: Neo4j property sharding (Infinigraph) GA in 2025.12, supported on 2025.10+
+- **Property Sharding Support (GA)**: Neo4j property sharding (Infinigraph, introduced in 2025.12)
   - **Automatic Configuration**: Applies required sharding settings (CYPHER_25 default language, sharded database enablement)
-  - **Version Validation**: Ensures Neo4j 2025.10+ for property sharding compatibility
+  - **Version Validation**: Ensures Neo4j 2025.12+ for property sharding compatibility
   - **Topology Requirements**: Validates minimum 2 servers for property sharding clusters (3+ recommended for HA)
   - **Neo4jShardedDatabase CRD**: CRD for creating and managing property-sharded databases
 - **Neo4j 5.26+ Plugin Compatibility**: Complete rework of plugin system for Neo4j 5.26+ compatibility

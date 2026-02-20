@@ -14,8 +14,7 @@ Property Sharding decouples data into:
 ### System Requirements
 
 **Neo4j Version Requirements:**
-- **Minimum**: Neo4j 2025.10-enterprise (feature GA as of 2025.12)
-- **Recommended**: Neo4j 2025.12+ (latest GA fixes and tooling)
+- **Minimum**: Neo4j 2025.12-enterprise (introduced in 2025.12)
 - **Note**: Property sharding is an enterprise-only feature and requires valid licensing
 - **Not available on Aura**
 
@@ -112,7 +111,7 @@ metadata:
 spec:
   image:
     repo: neo4j
-    tag: 2025.12-enterprise  # Requires 2025.10+ for property sharding (GA in 2025.12)
+    tag: 2025.12-enterprise  # Property sharding requires 2025.12+
 
   # Authentication required for property sharding
   auth:
@@ -374,9 +373,9 @@ SHOW DATABASES
 
 **1. Version Mismatch**
 ```
-Error: property sharding requires Neo4j 2025.10+
+Error: property sharding requires Neo4j 2025.12+
 ```
-Solution: Upgrade to Neo4j 2025.10 or later.
+Solution: Upgrade to Neo4j 2025.12 or later.
 
 **2. Insufficient Memory**
 ```
@@ -629,7 +628,7 @@ See [migration guide](migration.md) for detailed procedures.
 ## Limitations
 
 - **No in-operator resharding**: Resharding requires offline `neo4j-admin database copy` and recreation
-- **Neo4j version**: Requires 2025.10+ enterprise
+- **Neo4j version**: Requires 2025.12+ enterprise
 - **Cypher version**: Must use Cypher 25
 - **No online resharding**: Plan shard count carefully
 - **Increased complexity**: More monitoring and operational overhead

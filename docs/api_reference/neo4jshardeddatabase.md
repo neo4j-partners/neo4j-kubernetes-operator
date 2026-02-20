@@ -1,12 +1,12 @@
 # Neo4jShardedDatabase API Reference
 
-The `Neo4jShardedDatabase` Custom Resource Definition (CRD) manages sharded databases with property sharding for horizontal scaling of large datasets in Neo4j 2025.10+ clusters (feature GA as of Neo4j 2025.12).
+The `Neo4jShardedDatabase` Custom Resource Definition (CRD) manages sharded databases with property sharding for horizontal scaling of large datasets in Neo4j 2025.12+ clusters.
 
 ## Overview
 
 - **API Version**: `neo4j.neo4j.com/v1alpha1`
 - **Kind**: `Neo4jShardedDatabase`
-- **Supported Neo4j Versions**: 2025.10+ (requires property sharding support)
+- **Supported Neo4j Versions**: 2025.12+ (requires property sharding support)
 - **Prerequisites**: Neo4jEnterpriseCluster with `propertySharding.enabled: true`
 
 This document provides detailed API specifications for both Neo4jShardedDatabase and the property sharding configuration in Neo4jEnterpriseCluster.
@@ -65,7 +65,7 @@ status:
 #### Prerequisites for propertyShardingReady=true
 
 1. Cluster phase is "Ready"
-2. Neo4j version is 2025.10+
+2. Neo4j version is 2025.12+
 3. Minimum 2 servers configured (3+ recommended for HA graph shard primaries)
 4. Minimum 4GB memory per server (8GB+ recommended for production)
 5. Minimum 1 CPU core per server (2+ cores recommended for cross-shard queries)
@@ -347,7 +347,7 @@ queryMetrics:
 
 ### Neo4jEnterpriseCluster Validation
 
-- Neo4j version must be 2025.10+ when property sharding enabled
+- Neo4j version must be 2025.12+ when property sharding enabled
 - Minimum 2 servers required for property sharding (3+ recommended for HA graph shard primaries)
 - Minimum 4GB memory per server (8GB+ recommended for production)
 - Minimum 1 CPU core per server (2+ cores recommended for cross-shard queries)
@@ -372,7 +372,7 @@ queryMetrics:
 
 | Error | Cause | Resolution |
 |-------|-------|------------|
-| `property sharding requires Neo4j 2025.10+` | Old Neo4j version | Upgrade to 2025.10+ |
+| `property sharding requires Neo4j 2025.12+` | Old Neo4j version | Upgrade to 2025.12+ |
 | `spec.topology.servers in body should be greater than or equal to 2` | Invalid server count | Increase server count to 2+ (3+ recommended for HA) |
 | `property sharding requires minimum 4GB memory` | Insufficient memory | Increase memory to 8GB+ (recommended) |
 | `defaultCypherLanguage must be '25'` | Wrong Cypher version | Set to "25" |

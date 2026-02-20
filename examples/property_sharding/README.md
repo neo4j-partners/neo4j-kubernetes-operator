@@ -5,7 +5,7 @@ This directory contains examples demonstrating how to configure Neo4j Property S
 ## Prerequisites
 
 - Neo4j Kubernetes Operator deployed
-- Neo4j Enterprise 2025.10+ images (GA as of 2025.12; examples use 2025.12)
+- Neo4j Enterprise 2025.12+ images (property sharding introduced in 2025.12)
 - Kubernetes cluster with at least 1 node (3+ recommended for HA graph shard primaries)
 - Storage class supporting persistent volumes
 - Admin secret for Neo4j authentication

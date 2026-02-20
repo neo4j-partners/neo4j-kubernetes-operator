@@ -25,7 +25,7 @@ Below are some of the most important fields you will use to configure your clust
 *   `spec.config`: Add custom Neo4j configuration settings as key-value pairs. These are added to neo4j.conf.
 *   `spec.env`: Add environment variables to Neo4j pods. Note that NEO4J_AUTH and NEO4J_ACCEPT_LICENSE_AGREEMENT are managed by the operator.
 *   `spec.service`: Configure service type (ClusterIP, NodePort, LoadBalancer), annotations, and external access settings (Ingress; OpenShift Route).
-*   `spec.propertySharding`: (Neo4j 2025.10+, GA in 2025.12) Enable property sharding for horizontal scaling of large datasets. See the [Property Sharding Guide](property_sharding.md) for detailed configuration options.
+*   `spec.propertySharding`: (Neo4j 2025.12+) Enable property sharding for horizontal scaling of large datasets. See the [Property Sharding Guide](property_sharding.md) for detailed configuration options.
 
 ## MCP Server
 
