@@ -59,6 +59,10 @@ type BackupTarget struct {
 	// Name of the target resource
 	Name string `json:"name"`
 
+	// ClusterRef is the name of the Neo4jEnterpriseCluster (or Neo4jEnterpriseStandalone)
+	// that owns the database. Required when Kind=Database; unused when Kind=Cluster.
+	ClusterRef string `json:"clusterRef,omitempty"`
+
 	// Namespace of the target resource (defaults to backup namespace)
 	Namespace string `json:"namespace,omitempty"`
 }
@@ -109,6 +113,16 @@ type BackupOptions struct {
 
 	// Additional neo4j-admin backup arguments
 	AdditionalArgs []string `json:"additionalArgs,omitempty"`
+
+	// PreferDiffAsParent instructs the backup to use the latest differential
+	// backup as the parent instead of the latest full backup when creating a
+	// differential backup. Requires CalVer 2025.04+.
+	PreferDiffAsParent bool `json:"preferDiffAsParent,omitempty"`
+
+	// TempPath is a local directory for temporary files during the backup.
+	// Strongly recommended when --to-path points to cloud storage to avoid
+	// filling the Neo4j working directory.
+	TempPath string `json:"tempPath,omitempty"`
 }
 
 // EncryptionSpec defines backup encryption configuration

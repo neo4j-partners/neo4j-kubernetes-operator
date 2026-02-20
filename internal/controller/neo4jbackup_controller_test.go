@@ -25,7 +25,6 @@ import (
 	. "github.com/onsi/gomega"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -166,12 +165,11 @@ var _ = Describe("Neo4jBackup Controller", func() {
 	})
 
 	Context("When creating a PVC backup", func() {
-		It("Should create backup RBAC resources automatically", func() {
+		It("Should create the backup ServiceAccount automatically", func() {
 			By("Creating the backup resource")
 			Expect(k8sClient.Create(ctx, backup)).Should(Succeed())
 
-			By("Verifying backup RBAC resources were created")
-			// Check service account
+			By("Verifying neo4j-backup-sa ServiceAccount is created")
 			sa := &corev1.ServiceAccount{}
 			Eventually(func() error {
 				return k8sClient.Get(ctx, types.NamespacedName{
@@ -179,68 +177,11 @@ var _ = Describe("Neo4jBackup Controller", func() {
 					Namespace: namespaceName,
 				}, sa)
 			}, timeout, interval).Should(Succeed())
-
-			// Check role
-			role := &rbacv1.Role{}
-			Eventually(func() error {
-				return k8sClient.Get(ctx, types.NamespacedName{
-					Name:      "neo4j-backup-role",
-					Namespace: namespaceName,
-				}, role)
-			}, timeout, interval).Should(Succeed())
-
-			// Verify role has correct permissions
-			Expect(role.Rules).To(HaveLen(3))
-			Expect(role.Rules[0].APIGroups).To(Equal([]string{""}))
-			Expect(role.Rules[0].Resources).To(Equal([]string{"pods"}))
-			Expect(role.Rules[0].Verbs).To(ConsistOf("get", "list"))
-
-			// Check role binding
-			rb := &rbacv1.RoleBinding{}
-			Eventually(func() error {
-				return k8sClient.Get(ctx, types.NamespacedName{
-					Name:      "neo4j-backup-rolebinding",
-					Namespace: namespaceName,
-				}, rb)
-			}, timeout, interval).Should(Succeed())
-
-			// Verify role binding references correct resources
-			Expect(rb.RoleRef.Name).To(Equal("neo4j-backup-role"))
-			Expect(rb.Subjects).To(HaveLen(1))
-			Expect(rb.Subjects[0].Name).To(Equal("neo4j-backup-sa"))
+			// No Role or RoleBinding: the backup Job runs neo4j-admin directly
+			// and requires no Kubernetes API access.
 		})
 
 		It("Should create backup job successfully", func() {
-			By("Creating a mock pod for backup")
-			mockPod := &corev1.Pod{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      clusterName + "-0",
-					Namespace: namespaceName,
-					Labels: map[string]string{
-						"neo4j.com/cluster": clusterName,
-						"neo4j.com/role":    "primary",
-					},
-				},
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{{
-						Name:  "neo4j",
-						Image: "neo4j:5.26-enterprise",
-					}},
-				},
-				Status: corev1.PodStatus{
-					Phase: corev1.PodRunning,
-				},
-			}
-			Expect(k8sClient.Create(ctx, mockPod)).Should(Succeed())
-
-			// Wait for pod to be available
-			Eventually(func() error {
-				return k8sClient.Get(ctx, types.NamespacedName{
-					Name:      mockPod.Name,
-					Namespace: mockPod.Namespace,
-				}, &corev1.Pod{})
-			}, timeout, interval).Should(Succeed())
-
 			By("Creating the backup resource")
 			Expect(k8sClient.Create(ctx, backup)).Should(Succeed())
 
@@ -253,48 +194,16 @@ var _ = Describe("Neo4jBackup Controller", func() {
 				}, job)
 			}, timeout, interval).Should(Succeed())
 
-			By("Checking Job specifications")
+			By("Checking Job uses cluster Neo4j image and neo4j-admin backup command")
 			Expect(job.Spec.Template.Spec.Containers).To(HaveLen(1))
-			Expect(job.Spec.Template.Spec.Containers[0].Image).To(Equal("bitnami/kubectl:latest"))
-
-			By("Verifying job uses backup service account")
-			Expect(job.Spec.Template.Spec.ServiceAccountName).To(Equal("neo4j-backup-sa"))
-
-			// Clean up mock pod
-			Expect(k8sClient.Delete(ctx, mockPod)).Should(Succeed())
+			container := job.Spec.Template.Spec.Containers[0]
+			Expect(container.Image).To(ContainSubstring("neo4j"))
+			Expect(container.Args).To(HaveLen(2))
+			Expect(container.Args[0]).To(Equal("-c"))
+			Expect(container.Args[1]).To(ContainSubstring("neo4j-admin database backup"))
 		})
 
 		It("Should handle scheduled backups", func() {
-			By("Creating a mock pod for scheduled backup")
-			mockPod := &corev1.Pod{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      clusterName + "-0",
-					Namespace: namespaceName,
-					Labels: map[string]string{
-						"neo4j.com/cluster": clusterName,
-						"neo4j.com/role":    "primary",
-					},
-				},
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{{
-						Name:  "neo4j",
-						Image: "neo4j:5.26-enterprise",
-					}},
-				},
-				Status: corev1.PodStatus{
-					Phase: corev1.PodRunning,
-				},
-			}
-			Expect(k8sClient.Create(ctx, mockPod)).Should(Succeed())
-
-			// Wait for pod to be available
-			Eventually(func() error {
-				return k8sClient.Get(ctx, types.NamespacedName{
-					Name:      mockPod.Name,
-					Namespace: mockPod.Namespace,
-				}, &corev1.Pod{})
-			}, timeout, interval).Should(Succeed())
-
 			By("Setting up scheduled backup")
 			backup.Spec.Schedule = "0 2 * * *" // Daily at 2 AM
 			Expect(k8sClient.Create(ctx, backup)).Should(Succeed())
@@ -308,46 +217,18 @@ var _ = Describe("Neo4jBackup Controller", func() {
 				}, cronJob)
 			}, timeout, interval).Should(Succeed())
 
-			By("Checking CronJob schedule")
+			By("Checking CronJob schedule and uses neo4j-admin backup command")
 			Expect(cronJob.Spec.Schedule).To(Equal("0 2 * * *"))
-
-			// Clean up mock pod
-			Expect(k8sClient.Delete(ctx, mockPod)).Should(Succeed())
+			containers := cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers
+			Expect(containers).To(HaveLen(1))
+			Expect(containers[0].Image).To(ContainSubstring("neo4j"))
+			Expect(containers[0].Args).To(HaveLen(2))
+			Expect(containers[0].Args[1]).To(ContainSubstring("neo4j-admin database backup"))
 		})
 	})
 
 	Context("When creating S3 backup", func() {
 		It("Should create backup with S3 configuration", func() {
-			By("Creating a mock pod for S3 backup")
-			mockPod := &corev1.Pod{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      clusterName + "-0",
-					Namespace: namespaceName,
-					Labels: map[string]string{
-						"neo4j.com/cluster": clusterName,
-						"neo4j.com/role":    "primary",
-					},
-				},
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{{
-						Name:  "neo4j",
-						Image: "neo4j:5.26-enterprise",
-					}},
-				},
-				Status: corev1.PodStatus{
-					Phase: corev1.PodRunning,
-				},
-			}
-			Expect(k8sClient.Create(ctx, mockPod)).Should(Succeed())
-
-			// Wait for pod to be available
-			Eventually(func() error {
-				return k8sClient.Get(ctx, types.NamespacedName{
-					Name:      mockPod.Name,
-					Namespace: mockPod.Namespace,
-				}, &corev1.Pod{})
-			}, timeout, interval).Should(Succeed())
-
 			By("Configuring S3 storage")
 			backup.Spec.Storage = neo4jv1alpha1.StorageLocation{
 				Type:   "s3",
@@ -373,51 +254,16 @@ var _ = Describe("Neo4jBackup Controller", func() {
 			}, timeout, interval).Should(Succeed())
 
 			container := job.Spec.Template.Spec.Containers[0]
-			// Check that kubectl is used to trigger backup
-			Expect(container.Image).To(Equal("bitnami/kubectl:latest"))
+			Expect(container.Image).To(ContainSubstring("neo4j"))
 			Expect(container.Args).To(HaveLen(2))
 			Expect(container.Args[0]).To(Equal("-c"))
-			Expect(container.Args[1]).To(ContainSubstring("kubectl exec"))
-			Expect(container.Args[1]).To(ContainSubstring("backup-sidecar"))
-			Expect(container.Args[1]).To(ContainSubstring("/backup-requests/backup.request"))
-
-			// Clean up mock pod
-			Expect(k8sClient.Delete(ctx, mockPod)).Should(Succeed())
+			Expect(container.Args[1]).To(ContainSubstring("neo4j-admin database backup"))
+			Expect(container.Args[1]).To(ContainSubstring("s3://test-bucket"))
 		})
 	})
 
 	Context("When creating GCS backup", func() {
 		It("Should create backup with GCS configuration", func() {
-			By("Creating a mock pod for GCS backup")
-			mockPod := &corev1.Pod{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      clusterName + "-0",
-					Namespace: namespaceName,
-					Labels: map[string]string{
-						"neo4j.com/cluster": clusterName,
-						"neo4j.com/role":    "primary",
-					},
-				},
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{{
-						Name:  "neo4j",
-						Image: "neo4j:5.26-enterprise",
-					}},
-				},
-				Status: corev1.PodStatus{
-					Phase: corev1.PodRunning,
-				},
-			}
-			Expect(k8sClient.Create(ctx, mockPod)).Should(Succeed())
-
-			// Wait for pod to be available
-			Eventually(func() error {
-				return k8sClient.Get(ctx, types.NamespacedName{
-					Name:      mockPod.Name,
-					Namespace: mockPod.Namespace,
-				}, &corev1.Pod{})
-			}, timeout, interval).Should(Succeed())
-
 			By("Configuring GCS storage")
 			backup.Spec.Storage = neo4jv1alpha1.StorageLocation{
 				Type:   "gcs",
@@ -443,51 +289,16 @@ var _ = Describe("Neo4jBackup Controller", func() {
 			}, timeout, interval).Should(Succeed())
 
 			container := job.Spec.Template.Spec.Containers[0]
-			// Check that kubectl is used to trigger backup
-			Expect(container.Image).To(Equal("bitnami/kubectl:latest"))
+			Expect(container.Image).To(ContainSubstring("neo4j"))
 			Expect(container.Args).To(HaveLen(2))
 			Expect(container.Args[0]).To(Equal("-c"))
-			Expect(container.Args[1]).To(ContainSubstring("kubectl exec"))
-			Expect(container.Args[1]).To(ContainSubstring("backup-sidecar"))
-			Expect(container.Args[1]).To(ContainSubstring("/backup-requests/backup.request"))
-
-			// Clean up mock pod
-			Expect(k8sClient.Delete(ctx, mockPod)).Should(Succeed())
+			Expect(container.Args[1]).To(ContainSubstring("neo4j-admin database backup"))
+			Expect(container.Args[1]).To(ContainSubstring("gs://test-gcs-bucket"))
 		})
 	})
 
 	Context("When creating Azure backup", func() {
 		It("Should create backup with Azure configuration", func() {
-			By("Creating a mock pod for Azure backup")
-			mockPod := &corev1.Pod{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      clusterName + "-0",
-					Namespace: namespaceName,
-					Labels: map[string]string{
-						"neo4j.com/cluster": clusterName,
-						"neo4j.com/role":    "primary",
-					},
-				},
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{{
-						Name:  "neo4j",
-						Image: "neo4j:5.26-enterprise",
-					}},
-				},
-				Status: corev1.PodStatus{
-					Phase: corev1.PodRunning,
-				},
-			}
-			Expect(k8sClient.Create(ctx, mockPod)).Should(Succeed())
-
-			// Wait for pod to be available
-			Eventually(func() error {
-				return k8sClient.Get(ctx, types.NamespacedName{
-					Name:      mockPod.Name,
-					Namespace: mockPod.Namespace,
-				}, &corev1.Pod{})
-			}, timeout, interval).Should(Succeed())
-
 			By("Configuring Azure storage")
 			backup.Spec.Storage = neo4jv1alpha1.StorageLocation{
 				Type:   "azure",
@@ -513,16 +324,11 @@ var _ = Describe("Neo4jBackup Controller", func() {
 			}, timeout, interval).Should(Succeed())
 
 			container := job.Spec.Template.Spec.Containers[0]
-			// Check that kubectl is used to trigger backup
-			Expect(container.Image).To(Equal("bitnami/kubectl:latest"))
+			Expect(container.Image).To(ContainSubstring("neo4j"))
 			Expect(container.Args).To(HaveLen(2))
 			Expect(container.Args[0]).To(Equal("-c"))
-			Expect(container.Args[1]).To(ContainSubstring("kubectl exec"))
-			Expect(container.Args[1]).To(ContainSubstring("backup-sidecar"))
-			Expect(container.Args[1]).To(ContainSubstring("/backup-requests/backup.request"))
-
-			// Clean up mock pod
-			Expect(k8sClient.Delete(ctx, mockPod)).Should(Succeed())
+			Expect(container.Args[1]).To(ContainSubstring("neo4j-admin database backup"))
+			Expect(container.Args[1]).To(ContainSubstring("azb://test-azure-container"))
 		})
 	})
 
@@ -548,36 +354,6 @@ var _ = Describe("Neo4jBackup Controller", func() {
 
 	Context("When handling retention policies", func() {
 		It("Should apply retention policies", func() {
-			By("Creating a mock pod for retention policy test")
-			mockPod := &corev1.Pod{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      clusterName + "-0",
-					Namespace: namespaceName,
-					Labels: map[string]string{
-						"neo4j.com/cluster": clusterName,
-						"neo4j.com/role":    "primary",
-					},
-				},
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{{
-						Name:  "neo4j",
-						Image: "neo4j:5.26-enterprise",
-					}},
-				},
-				Status: corev1.PodStatus{
-					Phase: corev1.PodRunning,
-				},
-			}
-			Expect(k8sClient.Create(ctx, mockPod)).Should(Succeed())
-
-			// Wait for pod to be available
-			Eventually(func() error {
-				return k8sClient.Get(ctx, types.NamespacedName{
-					Name:      mockPod.Name,
-					Namespace: mockPod.Namespace,
-				}, &corev1.Pod{})
-			}, timeout, interval).Should(Succeed())
-
 			By("Configuring retention policy")
 			backup.Spec.Retention = &neo4jv1alpha1.RetentionPolicy{
 				MaxAge:   "30d",
@@ -595,53 +371,16 @@ var _ = Describe("Neo4jBackup Controller", func() {
 			}, timeout, interval).Should(Succeed())
 
 			container := job.Spec.Template.Spec.Containers[0]
-			// Check that kubectl is used to trigger backup
-			Expect(container.Image).To(Equal("bitnami/kubectl:latest"))
+			Expect(container.Image).To(ContainSubstring("neo4j"))
 			Expect(container.Args).To(HaveLen(2))
 			Expect(container.Args[0]).To(Equal("-c"))
-			Expect(container.Args[1]).To(ContainSubstring("kubectl exec"))
-			Expect(container.Args[1]).To(ContainSubstring("backup-sidecar"))
-			Expect(container.Args[1]).To(ContainSubstring("/backup-requests/backup.request"))
-
-			// Clean up mock pod
-			Expect(k8sClient.Delete(ctx, mockPod)).Should(Succeed())
+			Expect(container.Args[1]).To(ContainSubstring("neo4j-admin database backup"))
 		})
 	})
 
 	Context("When handling database-specific backups", func() {
 		It("Should create backup for specific database", func() {
-			By("Creating a mock pod for database-specific backup")
-			mockPod := &corev1.Pod{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      clusterName + "-0",
-					Namespace: namespaceName,
-					Labels: map[string]string{
-						"neo4j.com/cluster": clusterName,
-						"neo4j.com/role":    "primary",
-					},
-				},
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{{
-						Name:  "neo4j",
-						Image: "neo4j:5.26-enterprise",
-					}},
-				},
-				Status: corev1.PodStatus{
-					Phase: corev1.PodRunning,
-				},
-			}
-			Expect(k8sClient.Create(ctx, mockPod)).Should(Succeed())
-
-			// Wait for pod to be available
-			Eventually(func() error {
-				return k8sClient.Get(ctx, types.NamespacedName{
-					Name:      mockPod.Name,
-					Namespace: mockPod.Namespace,
-				}, &corev1.Pod{})
-			}, timeout, interval).Should(Succeed())
-
-			By("Configuring database-specific backup")
-			// Use AdditionalArgs to specify the database
+			By("Configuring database-specific backup with additional args")
 			backup.Spec.Options = &neo4jv1alpha1.BackupOptions{
 				AdditionalArgs: []string{"--database=testdb"},
 			}
@@ -657,17 +396,11 @@ var _ = Describe("Neo4jBackup Controller", func() {
 			}, timeout, interval).Should(Succeed())
 
 			container := job.Spec.Template.Spec.Containers[0]
-			// Check that kubectl is used to trigger backup
-			Expect(container.Image).To(Equal("bitnami/kubectl:latest"))
+			Expect(container.Image).To(ContainSubstring("neo4j"))
 			Expect(container.Args).To(HaveLen(2))
 			Expect(container.Args[0]).To(Equal("-c"))
-			Expect(container.Args[1]).To(ContainSubstring("kubectl exec"))
-			Expect(container.Args[1]).To(ContainSubstring("backup-sidecar"))
-			// The database parameter is passed in the JSON request to the sidecar
-			Expect(container.Args[1]).To(ContainSubstring("/backup-requests/backup.request"))
-
-			// Clean up mock pod
-			Expect(k8sClient.Delete(ctx, mockPod)).Should(Succeed())
+			Expect(container.Args[1]).To(ContainSubstring("neo4j-admin database backup"))
+			Expect(container.Args[1]).To(ContainSubstring("--database=testdb"))
 		})
 	})
 })

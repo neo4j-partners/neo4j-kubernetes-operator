@@ -512,6 +512,14 @@ type CloudBlock struct {
 	Provider string `json:"provider,omitempty"`
 
 	Identity *CloudIdentity `json:"identity,omitempty"`
+
+	// CredentialsSecretRef is the name of a Kubernetes Secret containing
+	// cloud provider credentials as environment variables. Optional when
+	// using workload identity / IAM instance profiles.
+	// For S3:    keys AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_DEFAULT_REGION
+	// For GCS:   key  GOOGLE_APPLICATION_CREDENTIALS_JSON (base64 service-account JSON)
+	// For Azure: keys AZURE_STORAGE_ACCOUNT, AZURE_STORAGE_KEY
+	CredentialsSecretRef string `json:"credentialsSecretRef,omitempty"`
 }
 
 // CloudIdentity defines cloud identity configuration

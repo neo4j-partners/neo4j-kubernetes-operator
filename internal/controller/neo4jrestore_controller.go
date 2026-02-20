@@ -310,6 +310,13 @@ func (r *Neo4jRestoreReconciler) handleRestoreSuccess(ctx context.Context, resto
 		}
 	}
 
+	// Register the restored database with Neo4j so it becomes accessible
+	if err := r.createOrStartDatabase(ctx, restore, cluster); err != nil {
+		logger.Error(err, "Failed to create/start database after restore")
+		r.Recorder.Event(restore, corev1.EventTypeWarning, "DatabaseCreateFailed",
+			fmt.Sprintf("Restore succeeded but failed to create database %q: %v", restore.Spec.DatabaseName, err))
+	}
+
 	// Restore completed successfully
 	r.updateRestoreStatus(ctx, restore, "Completed", "Restore completed successfully")
 	r.Recorder.Event(restore, "Normal", "RestoreCompleted", "Restore completed successfully")
@@ -317,33 +324,60 @@ func (r *Neo4jRestoreReconciler) handleRestoreSuccess(ctx context.Context, resto
 	return ctrl.Result{}, nil
 }
 
+// createOrStartDatabase registers the restored database with Neo4j.
+// If the database already exists (overwrite restore) it starts it; otherwise it creates it.
+func (r *Neo4jRestoreReconciler) createOrStartDatabase(ctx context.Context, restore *neo4jv1alpha1.Neo4jRestore, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) error {
+	neo4jClient, err := r.createNeo4jClient(ctx, cluster)
+	if err != nil {
+		return fmt.Errorf("failed to create Neo4j client: %w", err)
+	}
+	defer func() { _ = neo4jClient.Close() }()
+
+	exists, err := neo4jClient.DatabaseExists(ctx, restore.Spec.DatabaseName)
+	if err != nil {
+		return fmt.Errorf("failed to check database existence: %w", err)
+	}
+
+	if exists {
+		return neo4jClient.StartDatabase(ctx, restore.Spec.DatabaseName, false)
+	}
+	return neo4jClient.CreateDatabase(ctx, restore.Spec.DatabaseName, nil, false, false)
+}
+
 func (r *Neo4jRestoreReconciler) validateRestore(ctx context.Context, restore *neo4jv1alpha1.Neo4jRestore) error {
 	// Validate source
 	switch restore.Spec.Source.Type {
 	case SourceTypeBackup:
 		if restore.Spec.Source.BackupRef == "" {
-			return fmt.Errorf("backup reference is required when source type is 'backup'")
+			return fmt.Errorf("backupRef is required when source type is 'backup'")
 		}
-		// Check if backup exists
 		backup := &neo4jv1alpha1.Neo4jBackup{}
-		backupKey := types.NamespacedName{Name: restore.Spec.Source.BackupRef, Namespace: restore.Namespace}
-		if err := r.Get(ctx, backupKey, backup); err != nil {
-			return fmt.Errorf("backup %s not found: %w", restore.Spec.Source.BackupRef, err)
+		if err := r.Get(ctx, types.NamespacedName{
+			Name:      restore.Spec.Source.BackupRef,
+			Namespace: restore.Namespace,
+		}, backup); err != nil {
+			return fmt.Errorf("backup %q not found: %w", restore.Spec.Source.BackupRef, err)
 		}
-	case "storage":
-		if restore.Spec.Source.Storage == nil {
-			return fmt.Errorf("storage configuration is required when source type is 'storage'")
-		}
+
+	case "storage", SourceTypeS3, SourceTypeGCS, "azure":
 		if restore.Spec.Source.BackupPath == "" {
-			return fmt.Errorf("backup path is required when source type is 'storage'")
+			return fmt.Errorf("backupPath is required when source type is %q", restore.Spec.Source.Type)
 		}
+
+	case "pitr":
+		if restore.Spec.Source.PITR == nil {
+			return fmt.Errorf("pitr configuration is required when source type is 'pitr'")
+		}
+		if restore.Spec.Source.PITR.BaseBackup == nil && restore.Spec.Source.PointInTime == nil {
+			return fmt.Errorf("pitr requires baseBackup configuration or pointInTime (or both)")
+		}
+
 	default:
-		return fmt.Errorf("invalid source type: %s", restore.Spec.Source.Type)
+		return fmt.Errorf("invalid source type %q: must be one of: backup, storage, s3, gcs, azure, pitr", restore.Spec.Source.Type)
 	}
 
-	// Validate database name
 	if restore.Spec.DatabaseName == "" {
-		return fmt.Errorf("database name is required")
+		return fmt.Errorf("databaseName is required")
 	}
 
 	return nil
@@ -378,7 +412,7 @@ func (r *Neo4jRestoreReconciler) createRestoreJob(ctx context.Context, restore *
 	jobName := restore.Name + "-restore"
 
 	// Build restore command
-	restoreCmd, err := r.buildRestoreCommand(ctx, restore)
+	restoreCmd, err := r.buildRestoreCommand(ctx, restore, cluster)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build restore command: %w", err)
 	}
@@ -443,8 +477,7 @@ func (r *Neo4jRestoreReconciler) createRestoreJob(ctx context.Context, restore *
 	return job, nil
 }
 
-func (r *Neo4jRestoreReconciler) buildRestoreCommand(ctx context.Context, restore *neo4jv1alpha1.Neo4jRestore) (string, error) {
-	var cmd string
+func (r *Neo4jRestoreReconciler) buildRestoreCommand(ctx context.Context, restore *neo4jv1alpha1.Neo4jRestore, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) (string, error) {
 	var backupPath string
 
 	// Determine backup path based on source type
@@ -456,41 +489,32 @@ func (r *Neo4jRestoreReconciler) buildRestoreCommand(ctx context.Context, restor
 		if err := r.Get(ctx, backupKey, backup); err != nil {
 			return "", fmt.Errorf("failed to get backup %s: %w", restore.Spec.Source.BackupRef, err)
 		}
-		// Use backup storage configuration to build path
 		backupPath = fmt.Sprintf("/backup/%s", restore.Spec.Source.BackupRef)
-	case "storage":
+	case "storage", SourceTypeS3, SourceTypeGCS, "azure":
 		backupPath = restore.Spec.Source.BackupPath
 	case "pitr":
-		// Point-in-Time Recovery implementation
-		return r.buildPITRRestoreCommand(ctx, restore)
-	}
-
-	// Get cluster to extract version
-	clusterKey := types.NamespacedName{Name: restore.Spec.TargetCluster, Namespace: restore.Namespace}
-	cluster := &neo4jv1alpha1.Neo4jEnterpriseCluster{}
-	if err := r.Get(ctx, clusterKey, cluster); err != nil {
-		return "", fmt.Errorf("failed to get cluster: %w", err)
+		return r.buildPITRRestoreCommand(ctx, restore, cluster)
 	}
 
 	// Extract Neo4j version from cluster image
 	imageTag := fmt.Sprintf("%s:%s", cluster.Spec.Image.Repo, cluster.Spec.Image.Tag)
 	version, err := neo4j.GetImageVersion(imageTag)
 	if err != nil {
-		// Default to 5.26 behavior if we can't parse version
 		version = &neo4j.Version{Major: 5, Minor: 26, Patch: 0}
 	}
 
 	// Build the neo4j-admin restore command with correct Neo4j 5.26+ syntax
-	cmd = neo4j.GetRestoreCommand(version, restore.Spec.DatabaseName, backupPath)
+	cmd := neo4j.GetRestoreCommand(version, restore.Spec.DatabaseName, backupPath)
 
-	// Add --overwrite-destination flag if force is specified (replaces --force)
+	// Add --overwrite-destination flag if force is specified
 	if restore.Spec.Force {
 		cmd += " --overwrite-destination=true"
 	}
 
 	// Add point-in-time restore if specified
 	if restore.Spec.Source.PointInTime != nil {
-		cmd += fmt.Sprintf(" --restore-until=\"%s\"", restore.Spec.Source.PointInTime.Format("2006-01-02T15:04:05"))
+		t := restore.Spec.Source.PointInTime.Time.UTC()
+		cmd += fmt.Sprintf(` --restore-until="%s"`, t.Format("2006-01-02 15:04:05"))
 	}
 
 	// Add additional arguments if specified
@@ -503,76 +527,48 @@ func (r *Neo4jRestoreReconciler) buildRestoreCommand(ctx context.Context, restor
 	return cmd, nil
 }
 
-// buildPITRRestoreCommand builds a Point-in-Time Recovery restore command
-func (r *Neo4jRestoreReconciler) buildPITRRestoreCommand(ctx context.Context, restore *neo4jv1alpha1.Neo4jRestore) (string, error) {
-	if restore.Spec.Source.PITR == nil {
-		return "", fmt.Errorf("PITR configuration is required for PITR restore type")
+// buildPITRRestoreCommand builds a Point-in-Time Recovery restore command.
+// PITR in Neo4j is implemented via the --restore-until flag on neo4j-admin database restore;
+// there is no separate log-replay step.
+func (r *Neo4jRestoreReconciler) buildPITRRestoreCommand(_ context.Context, restore *neo4jv1alpha1.Neo4jRestore, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) (string, error) {
+	pitrConfig := restore.Spec.Source.PITR
+	if pitrConfig == nil {
+		return "", fmt.Errorf("PITR configuration is required for PITR restore")
 	}
 
-	pitrConfig := restore.Spec.Source.PITR
-	var cmd string
+	imageTag := fmt.Sprintf("%s:%s", cluster.Spec.Image.Repo, cluster.Spec.Image.Tag)
+	version, err := neo4j.GetImageVersion(imageTag)
+	if err != nil {
+		version = &neo4j.Version{Major: 5, Minor: 26, Patch: 0}
+	}
 
-	// Step 1: Restore base backup if specified
+	// Determine backup source path from base backup
+	var backupPath string
 	if pitrConfig.BaseBackup != nil {
-		var baseBackupPath string
 		switch pitrConfig.BaseBackup.Type {
 		case "backup":
-			backup := &neo4jv1alpha1.Neo4jBackup{}
-			backupKey := types.NamespacedName{Name: pitrConfig.BaseBackup.BackupRef, Namespace: restore.Namespace}
-			if err := r.Get(ctx, backupKey, backup); err != nil {
-				return "", fmt.Errorf("failed to get base backup %s: %w", pitrConfig.BaseBackup.BackupRef, err)
-			}
-			baseBackupPath = fmt.Sprintf("/backup/%s", pitrConfig.BaseBackup.BackupRef)
+			backupPath = fmt.Sprintf("/backup/%s", pitrConfig.BaseBackup.BackupRef)
 		case "storage":
-			baseBackupPath = pitrConfig.BaseBackup.BackupPath
+			backupPath = pitrConfig.BaseBackup.BackupPath
 		default:
 			return "", fmt.Errorf("invalid base backup type: %s", pitrConfig.BaseBackup.Type)
 		}
-
-		// Verify base backup if validation is enabled
-		if pitrConfig.ValidateLogIntegrity {
-			cmd = fmt.Sprintf("neo4j-admin inspect-backup --from=%s && ", baseBackupPath)
-		}
-
-		// Get cluster to extract version
-		clusterKey := types.NamespacedName{Name: restore.Spec.TargetCluster, Namespace: restore.Namespace}
-		cluster := &neo4jv1alpha1.Neo4jEnterpriseCluster{}
-		if err := r.Get(ctx, clusterKey, cluster); err != nil {
-			return "", fmt.Errorf("failed to get cluster: %w", err)
-		}
-
-		// Extract Neo4j version from cluster image
-		imageTag := fmt.Sprintf("%s:%s", cluster.Spec.Image.Repo, cluster.Spec.Image.Tag)
-		version, err := neo4j.GetImageVersion(imageTag)
-		if err != nil {
-			// Default to 5.26 behavior if we can't parse version
-			version = &neo4j.Version{Major: 5, Minor: 26, Patch: 0}
-		}
-
-		// Restore base backup with correct syntax
-		cmd += neo4j.GetRestoreCommand(version, restore.Spec.DatabaseName, baseBackupPath)
-
-		// Add --overwrite-destination flag if force is specified
-		if restore.Spec.Force {
-			cmd += " --overwrite-destination=true"
-		}
 	}
 
-	// Step 2: Apply transaction logs if point-in-time is specified
+	if backupPath == "" {
+		return "", fmt.Errorf("no backup source path could be determined for PITR restore")
+	}
+
+	cmd := neo4j.GetRestoreCommand(version, restore.Spec.DatabaseName, backupPath)
+
+	if restore.Spec.Force {
+		cmd += " --overwrite-destination=true"
+	}
+
+	// --restore-until is the Neo4j PITR mechanism
 	if restore.Spec.Source.PointInTime != nil {
-		// Validate transaction log integrity if enabled
-		if pitrConfig.ValidateLogIntegrity {
-			cmd += " && neo4j-admin validate-transaction-logs --from=/transaction-logs"
-		}
-
-		// Apply transaction logs up to the specified time
-		cmd += fmt.Sprintf(" && neo4j-admin apply-transaction-logs --database=%s --from=/transaction-logs --to-time=%s",
-			restore.Spec.DatabaseName, restore.Spec.Source.PointInTime.Format("2006-01-02T15:04:05Z"))
-
-		// Add recovery point objective validation
-		if pitrConfig.RecoveryPointObjective != "" {
-			cmd += fmt.Sprintf(" --rpo=%s", pitrConfig.RecoveryPointObjective)
-		}
+		t := restore.Spec.Source.PointInTime.Time.UTC()
+		cmd += fmt.Sprintf(` --restore-until="%s"`, t.Format("2006-01-02 15:04:05"))
 	}
 
 	return cmd, nil
@@ -604,14 +600,29 @@ func (r *Neo4jRestoreReconciler) buildRestoreVolumeMounts(restore *neo4jv1alpha1
 }
 
 func (r *Neo4jRestoreReconciler) buildRestoreVolumes(restore *neo4jv1alpha1.Neo4jRestore) []corev1.Volume {
-	volumes := []corev1.Volume{
-		{
+	var dataVolume corev1.Volume
+	if restore.Spec.StopCluster {
+		// For offline restore, write directly to the first server pod's data PVC so the
+		// restored store is available when the StatefulSet is scaled back up.
+		dataPVCName := fmt.Sprintf("data-%s-server-0", restore.Spec.TargetCluster)
+		dataVolume = corev1.Volume{
+			Name: "neo4j-data",
+			VolumeSource: corev1.VolumeSource{
+				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+					ClaimName: dataPVCName,
+				},
+			},
+		}
+	} else {
+		dataVolume = corev1.Volume{
 			Name: "neo4j-data",
 			VolumeSource: corev1.VolumeSource{
 				EmptyDir: &corev1.EmptyDirVolumeSource{},
 			},
-		},
+		}
 	}
+
+	volumes := []corev1.Volume{dataVolume}
 
 	// Add storage volume based on source type
 	if restore.Spec.Source.Type == "backup" {
@@ -695,10 +706,10 @@ func (r *Neo4jRestoreReconciler) stopCluster(ctx context.Context, cluster *neo4j
 	logger := log.FromContext(ctx)
 	logger.Info("Stopping cluster for restore", "cluster", cluster.Name)
 
-	// Get the StatefulSet for the cluster
+	// Get the StatefulSet for the cluster (named {cluster-name}-server in server-based architecture)
 	sts := &appsv1.StatefulSet{}
 	stsKey := types.NamespacedName{
-		Name:      cluster.Name,
+		Name:      cluster.Name + "-server",
 		Namespace: cluster.Namespace,
 	}
 
@@ -732,8 +743,7 @@ func (r *Neo4jRestoreReconciler) stopCluster(ctx context.Context, cluster *neo4j
 		case <-ticker.C:
 			pods := &corev1.PodList{}
 			if err := r.List(ctx, pods, client.InNamespace(cluster.Namespace), client.MatchingLabels{
-				"app.kubernetes.io/name":     "neo4j",
-				"app.kubernetes.io/instance": cluster.Name,
+				"app.kubernetes.io/instance": cluster.Name + "-server",
 			}); err != nil {
 				logger.Error(err, "Failed to list pods")
 				continue
@@ -753,10 +763,10 @@ func (r *Neo4jRestoreReconciler) startCluster(ctx context.Context, cluster *neo4
 	logger := log.FromContext(ctx)
 	logger.Info("Starting cluster after restore", "cluster", cluster.Name)
 
-	// Get the StatefulSet for the cluster
+	// Get the StatefulSet for the cluster (named {cluster-name}-server in server-based architecture)
 	sts := &appsv1.StatefulSet{}
 	stsKey := types.NamespacedName{
-		Name:      cluster.Name,
+		Name:      cluster.Name + "-server",
 		Namespace: cluster.Namespace,
 	}
 
@@ -805,8 +815,7 @@ func (r *Neo4jRestoreReconciler) waitForClusterReady(ctx context.Context, cluste
 			// Check if all pods are ready
 			pods := &corev1.PodList{}
 			if err := r.List(ctx, pods, client.InNamespace(cluster.Namespace), client.MatchingLabels{
-				"app.kubernetes.io/name":     "neo4j",
-				"app.kubernetes.io/instance": cluster.Name,
+				"app.kubernetes.io/instance": cluster.Name + "-server",
 			}); err != nil {
 				logger.Error(err, "Failed to list pods")
 				continue
@@ -1015,17 +1024,19 @@ func convertEnvVars(envVars []neo4jv1alpha1.EnvVar) []corev1.EnvVar {
 }
 
 func (r *Neo4jRestoreReconciler) getTargetCluster(ctx context.Context, restore *neo4jv1alpha1.Neo4jRestore) (*neo4jv1alpha1.Neo4jEnterpriseCluster, error) {
+	key := types.NamespacedName{Name: restore.Spec.TargetCluster, Namespace: restore.Namespace}
+
 	cluster := &neo4jv1alpha1.Neo4jEnterpriseCluster{}
-	clusterKey := types.NamespacedName{
-		Name:      restore.Spec.TargetCluster,
-		Namespace: restore.Namespace,
+	if err := r.Get(ctx, key, cluster); err == nil {
+		return cluster, nil
 	}
 
-	if err := r.Get(ctx, clusterKey, cluster); err != nil {
-		return nil, err
+	standalone := &neo4jv1alpha1.Neo4jEnterpriseStandalone{}
+	if err := r.Get(ctx, key, standalone); err != nil {
+		return nil, fmt.Errorf("target %q not found as Neo4jEnterpriseCluster or Neo4jEnterpriseStandalone: %w",
+			restore.Spec.TargetCluster, err)
 	}
-
-	return cluster, nil
+	return standaloneAsCluster(standalone), nil
 }
 
 func (r *Neo4jRestoreReconciler) createNeo4jClient(_ context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) (*neo4j.Client, error) {

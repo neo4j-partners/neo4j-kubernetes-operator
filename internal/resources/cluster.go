@@ -170,6 +170,19 @@ func BuildServerStatefulSetsForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterprise
 	return statefulSets
 }
 
+// BuildBackupFromAddresses returns a comma-separated list of
+// "pod-fqdn:6362" addresses for all server pods in the cluster.
+// These are used as the --from flag of neo4j-admin database backup.
+func BuildBackupFromAddresses(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) string {
+	servers := int(cluster.Spec.Topology.Servers)
+	addrs := make([]string, servers)
+	for i := 0; i < servers; i++ {
+		addrs[i] = fmt.Sprintf("%s-server-%d.%s-headless.%s.svc.cluster.local:%d",
+			cluster.Name, i, cluster.Name, cluster.Namespace, BackupPort)
+	}
+	return strings.Join(addrs, ",")
+}
+
 // BuildBackupStatefulSet creates a single, centralized backup StatefulSet for the cluster
 // This is more efficient than having backup sidecars in each server pod
 func BuildBackupStatefulSet(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) *appsv1.StatefulSet {
@@ -1531,6 +1544,8 @@ db.format=block
 server.cluster.listen_address=0.0.0.0:6000
 server.routing.listen_address=0.0.0.0:7688
 server.cluster.raft.listen_address=0.0.0.0:7000
+server.backup.enabled=true
+server.backup.listen_address=0.0.0.0:6362
 
 # Note: Single RAFT and cluster discovery settings are dynamically added by startup script
 `, memoryConfig.HeapInitialSize, memoryConfig.HeapMaxSize, memoryConfig.PageCacheSize)

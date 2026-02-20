@@ -58,6 +58,15 @@ spec:
               cloud:
                 description: Cloud configuration for cloud storage
                 properties:
+                  credentialsSecretRef:
+                    description: |-
+                      CredentialsSecretRef is the name of a Kubernetes Secret containing
+                      cloud provider credentials as environment variables. Optional when
+                      using workload identity / IAM instance profiles.
+                      For S3:    keys AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_DEFAULT_REGION
+                      For GCS:   key  GOOGLE_APPLICATION_CREDENTIALS_JSON (base64 service-account JSON)
+                      For Azure: keys AZURE_STORAGE_ACCOUNT, AZURE_STORAGE_KEY
+                    type: string
                   identity:
                     description: CloudIdentity defines cloud identity configuration
                     properties:
@@ -135,6 +144,12 @@ spec:
                   parallelDownload:
                     description: Enable parallel download for remote backups
                     type: boolean
+                  preferDiffAsParent:
+                    description: |-
+                      PreferDiffAsParent instructs the backup to use the latest differential
+                      backup as the parent instead of the latest full backup when creating a
+                      differential backup. Requires CalVer 2025.04+.
+                    type: boolean
                   remoteAddressResolution:
                     description: Resolve remote addresses for backups (useful in multi-homed
                       environments)
@@ -143,6 +158,12 @@ spec:
                     description: Skip recovery step after backup (advanced; use when
                       recovery is handled separately)
                     type: boolean
+                  tempPath:
+                    description: |-
+                      TempPath is a local directory for temporary files during the backup.
+                      Strongly recommended when --to-path points to cloud storage to avoid
+                      filling the Neo4j working directory.
+                    type: string
                   verify:
                     description: Verify backup integrity after creation
                     type: boolean
@@ -176,6 +197,15 @@ spec:
                   cloud:
                     description: Cloud provider configuration
                     properties:
+                      credentialsSecretRef:
+                        description: |-
+                          CredentialsSecretRef is the name of a Kubernetes Secret containing
+                          cloud provider credentials as environment variables. Optional when
+                          using workload identity / IAM instance profiles.
+                          For S3:    keys AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_DEFAULT_REGION
+                          For GCS:   key  GOOGLE_APPLICATION_CREDENTIALS_JSON (base64 service-account JSON)
+                          For Azure: keys AZURE_STORAGE_ACCOUNT, AZURE_STORAGE_KEY
+                        type: string
                       identity:
                         description: CloudIdentity defines cloud identity configuration
                         properties:
@@ -239,6 +269,11 @@ spec:
               target:
                 description: Target defines what to backup
                 properties:
+                  clusterRef:
+                    description: |-
+                      ClusterRef is the name of the Neo4jEnterpriseCluster (or Neo4jEnterpriseStandalone)
+                      that owns the database. Required when Kind=Database; unused when Kind=Cluster.
+                    type: string
                   kind:
                     enum:
                     - Cluster

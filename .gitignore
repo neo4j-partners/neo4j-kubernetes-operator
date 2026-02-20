@@ -97,3 +97,4 @@ integration-test-output.log
 # Log files in project root
 *.log
 logs/*.log
+update-alm-examples
