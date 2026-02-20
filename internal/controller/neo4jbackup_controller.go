@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 
 	batchv1 "k8s.io/api/batch/v1"
@@ -618,22 +619,35 @@ func (r *Neo4jBackupReconciler) cleanupBackupArtifacts(ctx context.Context, back
 	logger := log.FromContext(ctx)
 
 	if backup.Spec.Retention == nil {
-		logger.Info("No retention policy specified, skipping cleanup")
 		return nil
 	}
 
-	// Create a cleanup job that will handle retention policy enforcement
+	// Cloud storage: retention is handled by bucket lifecycle rules.
+	switch backup.Spec.Storage.Type {
+	case "s3", "gcs", "azure":
+		logger.Info("Cloud storage retention should be configured via bucket lifecycle rules — no cleanup Job created",
+			"backup", backup.Name, "storageType", backup.Spec.Storage.Type)
+		return nil
+	}
+
+	// PVC storage: create a cleanup Job using alpine.
+	script := buildRetentionScript(backup.Spec.Retention)
+	cleanupJobName := fmt.Sprintf("%s-cleanup-%d", backup.Name, time.Now().Unix())
+	backoffLimit := int32(1)
+
 	cleanupJob := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s-cleanup-%d", backup.Name, time.Now().Unix()),
+			Name:      cleanupJobName,
 			Namespace: backup.Namespace,
 			Labels: map[string]string{
-				"app.kubernetes.io/name":      "neo4j-backup",
-				"app.kubernetes.io/instance":  backup.Spec.Target.Name,
-				"app.kubernetes.io/component": "cleanup",
+				"app.kubernetes.io/name":       "neo4j-backup",
+				"app.kubernetes.io/instance":   backup.Name,
+				"app.kubernetes.io/component":  "cleanup",
+				"app.kubernetes.io/managed-by": "neo4j-operator",
 			},
 		},
 		Spec: batchv1.JobSpec{
+			BackoffLimit: &backoffLimit,
 			Template: corev1.PodTemplateSpec{
 				Spec: corev1.PodSpec{
 					RestartPolicy: corev1.RestartPolicyNever,
@@ -641,32 +655,88 @@ func (r *Neo4jBackupReconciler) cleanupBackupArtifacts(ctx context.Context, back
 						{
 							Name:    "backup-cleanup",
 							Image:   "alpine:latest",
-							Command: []string{"sh", "-c"},
-							Args: []string{
-								fmt.Sprintf(`
-									echo "Starting backup cleanup for %s"
-									echo "Retention policy: keep %s, max count %d"
-									# Implementation would:
-									# 1. List all backups in storage location
-									# 2. Apply retention policy (age + count)
-									# 3. Delete old backups
-									# 4. Update backup status
-									echo "Backup cleanup completed"
-								`, backup.Name, backup.Spec.Retention.MaxAge, backup.Spec.Retention.MaxCount),
+							Command: []string{"/bin/sh"},
+							Args:    []string{"-c", script},
+							VolumeMounts: []corev1.VolumeMount{
+								{Name: "backup-storage", MountPath: "/backup"},
 							},
 						},
 					},
+					Volumes: r.buildVolumes(backup),
 				},
 			},
 		},
 	}
 
+	if err := controllerutil.SetControllerReference(backup, cleanupJob, r.Scheme); err != nil {
+		return err
+	}
 	if err := r.Create(ctx, cleanupJob); err != nil {
 		return fmt.Errorf("failed to create cleanup job: %w", err)
 	}
 
 	logger.Info("Backup cleanup job created", "job", cleanupJob.Name)
 	return nil
+}
+
+// buildRetentionScript generates a shell script that enforces the given retention
+// policy against directories under /backup.
+func buildRetentionScript(policy *neo4jv1alpha1.RetentionPolicy) string {
+	script := `#!/bin/sh
+set -e
+BACKUP_DIR="/backup"
+echo "Backup retention enforcement in $BACKUP_DIR"
+`
+
+	if policy.MaxCount > 0 {
+		script += fmt.Sprintf(`
+MAX_COUNT=%d
+FILE_COUNT=$(find "$BACKUP_DIR" -maxdepth 1 -mindepth 1 -type d | wc -l)
+echo "Found $FILE_COUNT backup directories"
+if [ "$FILE_COUNT" -gt "$MAX_COUNT" ]; then
+    TO_DELETE=$((FILE_COUNT - MAX_COUNT))
+    echo "Deleting $TO_DELETE oldest backups (keeping $MAX_COUNT)"
+    find "$BACKUP_DIR" -maxdepth 1 -mindepth 1 -type d | \
+        sort | \
+        head -n "$TO_DELETE" | \
+        xargs -r rm -rf
+    echo "Deleted $TO_DELETE old backup directories"
+fi
+`, policy.MaxCount)
+	}
+
+	if policy.MaxAge != "" {
+		findArg := parseFindTimeArg(policy.MaxAge)
+		script += fmt.Sprintf(`
+# Delete backup directories older than %s
+find "$BACKUP_DIR" -maxdepth 1 -mindepth 1 -type d %s -exec rm -rf {} +
+echo "Removed backup directories older than %s"
+`, policy.MaxAge, findArg, policy.MaxAge)
+	}
+
+	script += `echo "Retention enforcement complete"`
+	return script
+}
+
+// parseFindTimeArg converts a MaxAge string (e.g. "7d", "24h") into a find(1)
+// time predicate such as "-mtime +7" or "-mmin +1440".
+func parseFindTimeArg(maxAge string) string {
+	if len(maxAge) < 2 {
+		return "-mtime +7"
+	}
+	unit := maxAge[len(maxAge)-1]
+	n, err := strconv.Atoi(maxAge[:len(maxAge)-1])
+	if err != nil || n <= 0 {
+		return "-mtime +7"
+	}
+	switch unit {
+	case 'd':
+		return fmt.Sprintf("-mtime +%d", n)
+	case 'h':
+		return fmt.Sprintf("-mmin +%d", n*60)
+	default:
+		return fmt.Sprintf("-mtime +%d", n)
+	}
 }
 
 func (r *Neo4jBackupReconciler) updateBackupStatus(ctx context.Context, backup *neo4jv1alpha1.Neo4jBackup, phase, message string) {
@@ -714,23 +784,41 @@ func (r *Neo4jBackupReconciler) updateBackupStatus(ctx context.Context, backup *
 }
 
 func (r *Neo4jBackupReconciler) updateBackupStats(ctx context.Context, backup *neo4jv1alpha1.Neo4jBackup, job *batchv1.Job) {
-	// This would calculate and update backup statistics
-	// For now, we'll create a basic stats entry
-	stats := &neo4jv1alpha1.BackupStats{
-		Size:       "unknown",
-		Duration:   "unknown",
-		Throughput: "unknown",
-		FileCount:  0,
-	}
+	logger := log.FromContext(ctx)
 
-	if job.Status.CompletionTime != nil && job.Status.StartTime != nil {
+	stats := &neo4jv1alpha1.BackupStats{}
+	if job.Status.StartTime != nil && job.Status.CompletionTime != nil {
 		duration := job.Status.CompletionTime.Sub(job.Status.StartTime.Time)
-		stats.Duration = duration.String()
+		stats.Duration = duration.Round(time.Second).String()
 	}
+	// Size, Throughput, FileCount are intentionally omitted:
+	// they require parsing neo4j-admin stdout from Job pod logs (future enhancement).
 
-	backup.Status.Stats = stats
-	if err := r.Status().Update(ctx, backup); err != nil {
-		log.FromContext(ctx).Error(err, "Failed to update backup stats")
+	update := func() error {
+		latest := &neo4jv1alpha1.Neo4jBackup{}
+		if err := r.Get(ctx, client.ObjectKeyFromObject(backup), latest); err != nil {
+			return err
+		}
+		latest.Status.Stats = stats
+
+		run := neo4jv1alpha1.BackupRun{
+			Status: "Succeeded",
+			Stats:  stats,
+		}
+		if job.Status.StartTime != nil {
+			run.StartTime = *job.Status.StartTime
+		}
+		run.CompletionTime = job.Status.CompletionTime
+
+		latest.Status.History = append([]neo4jv1alpha1.BackupRun{run}, latest.Status.History...)
+		if len(latest.Status.History) > 10 {
+			latest.Status.History = latest.Status.History[:10]
+		}
+
+		return r.Status().Update(ctx, latest)
+	}
+	if err := retry.RetryOnConflict(retry.DefaultBackoff, update); err != nil {
+		logger.Error(err, "Failed to update backup stats")
 	}
 }
 
