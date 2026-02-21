@@ -415,6 +415,22 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 		}
 	}
 
+	// Collect live diagnostics when QueryMonitoring is enabled and cluster is Ready.
+	// Diagnostics collection is non-fatal: failures are surfaced in status.diagnostics.collectionError.
+	if cluster.Spec.QueryMonitoring != nil && cluster.Spec.QueryMonitoring.Enabled &&
+		cluster.Status.Phase == "Ready" {
+		neo4jDiagClient, diagClientErr := r.createNeo4jClient(ctx, cluster)
+		if diagClientErr != nil {
+			logger.V(1).Info("Skipping diagnostics collection: could not create Neo4j client", "error", diagClientErr)
+		} else {
+			defer neo4jDiagClient.Close()
+			diagMonitor := NewQueryMonitor(r.Client, r.Scheme)
+			if diagErr := diagMonitor.CollectDiagnostics(ctx, cluster, neo4jDiagClient); diagErr != nil {
+				logger.Error(diagErr, "Failed to collect cluster diagnostics (non-fatal)")
+			}
+		}
+	}
+
 	// Plugin management is now handled by the separate Neo4jPlugin CRD and controller
 
 	// Verify Neo4j cluster formation before marking as Ready
