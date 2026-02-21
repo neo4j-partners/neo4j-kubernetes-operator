@@ -85,6 +85,24 @@ var (
 		[]string{LabelClusterName, LabelNamespace},
 	)
 
+	clusterPhase = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Subsystem: subsystem,
+			Name:      "cluster_phase",
+			Help:      "Current phase of the Neo4j cluster (1 = active phase, 0 = not in this phase)",
+		},
+		[]string{LabelClusterName, LabelNamespace, LabelPhase},
+	)
+
+	splitBrainDetectedTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Subsystem: subsystem,
+			Name:      "split_brain_detected_total",
+			Help:      "Total number of split-brain scenarios detected",
+		},
+		[]string{LabelClusterName, LabelNamespace},
+	)
+
 	// Reconciliation metrics
 	reconcileTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -220,6 +238,8 @@ func init() {
 	metrics.Registry.MustRegister(
 		clusterReplicas,
 		clusterHealthy,
+		clusterPhase,
+		splitBrainDetectedTotal,
 		reconcileTotal,
 		reconcileDuration,
 		upgradeTotal,
@@ -243,6 +263,7 @@ func init() {
 		primaryCount,
 		secondaryCount,
 		scalingValidationTotal,
+		serverHealth,
 	)
 }
 
@@ -324,6 +345,23 @@ func (m *ClusterMetrics) RecordClusterHealth(healthy bool) {
 		value = 1.0
 	}
 	clusterHealthy.WithLabelValues(m.clusterName, m.namespace).Set(value)
+}
+
+// RecordClusterPhase records the current cluster phase as a labelled gauge.
+// It sets 1.0 for the active phase label and 0.0 for all others.
+func (m *ClusterMetrics) RecordClusterPhase(phase string) {
+	for _, p := range []string{"Pending", "Forming", "Ready", "Failed", "Degraded", "Upgrading"} {
+		v := 0.0
+		if p == phase {
+			v = 1.0
+		}
+		clusterPhase.WithLabelValues(m.clusterName, m.namespace, p).Set(v)
+	}
+}
+
+// RecordSplitBrainDetected increments the split-brain detection counter for the given cluster.
+func RecordSplitBrainDetected(clusterName, namespace string) {
+	splitBrainDetectedTotal.WithLabelValues(clusterName, namespace).Inc()
 }
 
 // UpgradeMetrics provides methods for recording upgrade-related metrics
@@ -603,6 +641,15 @@ var (
 		},
 		[]string{LabelClusterName, LabelNamespace, "validation_type", LabelResult},
 	)
+
+	serverHealth = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Subsystem: subsystem,
+			Name:      "server_health",
+			Help:      "Health of individual Neo4j servers: 1=Enabled+Available, 0=degraded",
+		},
+		[]string{LabelClusterName, LabelNamespace, "server_name", "server_address"},
+	)
 )
 
 // DisasterRecoveryMetrics provides methods for recording disaster recovery metrics
@@ -699,4 +746,23 @@ func (m *ConflictMetrics) RecordConflict(resourceType, namespace string) {
 func (m *ConflictMetrics) RecordConflictRetry(resourceType, namespace string, attempts int, duration time.Duration) {
 	conflictRetryAttempts.WithLabelValues(resourceType, namespace).Observe(float64(attempts))
 	conflictRetryDuration.WithLabelValues(resourceType, namespace).Observe(duration.Seconds())
+}
+
+// ServerHealth is a lightweight struct carrying per-server health info for metric recording.
+type ServerHealth struct {
+	Name      string
+	Address   string
+	Enabled   bool
+	Available bool
+}
+
+// RecordServerHealth records per-server health gauges from SHOW SERVERS results.
+func (m *ClusterMetrics) RecordServerHealth(servers []ServerHealth) {
+	for _, s := range servers {
+		value := 0.0
+		if s.Enabled && s.Available {
+			value = 1.0
+		}
+		serverHealth.WithLabelValues(m.clusterName, m.namespace, s.Name, s.Address).Set(value)
+	}
 }

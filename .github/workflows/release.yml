@@ -143,6 +143,17 @@ jobs:
           --username "${{ github.actor }}" \
           --password "${{ secrets.GITHUB_TOKEN }}"
 
+    - name: Update Helm chart version
+      run: |
+        CLEAN_TAG="${{ needs.determine-tag.outputs.clean_tag }}"
+        sed -i "s/^version: .*/version: ${CLEAN_TAG}/" charts/neo4j-operator/Chart.yaml
+        sed -i "s/^appVersion: .*/appVersion: \"${CLEAN_TAG}\"/" charts/neo4j-operator/Chart.yaml
+        echo "Updated Chart.yaml:"
+        grep -E "^(version|appVersion):" charts/neo4j-operator/Chart.yaml
+
+    - name: Lint Helm chart
+      run: helm lint charts/neo4j-operator
+
     - name: Package and push Helm chart (OCI)
       run: |
         helm package charts/neo4j-operator \

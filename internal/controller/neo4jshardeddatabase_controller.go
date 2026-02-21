@@ -56,7 +56,6 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
@@ -69,6 +68,7 @@ import (
 	neo4jv1alpha1 "github.com/neo4j-partners/neo4j-kubernetes-operator/api/v1alpha1"
 	"github.com/neo4j-partners/neo4j-kubernetes-operator/internal/neo4j"
 	"github.com/neo4j-partners/neo4j-kubernetes-operator/internal/validation"
+	corev1 "k8s.io/api/core/v1"
 )
 
 // Neo4jShardedDatabaseReconciler reconciles a Neo4jShardedDatabase object
@@ -114,7 +114,7 @@ func (r *Neo4jShardedDatabaseReconciler) Reconcile(ctx context.Context, req ctrl
 	// Validate the sharded database configuration
 	if err := r.validateShardedDatabase(ctx, &shardedDatabase); err != nil {
 		logger.Error(err, "Validation failed")
-		r.Recorder.Event(&shardedDatabase, "Warning", "ValidationFailed", err.Error())
+		r.Recorder.Event(&shardedDatabase, corev1.EventTypeWarning, EventReasonValidationFailed, err.Error())
 
 		if statusErr := r.updateStatus(ctx, &shardedDatabase, "Failed", fmt.Sprintf("Validation failed: %v", err), nil); statusErr != nil {
 			logger.Error(statusErr, "Failed to update status after validation failure")
@@ -134,7 +134,7 @@ func (r *Neo4jShardedDatabaseReconciler) Reconcile(ctx context.Context, req ctrl
 	cluster, err := r.getReferencedCluster(ctx, &shardedDatabase)
 	if err != nil {
 		logger.Error(err, "Failed to get referenced cluster")
-		r.Recorder.Event(&shardedDatabase, "Warning", "ClusterNotFound", err.Error())
+		r.Recorder.Event(&shardedDatabase, corev1.EventTypeWarning, EventReasonClusterNotFound, err.Error())
 
 		if statusErr := r.updateStatus(ctx, &shardedDatabase, "Failed", fmt.Sprintf("Cluster not found: %v", err), nil); statusErr != nil {
 			logger.Error(statusErr, "Failed to update status after cluster lookup failure")
@@ -146,7 +146,7 @@ func (r *Neo4jShardedDatabaseReconciler) Reconcile(ctx context.Context, req ctrl
 	if !r.clusterSupportsPropertySharding(cluster) {
 		err := fmt.Errorf("cluster %s does not support property sharding (requires Neo4j 2025.12+ and propertySharding.enabled=true)", cluster.Name)
 		logger.Error(err, "Cluster does not support property sharding")
-		r.Recorder.Event(&shardedDatabase, "Warning", "ClusterNotReady", err.Error())
+		r.Recorder.Event(&shardedDatabase, corev1.EventTypeWarning, EventReasonClusterNotReady, err.Error())
 
 		if statusErr := r.updateStatus(ctx, &shardedDatabase, "Failed", err.Error(), nil); statusErr != nil {
 			logger.Error(statusErr, "Failed to update status after cluster readiness check")
@@ -158,7 +158,7 @@ func (r *Neo4jShardedDatabaseReconciler) Reconcile(ctx context.Context, req ctrl
 	neo4jClient, err := r.createNeo4jClient(ctx, cluster)
 	if err != nil {
 		logger.Error(err, "Failed to create Neo4j client")
-		r.Recorder.Event(&shardedDatabase, "Warning", "ClientCreationFailed", err.Error())
+		r.Recorder.Event(&shardedDatabase, corev1.EventTypeWarning, EventReasonClientCreationFailed, err.Error())
 
 		if statusErr := r.updateStatus(ctx, &shardedDatabase, "Failed", fmt.Sprintf("Failed to create Neo4j client: %v", err), nil); statusErr != nil {
 			logger.Error(statusErr, "Failed to update status after client creation failure")
@@ -170,7 +170,7 @@ func (r *Neo4jShardedDatabaseReconciler) Reconcile(ctx context.Context, req ctrl
 	// Create or update sharded database
 	if err := r.reconcileShardedDatabase(ctx, &shardedDatabase, neo4jClient); err != nil {
 		logger.Error(err, "Failed to reconcile sharded database")
-		r.Recorder.Event(&shardedDatabase, "Warning", "ReconcileFailed", err.Error())
+		r.Recorder.Event(&shardedDatabase, corev1.EventTypeWarning, EventReasonReconcileFailed, err.Error())
 
 		if statusErr := r.updateStatus(ctx, &shardedDatabase, "Failed", fmt.Sprintf("Reconcile failed: %v", err), nil); statusErr != nil {
 			logger.Error(statusErr, "Failed to update status after reconcile failure")
@@ -185,7 +185,7 @@ func (r *Neo4jShardedDatabaseReconciler) Reconcile(ctx context.Context, req ctrl
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 	}
 
-	r.Recorder.Event(&shardedDatabase, "Normal", "ShardedDatabaseReady", "Sharded database is ready and operational")
+	r.Recorder.Event(&shardedDatabase, corev1.EventTypeNormal, EventReasonShardedDatabaseReady, "Sharded database is ready and operational")
 	logger.Info("Successfully reconciled Neo4jShardedDatabase")
 
 	return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil // Periodic reconciliation
@@ -539,35 +539,9 @@ func (r *Neo4jShardedDatabaseReconciler) updateStatus(ctx context.Context, shard
 			latest.Status.ShardingReady = shardingReady
 		}
 
-		// Update condition
-		condition := metav1.Condition{
-			Type:    "Ready",
-			Status:  metav1.ConditionFalse,
-			Reason:  "NotReady",
-			Message: message,
-		}
-
-		if phase == "Ready" {
-			condition.Status = metav1.ConditionTrue
-			condition.Reason = "ShardedDatabaseReady"
-		} else if phase == "Failed" {
-			condition.Reason = "ShardedDatabaseFailed"
-		}
-
-		condition.LastTransitionTime = metav1.Now()
-
-		// Update or add condition
-		found := false
-		for i, existingCondition := range latest.Status.Conditions {
-			if existingCondition.Type == condition.Type {
-				latest.Status.Conditions[i] = condition
-				found = true
-				break
-			}
-		}
-		if !found {
-			latest.Status.Conditions = append(latest.Status.Conditions, condition)
-		}
+		// Update Ready condition using standard helper
+		condStatus, condReason := PhaseToConditionStatus(phase)
+		SetReadyCondition(&latest.Status.Conditions, latest.Generation, condStatus, condReason, message)
 
 		return r.Status().Update(ctx, &latest)
 	})

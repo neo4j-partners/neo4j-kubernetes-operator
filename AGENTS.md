@@ -74,10 +74,21 @@
 - Examples: `examples/` for standalone/cluster mins, plugins, backup/restore, property sharding, E2E blueprints.
 
 ## Observability & Troubleshooting
-- Logs: `kubectl logs -n neo4j-operator deployment/neo4j-operator-controller-manager -f` or `make operator-logs`.
-- Events: monitor split-brain via `kubectl get events --field-selector reason=SplitBrainDetected -A`.
-- Inspect: `kubectl explain neo4jenterprisecluster.spec`, `kubectl describe neo4jenterprisecluster/<name>`; use `cypher-shell` in pods for cluster state.
-- Debug aids: see `CLAUDE.md` for enabling debug logging, OOM checks (`kubectl describe pod`, `kubectl top pod`), and port-forward/seed URI guidance.
+- **Logs**: `kubectl logs -n neo4j-operator deployment/neo4j-operator-controller-manager -f` or `make operator-logs`
+- **Events**: All material state transitions emit structured Kubernetes events using constants from `internal/controller/events.go`. Monitor by reason:
+  - `kubectl get events --field-selector reason=SplitBrainDetected -A`
+  - `kubectl get events --field-selector reason=BackupFailed`
+  - `kubectl get events --field-selector reason=ClusterFormationFailed`
+- **Live Diagnostics**: When `spec.queryMonitoring.enabled=true` and cluster is `Ready`, the operator collects `SHOW SERVERS`/`SHOW DATABASES` results into `status.diagnostics`. Two conditions — `ServersHealthy` and `DatabasesHealthy` — surface cluster health without `kubectl exec`.
+- **Prometheus Metrics**: Custom metrics exported under `neo4j_operator_*` prefix:
+  - `neo4j_operator_cluster_healthy` / `neo4j_operator_cluster_phase` / `neo4j_operator_cluster_replicas_total`
+  - `neo4j_operator_server_health{server_name, server_address}` — per-server health from diagnostics
+  - `neo4j_operator_backup_total` / `neo4j_operator_reconcile_duration_seconds`
+  - `neo4j_operator_split_brain_detected_total`
+- **Inspect**: `kubectl explain neo4jenterprisecluster.spec`, `kubectl describe neo4jenterprisecluster/<name>`; use `cypher-shell` in pods for cluster state.
+- **GitOps**: ArgoCD health check scripts for all 7 CRDs in `docs/gitops/argocd-health-checks.yaml`. Flux uses the standard `Ready` condition automatically.
+- **Status Conditions**: All CRDs emit standardized conditions using helpers from `internal/controller/conditions.go`: `SetReadyCondition` (for `Ready`), `SetNamedCondition` (for `ServersHealthy`/`DatabasesHealthy`).
+- **Debug aids**: see `CLAUDE.md` for enabling debug logging, OOM checks, and port-forward guidance.
 
 ## Contribution Expectations
 - Follow `CONTRIBUTING.md`; run `make fmt lint test-unit` (plus integration when relevant) before PRs; Kind required.

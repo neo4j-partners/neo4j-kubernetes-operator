@@ -43,6 +43,14 @@ annotations:
     - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
       description: For TLS certificate management
   artifacthub.io/containsSecurityUpdates: "false"
+  artifacthub.io/maintainers: |
+    - name: Neo4j Partners
+      email: operator@neo4j.com
+  artifacthub.io/links: |
+    - name: Documentation
+      url: https://github.com/neo4j-partners/neo4j-kubernetes-operator/tree/main/docs
+    - name: Support
+      url: https://github.com/neo4j-partners/neo4j-kubernetes-operator/issues
   artifacthub.io/changes: |
     - kind: added
       description: Initial Helm chart implementation

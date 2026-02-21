@@ -577,6 +577,14 @@ Note: "Compliance-ready logging and auditing" means the operator exposes Neo4j l
 - **Better Error Handling**: Fixed nil pointer dereferences and improved error messages for better troubleshooting
 - **Improved TLS Cluster Formation**: Enhanced stability for TLS-enabled clusters during initial formation
 
+### Observability & GitOps (February 2026)
+- **Live Cluster Diagnostics**: `SHOW SERVERS` and `SHOW DATABASES` results surfaced in `status.diagnostics` — no more `kubectl exec` for cluster health
+- **Structured Kubernetes Events**: All state transitions emit typed events (`ClusterFormationStarted`, `BackupCompleted`, `SplitBrainDetected`, etc.) consumable by monitoring pipelines — see the [Events Reference](docs/user_guide/guides/kubernetes-events.md)
+- **Custom Prometheus Metrics**: Per-server health gauge, cluster phase gauge, backup counters, reconcile histograms — all with cluster/namespace labels
+- **ArgoCD/Flux Health Checks**: Native ArgoCD Lua scripts for all 7 CRDs; Flux detects readiness via standard `Ready` condition automatically
+- **Standardized Status Conditions**: All CRDs now emit `Ready`, `ServersHealthy`, and `DatabasesHealthy` conditions with consistent `Reason` and `Message` fields
+- **Multi-Registry Support**: `spec.image.pullSecrets` wired into StatefulSet `imagePullSecrets` for ECR/GCR/ACR/private registry support
+
 ### Developer Experience
 - **Simplified Testing**: New test cleanup patterns and helpers make integration testing more reliable
 - **Better Documentation**: Updated troubleshooting guides with common issues and solutions

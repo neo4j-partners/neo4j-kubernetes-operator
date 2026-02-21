@@ -601,6 +601,11 @@ type Neo4jEnterpriseClusterStatus struct {
 
 	// AuraFleetManagementStatus reports the current state of the Aura Fleet Management integration.
 	AuraFleetManagement *AuraFleetManagementStatus `json:"auraFleetManagement,omitempty"`
+
+	// Diagnostics holds the most recently collected live diagnostics from the cluster.
+	// Populated when spec.queryMonitoring.enabled=true and the cluster is Ready.
+	// +optional
+	Diagnostics *ClusterDiagnosticsStatus `json:"diagnostics,omitempty"`
 }
 
 // AuraFleetManagementStatus reports the registration state of the Aura Fleet Management plugin.
@@ -617,6 +622,65 @@ type AuraFleetManagementStatus struct {
 	// including error details when registration fails.
 	// +optional
 	Message string `json:"message,omitempty"`
+}
+
+// ClusterDiagnosticsStatus holds the most recent live diagnostics collected from
+// the Neo4j cluster via Cypher queries. Populated only when spec.queryMonitoring.enabled=true
+// and the cluster is in Ready phase.
+type ClusterDiagnosticsStatus struct {
+	// Servers lists the most recently observed state of each server in the cluster.
+	// +optional
+	Servers []ServerDiagnosticInfo `json:"servers,omitempty"`
+
+	// Databases lists the most recently observed state of each database.
+	// +optional
+	Databases []DatabaseDiagnosticInfo `json:"databases,omitempty"`
+
+	// LastCollected is the timestamp of the most recent successful diagnostics collection.
+	// +optional
+	LastCollected *metav1.Time `json:"lastCollected,omitempty"`
+
+	// CollectionError holds the last error message if diagnostics collection failed.
+	// Empty when collection succeeds.
+	// +optional
+	CollectionError string `json:"collectionError,omitempty"`
+}
+
+// ServerDiagnosticInfo holds the observed state of a single Neo4j server.
+type ServerDiagnosticInfo struct {
+	// Name is the server's display name (from SHOW SERVERS).
+	Name string `json:"name"`
+
+	// Address is the Bolt address of the server.
+	Address string `json:"address"`
+
+	// State is the server lifecycle state (e.g. "Enabled", "Cordoned", "Deallocating").
+	State string `json:"state"`
+
+	// Health is the server health status (e.g. "Available", "Unavailable").
+	Health string `json:"health"`
+
+	// HostingDatabases is the number of databases hosted by this server.
+	HostingDatabases int `json:"hostingDatabases"`
+}
+
+// DatabaseDiagnosticInfo holds the observed state of a single Neo4j database.
+type DatabaseDiagnosticInfo struct {
+	// Name is the database name.
+	Name string `json:"name"`
+
+	// Status is the current operational status (e.g. "online", "offline", "quarantined").
+	Status string `json:"status"`
+
+	// RequestedStatus is the desired operational status.
+	RequestedStatus string `json:"requestedStatus"`
+
+	// Role is the database role on the most recently contacted server (e.g. "primary", "secondary").
+	Role string `json:"role"`
+
+	// Default indicates whether this is the default database.
+	// +optional
+	Default bool `json:"default,omitempty"`
 }
 
 // UpgradeStatus tracks the progress of an ongoing upgrade

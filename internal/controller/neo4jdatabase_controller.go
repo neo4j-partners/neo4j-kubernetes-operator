@@ -37,6 +37,7 @@ import (
 	neo4jv1alpha1 "github.com/neo4j-partners/neo4j-kubernetes-operator/api/v1alpha1"
 	"github.com/neo4j-partners/neo4j-kubernetes-operator/internal/neo4j"
 	"github.com/neo4j-partners/neo4j-kubernetes-operator/internal/validation"
+	corev1 "k8s.io/api/core/v1"
 )
 
 // Neo4jDatabaseReconciler reconciles a Neo4jDatabase object
@@ -106,7 +107,7 @@ func (r *Neo4jDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		// Log and record warnings
 		for _, warning := range validationResult.Warnings {
 			logger.Info("Database validation warning", "warning", warning)
-			r.Recorder.Eventf(database, "Warning", "ValidationWarning", warning)
+			r.Recorder.Eventf(database, corev1.EventTypeWarning, EventReasonValidationWarning, warning)
 		}
 
 		// Handle validation errors
@@ -117,8 +118,8 @@ func (r *Neo4jDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			}
 			message := fmt.Sprintf("Database validation failed: %v", errMessages)
 			logger.Error(nil, message)
-			r.updateDatabaseStatus(ctx, database, metav1.ConditionFalse, "ValidationFailed", message)
-			r.Recorder.Eventf(database, "Warning", "ValidationFailed", message)
+			r.updateDatabaseStatus(ctx, database, metav1.ConditionFalse, EventReasonValidationFailed, message)
+			r.Recorder.Eventf(database, corev1.EventTypeWarning, EventReasonValidationFailed, message)
 			return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
 		}
 	}
@@ -144,9 +145,9 @@ func (r *Neo4jDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 		if err := r.Get(ctx, standaloneKey, standalone); err != nil {
 			if errors.IsNotFound(err) {
-				r.updateDatabaseStatus(ctx, database, metav1.ConditionFalse, "ClusterNotFound",
+				r.updateDatabaseStatus(ctx, database, metav1.ConditionFalse, EventReasonClusterNotFound,
 					fmt.Sprintf("Referenced cluster %s not found", database.Spec.ClusterRef))
-				r.Recorder.Eventf(database, "Warning", "ClusterNotFound",
+				r.Recorder.Eventf(database, corev1.EventTypeWarning, EventReasonClusterNotFound,
 					"Referenced cluster %s not found", database.Spec.ClusterRef)
 				return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
 			}
@@ -168,7 +169,7 @@ func (r *Neo4jDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 
 	if !clusterReady {
-		r.updateDatabaseStatus(ctx, database, metav1.ConditionFalse, "ClusterNotReady",
+		r.updateDatabaseStatus(ctx, database, metav1.ConditionFalse, EventReasonClusterNotReady,
 			"Referenced cluster is not ready")
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
 	}
@@ -190,7 +191,7 @@ func (r *Neo4jDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	if err != nil {
 		logger.Error(err, "Failed to create Neo4j client after retries")
-		r.updateDatabaseStatus(ctx, database, metav1.ConditionFalse, "ConnectionFailed",
+		r.updateDatabaseStatus(ctx, database, metav1.ConditionFalse, EventReasonConnectionFailed,
 			"Failed to connect to Neo4j cluster")
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 	}
@@ -206,9 +207,9 @@ func (r *Neo4jDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	if err := r.ensureDatabase(ctx, neo4jClient, database); err != nil {
 		duration := time.Since(dbCreateStart)
 		logger.Error(err, "Failed to ensure database", "database", database.Spec.Name, "duration", duration)
-		r.updateDatabaseStatus(ctx, database, metav1.ConditionFalse, "CreationFailed",
+		r.updateDatabaseStatus(ctx, database, metav1.ConditionFalse, EventReasonCreationFailed,
 			fmt.Sprintf("Failed to create database: %v", err))
-		r.Recorder.Eventf(database, "Warning", "CreationFailed",
+		r.Recorder.Eventf(database, corev1.EventTypeWarning, EventReasonCreationFailed,
 			"Failed to create database: %v", err)
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 	}
@@ -219,9 +220,9 @@ func (r *Neo4jDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	if database.Spec.InitialData != nil && database.Spec.SeedURI == "" && database.Status.DataImported == nil {
 		if err := r.importInitialData(ctx, neo4jClient, database); err != nil {
 			logger.Error(err, "Failed to import initial data")
-			r.updateDatabaseStatus(ctx, database, metav1.ConditionFalse, "DataImportFailed",
+			r.updateDatabaseStatus(ctx, database, metav1.ConditionFalse, EventReasonDataImportFailed,
 				fmt.Sprintf("Failed to import initial data: %v", err))
-			r.Recorder.Eventf(database, "Warning", "DataImportFailed",
+			r.Recorder.Eventf(database, corev1.EventTypeWarning, EventReasonDataImportFailed,
 				"Failed to import initial data: %v", err)
 			return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 		}
@@ -233,7 +234,7 @@ func (r *Neo4jDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			logger.Error(err, "Failed to update data import status")
 			return ctrl.Result{}, err
 		}
-		r.Recorder.Event(database, "Normal", "DataImported", "Initial data imported successfully")
+		r.Recorder.Event(database, corev1.EventTypeNormal, EventReasonDataImported, "Initial data imported successfully")
 	} else if database.Spec.SeedURI != "" && database.Status.DataImported == nil {
 		// Mark data as imported for seed URI databases (data comes from the seed)
 		imported := true
@@ -242,13 +243,13 @@ func (r *Neo4jDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			logger.Error(err, "Failed to update data import status for seeded database")
 			return ctrl.Result{}, err
 		}
-		r.Recorder.Event(database, "Normal", "DataSeeded", "Database seeded from URI successfully")
+		r.Recorder.Event(database, corev1.EventTypeNormal, EventReasonDataSeeded, "Database seeded from URI successfully")
 	}
 
 	// Update status to ready
-	r.updateDatabaseStatus(ctx, database, metav1.ConditionTrue, "DatabaseReady",
+	r.updateDatabaseStatus(ctx, database, metav1.ConditionTrue, EventReasonDatabaseReady,
 		"Database is ready and available")
-	r.Recorder.Event(database, "Normal", "DatabaseReady", "Database is ready and available")
+	r.Recorder.Event(database, corev1.EventTypeNormal, EventReasonDatabaseReady, "Database is ready and available")
 
 	logger.Info("Successfully reconciled Neo4jDatabase")
 	return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
@@ -305,12 +306,12 @@ func (r *Neo4jDatabaseReconciler) handleDeletion(ctx context.Context, database *
 	// Drop database
 	if err := neo4jClient.DropDatabase(ctx, database.Spec.Name); err != nil {
 		logger.Error(err, "Failed to drop database")
-		r.Recorder.Eventf(database, "Warning", "DeletionFailed",
+		r.Recorder.Eventf(database, corev1.EventTypeWarning, EventReasonDeletionFailed,
 			"Failed to drop database: %v", err)
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 	}
 
-	r.Recorder.Event(database, "Normal", "DatabaseDeleted", "Database dropped successfully")
+	r.Recorder.Event(database, corev1.EventTypeNormal, EventReasonDatabaseDeleted, "Database dropped successfully")
 
 	logger.Info("Removing finalizer from database", "finalizers", database.Finalizers, "deletionTimestamp", database.DeletionTimestamp)
 	controllerutil.RemoveFinalizer(database, DatabaseFinalizer)
@@ -426,7 +427,7 @@ func (r *Neo4jDatabaseReconciler) ensureDatabase(ctx context.Context, client *ne
 
 		// Record appropriate success event based on creation method
 		if database.Spec.SeedURI != "" {
-			r.Recorder.Eventf(database, "Normal", "DatabaseCreatedFromSeed",
+			r.Recorder.Eventf(database, corev1.EventTypeNormal, EventReasonDatabaseCreatedSeed,
 				"Database %s created successfully from seed URI", database.Spec.Name)
 			logger.Info("Database created successfully from seed URI",
 				"database", database.Spec.Name, "seedURI", database.Spec.SeedURI)
@@ -496,42 +497,25 @@ func (r *Neo4jDatabaseReconciler) updateDatabaseStatus(ctx context.Context, data
 		if err := r.Get(ctx, client.ObjectKeyFromObject(database), latest); err != nil {
 			return err
 		}
-		condition := metav1.Condition{
-			Type:               "Ready",
-			Status:             status,
-			Reason:             reason,
-			Message:            message,
-			LastTransitionTime: metav1.Now(),
-		}
-		updated := false
-		for i, existingCondition := range latest.Status.Conditions {
-			if existingCondition.Type == condition.Type {
-				latest.Status.Conditions[i] = condition
-				updated = true
-				break
-			}
-		}
-		if !updated {
-			latest.Status.Conditions = append(latest.Status.Conditions, condition)
-		}
+		SetReadyCondition(&latest.Status.Conditions, latest.Generation, status, reason, message)
 
 		// Set Phase field based on condition status for API consistency
 		switch status {
 		case metav1.ConditionTrue:
 			latest.Status.Phase = "Ready"
 			// Set creation time if this is the first time the database becomes ready
-			if latest.Status.CreationTime == nil && reason == "DatabaseReady" {
+			if latest.Status.CreationTime == nil && reason == EventReasonDatabaseReady {
 				now := metav1.Now()
 				latest.Status.CreationTime = &now
 			}
 		case metav1.ConditionFalse:
 			// Set phase based on the reason for failure
 			switch reason {
-			case "ValidationFailed":
-				latest.Status.Phase = "ValidationFailed"
-			case "ClusterNotFound", "ClusterNotReady":
+			case EventReasonValidationFailed:
+				latest.Status.Phase = EventReasonValidationFailed
+			case EventReasonClusterNotFound, EventReasonClusterNotReady:
 				latest.Status.Phase = "Pending"
-			case "ConnectionFailed", "CreationFailed", "DataImportFailed":
+			case EventReasonConnectionFailed, EventReasonCreationFailed, EventReasonDataImportFailed:
 				latest.Status.Phase = "Failed"
 			default:
 				latest.Status.Phase = "Unknown"
