@@ -1456,11 +1456,31 @@ func BuildPodSpecForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, se
 		podSpec.Affinity = cluster.Spec.Affinity
 	}
 
+	// Wire image pull secrets from cluster spec
+	if refs := clusterImagePullSecrets(cluster); len(refs) > 0 {
+		podSpec.ImagePullSecrets = refs
+	}
+
 	// --- Plugin Management ---
 	// NOTE: Plugins are now managed through the Neo4jPlugin CRD instead of embedded configuration.
 	// The Neo4jPlugin controller handles plugin installation and management separately.
 
 	return podSpec
+}
+
+// clusterImagePullSecrets converts the cluster's image pull secret names to []corev1.LocalObjectReference.
+func clusterImagePullSecrets(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) []corev1.LocalObjectReference {
+	if len(cluster.Spec.Image.PullSecrets) == 0 {
+		return nil
+	}
+	refs := make([]corev1.LocalObjectReference, 0, len(cluster.Spec.Image.PullSecrets))
+	for _, name := range cluster.Spec.Image.PullSecrets {
+		if name == "" {
+			continue
+		}
+		refs = append(refs, corev1.LocalObjectReference{Name: name})
+	}
+	return refs
 }
 
 func buildVolumeClaimTemplatesForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) []corev1.PersistentVolumeClaim {
