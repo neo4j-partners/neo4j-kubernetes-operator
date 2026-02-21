@@ -97,6 +97,21 @@ func containerSecurityContextForStandalone(standalone *neo4jv1alpha1.Neo4jEnterp
 	}
 }
 
+// standaloneImagePullSecrets converts the standalone's image pull secret names to []corev1.LocalObjectReference.
+func standaloneImagePullSecrets(standalone *neo4jv1alpha1.Neo4jEnterpriseStandalone) []corev1.LocalObjectReference {
+	if len(standalone.Spec.Image.PullSecrets) == 0 {
+		return nil
+	}
+	refs := make([]corev1.LocalObjectReference, 0, len(standalone.Spec.Image.PullSecrets))
+	for _, name := range standalone.Spec.Image.PullSecrets {
+		if name == "" {
+			continue
+		}
+		refs = append(refs, corev1.LocalObjectReference{Name: name})
+	}
+	return refs
+}
+
 const (
 	// StandaloneFinalizer is the finalizer for Neo4j enterprise standalone deployments
 	StandaloneFinalizer = "neo4j.neo4j.com/standalone-finalizer"
@@ -784,11 +799,12 @@ func (r *Neo4jEnterpriseStandaloneReconciler) createStatefulSet(standalone *neo4
 						},
 						r.buildBackupSidecarContainer(standalone),
 					},
-					SecurityContext: podSecurityContextForStandalone(standalone),
-					Volumes:         r.buildVolumes(standalone),
-					NodeSelector:    standalone.Spec.NodeSelector,
-					Tolerations:     standalone.Spec.Tolerations,
-					Affinity:        standalone.Spec.Affinity,
+					SecurityContext:  podSecurityContextForStandalone(standalone),
+					Volumes:          r.buildVolumes(standalone),
+					NodeSelector:     standalone.Spec.NodeSelector,
+					Tolerations:      standalone.Spec.Tolerations,
+					Affinity:         standalone.Spec.Affinity,
+					ImagePullSecrets: standaloneImagePullSecrets(standalone),
 				},
 			},
 			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{
