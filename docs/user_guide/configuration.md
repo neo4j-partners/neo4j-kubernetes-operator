@@ -19,6 +19,13 @@ Below are some of the most important fields you will use to configure your clust
 *   `spec.resources`: Allows you to set specific CPU and memory requests and limits for the Neo4j pods, which is crucial for performance tuning.
 *   `spec.backups`: (Deprecated) Use the separate Neo4jBackup CRD for backup management. The operator now uses a centralized backup StatefulSet for resource efficiency.
 *   `spec.queryMonitoring`: Enable query monitoring and Prometheus metrics exposure.
+
+> **Live Diagnostics:** When `enabled: true` and the cluster is `Ready`, the operator
+> automatically runs `SHOW SERVERS` and `SHOW DATABASES` and writes results to
+> `status.diagnostics`. Two new conditions, `ServersHealthy` and `DatabasesHealthy`,
+> reflect cluster health without requiring `kubectl exec`. See the
+> [Monitoring Guide](guides/monitoring.md#live-cluster-diagnostics) for full details.
+
 *   **Plugin management**: Use separate Neo4jPlugin CRDs to install plugins like APOC, GDS, Bloom, GenAI, and N10s. The operator automatically handles Neo4j 5.26+ compatibility requirements (see [Neo4jPlugin API Reference](../api_reference/neo4jplugin.md)).
 *   `spec.mcp`: Optional Neo4j MCP server deployment for client integrations (HTTP or STDIO). Requires the APOC plugin via Neo4jPlugin; HTTP uses per-request auth and supports Service/Ingress/Route exposure with optional TLS.
 *   `spec.tls`: Configure TLS/SSL encryption. Set mode to `cert-manager` and provide an issuerRef for automatic certificate management.
