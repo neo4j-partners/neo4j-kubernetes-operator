@@ -1499,6 +1499,147 @@ func (qm *QueryMonitor) setupAlertingRules(ctx context.Context, cluster *neo4jv1
 	return nil
 }
 
+// CollectDiagnostics runs SHOW SERVERS and SHOW DATABASES against the cluster
+// and writes the results into status.diagnostics and status.conditions.
+// Non-blocking: all errors are surfaced in status but do not fail the reconciliation loop.
+func (qm *QueryMonitor) CollectDiagnostics(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, neo4jClient *neo4jclient.Client) error {
+	logger := log.FromContext(ctx)
+	logger.V(1).Info("Collecting cluster diagnostics", "cluster", cluster.Name)
+
+	diagnostics := &neo4jv1alpha1.ClusterDiagnosticsStatus{}
+
+	// Collect server list
+	servers, serverErr := neo4jClient.GetServerList(ctx)
+	if serverErr != nil {
+		logger.Error(serverErr, "Failed to collect SHOW SERVERS")
+		diagnostics.CollectionError = fmt.Sprintf("SHOW SERVERS failed: %v", serverErr)
+	} else {
+		for _, s := range servers {
+			diagnostics.Servers = append(diagnostics.Servers, neo4jv1alpha1.ServerDiagnosticInfo{
+				Name:             s.Name,
+				Address:          s.Address,
+				State:            s.State,
+				Health:           s.Health,
+				HostingDatabases: len(s.Hosting),
+			})
+		}
+	}
+
+	// Collect database list
+	databases, dbErr := neo4jClient.GetDatabases(ctx)
+	if dbErr != nil {
+		logger.Error(dbErr, "Failed to collect SHOW DATABASES")
+		if diagnostics.CollectionError == "" {
+			diagnostics.CollectionError = fmt.Sprintf("SHOW DATABASES failed: %v", dbErr)
+		} else {
+			diagnostics.CollectionError += fmt.Sprintf("; SHOW DATABASES failed: %v", dbErr)
+		}
+	} else {
+		for _, d := range databases {
+			diagnostics.Databases = append(diagnostics.Databases, neo4jv1alpha1.DatabaseDiagnosticInfo{
+				Name:            d.Name,
+				Status:          d.Status,
+				RequestedStatus: d.RequestedStatus,
+				Role:            d.Role,
+				Default:         d.Default,
+			})
+		}
+	}
+
+	now := metav1.Now()
+	diagnostics.LastCollected = &now
+
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		latest := &neo4jv1alpha1.Neo4jEnterpriseCluster{}
+		if err := qm.Get(ctx, client.ObjectKeyFromObject(cluster), latest); err != nil {
+			return err
+		}
+
+		latest.Status.Diagnostics = diagnostics
+		qm.updateServersCondition(latest, servers, serverErr)
+		qm.updateDatabasesCondition(latest, databases, dbErr)
+
+		return qm.Status().Update(ctx, latest)
+	})
+}
+
+// updateServersCondition sets the ServersHealthy condition from SHOW SERVERS results.
+func (qm *QueryMonitor) updateServersCondition(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, servers []neo4jclient.ServerInfo, collectErr error) {
+	if collectErr != nil {
+		SetNamedCondition(&cluster.Status.Conditions, ConditionTypeServersHealthy,
+			cluster.Generation, metav1.ConditionUnknown,
+			ConditionReasonDiagnosticsUnavailable,
+			fmt.Sprintf("Could not collect server list: %v", collectErr))
+		return
+	}
+	if len(servers) == 0 {
+		SetNamedCondition(&cluster.Status.Conditions, ConditionTypeServersHealthy,
+			cluster.Generation, metav1.ConditionUnknown,
+			ConditionReasonDiagnosticsUnavailable, "No servers returned by SHOW SERVERS")
+		return
+	}
+
+	var degraded []string
+	for _, s := range servers {
+		if s.State != "Enabled" || s.Health != "Available" {
+			degraded = append(degraded, fmt.Sprintf("%s (state=%s health=%s)", s.Name, s.State, s.Health))
+		}
+	}
+
+	if len(degraded) > 0 {
+		SetNamedCondition(&cluster.Status.Conditions, ConditionTypeServersHealthy,
+			cluster.Generation, metav1.ConditionFalse,
+			ConditionReasonServerDegraded,
+			fmt.Sprintf("%d server(s) unhealthy: %s", len(degraded), strings.Join(degraded, ", ")))
+	} else {
+		SetNamedCondition(&cluster.Status.Conditions, ConditionTypeServersHealthy,
+			cluster.Generation, metav1.ConditionTrue,
+			ConditionReasonAllServersHealthy,
+			fmt.Sprintf("All %d servers are Enabled and Available", len(servers)))
+	}
+}
+
+// updateDatabasesCondition sets the DatabasesHealthy condition from SHOW DATABASES results.
+func (qm *QueryMonitor) updateDatabasesCondition(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, databases []neo4jclient.DatabaseInfo, collectErr error) {
+	if collectErr != nil {
+		SetNamedCondition(&cluster.Status.Conditions, ConditionTypeDatabasesHealthy,
+			cluster.Generation, metav1.ConditionUnknown,
+			ConditionReasonDiagnosticsUnavailable,
+			fmt.Sprintf("Could not collect database list: %v", collectErr))
+		return
+	}
+	if len(databases) == 0 {
+		SetNamedCondition(&cluster.Status.Conditions, ConditionTypeDatabasesHealthy,
+			cluster.Generation, metav1.ConditionUnknown,
+			ConditionReasonDiagnosticsUnavailable, "No databases returned by SHOW DATABASES")
+		return
+	}
+
+	var offline []string
+	userDBCount := 0
+	for _, d := range databases {
+		if d.Name == "system" {
+			continue
+		}
+		userDBCount++
+		if d.RequestedStatus == "online" && d.Status != "online" {
+			offline = append(offline, fmt.Sprintf("%s (status=%s)", d.Name, d.Status))
+		}
+	}
+
+	if len(offline) > 0 {
+		SetNamedCondition(&cluster.Status.Conditions, ConditionTypeDatabasesHealthy,
+			cluster.Generation, metav1.ConditionFalse,
+			ConditionReasonDatabaseOffline,
+			fmt.Sprintf("%d database(s) not online: %s", len(offline), strings.Join(offline, ", ")))
+	} else {
+		SetNamedCondition(&cluster.Status.Conditions, ConditionTypeDatabasesHealthy,
+			cluster.Generation, metav1.ConditionTrue,
+			ConditionReasonAllDatabasesOnline,
+			fmt.Sprintf("All %d user database(s) are online", userDBCount))
+	}
+}
+
 // validatePropertyShardingConfiguration validates property sharding settings
 func (r *Neo4jEnterpriseClusterReconciler) validatePropertyShardingConfiguration(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) error {
 	logger := log.FromContext(ctx)
