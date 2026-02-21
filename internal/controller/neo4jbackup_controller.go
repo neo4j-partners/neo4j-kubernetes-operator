@@ -38,6 +38,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	neo4jv1alpha1 "github.com/priyolahiri/neo4j-kubernetes-operator/api/v1alpha1"
+	"github.com/priyolahiri/neo4j-kubernetes-operator/internal/metrics"
 	"github.com/priyolahiri/neo4j-kubernetes-operator/internal/neo4j"
 	"github.com/priyolahiri/neo4j-kubernetes-operator/internal/resources"
 	"github.com/priyolahiri/neo4j-kubernetes-operator/internal/validation"
@@ -240,11 +241,15 @@ func (r *Neo4jBackupReconciler) handleOneTimeBackup(ctx context.Context, backup 
 }
 
 func (r *Neo4jBackupReconciler) handleExistingBackupJob(ctx context.Context, backup *neo4jv1alpha1.Neo4jBackup, job *batchv1.Job) (ctrl.Result, error) {
+	backupStart := time.Now()
+	backupM := metrics.NewBackupMetrics(backup.Name, backup.Namespace)
+
 	// Check job status
 	if job.Status.Succeeded > 0 {
 		// Backup completed successfully
 		r.updateBackupStatus(ctx, backup, "Completed", "Backup completed successfully")
 		r.Recorder.Event(backup, corev1.EventTypeNormal, EventReasonBackupCompleted, "Backup completed successfully")
+		backupM.RecordBackup(ctx, true, time.Since(backupStart), 0)
 
 		// Update backup statistics
 		r.updateBackupStats(ctx, backup, job)
@@ -256,6 +261,7 @@ func (r *Neo4jBackupReconciler) handleExistingBackupJob(ctx context.Context, bac
 		// Backup failed
 		r.updateBackupStatus(ctx, backup, "Failed", "Backup job failed")
 		r.Recorder.Event(backup, corev1.EventTypeWarning, EventReasonBackupFailed, "Backup job failed")
+		backupM.RecordBackup(ctx, false, time.Since(backupStart), 0)
 		return ctrl.Result{}, nil
 	}
 

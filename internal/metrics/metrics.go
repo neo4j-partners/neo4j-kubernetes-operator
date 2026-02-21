@@ -85,6 +85,24 @@ var (
 		[]string{LabelClusterName, LabelNamespace},
 	)
 
+	clusterPhase = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Subsystem: subsystem,
+			Name:      "cluster_phase",
+			Help:      "Current phase of the Neo4j cluster (1 = active phase, 0 = not in this phase)",
+		},
+		[]string{LabelClusterName, LabelNamespace, LabelPhase},
+	)
+
+	splitBrainDetectedTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Subsystem: subsystem,
+			Name:      "split_brain_detected_total",
+			Help:      "Total number of split-brain scenarios detected",
+		},
+		[]string{LabelClusterName, LabelNamespace},
+	)
+
 	// Reconciliation metrics
 	reconcileTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -220,6 +238,8 @@ func init() {
 	metrics.Registry.MustRegister(
 		clusterReplicas,
 		clusterHealthy,
+		clusterPhase,
+		splitBrainDetectedTotal,
 		reconcileTotal,
 		reconcileDuration,
 		upgradeTotal,
@@ -324,6 +344,23 @@ func (m *ClusterMetrics) RecordClusterHealth(healthy bool) {
 		value = 1.0
 	}
 	clusterHealthy.WithLabelValues(m.clusterName, m.namespace).Set(value)
+}
+
+// RecordClusterPhase records the current cluster phase as a labelled gauge.
+// It sets 1.0 for the active phase label and 0.0 for all others.
+func (m *ClusterMetrics) RecordClusterPhase(phase string) {
+	for _, p := range []string{"Pending", "Forming", "Ready", "Failed", "Degraded", "Upgrading"} {
+		v := 0.0
+		if p == phase {
+			v = 1.0
+		}
+		clusterPhase.WithLabelValues(m.clusterName, m.namespace, p).Set(v)
+	}
+}
+
+// RecordSplitBrainDetected increments the split-brain detection counter for the given cluster.
+func RecordSplitBrainDetected(clusterName, namespace string) {
+	splitBrainDetectedTotal.WithLabelValues(clusterName, namespace).Inc()
 }
 
 // UpgradeMetrics provides methods for recording upgrade-related metrics
