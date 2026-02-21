@@ -1071,6 +1071,8 @@ func (r *Neo4jRestoreReconciler) updateRestoreStatus(ctx context.Context, restor
 		latest.Status.Phase = phase
 		latest.Status.Message = message
 		latest.Status.ObservedGeneration = latest.Generation
+		condStatus, condReason := PhaseToConditionStatus(phase)
+		SetReadyCondition(&latest.Status.Conditions, latest.Generation, condStatus, condReason, message)
 		return r.Status().Update(ctx, latest)
 	}
 	err := retry.RetryOnConflict(retry.DefaultBackoff, update)

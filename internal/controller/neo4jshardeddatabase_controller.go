@@ -56,7 +56,6 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
@@ -540,35 +539,9 @@ func (r *Neo4jShardedDatabaseReconciler) updateStatus(ctx context.Context, shard
 			latest.Status.ShardingReady = shardingReady
 		}
 
-		// Update condition
-		condition := metav1.Condition{
-			Type:    "Ready",
-			Status:  metav1.ConditionFalse,
-			Reason:  "NotReady",
-			Message: message,
-		}
-
-		if phase == "Ready" {
-			condition.Status = metav1.ConditionTrue
-			condition.Reason = EventReasonShardedDatabaseReady
-		} else if phase == "Failed" {
-			condition.Reason = "ShardedDatabaseFailed"
-		}
-
-		condition.LastTransitionTime = metav1.Now()
-
-		// Update or add condition
-		found := false
-		for i, existingCondition := range latest.Status.Conditions {
-			if existingCondition.Type == condition.Type {
-				latest.Status.Conditions[i] = condition
-				found = true
-				break
-			}
-		}
-		if !found {
-			latest.Status.Conditions = append(latest.Status.Conditions, condition)
-		}
+		// Update Ready condition using standard helper
+		condStatus, condReason := PhaseToConditionStatus(phase)
+		SetReadyCondition(&latest.Status.Conditions, latest.Generation, condStatus, condReason, message)
 
 		return r.Status().Update(ctx, &latest)
 	})

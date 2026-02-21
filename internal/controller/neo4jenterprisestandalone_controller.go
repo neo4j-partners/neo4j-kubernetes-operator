@@ -859,6 +859,10 @@ func (r *Neo4jEnterpriseStandaloneReconciler) updateStatus(ctx context.Context, 
 	latestStandalone.Status.Ready = ready
 	latestStandalone.Status.Version = standalone.Spec.Image.Tag
 
+	// Update Ready condition using standard helper
+	condStatus, condReason := PhaseToConditionStatus(phase)
+	SetReadyCondition(&latestStandalone.Status.Conditions, latestStandalone.Generation, condStatus, condReason, message)
+
 	// Update endpoints
 	latestStandalone.Status.Endpoints = &neo4jv1alpha1.EndpointStatus{
 		Bolt:  fmt.Sprintf("bolt://%s-service.%s.svc.cluster.local:7687", standalone.Name, standalone.Namespace),

@@ -910,22 +910,17 @@ func (r *Neo4jEnterpriseClusterReconciler) updateClusterStatus(ctx context.Conte
 			return err
 		}
 
-		// Determine expected condition status
-		expectedConditionStatus := metav1.ConditionTrue
-		if phase == "Failed" {
-			expectedConditionStatus = metav1.ConditionFalse
-		}
-
 		// Check if status is already exactly what we want
 		statusNeedsUpdate := latest.Status.Phase != phase || latest.Status.Message != message
+
+		// Determine standard condition status and reason
+		condStatus, condReason := PhaseToConditionStatus(phase)
 		conditionNeedsUpdate := true
 
-		// Check existing condition
+		// Check existing condition against standardized values
 		for _, cond := range latest.Status.Conditions {
-			if cond.Type == "Ready" {
-				if cond.Status == expectedConditionStatus &&
-					cond.Reason == phase &&
-					cond.Message == message {
+			if cond.Type == ConditionTypeReady {
+				if cond.Status == condStatus && cond.Reason == condReason && cond.Message == message {
 					conditionNeedsUpdate = false
 				}
 				break
@@ -950,27 +945,8 @@ func (r *Neo4jEnterpriseClusterReconciler) updateClusterStatus(ctx context.Conte
 		latest.Status.Phase = phase
 		latest.Status.Message = message
 
-		// Update the condition
-		condition := metav1.Condition{
-			Type:               "Ready",
-			Status:             expectedConditionStatus,
-			LastTransitionTime: metav1.Now(),
-			Reason:             phase,
-			Message:            message,
-		}
-
-		// Update or add condition
-		found := false
-		for i, cond := range latest.Status.Conditions {
-			if cond.Type == condition.Type {
-				latest.Status.Conditions[i] = condition
-				found = true
-				break
-			}
-		}
-		if !found {
-			latest.Status.Conditions = append(latest.Status.Conditions, condition)
-		}
+		// Update Ready condition using standard helper
+		SetReadyCondition(&latest.Status.Conditions, latest.Generation, condStatus, condReason, message)
 
 		// Record Prometheus phase metric on every phase transition
 		clusterM := metrics.NewClusterMetrics(cluster.Name, cluster.Namespace)

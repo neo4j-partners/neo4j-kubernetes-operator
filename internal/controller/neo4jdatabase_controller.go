@@ -497,24 +497,7 @@ func (r *Neo4jDatabaseReconciler) updateDatabaseStatus(ctx context.Context, data
 		if err := r.Get(ctx, client.ObjectKeyFromObject(database), latest); err != nil {
 			return err
 		}
-		condition := metav1.Condition{
-			Type:               "Ready",
-			Status:             status,
-			Reason:             reason,
-			Message:            message,
-			LastTransitionTime: metav1.Now(),
-		}
-		updated := false
-		for i, existingCondition := range latest.Status.Conditions {
-			if existingCondition.Type == condition.Type {
-				latest.Status.Conditions[i] = condition
-				updated = true
-				break
-			}
-		}
-		if !updated {
-			latest.Status.Conditions = append(latest.Status.Conditions, condition)
-		}
+		SetReadyCondition(&latest.Status.Conditions, latest.Generation, status, reason, message)
 
 		// Set Phase field based on condition status for API consistency
 		switch status {

@@ -794,27 +794,8 @@ func (r *Neo4jBackupReconciler) updateBackupStatus(ctx context.Context, backup *
 		}
 		latest.Status.Phase = phase
 		latest.Status.Message = message
-		condition := metav1.Condition{
-			Type:               "Ready",
-			Status:             metav1.ConditionTrue,
-			Reason:             phase,
-			Message:            message,
-			LastTransitionTime: metav1.Now(),
-		}
-		if phase == "Failed" || phase == "Suspended" {
-			condition.Status = metav1.ConditionFalse
-		}
-		updated := false
-		for i, existingCondition := range latest.Status.Conditions {
-			if existingCondition.Type == condition.Type {
-				latest.Status.Conditions[i] = condition
-				updated = true
-				break
-			}
-		}
-		if !updated {
-			latest.Status.Conditions = append(latest.Status.Conditions, condition)
-		}
+		condStatus, condReason := PhaseToConditionStatus(phase)
+		SetReadyCondition(&latest.Status.Conditions, latest.Generation, condStatus, condReason, message)
 		now := metav1.Now()
 		switch phase {
 		case "Running":

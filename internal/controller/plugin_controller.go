@@ -676,27 +676,8 @@ func (r *Neo4jPluginReconciler) updatePluginStatus(ctx context.Context, plugin *
 		latest.Status.Phase = phase
 		latest.Status.Message = message
 		latest.Status.ObservedGeneration = latest.Generation
-		condition := metav1.Condition{
-			Type:               "Ready",
-			Status:             metav1.ConditionTrue,
-			LastTransitionTime: metav1.Now(),
-			Reason:             phase,
-			Message:            message,
-		}
-		if phase == "Failed" || phase == "Installing" {
-			condition.Status = metav1.ConditionFalse
-		}
-		found := false
-		for i, cond := range latest.Status.Conditions {
-			if cond.Type == condition.Type {
-				latest.Status.Conditions[i] = condition
-				found = true
-				break
-			}
-		}
-		if !found {
-			latest.Status.Conditions = append(latest.Status.Conditions, condition)
-		}
+		condStatus, condReason := PhaseToConditionStatus(phase)
+		SetReadyCondition(&latest.Status.Conditions, latest.Generation, condStatus, condReason, message)
 		return r.Status().Update(ctx, latest)
 	}
 	err := retry.RetryOnConflict(retry.DefaultBackoff, update)
