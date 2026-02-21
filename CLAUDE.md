@@ -657,6 +657,33 @@ spec:
 - `docs/user_guide/aura_fleet_management.md` — full user guide
 - `examples/fleet-management/` — example YAML files
 
+### Live Cluster Diagnostics
+
+When `spec.queryMonitoring.enabled=true` and cluster is `Ready`, the operator collects live diagnostics:
+
+**Implementation**: `QueryMonitor.CollectDiagnostics()` in `internal/controller/neo4jenterprisecluster_controller.go`
+
+**Status fields**:
+- `status.diagnostics.servers[]` — from `SHOW SERVERS`: name, address, state, health, hostingDatabases
+- `status.diagnostics.databases[]` — from `SHOW DATABASES`: name, status, requestedStatus, role
+- `status.diagnostics.lastCollected` — timestamp of last successful collection
+- `status.diagnostics.collectionError` — error from last failed collection
+
+**Conditions set**:
+- `ServersHealthy` (`True` when all servers are Enabled+Available)
+- `DatabasesHealthy` (`True` when all user databases are online; `system` database is excluded)
+
+**Prometheus metric**: `neo4j_operator_server_health{cluster_name, namespace, server_name, server_address}` — 1=healthy, 0=degraded
+
+**Non-fatal design**: Bolt connection failures surface in `collectionError` only; never block reconciliation.
+
+**Verify**:
+```bash
+kubectl get neo4jenterprisecluster <name> -o jsonpath='{.status.diagnostics}' | jq .
+kubectl get neo4jenterprisecluster <name> \
+  -o jsonpath='{.status.conditions[?(@.type=="ServersHealthy")]}'
+```
+
 ## Neo4j Database Syntax Reference (5.26+ and 2025.x)
 
 ### CREATE DATABASE Syntax
@@ -961,6 +988,10 @@ AfterEach(func() {
 18. **`envVarsEqual` Subset Semantics**: The cluster controller's `envVarsEqual` function is intentionally a *subset* check — it verifies all *desired* env vars are present in current, but tolerates extra env vars added by the `Neo4jPlugin` controller or fleet management reconciler. Never revert this to a strict length+value equality check or the controllers will oscillate.
 19. **NEO4J_PLUGINS Live-Patching via `MergeNeo4jPluginList`**: Do NOT bake `NEO4J_PLUGINS` into the static StatefulSet template in `internal/resources/cluster.go`. Plugin names must be added via the `MergeNeo4jPluginList` helper (live-patch on the running StatefulSet) so that multiple controllers (plugin controller, fleet management reconciler) can each add their plugin without overwriting the other's entry.
 20. **Fleet Management Two-Phase Reconciliation**: `reconcileAuraFleetManagement` has two independent phases: Phase 1 (install plugin via `mergeFleetManagementPlugin`) runs on every reconcile when enabled; Phase 2 (register Aura token) runs only when cluster is `Ready` and token not yet registered. Never collapse these into one step — the plugin needs a pod restart to load before registration is attempted.
+21. **Diagnostics Collection is Non-Fatal**: `CollectDiagnostics` in the QueryMonitor MUST never fail the reconciliation loop. Errors go to `status.diagnostics.collectionError` and conditions are set to `Unknown/DiagnosticsUnavailable`. Never `return err` from diagnostic collection.
+22. **Diagnostic Conditions**: Two new conditions exist — `ServersHealthy` (type from `ConditionTypeServersHealthy`) and `DatabasesHealthy` (type from `ConditionTypeDatabasesHealthy`). These are set by `updateServersCondition`/`updateDatabasesCondition` in `CollectDiagnostics`. The `system` database is explicitly excluded from `DatabasesHealthy` checks.
+23. **Structured Event Reasons**: All event reasons MUST use constants from `internal/controller/events.go` — never pass raw string literals to `r.Recorder.Event`. Use `corev1.EventTypeNormal`/`corev1.EventTypeWarning` for the event type, never the raw strings `"Normal"`/`"Warning"`.
+24. **`SetNamedCondition` for non-Ready conditions**: Use `SetNamedCondition` (not `SetReadyCondition`) for `ServersHealthy` and `DatabasesHealthy` conditions. `SetReadyCondition` is only for the `Ready` condition type. Both helpers preserve `LastTransitionTime` when `Status` and `Reason` are unchanged.
 
 ## Reports
 

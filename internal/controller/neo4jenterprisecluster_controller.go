@@ -111,6 +111,13 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 		return ctrl.Result{}, err
 	}
 
+	reconcileStart := time.Now()
+	reconcileM := metrics.NewReconcileMetrics(cluster.Name, cluster.Namespace)
+	defer func() {
+		success := cluster.Status.Phase == "Ready"
+		reconcileM.RecordReconcile(ctx, "cluster", time.Since(reconcileStart), success)
+	}()
+
 	// Handle deletion
 	if cluster.DeletionTimestamp != nil {
 		return r.handleDeletion(ctx, cluster)
@@ -143,14 +150,14 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 
 				// Emit warnings as events
 				for _, warning := range result.Warnings {
-					r.Recorder.Eventf(cluster, corev1.EventTypeWarning, "TopologyWarning", warning)
+					r.Recorder.Eventf(cluster, corev1.EventTypeWarning, EventReasonTopologyWarning, warning)
 				}
 
 				// Check for validation errors
 				if len(result.Errors) > 0 {
 					err := fmt.Errorf("validation failed: %s", result.Errors.ToAggregate().Error())
 					logger.Error(err, "Cluster update validation failed")
-					r.Recorder.Eventf(cluster, corev1.EventTypeWarning, "ValidationFailed", "Cluster update validation failed: %v", err)
+					r.Recorder.Eventf(cluster, corev1.EventTypeWarning, EventReasonValidationFailed, "Cluster update validation failed: %v", err)
 					_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Update validation failed: %v", err))
 					return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 				}
@@ -163,14 +170,14 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 
 			// Emit warnings as events
 			for _, warning := range result.Warnings {
-				r.Recorder.Eventf(cluster, corev1.EventTypeWarning, "TopologyWarning", warning)
+				r.Recorder.Eventf(cluster, corev1.EventTypeWarning, EventReasonTopologyWarning, warning)
 			}
 
 			// Check for validation errors
 			if len(result.Errors) > 0 {
 				err := fmt.Errorf("validation failed: %s", result.Errors.ToAggregate().Error())
 				logger.Error(err, "Cluster validation failed")
-				r.Recorder.Eventf(cluster, corev1.EventTypeWarning, "ValidationFailed", "Cluster validation failed: %v", err)
+				r.Recorder.Eventf(cluster, corev1.EventTypeWarning, EventReasonValidationFailed, "Cluster validation failed: %v", err)
 				_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Validation failed: %v", err))
 				return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 			}
@@ -181,7 +188,7 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 		if len(roleHintErrors) > 0 {
 			for _, roleError := range roleHintErrors {
 				logger.Error(fmt.Errorf("server role validation error"), roleError)
-				r.Recorder.Eventf(cluster, corev1.EventTypeWarning, "ServerRoleValidationFailed", "Server role hint validation failed: %s", roleError)
+				r.Recorder.Eventf(cluster, corev1.EventTypeWarning, EventReasonServerRoleFailed, "Server role hint validation failed: %s", roleError)
 			}
 			err := fmt.Errorf("server role validation failed: %v", roleHintErrors)
 			_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Server role validation failed: %v", roleHintErrors))
@@ -193,7 +200,7 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 	if cluster.Spec.PropertySharding != nil && cluster.Spec.PropertySharding.Enabled {
 		if err := r.validatePropertyShardingConfiguration(ctx, cluster); err != nil {
 			logger.Error(err, "Property sharding validation failed")
-			r.Recorder.Eventf(cluster, corev1.EventTypeWarning, "PropertyShardingValidationFailed", "Property sharding validation failed: %v", err)
+			r.Recorder.Eventf(cluster, corev1.EventTypeWarning, EventReasonPropertyShardingFailed, "Property sharding validation failed: %v", err)
 			_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Property sharding validation failed: %v", err))
 			return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 		}
@@ -340,7 +347,7 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 			// Fleet management registration failures are non-fatal: the cluster is operational,
 			// only the Aura monitoring registration failed. Log and surface via status.
 			logger.Error(err, "Failed to reconcile Aura Fleet Management registration")
-			r.Recorder.Eventf(cluster, corev1.EventTypeWarning, "AuraFleetManagementFailed",
+			r.Recorder.Eventf(cluster, corev1.EventTypeWarning, EventReasonAuraFleetFailed,
 				"Aura Fleet Management registration failed: %v", err)
 		}
 	}
@@ -352,7 +359,7 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 		if err != nil {
 			logger.Error(err, "Failed to calculate topology placement")
 			_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Failed to calculate topology placement: %v", err))
-			r.Recorder.Event(cluster, "Warning", "TopologyPlacementFailed", fmt.Sprintf("Failed to calculate topology placement: %v", err))
+			r.Recorder.Event(cluster, corev1.EventTypeWarning, EventReasonTopologyPlacementFailed, fmt.Sprintf("Failed to calculate topology placement: %v", err))
 			return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 		}
 		topologyPlacement = placement
@@ -363,7 +370,7 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 			"enforceDistribution", placement.EnforceDistribution)
 
 		if len(placement.AvailabilityZones) > 0 {
-			r.Recorder.Event(cluster, "Normal", "TopologyPlacementCalculated",
+			r.Recorder.Event(cluster, corev1.EventTypeNormal, EventReasonTopologyPlacementCalc,
 				fmt.Sprintf("Calculated topology placement across %d zones", len(placement.AvailabilityZones)))
 		}
 	}
@@ -408,17 +415,39 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 		}
 	}
 
+	// Collect live diagnostics when QueryMonitoring is enabled and cluster is Ready.
+	// Diagnostics collection is non-fatal: failures are surfaced in status.diagnostics.collectionError.
+	if cluster.Spec.QueryMonitoring != nil && cluster.Spec.QueryMonitoring.Enabled &&
+		cluster.Status.Phase == "Ready" {
+		neo4jDiagClient, diagClientErr := r.createNeo4jClient(ctx, cluster)
+		if diagClientErr != nil {
+			logger.V(1).Info("Skipping diagnostics collection: could not create Neo4j client", "error", diagClientErr)
+		} else {
+			defer neo4jDiagClient.Close()
+			diagMonitor := NewQueryMonitor(r.Client, r.Scheme)
+			if diagErr := diagMonitor.CollectDiagnostics(ctx, cluster, neo4jDiagClient); diagErr != nil {
+				logger.Error(diagErr, "Failed to collect cluster diagnostics (non-fatal)")
+			}
+		}
+	}
+
 	// Plugin management is now handled by the separate Neo4jPlugin CRD and controller
 
 	// Verify Neo4j cluster formation before marking as Ready
 	clusterFormed, formationMessage, err := r.verifyNeo4jClusterFormation(ctx, cluster)
 	if err != nil {
 		logger.Error(err, "Failed to verify cluster formation")
+		r.Recorder.Eventf(cluster, corev1.EventTypeWarning, EventReasonClusterFormationFailed,
+			"Cluster formation check failed: %v", err)
 		_ = r.updateClusterStatus(ctx, cluster, "Forming", fmt.Sprintf("Verifying cluster formation: %v", err))
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
 	}
 
 	if !clusterFormed {
+		if cluster.Status.Phase != "Forming" {
+			r.Recorder.Event(cluster, corev1.EventTypeNormal, EventReasonClusterFormationStarted,
+				"Neo4j cluster formation started")
+		}
 		_ = r.updateClusterStatus(ctx, cluster, "Forming", formationMessage)
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
 	}
@@ -437,7 +466,7 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 
 	// Only create event if status actually changed
 	if statusChanged {
-		r.Recorder.Event(cluster, "Normal", "ClusterReady", "Neo4j Enterprise cluster is ready")
+		r.Recorder.Event(cluster, corev1.EventTypeNormal, EventReasonClusterReady, "Neo4j Enterprise cluster is ready")
 	}
 
 	return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
@@ -897,22 +926,17 @@ func (r *Neo4jEnterpriseClusterReconciler) updateClusterStatus(ctx context.Conte
 			return err
 		}
 
-		// Determine expected condition status
-		expectedConditionStatus := metav1.ConditionTrue
-		if phase == "Failed" {
-			expectedConditionStatus = metav1.ConditionFalse
-		}
-
 		// Check if status is already exactly what we want
 		statusNeedsUpdate := latest.Status.Phase != phase || latest.Status.Message != message
+
+		// Determine standard condition status and reason
+		condStatus, condReason := PhaseToConditionStatus(phase)
 		conditionNeedsUpdate := true
 
-		// Check existing condition
+		// Check existing condition against standardized values
 		for _, cond := range latest.Status.Conditions {
-			if cond.Type == "Ready" {
-				if cond.Status == expectedConditionStatus &&
-					cond.Reason == phase &&
-					cond.Message == message {
+			if cond.Type == ConditionTypeReady {
+				if cond.Status == condStatus && cond.Reason == condReason && cond.Message == message {
 					conditionNeedsUpdate = false
 				}
 				break
@@ -937,26 +961,19 @@ func (r *Neo4jEnterpriseClusterReconciler) updateClusterStatus(ctx context.Conte
 		latest.Status.Phase = phase
 		latest.Status.Message = message
 
-		// Update the condition
-		condition := metav1.Condition{
-			Type:               "Ready",
-			Status:             expectedConditionStatus,
-			LastTransitionTime: metav1.Now(),
-			Reason:             phase,
-			Message:            message,
-		}
+		// Update Ready condition using standard helper
+		SetReadyCondition(&latest.Status.Conditions, latest.Generation, condStatus, condReason, message)
 
-		// Update or add condition
-		found := false
-		for i, cond := range latest.Status.Conditions {
-			if cond.Type == condition.Type {
-				latest.Status.Conditions[i] = condition
-				found = true
-				break
-			}
-		}
-		if !found {
-			latest.Status.Conditions = append(latest.Status.Conditions, condition)
+		// Record Prometheus phase metric on every phase transition
+		clusterM := metrics.NewClusterMetrics(cluster.Name, cluster.Namespace)
+		clusterM.RecordClusterPhase(phase)
+		if phase == "Ready" {
+			clusterM.RecordClusterHealth(true)
+			clusterM.RecordClusterReplicas(cluster.Spec.Topology.Servers, 0)
+		} else if phase == "Failed" || phase == "Degraded" {
+			clusterM.RecordClusterHealth(false)
+		} else if phase == "Forming" {
+			clusterM.RecordClusterHealth(false)
 		}
 
 		statusChanged = true
@@ -1083,6 +1100,9 @@ func (r *Neo4jEnterpriseClusterReconciler) handleRollingUpgrade(ctx context.Cont
 	// Create rolling upgrade orchestrator
 	upgrader := NewRollingUpgradeOrchestrator(r.Client, cluster.Name, cluster.Namespace)
 
+	r.Recorder.Eventf(cluster, corev1.EventTypeNormal, EventReasonUpgradeStarted,
+		"Rolling upgrade started: %s -> %s", cluster.Status.Version, cluster.Spec.Image.Tag)
+
 	// Execute rolling upgrade
 	if err := upgrader.ExecuteRollingUpgrade(ctx, cluster, neo4jClient); err != nil {
 		logger.Error(err, "Rolling upgrade failed")
@@ -1090,10 +1110,12 @@ func (r *Neo4jEnterpriseClusterReconciler) handleRollingUpgrade(ctx context.Cont
 		// Check if auto-pause is enabled
 		if cluster.Spec.UpgradeStrategy != nil && cluster.Spec.UpgradeStrategy.AutoPauseOnFailure {
 			_ = r.updateClusterStatus(ctx, cluster, "Paused", "Upgrade paused due to failure - manual intervention required")
-			r.Recorder.Event(cluster, "Warning", "UpgradePaused", fmt.Sprintf("Upgrade paused: %v", err))
+			r.Recorder.Event(cluster, corev1.EventTypeWarning, EventReasonUpgradePaused, fmt.Sprintf("Upgrade paused: %v", err))
 			return ctrl.Result{}, nil // Don't requeue automatically
 		}
 
+		r.Recorder.Eventf(cluster, corev1.EventTypeWarning, EventReasonUpgradeFailed,
+			"Rolling upgrade failed: %v", err)
 		_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Rolling upgrade failed: %v", err))
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 	}
@@ -1105,7 +1127,7 @@ func (r *Neo4jEnterpriseClusterReconciler) handleRollingUpgrade(ctx context.Cont
 		logger.Error(err, "Failed to update cluster status")
 	}
 
-	r.Recorder.Event(cluster, "Normal", "UpgradeCompleted", "Rolling upgrade completed successfully")
+	r.Recorder.Event(cluster, corev1.EventTypeNormal, EventReasonUpgradeCompleted, "Rolling upgrade completed successfully")
 	logger.Info("Rolling upgrade completed successfully")
 
 	return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
@@ -1195,8 +1217,9 @@ func (r *Neo4jEnterpriseClusterReconciler) verifyNeo4jClusterFormation(ctx conte
 			"repairAction", analysis.RepairAction)
 
 		// Record event about split-brain detection
-		r.Recorder.Eventf(cluster, "Warning", "SplitBrainDetected",
+		r.Recorder.Eventf(cluster, corev1.EventTypeWarning, EventReasonSplitBrainDetected,
 			"Split-brain detected: %s", analysis.ErrorMessage)
+		metrics.RecordSplitBrainDetected(cluster.Name, cluster.Namespace)
 
 		// Attempt automatic repair if configured
 		if analysis.RepairAction == RepairActionRestartPods {
@@ -1206,12 +1229,12 @@ func (r *Neo4jEnterpriseClusterReconciler) verifyNeo4jClusterFormation(ctx conte
 			repairErr := splitBrainDetector.RepairSplitBrain(ctx, cluster, analysis)
 			if repairErr != nil {
 				logger.Error(repairErr, "Failed to repair split-brain automatically")
-				r.Recorder.Eventf(cluster, "Warning", "SplitBrainRepairFailed",
+				r.Recorder.Eventf(cluster, corev1.EventTypeWarning, EventReasonSplitBrainRepairFailed,
 					"Automatic split-brain repair failed: %v", repairErr)
 				return false, fmt.Sprintf("Split-brain repair failed: %v", repairErr), nil
 			}
 
-			r.Recorder.Event(cluster, "Normal", "SplitBrainRepaired",
+			r.Recorder.Event(cluster, corev1.EventTypeNormal, EventReasonSplitBrainRepaired,
 				"Split-brain automatically repaired by restarting orphaned pods")
 
 			// After repair, cluster needs time to reform
@@ -1492,6 +1515,159 @@ func (qm *QueryMonitor) setupAlertingRules(ctx context.Context, cluster *neo4jv1
 	return nil
 }
 
+// CollectDiagnostics runs SHOW SERVERS and SHOW DATABASES against the cluster
+// and writes the results into status.diagnostics and status.conditions.
+// Non-blocking: all errors are surfaced in status but do not fail the reconciliation loop.
+func (qm *QueryMonitor) CollectDiagnostics(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, neo4jClient *neo4jclient.Client) error {
+	logger := log.FromContext(ctx)
+	logger.V(1).Info("Collecting cluster diagnostics", "cluster", cluster.Name)
+
+	diagnostics := &neo4jv1alpha1.ClusterDiagnosticsStatus{}
+
+	// Collect server list
+	servers, serverErr := neo4jClient.GetServerList(ctx)
+	if serverErr != nil {
+		logger.Error(serverErr, "Failed to collect SHOW SERVERS")
+		diagnostics.CollectionError = fmt.Sprintf("SHOW SERVERS failed: %v", serverErr)
+	} else {
+		for _, s := range servers {
+			diagnostics.Servers = append(diagnostics.Servers, neo4jv1alpha1.ServerDiagnosticInfo{
+				Name:             s.Name,
+				Address:          s.Address,
+				State:            s.State,
+				Health:           s.Health,
+				HostingDatabases: len(s.Hosting),
+			})
+		}
+		// Record per-server health metrics
+		clusterM := metrics.NewClusterMetrics(cluster.Name, cluster.Namespace)
+		serverHealthData := make([]metrics.ServerHealth, 0, len(servers))
+		for _, s := range servers {
+			serverHealthData = append(serverHealthData, metrics.ServerHealth{
+				Name:      s.Name,
+				Address:   s.Address,
+				Enabled:   s.State == "Enabled",
+				Available: s.Health == "Available",
+			})
+		}
+		clusterM.RecordServerHealth(serverHealthData)
+	}
+
+	// Collect database list
+	databases, dbErr := neo4jClient.GetDatabases(ctx)
+	if dbErr != nil {
+		logger.Error(dbErr, "Failed to collect SHOW DATABASES")
+		if diagnostics.CollectionError == "" {
+			diagnostics.CollectionError = fmt.Sprintf("SHOW DATABASES failed: %v", dbErr)
+		} else {
+			diagnostics.CollectionError += fmt.Sprintf("; SHOW DATABASES failed: %v", dbErr)
+		}
+	} else {
+		for _, d := range databases {
+			diagnostics.Databases = append(diagnostics.Databases, neo4jv1alpha1.DatabaseDiagnosticInfo{
+				Name:            d.Name,
+				Status:          d.Status,
+				RequestedStatus: d.RequestedStatus,
+				Role:            d.Role,
+				Default:         d.Default,
+			})
+		}
+	}
+
+	now := metav1.Now()
+	diagnostics.LastCollected = &now
+
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		latest := &neo4jv1alpha1.Neo4jEnterpriseCluster{}
+		if err := qm.Get(ctx, client.ObjectKeyFromObject(cluster), latest); err != nil {
+			return err
+		}
+
+		latest.Status.Diagnostics = diagnostics
+		qm.updateServersCondition(latest, servers, serverErr)
+		qm.updateDatabasesCondition(latest, databases, dbErr)
+
+		return qm.Status().Update(ctx, latest)
+	})
+}
+
+// updateServersCondition sets the ServersHealthy condition from SHOW SERVERS results.
+func (qm *QueryMonitor) updateServersCondition(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, servers []neo4jclient.ServerInfo, collectErr error) {
+	if collectErr != nil {
+		SetNamedCondition(&cluster.Status.Conditions, ConditionTypeServersHealthy,
+			cluster.Generation, metav1.ConditionUnknown,
+			ConditionReasonDiagnosticsUnavailable,
+			fmt.Sprintf("Could not collect server list: %v", collectErr))
+		return
+	}
+	if len(servers) == 0 {
+		SetNamedCondition(&cluster.Status.Conditions, ConditionTypeServersHealthy,
+			cluster.Generation, metav1.ConditionUnknown,
+			ConditionReasonDiagnosticsUnavailable, "No servers returned by SHOW SERVERS")
+		return
+	}
+
+	var degraded []string
+	for _, s := range servers {
+		if s.State != "Enabled" || s.Health != "Available" {
+			degraded = append(degraded, fmt.Sprintf("%s (state=%s health=%s)", s.Name, s.State, s.Health))
+		}
+	}
+
+	if len(degraded) > 0 {
+		SetNamedCondition(&cluster.Status.Conditions, ConditionTypeServersHealthy,
+			cluster.Generation, metav1.ConditionFalse,
+			ConditionReasonServerDegraded,
+			fmt.Sprintf("%d server(s) unhealthy: %s", len(degraded), strings.Join(degraded, ", ")))
+	} else {
+		SetNamedCondition(&cluster.Status.Conditions, ConditionTypeServersHealthy,
+			cluster.Generation, metav1.ConditionTrue,
+			ConditionReasonAllServersHealthy,
+			fmt.Sprintf("All %d servers are Enabled and Available", len(servers)))
+	}
+}
+
+// updateDatabasesCondition sets the DatabasesHealthy condition from SHOW DATABASES results.
+func (qm *QueryMonitor) updateDatabasesCondition(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, databases []neo4jclient.DatabaseInfo, collectErr error) {
+	if collectErr != nil {
+		SetNamedCondition(&cluster.Status.Conditions, ConditionTypeDatabasesHealthy,
+			cluster.Generation, metav1.ConditionUnknown,
+			ConditionReasonDiagnosticsUnavailable,
+			fmt.Sprintf("Could not collect database list: %v", collectErr))
+		return
+	}
+	if len(databases) == 0 {
+		SetNamedCondition(&cluster.Status.Conditions, ConditionTypeDatabasesHealthy,
+			cluster.Generation, metav1.ConditionUnknown,
+			ConditionReasonDiagnosticsUnavailable, "No databases returned by SHOW DATABASES")
+		return
+	}
+
+	var offline []string
+	userDBCount := 0
+	for _, d := range databases {
+		if d.Name == "system" {
+			continue
+		}
+		userDBCount++
+		if d.RequestedStatus == "online" && d.Status != "online" {
+			offline = append(offline, fmt.Sprintf("%s (status=%s)", d.Name, d.Status))
+		}
+	}
+
+	if len(offline) > 0 {
+		SetNamedCondition(&cluster.Status.Conditions, ConditionTypeDatabasesHealthy,
+			cluster.Generation, metav1.ConditionFalse,
+			ConditionReasonDatabaseOffline,
+			fmt.Sprintf("%d database(s) not online: %s", len(offline), strings.Join(offline, ", ")))
+	} else {
+		SetNamedCondition(&cluster.Status.Conditions, ConditionTypeDatabasesHealthy,
+			cluster.Generation, metav1.ConditionTrue,
+			ConditionReasonAllDatabasesOnline,
+			fmt.Sprintf("All %d user database(s) are online", userDBCount))
+	}
+}
+
 // validatePropertyShardingConfiguration validates property sharding settings
 func (r *Neo4jEnterpriseClusterReconciler) validatePropertyShardingConfiguration(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) error {
 	logger := log.FromContext(ctx)
@@ -1620,7 +1796,7 @@ func (r *Neo4jEnterpriseClusterReconciler) reconcileRoute(ctx context.Context, c
 		if meta.IsNoMatchError(err) {
 			logger.Info("Route API not available; skipping Route reconciliation")
 			if r.Recorder != nil {
-				r.Recorder.Event(cluster, corev1.EventTypeWarning, "RouteAPINotFound", "route.openshift.io/v1 not available; skipping Route reconciliation")
+				r.Recorder.Event(cluster, corev1.EventTypeWarning, EventReasonRouteAPINotFound, "route.openshift.io/v1 not available; skipping Route reconciliation")
 			}
 			return nil
 		}
@@ -1689,7 +1865,7 @@ func (r *Neo4jEnterpriseClusterReconciler) reconcileMCPRoute(ctx context.Context
 		if meta.IsNoMatchError(err) {
 			logger.Info("Route API not available; skipping MCP Route reconciliation")
 			if r.Recorder != nil {
-				r.Recorder.Event(cluster, corev1.EventTypeWarning, "RouteAPINotFound", "route.openshift.io/v1 not available; skipping MCP Route reconciliation")
+				r.Recorder.Event(cluster, corev1.EventTypeWarning, EventReasonRouteAPINotFound, "route.openshift.io/v1 not available; skipping MCP Route reconciliation")
 			}
 			return nil
 		}
@@ -1720,7 +1896,7 @@ func (r *Neo4jEnterpriseClusterReconciler) warnIfMCPMissingAPOC(ctx context.Cont
 		}
 	}
 
-	r.Recorder.Event(cluster, corev1.EventTypeWarning, "MCPApocMissing",
+	r.Recorder.Event(cluster, corev1.EventTypeWarning, EventReasonMCPApocMissing,
 		"MCP is enabled but APOC is not configured via Neo4jPlugin; MCP may fail in stdio mode and some tools may be unavailable.")
 }
 
@@ -1754,7 +1930,7 @@ func (r *Neo4jEnterpriseClusterReconciler) reconcileAuraFleetManagement(ctx cont
 	if err := r.mergeFleetManagementPlugin(ctx, stsName, cluster.Namespace); err != nil {
 		// Non-fatal for the reconcile: the cluster is functional, plugin patching failed.
 		logger.Error(err, "Failed to patch StatefulSet NEO4J_PLUGINS for fleet-management")
-		r.Recorder.Eventf(cluster, corev1.EventTypeWarning, "AuraFleetManagementPluginPatchFailed",
+		r.Recorder.Eventf(cluster, corev1.EventTypeWarning, EventReasonAuraFleetPluginPatchFailed,
 			"Failed to add fleet-management to NEO4J_PLUGINS: %v", err)
 		return nil
 	}
@@ -1814,7 +1990,7 @@ func (r *Neo4jEnterpriseClusterReconciler) reconcileAuraFleetManagement(ctx cont
 	}
 
 	logger.Info("Aura Fleet Management token registered successfully")
-	r.Recorder.Event(cluster, corev1.EventTypeNormal, "AuraFleetManagementRegistered",
+	r.Recorder.Event(cluster, corev1.EventTypeNormal, EventReasonAuraFleetRegistered,
 		"Successfully registered with Aura Fleet Management")
 	return r.setFleetManagementStatus(ctx, cluster, true, "Registered with Aura Fleet Management")
 }

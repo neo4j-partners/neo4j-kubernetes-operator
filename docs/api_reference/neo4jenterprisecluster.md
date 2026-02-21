@@ -697,6 +697,7 @@ The `Neo4jEnterpriseClusterStatus` represents the observed state of the cluster.
 | `upgradeStatus` | [`*UpgradeStatus`](#upgradestatus) | Upgrade status |
 | `lastBackup` | `*metav1.Time` | Last backup timestamp |
 | `observedGeneration` | `int64` | Last observed generation |
+| `diagnostics` | [`*DiagnosticsStatus`](#diagnosticsstatus) | Live diagnostics collected when `spec.queryMonitoring.enabled=true` and cluster is `Ready`. |
 
 ### EndpointStatus
 
@@ -762,6 +763,38 @@ Server-specific upgrade progress.
 | `inProgress` | `int32` | Number of servers currently being upgraded |
 | `pending` | `int32` | Number of servers pending upgrade |
 | `currentLeader` | `string` | Current leader server |
+
+### DiagnosticsStatus
+
+Live diagnostics collected from `SHOW SERVERS` and `SHOW DATABASES` when `spec.queryMonitoring.enabled=true` and the cluster is in `Ready` phase. Updated on every reconcile cycle.
+
+| Field | Type | Description |
+|---|---|---|
+| `servers` | `[]ServerDiagnostic` | SHOW SERVERS results. Each entry has `name`, `address`, `state`, `health`, `hostingDatabases`. |
+| `servers[].name` | `string` | Server display name. |
+| `servers[].address` | `string` | Bolt address of the server. |
+| `servers[].state` | `string` | Lifecycle state: `Enabled`, `Cordoned`, `Deallocating`. |
+| `servers[].health` | `string` | Health status: `Available` or `Unavailable`. |
+| `servers[].hostingDatabases` | `int` | Number of databases currently hosted on this server. |
+| `databases` | `[]DatabaseDiagnostic` | SHOW DATABASES results. Each entry has `name`, `status`, `requestedStatus`, `role`, `default`. |
+| `databases[].name` | `string` | Database name. |
+| `databases[].status` | `string` | Current status: `online`, `offline`, `quarantined`. |
+| `databases[].requestedStatus` | `string` | Desired status as requested by the operator. |
+| `databases[].role` | `string` | Role on the last-contacted server: `primary`, `secondary`. |
+| `databases[].default` | `bool` | Whether this is the cluster's default database. |
+| `lastCollected` | `string` (RFC3339) | Timestamp of the most recent successful collection. |
+| `collectionError` | `string` | Error message from the last failed collection; empty on success. |
+
+### Conditions
+
+The operator maintains the following condition types on `status.conditions` (standard `metav1.Condition`):
+
+| Condition Type | `True` when | `False` when | `Unknown` when |
+|---|---|---|---|
+| `ServersHealthy` | All servers are `state=Enabled` **and** `health=Available` | Any server is Cordoned, Deallocating, or Unavailable | Diagnostics cannot be collected (cluster not Ready or Bolt unreachable) |
+| `DatabasesHealthy` | All user databases have `status=online` | Any database has `requestedStatus=online` but `status≠online` | Diagnostics cannot be collected (cluster not Ready or Bolt unreachable) |
+
+> **Note:** The `system` database is excluded from the `DatabasesHealthy` check because it has special internal lifecycle behavior.
 
 ## Examples
 

@@ -317,6 +317,38 @@ Each cluster gets automatic RBAC creation:
 - **Event Recording**: Structured events for debugging and monitoring
 - **Connection Examples**: Automatic generation of connection strings
 
+### QueryMonitor and Live Diagnostics
+
+The `QueryMonitoringSpec` field (`spec.queryMonitoring`) drives two distinct
+responsibilities inside the cluster controller:
+
+**1. Infrastructure setup** (`ReconcileQueryMonitoring`):
+Creates Kubernetes resources for metrics collection:
+- `{cluster-name}-metrics` Service — exposes port 2004 for Prometheus scraping
+- `{cluster-name}-query-monitoring` ServiceMonitor — tells the Prometheus Operator to scrape the metrics service
+- Neo4j config flags (`server.metrics.prometheus.enabled=true`, `prometheus.io/*` annotations)
+
+Runs on every reconcile regardless of cluster phase.
+
+**2. Live diagnostics** (`CollectDiagnostics`):
+Runs `SHOW SERVERS` and `SHOW DATABASES` via the Bolt client when the cluster is `Ready`:
+- Writes results to `status.diagnostics` (`ClusterDiagnosticsStatus`)
+- Sets `ServersHealthy` condition (`True` when all servers are `state=Enabled` and `health=Available`)
+- Sets `DatabasesHealthy` condition (`True` when all user databases have `status=online`; the `system` database is excluded)
+- Updates `neo4j_operator_server_health` Prometheus gauge per server (labels: `cluster_name`, `namespace`, `server_name`, `server_address`)
+- Non-fatal: collection errors are surfaced in `status.diagnostics.collectionError` and the conditions are set to `Unknown` with reason `DiagnosticsUnavailable`
+
+The diagnostics Bolt client is created fresh per-reconcile and closed with `defer`. It
+never shares state with the cluster formation or upgrade clients.
+
+**Architecture invariant:** All status writes in `CollectDiagnostics` use
+`retry.RetryOnConflict` to handle concurrent updates without panicking.
+
+**Condition constants** (defined in `internal/controller/conditions.go`):
+- `ConditionTypeServersHealthy = "ServersHealthy"`
+- `ConditionTypeDatabasesHealthy = "DatabasesHealthy"`
+- Reason values: `AllServersHealthy`, `ServerDegraded`, `AllDatabasesOnline`, `DatabaseOffline`, `DiagnosticsUnavailable`
+
 ## Integration Architecture
 
 ### External System Integration:

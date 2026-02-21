@@ -12,13 +12,45 @@ The full CRD specifications, which detail every possible configuration field, ca
 
 Below are some of the most important fields you will use to configure your cluster. For a complete list, please consult the API reference.
 
-*   `spec.image`: The Neo4j Docker image to use. Requires Neo4j Enterprise 5.26+ or 2025.x. You can specify the repository (e.g., `neo4j`), tag (e.g., `5.26-enterprise`), and pull policy.
+*   `spec.image`: The Neo4j Docker image to use. Requires Neo4j Enterprise 5.26+ or 2025.x. You can specify the repository (e.g., `neo4j`), tag (e.g., `5.26-enterprise`), pull policy, and pull secrets for private registries.
+
+#### Private Registry / Image Pull Secrets
+
+To pull Neo4j images from a private registry (ECR, GCR, ACR, or a private Docker Hub account), create a Kubernetes image pull secret and reference it in your cluster spec:
+
+```bash
+# Create the pull secret
+kubectl create secret docker-registry my-registry-secret \
+  --docker-server=<registry-url> \
+  --docker-username=<username> \
+  --docker-password=<password>
+```
+
+```yaml
+spec:
+  image:
+    repo: my-private-registry.example.com/neo4j
+    tag: "2025.01.0-enterprise"
+    pullSecrets:
+      - my-registry-secret
+```
+
+The `pullSecrets` field accepts a list of secret names. Secrets must exist in the same namespace as the cluster. The operator automatically propagates the secrets to the StatefulSet's `imagePullSecrets` field.
+
+**Cloud-managed registries**: For ECR (AWS), GCR (Google Cloud), or ACR (Azure), use workload identity / IRSA to avoid long-lived credentials where possible. The `pullSecrets` field supports any Kubernetes `kubernetes.io/dockerconfigjson` secret.
 *   `spec.topology`: (Cluster only) Defines the architecture of your cluster. Specify the total number of servers (minimum 2) that will self-organize into primary and secondary roles based on database requirements. You can optionally configure server role constraints.
 *   `spec.storage`: Configures the persistent storage for the cluster, including storage class and size.
 *   `spec.auth`: Manages authentication, allowing you to specify the provider (native, LDAP, etc.) and the secret containing credentials.
 *   `spec.resources`: Allows you to set specific CPU and memory requests and limits for the Neo4j pods, which is crucial for performance tuning.
 *   `spec.backups`: (Deprecated) Use the separate Neo4jBackup CRD for backup management. The operator now uses a centralized backup StatefulSet for resource efficiency.
 *   `spec.queryMonitoring`: Enable query monitoring and Prometheus metrics exposure.
+
+> **Live Diagnostics:** When `enabled: true` and the cluster is `Ready`, the operator
+> automatically runs `SHOW SERVERS` and `SHOW DATABASES` and writes results to
+> `status.diagnostics`. Two new conditions, `ServersHealthy` and `DatabasesHealthy`,
+> reflect cluster health without requiring `kubectl exec`. See the
+> [Monitoring Guide](guides/monitoring.md#live-cluster-diagnostics) for full details.
+
 *   **Plugin management**: Use separate Neo4jPlugin CRDs to install plugins like APOC, GDS, Bloom, GenAI, and N10s. The operator automatically handles Neo4j 5.26+ compatibility requirements (see [Neo4jPlugin API Reference](../api_reference/neo4jplugin.md)).
 *   `spec.mcp`: Optional Neo4j MCP server deployment for client integrations (HTTP or STDIO). Requires the APOC plugin via Neo4jPlugin; HTTP uses per-request auth and supports Service/Ingress/Route exposure with optional TLS.
 *   `spec.tls`: Configure TLS/SSL encryption. Set mode to `cert-manager` and provide an issuerRef for automatic certificate management.

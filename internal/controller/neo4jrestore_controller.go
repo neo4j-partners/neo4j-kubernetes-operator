@@ -240,7 +240,7 @@ func (r *Neo4jRestoreReconciler) startRestore(ctx context.Context, restore *neo4
 
 	// Update status
 	r.updateRestoreStatus(ctx, restore, "Running", fmt.Sprintf("Restore job %s created", job.Name))
-	r.Recorder.Event(restore, "Normal", "RestoreStarted", fmt.Sprintf("Restore job %s started", job.Name))
+	r.Recorder.Event(restore, corev1.EventTypeNormal, EventReasonRestoreStarted, fmt.Sprintf("Restore job %s started", job.Name))
 
 	return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
 }
@@ -267,7 +267,7 @@ func (r *Neo4jRestoreReconciler) checkRestoreProgress(ctx context.Context, resto
 	if job.Status.Failed > 0 {
 		// Restore failed
 		r.updateRestoreStatus(ctx, restore, "Failed", "Restore job failed")
-		r.Recorder.Event(restore, "Warning", "RestoreFailed", "Restore job failed")
+		r.Recorder.Event(restore, corev1.EventTypeWarning, EventReasonRestoreFailed, "Restore job failed")
 		return ctrl.Result{}, nil
 	}
 
@@ -313,13 +313,13 @@ func (r *Neo4jRestoreReconciler) handleRestoreSuccess(ctx context.Context, resto
 	// Register the restored database with Neo4j so it becomes accessible
 	if err := r.createOrStartDatabase(ctx, restore, cluster); err != nil {
 		logger.Error(err, "Failed to create/start database after restore")
-		r.Recorder.Event(restore, corev1.EventTypeWarning, "DatabaseCreateFailed",
+		r.Recorder.Event(restore, corev1.EventTypeWarning, EventReasonDatabaseCreateFailed,
 			fmt.Sprintf("Restore succeeded but failed to create database %q: %v", restore.Spec.DatabaseName, err))
 	}
 
 	// Restore completed successfully
 	r.updateRestoreStatus(ctx, restore, "Completed", "Restore completed successfully")
-	r.Recorder.Event(restore, "Normal", "RestoreCompleted", "Restore completed successfully")
+	r.Recorder.Event(restore, corev1.EventTypeNormal, EventReasonRestoreCompleted, "Restore completed successfully")
 
 	return ctrl.Result{}, nil
 }
@@ -1071,6 +1071,8 @@ func (r *Neo4jRestoreReconciler) updateRestoreStatus(ctx context.Context, restor
 		latest.Status.Phase = phase
 		latest.Status.Message = message
 		latest.Status.ObservedGeneration = latest.Generation
+		condStatus, condReason := PhaseToConditionStatus(phase)
+		SetReadyCondition(&latest.Status.Conditions, latest.Generation, condStatus, condReason, message)
 		return r.Status().Update(ctx, latest)
 	}
 	err := retry.RetryOnConflict(retry.DefaultBackoff, update)

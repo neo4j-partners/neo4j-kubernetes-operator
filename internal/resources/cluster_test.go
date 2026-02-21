@@ -991,3 +991,50 @@ func TestBuildBackupFromAddressesStandaloneEquivalent(t *testing.T) {
 	addrs := resources.BuildBackupFromAddresses(cluster)
 	assert.Equal(t, "my-cluster-server-0.my-cluster-headless.ops.svc.cluster.local:6362", addrs)
 }
+
+func TestBuildPodSpecForEnterprise_WithPullSecrets(t *testing.T) {
+	cluster := &neo4jv1alpha1.Neo4jEnterpriseCluster{
+		Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
+			Image: neo4jv1alpha1.ImageSpec{
+				Repo:        "neo4j",
+				Tag:         "5.26-enterprise",
+				PullSecrets: []string{"my-registry-secret", "another-secret"},
+			},
+			Topology: neo4jv1alpha1.TopologyConfiguration{
+				Servers: 3,
+			},
+			Storage: neo4jv1alpha1.StorageSpec{
+				ClassName: "fast-ssd",
+				Size:      "10Gi",
+			},
+		},
+	}
+
+	podSpec := resources.BuildPodSpecForEnterprise(cluster, "server", "neo4j-admin-secret")
+
+	require.Len(t, podSpec.ImagePullSecrets, 2)
+	assert.Equal(t, "my-registry-secret", podSpec.ImagePullSecrets[0].Name)
+	assert.Equal(t, "another-secret", podSpec.ImagePullSecrets[1].Name)
+}
+
+func TestBuildPodSpecForEnterprise_WithNoPullSecrets(t *testing.T) {
+	cluster := &neo4jv1alpha1.Neo4jEnterpriseCluster{
+		Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
+			Image: neo4jv1alpha1.ImageSpec{
+				Repo: "neo4j",
+				Tag:  "5.26-enterprise",
+			},
+			Topology: neo4jv1alpha1.TopologyConfiguration{
+				Servers: 3,
+			},
+			Storage: neo4jv1alpha1.StorageSpec{
+				ClassName: "fast-ssd",
+				Size:      "10Gi",
+			},
+		},
+	}
+
+	podSpec := resources.BuildPodSpecForEnterprise(cluster, "server", "neo4j-admin-secret")
+
+	assert.Empty(t, podSpec.ImagePullSecrets)
+}
