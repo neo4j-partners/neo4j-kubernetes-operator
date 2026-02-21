@@ -424,9 +424,6 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 		r.Recorder.Eventf(cluster, corev1.EventTypeWarning, EventReasonClusterFormationFailed,
 			"Cluster formation check failed: %v", err)
 		_ = r.updateClusterStatus(ctx, cluster, "Forming", fmt.Sprintf("Verifying cluster formation: %v", err))
-		formingM := metrics.NewClusterMetrics(cluster.Name, cluster.Namespace)
-		formingM.RecordClusterHealth(false)
-		formingM.RecordClusterPhase("Forming")
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
 	}
 
@@ -436,19 +433,12 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 				"Neo4j cluster formation started")
 		}
 		_ = r.updateClusterStatus(ctx, cluster, "Forming", formationMessage)
-		formingM := metrics.NewClusterMetrics(cluster.Name, cluster.Namespace)
-		formingM.RecordClusterHealth(false)
-		formingM.RecordClusterPhase("Forming")
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
 	}
 
 	// Update status to "Ready" only if cluster formation is verified
 	// Note: Split-brain detection is already performed in verifyNeo4jClusterFormation
 	statusChanged := r.updateClusterStatus(ctx, cluster, "Ready", "Neo4j cluster is fully formed and ready")
-	clusterM := metrics.NewClusterMetrics(cluster.Name, cluster.Namespace)
-	clusterM.RecordClusterHealth(true)
-	clusterM.RecordClusterReplicas(cluster.Spec.Topology.Servers, 0)
-	clusterM.RecordClusterPhase("Ready")
 
 	// Update property sharding readiness status if enabled
 	if cluster.Spec.PropertySharding != nil && cluster.Spec.PropertySharding.Enabled {
@@ -982,6 +972,18 @@ func (r *Neo4jEnterpriseClusterReconciler) updateClusterStatus(ctx context.Conte
 			latest.Status.Conditions = append(latest.Status.Conditions, condition)
 		}
 
+		// Record Prometheus phase metric on every phase transition
+		clusterM := metrics.NewClusterMetrics(cluster.Name, cluster.Namespace)
+		clusterM.RecordClusterPhase(phase)
+		if phase == "Ready" {
+			clusterM.RecordClusterHealth(true)
+			clusterM.RecordClusterReplicas(cluster.Spec.Topology.Servers, 0)
+		} else if phase == "Failed" || phase == "Degraded" {
+			clusterM.RecordClusterHealth(false)
+		} else if phase == "Forming" {
+			clusterM.RecordClusterHealth(false)
+		}
+
 		statusChanged = true
 		return r.Status().Update(ctx, latest)
 	}
@@ -1123,18 +1125,11 @@ func (r *Neo4jEnterpriseClusterReconciler) handleRollingUpgrade(ctx context.Cont
 		r.Recorder.Eventf(cluster, corev1.EventTypeWarning, EventReasonUpgradeFailed,
 			"Rolling upgrade failed: %v", err)
 		_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Rolling upgrade failed: %v", err))
-		upgradeFailedM := metrics.NewClusterMetrics(cluster.Name, cluster.Namespace)
-		upgradeFailedM.RecordClusterHealth(false)
-		upgradeFailedM.RecordClusterPhase("Failed")
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 	}
 
 	// Update cluster status and version
 	_ = r.updateClusterStatus(ctx, cluster, "Ready", "Rolling upgrade completed successfully")
-	upgradeReadyM := metrics.NewClusterMetrics(cluster.Name, cluster.Namespace)
-	upgradeReadyM.RecordClusterHealth(true)
-	upgradeReadyM.RecordClusterReplicas(cluster.Spec.Topology.Servers, 0)
-	upgradeReadyM.RecordClusterPhase("Ready")
 	cluster.Status.Version = cluster.Spec.Image.Tag
 	if err := r.Status().Update(ctx, cluster); err != nil {
 		logger.Error(err, "Failed to update cluster status")
