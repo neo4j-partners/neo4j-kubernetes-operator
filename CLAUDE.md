@@ -323,7 +323,7 @@ ginkgo run -focus "Property Sharding" ./test/integration
 **Kind Clusters** (Kind only - no minikube/k3s):
 - **Development**: `neo4j-operator-dev` - manual testing
 - **Test**: `neo4j-operator-test` - automated tests
-- Both include cert-manager v1.18.2 with `ca-cluster-issuer`
+- Both include cert-manager v1.18.5 with `ca-cluster-issuer`
 
 **Cleanup Commands**:
 - `make dev-cluster-clean` / `make test-cluster-clean` - Remove operator only

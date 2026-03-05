@@ -18,7 +18,7 @@ Before deploying any examples, ensure you have:
 3. **Appropriate storage classes** available in your cluster
 4. **Neo4j Enterprise Edition** (evaluation license acceptable for testing)
 
-**Note**: Development and test clusters created with `make dev-cluster` or `make test-cluster` automatically include cert-manager v1.18.2 and a self-signed ClusterIssuer (`ca-cluster-issuer`) for TLS testing. The operator works with Neo4j Enterprise 5.26+ and 2025.x versions.
+**Note**: Development and test clusters created with `make dev-cluster` or `make test-cluster` automatically include cert-manager v1.18.5 and a self-signed ClusterIssuer (`ca-cluster-issuer`) for TLS testing. The operator works with Neo4j Enterprise 5.26+ and 2025.x versions.
 
 ## Quick Start
 

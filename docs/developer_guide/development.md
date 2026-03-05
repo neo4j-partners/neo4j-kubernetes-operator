@@ -119,7 +119,7 @@ make dev-cluster
 ```
 
 This creates a Kind cluster with:
-- **Cert-Manager**: v1.18.2 with `ca-cluster-issuer`
+- **Cert-Manager**: v1.18.5 with `ca-cluster-issuer`
 - **Development-Optimized**: Fast cluster creation for development
 - **Neo4j CRDs**: Automatically installed
 
