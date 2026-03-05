@@ -262,7 +262,7 @@ make test-cleanup
 **Dependencies**: Kind installed
 **Cluster Name**: `neo4j-operator-test`
 **Features**:
-- Includes cert-manager v1.18.2
+- Includes cert-manager v1.18.5
 - Pre-configured with self-signed issuer
 - Optimized for testing workloads
 
@@ -555,7 +555,7 @@ make undeploy-prod
 **Cluster Name**: `neo4j-operator-dev`
 **Dependencies**: Kind installed
 **Features**:
-- Includes cert-manager v1.18.2
+- Includes cert-manager v1.18.5
 - Self-signed ClusterIssuer for TLS
 - Development-optimized configuration
 

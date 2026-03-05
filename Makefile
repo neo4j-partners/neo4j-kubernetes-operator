@@ -648,7 +648,7 @@ dev-cluster: ## Create a Kind cluster for development
 		echo "Waiting for cluster to be ready..."; \
 		kubectl wait --for=condition=ready node --all --timeout=300s; \
 		echo "Installing cert-manager..."; \
-		kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.18.2/cert-manager.yaml; \
+		kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.18.5/cert-manager.yaml; \
 		kubectl wait --for=condition=ready pod -l app.kubernetes.io/instance=cert-manager -n cert-manager --timeout=300s; \
 		echo "Creating self-signed ClusterIssuer for development..."; \
 		kubectl apply -f config/dev/self-signed-issuer.yaml || echo "Self-signed issuer creation skipped (file may not exist)"; \
