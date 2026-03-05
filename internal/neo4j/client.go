@@ -492,59 +492,34 @@ func (c *Client) VerifyConnectivity(ctx context.Context) error {
 	})
 }
 
-// GetClusterOverview returns cluster topology information with optimized query
+// GetClusterOverview returns cluster topology information using SHOW SERVERS (5.26+ / CalVer).
+// It does not use the deprecated dbms.cluster.overview() from 4.x.
+// Each returned member has Role set to LEADER for the system database primary, FOLLOWER otherwise.
 func (c *Client) GetClusterOverview(ctx context.Context) ([]ClusterMember, error) {
 	var members []ClusterMember
 
 	err := c.executeWithCircuitBreaker(ctx, func(ctx context.Context) error {
-		session := c.driver.NewSession(ctx, neo4j.SessionConfig{
-			AccessMode: neo4j.AccessModeRead,
-		})
-		defer c.closeSession(ctx, session)
-
-		// Optimized query with timeout
-		timeoutCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		defer cancel()
-
-		result, err := session.Run(timeoutCtx, `
-			CALL dbms.cluster.overview()
-			YIELD id, addresses, role, database, health
-			RETURN id, addresses, role, database, health
-			LIMIT 100
-		`, nil)
+		servers, err := c.GetServerList(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to get cluster overview: %w", err)
+			return fmt.Errorf("failed to get server list: %w", err)
 		}
 
-		// Process results efficiently
-		for result.Next(timeoutCtx) {
-			record := result.Record()
+		// Determine system database primary address for Role (LEADER vs FOLLOWER)
+		systemPrimaryAddr, _ := c.FindSystemDatabasePrimaryAddress(ctx)
 
-			id, _ := record.Get("id")
-			addresses, _ := record.Get("addresses")
-			role, _ := record.Get("role")
-			database, _ := record.Get("database")
-			health, _ := record.Get("health")
-
-			// Convert addresses slice to string efficiently
-			addressStr := ""
-			if addrList, ok := addresses.([]interface{}); ok && len(addrList) > 0 {
-				addressStr = fmt.Sprintf("%v", addrList[0])
+		for _, s := range servers {
+			role := "FOLLOWER"
+			if systemPrimaryAddr != "" && (s.Address == systemPrimaryAddr || strings.HasPrefix(systemPrimaryAddr, s.Address) || strings.HasPrefix(s.Address, systemPrimaryAddr)) {
+				role = "LEADER"
 			}
-
 			members = append(members, ClusterMember{
-				ID:       fmt.Sprintf("%v", id),
-				Address:  addressStr,
-				Role:     fmt.Sprintf("%v", role),
-				Database: fmt.Sprintf("%v", database),
-				Health:   fmt.Sprintf("%v", health),
+				ID:       s.Name,
+				Address:  s.Address,
+				Role:     role,
+				Database: "system",
+				Health:   s.Health,
 			})
 		}
-
-		if err = result.Err(); err != nil {
-			return fmt.Errorf("error reading cluster overview: %w", err)
-		}
-
 		return nil
 	})
 
@@ -1158,6 +1133,143 @@ func (c *Client) IsClusterHealthy(ctx context.Context) (bool, error) {
 	return healthyCount > len(servers)/2, nil
 }
 
+// ReplicationStatusEntry holds one row returned by dbms.cluster.statusCheck().
+type ReplicationStatusEntry struct {
+	Database              string
+	ServerID              string
+	ServerName            string
+	Address               string
+	ReplicationSuccessful bool
+	MemberStatus          string
+	RecognisedLeader      string
+	RecognisedLeaderTerm  int64
+	Requester             bool
+	Error                 string
+}
+
+// IsClusterReplicationHealthy calls dbms.cluster.statusCheck(["system"], 2000) and
+// returns true only when the cluster can replicate to a majority and no member is
+// UNAVAILABLE.  It is deliberately slower than IsClusterHealthy (which only uses
+// SHOW SERVERS) and should only be used in latency-tolerant code paths such as the
+// rolling upgrade post-validation or pre-pod-restart gate.
+//
+// Available in Neo4j 5.24+ and all CalVer (2025.x+) releases.
+// Returns (false, nil) on transient replication failures so callers can retry.
+// Returns (false, err) only on connection / query errors.
+func (c *Client) IsClusterReplicationHealthy(ctx context.Context) (bool, error) {
+	var entries []ReplicationStatusEntry
+
+	err := c.executeWithCircuitBreaker(ctx, func(ctx context.Context) error {
+		session := c.driver.NewSession(ctx, neo4j.SessionConfig{
+			AccessMode:   neo4j.AccessModeRead,
+			DatabaseName: "system",
+		})
+		defer c.closeSession(ctx, session)
+
+		// 15-second outer timeout; the 2000 ms inner timeout is the replication
+		// window granted to Neo4j itself for the dummy transaction.
+		timeoutCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+		defer cancel()
+
+		result, err := session.Run(timeoutCtx,
+			`CALL dbms.cluster.statusCheck($databases, $timeoutMs)
+			 YIELD database, serverId, serverName, address, replicationSuccessful,
+			       memberStatus, recognisedLeader, recognisedLeaderTerm, requester, error
+			 RETURN database, serverId, serverName, address, replicationSuccessful,
+			        memberStatus, recognisedLeader, recognisedLeaderTerm, requester, error`,
+			map[string]interface{}{
+				"databases": []interface{}{"system"},
+				"timeoutMs": int64(2000),
+			})
+		if err != nil {
+			return fmt.Errorf("failed to call dbms.cluster.statusCheck: %w", err)
+		}
+
+		for result.Next(timeoutCtx) {
+			r := result.Record()
+			e := ReplicationStatusEntry{}
+			if v, ok := r.Get("database"); ok && v != nil {
+				e.Database = fmt.Sprintf("%v", v)
+			}
+			if v, ok := r.Get("serverId"); ok && v != nil {
+				e.ServerID = fmt.Sprintf("%v", v)
+			}
+			if v, ok := r.Get("serverName"); ok && v != nil {
+				e.ServerName = fmt.Sprintf("%v", v)
+			}
+			if v, ok := r.Get("address"); ok && v != nil {
+				e.Address = fmt.Sprintf("%v", v)
+			}
+			if v, ok := r.Get("replicationSuccessful"); ok && v != nil {
+				if b, ok := v.(bool); ok {
+					e.ReplicationSuccessful = b
+				}
+			}
+			if v, ok := r.Get("memberStatus"); ok && v != nil {
+				e.MemberStatus = fmt.Sprintf("%v", v)
+			}
+			if v, ok := r.Get("recognisedLeader"); ok && v != nil {
+				e.RecognisedLeader = fmt.Sprintf("%v", v)
+			}
+			if v, ok := r.Get("recognisedLeaderTerm"); ok && v != nil {
+				if n, ok := v.(int64); ok {
+					e.RecognisedLeaderTerm = n
+				}
+			}
+			if v, ok := r.Get("requester"); ok && v != nil {
+				if b, ok := v.(bool); ok {
+					e.Requester = b
+				}
+			}
+			if v, ok := r.Get("error"); ok && v != nil {
+				e.Error = fmt.Sprintf("%v", v)
+			}
+			entries = append(entries, e)
+		}
+		return result.Err()
+	})
+	if err != nil {
+		return false, err
+	}
+
+	if len(entries) == 0 {
+		return false, nil
+	}
+
+	for _, e := range entries {
+		if !e.ReplicationSuccessful || e.MemberStatus == "UNAVAILABLE" {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
+// WaitForReplicationHealthy retries IsClusterReplicationHealthy until it returns
+// true or the context deadline is exceeded.  It is designed for upgrade gate-keeping:
+// call it after WaitForClusterStabilization or inside post-upgrade validations.
+func (c *Client) WaitForReplicationHealthy(ctx context.Context, timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("timeout waiting for cluster replication health")
+		case <-ticker.C:
+			ok, err := c.IsClusterReplicationHealthy(ctx)
+			if err != nil {
+				continue
+			}
+			if ok {
+				return nil
+			}
+		}
+	}
+}
+
 // FindSystemDatabasePrimaryAddress returns the bolt address of the server currently
 // holding the primary role for the system database. This is the most important server
 // to roll last during a rolling upgrade. Returns ("", nil) if the primary cannot be
@@ -1226,8 +1338,7 @@ func (c *Client) WaitForServerAvailable(ctx context.Context, podName string, tim
 }
 
 // GetLeader returns the cluster member that holds the primary role for the system
-// database. It replaces the previous implementation that used the deprecated
-// dbms.cluster.overview() procedure.
+// database. Uses SHOW DATABASES and SHOW SERVERS (5.26+ / CalVer).
 func (c *Client) GetLeader(ctx context.Context) (*ClusterMember, error) {
 	primaryAddr, err := c.FindSystemDatabasePrimaryAddress(ctx)
 	if err != nil {
@@ -1285,34 +1396,41 @@ func (c *Client) WaitForClusterReady(ctx context.Context, timeout time.Duration)
 	}
 }
 
-// GetMemberRole returns the role of a specific cluster member using CALL dbms.cluster.role()
+// GetMemberRole returns whether the system database has a primary member in the cluster.
+// Uses SHOW DATABASES (5.26+ / CalVer replacement for the removed dbms.cluster.role()).
+// Returns "primary" if the system database has at least one primary, "secondary" otherwise.
+// Note: dbms.cluster.role() was removed in Neo4j 5.0; SHOW DATABASES is the replacement.
 func (c *Client) GetMemberRole(ctx context.Context) (string, error) {
 	session := c.driver.NewSession(ctx, neo4j.SessionConfig{
-		AccessMode: neo4j.AccessModeRead,
+		AccessMode:   neo4j.AccessModeRead,
+		DatabaseName: "system",
 	})
 	defer session.Close(ctx)
 
-	result, err := session.Run(ctx, "CALL dbms.cluster.role() YIELD role RETURN role", nil)
+	timeoutCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	result, err := session.Run(timeoutCtx,
+		"SHOW DATABASES YIELD name, role WHERE name = 'system' AND role = 'primary' RETURN count(*) AS primaryCount",
+		nil)
 	if err != nil {
-		return "", fmt.Errorf("failed to get cluster role: %w", err)
+		return "", fmt.Errorf("failed to get member role: %w", err)
 	}
 
-	if !result.Next(ctx) {
-		return "", fmt.Errorf("no role information returned")
+	if result.Next(timeoutCtx) {
+		record := result.Record()
+		if count, ok := record.Get("primaryCount"); ok {
+			if n, ok := count.(int64); ok && n > 0 {
+				return "primary", nil
+			}
+		}
 	}
 
-	record := result.Record()
-	role, found := record.Get("role")
-	if !found {
-		return "", fmt.Errorf("role field not found in result")
+	if err = result.Err(); err != nil {
+		return "", fmt.Errorf("error reading member role: %w", err)
 	}
 
-	roleStr, ok := role.(string)
-	if !ok {
-		return "", fmt.Errorf("role is not a string: %T", role)
-	}
-
-	return roleStr, nil
+	return "secondary", nil
 }
 
 // WaitForRoleTransition waits for a member to assume a specific role
@@ -1474,7 +1592,9 @@ func (c *Client) GetNonLeaderPrimaries(ctx context.Context) ([]ClusterMember, er
 	return nonLeaderPrimaries, nil
 }
 
-// GetSecondaryMembers returns all secondary/read replica members
+// GetSecondaryMembers returns all secondary/read replica members. In 5.26+ server-based
+// topology, GetClusterOverview returns one row per server with Database="system", so
+// this may return an empty list; role is per-database via SHOW DATABASES if needed.
 func (c *Client) GetSecondaryMembers(ctx context.Context) ([]ClusterMember, error) {
 	members, err := c.GetClusterOverview(ctx)
 	if err != nil {

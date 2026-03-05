@@ -315,6 +315,16 @@ func (r *RollingUpgradeOrchestrator) upgradeServers(
 		return fmt.Errorf("cluster failed to stabilize after server upgrade: %w", err)
 	}
 
+	// Verify replication is working before declaring the upgrade done.
+	// Uses dbms.cluster.statusCheck() (Neo4j 5.24+ / CalVer) — a stronger gate than
+	// SHOW SERVERS: confirms the cluster can still commit and replicate a dummy
+	// transaction to a majority, and that no member is UNAVAILABLE.
+	logger.Info("Verifying cluster replication health after all servers upgraded")
+	if err := neo4jClient.WaitForReplicationHealthy(ctx, stabilizationTimeout); err != nil {
+		return fmt.Errorf("cluster replication unhealthy after server upgrade: %w", err)
+	}
+	logger.Info("Cluster replication verified healthy after upgrade")
+
 	// Update progress — all servers upgraded.
 	cluster.Status.UpgradeStatus.Progress.Upgraded = replicas
 	cluster.Status.UpgradeStatus.Progress.Pending = 0
@@ -407,7 +417,7 @@ func (r *RollingUpgradeOrchestrator) postUpgradeValidations(
 		ctx, cancel := context.WithTimeout(ctx, healthTimeout)
 		defer cancel()
 
-		// Wait for cluster to be healthy
+		// Wait for cluster to be healthy (SHOW SERVERS gate — fast check).
 		ticker := time.NewTicker(10 * time.Second)
 		defer ticker.Stop()
 
@@ -429,6 +439,15 @@ func (r *RollingUpgradeOrchestrator) postUpgradeValidations(
 		}
 
 	healthCheckComplete:
+
+		// Replication gate — stronger check using dbms.cluster.statusCheck().
+		// Confirms a dummy transaction can be replicated to a majority and no
+		// member is UNAVAILABLE before the operator marks the upgrade complete.
+		logger.Info("Verifying cluster replication health post-upgrade")
+		if err := neo4jClient.WaitForReplicationHealthy(ctx, healthTimeout); err != nil {
+			return fmt.Errorf("cluster replication unhealthy after upgrade: %w", err)
+		}
+		logger.Info("Cluster replication healthy — post-upgrade validation complete")
 	}
 
 	// Verify version upgrade

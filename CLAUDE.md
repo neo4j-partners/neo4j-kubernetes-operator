@@ -436,7 +436,7 @@ CalVer detection uses `ParseVersion()` → `IsCalver` (`major >= 2025`), so 2026
 - `causal_clustering.*` - Replaced by modern clustering in 5.26+
 - `metrics.bolt.*` - Use `server.metrics.*` instead
 - `server.groups` - Not applicable to 5.26+ clustering
-- `dbms.cluster.role` - Use `SHOW DATABASES` for cluster status
+- `dbms.cluster.role` - **Removed in Neo4j 5.0**; replaced by `SHOW DATABASES`
 - `causal_clustering.leader_election_timeout` - Use `causal_clustering.leader_failure_detection_window`
 
 **Always Use** (Neo4j 5.26+ and 2025.x):
@@ -741,7 +741,8 @@ TOPOLOGY $primary PRIMARIES $secondary SECONDARIES WAIT
 CREATE DATABASE baddb OPTIONS {primaries: 1, secondaries: 1}
 
 -- DEPRECATED: dbms.cluster.role usage
-CALL dbms.cluster.role()
+-- REMOVED in Neo4j 5.0: CALL dbms.cluster.role()
+-- Use instead: SHOW DATABASES YIELD name, role WHERE name = 'system'
 
 -- DEPRECATED: Causal clustering syntax
 -- Any causal_clustering.* configuration
