@@ -142,7 +142,7 @@ Create a Kubernetes Secret with your AWS credentials:
 kubectl create secret generic aws-backup-creds \
   --from-literal=AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE \
   --from-literal=AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY \
-  --from-literal=AWS_DEFAULT_REGION=us-east-1
+  --from-literal=AWS_REGION=us-east-1
 ```
 
 Reference the Secret in your `Neo4jBackup`:
@@ -214,13 +214,13 @@ MinIO is a high-performance, S3-compatible object store popular for on-premises 
 
 #### Step 1: Create the credentials Secret
 
-MinIO uses the same secret key names as AWS. The `AWS_DEFAULT_REGION` value is required by the SDK but ignored by MinIO — any value works.
+MinIO uses the same secret key names as AWS. The `AWS_REGION` value is required by the SDK but ignored by MinIO — any value works.
 
 ```bash
 kubectl create secret generic minio-backup-credentials \
   --from-literal=AWS_ACCESS_KEY_ID=minioadmin \
   --from-literal=AWS_SECRET_ACCESS_KEY=minioadmin \
-  --from-literal=AWS_DEFAULT_REGION=us-east-1
+  --from-literal=AWS_REGION=us-east-1
 ```
 
 #### Step 2: Create the backup resource
@@ -1139,7 +1139,7 @@ storage:
     # Path 1: Explicit credentials
     credentialsSecretRef: <secret-name>
     # Secret keys by provider:
-    #   AWS: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_DEFAULT_REGION
+    #   AWS: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION
     #   GCP: GOOGLE_APPLICATION_CREDENTIALS_JSON (must be this exact key)
     #   Azure: AZURE_STORAGE_ACCOUNT, AZURE_STORAGE_KEY
 

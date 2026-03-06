@@ -74,11 +74,11 @@ func TestBuildCloudEnvVars_AWS_WithCredentials(t *testing.T) {
 	m := envVarMap(envs)
 	assert.Equal(t, "<from-secret>", m["AWS_ACCESS_KEY_ID"])
 	assert.Equal(t, "<from-secret>", m["AWS_SECRET_ACCESS_KEY"])
-	assert.Equal(t, "<from-secret>", m["AWS_DEFAULT_REGION"])
+	assert.Equal(t, "<from-secret>", m["AWS_REGION"])
 
 	assert.Equal(t, "AWS_ACCESS_KEY_ID", envVarSecretKey(envs, "AWS_ACCESS_KEY_ID"))
 	assert.Equal(t, "AWS_SECRET_ACCESS_KEY", envVarSecretKey(envs, "AWS_SECRET_ACCESS_KEY"))
-	assert.Equal(t, "AWS_DEFAULT_REGION", envVarSecretKey(envs, "AWS_DEFAULT_REGION"))
+	assert.Equal(t, "AWS_REGION", envVarSecretKey(envs, "AWS_REGION"))
 
 	// No MinIO-specific vars when endpointURL is not set
 	assert.NotContains(t, m, "AWS_ENDPOINT_URL_S3")
@@ -114,7 +114,7 @@ func TestBuildCloudEnvVars_MinIO_EndpointOnly(t *testing.T) {
 	// Standard AWS credentials must still be present
 	assert.Contains(t, m, "AWS_ACCESS_KEY_ID")
 	assert.Contains(t, m, "AWS_SECRET_ACCESS_KEY")
-	assert.Contains(t, m, "AWS_DEFAULT_REGION")
+	assert.Contains(t, m, "AWS_REGION")
 
 	// Custom endpoint must be injected
 	assert.Equal(t, "http://minio.minio.svc:9000", m["AWS_ENDPOINT_URL_S3"],

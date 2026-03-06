@@ -23,7 +23,7 @@
 #   kubectl create secret generic minio-backup-credentials \
 #     --from-literal=AWS_ACCESS_KEY_ID=minioadmin \
 #     --from-literal=AWS_SECRET_ACCESS_KEY=minioadmin \
-#     --from-literal=AWS_DEFAULT_REGION=us-east-1
+#     --from-literal=AWS_REGION=us-east-1
 #
 # ============================================================
 
@@ -39,7 +39,7 @@ stringData:
   # MinIO secret key (set when deploying MinIO)
   AWS_SECRET_ACCESS_KEY: minioadmin
   # Region is required by the AWS SDK but ignored by MinIO — any value works
-  AWS_DEFAULT_REGION: us-east-1
+  AWS_REGION: us-east-1
 
 ---
 # ============================================================

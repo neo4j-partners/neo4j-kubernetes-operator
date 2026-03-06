@@ -1218,10 +1218,25 @@ spec:
                           CredentialsSecretRef is the name of a Kubernetes Secret containing
                           cloud provider credentials as environment variables. Optional when
                           using workload identity / IAM instance profiles.
-                          For S3:    keys AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_DEFAULT_REGION
+                          For S3:    keys AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION
                           For GCS:   key  GOOGLE_APPLICATION_CREDENTIALS_JSON (base64 service-account JSON)
                           For Azure: keys AZURE_STORAGE_ACCOUNT, AZURE_STORAGE_KEY
                         type: string
+                      endpointURL:
+                        description: |-
+                          EndpointURL overrides the S3 API endpoint URL. Use this to target
+                          S3-compatible stores such as MinIO, Ceph RGW, or Cloudflare R2.
+                          Example: "http://minio.minio-ns.svc:9000"
+                          Only applies to the "aws" provider; ignored for gcp and azure.
+                        type: string
+                      forcePathStyle:
+                        description: |-
+                          ForcePathStyle forces S3 path-style addressing, where the bucket name
+                          appears in the URL path (e.g. http://endpoint/bucket/key) rather than
+                          the subdomain (e.g. http://bucket.endpoint/key).
+                          Required for MinIO and most self-hosted S3-compatible stores.
+                          Only effective when EndpointURL is set.
+                        type: boolean
                       identity:
                         description: CloudIdentity defines cloud identity configuration
                         properties:
@@ -1268,10 +1283,25 @@ spec:
                               CredentialsSecretRef is the name of a Kubernetes Secret containing
                               cloud provider credentials as environment variables. Optional when
                               using workload identity / IAM instance profiles.
-                              For S3:    keys AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_DEFAULT_REGION
+                              For S3:    keys AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION
                               For GCS:   key  GOOGLE_APPLICATION_CREDENTIALS_JSON (base64 service-account JSON)
                               For Azure: keys AZURE_STORAGE_ACCOUNT, AZURE_STORAGE_KEY
                             type: string
+                          endpointURL:
+                            description: |-
+                              EndpointURL overrides the S3 API endpoint URL. Use this to target
+                              S3-compatible stores such as MinIO, Ceph RGW, or Cloudflare R2.
+                              Example: "http://minio.minio-ns.svc:9000"
+                              Only applies to the "aws" provider; ignored for gcp and azure.
+                            type: string
+                          forcePathStyle:
+                            description: |-
+                              ForcePathStyle forces S3 path-style addressing, where the bucket name
+                              appears in the URL path (e.g. http://endpoint/bucket/key) rather than
+                              the subdomain (e.g. http://bucket.endpoint/key).
+                              Required for MinIO and most self-hosted S3-compatible stores.
+                              Only effective when EndpointURL is set.
+                            type: boolean
                           identity:
                             description: CloudIdentity defines cloud identity configuration
                             properties:
@@ -2480,10 +2510,25 @@ spec:
                               CredentialsSecretRef is the name of a Kubernetes Secret containing
                               cloud provider credentials as environment variables. Optional when
                               using workload identity / IAM instance profiles.
-                              For S3:    keys AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_DEFAULT_REGION
+                              For S3:    keys AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION
                               For GCS:   key  GOOGLE_APPLICATION_CREDENTIALS_JSON (base64 service-account JSON)
                               For Azure: keys AZURE_STORAGE_ACCOUNT, AZURE_STORAGE_KEY
                             type: string
+                          endpointURL:
+                            description: |-
+                              EndpointURL overrides the S3 API endpoint URL. Use this to target
+                              S3-compatible stores such as MinIO, Ceph RGW, or Cloudflare R2.
+                              Example: "http://minio.minio-ns.svc:9000"
+                              Only applies to the "aws" provider; ignored for gcp and azure.
+                            type: string
+                          forcePathStyle:
+                            description: |-
+                              ForcePathStyle forces S3 path-style addressing, where the bucket name
+                              appears in the URL path (e.g. http://endpoint/bucket/key) rather than
+                              the subdomain (e.g. http://bucket.endpoint/key).
+                              Required for MinIO and most self-hosted S3-compatible stores.
+                              Only effective when EndpointURL is set.
+                            type: boolean
                           identity:
                             description: CloudIdentity defines cloud identity configuration
                             properties:
@@ -3590,6 +3635,89 @@ spec:
                   - type
                   type: object
                 type: array
+              diagnostics:
+                description: |-
+                  Diagnostics holds the most recently collected live diagnostics from the cluster.
+                  Populated when spec.queryMonitoring.enabled=true and the cluster is Ready.
+                properties:
+                  collectionError:
+                    description: |-
+                      CollectionError holds the last error message if diagnostics collection failed.
+                      Empty when collection succeeds.
+                    type: string
+                  databases:
+                    description: Databases lists the most recently observed state
+                      of each database.
+                    items:
+                      description: DatabaseDiagnosticInfo holds the observed state
+                        of a single Neo4j database.
+                      properties:
+                        default:
+                          description: Default indicates whether this is the default
+                            database.
+                          type: boolean
+                        name:
+                          description: Name is the database name.
+                          type: string
+                        requestedStatus:
+                          description: RequestedStatus is the desired operational
+                            status.
+                          type: string
+                        role:
+                          description: Role is the database role on the most recently
+                            contacted server (e.g. "primary", "secondary").
+                          type: string
+                        status:
+                          description: Status is the current operational status (e.g.
+                            "online", "offline", "quarantined").
+                          type: string
+                      required:
+                      - name
+                      - requestedStatus
+                      - role
+                      - status
+                      type: object
+                    type: array
+                  lastCollected:
+                    description: LastCollected is the timestamp of the most recent
+                      successful diagnostics collection.
+                    format: date-time
+                    type: string
+                  servers:
+                    description: Servers lists the most recently observed state of
+                      each server in the cluster.
+                    items:
+                      description: ServerDiagnosticInfo holds the observed state of
+                        a single Neo4j server.
+                      properties:
+                        address:
+                          description: Address is the Bolt address of the server.
+                          type: string
+                        health:
+                          description: Health is the server health status (e.g. "Available",
+                            "Unavailable").
+                          type: string
+                        hostingDatabases:
+                          description: HostingDatabases is the number of databases
+                            hosted by this server.
+                          type: integer
+                        name:
+                          description: Name is the server's display name (from SHOW
+                            SERVERS).
+                          type: string
+                        state:
+                          description: State is the server lifecycle state (e.g. "Enabled",
+                            "Cordoned", "Deallocating").
+                          type: string
+                      required:
+                      - address
+                      - health
+                      - hostingDatabases
+                      - name
+                      - state
+                      type: object
+                    type: array
+                type: object
               endpoints:
                 description: Endpoints provides connection information
                 properties:

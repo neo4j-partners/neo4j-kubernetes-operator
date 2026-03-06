@@ -96,8 +96,8 @@ Cloud provider configuration. This type appears both on `StorageLocation` (for p
 
 | Provider | Required secret keys | Notes |
 |----------|---------------------|-------|
-| AWS | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_DEFAULT_REGION` | Standard AWS SDK env vars |
-| MinIO / S3-compatible | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_DEFAULT_REGION` | Same keys as AWS; set `endpointURL` and `forcePathStyle: true` on `CloudBlock` |
+| AWS | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` | Standard AWS SDK env vars |
+| MinIO / S3-compatible | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` | Same keys as AWS; set `endpointURL` and `forcePathStyle: true` on `CloudBlock` |
 | GCS | `GOOGLE_APPLICATION_CREDENTIALS_JSON` | Full service-account key JSON as a string value — **not** a filename path |
 | Azure | `AZURE_STORAGE_ACCOUNT`, `AZURE_STORAGE_KEY` | Storage account credentials |
 
@@ -108,13 +108,13 @@ Cloud provider configuration. This type appears both on `StorageLocation` (for p
 kubectl create secret generic aws-backup-credentials \
   --from-literal=AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE \
   --from-literal=AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY \
-  --from-literal=AWS_DEFAULT_REGION=us-east-1
+  --from-literal=AWS_REGION=us-east-1
 
 # MinIO (uses the same keys; region value is arbitrary — MinIO ignores it)
 kubectl create secret generic minio-backup-credentials \
   --from-literal=AWS_ACCESS_KEY_ID=minioadmin \
   --from-literal=AWS_SECRET_ACCESS_KEY=minioadmin \
-  --from-literal=AWS_DEFAULT_REGION=us-east-1
+  --from-literal=AWS_REGION=us-east-1
 
 # GCS — pass the JSON content directly as a string value
 kubectl create secret generic gcs-backup-credentials \

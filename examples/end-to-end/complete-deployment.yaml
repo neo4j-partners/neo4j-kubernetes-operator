@@ -33,7 +33,7 @@ type: Opaque
 stringData:
   AWS_ACCESS_KEY_ID: your-access-key
   AWS_SECRET_ACCESS_KEY: your-secret-key
-  AWS_DEFAULT_REGION: us-east-1
+  AWS_REGION: us-east-1
 ---
 # Neo4j Enterprise Cluster
 apiVersion: neo4j.neo4j.com/v1alpha1
