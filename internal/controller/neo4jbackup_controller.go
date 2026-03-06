@@ -270,6 +270,28 @@ func (r *Neo4jBackupReconciler) handleExistingBackupJob(ctx context.Context, bac
 	return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
 }
 
+// backupTargetName resolves the Neo4j instance name from a backup spec.
+// When Kind is "Database" the target name is the database name, not the instance;
+// ClusterRef holds the actual Neo4j instance in that case.
+func backupTargetName(backup *neo4jv1alpha1.Neo4jBackup) string {
+	if backup.Spec.Target.Kind == "Database" && backup.Spec.Target.ClusterRef != "" {
+		return backup.Spec.Target.ClusterRef
+	}
+	return backup.Spec.Target.Name
+}
+
+// backupLabels returns the standard label set for a Neo4jBackup workload, ready to
+// be applied identically at the CronJob/Job level and both template levels.
+func backupLabels(backup *neo4jv1alpha1.Neo4jBackup, component string) map[string]string {
+	return map[string]string{
+		"app.kubernetes.io/name":       "neo4j-backup",
+		"app.kubernetes.io/instance":   backup.Name,
+		"app.kubernetes.io/component":  component,
+		"app.kubernetes.io/managed-by": "neo4j-operator",
+		"neo4j.com/backup-target":      backupTargetName(backup),
+	}
+}
+
 func (r *Neo4jBackupReconciler) createBackupJob(ctx context.Context, backup *neo4jv1alpha1.Neo4jBackup, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) (*batchv1.Job, error) {
 	jobName := backup.Name + "-backup"
 	logger := log.FromContext(ctx)
@@ -283,20 +305,17 @@ func (r *Neo4jBackupReconciler) createBackupJob(ctx context.Context, backup *neo
 	image := fmt.Sprintf("%s:%s", cluster.Spec.Image.Repo, cluster.Spec.Image.Tag)
 	backoffLimit := int32(3)
 
+	labels := backupLabels(backup, "backup")
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
 			Namespace: backup.Namespace,
-			Labels: map[string]string{
-				"app.kubernetes.io/name":       "neo4j-backup",
-				"app.kubernetes.io/instance":   backup.Name,
-				"app.kubernetes.io/component":  "backup",
-				"app.kubernetes.io/managed-by": "neo4j-operator",
-			},
+			Labels:    labels,
 		},
 		Spec: batchv1.JobSpec{
 			BackoffLimit: &backoffLimit,
 			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{Labels: labels},
 				Spec: corev1.PodSpec{
 					RestartPolicy:      corev1.RestartPolicyNever,
 					ServiceAccountName: backupServiceAccountName,
@@ -344,17 +363,15 @@ func (r *Neo4jBackupReconciler) createBackupCronJob(ctx context.Context, backup 
 	}
 
 	_, err = controllerutil.CreateOrUpdate(ctx, r.Client, cronJob, func() error {
-		cronJob.Labels = map[string]string{
-			"app.kubernetes.io/name":       "neo4j-backup",
-			"app.kubernetes.io/instance":   backup.Name,
-			"app.kubernetes.io/component":  "backup-cron",
-			"app.kubernetes.io/managed-by": "neo4j-operator",
-		}
+		labels := backupLabels(backup, "backup-cron")
+		cronJob.Labels = labels
 		cronJob.Spec.Schedule = backup.Spec.Schedule
 		cronJob.Spec.JobTemplate = batchv1.JobTemplateSpec{
+			ObjectMeta: metav1.ObjectMeta{Labels: labels},
 			Spec: batchv1.JobSpec{
 				BackoffLimit: &backoffLimit,
 				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{Labels: labels},
 					Spec: corev1.PodSpec{
 						RestartPolicy:      corev1.RestartPolicyNever,
 						ServiceAccountName: backupServiceAccountName,
@@ -682,20 +699,17 @@ func (r *Neo4jBackupReconciler) cleanupBackupArtifacts(ctx context.Context, back
 	cleanupJobName := fmt.Sprintf("%s-cleanup-%d", backup.Name, time.Now().Unix())
 	backoffLimit := int32(1)
 
+	cleanupLabels := backupLabels(backup, "cleanup")
 	cleanupJob := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cleanupJobName,
 			Namespace: backup.Namespace,
-			Labels: map[string]string{
-				"app.kubernetes.io/name":       "neo4j-backup",
-				"app.kubernetes.io/instance":   backup.Name,
-				"app.kubernetes.io/component":  "cleanup",
-				"app.kubernetes.io/managed-by": "neo4j-operator",
-			},
+			Labels:    cleanupLabels,
 		},
 		Spec: batchv1.JobSpec{
 			BackoffLimit: &backoffLimit,
 			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{Labels: cleanupLabels},
 				Spec: corev1.PodSpec{
 					RestartPolicy: corev1.RestartPolicyNever,
 					Containers: []corev1.Container{
