@@ -403,24 +403,11 @@ func (v *SecurityValidator) validateTLSConfig(tls *neo4jv1alpha1.TLSSpec) field.
 					"issuer name must be specified",
 				))
 			}
-			if tls.IssuerRef.Kind == "" {
-				tls.IssuerRef.Kind = "Issuer" // Default to Issuer
-			}
-			validKinds := []string{"Issuer", "ClusterIssuer"}
-			valid := false
-			for _, kind := range validKinds {
-				if tls.IssuerRef.Kind == kind {
-					valid = true
-					break
-				}
-			}
-			if !valid {
-				allErrs = append(allErrs, field.NotSupported(
-					tlsPath.Child("issuerRef", "kind"),
-					tls.IssuerRef.Kind,
-					validKinds,
-				))
-			}
+			// kind is intentionally unrestricted: cert-manager's external issuer
+			// interface allows any registered CRD kind (e.g. AWSPCAClusterIssuer,
+			// VaultIssuer, GoogleCASClusterIssuer) to act as an issuer alongside
+			// the built-in Issuer and ClusterIssuer kinds. The operator passes
+			// kind directly to the cert-manager Certificate resource unchanged.
 		}
 	}
 

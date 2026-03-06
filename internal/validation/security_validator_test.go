@@ -432,6 +432,131 @@ func TestSecurityValidator_Validate(t *testing.T) {
 	}
 }
 
+func TestSecurityValidator_validateTLSConfig(t *testing.T) {
+	validator := NewSecurityValidator()
+
+	tests := []struct {
+		name        string
+		cluster     *neo4jv1alpha1.Neo4jEnterpriseCluster
+		expectError bool
+	}{
+		{
+			name: "standard ClusterIssuer accepted",
+			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
+				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
+					TLS: &neo4jv1alpha1.TLSSpec{
+						Mode: "cert-manager",
+						IssuerRef: &neo4jv1alpha1.IssuerRef{
+							Name: "ca-cluster-issuer",
+							Kind: "ClusterIssuer",
+						},
+					},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "standard Issuer accepted",
+			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
+				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
+					TLS: &neo4jv1alpha1.TLSSpec{
+						Mode: "cert-manager",
+						IssuerRef: &neo4jv1alpha1.IssuerRef{
+							Name: "my-issuer",
+							Kind: "Issuer",
+						},
+					},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "AWSPCAClusterIssuer accepted (issue #33)",
+			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
+				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
+					TLS: &neo4jv1alpha1.TLSSpec{
+						Mode: "cert-manager",
+						IssuerRef: &neo4jv1alpha1.IssuerRef{
+							Name:  "aws-acm-pca-issuer",
+							Kind:  "AWSPCAClusterIssuer",
+							Group: "awspca.cert-manager.io",
+						},
+					},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "VaultIssuer accepted",
+			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
+				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
+					TLS: &neo4jv1alpha1.TLSSpec{
+						Mode: "cert-manager",
+						IssuerRef: &neo4jv1alpha1.IssuerRef{
+							Name:  "vault-issuer",
+							Kind:  "VaultIssuer",
+							Group: "cert.cert-manager.io",
+						},
+					},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "GoogleCASClusterIssuer accepted",
+			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
+				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
+					TLS: &neo4jv1alpha1.TLSSpec{
+						Mode: "cert-manager",
+						IssuerRef: &neo4jv1alpha1.IssuerRef{
+							Name:  "google-cas-issuer",
+							Kind:  "GoogleCASClusterIssuer",
+							Group: "cas-issuer.jetstack.io",
+						},
+					},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "missing issuerRef name rejected",
+			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
+				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
+					TLS: &neo4jv1alpha1.TLSSpec{
+						Mode: "cert-manager",
+						IssuerRef: &neo4jv1alpha1.IssuerRef{
+							Kind: "ClusterIssuer",
+						},
+					},
+				},
+			},
+			expectError: true,
+		},
+		{
+			name: "nil issuerRef rejected for cert-manager mode",
+			cluster: &neo4jv1alpha1.Neo4jEnterpriseCluster{
+				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
+					TLS: &neo4jv1alpha1.TLSSpec{
+						Mode: "cert-manager",
+					},
+				},
+			},
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			errors := validator.Validate(tt.cluster)
+			if tt.expectError && len(errors) == 0 {
+				t.Errorf("expected validation errors but got none")
+			} else if !tt.expectError && len(errors) > 0 {
+				t.Errorf("expected no validation errors but got %d: %v", len(errors), errors)
+			}
+		})
+	}
+}
+
 func TestSecurityValidator_isValidURL(t *testing.T) {
 	validator := NewSecurityValidator()
 

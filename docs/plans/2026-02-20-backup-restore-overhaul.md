@@ -274,7 +274,7 @@ type CloudBlock struct {
 
     // CredentialsSecretRef is the name of a Kubernetes Secret containing
     // cloud provider credentials as environment variables.
-    // For S3: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_DEFAULT_REGION (optional: AWS_ENDPOINT_URL).
+    // For S3: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION (optional: AWS_ENDPOINT_URL).
     // For GCS: GOOGLE_APPLICATION_CREDENTIALS_JSON (base64-encoded service account key JSON).
     // For Azure: AZURE_STORAGE_ACCOUNT, AZURE_STORAGE_KEY.
     CredentialsSecretRef string `json:"credentialsSecretRef,omitempty"`
@@ -797,7 +797,7 @@ func (r *Neo4jBackupReconciler) buildCloudEnvVars(backup *neo4jv1alpha1.Neo4jBac
         return []corev1.EnvVar{
             {Name: "AWS_ACCESS_KEY_ID", ValueFrom: secretEnvSource(secretRef, "AWS_ACCESS_KEY_ID")},
             {Name: "AWS_SECRET_ACCESS_KEY", ValueFrom: secretEnvSource(secretRef, "AWS_SECRET_ACCESS_KEY")},
-            {Name: "AWS_DEFAULT_REGION", ValueFrom: secretEnvSource(secretRef, "AWS_DEFAULT_REGION")},
+            {Name: "AWS_REGION", ValueFrom: secretEnvSource(secretRef, "AWS_REGION")},
         }
     case "gcp":
         return []corev1.EnvVar{

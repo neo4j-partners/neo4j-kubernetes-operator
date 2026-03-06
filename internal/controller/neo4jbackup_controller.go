@@ -500,7 +500,7 @@ func (r *Neo4jBackupReconciler) buildCloudEnvVars(backup *neo4jv1alpha1.Neo4jBac
 		envVars := []corev1.EnvVar{
 			{Name: "AWS_ACCESS_KEY_ID", ValueFrom: fromSecret("AWS_ACCESS_KEY_ID")},
 			{Name: "AWS_SECRET_ACCESS_KEY", ValueFrom: fromSecret("AWS_SECRET_ACCESS_KEY")},
-			{Name: "AWS_DEFAULT_REGION", ValueFrom: fromSecret("AWS_DEFAULT_REGION")},
+			{Name: "AWS_REGION", ValueFrom: fromSecret("AWS_REGION")},
 		}
 		// S3-compatible endpoint (MinIO, Ceph RGW, Cloudflare R2, etc.).
 		// AWS SDK v2 reads AWS_ENDPOINT_URL_S3 as the S3-specific endpoint override.
