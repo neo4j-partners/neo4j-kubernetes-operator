@@ -108,8 +108,8 @@ The following table lists the configurable parameters of the Neo4j Operator char
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
-| `resources.limits.cpu` | CPU limit | `500m` |
-| `resources.limits.memory` | Memory limit | `512Mi` |
+| `resources.limits.cpu` | CPU limit | `1000m` |
+| `resources.limits.memory` | Memory limit | `1Gi` |
 | `resources.requests.cpu` | CPU request | `100m` |
 | `resources.requests.memory` | Memory request | `128Mi` |
 
@@ -127,7 +127,7 @@ The following table lists the configurable parameters of the Neo4j Operator char
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
-| `neo4j.defaultImage` | Default Neo4j image | `neo4j:5.26-enterprise` |
+| `neo4j.defaultImage` | Default Neo4j image | `neo4j:5.26.0-enterprise` |
 | `neo4j.defaultStorageSize` | Default storage size | `10Gi` |
 | `neo4j.defaultStorageClass` | Default storage class | `""` (cluster default) |
 | `neo4j.defaultResources.requests.cpu` | Default CPU request | `500m` |

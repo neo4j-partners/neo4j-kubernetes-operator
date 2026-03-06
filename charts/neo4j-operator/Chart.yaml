@@ -2,8 +2,8 @@ apiVersion: v2
 name: neo4j-operator
 description: Neo4j Enterprise Operator for Kubernetes - Manages Neo4j Enterprise deployments (v5.26+)
 type: application
-version: 0.1.0
-appVersion: "0.1.0"
+version: 0.0.1
+appVersion: "0.0.1"
 keywords:
   - neo4j
   - graph

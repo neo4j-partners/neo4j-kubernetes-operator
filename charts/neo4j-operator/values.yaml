@@ -61,8 +61,8 @@ securityContext:
 
 resources:
   limits:
-    cpu: 500m
-    memory: 512Mi
+    cpu: 1000m
+    memory: 1Gi
   requests:
     cpu: 100m
     memory: 128Mi
@@ -173,7 +173,7 @@ config:
 # Neo4j-specific configuration
 neo4j:
   # Default Neo4j enterprise image to use if not specified in CR
-  defaultImage: neo4j:5.26-enterprise
+  defaultImage: neo4j:5.26.0-enterprise
   # Default resource requirements for Neo4j pods if not specified in CR
   defaultResources:
     requests:
