@@ -317,15 +317,15 @@ Each cluster gets automatic RBAC creation:
 - **Event Recording**: Structured events for debugging and monitoring
 - **Connection Examples**: Automatic generation of connection strings
 
-### QueryMonitor and Live Diagnostics
+### Monitoring and Live Diagnostics
 
-The `QueryMonitoringSpec` field (`spec.queryMonitoring`) drives two distinct
+The `MonitoringSpec` field (`spec.monitoring`) drives two distinct
 responsibilities inside the cluster controller:
 
-**1. Infrastructure setup** (`ReconcileQueryMonitoring`):
+**1. Infrastructure setup** (`ReconcileMonitoring`):
 Creates Kubernetes resources for metrics collection:
 - `{cluster-name}-metrics` Service — exposes port 2004 for Prometheus scraping
-- `{cluster-name}-query-monitoring` ServiceMonitor — tells the Prometheus Operator to scrape the metrics service
+- `{cluster-name}-monitoring` ServiceMonitor — tells the Prometheus Operator to scrape the metrics service
 - Neo4j config flags (`server.metrics.prometheus.enabled=true`, `prometheus.io/*` annotations)
 
 Runs on every reconcile regardless of cluster phase.

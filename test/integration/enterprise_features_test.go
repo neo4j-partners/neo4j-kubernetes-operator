@@ -185,11 +185,12 @@ var _ = Describe("Enterprise Features Integration Tests", func() {
 							Value: "eval",
 						},
 					},
-					QueryMonitoring: &neo4jv1alpha1.QueryMonitoringSpec{
-						Enabled:              true,
-						SlowQueryThreshold:   "2s",
-						ExplainPlan:          true,
-						IndexRecommendations: true,
+					Monitoring: &neo4jv1alpha1.MonitoringSpec{
+						Enabled:            true,
+						SlowQueryThreshold: "2s",
+						ExplainPlan:        true,
+						QueryLogLevel:      "VERBOSE",
+						ObfuscateLiterals:  true,
 						Sampling: &neo4jv1alpha1.QuerySamplingConfig{
 							Rate:                "0.1",
 							MaxQueriesPerSecond: 100,
@@ -227,10 +228,11 @@ var _ = Describe("Enterprise Features Integration Tests", func() {
 				Namespace: namespace,
 			}, updated)).To(Succeed())
 
-			Expect(updated.Spec.QueryMonitoring.Enabled).To(BeTrue())
-			Expect(updated.Spec.QueryMonitoring.SlowQueryThreshold).To(Equal("2s"))
-			Expect(updated.Spec.QueryMonitoring.ExplainPlan).To(BeTrue())
-			Expect(updated.Spec.QueryMonitoring.IndexRecommendations).To(BeTrue())
+			Expect(updated.Spec.Monitoring.Enabled).To(BeTrue())
+			Expect(updated.Spec.Monitoring.SlowQueryThreshold).To(Equal("2s"))
+			Expect(updated.Spec.Monitoring.ExplainPlan).To(BeTrue())
+			Expect(updated.Spec.Monitoring.QueryLogLevel).To(Equal("VERBOSE"))
+			Expect(updated.Spec.Monitoring.ObfuscateLiterals).To(BeTrue())
 
 			By("Cleaning up")
 			Expect(k8sClient.Delete(ctx, cluster)).To(Succeed())

@@ -406,18 +406,18 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 	}
 
 	// Handle Query Performance Monitoring
-	if cluster.Spec.QueryMonitoring != nil && cluster.Spec.QueryMonitoring.Enabled {
+	if cluster.Spec.Monitoring != nil && cluster.Spec.Monitoring.Enabled {
 		queryMonitor := NewQueryMonitor(r.Client, r.Scheme)
-		if err := queryMonitor.ReconcileQueryMonitoring(ctx, cluster); err != nil {
+		if err := queryMonitor.ReconcileMonitoring(ctx, cluster); err != nil {
 			logger.Error(err, "Failed to reconcile query monitoring")
 			// Don't fail the entire reconciliation for monitoring issues
 			logger.Info("Query monitoring setup failed, continuing with cluster reconciliation")
 		}
 	}
 
-	// Collect live diagnostics when QueryMonitoring is enabled and cluster is Ready.
+	// Collect live diagnostics when Monitoring is enabled and cluster is Ready.
 	// Diagnostics collection is non-fatal: failures are surfaced in status.diagnostics.collectionError.
-	if cluster.Spec.QueryMonitoring != nil && cluster.Spec.QueryMonitoring.Enabled &&
+	if cluster.Spec.Monitoring != nil && cluster.Spec.Monitoring.Enabled &&
 		cluster.Status.Phase == "Ready" {
 		neo4jDiagClient, diagClientErr := r.createNeo4jClient(ctx, cluster)
 		if diagClientErr != nil {
@@ -1367,8 +1367,8 @@ type QueryMonitor struct {
 	Scheme *runtime.Scheme
 }
 
-// ReconcileQueryMonitoring sets up query monitoring for the cluster
-func (qm *QueryMonitor) ReconcileQueryMonitoring(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) error {
+// ReconcileMonitoring sets up query monitoring for the cluster
+func (qm *QueryMonitor) ReconcileMonitoring(ctx context.Context, cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) error {
 	logger := log.FromContext(ctx)
 	logger.Info("Setting up query monitoring", "cluster", cluster.Name)
 
@@ -1378,7 +1378,7 @@ func (qm *QueryMonitor) ReconcileQueryMonitoring(ctx context.Context, cluster *n
 	}
 
 	// Configure alerting rules if metrics export is enabled
-	if cluster.Spec.QueryMonitoring != nil && cluster.Spec.QueryMonitoring.MetricsExport != nil && cluster.Spec.QueryMonitoring.MetricsExport.Prometheus {
+	if cluster.Spec.Monitoring != nil && cluster.Spec.Monitoring.MetricsExport != nil && cluster.Spec.Monitoring.MetricsExport.Prometheus {
 		if err := qm.setupAlertingRules(ctx, cluster); err != nil {
 			return fmt.Errorf("failed to setup alerting rules: %w", err)
 		}
@@ -1400,7 +1400,7 @@ func (qm *QueryMonitor) setupMetricsCollection(ctx context.Context, cluster *neo
 		Version: "v1",
 		Kind:    "ServiceMonitor",
 	})
-	serviceMonitor.SetName(cluster.Name + "-query-monitoring")
+	serviceMonitor.SetName(cluster.Name + "-monitoring")
 	serviceMonitor.SetNamespace(cluster.Namespace)
 	serviceMonitor.SetLabels(map[string]string{
 		"app":               "neo4j",
@@ -1462,30 +1462,31 @@ func (qm *QueryMonitor) setupAlertingRules(ctx context.Context, cluster *neo4jv1
 		"role":              "alert-rules",
 	})
 
-	// Generate alerting rules
+	// Generate alerting rules using actual Neo4j Prometheus metric names.
+	// Neo4j exposes query latency as a histogram in milliseconds and heap as gauges in bytes.
 	rules := []map[string]interface{}{
 		{
 			"alert": "Neo4jSlowQueries",
-			"expr":  "neo4j_query_duration_seconds > 5",
+			"expr":  "histogram_quantile(0.99, rate(neo4j_db_query_execution_latency_millis_bucket[5m])) > 5000",
 			"for":   "5m",
 			"labels": map[string]interface{}{
 				"severity": "warning",
 			},
 			"annotations": map[string]interface{}{
 				"summary":     "Neo4j slow queries detected",
-				"description": "Neo4j cluster {{ $labels.cluster }} has slow queries taking longer than 5 seconds",
+				"description": "Neo4j cluster {{ $labels.namespace }}/{{ $labels.job }} p99 query latency exceeds 5 seconds",
 			},
 		},
 		{
-			"alert": "Neo4jHighMemoryUsage",
-			"expr":  "neo4j_memory_usage_bytes / neo4j_memory_total_bytes > 0.8",
+			"alert": "Neo4jHighHeapUsage",
+			"expr":  "neo4j_vm_heap_used / neo4j_vm_heap_max > 0.8",
 			"for":   "5m",
 			"labels": map[string]interface{}{
 				"severity": "warning",
 			},
 			"annotations": map[string]interface{}{
-				"summary":     "Neo4j high memory usage",
-				"description": "Neo4j cluster {{ $labels.cluster }} memory usage is above 80%",
+				"summary":     "Neo4j high heap usage",
+				"description": "Neo4j cluster {{ $labels.namespace }}/{{ $labels.job }} JVM heap usage is above 80%",
 			},
 		},
 	}
@@ -1493,7 +1494,7 @@ func (qm *QueryMonitor) setupAlertingRules(ctx context.Context, cluster *neo4jv1
 	prometheusRule.Object["spec"] = map[string]interface{}{
 		"groups": []map[string]interface{}{
 			{
-				"name":  "neo4j-query-monitoring",
+				"name":  "neo4j-monitoring",
 				"rules": rules,
 			},
 		},

@@ -62,7 +62,7 @@ func TestBuildPodSpecForEnterprise_WithPlugins(t *testing.T) {
 	assert.Len(t, podSpec.InitContainers, 0, "should have no init containers as plugins are managed via Neo4jPlugin CRD")
 }
 
-func TestBuildPodSpecForEnterprise_WithQueryMonitoring(t *testing.T) {
+func TestBuildPodSpecForEnterprise_WithMonitoring(t *testing.T) {
 	cluster := &neo4jv1alpha1.Neo4jEnterpriseCluster{
 		Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 			Image: neo4jv1alpha1.ImageSpec{
@@ -76,7 +76,7 @@ func TestBuildPodSpecForEnterprise_WithQueryMonitoring(t *testing.T) {
 				ClassName: "fast-ssd",
 				Size:      "10Gi",
 			},
-			QueryMonitoring: &neo4jv1alpha1.QueryMonitoringSpec{
+			Monitoring: &neo4jv1alpha1.MonitoringSpec{
 				Enabled: true,
 			},
 		},
@@ -141,7 +141,7 @@ func TestBuildStatefulSetForEnterprise_WithFeatures(t *testing.T) {
 				Size:      "10Gi",
 			},
 			// Plugin management is now handled via separate Neo4jPlugin CRD
-			QueryMonitoring: &neo4jv1alpha1.QueryMonitoringSpec{
+			Monitoring: &neo4jv1alpha1.MonitoringSpec{
 				Enabled: true,
 			},
 		},
@@ -867,7 +867,7 @@ func TestBuildPodSpecForEnterprise_CustomSecurityContext(t *testing.T) {
 				ClassName: "fast-ssd",
 				Size:      "10Gi",
 			},
-			QueryMonitoring: &neo4jv1alpha1.QueryMonitoringSpec{
+			Monitoring: &neo4jv1alpha1.MonitoringSpec{
 				Enabled: true,
 			},
 			SecurityContext: &neo4jv1alpha1.SecurityContextSpec{
@@ -1037,4 +1037,57 @@ func TestBuildPodSpecForEnterprise_WithNoPullSecrets(t *testing.T) {
 	podSpec := resources.BuildPodSpecForEnterprise(cluster, "server", "neo4j-admin-secret")
 
 	assert.Empty(t, podSpec.ImagePullSecrets)
+}
+
+func TestBuildMonitoringConfig(t *testing.T) {
+	t.Run("defaults", func(t *testing.T) {
+		config := resources.BuildMonitoringConfig(nil)
+
+		// Must contain valid settings
+		assert.Contains(t, config, "server.metrics.prometheus.enabled=true")
+		assert.Contains(t, config, "server.metrics.prometheus.endpoint=0.0.0.0:2004")
+		assert.Contains(t, config, "server.metrics.csv.enabled=false")
+		assert.Contains(t, config, "db.logs.query.enabled=INFO")
+		assert.Contains(t, config, "db.logs.query.threshold=5s")
+		assert.Contains(t, config, "db.logs.query.plan_description_enabled=false")
+		assert.Contains(t, config, "db.logs.query.obfuscate_literals=false")
+
+		// Must NOT contain invalid/removed settings
+		assert.NotContains(t, config, "slow_threshold")
+		assert.NotContains(t, config, "index.recommendations")
+	})
+
+	t.Run("custom values", func(t *testing.T) {
+		spec := &neo4jv1alpha1.MonitoringSpec{
+			Enabled:            true,
+			SlowQueryThreshold: "2s",
+			ExplainPlan:        true,
+			QueryLogLevel:      "VERBOSE",
+			ObfuscateLiterals:  true,
+			MetricsFilter:      "*bolt*,*transaction*",
+			MetricsPrefix:      "myneo4j",
+		}
+		config := resources.BuildMonitoringConfig(spec)
+
+		assert.Contains(t, config, "db.logs.query.threshold=2s")
+		assert.Contains(t, config, "db.logs.query.enabled=VERBOSE")
+		assert.Contains(t, config, "db.logs.query.plan_description_enabled=true")
+		assert.Contains(t, config, "db.logs.query.obfuscate_literals=true")
+		assert.Contains(t, config, "server.metrics.filter=*bolt*,*transaction*")
+		assert.Contains(t, config, "server.metrics.prefix=myneo4j")
+
+		// Must NOT contain invalid settings
+		assert.NotContains(t, config, "slow_threshold")
+		assert.NotContains(t, config, "index.recommendations")
+	})
+
+	t.Run("empty optional fields omitted", func(t *testing.T) {
+		spec := &neo4jv1alpha1.MonitoringSpec{
+			Enabled: true,
+		}
+		config := resources.BuildMonitoringConfig(spec)
+
+		assert.NotContains(t, config, "server.metrics.filter")
+		assert.NotContains(t, config, "server.metrics.prefix")
+	})
 }

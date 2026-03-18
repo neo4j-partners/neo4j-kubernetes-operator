@@ -91,7 +91,7 @@ The `Neo4jEnterpriseClusterSpec` defines the desired state of a Neo4j Enterprise
 | `ui` | [`UISpec`](#uispec) | Neo4j UI configuration |
 | `mcp` | [`MCPServerSpec`](#mcpserverspec) | MCP server deployment and exposure settings |
 | `propertySharding` | [`PropertyShardingSpec`](#propertyshardingspec) | Property sharding configuration (Neo4j 2025.12+) |
-| `queryMonitoring` | [`QueryMonitoringSpec`](#querymonitoringspec) | Query monitoring configuration |
+| `monitoring` | [`MonitoringSpec`](#querymonitoringspec) | Query monitoring configuration |
 | `auraFleetManagement` | [`AuraFleetManagementSpec`](#aurafleetmanagementspec) | Aura Fleet Management integration (optional) |
 
 ## Type Definitions
@@ -485,16 +485,19 @@ For detailed configuration, see the [Property Sharding Guide](../user_guide/prop
 | `enabled` | `bool` | Enable auto-creation of service account (default: `true`) |
 | `annotations` | `map[string]string` | Annotations to apply to auto-created service account |
 
-### QueryMonitoringSpec
+### MonitoringSpec
 
 Query performance monitoring and analytics configuration.
 
 | Field | Type | Description |
 |---|---|---|
 | `enabled` | `bool` | Enable query monitoring (default: `true`) |
-| `slowQueryThreshold` | `string` | Slow query threshold (default: `"5s"`) |
-| `explainPlan` | `bool` | Enable query plan explanation (default: `true`) |
-| `indexRecommendations` | `bool` | Enable index recommendations (default: `true`) |
+| `slowQueryThreshold` | `string` | Slow query threshold — maps to `db.logs.query.threshold` (default: `"5s"`) |
+| `explainPlan` | `bool` | Enable query plan explanation in logs. Has performance impact — recommended `false` in production (default: `false`) |
+| `queryLogLevel` | `string` | Query log verbosity: `OFF`, `INFO`, or `VERBOSE` (default: `"INFO"`) |
+| `obfuscateLiterals` | `bool` | Obfuscate literal values in query logs to protect sensitive data (default: `false`) |
+| `metricsFilter` | `string` | Glob pattern for which Neo4j metrics to expose, e.g. `"*"` for all (maps to `server.metrics.filter`) |
+| `metricsPrefix` | `string` | Custom prefix for Neo4j metric names (maps to `server.metrics.prefix`) |
 | `sampling` | [`*QuerySamplingConfig`](#querysamplingconfig) | Query sampling configuration |
 | `metricsExport` | [`*QueryMetricsExportConfig`](#querymetricsexportconfig) | Metrics export configuration |
 
@@ -697,7 +700,7 @@ The `Neo4jEnterpriseClusterStatus` represents the observed state of the cluster.
 | `upgradeStatus` | [`*UpgradeStatus`](#upgradestatus) | Upgrade status |
 | `lastBackup` | `*metav1.Time` | Last backup timestamp |
 | `observedGeneration` | `int64` | Last observed generation |
-| `diagnostics` | [`*DiagnosticsStatus`](#diagnosticsstatus) | Live diagnostics collected when `spec.queryMonitoring.enabled=true` and cluster is `Ready`. |
+| `diagnostics` | [`*DiagnosticsStatus`](#diagnosticsstatus) | Live diagnostics collected when `spec.monitoring.enabled=true` and cluster is `Ready`. |
 
 ### EndpointStatus
 
@@ -766,7 +769,7 @@ Server-specific upgrade progress.
 
 ### DiagnosticsStatus
 
-Live diagnostics collected from `SHOW SERVERS` and `SHOW DATABASES` when `spec.queryMonitoring.enabled=true` and the cluster is in `Ready` phase. Updated on every reconcile cycle.
+Live diagnostics collected from `SHOW SERVERS` and `SHOW DATABASES` when `spec.monitoring.enabled=true` and the cluster is in `Ready` phase. Updated on every reconcile cycle.
 
 | Field | Type | Description |
 |---|---|---|
@@ -905,11 +908,11 @@ spec:
         provider: aws
         serviceAccount: neo4j-backup-sa  # Uses IAM roles for pods
   # Enhanced query monitoring
-  queryMonitoring:
+  monitoring:
     enabled: true
     slowQueryThreshold: "1s"
-    explainPlan: true
-    indexRecommendations: true
+    queryLogLevel: "INFO"
+    obfuscateLiterals: true
     sampling:
       rate: "0.1"
       maxQueriesPerSecond: 100

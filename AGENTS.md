@@ -79,7 +79,7 @@
   - `kubectl get events --field-selector reason=SplitBrainDetected -A`
   - `kubectl get events --field-selector reason=BackupFailed`
   - `kubectl get events --field-selector reason=ClusterFormationFailed`
-- **Live Diagnostics**: When `spec.queryMonitoring.enabled=true` and cluster is `Ready`, the operator collects `SHOW SERVERS`/`SHOW DATABASES` results into `status.diagnostics`. Two conditions — `ServersHealthy` and `DatabasesHealthy` — surface cluster health without `kubectl exec`.
+- **Live Diagnostics**: When `spec.monitoring.enabled=true` and cluster is `Ready`, the operator collects `SHOW SERVERS`/`SHOW DATABASES` results into `status.diagnostics`. Two conditions — `ServersHealthy` and `DatabasesHealthy` — surface cluster health without `kubectl exec`.
 - **Prometheus Metrics**: Custom metrics exported under `neo4j_operator_*` prefix:
   - `neo4j_operator_cluster_healthy` / `neo4j_operator_cluster_phase` / `neo4j_operator_cluster_replicas_total`
   - `neo4j_operator_server_health{server_name, server_address}` — per-server health from diagnostics

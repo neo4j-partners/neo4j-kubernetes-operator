@@ -285,15 +285,15 @@ spec:
 
 See the [Neo4jPlugin API reference](neo4jplugin.md) for complete documentation.
 
-#### `queryMonitoring` (QueryMonitoringSpec)
+#### `monitoring` (MonitoringSpec)
 Query performance monitoring.
 
 ```yaml
-queryMonitoring:
+monitoring:
   enabled: true
   slowQueryThreshold: "5s"
-  explainPlan: true
-  indexRecommendations: true
+  queryLogLevel: "INFO"
+  obfuscateLiterals: false
 ```
 
 ## Status Fields
@@ -554,11 +554,11 @@ spec:
     enabled: true
     retentionPolicy: Retain
 
-  queryMonitoring:
+  monitoring:
     enabled: true
     slowQueryThreshold: "1s"
-    explainPlan: true
-    indexRecommendations: true
+    queryLogLevel: "INFO"
+    obfuscateLiterals: true
 
   config:
     server.memory.heap.initial_size: "3G"

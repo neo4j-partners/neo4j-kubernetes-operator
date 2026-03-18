@@ -1,41 +1,58 @@
 # Monitoring
 
-This guide explains how to expose Neo4j metrics for Prometheus and where the operator wires things for you.
+This guide explains how to expose Neo4j metrics for Prometheus and where the operator wires things for you. For a complete end-to-end setup with Grafana dashboards and alerting, see the [Prometheus and Grafana Setup Guide](prometheus-grafana-setup.md).
 
-## Enable metrics via `spec.queryMonitoring`
+## Enable metrics via `spec.monitoring`
 
-The operator uses Neo4j's built-in Prometheus endpoint (see https://neo4j.com/docs/operations-manual/current/monitoring/metrics/expose/). When `spec.queryMonitoring.enabled` is true, the operator:
+The operator uses Neo4j's built-in Prometheus endpoint (see https://neo4j.com/docs/operations-manual/current/monitoring/metrics/expose/). When `spec.monitoring.enabled` is true, the operator:
 
 - Enables the Neo4j Prometheus endpoint (`server.metrics.prometheus.enabled=true`).
-- Binds it to `0.0.0.0:2004`.
+- Binds it to `0.0.0.0:2004` (safe in Kubernetes — pod network isolation prevents external access).
 - Exposes port `2004` on the Neo4j container.
 - Adds `prometheus.io/*` annotations for scrape-based setups.
+- Disables CSV metrics export (`server.metrics.csv.enabled=false`) to avoid unnecessary disk usage.
 
 ### Cluster example
 
 ```yaml
 spec:
-  queryMonitoring:
+  monitoring:
     enabled: true
 ```
 
-For clusters, the operator also creates a `Service` named `<cluster>-metrics` and attempts to create a `ServiceMonitor` named `<cluster>-query-monitoring` if the Prometheus Operator CRDs are available.
+For clusters, the operator also creates:
+- A `Service` named `<cluster>-metrics` (port 2004)
+- A `ServiceMonitor` named `<cluster>-monitoring` (if Prometheus Operator CRDs are available)
 
 ### Standalone example
 
 ```yaml
 spec:
-  queryMonitoring:
+  monitoring:
     enabled: true
 ```
 
-For standalone deployments, the metrics port is added to the `<standalone>-service` Service.
+For standalone deployments, the metrics port is added to the `<standalone>-service` Service and a `ServiceMonitor` named `<standalone>-monitoring` is created automatically.
+
+### Full configuration example
+
+```yaml
+spec:
+  monitoring:
+    enabled: true
+    slowQueryThreshold: "5s"       # Log queries slower than this (maps to db.logs.query.threshold)
+    queryLogLevel: "INFO"          # OFF, INFO, or VERBOSE (maps to db.logs.query.enabled)
+    obfuscateLiterals: true        # Mask literal values in query logs (recommended in production)
+    explainPlan: false             # Include execution plan in logs (performance impact — avoid in production)
+    metricsFilter: "*"             # Enable all Neo4j metrics (default: subset only)
+    metricsPrefix: "neo4j"         # Custom prefix for metric names
+```
 
 ## Prometheus scraping
 
 ### Prometheus Operator
 
-If you use Prometheus Operator, the ServiceMonitor created for clusters will target the `<cluster>-metrics` Service (port `metrics`). For standalone deployments, create your own ServiceMonitor pointing at the `<standalone>-service` Service.
+The operator auto-creates `ServiceMonitor` resources for both cluster and standalone deployments when `monitoring.enabled: true`. These target the metrics Service on port `metrics` (2004) with a 30-second scrape interval. No manual ServiceMonitor creation is needed.
 
 ### Standard Prometheus
 
@@ -54,15 +71,63 @@ Note: for standalone deployments, scrape `<standalone>-service.<namespace>.svc.c
 
 ## Customizing metrics settings
 
-If you override the metrics endpoint in `spec.config`, keep the Service port aligned:
+### Metrics filter
+
+By default, Neo4j only exposes a subset of its metrics. To enable all metrics or select specific categories:
 
 ```yaml
 spec:
-  queryMonitoring:
+  monitoring:
     enabled: true
-  config:
-    server.metrics.prometheus.endpoint: "0.0.0.0:2004"
+    metricsFilter: "*"  # Enable all metrics
 ```
+
+Or select specific categories with glob patterns:
+
+```yaml
+spec:
+  monitoring:
+    enabled: true
+    metricsFilter: "*bolt*,*transaction*,*page_cache*,*cluster.raft*"
+```
+
+### Query log security
+
+In production environments, enable literal obfuscation to prevent sensitive data (passwords, PII) from appearing in query logs:
+
+```yaml
+spec:
+  monitoring:
+    enabled: true
+    obfuscateLiterals: true
+    queryLogLevel: "INFO"           # Log only slow queries, not all queries
+    slowQueryThreshold: "2s"
+```
+
+## Version-specific metrics
+
+Neo4j metric names are identical across 5.26.x and 2025.x+ CalVer releases, but some metrics are only available in newer versions:
+
+| Metric Category | 5.26.x | 2025.x+ |
+|---|---|---|
+| Core metrics (Bolt, transactions, page cache, JVM) | Yes | Yes |
+| CPU usage (`vm.cpu_load.*`) | No | 2025.01+ |
+| Raft snapshot metrics (`cluster.raft.snapshot_*`) | No | 2025.01+ |
+| Virtual threads (`vm.threads.virtual`) | No | 2025.05+ |
+| Raft election/queue metrics | No | 2025.02+ |
+| Store copy download metrics | No | 2025.02+ |
+| Deadlock rollback counter | No | 2026.01+ |
+| Page cache async IO metrics | No | 2026.02+ |
+| Discovery v1 metrics (`cluster.discovery.cluster.*`) | Deprecated | Removed |
+
+### Prometheus metric naming
+
+Neo4j converts metric names for Prometheus: dots become underscores, counter metrics get a `_total` suffix. The `# HELP` comment preserves the original name.
+
+Examples:
+- `neo4j.dbms.bolt.connections_running` → `neo4j_dbms_bolt_connections_running`
+- `neo4j.database.<db>.transaction.committed` → `neo4j_database_<db>_transaction_committed_total`
+- `neo4j.page_cache.hit_ratio` → `neo4j_page_cache_hit_ratio`
 
 ## Aura Fleet Management (cloud monitoring)
 
@@ -147,7 +212,7 @@ The operator registers the following Prometheus metrics. All metrics use the pre
 
 ## Live Cluster Diagnostics
 
-When `spec.queryMonitoring.enabled: true` and the cluster is in `Ready` phase, the
+When `spec.monitoring.enabled: true` and the cluster is in `Ready` phase, the
 operator automatically collects live diagnostics by running `SHOW SERVERS` and
 `SHOW DATABASES` against the cluster. Results are written to `status.diagnostics`
 and two new Kubernetes conditions without requiring `kubectl exec` into pods.
@@ -156,7 +221,7 @@ and two new Kubernetes conditions without requiring `kubectl exec` into pods.
 
 ```yaml
 spec:
-  queryMonitoring:
+  monitoring:
     enabled: true
 ```
 
@@ -295,5 +360,5 @@ kubectl exec <cluster-name>-server-0 -c neo4j -- \
 
 ### Disabling Diagnostics
 
-Set `spec.queryMonitoring.enabled: false` (or omit the `queryMonitoring` section entirely).
+Set `spec.monitoring.enabled: false` (or omit the `monitoring` section entirely).
 The `status.diagnostics` field will remain at its last-known value but will not be updated.

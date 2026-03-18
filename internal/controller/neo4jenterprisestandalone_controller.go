@@ -266,6 +266,17 @@ func (r *Neo4jEnterpriseStandaloneReconciler) reconcileStandalone(ctx context.Co
 		}
 	}
 
+	// Reconcile ServiceMonitor for Prometheus scraping (non-fatal if Prometheus Operator not installed)
+	if standalone.Spec.Monitoring != nil && standalone.Spec.Monitoring.Enabled {
+		if err := r.reconcileServiceMonitor(ctx, standalone); err != nil {
+			if meta.IsNoMatchError(err) {
+				logger.Info("ServiceMonitor API not available; skipping ServiceMonitor creation")
+			} else {
+				logger.Info("ServiceMonitor creation failed", "error", err.Error())
+			}
+		}
+	}
+
 	// Update status once at the end
 	if err := r.updateStatus(ctx, standalone); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to update status: %w", err)
@@ -600,8 +611,8 @@ func (r *Neo4jEnterpriseStandaloneReconciler) createConfigMap(standalone *neo4jv
 		configLines = append(configLines, "")
 	}
 
-	if standalone.Spec.QueryMonitoring != nil && standalone.Spec.QueryMonitoring.Enabled {
-		configLines = append(configLines, strings.Split(resources.BuildQueryMonitoringConfig(standalone.Spec.QueryMonitoring), "\n")...)
+	if standalone.Spec.Monitoring != nil && standalone.Spec.Monitoring.Enabled {
+		configLines = append(configLines, strings.Split(resources.BuildMonitoringConfig(standalone.Spec.Monitoring), "\n")...)
 		configLines = append(configLines, "")
 	}
 
@@ -662,7 +673,7 @@ func (r *Neo4jEnterpriseStandaloneReconciler) createService(standalone *neo4jv1a
 		},
 	}
 
-	if standalone.Spec.QueryMonitoring != nil && standalone.Spec.QueryMonitoring.Enabled {
+	if standalone.Spec.Monitoring != nil && standalone.Spec.Monitoring.Enabled {
 		ports = append(ports, corev1.ServicePort{
 			Name:       "metrics",
 			Port:       resources.MetricsPort,
@@ -725,7 +736,7 @@ func (r *Neo4jEnterpriseStandaloneReconciler) createService(standalone *neo4jv1a
 func (r *Neo4jEnterpriseStandaloneReconciler) createStatefulSet(standalone *neo4jv1alpha1.Neo4jEnterpriseStandalone) *appsv1.StatefulSet {
 	replicas := int32(1)
 	annotations := map[string]string{}
-	if standalone.Spec.QueryMonitoring != nil && standalone.Spec.QueryMonitoring.Enabled {
+	if standalone.Spec.Monitoring != nil && standalone.Spec.Monitoring.Enabled {
 		annotations["prometheus.io/scrape"] = "true"
 		annotations["prometheus.io/port"] = fmt.Sprintf("%d", resources.MetricsPort)
 		annotations["prometheus.io/path"] = "/metrics"
@@ -754,7 +765,7 @@ func (r *Neo4jEnterpriseStandaloneReconciler) createStatefulSet(standalone *neo4
 		},
 	}
 
-	if standalone.Spec.QueryMonitoring != nil && standalone.Spec.QueryMonitoring.Enabled {
+	if standalone.Spec.Monitoring != nil && standalone.Spec.Monitoring.Enabled {
 		ports = append(ports, corev1.ContainerPort{
 			Name:          "metrics",
 			ContainerPort: resources.MetricsPort,
@@ -1317,6 +1328,45 @@ func (r *Neo4jEnterpriseStandaloneReconciler) createIngress(standalone *neo4jv1a
 			},
 		},
 	}
+}
+
+// reconcileServiceMonitor creates or updates a ServiceMonitor for standalone Prometheus scraping.
+func (r *Neo4jEnterpriseStandaloneReconciler) reconcileServiceMonitor(ctx context.Context, standalone *neo4jv1alpha1.Neo4jEnterpriseStandalone) error {
+	serviceMonitor := &unstructured.Unstructured{}
+	serviceMonitor.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   "monitoring.coreos.com",
+		Version: "v1",
+		Kind:    "ServiceMonitor",
+	})
+	serviceMonitor.SetName(standalone.Name + "-monitoring")
+	serviceMonitor.SetNamespace(standalone.Namespace)
+	serviceMonitor.SetLabels(map[string]string{
+		"app":                        "neo4j",
+		"app.kubernetes.io/name":     "neo4j",
+		"app.kubernetes.io/instance": standalone.Name,
+	})
+
+	serviceMonitor.Object["spec"] = map[string]interface{}{
+		"selector": map[string]interface{}{
+			"matchLabels": map[string]interface{}{
+				"app.kubernetes.io/name":     "neo4j",
+				"app.kubernetes.io/instance": standalone.Name,
+			},
+		},
+		"endpoints": []map[string]interface{}{
+			{
+				"port":     "metrics",
+				"interval": "30s",
+				"path":     "/metrics",
+			},
+		},
+	}
+
+	if err := ctrl.SetControllerReference(standalone, serviceMonitor, r.Scheme); err != nil {
+		return fmt.Errorf("failed to set controller reference on ServiceMonitor: %w", err)
+	}
+
+	return r.createOrUpdateUnstructured(ctx, serviceMonitor)
 }
 
 func (r *Neo4jEnterpriseStandaloneReconciler) createOrUpdateUnstructured(ctx context.Context, obj *unstructured.Unstructured) error {

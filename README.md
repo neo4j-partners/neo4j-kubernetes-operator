@@ -8,6 +8,15 @@ The Neo4j Kubernetes Operator automates the deployment and management of Neo4j E
 
 The Operator deploys Neo4j EE v5.26+.  It supports both clustered and standalone deployments for cloud-native graph database operations.
 
+> [!WARNING]
+> **Alpha Software — Please Read Before Using**
+>
+> This project is in **alpha stage** and is maintained by a **single maintainer** in a personal capacity. Development is assisted by LLM-based tooling, which means the codebase may contain subtle bugs, incomplete features, or unexpected behavior despite best efforts.
+>
+> - **No production guarantees**: This operator is not recommended for production workloads without thorough independent validation. Use at your own risk.
+ > - **No official Neo4j support**: This project is not an official Neo4j product and is not supported by Neo4j, Inc. in any capacity. The maintainer is a Product Manager at Neo4j, but maintains this project in a personal capacity. Support is provided solely by the maintainer on a best-effort basis through [GitHub Issues](https://github.com/priyolahiri/neo4j-kubernetes-operator/issues).
+> - **Breaking changes**: As an alpha project, APIs and behavior may change between releases without notice.
+
 ## 📑 Table of Contents
 
 - [Requirements](#-requirements)
@@ -510,7 +519,7 @@ Complete CRD documentation for all custom resources:
 - **Smart Status Updates**: Status updates only when cluster state actually changes
 - **ConfigMap Debouncing**: 2-minute debounce prevents restart loops from configuration changes
 - **Resource Validation**: Automatic validation ensures optimal Neo4j memory settings
-- **Prometheus Metrics**: Neo4j built-in metrics endpoint exposed via `spec.queryMonitoring`
+- **Prometheus Metrics**: Neo4j built-in metrics endpoint exposed via `spec.monitoring`
 
 ### 🔧 Deployment Management
 Manage your Neo4j deployments using standard kubectl commands:

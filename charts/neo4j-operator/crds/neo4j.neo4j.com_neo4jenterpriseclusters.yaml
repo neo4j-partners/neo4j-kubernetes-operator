@@ -2359,6 +2359,77 @@ spec:
                     - stdio
                     type: string
                 type: object
+              monitoring:
+                description: Monitoring configuration (Prometheus metrics, query logging,
+                  diagnostics)
+                properties:
+                  enabled:
+                    default: true
+                    description: Enable query monitoring
+                    type: boolean
+                  explainPlan:
+                    default: false
+                    description: |-
+                      Enable query plan explanation in logs. WARNING: enabling this has measurable
+                      performance impact on high-throughput workloads. Recommended false in production.
+                    type: boolean
+                  metricsExport:
+                    description: Metrics export configuration
+                    properties:
+                      customEndpoint:
+                        description: Export to custom endpoint
+                        type: string
+                      interval:
+                        description: Export interval
+                        type: string
+                      prometheus:
+                        description: Export to Prometheus
+                        type: boolean
+                    type: object
+                  metricsFilter:
+                    description: |-
+                      Glob pattern to select which Neo4j metrics are active (maps to server.metrics.filter).
+                      Only a subset of metrics is enabled by default. Use "*" to enable all metrics,
+                      or specific patterns like "*bolt*,*transaction*,*page_cache*".
+                    type: string
+                  metricsPrefix:
+                    description: |-
+                      Custom prefix for all Neo4j metric names (maps to server.metrics.prefix).
+                      Useful when multiple Neo4j deployments share one Prometheus instance.
+                    type: string
+                  obfuscateLiterals:
+                    default: false
+                    description: |-
+                      Obfuscate literal values in query logs. Recommended true in production
+                      to avoid leaking sensitive data (passwords, PII) into log files.
+                    type: boolean
+                  queryLogLevel:
+                    default: INFO
+                    description: |-
+                      Query log verbosity level. OFF disables query logging, INFO logs queries
+                      exceeding the slow query threshold, VERBOSE logs all queries.
+                    enum:
+                    - "OFF"
+                    - INFO
+                    - VERBOSE
+                    type: string
+                  sampling:
+                    description: Query sampling configuration
+                    properties:
+                      maxQueriesPerSecond:
+                        description: Maximum queries to sample per second
+                        format: int32
+                        type: integer
+                      rate:
+                        description: Sampling rate (0.0 to 1.0)
+                        type: string
+                    type: object
+                  slowQueryThreshold:
+                    default: 5s
+                    description: Slow query threshold — maps to db.logs.query.threshold
+                      in Neo4j config
+                    type: string
+                type: object
               nodeSelector:
                 additionalProperties:
                   type: string
@@ -2382,50 +2453,6 @@ spec:
                     default: false
                     description: Enable property sharding support on this cluster
                     type: boolean
-                type: object
-              queryMonitoring:
-                description: Query performance monitoring
-                properties:
-                  enabled:
-                    default: true
-                    description: Enable query monitoring
-                    type: boolean
-                  explainPlan:
-                    default: true
-                    description: Enable query plan explanation
-                    type: boolean
-                  indexRecommendations:
-                    default: true
-                    description: Enable index recommendations
-                    type: boolean
-                  metricsExport:
-                    description: Metrics export configuration
-                    properties:
-                      customEndpoint:
-                        description: Export to custom endpoint
-                        type: string
-                      interval:
-                        description: Export interval
-                        type: string
-                      prometheus:
-                        description: Export to Prometheus
-                        type: boolean
-                    type: object
-                  sampling:
-                    description: Query sampling configuration
-                    properties:
-                      maxQueriesPerSecond:
-                        description: Maximum queries to sample per second
-                        format: int32
-                        type: integer
-                      rate:
-                        description: Sampling rate (0.0 to 1.0)
-                        type: string
-                    type: object
-                  slowQueryThreshold:
-                    default: 5s
-                    description: Slow query threshold
-                    type: string
                 type: object
               resources:
                 description: Resource requirements for Neo4j pods
@@ -3638,7 +3665,7 @@ spec:
               diagnostics:
                 description: |-
                   Diagnostics holds the most recently collected live diagnostics from the cluster.
-                  Populated when spec.queryMonitoring.enabled=true and the cluster is Ready.
+                  Populated when spec.monitoring.enabled=true and the cluster is Ready.
                 properties:
                   collectionError:
                     description: |-

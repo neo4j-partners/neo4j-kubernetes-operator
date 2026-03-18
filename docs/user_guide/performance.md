@@ -230,7 +230,7 @@ Monitor these critical metrics for performance optimization:
 
 ```yaml
 spec:
-  queryMonitoring:
+  monitoring:
     enabled: true
   config:
     # Prometheus metrics endpoint (overrides default if needed)

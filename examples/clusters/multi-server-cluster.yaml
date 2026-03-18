@@ -83,11 +83,11 @@ spec:
     server.bolt.thread_pool_max_size: "200"
 
   # Query monitoring
-  queryMonitoring:
+  monitoring:
     enabled: true
     slowQueryThreshold: "1s"
-    explainPlan: true
-    indexRecommendations: true
+    queryLogLevel: "INFO"
+    obfuscateLiterals: false
 
 ---
 # Admin credentials secret (create this before applying the cluster)

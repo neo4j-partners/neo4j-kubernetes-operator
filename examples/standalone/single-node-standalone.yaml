@@ -85,8 +85,8 @@ spec:
       value: "true"
       effect: "NoSchedule"
 
-  # Query monitoring
-  queryMonitoring:
+  # Monitoring
+  monitoring:
     enabled: true
     slowQueryThreshold: "5s"
     explainPlan: true

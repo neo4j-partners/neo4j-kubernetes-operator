@@ -74,8 +74,8 @@ type Neo4jEnterpriseClusterSpec struct {
 
 	// Plugin management configuration - DEPRECATED: Use Neo4jPlugin CRD instead
 
-	// Query performance monitoring
-	QueryMonitoring *QueryMonitoringSpec `json:"queryMonitoring,omitempty"`
+	// Monitoring configuration (Prometheus metrics, query logging, diagnostics)
+	Monitoring *MonitoringSpec `json:"monitoring,omitempty"`
 
 	// MCP server configuration for this cluster
 	MCP *MCPServerSpec `json:"mcp,omitempty"`
@@ -603,7 +603,7 @@ type Neo4jEnterpriseClusterStatus struct {
 	AuraFleetManagement *AuraFleetManagementStatus `json:"auraFleetManagement,omitempty"`
 
 	// Diagnostics holds the most recently collected live diagnostics from the cluster.
-	// Populated when spec.queryMonitoring.enabled=true and the cluster is Ready.
+	// Populated when spec.monitoring.enabled=true and the cluster is Ready.
 	// +optional
 	Diagnostics *ClusterDiagnosticsStatus `json:"diagnostics,omitempty"`
 }
@@ -625,7 +625,7 @@ type AuraFleetManagementStatus struct {
 }
 
 // ClusterDiagnosticsStatus holds the most recent live diagnostics collected from
-// the Neo4j cluster via Cypher queries. Populated only when spec.queryMonitoring.enabled=true
+// the Neo4j cluster via Cypher queries. Populated only when spec.monitoring.enabled=true
 // and the cluster is in Ready phase.
 type ClusterDiagnosticsStatus struct {
 	// Servers lists the most recently observed state of each server in the cluster.
@@ -971,23 +971,40 @@ type Neo4jEnterpriseClusterList struct {
 // DEPRECATED: PluginSpec is deprecated. Use Neo4jPlugin CRD instead.
 // This type is kept for backward compatibility but will be removed in future versions.
 
-// QueryMonitoringSpec defines query performance monitoring
-type QueryMonitoringSpec struct {
+// MonitoringSpec defines monitoring, metrics, and query logging configuration.
+type MonitoringSpec struct {
 	// +kubebuilder:default=true
 	// Enable query monitoring
 	Enabled bool `json:"enabled,omitempty"`
 
 	// +kubebuilder:default="5s"
-	// Slow query threshold
+	// Slow query threshold — maps to db.logs.query.threshold in Neo4j config
 	SlowQueryThreshold string `json:"slowQueryThreshold,omitempty"`
 
-	// +kubebuilder:default=true
-	// Enable query plan explanation
+	// +kubebuilder:default=false
+	// Enable query plan explanation in logs. WARNING: enabling this has measurable
+	// performance impact on high-throughput workloads. Recommended false in production.
 	ExplainPlan bool `json:"explainPlan,omitempty"`
 
-	// +kubebuilder:default=true
-	// Enable index recommendations
-	IndexRecommendations bool `json:"indexRecommendations,omitempty"`
+	// +kubebuilder:default="INFO"
+	// +kubebuilder:validation:Enum=OFF;INFO;VERBOSE
+	// Query log verbosity level. OFF disables query logging, INFO logs queries
+	// exceeding the slow query threshold, VERBOSE logs all queries.
+	QueryLogLevel string `json:"queryLogLevel,omitempty"`
+
+	// +kubebuilder:default=false
+	// Obfuscate literal values in query logs. Recommended true in production
+	// to avoid leaking sensitive data (passwords, PII) into log files.
+	ObfuscateLiterals bool `json:"obfuscateLiterals,omitempty"`
+
+	// Glob pattern to select which Neo4j metrics are active (maps to server.metrics.filter).
+	// Only a subset of metrics is enabled by default. Use "*" to enable all metrics,
+	// or specific patterns like "*bolt*,*transaction*,*page_cache*".
+	MetricsFilter string `json:"metricsFilter,omitempty"`
+
+	// Custom prefix for all Neo4j metric names (maps to server.metrics.prefix).
+	// Useful when multiple Neo4j deployments share one Prometheus instance.
+	MetricsPrefix string `json:"metricsPrefix,omitempty"`
 
 	// Query sampling configuration
 	Sampling *QuerySamplingConfig `json:"sampling,omitempty"`

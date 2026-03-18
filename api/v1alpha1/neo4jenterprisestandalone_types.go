@@ -68,8 +68,8 @@ type Neo4jEnterpriseStandaloneSpec struct {
 
 	// Plugin management configuration - DEPRECATED: Use Neo4jPlugin CRD instead
 
-	// Query performance monitoring
-	QueryMonitoring *QueryMonitoringSpec `json:"queryMonitoring,omitempty"`
+	// Monitoring configuration (Prometheus metrics, query logging, diagnostics)
+	Monitoring *MonitoringSpec `json:"monitoring,omitempty"`
 
 	// MCP server configuration for this standalone deployment
 	MCP *MCPServerSpec `json:"mcp,omitempty"`

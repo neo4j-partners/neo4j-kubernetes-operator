@@ -4,7 +4,7 @@
 
 **Goal:** Enhance the QueryMonitor to periodically run `SHOW SERVERS` and `SHOW DATABASES` against a Ready cluster and surface the results in `status.diagnostics`, `status.conditions`, and matching Prometheus metrics — eliminating the need for users to `exec` into pods to inspect cluster state.
 
-**Architecture:** Add a `CollectDiagnostics(ctx, cluster, neo4jClient)` method to the existing `QueryMonitor` type. The cluster reconciler calls it whenever `QueryMonitoring.Enabled=true` AND `status.phase=Ready`. Results are written into a new `status.diagnostics` sub-struct and two new Kubernetes conditions (`ServersHealthy`, `DatabasesHealthy`). All diagnostics collection is non-blocking and non-fatal — failure to collect never prevents the cluster from reaching Ready.
+**Architecture:** Add a `CollectDiagnostics(ctx, cluster, neo4jClient)` method to the existing `QueryMonitor` type. The cluster reconciler calls it whenever `Monitoring.Enabled=true` AND `status.phase=Ready`. Results are written into a new `status.diagnostics` sub-struct and two new Kubernetes conditions (`ServersHealthy`, `DatabasesHealthy`). All diagnostics collection is non-blocking and non-fatal — failure to collect never prevents the cluster from reaching Ready.
 
 **Tech Stack:** Go 1.24, controller-runtime v0.21, `internal/neo4j.Client` (existing Bolt client), `api/v1alpha1` CRD types, `internal/metrics` (Prometheus).
 
@@ -14,7 +14,7 @@
 
 | Symbol | File |
 |---|---|
-| `QueryMonitor` struct + `ReconcileQueryMonitoring` | `internal/controller/neo4jenterprisecluster_controller.go:1340–1500` |
+| `QueryMonitor` struct + `ReconcileMonitoring` | `internal/controller/neo4jenterprisecluster_controller.go:1340–1500` |
 | `Neo4jEnterpriseClusterStatus` | `api/v1alpha1/neo4jenterprisecluster_types.go:563–604` |
 | `conditions.go` constants | `internal/controller/conditions.go` |
 | `neo4jclient.GetServerList` | `internal/neo4j/client.go:1639` — returns `[]ServerInfo{Name,Address,State,Health,Hosting}` |
@@ -44,7 +44,7 @@ Find the end of the `Neo4jEnterpriseClusterStatus` struct block and add the foll
 
 ```go
 // ClusterDiagnosticsStatus holds the most recent live diagnostics collected from
-// the Neo4j cluster via Cypher queries. Populated only when spec.queryMonitoring.enabled=true
+// the Neo4j cluster via Cypher queries. Populated only when spec.monitoring.enabled=true
 // and the cluster is in Ready phase.
 type ClusterDiagnosticsStatus struct {
 	// Servers lists the most recently observed state of each server in the cluster.
@@ -108,7 +108,7 @@ Inside the `Neo4jEnterpriseClusterStatus` struct, after the `AuraFleetManagement
 
 ```go
 // Diagnostics holds the most recently collected live diagnostics from the cluster.
-// Populated when spec.queryMonitoring.enabled=true and the cluster is Ready.
+// Populated when spec.monitoring.enabled=true and the cluster is Ready.
 // +optional
 Diagnostics *ClusterDiagnosticsStatus `json:"diagnostics,omitempty"`
 ```
@@ -418,19 +418,19 @@ git commit -m "feat(diagnostics): add CollectDiagnostics method to QueryMonitor"
 
 Read the `Reconcile()` function around the block:
 ```go
-if cluster.Spec.QueryMonitoring != nil && cluster.Spec.QueryMonitoring.Enabled {
+if cluster.Spec.Monitoring != nil && cluster.Spec.Monitoring.Enabled {
     queryMonitor := NewQueryMonitor(r.Client, r.Scheme)
-    if err := queryMonitor.ReconcileQueryMonitoring(ctx, cluster); err != nil {
+    if err := queryMonitor.ReconcileMonitoring(ctx, cluster); err != nil {
 ```
 
-### Step 2: Add `CollectDiagnostics` call after the existing QueryMonitoring block
+### Step 2: Add `CollectDiagnostics` call after the existing Monitoring block
 
-After the closing `}` of the existing QueryMonitoring block, add:
+After the closing `}` of the existing Monitoring block, add:
 
 ```go
-// Collect live diagnostics when QueryMonitoring is enabled and cluster is Ready.
+// Collect live diagnostics when Monitoring is enabled and cluster is Ready.
 // Diagnostics collection is non-fatal: failures are surfaced in status.diagnostics.collectionError.
-if cluster.Spec.QueryMonitoring != nil && cluster.Spec.QueryMonitoring.Enabled &&
+if cluster.Spec.Monitoring != nil && cluster.Spec.Monitoring.Enabled &&
 	cluster.Status.Phase == "Ready" {
 	neo4jClient, clientErr := r.createNeo4jClient(ctx, cluster)
 	if clientErr != nil {
@@ -737,17 +737,17 @@ git commit -m "feat(metrics): add per-server health gauge from SHOW SERVERS diag
 
 Read all three files fully before editing:
 - `docs/user_guide/guides/monitoring.md`
-- `docs/user_guide/configuration.md` (focus on queryMonitoring section)
+- `docs/user_guide/configuration.md` (focus on monitoring section)
 - `docs/developer_guide/architecture.md`
 
 ### Step 2: Update `docs/user_guide/guides/monitoring.md`
 
-The monitoring guide currently describes how to enable `spec.queryMonitoring`. Add a new section after the existing content covering:
+The monitoring guide currently describes how to enable `spec.monitoring`. Add a new section after the existing content covering:
 
 ```markdown
 ## Live Cluster Diagnostics
 
-When `spec.queryMonitoring.enabled: true` and the cluster is in `Ready` phase, the
+When `spec.monitoring.enabled: true` and the cluster is in `Ready` phase, the
 operator periodically collects live diagnostics from the cluster and surfaces them in
 `status.diagnostics` and `status.conditions`.
 
@@ -818,18 +818,18 @@ This metric can drive Alertmanager rules:
 
 ### Disabling Diagnostics
 
-Diagnostics are collected only when `spec.queryMonitoring.enabled: true`. To disable:
+Diagnostics are collected only when `spec.monitoring.enabled: true`. To disable:
 
 ```yaml
 spec:
-  queryMonitoring:
+  monitoring:
     enabled: false
 ```
 ```
 
 ### Step 3: Update `docs/user_guide/configuration.md`
 
-Find the `spec.queryMonitoring` section. After the existing fields table, add a note:
+Find the `spec.monitoring` section. After the existing fields table, add a note:
 
 ```markdown
 > **Live Diagnostics**: When `enabled: true` and the cluster is `Ready`, the operator
@@ -847,7 +847,7 @@ Find the section describing controllers or the QueryMonitor. Add or expand a "Qu
 The `QueryMonitor` type (defined inline in `neo4jenterprisecluster_controller.go`) handles
 two responsibilities:
 
-1. **Infrastructure setup** (`ReconcileQueryMonitoring`): Creates the metrics `Service`,
+1. **Infrastructure setup** (`ReconcileMonitoring`): Creates the metrics `Service`,
    `ServiceMonitor`, and `PrometheusRule` Kubernetes resources. Runs on every reconcile.
 
 2. **Live diagnostics** (`CollectDiagnostics`): Runs `SHOW SERVERS` and `SHOW DATABASES`

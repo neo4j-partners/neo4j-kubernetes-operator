@@ -509,7 +509,7 @@ spec:
 
 ```yaml
 spec:
-  queryMonitoring:
+  monitoring:
     enabled: true
   config:
     # Security metrics configuration

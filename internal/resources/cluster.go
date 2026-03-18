@@ -531,7 +531,7 @@ func BuildClientServiceForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseClust
 
 // BuildMetricsServiceForEnterprise creates a service for Prometheus scraping.
 func BuildMetricsServiceForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) *corev1.Service {
-	if cluster.Spec.QueryMonitoring == nil || !cluster.Spec.QueryMonitoring.Enabled {
+	if cluster.Spec.Monitoring == nil || !cluster.Spec.Monitoring.Enabled {
 		return nil
 	}
 
@@ -945,7 +945,7 @@ func getLabelsForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, role 
 }
 
 func buildMetricsAnnotations(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) map[string]string {
-	if cluster.Spec.QueryMonitoring == nil || !cluster.Spec.QueryMonitoring.Enabled {
+	if cluster.Spec.Monitoring == nil || !cluster.Spec.Monitoring.Enabled {
 		return nil
 	}
 
@@ -1370,7 +1370,7 @@ func BuildPodSpecForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, se
 		},
 	}
 
-	if cluster.Spec.QueryMonitoring != nil && cluster.Spec.QueryMonitoring.Enabled {
+	if cluster.Spec.Monitoring != nil && cluster.Spec.Monitoring.Enabled {
 		neo4jContainer.Ports = append(neo4jContainer.Ports, corev1.ContainerPort{
 			Name:          "metrics",
 			ContainerPort: MetricsPort,
@@ -1636,9 +1636,9 @@ server.bolt.tls_level=OPTIONAL
 `
 	}
 
-	if cluster.Spec.QueryMonitoring != nil && cluster.Spec.QueryMonitoring.Enabled {
+	if cluster.Spec.Monitoring != nil && cluster.Spec.Monitoring.Enabled {
 		config += "\n# Query Monitoring and Metrics\n"
-		config += BuildQueryMonitoringConfig(cluster.Spec.QueryMonitoring)
+		config += BuildMonitoringConfig(cluster.Spec.Monitoring)
 	}
 
 	// Add custom configuration (excluding memory settings already added above)
@@ -1695,17 +1695,21 @@ server.bolt.tls_level=OPTIONAL
 	return config
 }
 
-// BuildQueryMonitoringConfig generates Neo4j config lines for query monitoring and metrics exposure.
-func BuildQueryMonitoringConfig(queryMonitoring *neo4jv1alpha1.QueryMonitoringSpec) string {
+// BuildMonitoringConfig generates Neo4j config lines for monitoring, metrics exposure, and query logging.
+func BuildMonitoringConfig(mon *neo4jv1alpha1.MonitoringSpec) string {
 	slowThreshold := "5s"
-	explainPlan := true
-	indexRecommendations := true
-	if queryMonitoring != nil {
-		if queryMonitoring.SlowQueryThreshold != "" {
-			slowThreshold = queryMonitoring.SlowQueryThreshold
+	explainPlan := false
+	queryLogLevel := "INFO"
+	obfuscateLiterals := false
+	if mon != nil {
+		if mon.SlowQueryThreshold != "" {
+			slowThreshold = mon.SlowQueryThreshold
 		}
-		explainPlan = queryMonitoring.ExplainPlan
-		indexRecommendations = queryMonitoring.IndexRecommendations
+		explainPlan = mon.ExplainPlan
+		if mon.QueryLogLevel != "" {
+			queryLogLevel = mon.QueryLogLevel
+		}
+		obfuscateLiterals = mon.ObfuscateLiterals
 	}
 
 	lines := []string{
@@ -1713,14 +1717,26 @@ func BuildQueryMonitoringConfig(queryMonitoring *neo4jv1alpha1.QueryMonitoringSp
 		"server.metrics.prometheus.enabled=true",
 		fmt.Sprintf("server.metrics.prometheus.endpoint=0.0.0.0:%d", MetricsPort),
 		"",
-		"# Query logging defaults",
-		"db.logs.query.enabled=INFO",
-		"db.logs.query.threshold=1s",
-		fmt.Sprintf("db.logs.query.slow_threshold=%s", slowThreshold),
+		"# Disable CSV metrics export (unnecessary in Kubernetes — files are lost on pod restart)",
+		"server.metrics.csv.enabled=false",
+		"",
+		"# Query logging",
+		fmt.Sprintf("db.logs.query.enabled=%s", queryLogLevel),
+		fmt.Sprintf("db.logs.query.threshold=%s", slowThreshold),
 		fmt.Sprintf("db.logs.query.plan_description_enabled=%t", explainPlan),
 		"db.logs.query.parameter_logging_enabled=true",
-		fmt.Sprintf("dbms.index.recommendations.enabled=%t", indexRecommendations),
+		fmt.Sprintf("db.logs.query.obfuscate_literals=%t", obfuscateLiterals),
 		"",
+	}
+
+	// Optional metrics filter
+	if mon != nil && mon.MetricsFilter != "" {
+		lines = append(lines, fmt.Sprintf("server.metrics.filter=%s", mon.MetricsFilter))
+	}
+
+	// Optional metrics prefix
+	if mon != nil && mon.MetricsPrefix != "" {
+		lines = append(lines, fmt.Sprintf("server.metrics.prefix=%s", mon.MetricsPrefix))
 	}
 
 	return strings.Join(lines, "\n")

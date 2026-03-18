@@ -8,7 +8,6 @@ Neo4j Enterprise Operator for Kubernetes - manages Neo4j Enterprise deployments 
 
 **Supported Neo4j Versions**: 5.26.x (last semver LTS) and 2025.x.x+ (CalVer). Neo4j moved from semver to CalVer after 5.26 — no 5.27+ semver releases exist or will exist.
 **CRITICAL: KIND IS MANDATORY**: This project exclusively uses Kind (Kubernetes in Docker) for ALL development, testing, and CI workflows. No alternatives (minikube, k3s) are supported.
-
 **CRITICAL: ENTERPRISE IMAGES ONLY**: Never use Neo4j community images (neo4j:5.26), only enterprise ones (neo4j:5.26-enterprise, neo4j:2025.01.0-enterprise)
 **Discovery**: V2_ONLY mode exclusively
 
@@ -29,426 +28,159 @@ Neo4j Enterprise Operator for Kubernetes - manages Neo4j Enterprise deployments 
 - `internal/resources/` - K8s resource builders
 - `test/` - Unit, integration, e2e tests
 
+**Server-Based Architecture**: Single `{cluster-name}-server` StatefulSet with `replicas: N`. Pods: `{cluster-name}-server-0`, `{cluster-name}-server-1`, etc. Backup: `{cluster-name}-backup-0` (centralized single StatefulSet per cluster, ~70% fewer resources than sidecars).
+
+**Server Role Hints** (`initial.server.mode_constraint`):
+```yaml
+topology:
+  servers: 3
+  serverModeConstraint: "PRIMARY"   # Global: all servers only host primaries
+  serverRoles:
+    - serverIndex: 0
+      modeConstraint: "PRIMARY"     # Per-server (overrides global)
+    - serverIndex: 1
+      modeConstraint: "SECONDARY"
+    - serverIndex: 2
+      modeConstraint: "NONE"        # Default: any mode
+```
+Validation: indices in range (0 to servers-1), no duplicates, cannot set ALL servers to SECONDARY.
+
 ## Essential Commands
 
-### Prerequisites Check & Kind Installation
 ```bash
-# Verify Kind is installed (MANDATORY)
-kind version
+# Build
+make build                  # Operator binary
+make docker-build           # Container image
+make manifests              # Generate CRDs and RBAC
+make generate               # Generate DeepCopy methods
 
-# Install Kind if missing:
-# macOS: brew install kind
-# Linux: curl -Lo ./kind https://kind.sigs.k8s.io/dl/latest/kind-linux-amd64 && chmod +x ./kind && sudo mv ./kind /usr/local/bin/kind
+# Dev cluster (Kind: neo4j-operator-dev)
+make dev-cluster            # Create
+make dev-cluster-reset      # Delete and recreate
+make dev-cluster-delete     # Delete
+make dev-destroy            # Completely destroy environment
 
-# Test Kind functionality
-kind create cluster --name test && kind delete cluster --name test
+# Deploy
+make deploy-dev-local       # Build + deploy local dev image to Kind
+make deploy-prod-local      # Build + deploy local prod image to Kind
+make operator-setup         # Deploy operator to available Kind cluster
+make undeploy-dev / make undeploy-prod
+
+# Test
+make test-unit              # Unit tests (no cluster required)
+make test-integration       # Integration tests (auto-creates cluster, deploys operator)
+make test-integration-ci    # CI mode (assumes cluster exists)
+make test-ci-local          # Emulate CI locally (logs saved to logs/ci-local-*.log)
+make test                   # Unit + integration
+make test-coverage
+
+# Specific test
+go test ./internal/controller -run TestClusterReconciler
+ginkgo run -focus "should create backup" ./test/integration
+
+# Code quality
+make fmt / make lint / make lint-lenient / make vet / make security / make tidy
+
+# CRDs
+make install / make uninstall
+
+# Operator logs/status
+make operator-logs / make operator-status
+kubectl logs -n neo4j-operator deployment/neo4j-operator-controller-manager
 ```
 
-### Build & Development
+**CRITICAL: NEVER run `make dev-run`** — DNS resolution fails when operator runs outside cluster. Always deploy inside cluster via `make operator-setup`.
+
+**Quick test deploy**:
 ```bash
-make build                 # Build operator binary
-make docker-build         # Build container image
-make docker-push          # Push docker image
-make manifests            # Generate CRDs and RBAC
-make generate             # Generate DeepCopy methods
-
-# Development cluster management
-make dev-cluster          # Create Kind development cluster (neo4j-operator-dev)
-make dev-cluster-clean    # Clean operator resources from dev cluster
-make dev-cluster-reset    # Delete and recreate dev cluster
-make dev-cluster-delete   # Delete dev cluster
-make dev-cleanup          # Clean dev environment (keep cluster)
-make dev-destroy          # Completely destroy dev environment
-
-# Standard deployment (uses local images by default)
-make deploy-dev           # Deploy to dev namespace with local neo4j-operator:dev image
-make deploy-prod          # Deploy to prod namespace with local neo4j-operator:latest image
-make deploy-dev-local     # Build and deploy controller with local dev image to Kind cluster
-make deploy-prod-local    # Build and deploy controller with local prod image to Kind cluster
-make operator-setup       # Deploy operator to available Kind cluster
-
-# Registry-based deployment (uses Docker Hub)
-make deploy-dev-registry  # Deploy dev overlay with registry image
-make deploy-prod-registry # Deploy prod overlay with Docker Hub image
-
-# Undeployment
-make undeploy-dev         # Undeploy development controller from cluster
-make undeploy-prod        # Undeploy production controller from cluster
-
-# Operator management utilities
-make operator-setup-interactive  # Set up the Neo4j operator interactively
-make operator-status      # Show operator status
-make operator-logs        # Follow operator logs
-
-# Demo capabilities
-make demo                 # Run interactive demo of the operator capabilities
-make demo-fast            # Run fast automated demo (no confirmations)
-make demo-only            # Run fast demo without environment setup (assumes cluster exists)
-make demo-interactive     # Run interactive demo without environment setup
-make demo-setup           # Setup complete demo environment (cluster + operator)
-```
-
-**CRITICAL: NEVER run `make dev-run` (operator outside cluster)**
-- DNS resolution fails when operator runs outside cluster
-- Cluster formation verification requires in-cluster connectivity
-- Always use `make operator-setup` to deploy operator inside cluster
-- This applies to ALL development and testing workflows
-
-### Quick Testing with Examples
-```bash
-# Deploy a standalone instance for development
-kubectl create secret generic neo4j-admin-secret \
-  --from-literal=username=neo4j --from-literal=password=admin123
+kubectl create secret generic neo4j-admin-secret --from-literal=username=neo4j --from-literal=password=admin123
 kubectl apply -f examples/standalone/single-node-standalone.yaml
-
-# Check standalone status
-kubectl get neo4jenterprisestandalone
-kubectl get pods
-
-# Access Neo4j Browser (standalone)
-kubectl port-forward svc/standalone-neo4j-service 7474:7474 &
-open http://localhost:7474
-
-# Or deploy a minimal cluster for testing
 kubectl apply -f examples/clusters/minimal-cluster.yaml
-kubectl get neo4jenterprisecluster
 kubectl port-forward svc/minimal-cluster-client 7474:7474 &
 ```
 
-### Testing
-```bash
-# Environment management
-make test-setup           # Setup test environment
-make test-cleanup         # Clean test artifacts (keep cluster)
-make test-destroy         # Completely destroy test environment
-
-# Quick tests (no cluster required)
-make test-unit            # Unit tests only
-
-# Test cluster management
-make test-cluster         # Create test cluster (neo4j-operator-test)
-make test-cluster-clean   # Clean operator resources from test cluster
-make test-cluster-reset   # Delete and recreate test cluster
-make test-cluster-delete  # Delete test cluster
-
-# Cluster-based tests
-make test-integration     # Integration tests (auto-creates cluster and deploys operator)
-make test-integration-ci  # Run integration tests in CI (assumes cluster already exists)
-make test-integration-ci-full  # Run ALL integration tests in CI (use with caution - may exhaust resources)
-
-# Full test suite
-make test                 # Run unit + integration tests
-make test-coverage        # Generate coverage report
-
-# CI Workflow Emulation (Added 2025-08-22)
-make test-ci-local        # Emulate CI workflow locally with debug logging
-                          # - Runs unit tests with CI=true GITHUB_ACTIONS=true
-                          # - Creates test cluster and deploys operator
-                          # - Runs integration tests with 512Mi memory constraints
-                          # - Provides detailed logging for troubleshooting
-                          # - Logs saved to: logs/ci-local-*.log
-
-# Run specific test
-go test ./internal/controller -run TestClusterReconciler
-ginkgo run -focus "should create backup" ./test/integration
-```
-
-### Code Quality
-```bash
-make fmt                  # Format code with gofmt
-make lint                 # Run golangci-lint (strict mode)
-make lint-lenient        # Run with relaxed rules for CI
-make vet                  # Run go vet
-make security            # Run gosec security scan
-make tidy                 # Tidy go modules and verify
-make clean                # Clean build artifacts and temporary files
-```
-
-### Debugging & Troubleshooting
-```bash
-# View operator logs
-kubectl logs -n neo4j-operator deployment/neo4j-operator-controller-manager
-
-# Validate CRDs
-kubectl explain neo4jenterprisecluster.spec
-
-# Install and uninstall CRDs
-make install              # Install CRDs into the K8s cluster
-make uninstall           # Uninstall CRDs from the K8s cluster
-
-# Troubleshoot OOM issues
-kubectl describe pod <pod-name> | grep -E "(OOMKilled|Memory|Exit.*137)"
-kubectl top pod <pod-name> --containers  # Check memory usage
-kubectl logs <pod-name> --previous | tail  # Check logs before restart
-
-# Test Neo4j database operations
-kubectl exec <pod-name> -c neo4j -- cypher-shell -u neo4j -p <password> "SHOW SERVERS"
-kubectl exec <pod-name> -c neo4j -- cypher-shell -u neo4j -p <password> "CREATE DATABASE testdb TOPOLOGY 1 PRIMARY"
-```
-
-### Bundle and Catalog Management (Operator SDK)
-```bash
-# Bundle generation and management
-make bundle               # Generate bundle manifests and metadata, validate files
-make bundle-build         # Build the bundle image
-make bundle-push          # Push the bundle image
-
-# Catalog image management
-make catalog-build        # Build a catalog image
-make catalog-push         # Push a catalog image
-
-# Dependency tools
-make operator-sdk         # Download operator-sdk locally if necessary
-make opm                  # Download opm (Operator Package Manager) locally
-make kustomize            # Download kustomize locally if necessary
-make controller-gen       # Download controller-gen locally if necessary
-make envtest             # Download setup-envtest locally if necessary
-make golangci-lint       # Download golangci-lint locally if necessary
-make ginkgo              # Download ginkgo locally if necessary
-```
-
-## CRITICAL Current Architecture (August 2025)
-
-**Server-Based Architecture**: Unified server deployment where Neo4j servers self-organize into primary/secondary roles.
-
-**Current Topology**:
-```yaml
-topology:
-  servers: 3  # Single StatefulSet: cluster-name-server (replicas: 3)
-```
-
-**Centralized Backup**: Single backup StatefulSet per cluster (`cluster-name-backup`) replaces expensive per-pod sidecars.
-
-**Key Implementation**:
-- Single `{cluster-name}-server` StatefulSet with `replicas: N`
-- Pods: `{cluster-name}-server-0`, `{cluster-name}-server-1`, etc.
-- Backup: `{cluster-name}-backup-0` (if backups enabled)
-
-**Resource Efficiency**: Centralized backup uses ~70% fewer resources than distributed sidecars.
-
-### Server Role Specification
-
-**Server Role Hints**: Control which databases a server can host using Neo4j's `initial.server.mode_constraint` configuration.
-
-**Basic Usage**:
-```yaml
-# Self-organizing cluster (default)
-topology:
-  servers: 3
-
-# Global constraint for all servers
-topology:
-  servers: 3
-  serverModeConstraint: "PRIMARY"  # All servers only host primaries
-
-# Per-server role hints (takes precedence over global)
-topology:
-  servers: 3
-  serverRoles:
-    - serverIndex: 0
-      modeConstraint: "PRIMARY"    # Server-0: only primary databases
-    - serverIndex: 1
-      modeConstraint: "SECONDARY"  # Server-1: only secondary databases
-    - serverIndex: 2
-      modeConstraint: "NONE"       # Server-2: any database mode (default)
-```
-
-**Mode Constraints**:
-- `NONE` (default): Server can host databases in any mode
-- `PRIMARY`: Server only hosts databases in primary mode
-- `SECONDARY`: Server only hosts databases in secondary mode
-
-**Use Cases**:
-- **Dedicated Primary Servers**: Assign high-performance nodes to host only primary databases
-- **Secondary-Only Servers**: Use lower-cost nodes for read replicas and analytics workloads
-- **Mixed Workloads**: Balance primary and secondary databases across servers
-- **Resource Optimization**: Match server capabilities to database hosting requirements
-
-**Validation**:
-- Server indices must be within range (0 to servers-1)
-- No duplicate server indices allowed
-- Cannot configure all servers as SECONDARY (cluster needs primaries)
-- Per-server role hints override global `serverModeConstraint`
-
-See detailed implementation: `/reports/2025-08-19-server-based-architecture-implementation.md`
-
-## Testing & Development
-
-**Test Suite** (Ginkgo/Gomega):
-- Unit Tests: `make test-unit` (run before commits)
-- Integration Tests: `make test-integration` (requires cluster)
-
-**Key Notes**:
-- Kind clusters only (no minikube/k3s)
-- TLS features require cert-manager
-- Use envtest for controller unit tests
-- Neo4j client uses Bolt protocol
-- Integration tests use 300-second timeouts for CI compatibility
-- **Property Sharding tests**: Skipped in CI due to resource requirements (run locally only)
-
-**Property Sharding Tests** (Local Only):
-```bash
-# Run property sharding tests locally (requires Neo4j 2025.12+ images)
-# IMPORTANT: Property sharding tests require significant resources:
-# - 16GB+ memory per server (12GB+ heap + system overhead)
-# - 2+ CPU cores per server
-# - 5+ servers minimum
-# Only run on high-spec development machines
-make test-integration FOCUS="Property Sharding"
-
-# Or with ginkgo directly
-ginkgo run -focus "Property Sharding" ./test/integration
-```
-
-**✅ Property Sharding Test Results** (Updated based on Implementation Report 2025-09-05):
-- **Minimum servers**: 5 servers (validated working configuration)
-- **Memory requirements**: 4-8Gi per server (20-40Gi total cluster memory)
-- **CPU requirements**: 2+ cores per server for cross-shard query processing
-- **Resource overhead**: 20-30% additional CPU and 2-4GB extra memory for shard coordination
-- **Network requirements**: Low-latency networking essential for transaction log synchronization
-- **Test duration**: ~130 seconds for full cluster creation and validation
-- **Authentication**: Required (Auth.AdminSecret must be configured)
-- **Storage**: Storage class must be specified (e.g., `className: standard`)
-
-**Test Troubleshooting**:
-- If tests timeout: Check image pull delays in CI - tests use 5-minute timeout
-- If pod scheduling fails: Check resource constraints - tests use minimal CPU/memory
-- If cluster formation fails: Check discovery service and endpoints RBAC permissions
-- If pods get OOMKilled: Check memory limits - Neo4j Enterprise needs ≥ 1.5Gi for database operations
-- If database creation hangs: Verify Neo4j 5.x syntax uses `TOPOLOGY` clause, not `OPTIONS`
-- If property sharding tests fail: Ensure Neo4j 2025.12+ images available, sufficient cluster resources (5+ nodes, 4Gi+ memory per server minimum, 8Gi recommended, 2+ CPU cores per server)
-
-### Development Environment
-
-**Kind Clusters** (Kind only - no minikube/k3s):
-- **Development**: `neo4j-operator-dev` - manual testing
-- **Test**: `neo4j-operator-test` - automated tests
-- Both include cert-manager v1.18.5 with `ca-cluster-issuer`
-
-**Cleanup Commands**:
-- `make dev-cluster-clean` / `make test-cluster-clean` - Remove operator only
-- `make dev-cluster-reset` / `make test-cluster-reset` - Recreate cluster
-- `make dev-destroy` / `make test-destroy` - Complete destruction
-
-## CI/CD & Debugging
-
-**GitHub Actions (Updated 2025-08-27)**:
-- **Unit Tests**: ✅ Always run automatically on all pushes/PRs
-- **Integration Tests**: ⏭️ Optional, on-demand only (trigger with PR label `run-integration-tests`, commit message `[run-integration]`, or manual dispatch)
-- **E2E Tests**: Manual workflow dispatch only
-- **Release**: Multi-arch builds triggered by git tags
-
-**PR Requirements**: Unit tests must pass, integration tests optional unless requested
-**Triggers**:
-```bash
-# PR label method
-gh pr edit --add-label "run-integration-tests"
-
-# Commit message method
-git commit -m "feat: cluster changes [run-integration]"
-
-# Manual dispatch: Actions → CI → Run workflow → Check "Run integration tests"
-```
-
-### Operator Mode During Integration Tests
-
-All integration test paths now deploy the operator in **production mode** to `neo4j-operator-system`:
-
-| Workflow | File | Operator namespace | Mode | Suite finds operator? |
-|---|---|---|---|---|
-| `make test-integration` (main CI / local) | `ci.yml` | `neo4j-operator-system` | **production** (no flag) | ✅ Suite waits for readiness |
-| On-demand integration tests | `integration-tests.yml` | `neo4j-operator-system` | **production** (no flag) | ✅ Suite waits for readiness |
-
-**Key facts**:
-- `make test-integration` uses `config/overlays/integration-test/kustomization.yaml` — this deploys to `neo4j-operator-system` without `--mode=dev` and with production resource limits (100m–1000m CPU, 256Mi–1Gi). Image tag is `neo4j-operator:integration-test`.
-- `.github/workflows/integration-tests.yml` (manual dispatch) builds its own `ci-temp` overlay with the same semantics.
-- The test suite's `waitForOperatorReady()` hard-codes the lookup to `neo4j-operator-system`. With the production overlay it WILL find the deployment and wait for it to be ready before running specs.
-- For manual local runs against production mode: `make test-integration` (or `make deploy-prod-local` then run ginkgo separately).
-
-**Mode differences** (`production` vs `dev`):
-- `production` (what tests use): `OnDemandCache`, does not skip cache wait, has resource limits.
-- `dev` (manual debugging only): `NoCache` or `OnDemandCache`, skips cache wait, no resource limits. Use `make deploy-dev` then inspect with `kubectl logs -n neo4j-operator-dev`.
-
-**HISTORICAL NOTE**: Before this change, `make test-integration` deployed via `deploy-dev` to `neo4j-operator-dev` with `--mode=dev`. The suite silently skipped the readiness gate because it only looks in `neo4j-operator-system`. This inconsistency has been fixed.
-
-**Debug Failed Reconciliation**:
+**Debug reconciliation**:
 ```bash
 kubectl logs -n neo4j-operator deployment/neo4j-operator-controller-manager -f
 kubectl describe neo4jenterprisecluster <name>
-# Enable debug logging in deployed operator
+# Enable debug logging
 kubectl patch -n neo4j-operator-dev deployment/neo4j-operator-controller-manager \
   -p '{"spec":{"template":{"spec":{"containers":[{"name":"manager","args":["--mode=dev","--zap-log-level=debug"]}]}}}}'
+# OOM troubleshooting
+kubectl describe pod <pod-name> | grep -E "(OOMKilled|Memory|Exit.*137)"
+kubectl exec <pod-name> -c neo4j -- cypher-shell -u neo4j -p <password> "SHOW SERVERS"
 ```
 
-## Key Features
+## Testing
 
-### Plugin Installation Testing
-- **APOC Core is pre-bundled**: Every Neo4j enterprise image ships APOC Core at `/var/lib/neo4j/labs/apoc-*-core.jar`. The operator sets `NEO4J_PLUGINS=["apoc"]` on the StatefulSet; the Docker entrypoint copies the bundled jar to the `/plugins` EmptyDir volume at pod startup — **no internet access required**.
-- **Plugin directory flow**: Cluster StatefulSets mount an `EmptyDir` volume at `/plugins`. `server.directories.plugins=/plugins` is set in the base neo4j.conf so Neo4j loads from there. The Docker entrypoint detects `/plugins` exists and copies labs jars into it.
-- **APOC runtime config**: Behavioral settings (`apoc.export.file.enabled`, etc.) use env vars (`NEO4J_APOC_*`), not `neo4j.conf`, in Neo4j 5.26+
-- **Neo4j Config Plugins**: Graph Data Science, Bloom require neo4j.conf configuration with automatic security settings
-- **Dual Deployment Support**: Plugin tests verify both cluster and standalone deployment architectures
-- **ConfigMap Validation**: Standalone plugin tests check ConfigMap content, not StatefulSet environment variables
-- **Critical Test Fix**: Updated GDS and Bloom plugin tests to check ConfigMap where Neo4j standalone reads configuration
+**Test Suite**: Ginkgo/Gomega. Kind clusters only. 300-second timeouts for all integration tests.
 
-### Centralized Backup System
-- **Architecture**: Single backup StatefulSet per cluster (replaces expensive per-pod sidecars)
-- **Resource Efficiency**: 100m CPU/256Mi memory for entire cluster vs N×200m CPU/512Mi per sidecar
-- **Connectivity**: Connects to cluster via client service using Bolt protocol
-- **Neo4j 5.26+ Support**: Correct `--to-path` syntax, automated path creation
-- **Test**: `kubectl exec <cluster>-backup-0 -- sh -c 'echo "{\"path\":\"/backups/test\",\"type\":\"FULL\"}" > /backup-requests/backup.request'`
-- **Benefits**: No coordination issues, centralized storage, single point of monitoring
+**Kind Clusters**:
+- Development: `neo4j-operator-dev` | Test: `neo4j-operator-test`
+- Both include cert-manager v1.18.5 with `ca-cluster-issuer`
 
-### Deployment Configuration
+**Test Resource Config**: CPU 50m–200m, memory ≥ 1.5Gi (Enterprise minimum), storage 500Mi–1Gi.
 
-**Neo4jEnterpriseCluster**:
-- Min topology: 2+ servers (self-organize into primary/secondary roles)
-- Scalable, uses V2_ONLY discovery
+**Property Sharding Tests** (local only, skipped in CI):
+- Requires Neo4j 2025.12+ images, 5+ servers, 4-8Gi/server, 2+ CPU/server, ~130s runtime
+- `ginkgo run -focus "Property Sharding" ./test/integration`
 
-**Neo4jEnterpriseStandalone**:
-- Fixed single node (no scaling)
-- Uses clustering infrastructure (no `dbms.mode=SINGLE`)
+**Test Troubleshooting**:
+- Timeout → image pull delays in CI
+- OOMKilled → Neo4j Enterprise needs ≥ 1.5Gi
+- DB creation hangs → use `TOPOLOGY` clause, not `OPTIONS`
+- Cluster formation fails → check discovery service RBAC
 
-**Version-Specific Discovery** (LIST resolver via static pod FQDNs — all versions use port 6000):
+**MANDATORY AfterEach cleanup**:
+```go
+AfterEach(func() {
+    if cluster != nil {
+        if len(cluster.GetFinalizers()) > 0 {
+            cluster.SetFinalizers([]string{})
+            _ = k8sClient.Update(ctx, cluster)
+        }
+        _ = k8sClient.Delete(ctx, cluster)
+        cluster = nil
+    }
+    if testNamespace != "" {
+        cleanupCustomResourcesInNamespace(testNamespace)
+    }
+})
+```
+Always remove finalizers before deletion. Never rely on test suite cleanup alone.
 
-| Setting | 5.26.x (SemVer) | 2025.x+ / 2026.x+ (CalVer) |
+## CI/CD
+
+**GitHub Actions**:
+- Unit Tests: always run on push/PR
+- Integration Tests: on-demand — trigger with label `run-integration-tests`, `[run-integration]` in commit message, or manual dispatch
+- E2E Tests: manual dispatch only
+- Release: multi-arch builds on git tags
+
+**Integration tests** deploy operator to `neo4j-operator-system` in production mode (100m–1000m CPU, 256Mi–1Gi, image tag `neo4j-operator:integration-test`). `waitForOperatorReady()` hardcodes lookup to this namespace.
+
+**Dev mode** (manual debugging only): `make deploy-dev` → logs in `neo4j-operator-dev`.
+
+## Deployment Configuration
+
+**Version-Specific Discovery** (LIST resolver, static pod FQDNs):
+
+| Setting | 5.26.x (SemVer) | 2025.x+ (CalVer) |
 |---|---|---|
-| `dbms.cluster.discovery.resolver_type` | `LIST` | `LIST` |
-| `dbms.cluster.discovery.version` | `V2_ONLY` (must be explicit) | *(not used — V2 is the only protocol)* |
-| Endpoints setting | `dbms.cluster.discovery.v2.endpoints=<fqdns>:6000` | `dbms.cluster.endpoints=<fqdns>:6000` |
-| Bootstrap hint | `internal.dbms.cluster.discovery.system_bootstrapping_strategy=me/other` | *(not applicable — RAFT handles it)* |
+| `dbms.cluster.discovery.version` | `V2_ONLY` (required) | not used |
+| Endpoints | `dbms.cluster.discovery.v2.endpoints=<fqdns>:6000` | `dbms.cluster.endpoints=<fqdns>:6000` |
+| Bootstrap hint | `internal.dbms.cluster.discovery.system_bootstrapping_strategy=me/other` | not applicable |
 
-**Port mapping** (same for all versions):
-- Port **5000** (`tcp-discovery`): V1 discovery — **deprecated, never used by this operator**
-- Port **6000** (`tcp-tx`): V2 discovery embedded in cluster traffic — **always use this**
-- Port **7000** (`raft`): RAFT consensus
+**Ports**: 5000 = V1 discovery (deprecated, **never used**) | **6000 = V2 discovery (always use)** | 7000 = RAFT.
+CalVer detection: `ParseVersion()` → `IsCalver` when `major >= 2025` (handles 2026.x, 2027.x automatically).
 
-CalVer detection uses `ParseVersion()` → `IsCalver` (`major >= 2025`), so 2026.x, 2027.x etc. are handled automatically.
+**Never Use** (deprecated 4.x settings):
+- `dbms.mode=SINGLE`, `causal_clustering.*`, `metrics.bolt.*`, `server.groups`, `dbms.cluster.role`
 
-**Docs references**:
-- 5.26.x: https://neo4j.com/docs/operations-manual/5/clustering/setup/discovery/
-- 2025.x+: https://neo4j.com/docs/operations-manual/current/clustering/setup/discovery/
+**Always Use** (5.26+):
+- `server.*` instead of `dbms.connector.*`, env vars over config files, modern `TOPOLOGY` syntax
 
-### Configuration Guidelines
-
-**Never Use** (Neo4j 4.x settings - DEPRECATED):
-- `dbms.mode=SINGLE` - Use server-based architecture instead
-- `causal_clustering.*` - Replaced by modern clustering in 5.26+
-- `metrics.bolt.*` - Use `server.metrics.*` instead
-- `server.groups` - Not applicable to 5.26+ clustering
-- `dbms.cluster.role` - **Removed in Neo4j 5.0**; replaced by `SHOW DATABASES`
-- `causal_clustering.leader_election_timeout` - Use `causal_clustering.leader_failure_detection_window`
-
-**Always Use** (Neo4j 5.26+ and 2025.x):
-- `dbms.cluster.discovery.version=V2_ONLY` (5.26.x only) / not used in 2025.x+ (V2 is the only protocol)
-- `server.*` instead of `dbms.connector.*`
-- `dbms.ssl.policy.{scope}.*` for TLS
-- Environment variables over config files
-- Modern database topology syntax (see below)
-
-### TLS Configuration
-
-**Setup**:
+**TLS**:
 ```yaml
 spec:
   tls:
@@ -457,551 +189,147 @@ spec:
       name: ca-cluster-issuer
       kind: ClusterIssuer
 ```
-
-**Auto-generated**:
-- SSL policies for `https` and `bolt` scopes
-- Certificates mounted at `/ssl/`
-- `dbms.ssl.policy.cluster.trust_all=true` for cluster formation
-
-**Test**: `curl -k https://localhost:7473`
+Auto-generates SSL policies for `https`/`bolt`, certs at `/ssl/`, sets `dbms.ssl.policy.cluster.trust_all=true`.
+TLS-enabled → `bolt+s://` scheme; TLS-disabled → `bolt://`.
 
 ## Neo4j Plugin Support
 
-**CRITICAL**: The operator provides comprehensive support for Neo4j plugins with automatic configuration based on plugin type and Neo4j version compatibility.
-
-### Plugin Types and Configuration
-
-**APOC Installation** (both 5.26.x and 2025.x+/2026.x+):
-
-The operator sets `NEO4J_PLUGINS=["apoc"]` on the StatefulSet. This triggers the Neo4j Docker entrypoint's plugin installation logic at pod startup:
-
-1. The entrypoint reads `/startup/neo4j-plugins.json` which specifies APOC's `"location": "/var/lib/neo4j/labs/apoc-*-core.jar"`
-2. It finds the bundled jar (e.g. `apoc-5.26.19-core.jar`) in the labs directory
-3. Because the operator mounts an `EmptyDir` volume at `/plugins`, the entrypoint copies the jar to `/plugins/apoc.jar`
-4. The operator's base `neo4j.conf` sets `server.directories.plugins=/plugins`, so Neo4j loads APOC from there
-
-**No internet access required** — APOC comes bundled in every Neo4j Enterprise image. This works identically in 5.26.x and all CalVer releases (2025.x+, 2026.x+).
-
-For `apoc-extended` (not bundled in labs), the entrypoint does fall back to downloading — this plugin requires egress internet access.
-
-**APOC runtime configuration** (all versions 5.26+):
-- APOC behavioral settings (`apoc.export.file.enabled`, etc.) go via **environment variables** (`NEO4J_APOC_EXPORT_FILE_ENABLED`), NOT `neo4j.conf`
-- Procedure security allowlisting (`dbms.security.procedures.unrestricted`) still goes in `neo4j.conf`
+**APOC** (pre-bundled, no internet required):
+- Operator sets `NEO4J_PLUGINS=["apoc"]` → Docker entrypoint copies `/var/lib/neo4j/labs/apoc-*-core.jar` to `/plugins/` EmptyDir at pod startup
+- APOC behavioral settings → env vars (`NEO4J_APOC_EXPORT_FILE_ENABLED`, etc.), NOT `neo4j.conf`
+- Procedure allowlisting (`dbms.security.procedures.unrestricted`) → `neo4j.conf`
+- `apoc-extended` (not bundled) requires egress internet access
 
 **Neo4j Config Plugins**:
-- **Graph Data Science**: Requires `dbms.security.procedures.unrestricted=gds.*`
-- **Bloom**: Requires multiple settings (`dbms.bloom.*`, `server.unmanaged_extension_classes`, HTTP auth)
-- **GenAI**: Provider-specific configuration through neo4j.conf
-- **Neo Semantics (N10s)**: Procedure security configuration
-- **GraphQL**: Standard plugin configuration
+- **GDS**: auto-adds `dbms.security.procedures.unrestricted=gds.*` and `allowlist=gds.*`
+- **Bloom**: auto-adds `dbms.bloom.*`, `server.unmanaged_extension_classes`, HTTP auth allowlist
+- **GenAI, N10s, GraphQL**: standard plugin config handling
 
-### Plugin Usage Examples
+**Plugin configuration validation**:
+- Cluster deployments: check StatefulSet env vars (`NEO4J_PLUGINS`)
+- Standalone deployments: check ConfigMap content (Neo4j reads config from there)
 
-**APOC Plugin** (no internet required — uses pre-bundled labs jar via EmptyDir volume):
-```yaml
-apiVersion: neo4j.neo4j.com/v1alpha1
-kind: Neo4jPlugin
-metadata:
-  name: apoc-plugin
-spec:
-  clusterRef: my-cluster
-  name: apoc
-  version: "5.26.0"
-  config:
-    # APOC behavioral settings become NEO4J_APOC_* environment variables
-    apoc.export.file.enabled: "true"
-    apoc.import.file.enabled: "true"
-    # Operator automatically sets NEO4J_PLUGINS=["apoc"] on the StatefulSet.
-    # At pod startup, the Docker entrypoint copies /var/lib/neo4j/labs/apoc-*-core.jar
-    # to /plugins/apoc.jar (the operator's EmptyDir volume).
-    # neo4j.conf has server.directories.plugins=/plugins so Neo4j loads it from there.
-```
+**`NEO4J_PLUGINS` live-patching**: Never bake into static StatefulSet template in `internal/resources/cluster.go`. Use `MergeNeo4jPluginList` helper so multiple controllers (plugin controller, fleet management) don't overwrite each other.
 
-**Graph Data Science Plugin** (Neo4j Config):
-```yaml
-apiVersion: neo4j.com/v1alpha1
-kind: Neo4jPlugin
-metadata:
-  name: gds-plugin
-spec:
-  clusterRef: my-cluster
-  name: graph-data-science
-  version: "2.10.0"
-  config:
-    # These go through neo4j.conf
-    gds.enterprise.license_file: "/licenses/gds.license"
-  # Security settings automatically applied:
-  # - dbms.security.procedures.unrestricted=gds.*
-  # - dbms.security.procedures.allowlist=gds.*
-```
-
-**Bloom Plugin** (Complex Neo4j Config):
-```yaml
-apiVersion: neo4j.com/v1alpha1
-kind: Neo4jPlugin
-metadata:
-  name: bloom-plugin
-spec:
-  clusterRef: my-cluster
-  name: bloom
-  version: "2.15.0"
-  config:
-    dbms.bloom.license_file: "/licenses/bloom.license"
-  # Automatically configured:
-  # - dbms.security.procedures.unrestricted=bloom.*
-  # - dbms.security.http_auth_allowlist=/,/browser.*,/bloom.*
-  # - server.unmanaged_extension_classes=com.neo4j.bloom.server=/bloom
-```
-
-**Plugin with Dependencies**:
-```yaml
-apiVersion: neo4j.com/v1alpha1
-kind: Neo4jPlugin
-metadata:
-  name: gds-with-apoc
-spec:
-  clusterRef: my-cluster
-  name: graph-data-science
-  version: "2.10.0"
-  dependencies:
-    - name: apoc
-      versionConstraint: ">=5.26.0"
-      optional: false
-  # Both GDS and APOC will be installed and configured correctly
-```
-
-### Key Plugin Features
-
-**Automatic Configuration**:
-- Plugin-specific security settings applied automatically
-- Environment variables vs neo4j.conf handled correctly
-- Procedure allowlists configured per plugin requirements
-
-**Dependency Management**:
-- Automatic dependency resolution and installation
-- Version constraint validation
-- Optional vs required dependency handling
-
-**Plugin Installation Methods**:
-- `NEO4J_PLUGINS` environment variable (recommended)
-- Automatic jar file management
-- Version compatibility validation
-
-**Testing Plugin Installation**:
-```bash
-# Verify plugin installation
-kubectl exec <pod-name> -c neo4j -- cypher-shell -u neo4j -p <password> "SHOW PROCEDURES"
-
-# Check plugin-specific procedures
-kubectl exec <pod-name> -c neo4j -- cypher-shell -u neo4j -p <password> "SHOW PROCEDURES YIELD name WHERE name STARTS WITH 'apoc'"
-
-# For standalone deployments: Check ConfigMap content (not environment variables)
-kubectl get configmap <standalone-name>-config -o yaml | grep -A10 neo4j.conf
-
-# For cluster deployments: Check environment variables
-kubectl get statefulset <cluster-name>-server -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="NEO4J_PLUGINS")].value}'
-```
-
-**Plugin Testing Architecture**:
-- **Cluster Tests**: Verify plugin installation via StatefulSet environment variables
-- **Standalone Tests**: Verify plugin configuration via ConfigMap where Neo4j reads settings
-- **Critical Fix Applied**: Plugin tests now correctly validate configuration source based on deployment type
+**`envVarsEqual` is an intentional subset check**: verifies desired vars present in current but tolerates extras. Never revert to strict length+value equality or controllers will oscillate.
 
 ## Aura Fleet Management
 
-Register operator-deployed Neo4j instances with Neo4j Aura Fleet Management for centralised monitoring.
-
-**CRD field** (both `Neo4jEnterpriseCluster` and `Neo4jEnterpriseStandalone`):
 ```yaml
 spec:
   auraFleetManagement:
     enabled: true
     tokenSecretRef:
-      name: aura-fleet-token   # Kubernetes Secret
-      key: token               # Default: "token"
+      name: aura-fleet-token
+      key: token              # default: "token"
 ```
 
-**Create the secret**:
-```bash
-kubectl create secret generic aura-fleet-token --from-literal=token=<YOUR_AURA_TOKEN>
-```
+**Two-phase reconciliation** (never collapse into one step):
+1. Install plugin via `mergeFleetManagementPlugin` — runs on every reconcile when enabled
+2. Register token via `CALL fleetManagement.registerToken($token)` — runs only when cluster `Ready` and token not yet registered
 
-**How it works**:
-1. The cluster/standalone controller detects `spec.auraFleetManagement.enabled: true`.
-2. It live-patches `NEO4J_PLUGINS` on the StatefulSet to include `"fleet-management"` (using `MergeNeo4jPluginList` — does NOT overwrite other plugins).
-3. At the next pod restart the Docker entrypoint copies the pre-bundled `fleet-management-*.jar` from `/var/lib/neo4j/products/` into the `/plugins` EmptyDir.
-4. Once the cluster reaches `status.phase = Ready`, the controller reads the token and calls `CALL fleetManagement.registerToken($token)` via the Bolt client.
-5. Registration status is reported in `status.auraFleetManagement`.
+Plugin-only mode: omit `tokenSecretRef` to defer registration.
 
-**Verify**:
-```bash
-kubectl describe neo4jenterprisecluster <name> | grep -A5 "Aura Fleet"
-kubectl exec <pod> -c neo4j -- cypher-shell -u neo4j -p <password> "CALL fleetManagement.status()"
-```
-
-**Plugin-only mode** (install without token — useful when token will be provided later):
-```yaml
-spec:
-  auraFleetManagement:
-    enabled: true
-    # tokenSecretRef omitted → plugin loads but registration deferred
-```
-
-**Key implementation files**:
+**Key files**:
 - `internal/controller/neo4jenterprisecluster_controller.go` — `reconcileAuraFleetManagement`, `mergeFleetManagementPlugin`
 - `internal/controller/neo4jenterprisestandalone_controller.go` — standalone equivalents
-- `internal/controller/plugin_controller.go` — `MergeNeo4jPluginList` utility, `fleet-management` plugin type registration
-- `internal/resources/cluster.go` — `neo4j.conf` security settings for fleet management
-- `internal/validation/fleet_validator.go` — `validateAuraFleetManagement`
+- `internal/controller/plugin_controller.go` — `MergeNeo4jPluginList`
 - `internal/neo4j/client.go` — `RegisterFleetManagementToken`, `IsFleetManagementInstalled`
-- `docs/user_guide/aura_fleet_management.md` — full user guide
-- `examples/fleet-management/` — example YAML files
+- `internal/validation/fleet_validator.go`
 
-### Live Cluster Diagnostics
+## Live Cluster Diagnostics
 
-When `spec.queryMonitoring.enabled=true` and cluster is `Ready`, the operator collects live diagnostics:
+When `spec.monitoring.enabled=true` and cluster is `Ready`:
+- `status.diagnostics.servers[]` — from `SHOW SERVERS`: name, address, state, health
+- `status.diagnostics.databases[]` — from `SHOW DATABASES`; `system` DB excluded from health checks
+- Conditions: `ServersHealthy`, `DatabasesHealthy` (use `SetNamedCondition`, not `SetReadyCondition`)
+- Prometheus metric: `neo4j_operator_server_health{cluster_name, namespace, server_name, server_address}` — 1=healthy, 0=degraded
 
-**Implementation**: `QueryMonitor.CollectDiagnostics()` in `internal/controller/neo4jenterprisecluster_controller.go`
+**CollectDiagnostics is non-fatal**: errors → `status.diagnostics.collectionError` only. Never `return err` from diagnostics.
 
-**Status fields**:
-- `status.diagnostics.servers[]` — from `SHOW SERVERS`: name, address, state, health, hostingDatabases
-- `status.diagnostics.databases[]` — from `SHOW DATABASES`: name, status, requestedStatus, role
-- `status.diagnostics.lastCollected` — timestamp of last successful collection
-- `status.diagnostics.collectionError` — error from last failed collection
+## Neo4j Database Syntax (5.26+ and 2025.x)
 
-**Conditions set**:
-- `ServersHealthy` (`True` when all servers are Enabled+Available)
-- `DatabasesHealthy` (`True` when all user databases are online; `system` database is excluded)
-
-**Prometheus metric**: `neo4j_operator_server_health{cluster_name, namespace, server_name, server_address}` — 1=healthy, 0=degraded
-
-**Non-fatal design**: Bolt connection failures surface in `collectionError` only; never block reconciliation.
-
-**Verify**:
-```bash
-kubectl get neo4jenterprisecluster <name> -o jsonpath='{.status.diagnostics}' | jq .
-kubectl get neo4jenterprisecluster <name> \
-  -o jsonpath='{.status.conditions[?(@.type=="ServersHealthy")]}'
-```
-
-## Neo4j Database Syntax Reference (5.26+ and 2025.x)
-
-### CREATE DATABASE Syntax
-
-**Neo4j 5.26+ (Cypher 5)**:
 ```cypher
+-- 5.26+ (Cypher 5)
 CREATE DATABASE name [IF NOT EXISTS]
 [TOPOLOGY n PRIMAR{Y|IES} [m SECONDAR{Y|IES}]]
-[OPTIONS "{" option: value[, ...] "}"]
-[WAIT [n [SEC[OND[S]]]]|NOWAIT]
+[WAIT]
 
-CREATE OR REPLACE DATABASE name
-[TOPOLOGY n PRIMAR{Y|IES} [m SECONDAR{Y|IES}]]
-[OPTIONS "{" option: value[, ...] "}"]
-[WAIT [n [SEC[OND[S]]]]|NOWAIT]
-```
-
-**Neo4j 2025.x (Cypher 25)**:
-```cypher
+-- 2025.x (Cypher 25)
 CREATE DATABASE name [IF NOT EXISTS]
 [[SET] DEFAULT LANGUAGE CYPHER {5|25}]
 [[SET] TOPOLOGY n PRIMARIES [m SECONDARIES]]
-[OPTIONS "{" option: value[, ...] "}"]
-[WAIT [n [SEC[OND[S]]]]|NOWAIT]
+[WAIT]
 ```
 
-### Example Usage
-
-**Basic Database Creation**:
+**Never use** (4.x syntax — fails in 5.26+):
 ```cypher
--- Single primary with secondaries
-CREATE DATABASE mydb TOPOLOGY 1 PRIMARY 2 SECONDARIES
-
--- Multiple primaries for fault tolerance
-CREATE DATABASE proddb TOPOLOGY 3 PRIMARIES 2 SECONDARIES
-
--- Neo4j 2025.x with Cypher 25
-CREATE DATABASE moderndb
-DEFAULT LANGUAGE CYPHER 25
-TOPOLOGY 3 PRIMARIES 2 SECONDARIES
+CREATE DATABASE baddb OPTIONS {primaries: 1, secondaries: 1}  -- DEPRECATED
+CALL dbms.cluster.role()  -- REMOVED in 5.0, use SHOW DATABASES
 ```
 
-**Parameterized Creation** (Operator Usage):
-```cypher
--- Using parameters from operator
-CREATE DATABASE $dbname
-TOPOLOGY $primary PRIMARIES $secondary SECONDARIES WAIT
-```
+## Neo4jDatabase CRD
 
-### CRITICAL: Deprecated 4.x Syntax to AVOID
+Works with both `Neo4jEnterpriseCluster` and `Neo4jEnterpriseStandalone`. `DatabaseValidator` tries cluster lookup first, then standalone automatically.
 
-**❌ NEVER USE** (Neo4j 4.x - Will Fail in 5.26+):
-```cypher
--- DEPRECATED: OPTIONS with primaries/secondaries
-CREATE DATABASE baddb OPTIONS {primaries: 1, secondaries: 1}
-
--- DEPRECATED: dbms.cluster.role usage
--- REMOVED in Neo4j 5.0: CALL dbms.cluster.role()
--- Use instead: SHOW DATABASES YIELD name, role WHERE name = 'system'
-
--- DEPRECATED: Causal clustering syntax
--- Any causal_clustering.* configuration
-```
-
-## CRITICAL: Neo4jDatabase Support for Standalone Deployments (Added 2025-08-20)
-
-**MANDATORY FOR PRODUCTION**: The operator now fully supports Neo4jDatabase resources with both Neo4jEnterpriseCluster AND Neo4jEnterpriseStandalone deployments.
-
-**Key Fixes Implemented**:
-- **Enhanced DatabaseValidator**: Added dual resource discovery - tries cluster first, then standalone
-- **Enhanced Database Controller**: Added standalone-specific reconciliation logic with proper client creation
-- **Enhanced Neo4j Client**: Added `NewClientForEnterpriseStandalone()` method for standalone connections
-- **Authentication Fix**: Added NEO4J_AUTH environment variable to standalone controller for automatic password setup
-
-**Why This Fix Is Critical**:
-1. **API Consistency**: Neo4jDatabase resources now work uniformly across all deployment types
-2. **Authentication Automation**: Eliminates manual password changes in standalone deployments
-3. **Production Readiness**: Enables automated database creation in both cluster and standalone environments
-4. **Developer Experience**: Consistent API behavior regardless of deployment architecture
-
-**Usage Examples**:
-```yaml
-# Database for cluster deployment
-apiVersion: neo4j.com/v1alpha1
-kind: Neo4jDatabase
-metadata:
-  name: my-cluster-database
-spec:
-  clusterRef: my-cluster  # References Neo4jEnterpriseCluster
-  name: proddb
-  topology:
-    primaries: 2
-    secondaries: 1
-
----
-# Database for standalone deployment
-apiVersion: neo4j.com/v1alpha1
-kind: Neo4jDatabase
-metadata:
-  name: my-standalone-database
-spec:
-  clusterRef: my-standalone  # References Neo4jEnterpriseStandalone
-  name: devdb
-  ifNotExists: true
-```
-
-**Validation Logic**:
-- DatabaseValidator attempts cluster lookup first
-- If cluster not found, attempts standalone lookup
-- Applies appropriate validation rules based on deployment type
-- Provides clear error messages for missing references
-
-**Technical Implementation**:
-- Database controller detects referenced resource type automatically
-- Uses appropriate Neo4j client (cluster vs standalone)
-- Maintains backward compatibility with existing cluster deployments
-
-## CRITICAL: Split-Brain Detection and Repair (Added 2025-08-09)
-
-**MANDATORY FOR PRODUCTION**: The operator includes comprehensive split-brain detection and automatic repair to prevent Neo4j cluster inconsistencies.
-
-**Location**: `internal/controller/splitbrain_detector.go`
-
-**Key Features**:
-- **Multi-Pod Analysis**: Connects to each Neo4j server pod individually to compare cluster views
-- **Smart Detection**: Distinguishes between split-brain scenarios and normal startup/formation
-- **Automatic Repair**: Restarts orphaned pods to rejoin the main cluster
-- **Production Ready**: Includes comprehensive logging, events, and fallback mechanisms
-
-**Why This Fix Is Critical**:
-1. **Split-Brain Prevention**: Detects scenarios where servers form separate clusters instead of one unified cluster
-2. **Data Consistency**: Prevents data divergence between isolated cluster partitions
-3. **Automatic Recovery**: No manual intervention required for common split-brain scenarios
-4. **Production Reliability**: Essential for maintaining cluster integrity in production environments
-
-**Monitoring Commands**:
-```bash
-# Check for split-brain events
-kubectl get events --field-selector reason=SplitBrainDetected -A
-
-# Monitor cluster formation
-kubectl logs -n neo4j-operator-system deployment/neo4j-operator-controller-manager | grep -E "(split|brain|SplitBrain)"
-
-# Verify cluster health after repair
-kubectl exec <cluster>-server-0 -- cypher-shell -u neo4j -p <password> "SHOW SERVERS"
-```
-
-## CRITICAL: Resource Version Conflict Handling (Added 2025-08-05)
-
-**MANDATORY FOR CLUSTER FORMATION**: The operator MUST include resource version conflict retry logic to prevent timing-sensitive cluster formation failures.
-
-**Location**: `internal/controller/neo4jenterprisecluster_controller.go`
-
-**Essential Pattern**:
-```go
-import "k8s.io/client-go/util/retry"
-
-func (r *Neo4jEnterpriseClusterReconciler) createOrUpdateResource(ctx context.Context, obj client.Object, owner client.Object) error {
-    return retry.RetryOnConflict(retry.DefaultRetry, func() error {
-        return r.createOrUpdateResourceInternal(ctx, obj, owner)
-    })
-}
-```
-
-**Why This Fix Is Critical**:
-1. **Neo4j 2025.01.0 Dependency**: Without retry logic, Neo4j 2025.01.0 fails to form clusters due to timing-sensitive resource conflicts during bootstrap
-2. **StatefulSet Conflicts**: Kubernetes StatefulSet controller and operator reconciliation create concurrent updates
-3. **Cluster Bootstrap Window**: Resource conflicts during critical cluster formation window cause permanent failure
-4. **Production Reliability**: Essential for consistent cluster formation across all Neo4j versions
-
-## CRITICAL: Edition Field Removal (Added 2025-09-02)
-
-**MANDATORY FOR API SIMPLIFICATION**: The operator no longer requires users to specify an Edition field since only Neo4j Enterprise edition is supported.
-
-**Changes Made**:
-- **Removed Edition field** from `Neo4jEnterpriseClusterSpec` and `Neo4jEnterpriseStandaloneSpec` API types
-- **Eliminated redundant validation** - edition_validator.go now always returns no errors
-- **Updated all examples** - removed `edition: enterprise` from 22+ YAML files
-- **Updated all tests** - removed Edition field from integration and unit tests
-- **Updated documentation** - removed Edition field references from API docs
-
-**Why This Change Is Critical**:
-1. **User Experience**: Eliminates confusion about why users need to specify something that only has one valid option
-2. **API Clarity**: Simplifies the API surface - if only enterprise is supported, don't make users declare it
-3. **Reduced Complexity**: Less validation code, fewer test cases, cleaner examples
-4. **Future-Proof**: When there's only one option, having a field for it is an anti-pattern
-
-**Impact**:
-- **Existing deployments**: No breaking changes - operator internally assumes enterprise edition
-- **New deployments**: Simpler YAML with no edition field required
-- **Tests pass**: All integration tests updated to work without Edition field
-- **Documentation**: Updated to reflect simplified API
-
-**Technical Notes**:
-- Neo4j client code still checks actual Neo4j server edition (from `CALL dbms.components()`) - this remains unchanged
-- CRDs regenerated to remove edition field from OpenAPI schema
-- All controller and validation logic updated to not expect Edition field
-
-## Configuration Validation
-
-### Integration Test Configuration
-- **Timeouts**: All integration tests use 300-second timeout for CI compatibility
-- **Resources**: Minimal CPU (50m-200m), memory limits at 1.5Gi (Neo4j Enterprise requirement for database operations)
-- **Storage**: Reduced storage sizes (500Mi-1Gi) to avoid PVC scheduling issues
-- **Image Pull**: Tests account for image pull delays in CI environments
-- **Memory Validation**: Neo4j Enterprise requires minimum 1.5Gi for database creation and topology operations
-- **OOM Prevention**: Tests configured to prevent Out of Memory kills (exit code 137) during database operations
-
-### Integration Test Resource Management (Critical)
-**MANDATORY**: All integration tests MUST implement proper resource cleanup to prevent CI failures.
-
-**Required AfterEach Pattern**:
-```go
-AfterEach(func() {
-    // Critical: Clean up resources immediately to prevent CI resource exhaustion
-    if cluster != nil {
-        By("Cleaning up cluster resource")
-        // Remove finalizers first
-        if len(cluster.GetFinalizers()) > 0 {
-            cluster.SetFinalizers([]string{})
-            _ = k8sClient.Update(ctx, cluster)
-        }
-        // Delete the resource
-        _ = k8sClient.Delete(ctx, cluster)
-        cluster = nil
-    }
-    // Clean up any remaining resources in namespace
-    if testNamespace != "" {
-        cleanupCustomResourcesInNamespace(testNamespace)
-    }
-})
-```
-
-**Key Requirements**:
-1. **Always include AfterEach blocks** - Even if tests have inline cleanup
-2. **Remove finalizers before deletion** - Ensures resources are actually deleted
-3. **Call cleanupCustomResourcesInNamespace()** - Cleans up related resources
-4. **Set resources to nil after deletion** - Prevents double cleanup
-5. **Don't rely on test suite cleanup alone** - Active cleanup prevents accumulation
-
-**Common Pitfalls to Avoid**:
-- ❌ No AfterEach block (causes resource leaks if tests fail)
-- ❌ Only deleting main resource without namespace cleanup
-- ❌ Relying on inline cleanup at end of test (won't run if test fails)
-- ❌ Not removing finalizers (resources stay in Terminating state)
-- ❌ Comments saying "cleanup handled by test suite" (not sufficient)
-
-### Template Comparison Fix (Critical)
-**Issue**: Original logic used `sts.ResourceVersion != ""` to check if StatefulSet exists
-**Problem**: ResourceVersion is populated even for new resources, preventing initial creation
-**Solution**: Use `sts.UID != ""` which correctly identifies existing vs new resources
-**Impact**: Enables immediate StatefulSet creation instead of being blocked by template comparison
-
-### CRD Separation of Concerns (Critical)
-
-**MANDATORY DESIGN PRINCIPLE**: The operator follows strict separation of concerns between CRDs to prevent configuration conflicts and maintain clear responsibility boundaries.
-
-**Neo4jEnterpriseCluster / Neo4jEnterpriseStandalone CRDs**:
-- Infrastructure-level configuration (servers, resources, networking)
-- Neo4j server configuration (`neo4j.conf` settings)
-- Authentication, TLS, and security settings
-- Plugin installations and environment variables
-- Backup policies and monitoring configuration
-- Image versions and repository settings
-
-**Neo4jDatabase CRD**:
-- Database-specific settings only (name, topology, Cypher version)
-- Database creation options passed to `CREATE DATABASE` statement
-- Initial data import and seeding configuration
-- Database-level topology (primaries/secondaries distribution within cluster)
-
-**NEVER Allow Cross-CRD Configuration Overrides**:
+**CRD Separation of Concerns** (strict, never violate):
+- Cluster/Standalone CRDs own: infrastructure, server config, auth, TLS, plugins, backup, images
+- Neo4jDatabase CRD owns: database name, topology, Cypher version, CREATE DATABASE options only
 - ❌ Neo4jDatabase MUST NOT override cluster/server-level settings
-- ❌ Neo4jDatabase MUST NOT modify resource limits, TLS, or authentication
-- ❌ Neo4jDatabase MUST NOT change Neo4j server configuration
-- ✅ Each CRD manages its own responsibility scope exclusively
 
-**Why This Design Matters**:
-1. **Clear Ownership**: Each CRD has a single responsibility
-2. **Prevents Conflicts**: Avoids configuration conflicts between resources
-3. **Operational Clarity**: Operators know exactly where to configure each setting
-4. **Resource Management**: Infrastructure decisions stay at infrastructure level
-5. **Security Consistency**: Security settings apply uniformly across all databases
+**Standalone deployments require `NEO4J_AUTH` env var** for automatic password setup (critical for Neo4jDatabase support).
 
-### Regression Prevention Checklist
-1. **Resource Conflicts**: Always use `retry.RetryOnConflict` with `controllerutil.CreateOrUpdate`
-2. **Template Comparison**: Use `UID != ""` to check resource existence, not `ResourceVersion != ""`
-3. **Test Timeouts**: Use 300-second timeout for all integration tests
-4. **Resource Requirements**: Keep CPU ≤ 200m, memory limits must be ≥ 1.5Gi for Neo4j Enterprise (database operations)
-5. **Cluster Formation**: Verify using `SHOW SERVERS` command, not just status checks
-6. **Server Architecture**: Always use `servers` field for clusters, preserve `primaries`/`secondaries` for databases
-7. **Pod Naming**: Expect `<cluster>-server-*` naming, not `<cluster>-primary-*` or `<cluster>-secondary-*`
-8. **Certificate DNS**: Include all server pod DNS names in certificates
-9. **Discovery Port**: Always use port **6000** (`tcp-tx`) for V2 discovery endpoints — port 5000 (`tcp-discovery`) was the deprecated V1 discovery port and is **never** used by this operator
-10. **CRD Separation**: Never allow cross-CRD configuration overrides
-11. **Enterprise Image Validation**: Always validate Neo4j Enterprise images only (`neo4j:X.Y-enterprise`, `neo4j:2025.X.Y-enterprise`) - never allow community images (`neo4j:X.Y`) as they cause licensing and feature failures
-12. **Integration Test Cleanup**: MANDATORY AfterEach blocks with finalizer removal and `cleanupCustomResourcesInNamespace()` - prevents CI resource exhaustion and test failures from resource leaks
-13. **NEO4J_AUTH Environment Variable**: Standalone deployments require `NEO4J_AUTH` environment variable for automatic password setup - critical for Neo4jDatabase support on standalone deployments
-14. **Plugin Configuration Validation**: Environment variable plugins (APOC) check StatefulSet env vars for clusters; Neo4j config plugins (GDS, Bloom) check ConfigMap content for standalone - test configuration source based on deployment type
-15. **Status Phase Validation**: Always check `status.phase="Ready"` for clusters before database operations - don't rely solely on conditions as phase is more reliable for readiness
-16. **TLS Scheme Consistency**: TLS-enabled clusters must use `bolt+s://` scheme, TLS-disabled use `bolt://` - critical for Neo4j client connections and seed URI functionality
-17. **Backup Path Syntax**: Neo4j 5.26+ requires correct `--to-path` syntax for backup operations with automated path creation to prevent backup failures
-18. **`envVarsEqual` Subset Semantics**: The cluster controller's `envVarsEqual` function is intentionally a *subset* check — it verifies all *desired* env vars are present in current, but tolerates extra env vars added by the `Neo4jPlugin` controller or fleet management reconciler. Never revert this to a strict length+value equality check or the controllers will oscillate.
-19. **NEO4J_PLUGINS Live-Patching via `MergeNeo4jPluginList`**: Do NOT bake `NEO4J_PLUGINS` into the static StatefulSet template in `internal/resources/cluster.go`. Plugin names must be added via the `MergeNeo4jPluginList` helper (live-patch on the running StatefulSet) so that multiple controllers (plugin controller, fleet management reconciler) can each add their plugin without overwriting the other's entry.
-20. **Fleet Management Two-Phase Reconciliation**: `reconcileAuraFleetManagement` has two independent phases: Phase 1 (install plugin via `mergeFleetManagementPlugin`) runs on every reconcile when enabled; Phase 2 (register Aura token) runs only when cluster is `Ready` and token not yet registered. Never collapse these into one step — the plugin needs a pod restart to load before registration is attempted.
-21. **Diagnostics Collection is Non-Fatal**: `CollectDiagnostics` in the QueryMonitor MUST never fail the reconciliation loop. Errors go to `status.diagnostics.collectionError` and conditions are set to `Unknown/DiagnosticsUnavailable`. Never `return err` from diagnostic collection.
-22. **Diagnostic Conditions**: Two new conditions exist — `ServersHealthy` (type from `ConditionTypeServersHealthy`) and `DatabasesHealthy` (type from `ConditionTypeDatabasesHealthy`). These are set by `updateServersCondition`/`updateDatabasesCondition` in `CollectDiagnostics`. The `system` database is explicitly excluded from `DatabasesHealthy` checks.
-23. **Structured Event Reasons**: All event reasons MUST use constants from `internal/controller/events.go` — never pass raw string literals to `r.Recorder.Event`. Use `corev1.EventTypeNormal`/`corev1.EventTypeWarning` for the event type, never the raw strings `"Normal"`/`"Warning"`.
-24. **`SetNamedCondition` for non-Ready conditions**: Use `SetNamedCondition` (not `SetReadyCondition`) for `ServersHealthy` and `DatabasesHealthy` conditions. `SetReadyCondition` is only for the `Ready` condition type. Both helpers preserve `LastTransitionTime` when `Status` and `Reason` are unchanged.
+## Key Implementation Patterns
+
+**Resource Version Conflict**: Always wrap with `retry.RetryOnConflict(retry.DefaultRetry, ...)` — required for Neo4j 2025.01.0 cluster formation.
+
+**Template Comparison**: Use `sts.UID != ""` to check if StatefulSet exists, NOT `sts.ResourceVersion != ""` (ResourceVersion is populated even for new resources).
+
+**Split-Brain Detection**: `internal/controller/splitbrain_detector.go` — connects to each pod, compares cluster views, auto-restarts orphaned pods.
+```bash
+kubectl get events --field-selector reason=SplitBrainDetected -A
+kubectl logs -n neo4j-operator-system deployment/neo4j-operator-controller-manager | grep -i splitbrain
+```
+
+**Edition field removed**: No `edition: enterprise` field in CRDs. Operator always assumes enterprise. Neo4j client still checks actual edition via `CALL dbms.components()`.
+
+**Structured Events**: Use constants from `internal/controller/events.go`. Use `corev1.EventTypeNormal`/`corev1.EventTypeWarning` — never raw strings `"Normal"`/`"Warning"`.
+
+## Regression Prevention Checklist
+
+1. **Resource Conflicts**: `retry.RetryOnConflict` with `controllerutil.CreateOrUpdate`
+2. **Template Comparison**: `UID != ""` not `ResourceVersion != ""`
+3. **Test Timeouts**: 300-second for all integration tests
+4. **Resource Requirements**: CPU ≤ 200m, memory ≥ 1.5Gi
+5. **Cluster Formation**: Verify with `SHOW SERVERS`, not just status checks
+6. **Server Architecture**: `servers` field for clusters; `primaries`/`secondaries` for databases
+7. **Pod Naming**: `<cluster>-server-*` (never `primary-*` or `secondary-*`)
+8. **Certificate DNS**: Include all server pod DNS names
+9. **Discovery Port**: Always port **6000** (`tcp-tx`), never 5000
+10. **CRD Separation**: Neo4jDatabase must not override cluster/server settings
+11. **Enterprise Images**: `neo4j:X.Y-enterprise` only, never `neo4j:X.Y`
+12. **Test Cleanup**: MANDATORY AfterEach with finalizer removal + `cleanupCustomResourcesInNamespace()`
+13. **NEO4J_AUTH**: Standalone deployments need this env var
+14. **Plugin Config Source**: APOC → StatefulSet env vars (cluster) / ConfigMap (standalone)
+15. **Status Phase**: Check `status.phase="Ready"` before database ops
+16. **TLS Scheme**: `bolt+s://` (TLS on) / `bolt://` (TLS off)
+17. **Backup Path**: `--to-path` syntax for Neo4j 5.26+
+18. **`envVarsEqual` Subset**: Never revert to strict equality check
+19. **`NEO4J_PLUGINS` Live-Patch**: Via `MergeNeo4jPluginList`, never in static StatefulSet template
+20. **Fleet Two-Phase**: Plugin install phase ≠ token registration phase — never collapse
+21. **Diagnostics Non-Fatal**: Never `return err` from `CollectDiagnostics`
+22. **Diagnostic Conditions**: `SetNamedCondition` for `ServersHealthy`/`DatabasesHealthy`; `system` DB excluded
+23. **Event Reasons**: Constants from `events.go`; `corev1.EventTypeNormal/Warning` not raw strings
+24. **`SetNamedCondition`**: For non-Ready conditions; `SetReadyCondition` only for the `Ready` type
 
 ## Reports
 
-All reports go in `/reports/` directory with mandatory `YYYY-MM-DD-descriptive-name.md` format.
+All reports in `/reports/` with format `YYYY-MM-DD-descriptive-name.md`.
 
 **Key Reports:**
-- `/reports/2025-08-19-server-based-architecture-implementation.md` - Detailed server-based architecture implementation
-- `/reports/2025-08-05-neo4j-2025.01.0-enterprise-cluster-analysis.md` - Neo4j 2025.x compatibility analysis
-- `/reports/2025-08-08-seed-uri-and-server-architecture-release-notes.md` - Seed URI feature implementation
+- `/reports/2025-08-19-server-based-architecture-implementation.md` — server-based architecture
+- `/reports/2025-08-05-neo4j-2025.01.0-enterprise-cluster-analysis.md` — Neo4j 2025.x compatibility
+- `/reports/2025-08-08-seed-uri-and-server-architecture-release-notes.md` — Seed URI feature
 
 # important-instruction-reminders
 Do what has been asked; nothing more, nothing less.
