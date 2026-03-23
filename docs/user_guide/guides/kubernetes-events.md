@@ -106,6 +106,14 @@ kubectl get events -A --field-selector involvedObject.apiVersion=neo4j.neo4j.com
 | `AuraFleetManagementFailed` | Warning | Aura Fleet Management registration or operation failed |
 | `AuraFleetManagementPluginPatchFailed` | Warning | Failed to patch the fleet-management plugin onto the StatefulSet |
 
+### Storage Expansion
+
+| Reason | Type | Description |
+|---|---|---|
+| `StorageExpansionStarted` | Normal | PVC expansion has begun after detecting `spec.storage.size` increase |
+| `StorageExpansionCompleted` | Normal | All PVCs expanded and StatefulSet recreated successfully |
+| `StorageExpansionFailed` | Warning | Expansion failed (non-expandable StorageClass, shrink attempt, or patch error) |
+
 ### Sharded Databases
 
 | Reason | Type | Description |

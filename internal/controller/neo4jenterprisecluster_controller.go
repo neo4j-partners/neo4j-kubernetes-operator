@@ -94,6 +94,7 @@ const (
 //+kubebuilder:rbac:groups=external-secrets.io,resources=externalsecrets,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=external-secrets.io,resources=secretstores,verbs=get;list;watch
 //+kubebuilder:rbac:groups=external-secrets.io,resources=clustersecretstores,verbs=get;list;watch
+//+kubebuilder:rbac:groups=storage.k8s.io,resources=storageclasses,verbs=get;list;watch
 //+kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=route.openshift.io,resources=routes,verbs=get;list;watch;create;update;patch;delete
 
@@ -373,6 +374,17 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 			r.Recorder.Event(cluster, corev1.EventTypeNormal, EventReasonTopologyPlacementCalc,
 				fmt.Sprintf("Calculated topology placement across %d zones", len(placement.AvailabilityZones)))
 		}
+	}
+
+	// Check if PVC storage expansion is needed before creating/updating StatefulSets.
+	// If expansion is needed, PVCs are patched and the StatefulSet is orphan-deleted,
+	// then we requeue so the next reconcile recreates it with updated VolumeClaimTemplates.
+	if requeue, err := r.reconcileStorageExpansion(ctx, cluster); err != nil {
+		logger.Error(err, "Failed to reconcile storage expansion")
+		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
+	} else if requeue {
+		logger.Info("Storage expansion completed, requeueing to recreate StatefulSet")
+		return ctrl.Result{Requeue: true}, nil
 	}
 
 	// Create single StatefulSet for all servers

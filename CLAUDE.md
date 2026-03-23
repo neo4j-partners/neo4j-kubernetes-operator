@@ -9,6 +9,7 @@ Neo4j Enterprise Operator for Kubernetes - manages Neo4j Enterprise deployments 
 **Supported Neo4j Versions**: 5.26.x (last semver LTS) and 2025.x.x+ (CalVer). Neo4j moved from semver to CalVer after 5.26 — no 5.27+ semver releases exist or will exist.
 **CRITICAL: KIND IS MANDATORY**: This project exclusively uses Kind (Kubernetes in Docker) for ALL development, testing, and CI workflows. No alternatives (minikube, k3s) are supported.
 **CRITICAL: ENTERPRISE IMAGES ONLY**: Never use Neo4j community images (neo4j:5.26), only enterprise ones (neo4j:5.26-enterprise, neo4j:2025.01.0-enterprise)
+**CRITICAL: NO WEBHOOK VALIDATION**: This project does NOT use admission webhooks (ValidatingWebhookConfiguration/MutatingWebhookConfiguration). All validation is performed inline during reconciliation in the controller. Never introduce webhook-based validation — all validation logic belongs in `internal/validation/` and is called directly from the reconciler.
 **Discovery**: V2_ONLY mode exclusively
 
 **Deployment Types:**
@@ -321,6 +322,8 @@ kubectl logs -n neo4j-operator-system deployment/neo4j-operator-controller-manag
 22. **Diagnostic Conditions**: `SetNamedCondition` for `ServersHealthy`/`DatabasesHealthy`; `system` DB excluded
 23. **Event Reasons**: Constants from `events.go`; `corev1.EventTypeNormal/Warning` not raw strings
 24. **`SetNamedCondition`**: For non-Ready conditions; `SetReadyCondition` only for the `Ready` type
+25. **Storage Expansion**: Orphan-delete STS (not regular delete); compare spec vs actual PVC sizes (not old vs new spec); `retry.RetryOnConflict` on PVC patches; validate `allowVolumeExpansion` before patching; never shrink PVCs
+26. **No Webhooks**: All validation is controller-side in `internal/validation/`; never introduce `ValidatingWebhookConfiguration` or `_webhook.go` files
 
 ## Reports
 

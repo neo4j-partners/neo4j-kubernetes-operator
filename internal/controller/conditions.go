@@ -37,6 +37,7 @@ const (
 	ConditionReasonPluginInstalled = "PluginInstalled"
 	ConditionReasonPluginFailed    = "PluginInstallFailed"
 
+	ConditionReasonStorageExpanding       = "StorageExpanding"
 	ConditionReasonAllServersHealthy      = "AllServersHealthy"
 	ConditionReasonServerDegraded         = "ServerDegraded"
 	ConditionReasonAllDatabasesOnline     = "AllDatabasesOnline"
@@ -100,6 +101,8 @@ func PhaseToConditionStatus(phase string) (metav1.ConditionStatus, string) {
 		return metav1.ConditionFalse, ConditionReasonFailed
 	case "Upgrading":
 		return metav1.ConditionUnknown, ConditionReasonUpgrading
+	case "Expanding":
+		return metav1.ConditionUnknown, ConditionReasonStorageExpanding
 	case "Forming", "Creating":
 		return metav1.ConditionUnknown, ConditionReasonForming
 	case "Installing", "Running", "Validating", "Pending":
