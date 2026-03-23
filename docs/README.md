@@ -24,6 +24,7 @@ The [User Guide](user_guide) is for users of the Neo4j Enterprise Operator. It c
     *   [Performance](user_guide/guides/performance.md)
     *   [Monitoring](user_guide/guides/monitoring.md)
     *   [GitOps Integration (ArgoCD/Flux)](gitops/README.md) — Health checks and GitOps tooling
+    *   [Storage Expansion](user_guide/guides/storage_expansion.md) - Expand PVC storage with zero downtime
     *   [Upgrades](user_guide/guides/upgrades.md)
     *   [Troubleshooting](user_guide/guides/troubleshooting.md) - Including **seed URI troubleshooting**
 

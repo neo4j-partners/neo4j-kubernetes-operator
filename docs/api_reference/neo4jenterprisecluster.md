@@ -144,8 +144,8 @@ Specifies role constraints for individual servers.
 
 | Field | Type | Description |
 |---|---|---|
-| `className` | `string` | Storage class name |
-| `size` | `string` | Storage size (e.g., `"10Gi"`) |
+| `className` | `string` | Storage class name (immutable after creation) |
+| `size` | `string` | Storage size (e.g., `"10Gi"`). Can be increased after creation — the operator automatically expands PVCs and recreates the StatefulSet with zero downtime. **Cannot be decreased** (PVC shrink is not supported by Kubernetes). Requires the StorageClass to have `allowVolumeExpansion: true`. |
 | `retentionPolicy` | `string` | PVC retention policy: `"Delete"` (default) or `"Retain"` |
 | `backupStorage` | [`*BackupStorageSpec`](#backupstoragespec) | Additional storage for backups |
 
@@ -154,7 +154,7 @@ Specifies role constraints for individual servers.
 | Field | Type | Description |
 |---|---|---|
 | `className` | `string` | Storage class name for backup volumes |
-| `size` | `string` | Storage size for backup volumes |
+| `size` | `string` | Storage size for backup volumes. Supports the same automatic expansion as `spec.storage.size`. |
 
 ### AuthSpec
 

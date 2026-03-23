@@ -74,6 +74,13 @@ const (
 	EventReasonAuraFleetRegistered        = "AuraFleetManagementRegistered"
 )
 
+// Storage expansion events
+const (
+	EventReasonStorageExpansionStarted   = "StorageExpansionStarted"
+	EventReasonStorageExpansionCompleted = "StorageExpansionCompleted"
+	EventReasonStorageExpansionFailed    = "StorageExpansionFailed"
+)
+
 // Sharded database events
 const (
 	EventReasonShardedDatabaseReady = "ShardedDatabaseReady"

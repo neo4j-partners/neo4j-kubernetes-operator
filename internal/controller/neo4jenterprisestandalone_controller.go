@@ -125,6 +125,7 @@ const (
 //+kubebuilder:rbac:groups=cert-manager.io,resources=issuers,verbs=get;list;watch
 //+kubebuilder:rbac:groups=cert-manager.io,resources=clusterissuers,verbs=get;list;watch
 //+kubebuilder:rbac:groups=route.openshift.io,resources=routes,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=storage.k8s.io,resources=storageclasses,verbs=get;list;watch
 
 func (r *Neo4jEnterpriseStandaloneReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
@@ -236,6 +237,15 @@ func (r *Neo4jEnterpriseStandaloneReconciler) reconcileStandalone(ctx context.Co
 	// Reconcile MCP resources if enabled
 	if err := r.reconcileMCP(ctx, standalone); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to reconcile MCP resources: %w", err)
+	}
+
+	// Check if PVC storage expansion is needed before creating/updating the StatefulSet.
+	if requeue, err := r.reconcileStandaloneStorageExpansion(ctx, standalone); err != nil {
+		logger.Error(err, "Failed to reconcile storage expansion")
+		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
+	} else if requeue {
+		logger.Info("Storage expansion completed, requeueing to recreate StatefulSet")
+		return ctrl.Result{Requeue: true}, nil
 	}
 
 	// Reconcile StatefulSet
