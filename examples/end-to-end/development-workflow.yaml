@@ -56,15 +56,14 @@ spec:
     adminSecret: dev-admin-secret
 
   # Development-friendly settings
-  configMap:
-    data:
-      # Enable all APOC procedures
-      dbms.security.procedures.unrestricted: "apoc.*"
-      # Disable query timeout for debugging
-      db.query.timeout: "0"
-      # Enable query logging
-      db.logs.query.enabled: "VERBOSE"
-      db.logs.query.threshold: "0"
+  config:
+    # Enable all APOC procedures
+    dbms.security.procedures.unrestricted: "apoc.*"
+    # Disable query timeout for debugging
+    db.query.timeout: "0"
+    # Enable query logging
+    db.logs.query.enabled: "VERBOSE"
+    db.logs.query.threshold: "0"
 ---
 # STEP 2: Development Database with Schema
 ---

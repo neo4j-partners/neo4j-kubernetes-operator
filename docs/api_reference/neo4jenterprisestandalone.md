@@ -209,6 +209,19 @@ auraFleetManagement:
 For full setup instructions see [Aura Fleet Management Guide](../user_guide/aura_fleet_management.md).
 For the full type definition see [`AuraFleetManagementSpec`](neo4jenterprisecluster.md#aurafleetmanagementspec).
 
+#### `upgradeStrategy` (UpgradeStrategySpec)
+
+Configures how the operator handles Neo4j version upgrades for standalone deployments. When an image tag change is detected, the operator runs a pre-upgrade health check (if enabled) before allowing the StatefulSet to update.
+
+```yaml
+upgradeStrategy:
+  strategy: RollingUpgrade       # RollingUpgrade (default) or Recreate
+  preUpgradeHealthCheck: true    # Verify Neo4j health before upgrading
+  autoPauseOnFailure: true       # Block upgrade if health check fails
+```
+
+For the full type definition see [`UpgradeStrategySpec`](neo4jenterprisecluster.md#upgradestrategyspec).
+
 #### `persistence` (PersistenceSpec)
 Persistence configuration for standalone deployments.
 
@@ -362,6 +375,20 @@ databaseStatus:
   healthStatus: "Healthy"
   lastHealthCheck: "2025-01-20T10:30:00Z"
 ```
+
+#### `diagnostics` (StandaloneDiagnosticsStatus)
+
+Live diagnostics collected from `SHOW DATABASES` when `spec.monitoring.enabled=true` and the standalone is in `Ready` phase. Updated on every reconcile cycle. Collection errors are stored in `diagnostics.collectionError` and never block reconciliation.
+
+| Field | Type | Description |
+|---|---|---|
+| `databases` | `[]DatabaseDiagnosticInfo` | Database status from `SHOW DATABASES` |
+| `lastCollected` | `*metav1.Time` | Timestamp of last successful collection |
+| `collectionError` | `string` | Error message if collection failed (empty on success) |
+
+#### `observedGeneration` (int64)
+
+The most recent generation observed by the controller. Compare with `metadata.generation` to detect whether the controller has processed the latest spec changes.
 
 ## Examples
 

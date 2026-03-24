@@ -237,6 +237,7 @@ Specifies role constraints for individual servers.
 | `mode` | `string` | TLS mode: `"cert-manager"` (default) or `"disabled"` |
 | `issuerRef` | [`*IssuerRef`](#issuerref) | cert-manager issuer reference |
 | `certificateSecret` | `string` | TLS secret name (manual certificates) |
+| `trustedCASecret` | `string` | Secret containing a trusted CA certificate (key: `ca.crt`) for verifying Neo4j TLS connections. When omitted, the operator auto-discovers the CA from the cert-manager-generated Secret. |
 | `externalSecrets` | [`*ExternalSecretsConfig`](#externalsecretsconfig) | External Secrets configuration |
 | `duration` | `*string` | Certificate duration (e.g., `"2160h"`) |
 | `renewBefore` | `*string` | Renewal window before expiry (e.g., `"360h"`) |
@@ -682,6 +683,30 @@ Overrides the Neo4j credentials injected into the MCP pod. **Only effective for 
 | `tlsEnabled` | `bool` | Enable TLS on the Ingress |
 | `tlsSecretName` | `string` | TLS certificate secret name |
 | `annotations` | `map[string]string` | Ingress annotations |
+
+### UpgradeStrategySpec
+
+Configures how the operator handles Neo4j version upgrades.
+
+| Field | Type | Description |
+|---|---|---|
+| `strategy` | `string` | Upgrade strategy: `"RollingUpgrade"` (default) or `"Recreate"` |
+| `preUpgradeHealthCheck` | `bool` | Enable health validation before upgrade (default: `true`) |
+| `maxUnavailableDuringUpgrade` | `*int32` | Max unavailable replicas during upgrade (default: `1`) |
+| `upgradeTimeout` | `string` | Timeout for the entire upgrade process (default: `"30m"`) |
+| `postUpgradeHealthCheck` | `bool` | Enable health validation after upgrade (default: `true`) |
+| `healthCheckTimeout` | `string` | Timeout for health checks (default: `"5m"`) |
+| `stabilizationTimeout` | `string` | Wait time for cluster stabilization (default: `"3m"`) |
+| `autoPauseOnFailure` | `bool` | Pause upgrade on failure for manual intervention (default: `true`) |
+
+### RestoreSpec
+
+Configures restoration from a backup during cluster creation.
+
+| Field | Type | Description |
+|---|---|---|
+| `backupName` | `string` | Name of the `Neo4jBackup` resource to restore from |
+| `databaseName` | `string` | Target database name for the restore |
 
 ## Status
 

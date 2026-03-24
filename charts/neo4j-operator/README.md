@@ -135,6 +135,22 @@ The following table lists the configurable parameters of the Neo4j Operator char
 | `neo4j.defaultResources.limits.cpu` | Default CPU limit | `2` |
 | `neo4j.defaultResources.limits.memory` | Default memory limit | `4Gi` |
 
+### Network Policy
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `networkPolicy.enabled` | Create a NetworkPolicy for the operator pod | `false` |
+| `networkPolicy.ingress` | Ingress rules (list of NetworkPolicyIngressRule) | `[]` |
+| `networkPolicy.egress` | Egress rules (list of NetworkPolicyEgressRule) | `[]` |
+
+### Pod Disruption Budget
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `podDisruptionBudget.enabled` | Create a PodDisruptionBudget for the operator | `false` |
+| `podDisruptionBudget.minAvailable` | Minimum available replicas | `1` |
+| `podDisruptionBudget.maxUnavailable` | Maximum unavailable replicas (mutually exclusive with minAvailable) | `""` |
+
 ### Other Configuration
 
 | Parameter | Description | Default |
