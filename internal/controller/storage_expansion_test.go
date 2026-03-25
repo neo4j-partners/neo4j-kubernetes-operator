@@ -75,9 +75,16 @@ func makePVC(name, namespace, stsName, volumeName, storageClass, size string, or
 		},
 	}
 	if withLabels {
+		role := "server"
+		if volumeName == "backup-storage" {
+			role = "backup"
+		}
 		pvc.Labels = map[string]string{
-			"app.kubernetes.io/name":     "neo4j",
-			"app.kubernetes.io/instance": name,
+			"app.kubernetes.io/name":       "neo4j",
+			"app.kubernetes.io/instance":   name,
+			"app.kubernetes.io/managed-by": "neo4j-operator",
+			"neo4j.com/cluster":            name,
+			"neo4j.com/role":               role,
 		}
 	}
 	return pvc
@@ -121,7 +128,7 @@ func TestFindPVCsForStatefulSet_LabelBased(t *testing.T) {
 
 	r := newTestReconciler(scheme, pvc0, pvc1, pvc2, unrelated)
 
-	pvcs, err := r.findPVCsForStatefulSet(context.Background(), "default", "my-cluster-server", "data")
+	pvcs, err := r.findPVCsForStatefulSet(context.Background(), "default", "my-cluster", "my-cluster-server", "data")
 	require.NoError(t, err)
 	assert.Len(t, pvcs, 3)
 }
@@ -134,7 +141,7 @@ func TestFindPVCsForStatefulSet_NamePrefixFallback(t *testing.T) {
 
 	r := newTestReconciler(scheme, pvc0, pvc1)
 
-	pvcs, err := r.findPVCsForStatefulSet(context.Background(), "default", "my-cluster-server", "data")
+	pvcs, err := r.findPVCsForStatefulSet(context.Background(), "default", "my-cluster", "my-cluster-server", "data")
 	require.NoError(t, err)
 	assert.Len(t, pvcs, 2)
 }
@@ -160,10 +167,22 @@ func TestFindPVCsForStatefulSet_PrefixCollisionProtection(t *testing.T) {
 
 	r := newTestReconciler(scheme, pvc0, pvcOther)
 
-	pvcs, err := r.findPVCsForStatefulSet(context.Background(), "default", "my-cluster-server", "data")
+	pvcs, err := r.findPVCsForStatefulSet(context.Background(), "default", "my-cluster", "my-cluster-server", "data")
 	require.NoError(t, err)
 	assert.Len(t, pvcs, 1)
 	assert.Equal(t, "data-my-cluster-server-0", pvcs[0].Name)
+}
+
+func TestFindPVCsForStatefulSet_BackupLabelBased(t *testing.T) {
+	scheme := newStorageTestScheme()
+	pvc0 := makePVC("my-cluster", "default", "my-cluster-backup", "backup-storage", "ssd", "100Gi", 0, true)
+
+	r := newTestReconciler(scheme, pvc0)
+
+	pvcs, err := r.findPVCsForStatefulSet(context.Background(), "default", "my-cluster", "my-cluster-backup", "backup-storage")
+	require.NoError(t, err)
+	assert.Len(t, pvcs, 1)
+	assert.Equal(t, "backup-storage-my-cluster-backup-0", pvcs[0].Name)
 }
 
 func TestComparePVCSizes(t *testing.T) {
@@ -174,23 +193,23 @@ func TestComparePVCSizes(t *testing.T) {
 	r := newTestReconciler(scheme, pvc0, pvc1)
 
 	// Same size — match
-	state, err := r.comparePVCSizes(context.Background(), "default", "my-cluster-server", "data", resource.MustParse("100Gi"))
+	state, err := r.comparePVCSizes(context.Background(), "default", "my-cluster", "my-cluster-server", "data", resource.MustParse("100Gi"))
 	require.NoError(t, err)
 	assert.Equal(t, pvcSizeMatch, state)
 
 	// Larger desired — expand
-	state, err = r.comparePVCSizes(context.Background(), "default", "my-cluster-server", "data", resource.MustParse("200Gi"))
+	state, err = r.comparePVCSizes(context.Background(), "default", "my-cluster", "my-cluster-server", "data", resource.MustParse("200Gi"))
 	require.NoError(t, err)
 	assert.Equal(t, pvcSizeExpand, state)
 
 	// Smaller desired — shrink
-	state, err = r.comparePVCSizes(context.Background(), "default", "my-cluster-server", "data", resource.MustParse("50Gi"))
+	state, err = r.comparePVCSizes(context.Background(), "default", "my-cluster", "my-cluster-server", "data", resource.MustParse("50Gi"))
 	require.NoError(t, err)
 	assert.Equal(t, pvcSizeShrink, state)
 
 	// No PVCs — match (fresh cluster)
 	r2 := newTestReconciler(scheme)
-	state, err = r2.comparePVCSizes(context.Background(), "default", "new-cluster-server", "data", resource.MustParse("100Gi"))
+	state, err = r2.comparePVCSizes(context.Background(), "default", "new-cluster", "new-cluster-server", "data", resource.MustParse("100Gi"))
 	require.NoError(t, err)
 	assert.Equal(t, pvcSizeMatch, state)
 }

@@ -127,7 +127,7 @@ func (r *Neo4jEnterpriseClusterReconciler) checkStorageExpansionNeeded(ctx conte
 	// Check data volumes
 	desiredDataSize := resource.MustParse(cluster.Spec.Storage.Size)
 	stsName := fmt.Sprintf("%s-server", cluster.Name)
-	state, err := r.comparePVCSizes(ctx, cluster.Namespace, stsName, "data", desiredDataSize)
+	state, err := r.comparePVCSizes(ctx, cluster.Namespace, cluster.Name, stsName, "data", desiredDataSize)
 	if err != nil {
 		return result, err
 	}
@@ -146,7 +146,7 @@ func (r *Neo4jEnterpriseClusterReconciler) checkStorageExpansionNeeded(ctx conte
 		}
 		desiredBackupSize := resource.MustParse(backupSize)
 		backupStsName := fmt.Sprintf("%s-backup", cluster.Name)
-		state, err := r.comparePVCSizes(ctx, cluster.Namespace, backupStsName, "backup-storage", desiredBackupSize)
+		state, err := r.comparePVCSizes(ctx, cluster.Namespace, cluster.Name, backupStsName, "backup-storage", desiredBackupSize)
 		if err != nil {
 			return result, err
 		}
@@ -172,8 +172,8 @@ const (
 )
 
 // comparePVCSizes checks whether PVCs need expansion, are at the right size, or would require a shrink.
-func (r *Neo4jEnterpriseClusterReconciler) comparePVCSizes(ctx context.Context, namespace, stsName, volumeName string, desiredSize resource.Quantity) (pvcSizeState, error) {
-	pvcs, err := r.findPVCsForStatefulSet(ctx, namespace, stsName, volumeName)
+func (r *Neo4jEnterpriseClusterReconciler) comparePVCSizes(ctx context.Context, namespace, clusterName, stsName, volumeName string, desiredSize resource.Quantity) (pvcSizeState, error) {
+	pvcs, err := r.findPVCsForStatefulSet(ctx, namespace, clusterName, stsName, volumeName)
 	if err != nil {
 		return pvcSizeMatch, err
 	}
@@ -196,7 +196,7 @@ func (r *Neo4jEnterpriseClusterReconciler) expandVolumes(ctx context.Context, cl
 	logger := log.FromContext(ctx)
 
 	// 1. Validate the StorageClass supports volume expansion
-	pvcs, err := r.findPVCsForStatefulSet(ctx, cluster.Namespace, stsName, volumeName)
+	pvcs, err := r.findPVCsForStatefulSet(ctx, cluster.Namespace, cluster.Name, stsName, volumeName)
 	if err != nil {
 		return fmt.Errorf("failed to find PVCs for %s/%s: %w", stsName, volumeName, err)
 	}
@@ -236,16 +236,24 @@ func (r *Neo4jEnterpriseClusterReconciler) expandVolumes(ctx context.Context, cl
 	return nil
 }
 
+// volumeNameToRole maps a VolumeClaimTemplate name to the PVC role label value.
+func volumeNameToRole(volumeName string) string {
+	if volumeName == "backup-storage" {
+		return "backup"
+	}
+	return "server"
+}
+
 // findPVCsForStatefulSet discovers PVCs belonging to a StatefulSet.
 // Uses two-tier strategy: label selector first, name-prefix + ordinal fallback for legacy clusters.
-func (r *Neo4jEnterpriseClusterReconciler) findPVCsForStatefulSet(ctx context.Context, namespace, stsName, volumeName string) ([]corev1.PersistentVolumeClaim, error) {
+func (r *Neo4jEnterpriseClusterReconciler) findPVCsForStatefulSet(ctx context.Context, namespace, clusterName, stsName, volumeName string) ([]corev1.PersistentVolumeClaim, error) {
 	logger := log.FromContext(ctx)
 
-	// Tier 1: Label-based discovery
+	// Tier 1: Label-based discovery using stable PVC labels
 	pvcList := &corev1.PersistentVolumeClaimList{}
 	labelSelector := client.MatchingLabels{
-		"app.kubernetes.io/name":     "neo4j",
-		"app.kubernetes.io/instance": strings.TrimSuffix(stsName, "-server"),
+		"neo4j.com/cluster": clusterName,
+		"neo4j.com/role":    volumeNameToRole(volumeName),
 	}
 	if err := r.List(ctx, pvcList, client.InNamespace(namespace), labelSelector); err != nil {
 		return nil, fmt.Errorf("failed to list PVCs by label: %w", err)

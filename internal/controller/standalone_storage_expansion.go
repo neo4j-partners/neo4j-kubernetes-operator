@@ -113,10 +113,11 @@ func (r *Neo4jEnterpriseStandaloneReconciler) compareStandalonePVCSizes(ctx cont
 func (r *Neo4jEnterpriseStandaloneReconciler) findStandalonePVCs(ctx context.Context, namespace, stsName, volumeName string) ([]corev1.PersistentVolumeClaim, error) {
 	logger := log.FromContext(ctx)
 
-	// Tier 1: Label-based discovery (standalone uses "app" label)
+	// Tier 1: Label-based discovery using stable PVC labels
 	pvcList := &corev1.PersistentVolumeClaimList{}
 	if err := r.List(ctx, pvcList, client.InNamespace(namespace), client.MatchingLabels{
-		"app": stsName,
+		"neo4j.com/cluster": stsName,
+		"neo4j.com/role":    "data",
 	}); err != nil {
 		return nil, fmt.Errorf("failed to list PVCs by label: %w", err)
 	}
