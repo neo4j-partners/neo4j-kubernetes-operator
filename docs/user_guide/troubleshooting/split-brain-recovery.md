@@ -357,7 +357,7 @@ If automatic recovery fails:
 
 3. **Inspect Storage**:
    ```bash
-   kubectl get pvc -l app.kubernetes.io/name=neo4j
+   kubectl get pvc -l neo4j.com/cluster=production-cluster
    kubectl describe pvc data-production-cluster-server-0
    ```
 
@@ -373,18 +373,18 @@ kubectl patch neo4jenterprisecluster production-cluster --type='json' \
   -p='[{"op": "replace", "path": "/spec/topology/servers", "value": 0}]'
 
 # 2. Wait for pods to terminate
-kubectl wait --for=delete pod -l app.kubernetes.io/name=neo4j --timeout=300s
+kubectl wait --for=delete pod -l neo4j.com/cluster=production-cluster --timeout=300s
 
 # 3. Clean up cluster state (if necessary)
 # Note: This may cause data loss - only do if cluster is completely corrupted
-# kubectl delete pvc -l app.kubernetes.io/name=neo4j
+# kubectl delete pvc -l neo4j.com/cluster=production-cluster,neo4j.com/role=server
 
 # 4. Scale back up
 kubectl patch neo4jenterprisecluster production-cluster --type='json' \
   -p='[{"op": "replace", "path": "/spec/topology/servers", "value": 3}]'
 
 # 5. Monitor recovery
-kubectl get pods -l app.kubernetes.io/name=neo4j -w
+kubectl get pods -l neo4j.com/cluster=production-cluster -w
 ```
 
 ### Data Recovery from Backups

@@ -76,7 +76,11 @@ func makeStandalonePVC(name, namespace, storageClass, size string, ordinal int, 
 	}
 	if withLabels {
 		pvc.Labels = map[string]string{
-			"app": name,
+			"app.kubernetes.io/name":       "neo4j",
+			"app.kubernetes.io/instance":   name,
+			"app.kubernetes.io/managed-by": "neo4j-operator",
+			"neo4j.com/cluster":            name,
+			"neo4j.com/role":               "data",
 		}
 	}
 	return pvc

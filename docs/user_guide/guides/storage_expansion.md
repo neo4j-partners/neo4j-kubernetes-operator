@@ -157,7 +157,14 @@ Then retry the expansion (the operator will pick it up on the next reconcile).
 If the operator can't find PVCs to expand, check that PVCs have the expected labels:
 
 ```bash
-kubectl get pvc -l app.kubernetes.io/instance=my-cluster -l app.kubernetes.io/name=neo4j
+# Server PVCs
+kubectl get pvc -l neo4j.com/cluster=my-cluster -l neo4j.com/role=server
+
+# Backup PVCs
+kubectl get pvc -l neo4j.com/cluster=my-cluster -l neo4j.com/role=backup
+
+# Standalone PVCs
+kubectl get pvc -l neo4j.com/cluster=my-standalone -l neo4j.com/role=data
 ```
 
 For clusters created before labeling was added, the operator falls back to name-based discovery (`data-{cluster-name}-server-{ordinal}`).

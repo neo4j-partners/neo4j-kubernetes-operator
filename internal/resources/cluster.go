@@ -924,6 +924,18 @@ func getLabelsForEnterpriseServer(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster,
 	return labels
 }
 
+// GetLabelsForPVC returns minimal, stable labels for PVC VolumeClaimTemplates.
+// Intentionally excludes version (immutable after PVC creation) and dynamic clustering labels.
+func GetLabelsForPVC(instanceName, role string) map[string]string {
+	return map[string]string{
+		"app.kubernetes.io/name":       "neo4j",
+		"app.kubernetes.io/instance":   instanceName,
+		"app.kubernetes.io/managed-by": "neo4j-operator",
+		"neo4j.com/cluster":            instanceName,
+		"neo4j.com/role":               role,
+	}
+}
+
 func getLabelsForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster, role string) map[string]string {
 	labels := map[string]string{
 		"app.kubernetes.io/name":       "neo4j",
@@ -1176,7 +1188,8 @@ func buildBackupVolumeClaimTemplates(cluster *neo4jv1alpha1.Neo4jEnterpriseClust
 
 	pvc := corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "backup-storage",
+			Name:   "backup-storage",
+			Labels: GetLabelsForPVC(cluster.Name, "backup"),
 		},
 		Spec: corev1.PersistentVolumeClaimSpec{
 			AccessModes: []corev1.PersistentVolumeAccessMode{
@@ -1488,7 +1501,7 @@ func buildVolumeClaimTemplatesForEnterprise(cluster *neo4jv1alpha1.Neo4jEnterpri
 		{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:   DataVolume,
-				Labels: getLabelsForEnterprise(cluster, ""),
+				Labels: GetLabelsForPVC(cluster.Name, "server"),
 			},
 			Spec: corev1.PersistentVolumeClaimSpec{
 				AccessModes: []corev1.PersistentVolumeAccessMode{
