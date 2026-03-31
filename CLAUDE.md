@@ -49,6 +49,16 @@ Validation: indices in range (0 to servers-1), no duplicates, cannot set ALL ser
 ## Essential Commands
 
 ```bash
+# Getting started (one-command bootstrap)
+make dev-up                 # Create cluster + deploy operator (first time)
+make dev-down               # Tear down everything
+make check-prereqs          # Verify all tools installed
+
+# Inner dev loop
+make deploy-dev-local       # Rebuild + redeploy to Kind (~60s)
+make dev-watch              # Auto-rebuild on file changes (watchexec/fswatch)
+tilt up                     # Live-reload with dashboard (~5s, requires Tilt)
+
 # Build
 make build                  # Operator binary
 make docker-build           # Container image
@@ -69,11 +79,13 @@ make undeploy-dev / make undeploy-prod
 
 # Test
 make test-unit              # Unit tests (no cluster required)
+make test-one TEST="name"   # Single integration test by name
 make test-integration       # Integration tests (auto-creates cluster, deploys operator)
 make test-integration-ci    # CI mode (assumes cluster exists)
 make test-ci-local          # Emulate CI locally (logs saved to logs/ci-local-*.log)
 make test                   # Unit + integration
 make test-coverage
+make smoke-test             # Deploy standalone + verify Ready state
 
 # Specific test
 go test ./internal/controller -run TestClusterReconciler
