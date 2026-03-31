@@ -1,387 +1,433 @@
 # Contributing to Neo4j Enterprise Operator
 
-Welcome to the Neo4j Enterprise Operator project! We're excited to have you contribute. This guide will help you get started with development.
+Welcome to the Neo4j Enterprise Operator project! This guide covers everything you need to get a productive development environment running.
 
 ## Prerequisites
 
-> **⚠️ IMPORTANT: Kind is Required**
-> This project **exclusively uses Kind (Kubernetes in Docker)** for development and testing. All development workflows, testing, and CI emulation depend on Kind clusters. You cannot contribute without Kind installed.
-
-Before contributing, ensure you have the following tools installed:
+> **Kind is Required** -- This project exclusively uses Kind (Kubernetes in Docker) for development, testing, and CI. No alternatives (minikube, k3s) are supported.
 
 ### Required Tools
 
-- **Go 1.24+**: [Installation Guide](https://golang.org/doc/install)
-- **Docker**: [Installation Guide](https://docs.docker.com/get-docker/)
-- **kubectl**: [Installation Guide](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
-- **Kind (Kubernetes in Docker)**: **REQUIRED** - See installation instructions below
-- **make**: Usually pre-installed on Unix systems
-- **git**: [Installation Guide](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git)
+| Tool | Version | Install |
+|------|---------|---------|
+| Go | 1.24+ | [golang.org/doc/install](https://golang.org/doc/install) |
+| Docker | Latest | [docs.docker.com/get-docker](https://docs.docker.com/get-docker/) |
+| kubectl | Latest | [kubernetes.io/docs/tasks/tools](https://kubernetes.io/docs/tasks/tools/install-kubectl/) |
+| Kind | 0.20.0+ | `brew install kind` (macOS) or [kind.sigs.k8s.io](https://kind.sigs.k8s.io/docs/user/quick-start/#installation) |
+| make | Any | Pre-installed on macOS/Linux |
+| git | Any | [git-scm.com](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git) |
 
-### Kind Installation Instructions
+### Optional Tools
 
-Kind is **mandatory** for all development workflows. Choose your platform:
+| Tool | Purpose | Install |
+|------|---------|---------|
+| [Tilt](https://tilt.dev/) | Live-reload dev loop (~5s rebuilds) | `brew install tilt` |
+| [watchexec](https://github.com/watchexec/watchexec) | File-watcher for `make dev-watch` | `brew install watchexec` |
+| [mise](https://mise.jdx.dev/) | Pin exact tool versions from `.tool-versions` | `curl https://mise.jdx.dev/install.sh \| sh` |
+| [pre-commit](https://pre-commit.com/) | Git hook framework | `brew install pre-commit` |
 
-#### macOS (using Homebrew - Recommended)
-```bash
-# Install Kind via Homebrew
-brew install kind
-
-# Verify installation
-kind version
-```
-
-#### Linux (using Go or Binary)
-```bash
-# Option 1: Install via Go (if you have Go installed)
-go install sigs.k8s.io/kind@latest
-
-# Option 2: Download binary directly
-# For AMD64 / x86_64
-[ $(uname -m) = x86_64 ] && curl -Lo ./kind https://kind.sigs.k8s.io/dl/latest/kind-linux-amd64
-# For ARM64
-[ $(uname -m) = aarch64 ] && curl -Lo ./kind https://kind.sigs.k8s.io/dl/latest/kind-linux-arm64
-chmod +x ./kind
-sudo mv ./kind /usr/local/bin/kind
-
-# Verify installation
-kind version
-```
-
-#### Windows (using Chocolatey or Scoop)
-```bash
-# Using Chocolatey
-choco install kind
-
-# Using Scoop
-scoop install kind
-
-# Verify installation
-kind version
-```
-
-#### Why Kind is Required
-
-- **Development Clusters**: All local development uses Kind clusters (`make dev-cluster`)
-- **Testing Infrastructure**: Integration and E2E tests require Kind (`make test-integration`)
-- **CI Emulation**: The `make test-ci-local` target depends on Kind clusters
-- **No Alternatives**: We do **not** support minikube, k3s, or other local Kubernetes solutions
-
-### Verify Prerequisites
-
-Once you have all tools installed, verify your setup:
+### Automated Prerequisite Check
 
 ```bash
-# Check all required tools
-go version          # Should show Go 1.24+
-docker version      # Should show Docker info
-kubectl version     # Should show kubectl client
-kind version        # Should show Kind version
-make --version      # Should show GNU Make
-git --version       # Should show Git version
-
-# Test Kind functionality
-kind create cluster --name test-setup
-kind delete cluster --name test-setup
+make check-prereqs
 ```
+
+This verifies all required tools are installed and Docker is running, with actionable error messages for anything missing.
+
+### Reproducible Tool Versions (Optional)
+
+The project includes a `.tool-versions` file that pins the exact tool versions used in CI:
+
+```bash
+# Install mise (one-time)
+curl https://mise.jdx.dev/install.sh | sh
+
+# Install all pinned versions (Go 1.24.1, Kind 0.20.0, kubectl 1.31.0, etc.)
+mise install
+```
+
+This guarantees version parity between your local machine and CI.
 
 ## Quick Start
 
-1. **Fork and Clone the Repository**
-
-   ```bash
-   git clone https://github.com/your-username/neo4j-kubernetes-operator.git
-
+```bash
+# 1. Clone
+git clone https://github.com/your-username/neo4j-kubernetes-operator.git
 cd neo4j-kubernetes-operator
 
-   ```
+# 2. Bootstrap complete dev environment (Kind cluster + cert-manager + operator)
+make dev-up
 
-2. **Set Up Development Environment**
+# 3. Verify everything works
+make smoke-test
 
-   ```bash
-   make dev-cluster
-   ```
+# 4. Start developing (pick one)
+make deploy-dev-local           # Manual rebuild after changes
+make dev-watch                  # Auto-rebuild on file save
+tilt up                         # Live-reload with web dashboard (recommended)
 
-3. **Install Dependencies**
+# 5. Tear down when done
+make dev-down
+```
 
-   ```bash
-   make manifests generate
-   ```
+`make dev-up` takes ~3 minutes on first run. Subsequent runs are faster since it reuses an existing cluster.
 
-4. **Run Tests**
+### Alternative: GitHub Codespaces (Zero Local Setup)
 
-   ```bash
-   make test
-   ```
+The project includes a `.devcontainer/` configuration. On GitHub, click **Code > Codespaces > New codespace** to get a fully configured environment with Go, Docker-in-Docker, kubectl, Helm, and Kind pre-installed. Once the container starts, run `make dev-up` to bootstrap.
 
-5. **Start Local Development**
-
-   ```bash
-   make dev-cluster
-   make deploy-dev  # Deploy operator with local image (default behavior)
-   ```
+Ports 7474 (Neo4j Browser) and 7687 (Bolt) are auto-forwarded.
 
 ## Development Workflow
 
 ### Setting Up Your Environment
 
-1. **Install all dependencies**:
+The fastest path is `make dev-up`. For manual control:
 
-   ```bash
-   make manifests generate
-   ```
+```bash
+make dev-cluster        # Create Kind cluster + install cert-manager
+make manifests generate # Generate CRDs and DeepCopy methods
+make install            # Install CRDs into the cluster
+make deploy-dev-local   # Build operator image, load into Kind, deploy
+```
 
-2. **Create a development cluster**:
+### Inner Dev Loop
 
-   ```bash
-   make dev-cluster
-   ```
+Three options, from simplest to most powerful:
 
-3. **Install CRDs**:
+#### Option A: Manual Rebuild (no extra tools)
 
-   ```bash
-   make install
-   ```
+```bash
+# After making changes:
+make deploy-dev-local   # Full rebuild + redeploy (~60s)
+```
+
+#### Option B: File Watcher (requires watchexec or fswatch)
+
+```bash
+make dev-watch
+```
+
+Watches `api/`, `internal/`, and `cmd/` for `.go` and `.yaml` changes. On each save, automatically runs `make manifests generate build deploy-dev-local`. Install a watcher first:
+
+```bash
+brew install watchexec   # recommended
+# or
+brew install fswatch     # alternative
+```
+
+#### Option C: Tilt (recommended for regular contributors)
+
+```bash
+brew install tilt   # one-time
+tilt up             # start the dev loop
+```
+
+Tilt provides:
+- **Auto CRD regeneration** when `api/` files change
+- **Cross-compile + image build + Kind load** on every Go source change (~5s)
+- **Web dashboard** showing resource status, logs, and build times
+- **Unit test runner** (manual trigger from the Tilt UI)
+
+The Tiltfile uses `custom_build` to compile a Linux binary locally and package it into a minimal Alpine image, then loads it into Kind. The architecture is auto-detected (works on both amd64 and arm64).
+
+```bash
+tilt up --stream   # terminal-only mode (no browser)
+tilt down          # stop and clean up
+tilt ci            # run once and exit (useful for validation)
+```
 
 ### Making Changes
 
 1. **Create a feature branch**:
-
    ```bash
    git checkout -b feature/your-feature-name
    ```
 
-2. **Make your changes** and ensure they follow our coding standards (optional but recommended):
-
+2. **Make your changes** and run code quality checks:
    ```bash
    make fmt lint
    ```
 
 3. **Run tests**:
-
    ```bash
-   make test
-   make test-integration
+   make test-unit                           # Fast unit tests (~30s)
+   make test-one TEST="should create"       # Single integration test
+   make test-integration                    # Full integration suite (~30min)
    ```
 
-4. **Test your changes locally**:
-
+4. **Verify end-to-end**:
    ```bash
-   make deploy-dev   # Deploy operator with your changes (uses local image)
-   # or
-   make deploy-prod  # Test in production-like environment (uses local image)
+   make smoke-test   # Deploys a standalone instance and waits for Ready
    ```
 
-### Testing Your Changes
+5. **If you modified API types** (`api/v1alpha1/`):
+   ```bash
+   make generate manifests   # Regenerate DeepCopy and CRDs
+   ```
+   If using Tilt, this happens automatically.
 
-We have several levels of testing:
+## Testing
 
-- **Unit Tests**: `make test-unit`
-- **Integration Tests**: `make test-integration` (auto-creates cluster and deploys operator)
-- **All Tests**: `make test`
-- **Coverage Report**: `make test-coverage`
+### Test Levels
 
-#### Integration Test Best Practices
+| Command | What It Does | Cluster Required | Typical Duration |
+|---------|-------------|-----------------|-----------------|
+| `make test-unit` | Unit tests with envtest | No | ~30s |
+| `make test-one TEST="..."` | Single integration test by name | Yes | 1-5min |
+| `make smoke-test` | Deploy standalone, verify Ready | Yes | ~3min |
+| `make test-integration` | Full integration suite | Auto-created | ~30min |
+| `make test-ci-local` | Emulate full CI workflow | Auto-created | ~45min |
+| `make test-coverage` | Unit tests with coverage report | No | ~1min |
 
-When writing integration tests, **proper resource cleanup is MANDATORY** to prevent CI failures:
+### Running a Single Integration Test
 
-1. **Always include AfterEach blocks** with comprehensive cleanup
-2. **Remove finalizers** before deleting resources to ensure actual deletion
-3. **Call cleanupCustomResourcesInNamespace()** to clean up all related resources
-4. **Don't rely on test suite cleanup alone** - implement active cleanup
+```bash
+# Run tests matching a description substring
+make test-one TEST="should create standalone"
+make test-one TEST="backup"
+make test-one TEST="version detection"
+```
 
-Example pattern:
+This wraps Ginkgo's `--focus` flag. It auto-detects which Kind cluster (dev or test) to use.
+
+### Smoke Test
+
+```bash
+make smoke-test
+```
+
+Deploys a minimal Neo4j Enterprise standalone instance (`hack/smoke-test-standalone.yaml`) with 1.5Gi memory, waits for the `Ready` condition (up to 5 minutes), then cleans up. Useful as a quick end-to-end sanity check after changes.
+
+### Integration Test Best Practices
+
+**Resource cleanup is mandatory** in every test. Tests that leak resources cause cascading failures in CI.
+
 ```go
 AfterEach(func() {
     if cluster != nil {
-        // Remove finalizers and delete
+        // Remove finalizers before deletion
         if len(cluster.GetFinalizers()) > 0 {
             cluster.SetFinalizers([]string{})
             _ = k8sClient.Update(ctx, cluster)
         }
         _ = k8sClient.Delete(ctx, cluster)
+        cluster = nil
     }
-    // Clean up namespace resources
-    cleanupCustomResourcesInNamespace(testNamespace)
+    if testNamespace != "" {
+        cleanupCustomResourcesInNamespace(testNamespace)
+    }
 })
 ```
 
-See CLAUDE.md for detailed integration test patterns and common pitfalls to avoid.
+Key rules:
+- Always remove finalizers before deleting custom resources
+- Use `cleanupCustomResourcesInNamespace()` in every `AfterEach`
+- Use 300-second timeouts for all integration tests
+- Memory requests must be >= 1.5Gi (Neo4j Enterprise minimum)
 
-#### CI Workflow Emulation (Added 2025-08-22)
+See `CLAUDE.md` for the full regression prevention checklist.
 
-Before submitting PRs, test your changes with CI-identical resource constraints:
+### CI Workflow Emulation
+
+Before submitting a PR that touches controllers or tests, validate with CI-identical constraints:
 
 ```bash
-# Emulate complete CI workflow with debug logging
 make test-ci-local
 ```
 
-**Why Use CI Emulation:**
-- **Prevent CI Failures**: Test with same memory constraints as GitHub Actions (512Mi vs 1.5Gi local)
-- **Debug Information**: Comprehensive logs for troubleshooting (`logs/ci-local-*.log`)
-- **Complete Testing**: Full workflow from unit tests to integration cleanup
-- **Resource Validation**: Ensures your changes work in memory-constrained environments
+This runs unit tests and integration tests with CI environment variables (`CI=true`, 512Mi memory limits). Debug logs are saved to:
+- `logs/ci-local-unit.log`
+- `logs/ci-local-integration.log`
+- `logs/ci-local-cleanup.log`
 
-**When to Use:**
-- Before pushing changes that affect resource requirements
-- When debugging failed CI runs
-- Before submitting PRs with test modifications
-- When adding new integration tests
+## CI/CD
 
-**Generated Debug Files:**
-- `logs/ci-local-unit.log` - Unit test execution logs
-- `logs/ci-local-integration.log` - Integration test and cluster setup logs
-- `logs/ci-local-cleanup.log` - Environment cleanup logs
+### Automatic (Every Push/PR)
+- **Unit tests** run on every push and pull request
 
-**Example Usage:**
-```bash
-# Test changes before pushing
-make test-ci-local
+### On-Demand (Integration Tests)
 
-# Check for memory-related issues
-grep -E "(memory|Memory|OOM)" logs/ci-local-integration.log
+Integration tests are opt-in to save CI resources (~7GB RAM, 10+ minutes):
 
-# Verify CI readiness
-echo "If this passes, CI should pass too ✅"
-```
+| Trigger | How |
+|---------|-----|
+| PR label | Add `run-integration-tests` label |
+| Commit message | Include `[run-integration]` in message |
+| Manual | Actions > CI > Run workflow > Check "Run integration tests" |
 
-### Code Generation
-
-When you modify API types, run:
-
-```bash
-make generate manifests
-```
-
-### Submitting Changes
-
-1. **Commit your changes** with a clear message:
-
-   ```bash
-   git add .
-   git commit -m "feat: add new feature description"
-   ```
-
-2. **Push to your fork**:
-
-   ```bash
-   git push origin feature/your-feature-name
-   ```
-
-3. **Create a Pull Request** with:
-   - Clear title and description
-   - Reference to any related issues
-   - Screenshots for UI changes
-   - Test results
-
-### CI/CD Workflow (Updated 2025-08-22)
-
-Our CI pipeline has been optimized for faster feedback and resource efficiency:
-
-#### Automatic Testing
-- **✅ Unit Tests**: Run automatically on every push and PR
-- **⚡ Fast Feedback**: Unit tests provide immediate feedback without cluster overhead
-
-#### Optional Integration Tests (On-demand)
-Integration tests are now **optional** and only run when explicitly requested to save CI resources:
-
-**How to trigger integration tests:**
-
-1. **Manual Trigger** (Recommended for testing):
-   ```
-   Go to Actions → CI → "Run workflow" → Check "Run integration tests"
-   ```
-
-2. **PR Label** (For PRs requiring integration testing):
-   ```
-   Add "run-integration-tests" label to your pull request
-   ```
-
-3. **Commit Message** (For specific commits):
-   ```bash
-   git commit -m "feat: add new cluster feature [run-integration]"
-   ```
-
-**Why this change?**
-- **Resource Efficiency**: Integration tests require significant memory (~7GB) and time (10+ minutes)
-- **Faster PRs**: Most changes only need unit tests for validation
-- **On-demand**: Run integration tests only when needed for cluster/integration changes
-
-**When to run integration tests:**
-- Changes to controllers or cluster logic
-- New integration test additions
+**When to trigger integration tests:**
+- Changes to controllers, resources, or cluster logic
+- New or modified integration tests
 - Before important releases
-- When troubleshooting CI-specific issues
 
-## Development Tools
+## Make Target Reference
 
-### Code Quality Tools (Optional)
+Run `make help` for the most common targets, or `make help-all` for the complete list.
 
-The following tools are available for local development to maintain code quality:
+### Getting Started
+| Target | Description |
+|--------|-------------|
+| `make dev-up` | Bootstrap complete dev environment (cluster + operator) |
+| `make dev-down` | Tear down the complete dev environment |
+| `make check-prereqs` | Verify all required tools are installed |
+| `make deploy-dev-local` | Build and deploy operator to Kind |
 
-- **go fmt**: Code formatting (`make fmt`)
-- **go vet**: Static analysis (`make vet`)
-- **golangci-lint**: Advanced linting (`make lint`)
-- **goimports**: Import organization
-- **Security scanning**: (`make security`)
+### Dev Loop
+| Target | Description |
+|--------|-------------|
+| `make dev-watch` | Auto-rebuild on file changes (requires watchexec/fswatch) |
+| `make operator-logs` | Follow operator logs |
+| `make operator-status` | Show operator deployment status |
 
-**Note:** Code quality checks are not enforced by CI but are recommended for local development.
+### Testing
+| Target | Description |
+|--------|-------------|
+| `make test-unit` | Unit tests (no cluster needed) |
+| `make test-one TEST="..."` | Run a single integration test by name |
+| `make smoke-test` | Deploy standalone and verify Ready state |
+| `make test-integration` | Full integration suite |
+| `make test-ci-local` | Emulate CI workflow locally |
+| `make test-coverage` | Generate coverage report |
 
-### VS Code Integration
+### Build
+| Target | Description |
+|--------|-------------|
+| `make build` | Build operator binary |
+| `make docker-build` | Build container image |
+| `make manifests` | Generate CRDs and RBAC |
+| `make generate` | Generate DeepCopy methods |
 
-Install the Go extension and use the provided `.vscode/settings.json` for optimal development experience.
+### Code Quality
+| Target | Description |
+|--------|-------------|
+| `make fmt` | Run go fmt |
+| `make vet` | Run go vet |
+| `make lint` | Run golangci-lint |
+| `make security` | Run gosec security scanner |
+| `make tidy` | Tidy go modules |
 
-### Debugging
-
-Use `make operator-setup` to deploy the operator in your development cluster for testing and debugging.
+### Cluster Management
+| Target | Description |
+|--------|-------------|
+| `make dev-cluster` | Create Kind dev cluster |
+| `make dev-cluster-reset` | Delete and recreate dev cluster |
+| `make dev-cluster-delete` | Delete dev cluster |
+| `make test-cluster` | Create Kind test cluster |
 
 ## Project Structure
 
 ```text
-├── api/                    # API type definitions
-├── cmd/                    # Main application entry point
-├── config/                 # Kubernetes manifests and configuration
-├── internal/               # Internal packages
-│   ├── controller/         # Controller implementations
-│   ├── resources/          # Resource builders
-│   ├── neo4j/             # Neo4j client and utilities
-│   └── validation/        # Input validation logic
-├── test/                   # Test files
-├── hack/                   # Development scripts
-└── docs/                   # Documentation
+.
+├── api/v1alpha1/           # CRD type definitions
+├── cmd/                    # Operator entrypoint
+├── config/                 # Kustomize manifests
+│   ├── crd/bases/          # Generated CRD YAML
+│   ├── overlays/dev/       # Dev deployment (neo4j-operator-dev namespace)
+│   ├── overlays/prod/      # Prod deployment (neo4j-operator-system namespace)
+│   └── overlays/integration-test/
+├── internal/
+│   ├── controller/         # Reconciliation logic
+│   ├── resources/          # Kubernetes resource builders
+│   ├── neo4j/              # Neo4j Bolt client
+│   └── validation/         # Inline validation (no webhooks)
+├── test/
+│   ├── integration/        # Ginkgo integration tests
+│   ├── fixtures/           # Test data
+│   └── testutil/           # Test helpers
+├── charts/neo4j-operator/  # Helm chart
+├── hack/                   # Dev scripts and configs
+│   ├── kind-config.yaml    # Kind cluster configuration
+│   ├── setup-dev.sh        # Full dev environment setup
+│   ├── Dockerfile.tilt     # Lightweight image for Tilt builds
+│   └── smoke-test-standalone.yaml  # Manifest for smoke-test target
+├── scripts/                # CI and operational scripts
+├── examples/               # 67+ example manifests by use case
+├── .devcontainer/          # GitHub Codespaces / VS Code Dev Container
+├── .tool-versions          # Pinned tool versions for mise/asdf
+├── Tiltfile                # Tilt live-reload configuration
+├── Makefile                # Build, test, deploy targets
+└── CLAUDE.md               # AI assistant guidance and project reference
 ```
 
 ## Coding Standards
 
 ### Go Style
 
-- Follow [Effective Go](https://golang.org/doc/effective_go.html)
+- Follow [Effective Go](https://golang.org/doc/effective_go.html) and [Go Code Review Comments](https://github.com/golang/go/wiki/CodeReviewComments)
 - Use `gofmt` and `goimports`
-- Follow the [Go Code Review Comments](https://github.com/golang/go/wiki/CodeReviewComments)
+- Run `make fmt lint` before committing
 
 ### Kubernetes Conventions
 
 - Follow [Kubernetes API Conventions](https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md)
-- Use proper status conditions
-- Implement proper RBAC
+- All validation is inline in controllers (`internal/validation/`), never via webhooks
+- Use `retry.RetryOnConflict` for resource updates
+- Use structured event constants from `internal/controller/events.go`
 
 ### Git Commit Messages
 
 We follow [Conventional Commits](https://www.conventionalcommits.org/):
 
-- `feat:` for new features
-- `fix:` for bug fixes
-- `docs:` for documentation changes
-- `test:` for test additions/changes
-- `refactor:` for code refactoring
-- `chore:` for maintenance tasks
+```
+feat: add new feature description
+fix: resolve issue with cluster formation
+docs: update contributing guide
+test: add integration test for backup
+refactor: simplify reconciliation loop
+chore: update dependency versions
+```
+
+Pre-commit hooks (if installed) validate commit message format automatically.
+
+### Pre-commit Hooks (Optional)
+
+```bash
+# Install pre-commit framework
+brew install pre-commit
+
+# Install hooks for this repo
+pre-commit install
+pre-commit install --hook-type commit-msg
+```
+
+Hooks run on each commit: go fmt, goimports, go mod tidy, golangci-lint (lenient, soft-fail), staticcheck, gitleaks (secret detection), and commitizen (message format).
+
+## Submitting Changes
+
+1. **Commit** with a conventional commit message
+2. **Push** to your fork
+3. **Create a Pull Request** with:
+   - Clear title and description
+   - Reference to related issues
+   - Test results or CI confirmation
+4. **Trigger integration tests** if your change touches controllers or cluster logic (add the `run-integration-tests` label)
+
+## Debugging
+
+```bash
+# Operator logs
+make operator-logs
+
+# Describe a custom resource
+kubectl describe neo4jenterprisecluster <name>
+
+# Check pod events
+kubectl get events --sort-by='.lastTimestamp' -A
+
+# Enable debug logging
+kubectl patch -n neo4j-operator-dev deployment/neo4j-operator-controller-manager \
+  -p '{"spec":{"template":{"spec":{"containers":[{"name":"manager","args":["--mode=dev","--zap-log-level=debug"]}]}}}}'
+
+# OOM troubleshooting
+kubectl describe pod <pod-name> | grep -E "(OOMKilled|Memory|Exit.*137)"
+```
 
 ## Getting Help
 
-- **Slack**: Join our [Neo4j Community Slack](https://neo4j.com/slack/)
-- **Issues**: Check existing [GitHub Issues](https://github.com/neo4j-partners/neo4j-kubernetes-operator/issues)
-- **Discussions**: Start a [GitHub Discussion](https://github.com/neo4j-partners/neo4j-kubernetes-operator/discussions)
+- **Issues**: [GitHub Issues](https://github.com/neo4j-partners/neo4j-kubernetes-operator/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/neo4j-partners/neo4j-kubernetes-operator/discussions)
+- **Slack**: [Neo4j Community Slack](https://neo4j.com/slack/)
 
 ## License
 

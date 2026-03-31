@@ -93,8 +93,21 @@ all: build
 # http://linuxcommand.org/lc3_adv_awk.php
 
 .PHONY: help
-help: ## Display this help.
-	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
+help: ## Display getting-started targets (use 'make help-all' for everything).
+	@printf "\n\033[1mGetting Started\033[0m\n"
+	@printf "  \033[36m%-20s\033[0m %s\n" "dev-up" "Bootstrap complete dev environment (cluster + operator)"
+	@printf "  \033[36m%-20s\033[0m %s\n" "dev-down" "Tear down dev environment"
+	@printf "  \033[36m%-20s\033[0m %s\n" "deploy-dev-local" "Build and deploy operator to Kind"
+	@printf "  \033[36m%-20s\033[0m %s\n" "test-unit" "Run unit tests (no cluster needed)"
+	@printf "  \033[36m%-20s\033[0m %s\n" "test-one" "Run a single test: make test-one TEST=\"my test name\""
+	@printf "  \033[36m%-20s\033[0m %s\n" "smoke-test" "Deploy standalone instance and verify it reaches Ready"
+	@printf "  \033[36m%-20s\033[0m %s\n" "dev-watch" "File-watch mode: auto-rebuild on code changes"
+	@printf "  \033[36m%-20s\033[0m %s\n" "operator-logs" "Follow operator logs"
+	@printf "\n  Run \033[36mmake help-all\033[0m for all targets.\n\n"
+
+.PHONY: help-all
+help-all: ## Display all available targets.
+	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-25s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
 ##@ Code Generation
 
@@ -613,6 +626,112 @@ scorecard: ## Run operator-sdk scorecard checks against the generated bundle.
 	operator-sdk scorecard --config config/scorecard/scorecard.yaml bundle
 
 # Removed: catalog-build-test and catalog-push-test targets - duplicates of catalog-build and catalog-push
+
+##@ Developer Experience
+
+.PHONY: check-prereqs
+check-prereqs: ## Verify all required tools are installed.
+	@echo "Checking prerequisites..."
+	@MISSING=0; \
+	command -v go >/dev/null 2>&1 || { echo "  [MISSING] go - install from https://golang.org/doc/install"; MISSING=1; }; \
+	command -v docker >/dev/null 2>&1 || { echo "  [MISSING] docker - install from https://docs.docker.com/get-docker/"; MISSING=1; }; \
+	docker info >/dev/null 2>&1 || { echo "  [NOT RUNNING] Docker daemon is not running. Start Docker Desktop and retry."; MISSING=1; }; \
+	command -v kubectl >/dev/null 2>&1 || { echo "  [MISSING] kubectl - install from https://kubernetes.io/docs/tasks/tools/"; MISSING=1; }; \
+	command -v kind >/dev/null 2>&1 || { echo "  [MISSING] kind - install with: brew install kind"; MISSING=1; }; \
+	command -v make >/dev/null 2>&1 || { echo "  [MISSING] make - install with: xcode-select --install (macOS)"; MISSING=1; }; \
+	if [ $$MISSING -eq 1 ]; then echo ""; echo "Install missing tools and retry."; exit 1; fi; \
+	echo "All prerequisites satisfied."
+
+.PHONY: dev-up
+dev-up: check-prereqs ## Bootstrap complete dev environment (cluster + operator) in one command.
+	@echo "=== Setting up complete development environment ==="
+	@echo ""
+	@echo "Step 1/4: Creating Kind cluster..."
+	@$(MAKE) dev-cluster
+	@echo ""
+	@echo "Step 2/4: Installing CRDs..."
+	@$(MAKE) install
+	@echo ""
+	@echo "Step 3/4: Building and deploying operator..."
+	@$(MAKE) deploy-dev-local
+	@echo ""
+	@echo "Step 4/4: Waiting for operator to be ready..."
+	@kubectl rollout status deployment/neo4j-operator-controller-manager -n neo4j-operator-dev --timeout=120s 2>/dev/null || \
+		kubectl rollout status deployment/neo4j-operator-controller-manager -n neo4j-operator-system --timeout=120s 2>/dev/null || \
+		echo "Operator deployment rolling out (check 'make operator-status' for details)"
+	@echo ""
+	@echo "============================================"
+	@echo "  Dev environment ready!"
+	@echo ""
+	@echo "  Next steps:"
+	@echo "    make operator-logs          # Watch operator logs"
+	@echo "    make smoke-test             # Verify with a standalone deploy"
+	@echo "    make dev-watch              # Auto-rebuild on file changes"
+	@echo "    tilt up                     # Live-reload dev loop (if Tilt installed)"
+	@echo "============================================"
+
+.PHONY: dev-down
+dev-down: ## Tear down the complete dev environment.
+	@echo "Tearing down dev environment..."
+	@$(MAKE) dev-destroy
+	@echo "Dev environment removed."
+
+.PHONY: test-one
+test-one: ginkgo ## Run a single integration test by name. Usage: make test-one TEST="should create standalone"
+	@if [ -z "$(TEST)" ]; then \
+		echo "Usage: make test-one TEST=\"test description substring\""; \
+		echo "Example: make test-one TEST=\"should create standalone\""; \
+		exit 1; \
+	fi
+	@echo "Running test matching: $(TEST)"
+	@kind export kubeconfig --name neo4j-operator-test 2>/dev/null || kind export kubeconfig --name neo4j-operator-dev 2>/dev/null || true
+	@$(GINKGO) run --focus "$(TEST)" --timeout=300s --procs=1 -v ./test/integration/...
+
+.PHONY: smoke-test
+smoke-test: ## Deploy a standalone Neo4j instance and verify it reaches Ready state.
+	@echo "Running smoke test..."
+	@echo "Creating admin secret..."
+	@kubectl create secret generic neo4j-smoke-secret \
+		--from-literal=username=neo4j --from-literal=password=smoke-test-pass123 \
+		--dry-run=client -o yaml | kubectl apply -f -
+	@echo "Deploying minimal standalone instance..."
+	@kubectl apply -f hack/smoke-test-standalone.yaml
+	@echo "Waiting for standalone to reach Ready (up to 5 minutes)..."
+	@kubectl wait neo4jenterprisestandalone/smoke-test --for=condition=Ready --timeout=300s && \
+		echo "Smoke test PASSED - standalone reached Ready state" || \
+		{ echo "Smoke test FAILED - standalone did not reach Ready in time"; \
+		  echo "Debug: kubectl describe neo4jenterprisestandalone smoke-test"; \
+		  echo "Debug: kubectl get pods -l app.kubernetes.io/instance=smoke-test"; }
+	@echo "Cleaning up smoke test resources..."
+	@kubectl delete neo4jenterprisestandalone smoke-test --ignore-not-found=true --timeout=60s
+	@kubectl delete secret neo4j-smoke-secret --ignore-not-found=true
+
+.PHONY: dev-watch
+dev-watch: ## Auto-rebuild and redeploy on code changes (requires watchexec or fswatch).
+	@if command -v watchexec >/dev/null 2>&1; then \
+		echo "Watching for changes (Ctrl+C to stop)..."; \
+		echo "Tip: For a richer experience, use 'tilt up' instead."; \
+		watchexec -w api/ -w internal/ -w cmd/ \
+			--exts go,yaml \
+			--debounce 2000 \
+			-- make manifests generate build deploy-dev-local; \
+	elif command -v fswatch >/dev/null 2>&1; then \
+		echo "Watching for changes with fswatch (Ctrl+C to stop)..."; \
+		echo "Tip: For a richer experience, use 'tilt up' instead."; \
+		fswatch -o api/ internal/ cmd/ -e ".*_test.go" | while read; do \
+			make manifests generate build deploy-dev-local; \
+		done; \
+	else \
+		echo "Neither watchexec nor fswatch found."; \
+		echo "Install one of:"; \
+		echo "  brew install watchexec    # recommended"; \
+		echo "  brew install fswatch"; \
+		echo ""; \
+		echo "Or use Tilt for a richer dev experience:"; \
+		echo "  brew install tilt"; \
+		echo "  tilt up"; \
+		exit 1; \
+	fi
 
 ##@ Development Environment
 

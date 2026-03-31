@@ -1,0 +1,35 @@
+{
+  "name": "Neo4j Kubernetes Operator",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/devcontainers/features/kubectl-helm-minikube:1": {
+      "helm": "3.16.0",
+      "kubectl": "1.31.0",
+      "minikube": "none"
+    }
+  },
+  "postCreateCommand": "go install sigs.k8s.io/kind@v0.20.0 && echo 'Run make dev-up to bootstrap the dev environment'",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "golang.go",
+        "ms-kubernetes-tools.vscode-kubernetes-tools",
+        "redhat.vscode-yaml"
+      ],
+      "settings": {
+        "go.lintTool": "golangci-lint",
+        "go.lintFlags": ["--fast"],
+        "go.testTimeout": "300s"
+      }
+    }
+  },
+  "remoteUser": "vscode",
+  "forwardPorts": [7474, 7687],
+  "portsAttributes": {
+    "7474": { "label": "Neo4j Browser" },
+    "7687": { "label": "Neo4j Bolt" }
+  }
+}
