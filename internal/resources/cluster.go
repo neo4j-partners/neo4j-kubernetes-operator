@@ -1790,7 +1790,7 @@ func BuildMonitoringConfig(mon *neo4jv1alpha1.MonitoringSpec) string {
 		lines = append(lines, fmt.Sprintf("server.metrics.prefix=%s", mon.MetricsPrefix))
 	}
 
-	return strings.Join(lines, "\n")
+	return strings.Join(lines, "\n") + "\n"
 }
 
 // isNeo4jVersion526OrHigher checks if the Neo4j image is the 5.26.x semver LTS release.

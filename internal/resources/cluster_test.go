@@ -2,6 +2,7 @@ package resources_test
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -1089,5 +1090,25 @@ func TestBuildMonitoringConfig(t *testing.T) {
 
 		assert.NotContains(t, config, "server.metrics.filter")
 		assert.NotContains(t, config, "server.metrics.prefix")
+	})
+
+	t.Run("trailing newline prevents config corruption when metricsFilter is set", func(t *testing.T) {
+		spec := &neo4jv1alpha1.MonitoringSpec{
+			Enabled:       true,
+			MetricsFilter: "*",
+		}
+		config := resources.BuildMonitoringConfig(spec)
+
+		// Config must end with newline so subsequent config entries
+		// (from spec.config) don't concatenate onto the last line.
+		assert.True(t, strings.HasSuffix(config, "\n"),
+			"BuildMonitoringConfig must end with trailing newline, got: %q", config[len(config)-40:])
+
+		// Simulate the concatenation that happens in buildNeo4jConfigForCluster:
+		// config += BuildMonitoringConfig(...)
+		// config += fmt.Sprintf("%s=%s\n", key, value)
+		combined := config + "dbms.default_listen_address=0.0.0.0\n"
+		assert.NotContains(t, combined, "server.metrics.filter=*dbms",
+			"metricsFilter line must not be concatenated with the next config entry")
 	})
 }
