@@ -109,8 +109,8 @@ var _ = Describe("Server Role Hints Integration", func() {
 						Size:      "1Gi",
 					},
 					Auth: &neo4jv1alpha1.AuthSpec{
-						Provider:    "native",
-						AdminSecret: "neo4j-admin-secret",
+						AuthenticationProviders: []string{"native"},
+						AdminSecret:             "neo4j-admin-secret",
 					},
 					TLS: &neo4jv1alpha1.TLSSpec{
 						Mode: "disabled",

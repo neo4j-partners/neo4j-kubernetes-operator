@@ -68,28 +68,6 @@ func (v *SecurityValidator) validateAuthenticationConfig(cluster *neo4jv1alpha1.
 	hasTypedOIDC := len(cluster.Spec.Auth.OIDC) > 0
 
 	// Validate provider-specific requirements from raw spec.config
-	// (fallback for users not using typed fields)
-	provider := cluster.Spec.Auth.Provider
-	if provider != "" {
-		switch provider {
-		case "ldap":
-			if !hasTypedLDAP {
-				allErrs = append(allErrs, v.validateLDAPConfig(cluster)...)
-			}
-		case "jwt":
-			allErrs = append(allErrs, v.validateJWTConfig(cluster)...)
-		case "oidc":
-			if !hasTypedOIDC {
-				allErrs = append(allErrs, v.validateOIDCConfig(cluster)...)
-			}
-		case "saml":
-			allErrs = append(allErrs, v.validateSAMLConfig(cluster)...)
-		case "kerberos":
-			allErrs = append(allErrs, v.validateKerberosConfig(cluster)...)
-		}
-	}
-
-	// Also check provider lists for raw config validation
 	for _, p := range cluster.Spec.Auth.AuthenticationProviders {
 		switch {
 		case p == "ldap" && !hasTypedLDAP:

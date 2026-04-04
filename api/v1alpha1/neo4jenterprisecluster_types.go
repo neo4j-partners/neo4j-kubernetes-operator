@@ -257,25 +257,15 @@ type AuthSpec struct {
 	// AuthenticationProviders is an ordered list of authentication providers.
 	// Neo4j evaluates them in order during login. Valid values: native, ldap, oidc-<name>, jwt, kerberos.
 	// For OIDC providers, use the format "oidc-<name>" where <name> matches a key in the OIDC map.
-	// Defaults to ["native"] if both this and Provider are empty.
+	// Defaults to ["native"] if empty.
 	// +optional
 	AuthenticationProviders []string `json:"authenticationProviders,omitempty"`
 
 	// AuthorizationProviders is an ordered list of authorization providers.
 	// Valid values: native, ldap, oidc-<name>, jwt, kerberos.
-	// Defaults to ["native"] if both this and Provider are empty.
+	// Defaults to ["native"] if empty.
 	// +optional
 	AuthorizationProviders []string `json:"authorizationProviders,omitempty"`
-
-	// DEPRECATED: Provider selects a single auth provider. Use AuthenticationProviders/AuthorizationProviders instead.
-	// If set and the new list fields are empty, the operator treats it as AuthenticationProviders: [<provider>].
-	// +kubebuilder:validation:Enum=native;ldap;kerberos;jwt;oidc;saml;custom
-	// +optional
-	Provider string `json:"provider,omitempty"`
-
-	// DEPRECATED: Secret containing auth provider configuration. Use provider-specific secretRefs instead.
-	// +optional
-	SecretRef string `json:"secretRef,omitempty"`
 
 	// AdminSecret is the name of the Secret containing initial admin credentials (keys: username, password)
 	// +optional
@@ -313,8 +303,9 @@ type AuthSpec struct {
 
 	// TrustStore configures a custom JVM truststore for LDAPS or OIDC with internal CAs.
 	// The operator mounts the CA certificate and creates a JKS truststore via an init container.
+	// Name is the Secret name; Key defaults to "ca.crt" if omitted.
 	// +optional
-	TrustStore *TrustStoreSpec `json:"trustStore,omitempty"`
+	TrustStore *SecretKeyRef `json:"trustStore,omitempty"`
 }
 
 // PasswordPolicySpec defines Neo4j password policy
@@ -566,15 +557,13 @@ type OIDCClaimsSpec struct {
 	Groups string `json:"groups,omitempty"`
 }
 
-// TrustStoreSpec configures a custom JVM truststore for LDAPS or OIDC with internal CAs.
-// The operator creates an init container that converts the PEM CA certificate into a JKS truststore.
-type TrustStoreSpec struct {
-	// SecretRef is the name of a Secret containing the CA certificate in PEM format
+// SecretKeyRef references a specific key within a Kubernetes Secret.
+type SecretKeyRef struct {
 	// +kubebuilder:validation:Required
-	SecretRef string `json:"secretRef"`
+	// Name of the Kubernetes Secret
+	Name string `json:"name"`
 
-	// Key is the key in the Secret containing the CA certificate. Defaults to "ca.crt".
-	// +kubebuilder:default="ca.crt"
+	// Key within the Secret. The default depends on context (e.g., "ca.crt" for TrustStore, "token" for fleet management).
 	// +optional
 	Key string `json:"key,omitempty"`
 }
@@ -587,18 +576,8 @@ type KerberosAuthSpec struct {
 	// Service principal name
 	ServicePrincipal string `json:"servicePrincipal,omitempty"`
 
-	// Keytab configuration
-	Keytab *KerberosKeytabSpec `json:"keytab,omitempty"`
-}
-
-// KerberosKeytabSpec defines Kerberos keytab configuration
-type KerberosKeytabSpec struct {
-	// Secret containing keytab file
-	SecretRef string `json:"secretRef,omitempty"`
-
-	// Key in secret containing keytab
-	// +kubebuilder:default=keytab
-	Key string `json:"key,omitempty"`
+	// Keytab secret reference. Name is the Secret name; Key defaults to "keytab" if omitted.
+	Keytab *SecretKeyRef `json:"keytab,omitempty"`
 }
 
 // ServiceSpec defines service configuration
@@ -1196,9 +1175,6 @@ type Neo4jEnterpriseClusterList struct {
 	Items           []Neo4jEnterpriseCluster `json:"items"`
 }
 
-// DEPRECATED: PluginSpec is deprecated. Use Neo4jPlugin CRD instead.
-// This type is kept for backward compatibility but will be removed in future versions.
-
 // MonitoringSpec defines monitoring, metrics, and query logging configuration.
 type MonitoringSpec struct {
 	// +kubebuilder:default=true
@@ -1292,20 +1268,7 @@ type AuraFleetManagementSpec struct {
 	// Example:
 	//   kubectl create secret generic aura-fleet-token --from-literal=token='<token-from-aura>'
 	// +optional
-	TokenSecretRef *AuraTokenSecretRef `json:"tokenSecretRef,omitempty"`
-}
-
-// AuraTokenSecretRef specifies the Kubernetes Secret holding the Aura Fleet Management token.
-type AuraTokenSecretRef struct {
-	// Name of the Kubernetes Secret containing the registration token.
-	// +kubebuilder:validation:Required
-	Name string `json:"name"`
-
-	// Key within the Secret whose value is the registration token.
-	// Defaults to "token" if not specified.
-	// +kubebuilder:default=token
-	// +optional
-	Key string `json:"key,omitempty"`
+	TokenSecretRef *SecretKeyRef `json:"tokenSecretRef,omitempty"`
 }
 
 // PropertyShardingSpec defines property sharding configuration

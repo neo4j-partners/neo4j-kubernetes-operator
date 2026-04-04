@@ -112,7 +112,7 @@ spec:
         systemAccountSecretRef: ldap-system-account
     # TrustStore for LDAPS with internal CA
     trustStore:
-      secretRef: corp-ca-cert  # Secret with key "ca.crt" containing the corporate CA
+      name: corp-ca-cert  # Secret with key "ca.crt" containing the corporate CA
   tls:
     mode: disabled
 

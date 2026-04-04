@@ -49,8 +49,8 @@ var _ = Describe("Restore API Integration Tests", func() {
 					Namespace: testNamespace,
 				},
 				Spec: neo4jv1alpha1.Neo4jRestoreSpec{
-					TargetCluster: "test-cluster",
-					DatabaseName:  "restoreddb",
+					ClusterRef:   "test-cluster",
+					DatabaseName: "restoreddb",
 					Source: neo4jv1alpha1.RestoreSource{
 						Type:      "backup",
 						BackupRef: "daily-backup-20250121",
@@ -87,8 +87,8 @@ var _ = Describe("Restore API Integration Tests", func() {
 					Namespace: testNamespace,
 				},
 				Spec: neo4jv1alpha1.Neo4jRestoreSpec{
-					TargetCluster: "prod-cluster",
-					DatabaseName:  "pitrdb",
+					ClusterRef:   "prod-cluster",
+					DatabaseName: "pitrdb",
 					Source: neo4jv1alpha1.RestoreSource{
 						Type: "pitr",
 						PITR: &neo4jv1alpha1.PITRConfig{
@@ -137,8 +137,8 @@ var _ = Describe("Restore API Integration Tests", func() {
 					Namespace: testNamespace,
 				},
 				Spec: neo4jv1alpha1.Neo4jRestoreSpec{
-					TargetCluster: "staging-cluster",
-					DatabaseName:  "testdb",
+					ClusterRef:   "staging-cluster",
+					DatabaseName: "testdb",
 					Source: neo4jv1alpha1.RestoreSource{
 						Type: "storage",
 						Storage: &neo4jv1alpha1.StorageLocation{

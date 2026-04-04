@@ -79,8 +79,8 @@ spec:
                     description: Enable coordinated backups across all shards
                     type: boolean
                   retention:
-                    default: 7d
-                    description: Backup retention policy
+                    default: 168h
+                    description: Backup retention policy (e.g., "168h" for 7 days)
                     type: string
                   schedule:
                     description: |-

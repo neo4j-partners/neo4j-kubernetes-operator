@@ -129,8 +129,8 @@ type ShardedDatabaseBackupConfig struct {
 	// Storage location for sharded database backups
 	Storage *StorageLocation `json:"storage,omitempty"`
 
-	// Backup retention policy
-	// +kubebuilder:default="7d"
+	// Backup retention policy (e.g., "168h" for 7 days)
+	// +kubebuilder:default="168h"
 	Retention string `json:"retention,omitempty"`
 
 	// Consistency mode for cross-shard backups

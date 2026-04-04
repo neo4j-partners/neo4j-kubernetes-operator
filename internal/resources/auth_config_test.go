@@ -19,17 +19,25 @@ func TestBuildAuthConfig_NilAuth(t *testing.T) {
 }
 
 func TestBuildAuthConfig_NativeOnly(t *testing.T) {
+	// Empty auth spec (default native) doesn't generate provider lines
+	auth := &neo4jv1alpha1.AuthSpec{}
+	result := resources.BuildAuthConfig(auth)
+	assert.Empty(t, result.Config)
+}
+
+func TestBuildAuthConfig_ExplicitNative(t *testing.T) {
+	// Explicitly setting native generates the config line
 	auth := &neo4jv1alpha1.AuthSpec{
-		Provider: "native",
+		AuthenticationProviders: []string{"native"},
 	}
 	result := resources.BuildAuthConfig(auth)
-	// native-only doesn't generate provider lines (it's the default)
-	assert.Empty(t, result.Config)
+	assert.Contains(t, result.Config, "dbms.security.authentication_providers=native")
 }
 
 func TestBuildAuthConfig_BackwardCompat_SingleProvider(t *testing.T) {
 	auth := &neo4jv1alpha1.AuthSpec{
-		Provider: "ldap",
+		AuthenticationProviders: []string{"ldap"},
+		AuthorizationProviders:  []string{"ldap"},
 		LDAP: &neo4jv1alpha1.Neo4jLDAPSpec{
 			Host: "ldap://ldap.example.com",
 		},
@@ -280,9 +288,9 @@ func TestBuildAuthEnvVars_LDAPNoSystemAccount(t *testing.T) {
 }
 
 func TestBuildTrustStoreInitContainer(t *testing.T) {
-	trustStore := &neo4jv1alpha1.TrustStoreSpec{
-		SecretRef: "my-ca-secret",
-		Key:       "custom-ca.pem",
+	trustStore := &neo4jv1alpha1.SecretKeyRef{
+		Name: "my-ca-secret",
+		Key:  "custom-ca.pem",
 	}
 
 	container := resources.BuildTrustStoreInitContainer("neo4j:5.26-enterprise", trustStore)
@@ -295,8 +303,8 @@ func TestBuildTrustStoreInitContainer(t *testing.T) {
 }
 
 func TestBuildTrustStoreVolumes(t *testing.T) {
-	trustStore := &neo4jv1alpha1.TrustStoreSpec{
-		SecretRef: "my-ca-secret",
+	trustStore := &neo4jv1alpha1.SecretKeyRef{
+		Name: "my-ca-secret",
 	}
 
 	volumes := resources.BuildTrustStoreVolumes(trustStore)

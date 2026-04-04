@@ -41,7 +41,7 @@ func TestSecurityValidator_Validate(t *testing.T) {
 				},
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 					Auth: &neo4jv1alpha1.AuthSpec{
-						Provider: "native",
+						AuthenticationProviders: []string{"native"},
 					},
 				},
 			},
@@ -56,8 +56,7 @@ func TestSecurityValidator_Validate(t *testing.T) {
 				},
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 					Auth: &neo4jv1alpha1.AuthSpec{
-						Provider:  "ldap",
-						SecretRef: "ldap-secret",
+						AuthenticationProviders: []string{"ldap"},
 					},
 					Config: map[string]string{
 						"dbms.security.ldap.host":                     "ldap.example.com",
@@ -77,8 +76,7 @@ func TestSecurityValidator_Validate(t *testing.T) {
 				},
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 					Auth: &neo4jv1alpha1.AuthSpec{
-						Provider:  "oidc",
-						SecretRef: "oidc-secret",
+						AuthenticationProviders: []string{"oidc"},
 					},
 					Config: map[string]string{
 						"dbms.security.oidc.issuer":    "https://auth.example.com",
@@ -98,8 +96,7 @@ func TestSecurityValidator_Validate(t *testing.T) {
 				},
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 					Auth: &neo4jv1alpha1.AuthSpec{
-						Provider:  "jwt",
-						SecretRef: "jwt-secret",
+						AuthenticationProviders: []string{"jwt"},
 					},
 					Config: map[string]string{
 						"dbms.security.jwt.public_key": "/ssl/jwt-public.key",
@@ -118,8 +115,7 @@ func TestSecurityValidator_Validate(t *testing.T) {
 				},
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 					Auth: &neo4jv1alpha1.AuthSpec{
-						Provider:  "saml",
-						SecretRef: "saml-secret",
+						AuthenticationProviders: []string{"saml"},
 					},
 					Config: map[string]string{
 						"dbms.security.saml.metadata_url": "https://idp.example.com/metadata",
@@ -138,8 +134,7 @@ func TestSecurityValidator_Validate(t *testing.T) {
 				},
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 					Auth: &neo4jv1alpha1.AuthSpec{
-						Provider:  "kerberos",
-						SecretRef: "kerberos-secret",
+						AuthenticationProviders: []string{"kerberos"},
 					},
 					Config: map[string]string{
 						"dbms.security.kerberos.service_principal": "neo4j/server.example.com@EXAMPLE.COM",
@@ -158,7 +153,7 @@ func TestSecurityValidator_Validate(t *testing.T) {
 				},
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 					Auth: &neo4jv1alpha1.AuthSpec{
-						Provider: "invalid-provider",
+						AuthenticationProviders: []string{"invalid-provider"},
 					},
 				},
 			},
@@ -173,8 +168,8 @@ func TestSecurityValidator_Validate(t *testing.T) {
 				},
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 					Auth: &neo4jv1alpha1.AuthSpec{
-						Provider: "ldap",
-						// Missing SecretRef - now validated by AuthValidator, not SecurityValidator
+						AuthenticationProviders: []string{"ldap"},
+						// Validated by AuthValidator, not SecurityValidator
 					},
 				},
 			},
@@ -189,8 +184,7 @@ func TestSecurityValidator_Validate(t *testing.T) {
 				},
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 					Auth: &neo4jv1alpha1.AuthSpec{
-						Provider:  "ldap",
-						SecretRef: "ldap-secret",
+						AuthenticationProviders: []string{"ldap"},
 					},
 					Config: map[string]string{
 						"dbms.security.ldap.host":                     "",        // Empty host
@@ -210,8 +204,7 @@ func TestSecurityValidator_Validate(t *testing.T) {
 				},
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 					Auth: &neo4jv1alpha1.AuthSpec{
-						Provider:  "oidc",
-						SecretRef: "oidc-secret",
+						AuthenticationProviders: []string{"oidc"},
 					},
 					Config: map[string]string{
 						// Missing issuer
@@ -230,8 +223,7 @@ func TestSecurityValidator_Validate(t *testing.T) {
 				},
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 					Auth: &neo4jv1alpha1.AuthSpec{
-						Provider:  "oidc",
-						SecretRef: "oidc-secret",
+						AuthenticationProviders: []string{"oidc"},
 					},
 					Config: map[string]string{
 						"dbms.security.oidc.issuer":    "invalid-url", // Invalid URL
@@ -250,8 +242,7 @@ func TestSecurityValidator_Validate(t *testing.T) {
 				},
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 					Auth: &neo4jv1alpha1.AuthSpec{
-						Provider:  "oidc",
-						SecretRef: "oidc-secret",
+						AuthenticationProviders: []string{"oidc"},
 					},
 					Config: map[string]string{
 						"dbms.security.oidc.issuer":    "https://auth.example.com",
@@ -271,8 +262,7 @@ func TestSecurityValidator_Validate(t *testing.T) {
 				},
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 					Auth: &neo4jv1alpha1.AuthSpec{
-						Provider:  "jwt",
-						SecretRef: "jwt-secret",
+						AuthenticationProviders: []string{"jwt"},
 					},
 					Config: map[string]string{
 						// Missing jwt.secret or jwt.public_key
@@ -291,8 +281,7 @@ func TestSecurityValidator_Validate(t *testing.T) {
 				},
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 					Auth: &neo4jv1alpha1.AuthSpec{
-						Provider:  "jwt",
-						SecretRef: "jwt-secret",
+						AuthenticationProviders: []string{"jwt"},
 					},
 					Config: map[string]string{
 						"dbms.security.jwt.secret":    "secret-key",
@@ -311,8 +300,7 @@ func TestSecurityValidator_Validate(t *testing.T) {
 				},
 				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 					Auth: &neo4jv1alpha1.AuthSpec{
-						Provider:  "kerberos",
-						SecretRef: "kerberos-secret",
+						AuthenticationProviders: []string{"kerberos"},
 					},
 					Config: map[string]string{
 						"dbms.security.kerberos.service_principal": "invalid-principal", // Invalid format

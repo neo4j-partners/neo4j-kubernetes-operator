@@ -17,14 +17,15 @@ limitations under the License.
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // Neo4jRestoreSpec defines the desired state of Neo4jRestore
 type Neo4jRestoreSpec struct {
 	// +kubebuilder:validation:Required
-	// Target cluster to restore to
-	TargetCluster string `json:"targetCluster"`
+	// Reference to the Neo4j cluster or standalone to restore to
+	ClusterRef string `json:"clusterRef"`
 
 	// +kubebuilder:validation:Required
 	// Source backup location
@@ -75,8 +76,8 @@ type PITRConfig struct {
 	// Transaction log storage location
 	LogStorage *StorageLocation `json:"logStorage,omitempty"`
 
-	// Transaction log retention period
-	// +kubebuilder:default="7d"
+	// Transaction log retention period (e.g., "168h" for 7 days)
+	// +kubebuilder:default="168h"
 	LogRetention string `json:"logRetention,omitempty"`
 
 	// Recovery point objective
@@ -94,7 +95,7 @@ type PITRConfig struct {
 	Compression *CompressionConfig `json:"compression,omitempty"`
 
 	// Encryption settings for transaction logs
-	Encryption *EncryptionConfig `json:"encryption,omitempty"`
+	Encryption *EncryptionSpec `json:"encryption,omitempty"`
 }
 
 // BaseBackupSource defines a backup source without PITR config to avoid circular references
@@ -127,25 +128,6 @@ type CompressionConfig struct {
 
 	// Compression level (1-9 for gzip, 1-12 for lz4, 1-22 for zstd)
 	Level int32 `json:"level,omitempty"`
-}
-
-// EncryptionConfig defines encryption settings
-type EncryptionConfig struct {
-	// Enable encryption
-	// +kubebuilder:default=false
-	Enabled bool `json:"enabled,omitempty"`
-
-	// Encryption algorithm (AES256, ChaCha20Poly1305)
-	// +kubebuilder:validation:Enum=AES256;ChaCha20Poly1305
-	// +kubebuilder:default=AES256
-	Algorithm string `json:"algorithm,omitempty"`
-
-	// Secret containing encryption key
-	KeySecret string `json:"keySecret,omitempty"`
-
-	// Key within the secret
-	// +kubebuilder:default=key
-	KeySecretKey string `json:"keySecretKey,omitempty"`
 }
 
 // RestoreOptionsSpec defines restore-specific options
@@ -205,46 +187,7 @@ type ContainerSpec struct {
 	Args []string `json:"args,omitempty"`
 
 	// Environment variables
-	Env []EnvVar `json:"env,omitempty"`
-}
-
-// EnvVar represents an environment variable
-type EnvVar struct {
-	// Name of the environment variable
-	Name string `json:"name"`
-
-	// Value of the environment variable
-	Value string `json:"value,omitempty"`
-
-	// ValueFrom specifies a source for the value
-	ValueFrom *EnvVarSource `json:"valueFrom,omitempty"`
-}
-
-// EnvVarSource represents a source for the value of an EnvVar
-type EnvVarSource struct {
-	// Secret key reference
-	SecretKeyRef *SecretKeySelector `json:"secretKeyRef,omitempty"`
-
-	// ConfigMap key reference
-	ConfigMapKeyRef *ConfigMapKeySelector `json:"configMapKeyRef,omitempty"`
-}
-
-// SecretKeySelector selects a key of a Secret
-type SecretKeySelector struct {
-	// Name of the secret
-	Name string `json:"name"`
-
-	// Key within the secret
-	Key string `json:"key"`
-}
-
-// ConfigMapKeySelector selects a key of a ConfigMap
-type ConfigMapKeySelector struct {
-	// Name of the ConfigMap
-	Name string `json:"name"`
-
-	// Key within the ConfigMap
-	Key string `json:"key"`
+	Env []corev1.EnvVar `json:"env,omitempty"`
 }
 
 // Neo4jRestoreStatus defines the observed state of Neo4jRestore
@@ -312,7 +255,7 @@ type RestoreBackupInfo struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:printcolumn:name="Target",type=string,JSONPath=`.spec.targetCluster`
+// +kubebuilder:printcolumn:name="Target",type=string,JSONPath=`.spec.clusterRef`
 // +kubebuilder:printcolumn:name="Database",type=string,JSONPath=`.spec.databaseName`
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
 // +kubebuilder:printcolumn:name="Duration",type=string,JSONPath=`.status.stats.duration`

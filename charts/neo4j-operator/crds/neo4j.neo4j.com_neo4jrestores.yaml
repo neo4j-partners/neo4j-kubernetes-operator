@@ -15,7 +15,7 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .spec.targetCluster
+    - jsonPath: .spec.clusterRef
       name: Target
       type: string
     - jsonPath: .spec.databaseName
@@ -55,6 +55,10 @@ spec:
           spec:
             description: Neo4jRestoreSpec defines the desired state of Neo4jRestore
             properties:
+              clusterRef:
+                description: Reference to the Neo4j cluster or standalone to restore
+                  to
+                type: string
               databaseName:
                 description: Database to restore to
                 type: string
@@ -104,44 +108,123 @@ spec:
                                     description: Environment variables
                                     items:
                                       description: EnvVar represents an environment
-                                        variable
+                                        variable present in a Container.
                                       properties:
                                         name:
-                                          description: Name of the environment variable
+                                          description: Name of the environment variable.
+                                            Must be a C_IDENTIFIER.
                                           type: string
                                         value:
-                                          description: Value of the environment variable
+                                          description: |-
+                                            Variable references $(VAR_NAME) are expanded
+                                            using the previously defined environment variables in the container and
+                                            any service environment variables. If a variable cannot be resolved,
+                                            the reference in the input string will be unchanged. Double $$ are reduced
+                                            to a single $, which allows for escaping the $(VAR_NAME) syntax: i.e.
+                                            "$$(VAR_NAME)" will produce the string literal "$(VAR_NAME)".
+                                            Escaped references will never be expanded, regardless of whether the variable
+                                            exists or not.
+                                            Defaults to "".
                                           type: string
                                         valueFrom:
-                                          description: ValueFrom specifies a source
-                                            for the value
+                                          description: Source for the environment
+                                            variable's value. Cannot be used if value
+                                            is not empty.
                                           properties:
                                             configMapKeyRef:
-                                              description: ConfigMap key reference
+                                              description: Selects a key of a ConfigMap.
                                               properties:
                                                 key:
-                                                  description: Key within the ConfigMap
+                                                  description: The key to select.
                                                   type: string
                                                 name:
-                                                  description: Name of the ConfigMap
+                                                  default: ""
+                                                  description: |-
+                                                    Name of the referent.
+                                                    This field is effectively required, but due to backwards compatibility is
+                                                    allowed to be empty. Instances of this type with an empty value here are
+                                                    almost certainly wrong.
+                                                    More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
                                                   type: string
+                                                optional:
+                                                  description: Specify whether the
+                                                    ConfigMap or its key must be defined
+                                                  type: boolean
                                               required:
                                               - key
-                                              - name
                                               type: object
+                                              x-kubernetes-map-type: atomic
+                                            fieldRef:
+                                              description: |-
+                                                Selects a field of the pod: supports metadata.name, metadata.namespace, `metadata.labels['<KEY>']`, `metadata.annotations['<KEY>']`,
+                                                spec.nodeName, spec.serviceAccountName, status.hostIP, status.podIP, status.podIPs.
+                                              properties:
+                                                apiVersion:
+                                                  description: Version of the schema
+                                                    the FieldPath is written in terms
+                                                    of, defaults to "v1".
+                                                  type: string
+                                                fieldPath:
+                                                  description: Path of the field to
+                                                    select in the specified API version.
+                                                  type: string
+                                              required:
+                                              - fieldPath
+                                              type: object
+                                              x-kubernetes-map-type: atomic
+                                            resourceFieldRef:
+                                              description: |-
+                                                Selects a resource of the container: only resources limits and requests
+                                                (limits.cpu, limits.memory, limits.ephemeral-storage, requests.cpu, requests.memory and requests.ephemeral-storage) are currently supported.
+                                              properties:
+                                                containerName:
+                                                  description: 'Container name: required
+                                                    for volumes, optional for env
+                                                    vars'
+                                                  type: string
+                                                divisor:
+                                                  anyOf:
+                                                  - type: integer
+                                                  - type: string
+                                                  description: Specifies the output
+                                                    format of the exposed resources,
+                                                    defaults to "1"
+                                                  pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                                  x-kubernetes-int-or-string: true
+                                                resource:
+                                                  description: 'Required: resource
+                                                    to select'
+                                                  type: string
+                                              required:
+                                              - resource
+                                              type: object
+                                              x-kubernetes-map-type: atomic
                                             secretKeyRef:
-                                              description: Secret key reference
+                                              description: Selects a key of a secret
+                                                in the pod's namespace
                                               properties:
                                                 key:
-                                                  description: Key within the secret
+                                                  description: The key of the secret
+                                                    to select from.  Must be a valid
+                                                    secret key.
                                                   type: string
                                                 name:
-                                                  description: Name of the secret
+                                                  default: ""
+                                                  description: |-
+                                                    Name of the referent.
+                                                    This field is effectively required, but due to backwards compatibility is
+                                                    allowed to be empty. Instances of this type with an empty value here are
+                                                    almost certainly wrong.
+                                                    More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
                                                   type: string
+                                                optional:
+                                                  description: Specify whether the
+                                                    Secret or its key must be defined
+                                                  type: boolean
                                               required:
                                               - key
-                                              - name
                                               type: object
+                                              x-kubernetes-map-type: atomic
                                           type: object
                                       required:
                                       - name
@@ -198,44 +281,123 @@ spec:
                                     description: Environment variables
                                     items:
                                       description: EnvVar represents an environment
-                                        variable
+                                        variable present in a Container.
                                       properties:
                                         name:
-                                          description: Name of the environment variable
+                                          description: Name of the environment variable.
+                                            Must be a C_IDENTIFIER.
                                           type: string
                                         value:
-                                          description: Value of the environment variable
+                                          description: |-
+                                            Variable references $(VAR_NAME) are expanded
+                                            using the previously defined environment variables in the container and
+                                            any service environment variables. If a variable cannot be resolved,
+                                            the reference in the input string will be unchanged. Double $$ are reduced
+                                            to a single $, which allows for escaping the $(VAR_NAME) syntax: i.e.
+                                            "$$(VAR_NAME)" will produce the string literal "$(VAR_NAME)".
+                                            Escaped references will never be expanded, regardless of whether the variable
+                                            exists or not.
+                                            Defaults to "".
                                           type: string
                                         valueFrom:
-                                          description: ValueFrom specifies a source
-                                            for the value
+                                          description: Source for the environment
+                                            variable's value. Cannot be used if value
+                                            is not empty.
                                           properties:
                                             configMapKeyRef:
-                                              description: ConfigMap key reference
+                                              description: Selects a key of a ConfigMap.
                                               properties:
                                                 key:
-                                                  description: Key within the ConfigMap
+                                                  description: The key to select.
                                                   type: string
                                                 name:
-                                                  description: Name of the ConfigMap
+                                                  default: ""
+                                                  description: |-
+                                                    Name of the referent.
+                                                    This field is effectively required, but due to backwards compatibility is
+                                                    allowed to be empty. Instances of this type with an empty value here are
+                                                    almost certainly wrong.
+                                                    More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
                                                   type: string
+                                                optional:
+                                                  description: Specify whether the
+                                                    ConfigMap or its key must be defined
+                                                  type: boolean
                                               required:
                                               - key
-                                              - name
                                               type: object
+                                              x-kubernetes-map-type: atomic
+                                            fieldRef:
+                                              description: |-
+                                                Selects a field of the pod: supports metadata.name, metadata.namespace, `metadata.labels['<KEY>']`, `metadata.annotations['<KEY>']`,
+                                                spec.nodeName, spec.serviceAccountName, status.hostIP, status.podIP, status.podIPs.
+                                              properties:
+                                                apiVersion:
+                                                  description: Version of the schema
+                                                    the FieldPath is written in terms
+                                                    of, defaults to "v1".
+                                                  type: string
+                                                fieldPath:
+                                                  description: Path of the field to
+                                                    select in the specified API version.
+                                                  type: string
+                                              required:
+                                              - fieldPath
+                                              type: object
+                                              x-kubernetes-map-type: atomic
+                                            resourceFieldRef:
+                                              description: |-
+                                                Selects a resource of the container: only resources limits and requests
+                                                (limits.cpu, limits.memory, limits.ephemeral-storage, requests.cpu, requests.memory and requests.ephemeral-storage) are currently supported.
+                                              properties:
+                                                containerName:
+                                                  description: 'Container name: required
+                                                    for volumes, optional for env
+                                                    vars'
+                                                  type: string
+                                                divisor:
+                                                  anyOf:
+                                                  - type: integer
+                                                  - type: string
+                                                  description: Specifies the output
+                                                    format of the exposed resources,
+                                                    defaults to "1"
+                                                  pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                                  x-kubernetes-int-or-string: true
+                                                resource:
+                                                  description: 'Required: resource
+                                                    to select'
+                                                  type: string
+                                              required:
+                                              - resource
+                                              type: object
+                                              x-kubernetes-map-type: atomic
                                             secretKeyRef:
-                                              description: Secret key reference
+                                              description: Selects a key of a secret
+                                                in the pod's namespace
                                               properties:
                                                 key:
-                                                  description: Key within the secret
+                                                  description: The key of the secret
+                                                    to select from.  Must be a valid
+                                                    secret key.
                                                   type: string
                                                 name:
-                                                  description: Name of the secret
+                                                  default: ""
+                                                  description: |-
+                                                    Name of the referent.
+                                                    This field is effectively required, but due to backwards compatibility is
+                                                    allowed to be empty. Instances of this type with an empty value here are
+                                                    almost certainly wrong.
+                                                    More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
                                                   type: string
+                                                optional:
+                                                  description: Specify whether the
+                                                    Secret or its key must be defined
+                                                  type: boolean
                                               required:
                                               - key
-                                              - name
                                               type: object
+                                              x-kubernetes-map-type: atomic
                                           type: object
                                       required:
                                       - name
@@ -412,13 +574,12 @@ spec:
                         properties:
                           algorithm:
                             default: AES256
-                            description: Encryption algorithm (AES256, ChaCha20Poly1305)
+                            description: Encryption algorithm
                             enum:
                             - AES256
                             - ChaCha20Poly1305
                             type: string
                           enabled:
-                            default: false
                             description: Enable encryption
                             type: boolean
                           keySecret:
@@ -426,12 +587,14 @@ spec:
                             type: string
                           keySecretKey:
                             default: key
-                            description: Key within the secret
+                            description: Key within the secret containing the encryption
+                              key
                             type: string
                         type: object
                       logRetention:
-                        default: 7d
-                        description: Transaction log retention period
+                        default: 168h
+                        description: Transaction log retention period (e.g., "168h"
+                          for 7 days)
                         type: string
                       logStorage:
                         description: Transaction log storage location
@@ -640,16 +803,13 @@ spec:
                 description: Stop cluster before restore (required for some restore
                   operations)
                 type: boolean
-              targetCluster:
-                description: Target cluster to restore to
-                type: string
               timeout:
                 description: Timeout for restore operation
                 type: string
             required:
+            - clusterRef
             - databaseName
             - source
-            - targetCluster
             type: object
           status:
             description: Neo4jRestoreStatus defines the observed state of Neo4jRestore

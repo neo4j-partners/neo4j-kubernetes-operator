@@ -97,8 +97,8 @@ var _ = Describe("Rolling Upgrade Integration", func() {
 						Tag:  initialTag,
 					},
 					Auth: &neo4jv1alpha1.AuthSpec{
-						Provider:    "native",
-						AdminSecret: "neo4j-admin-secret",
+						AuthenticationProviders: []string{"native"},
+						AdminSecret:             "neo4j-admin-secret",
 					},
 					Topology: neo4jv1alpha1.TopologyConfiguration{
 						Servers: serverCount,

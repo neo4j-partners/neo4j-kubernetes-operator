@@ -141,7 +141,7 @@ func (r *Neo4jRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	}
 
 	// Get target cluster
-	targetCluster, err := r.getTargetCluster(ctx, restore)
+	targetCluster, err := r.getClusterRef(ctx, restore)
 	if err != nil {
 		logger.Error(err, "Failed to get target cluster")
 		r.updateRestoreStatus(ctx, restore, "Failed", fmt.Sprintf("Failed to get target cluster: %v", err))
@@ -604,7 +604,7 @@ func (r *Neo4jRestoreReconciler) buildRestoreVolumes(restore *neo4jv1alpha1.Neo4
 	if restore.Spec.StopCluster {
 		// For offline restore, write directly to the first server pod's data PVC so the
 		// restored store is available when the StatefulSet is scaled back up.
-		dataPVCName := fmt.Sprintf("data-%s-server-0", restore.Spec.TargetCluster)
+		dataPVCName := fmt.Sprintf("data-%s-server-0", restore.Spec.ClusterRef)
 		dataVolume = corev1.Volume{
 			Name: "neo4j-data",
 			VolumeSource: corev1.VolumeSource{
@@ -938,7 +938,7 @@ func (r *Neo4jRestoreReconciler) runHookJob(ctx context.Context, restore *neo4jv
 							Image:           hookSpec.Template.Container.Image,
 							Command:         hookSpec.Template.Container.Command,
 							Args:            hookSpec.Template.Container.Args,
-							Env:             convertEnvVars(hookSpec.Template.Container.Env),
+							Env:             hookSpec.Template.Container.Env,
 							SecurityContext: hardenedRestoreContainerSecurityContext(),
 						},
 					},
@@ -992,39 +992,8 @@ func (r *Neo4jRestoreReconciler) runHookJob(ctx context.Context, restore *neo4jv
 	}
 }
 
-// convertEnvVars converts custom EnvVar to corev1.EnvVar
-func convertEnvVars(envVars []neo4jv1alpha1.EnvVar) []corev1.EnvVar {
-	result := make([]corev1.EnvVar, len(envVars))
-	for i, env := range envVars {
-		result[i] = corev1.EnvVar{
-			Name:  env.Name,
-			Value: env.Value,
-		}
-		if env.ValueFrom != nil {
-			result[i].ValueFrom = &corev1.EnvVarSource{}
-			if env.ValueFrom.SecretKeyRef != nil {
-				result[i].ValueFrom.SecretKeyRef = &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{
-						Name: env.ValueFrom.SecretKeyRef.Name,
-					},
-					Key: env.ValueFrom.SecretKeyRef.Key,
-				}
-			}
-			if env.ValueFrom.ConfigMapKeyRef != nil {
-				result[i].ValueFrom.ConfigMapKeyRef = &corev1.ConfigMapKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{
-						Name: env.ValueFrom.ConfigMapKeyRef.Name,
-					},
-					Key: env.ValueFrom.ConfigMapKeyRef.Key,
-				}
-			}
-		}
-	}
-	return result
-}
-
-func (r *Neo4jRestoreReconciler) getTargetCluster(ctx context.Context, restore *neo4jv1alpha1.Neo4jRestore) (*neo4jv1alpha1.Neo4jEnterpriseCluster, error) {
-	key := types.NamespacedName{Name: restore.Spec.TargetCluster, Namespace: restore.Namespace}
+func (r *Neo4jRestoreReconciler) getClusterRef(ctx context.Context, restore *neo4jv1alpha1.Neo4jRestore) (*neo4jv1alpha1.Neo4jEnterpriseCluster, error) {
+	key := types.NamespacedName{Name: restore.Spec.ClusterRef, Namespace: restore.Namespace}
 
 	cluster := &neo4jv1alpha1.Neo4jEnterpriseCluster{}
 	if err := r.Get(ctx, key, cluster); err == nil {
@@ -1034,7 +1003,7 @@ func (r *Neo4jRestoreReconciler) getTargetCluster(ctx context.Context, restore *
 	standalone := &neo4jv1alpha1.Neo4jEnterpriseStandalone{}
 	if err := r.Get(ctx, key, standalone); err != nil {
 		return nil, fmt.Errorf("target %q not found as Neo4jEnterpriseCluster or Neo4jEnterpriseStandalone: %w",
-			restore.Spec.TargetCluster, err)
+			restore.Spec.ClusterRef, err)
 	}
 	return standaloneAsCluster(standalone), nil
 }

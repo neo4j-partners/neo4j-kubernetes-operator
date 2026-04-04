@@ -222,17 +222,6 @@ upgradeStrategy:
 
 For the full type definition see [`UpgradeStrategySpec`](neo4jenterprisecluster.md#upgradestrategyspec).
 
-#### `persistence` (PersistenceSpec)
-Persistence configuration for standalone deployments.
-
-```yaml
-persistence:
-  enabled: true                 # Enable persistent storage
-  retentionPolicy: Delete       # Delete or Retain PVCs on deletion
-  accessModes:
-    - ReadWriteOnce
-```
-
 #### `backups` (BackupsSpec)
 Default backup configuration.
 
@@ -577,10 +566,6 @@ spec:
     annotations:
       service.beta.kubernetes.io/aws-load-balancer-type: nlb
 
-  persistence:
-    enabled: true
-    retentionPolicy: Retain
-
   monitoring:
     enabled: true
     slowQueryThreshold: "1s"
@@ -726,7 +711,7 @@ kind: Neo4jRestore
 metadata:
   name: restore-dev-neo4j
 spec:
-  targetCluster: dev-neo4j        # Target standalone instance
+  clusterRef: dev-neo4j            # Target standalone instance
   databaseName: neo4j
   source:
     type: backup

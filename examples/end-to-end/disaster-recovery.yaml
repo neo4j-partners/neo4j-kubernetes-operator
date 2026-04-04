@@ -51,7 +51,7 @@ metadata:
   name: full-cluster-restore
   namespace: neo4j-production
 spec:
-  targetCluster: production-cluster
+  clusterRef: production-cluster
 
   # Restore all databases
   databaseName: "*"
@@ -89,7 +89,7 @@ metadata:
   name: pitr-restore
   namespace: neo4j-production
 spec:
-  targetCluster: production-cluster
+  clusterRef: production-cluster
   databaseName: maindb
 
   source:
@@ -152,7 +152,7 @@ metadata:
   namespace: neo4j-dr
 spec:
   # Restore to DR cluster in different region
-  targetCluster: dr-cluster
+  clusterRef: dr-cluster
   databaseName: "*"
 
   source:
@@ -190,7 +190,7 @@ metadata:
   name: selective-restore
   namespace: neo4j-production
 spec:
-  targetCluster: production-cluster
+  clusterRef: production-cluster
 
   # Restore only analytics database
   databaseName: analytics
@@ -252,7 +252,7 @@ spec:
                     name: validation-restore-$(date +%s)
                     namespace: neo4j-production
                   spec:
-                    targetCluster: test-restore-cluster
+                    clusterRef: test-restore-cluster
                     databaseName: "*"
                     source:
                       type: backup
@@ -300,7 +300,7 @@ data:
         name: failover-restore-$(date +%s)
         namespace: $NAMESPACE
       spec:
-        targetCluster: $DR_CLUSTER
+        clusterRef: $DR_CLUSTER
         databaseName: "*"
         source:
           type: backup

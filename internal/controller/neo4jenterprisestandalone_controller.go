@@ -270,8 +270,8 @@ func (r *Neo4jEnterpriseStandaloneReconciler) reconcileStandalone(ctx context.Co
 		}
 	}
 
-	// Reconcile OpenShift Route (if configured)
-	if standalone.Spec.Route != nil && standalone.Spec.Route.Enabled {
+	// Reconcile OpenShift Route (if configured via spec.service.route)
+	if standalone.Spec.Service != nil && standalone.Spec.Service.Route != nil && standalone.Spec.Service.Route.Enabled {
 		route := resources.BuildRouteForStandalone(standalone)
 		if route != nil {
 			route.SetOwnerReferences([]metav1.OwnerReference{*metav1.NewControllerRef(standalone, neo4jv1alpha1.GroupVersion.WithKind("Neo4jEnterpriseStandalone"))})
@@ -1071,8 +1071,8 @@ func (r *Neo4jEnterpriseStandaloneReconciler) preUpgradeHealthCheck(ctx context.
 func (r *Neo4jEnterpriseStandaloneReconciler) cleanupResources(ctx context.Context, standalone *neo4jv1alpha1.Neo4jEnterpriseStandalone) error {
 	logger := log.FromContext(ctx)
 
-	// Cleanup based on retention policy
-	if standalone.Spec.Persistence != nil && standalone.Spec.Persistence.RetentionPolicy == "Delete" {
+	// Cleanup based on retention policy (uses spec.storage.retentionPolicy, matching cluster pattern)
+	if standalone.Spec.Storage.RetentionPolicy == "Delete" || standalone.Spec.Storage.RetentionPolicy == "" {
 		// Delete PVCs
 		pvcList := &corev1.PersistentVolumeClaimList{}
 		if err := r.List(ctx, pvcList, client.InNamespace(standalone.Namespace), client.MatchingLabels{

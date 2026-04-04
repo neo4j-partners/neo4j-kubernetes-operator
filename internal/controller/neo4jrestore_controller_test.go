@@ -135,8 +135,8 @@ var _ = Describe("Neo4jRestore Controller", func() {
 				Namespace: namespaceName,
 			},
 			Spec: neo4jv1alpha1.Neo4jRestoreSpec{
-				TargetCluster: clusterName,
-				DatabaseName:  "neo4j",
+				ClusterRef:   clusterName,
+				DatabaseName: "neo4j",
 				Source: neo4jv1alpha1.RestoreSource{
 					Type:      "backup",
 					BackupRef: backupName, // Use the created backup
@@ -217,8 +217,8 @@ var _ = Describe("Neo4jRestore Controller", func() {
 					Namespace: "default",
 				},
 				Spec: neo4jv1alpha1.Neo4jRestoreSpec{
-					TargetCluster: "non-existent-cluster",
-					DatabaseName:  "neo4j",
+					ClusterRef:   "non-existent-cluster",
+					DatabaseName: "neo4j",
 					Source: neo4jv1alpha1.RestoreSource{
 						Type:      "backup",
 						BackupRef: backupName, // Use existing backup
@@ -261,8 +261,8 @@ var _ = Describe("Neo4jRestore Controller", func() {
 					Namespace: "default",
 				},
 				Spec: neo4jv1alpha1.Neo4jRestoreSpec{
-					TargetCluster: clusterName, // Use existing cluster
-					DatabaseName:  "neo4j",
+					ClusterRef:   clusterName, // Use existing cluster
+					DatabaseName: "neo4j",
 					Source: neo4jv1alpha1.RestoreSource{
 						Type:      "backup",
 						BackupRef: "non-existent-backup",
@@ -305,8 +305,8 @@ var _ = Describe("Neo4jRestore Controller", func() {
 					Namespace: "default",
 				},
 				Spec: neo4jv1alpha1.Neo4jRestoreSpec{
-					TargetCluster: clusterName, // Use existing cluster
-					DatabaseName:  "neo4j",
+					ClusterRef:   clusterName, // Use existing cluster
+					DatabaseName: "neo4j",
 					Source: neo4jv1alpha1.RestoreSource{
 						Type: "storage",
 						Storage: &neo4jv1alpha1.StorageLocation{

@@ -125,7 +125,7 @@ type BackupOptions struct {
 	TempPath string `json:"tempPath,omitempty"`
 }
 
-// EncryptionSpec defines backup encryption configuration
+// EncryptionSpec defines encryption configuration for backup and restore operations
 type EncryptionSpec struct {
 	// Enable encryption
 	Enabled bool `json:"enabled,omitempty"`
@@ -133,8 +133,12 @@ type EncryptionSpec struct {
 	// Secret containing encryption key
 	KeySecret string `json:"keySecret,omitempty"`
 
+	// Key within the secret containing the encryption key
+	// +kubebuilder:default=key
+	KeySecretKey string `json:"keySecretKey,omitempty"`
+
 	// Encryption algorithm
-	// +kubebuilder:validation:Enum=AES256;ChaCha20
+	// +kubebuilder:validation:Enum=AES256;ChaCha20Poly1305
 	// +kubebuilder:default=AES256
 	Algorithm string `json:"algorithm,omitempty"`
 }
@@ -164,6 +168,9 @@ type Neo4jBackupStatus struct {
 
 	// History of recent backup runs
 	History []BackupRun `json:"history,omitempty"`
+
+	// ObservedGeneration reflects the generation most recently observed by the controller
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 }
 
 // BackupStats provides backup statistics

@@ -6,7 +6,7 @@ metadata:
     environment: development
     restore-type: backup-reference
 spec:
-  targetCluster: single-node-cluster
+  clusterRef: single-node-cluster
   databaseName: neo4j
   source:
     type: backup
@@ -35,7 +35,7 @@ metadata:
     environment: staging
     restore-type: with-hooks
 spec:
-  targetCluster: staging-cluster
+  clusterRef: staging-cluster
   databaseName: myapp
   source:
     type: backup

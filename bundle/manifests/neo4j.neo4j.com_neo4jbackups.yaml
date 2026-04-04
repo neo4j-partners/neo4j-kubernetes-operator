@@ -1,9 +1,9 @@
+---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.19.0
-  creationTimestamp: null
   name: neo4jbackups.neo4j.neo4j.com
 spec:
   group: neo4j.neo4j.com
@@ -143,13 +143,18 @@ spec:
                         description: Encryption algorithm
                         enum:
                         - AES256
-                        - ChaCha20
+                        - ChaCha20Poly1305
                         type: string
                       enabled:
                         description: Enable encryption
                         type: boolean
                       keySecret:
                         description: Secret containing encryption key
+                        type: string
+                      keySecretKey:
+                        default: key
+                        description: Key within the secret containing the encryption
+                          key
                         type: string
                     type: object
                   pageCache:
@@ -442,6 +447,11 @@ spec:
                 description: NextRunTime shows when the next backup is scheduled
                 format: date-time
                 type: string
+              observedGeneration:
+                description: ObservedGeneration reflects the generation most recently
+                  observed by the controller
+                format: int64
+                type: integer
               phase:
                 description: Phase represents the current phase of the backup
                 type: string
@@ -468,9 +478,3 @@ spec:
     storage: true
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: null
-  storedVersions: null

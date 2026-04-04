@@ -1,9 +1,9 @@
+---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.19.0
-  creationTimestamp: null
   name: neo4jenterpriseclusters.neo4j.neo4j.com
 spec:
   group: neo4j.neo4j.com
@@ -993,14 +993,12 @@ spec:
                         kubectl create secret generic aura-fleet-token --from-literal=token='<token-from-aura>'
                     properties:
                       key:
-                        default: token
-                        description: |-
-                          Key within the Secret whose value is the registration token.
-                          Defaults to "token" if not specified.
+                        description: Key within the Secret. The default depends on
+                          context (e.g., "ca.crt" for TrustStore, "token" for fleet
+                          management).
                         type: string
                       name:
-                        description: Name of the Kubernetes Secret containing the
-                          registration token.
+                        description: Name of the Kubernetes Secret
                         type: string
                     required:
                     - name
@@ -1026,7 +1024,7 @@ spec:
                       AuthenticationProviders is an ordered list of authentication providers.
                       Neo4j evaluates them in order during login. Valid values: native, ldap, oidc-<name>, jwt, kerberos.
                       For OIDC providers, use the format "oidc-<name>" where <name> matches a key in the OIDC map.
-                      Defaults to ["native"] if both this and Provider are empty.
+                      Defaults to ["native"] if empty.
                     items:
                       type: string
                     type: array
@@ -1034,7 +1032,7 @@ spec:
                     description: |-
                       AuthorizationProviders is an ordered list of authorization providers.
                       Valid values: native, ldap, oidc-<name>, jwt, kerberos.
-                      Defaults to ["native"] if both this and Provider are empty.
+                      Defaults to ["native"] if empty.
                     items:
                       type: string
                     type: array
@@ -1120,15 +1118,19 @@ spec:
                     description: Kerberos configuration for Kerberos auth provider
                     properties:
                       keytab:
-                        description: Keytab configuration
+                        description: Keytab secret reference. Name is the Secret name;
+                          Key defaults to "keytab" if omitted.
                         properties:
                           key:
-                            default: keytab
-                            description: Key in secret containing keytab
+                            description: Key within the Secret. The default depends
+                              on context (e.g., "ca.crt" for TrustStore, "token" for
+                              fleet management).
                             type: string
-                          secretRef:
-                            description: Secret containing keytab file
+                          name:
+                            description: Name of the Kubernetes Secret
                             type: string
+                        required:
+                        - name
                         type: object
                       realm:
                         description: Kerberos realm
@@ -1379,39 +1381,22 @@ spec:
                         description: Require uppercase characters
                         type: boolean
                     type: object
-                  provider:
-                    description: |-
-                      DEPRECATED: Provider selects a single auth provider. Use AuthenticationProviders/AuthorizationProviders instead.
-                      If set and the new list fields are empty, the operator treats it as AuthenticationProviders: [<provider>].
-                    enum:
-                    - native
-                    - ldap
-                    - kerberos
-                    - jwt
-                    - oidc
-                    - saml
-                    - custom
-                    type: string
-                  secretRef:
-                    description: 'DEPRECATED: Secret containing auth provider configuration.
-                      Use provider-specific secretRefs instead.'
-                    type: string
                   trustStore:
                     description: |-
                       TrustStore configures a custom JVM truststore for LDAPS or OIDC with internal CAs.
                       The operator mounts the CA certificate and creates a JKS truststore via an init container.
+                      Name is the Secret name; Key defaults to "ca.crt" if omitted.
                     properties:
                       key:
-                        default: ca.crt
-                        description: Key is the key in the Secret containing the CA
-                          certificate. Defaults to "ca.crt".
+                        description: Key within the Secret. The default depends on
+                          context (e.g., "ca.crt" for TrustStore, "token" for fleet
+                          management).
                         type: string
-                      secretRef:
-                        description: SecretRef is the name of a Secret containing
-                          the CA certificate in PEM format
+                      name:
+                        description: Name of the Kubernetes Secret
                         type: string
                     required:
-                    - secretRef
+                    - name
                     type: object
                 type: object
               backups:
@@ -4132,9 +4117,3 @@ spec:
     storage: true
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: null
-  storedVersions: null

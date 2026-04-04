@@ -17,7 +17,6 @@ limitations under the License.
 package validation
 
 import (
-	"fmt"
 	"regexp"
 	"strings"
 
@@ -53,24 +52,7 @@ func (v *AuthValidator) ValidateAuthSpec(auth *neo4jv1alpha1.AuthSpec, authPath 
 		return allErrs
 	}
 
-	// Backward compat: validate deprecated Provider field
-	if auth.Provider != "" {
-		allErrs = append(allErrs, v.validateProviderName(auth.Provider, authPath.Child("provider"))...)
-
-		// If using old-style external provider without typed fields, require secretRef
-		if auth.Provider != "native" && auth.SecretRef == "" {
-			// Only require secretRef if no typed config is provided
-			hasTypedConfig := auth.LDAP != nil || len(auth.OIDC) > 0 || auth.JWT != nil || auth.Kerberos != nil
-			if !hasTypedConfig {
-				allErrs = append(allErrs, field.Required(
-					authPath.Child("secretRef"),
-					fmt.Sprintf("secretRef is required for %s auth provider when typed config is not provided", auth.Provider),
-				))
-			}
-		}
-	}
-
-	// Validate new provider lists
+	// Validate provider lists
 	allErrs = append(allErrs, v.validateProviderList(auth.AuthenticationProviders, authPath.Child("authenticationProviders"))...)
 	allErrs = append(allErrs, v.validateProviderList(auth.AuthorizationProviders, authPath.Child("authorizationProviders"))...)
 
@@ -86,10 +68,10 @@ func (v *AuthValidator) ValidateAuthSpec(auth *neo4jv1alpha1.AuthSpec, authPath 
 
 	// Validate TrustStore
 	if auth.TrustStore != nil {
-		if auth.TrustStore.SecretRef == "" {
+		if auth.TrustStore.Name == "" {
 			allErrs = append(allErrs, field.Required(
-				authPath.Child("trustStore", "secretRef"),
-				"secretRef must specify the Secret containing the CA certificate",
+				authPath.Child("trustStore", "name"),
+				"name must specify the Secret containing the CA certificate",
 			))
 		}
 	}

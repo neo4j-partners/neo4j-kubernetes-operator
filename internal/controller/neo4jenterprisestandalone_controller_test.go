@@ -289,8 +289,8 @@ var _ = Describe("Neo4jEnterpriseStandalone Controller", func() {
 
 			By("Adding authentication configuration")
 			standalone.Spec.Auth = &neo4jv1alpha1.AuthSpec{
-				AdminSecret: "admin-secret-test",
-				Provider:    "native",
+				AdminSecret:             "admin-secret-test",
+				AuthenticationProviders: []string{"native"},
 			}
 
 			By("Creating the standalone resource")

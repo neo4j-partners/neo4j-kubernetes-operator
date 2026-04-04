@@ -13,10 +13,10 @@ spec:
     adminSecret: neo4j-admin-secret
   service:
     type: ClusterIP
-  route:
-    enabled: true
-    host: route-standalone.apps.example.com
-    termination: edge
+    route:
+      enabled: true
+      host: route-standalone.apps.example.com
+      termination: edge
   securityContext:
     podSecurityContext:
       runAsNonRoot: true

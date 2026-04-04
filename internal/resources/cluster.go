@@ -2435,15 +2435,9 @@ func BuildAuthConfig(auth *neo4jv1alpha1.AuthSpec) AuthConfigResult {
 	var lines []string
 	var keys []string
 
-	// Resolve provider lists with backward compatibility
+	// Resolve provider lists
 	authnProviders := auth.AuthenticationProviders
-	if len(authnProviders) == 0 && auth.Provider != "" && auth.Provider != "native" {
-		authnProviders = []string{auth.Provider}
-	}
 	authzProviders := auth.AuthorizationProviders
-	if len(authzProviders) == 0 && auth.Provider != "" && auth.Provider != "native" {
-		authzProviders = []string{auth.Provider}
-	}
 
 	if len(authnProviders) > 0 {
 		lines = append(lines, fmt.Sprintf("dbms.security.authentication_providers=%s", strings.Join(authnProviders, ",")))
@@ -2690,7 +2684,7 @@ func BuildAuthEnvVars(auth *neo4jv1alpha1.AuthSpec) []corev1.EnvVar {
 }
 
 // BuildTrustStoreInitContainer creates an init container that converts a PEM CA cert into a JKS truststore.
-func BuildTrustStoreInitContainer(image string, trustStore *neo4jv1alpha1.TrustStoreSpec) corev1.Container {
+func BuildTrustStoreInitContainer(image string, trustStore *neo4jv1alpha1.SecretKeyRef) corev1.Container {
 	caKey := trustStore.Key
 	if caKey == "" {
 		caKey = "ca.crt"
@@ -2710,13 +2704,13 @@ func BuildTrustStoreInitContainer(image string, trustStore *neo4jv1alpha1.TrustS
 }
 
 // BuildTrustStoreVolumes returns the volumes needed for JVM truststore support.
-func BuildTrustStoreVolumes(trustStore *neo4jv1alpha1.TrustStoreSpec) []corev1.Volume {
+func BuildTrustStoreVolumes(trustStore *neo4jv1alpha1.SecretKeyRef) []corev1.Volume {
 	return []corev1.Volume{
 		{
 			Name: "truststore-ca",
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{
-					SecretName: trustStore.SecretRef,
+					SecretName: trustStore.Name,
 				},
 			},
 		},

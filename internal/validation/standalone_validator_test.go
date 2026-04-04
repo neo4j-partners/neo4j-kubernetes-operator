@@ -130,9 +130,9 @@ func TestStandaloneValidator_ValidateCreate(t *testing.T) {
 		{
 			name: "invalid auth provider",
 			mutate: func(s *neo4jv1alpha1.Neo4jEnterpriseStandalone) {
-				s.Spec.Auth = &neo4jv1alpha1.AuthSpec{Provider: "bogus-auth"}
+				s.Spec.Auth = &neo4jv1alpha1.AuthSpec{AuthenticationProviders: []string{"bogus-auth"}}
 			},
-			wantErrs: 2, // invalid provider + missing secretRef (no typed config)
+			wantErrs: 1, // invalid provider name
 		},
 	}
 

@@ -104,8 +104,8 @@ var _ = Describe("Multi-Node Cluster Formation Integration Tests", func() {
 						Tag:  getNeo4jImageTag(), // Use environment-specified version
 					},
 					Auth: &neo4jv1alpha1.AuthSpec{
-						Provider:    "native",
-						AdminSecret: "neo4j-admin-secret",
+						AuthenticationProviders: []string{"native"},
+						AdminSecret:             "neo4j-admin-secret",
 					},
 					Topology: neo4jv1alpha1.TopologyConfiguration{
 						Servers: 2, // Minimum cluster topology
@@ -215,8 +215,8 @@ var _ = Describe("Multi-Node Cluster Formation Integration Tests", func() {
 						Tag:  "2025.02.0-enterprise", // Test 2025.x version
 					},
 					Auth: &neo4jv1alpha1.AuthSpec{
-						Provider:    "native",
-						AdminSecret: "neo4j-admin-secret",
+						AuthenticationProviders: []string{"native"},
+						AdminSecret:             "neo4j-admin-secret",
 					},
 					Topology: neo4jv1alpha1.TopologyConfiguration{
 						Servers: 2, // 1 + 1 total servers

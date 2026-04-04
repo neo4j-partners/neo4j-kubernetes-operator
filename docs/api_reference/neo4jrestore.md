@@ -14,7 +14,7 @@ For practical examples and usage guidance, see the [Backup and Restore Guide](..
 
 When a `Neo4jRestore` resource is created, the operator:
 
-1. Resolves the `targetCluster` — it accepts both `Neo4jEnterpriseCluster` and `Neo4jEnterpriseStandalone`. The controller detects the type automatically.
+1. Resolves the `clusterRef` — it accepts both `Neo4jEnterpriseCluster` and `Neo4jEnterpriseStandalone`. The controller detects the type automatically.
 2. Creates a restore Kubernetes Job that runs `neo4j-admin database restore` inside a container using the **same Neo4j enterprise image** as the target.
 3. If `stopCluster: true`, the operator scales down the cluster StatefulSet before starting the restore Job. When this flag is set, the operator mounts the actual server data PVC (`data-{cluster}-server-0`) directly into the restore Job container for offline restore access.
 4. After the restore Job succeeds, the operator automatically issues one of the following Cypher commands via the Bolt client:
@@ -28,7 +28,7 @@ When a `Neo4jRestore` resource is created, the operator:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `targetCluster` | `string` | ✅ | Name of the `Neo4jEnterpriseCluster` or `Neo4jEnterpriseStandalone` to restore into. The controller detects the type automatically. |
+| `clusterRef` | `string` | ✅ | Name of the `Neo4jEnterpriseCluster` or `Neo4jEnterpriseStandalone` to restore into. The controller detects the type automatically. |
 | `source` | [`RestoreSource`](#restoresource) | ✅ | Source of the backup data to restore |
 | `databaseName` | `string` | ✅ | Name of the Neo4j database to restore |
 | `options` | [`RestoreOptionsSpec`](#restoreoptionsspec) | ❌ | Additional restore configuration options |
@@ -36,7 +36,7 @@ When a `Neo4jRestore` resource is created, the operator:
 | `stopCluster` | `bool` | ❌ | Scale down the target cluster before restore for an offline/cold restore (default: `false`). When `true`, mounts `data-{cluster}-server-0` PVC into the restore Job. |
 | `timeout` | `string` | ❌ | Timeout for the restore Job (e.g., `"2h"`, `"30m"`) |
 
-**Target compatibility**: `targetCluster` can reference either:
+**Target compatibility**: `clusterRef` can reference either:
 - `Neo4jEnterpriseCluster` — for HA cluster restore operations
 - `Neo4jEnterpriseStandalone` — for single-node restore operations
 
@@ -336,7 +336,7 @@ metadata:
   name: simple-backup-restore
   namespace: neo4j
 spec:
-  targetCluster: test-cluster   # Neo4jEnterpriseCluster or Neo4jEnterpriseStandalone
+  clusterRef: test-cluster   # Neo4jEnterpriseCluster or Neo4jEnterpriseStandalone
   databaseName: testdb
   source:
     type: backup
@@ -358,7 +358,7 @@ metadata:
   name: dev-s3-restore
   namespace: development
 spec:
-  targetCluster: dev-standalone   # Neo4jEnterpriseStandalone
+  clusterRef: dev-standalone   # Neo4jEnterpriseStandalone
   databaseName: dev-app
   source:
     type: storage
@@ -391,7 +391,7 @@ metadata:
   name: gcs-restore
   namespace: neo4j
 spec:
-  targetCluster: analytics-cluster
+  clusterRef: analytics-cluster
   databaseName: analytics-db
   source:
     type: gcs
@@ -423,7 +423,7 @@ metadata:
     compliance: required
     environment: production
 spec:
-  targetCluster: enterprise-cluster
+  clusterRef: enterprise-cluster
   databaseName: customer-data
   source:
     type: azure
@@ -473,7 +473,7 @@ metadata:
   name: production-pitr-restore
   namespace: neo4j
 spec:
-  targetCluster: recovery-cluster
+  clusterRef: recovery-cluster
   databaseName: production-db
   source:
     type: pitr
@@ -526,7 +526,7 @@ metadata:
   name: offline-restore
   namespace: neo4j
 spec:
-  targetCluster: production-cluster
+  clusterRef: production-cluster
   databaseName: large-graph
   source:
     type: storage
@@ -545,7 +545,7 @@ spec:
 
 ### Standalone Restore
 
-`targetCluster` can reference a `Neo4jEnterpriseStandalone` resource. The controller detects the type automatically.
+`clusterRef` can reference a `Neo4jEnterpriseStandalone` resource. The controller detects the type automatically.
 
 ```yaml
 apiVersion: neo4j.neo4j.com/v1alpha1
@@ -554,7 +554,7 @@ metadata:
   name: standalone-restore
   namespace: development
 spec:
-  targetCluster: dev-standalone   # Neo4jEnterpriseStandalone
+  clusterRef: dev-standalone   # Neo4jEnterpriseStandalone
   databaseName: app-db
   source:
     type: backup
@@ -576,7 +576,7 @@ metadata:
   name: cross-cloud-dr-restore
   namespace: disaster-recovery
 spec:
-  targetCluster: dr-cluster
+  clusterRef: dr-cluster
   databaseName: critical-app
   source:
     type: gcs

@@ -52,7 +52,7 @@ func TestValidateAuraFleetManagement(t *testing.T) {
 			name: "enabled with valid tokenSecretRef — valid",
 			spec: &neo4jv1alpha1.AuraFleetManagementSpec{
 				Enabled: true,
-				TokenSecretRef: &neo4jv1alpha1.AuraTokenSecretRef{
+				TokenSecretRef: &neo4jv1alpha1.SecretKeyRef{
 					Name: "aura-fleet-token",
 					Key:  "token",
 				},
@@ -63,7 +63,7 @@ func TestValidateAuraFleetManagement(t *testing.T) {
 			name: "enabled with tokenSecretRef but empty name — error",
 			spec: &neo4jv1alpha1.AuraFleetManagementSpec{
 				Enabled: true,
-				TokenSecretRef: &neo4jv1alpha1.AuraTokenSecretRef{
+				TokenSecretRef: &neo4jv1alpha1.SecretKeyRef{
 					Name: "",
 					Key:  "token",
 				},
@@ -75,7 +75,7 @@ func TestValidateAuraFleetManagement(t *testing.T) {
 			name: "enabled with tokenSecretRef and default key — valid",
 			spec: &neo4jv1alpha1.AuraFleetManagementSpec{
 				Enabled: true,
-				TokenSecretRef: &neo4jv1alpha1.AuraTokenSecretRef{
+				TokenSecretRef: &neo4jv1alpha1.SecretKeyRef{
 					Name: "aura-fleet-token",
 					// Key omitted — defaults to "token"
 				},

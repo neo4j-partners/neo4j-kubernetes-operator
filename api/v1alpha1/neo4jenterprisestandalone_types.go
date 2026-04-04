@@ -56,9 +56,6 @@ type Neo4jEnterpriseStandaloneSpec struct {
 
 	Service *ServiceSpec `json:"service,omitempty"`
 
-	// Optional OpenShift Route configuration for external access
-	Route *RouteSpec `json:"route,omitempty"`
-
 	Backups *BackupsSpec `json:"backups,omitempty"`
 
 	UI *UISpec `json:"ui,omitempty"`
@@ -74,9 +71,6 @@ type Neo4jEnterpriseStandaloneSpec struct {
 	// MCP server configuration for this standalone deployment
 	MCP *MCPServerSpec `json:"mcp,omitempty"`
 
-	// Persistence configuration for standalone deployment
-	Persistence *PersistenceSpec `json:"persistence,omitempty"`
-
 	// AuraFleetManagement enables integration with Neo4j Aura Fleet Management
 	// for monitoring this standalone deployment from the Aura console.
 	// See: https://neo4j.com/docs/aura/fleet-management/
@@ -85,22 +79,6 @@ type Neo4jEnterpriseStandaloneSpec struct {
 
 	// UpgradeStrategy specifies how to handle rolling upgrades
 	UpgradeStrategy *UpgradeStrategySpec `json:"upgradeStrategy,omitempty"`
-}
-
-// PersistenceSpec defines persistence configuration for standalone deployments
-type PersistenceSpec struct {
-	// +kubebuilder:default=true
-	// Enable persistent storage
-	Enabled bool `json:"enabled,omitempty"`
-
-	// +kubebuilder:validation:Enum=Delete;Retain
-	// +kubebuilder:default=Delete
-	// PVC retention policy when standalone is deleted
-	RetentionPolicy string `json:"retentionPolicy,omitempty"`
-
-	// Access modes for the PVC
-	// +kubebuilder:default={"ReadWriteOnce"}
-	AccessModes []corev1.PersistentVolumeAccessMode `json:"accessModes,omitempty"`
 }
 
 // Neo4jEnterpriseStandaloneStatus defines the observed state of Neo4jEnterpriseStandalone

@@ -6,7 +6,7 @@ metadata:
     environment: production
     restore-type: pitr
 spec:
-  targetCluster: recovery-cluster
+  clusterRef: recovery-cluster
   databaseName: production-db
   source:
     type: pitr
@@ -54,7 +54,7 @@ metadata:
     environment: production
     restore-type: pitr-advanced
 spec:
-  targetCluster: disaster-recovery
+  clusterRef: disaster-recovery
   databaseName: critical-app
   source:
     type: pitr

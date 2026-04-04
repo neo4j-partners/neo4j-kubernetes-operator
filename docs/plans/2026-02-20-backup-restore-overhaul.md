@@ -426,7 +426,7 @@ git commit -m "feat(backup): add BuildBackupFromAddresses helper for backup Job 
 
 ---
 
-## Task 5 — Backup controller: fix `isClusterReady` and `getTargetCluster`
+## Task 5 — Backup controller: fix `isClusterReady` and `getClusterRef`
 
 **Files:**
 - Modify: `internal/controller/neo4jbackup_controller.go`
@@ -434,7 +434,7 @@ git commit -m "feat(backup): add BuildBackupFromAddresses helper for backup Job 
 
 **Context:**
 1. `isClusterReady` checks Conditions instead of `status.phase` — unreliable per CLAUDE.md item 15.
-2. `getTargetCluster` with `Kind="Database"` uses the database name as a cluster name — always fails.
+2. `getClusterRef` with `Kind="Database"` uses the database name as a cluster name — always fails.
 3. Only `Neo4jEnterpriseCluster` is supported — standalone not attempted.
 
 **Step 1 — Write failing tests**
@@ -474,10 +474,10 @@ It("should use ClusterRef when Kind=Database", func() {
 go test ./internal/controller/... -run "should use ClusterRef" -v
 ```
 
-**Step 3 — Fix `getTargetCluster`**
+**Step 3 — Fix `getClusterRef`**
 
 ```go
-func (r *Neo4jBackupReconciler) getTargetCluster(ctx context.Context, backup *neo4jv1alpha1.Neo4jBackup) (*neo4jv1alpha1.Neo4jEnterpriseCluster, error) {
+func (r *Neo4jBackupReconciler) getClusterRef(ctx context.Context, backup *neo4jv1alpha1.Neo4jBackup) (*neo4jv1alpha1.Neo4jEnterpriseCluster, error) {
     targetNamespace := backup.Spec.Target.Namespace
     if targetNamespace == "" {
         targetNamespace = backup.Namespace
@@ -529,7 +529,7 @@ Expected: PASS.
 
 ```bash
 git add internal/controller/neo4jbackup_controller.go internal/controller/neo4jbackup_controller_test.go
-git commit -m "fix(backup): fix isClusterReady (use phase), fix getTargetCluster for Kind=Database and standalone"
+git commit -m "fix(backup): fix isClusterReady (use phase), fix getClusterRef for Kind=Database and standalone"
 ```
 
 ---
@@ -1141,7 +1141,7 @@ func (r *Neo4jRestoreReconciler) buildPITRRestoreCommand(ctx context.Context, re
         return "", fmt.Errorf("PITR configuration is required for PITR restore")
     }
 
-    clusterKey := types.NamespacedName{Name: restore.Spec.TargetCluster, Namespace: restore.Namespace}
+    clusterKey := types.NamespacedName{Name: restore.Spec.ClusterRef, Namespace: restore.Namespace}
     cluster := &neo4jv1alpha1.Neo4jEnterpriseCluster{}
     if err := r.Get(ctx, clusterKey, cluster); err != nil {
         return "", fmt.Errorf("failed to get cluster: %w", err)
@@ -1323,15 +1323,15 @@ git commit -m "fix(restore): add CREATE DATABASE step after restore, fix PVC vol
 **Files:**
 - Modify: `internal/controller/neo4jrestore_controller.go`
 
-**Context:** `getTargetCluster` only fetches `Neo4jEnterpriseCluster`. Standalone deployments are not supported. The same dual-lookup pattern from the database controller should be applied.
+**Context:** `getClusterRef` only fetches `Neo4jEnterpriseCluster`. Standalone deployments are not supported. The same dual-lookup pattern from the database controller should be applied.
 
-**Step 1 — Fix `getTargetCluster` in restore controller**
+**Step 1 — Fix `getClusterRef` in restore controller**
 
 Mirror the pattern from Task 5. Try `Neo4jEnterpriseCluster` first, then fall back to `Neo4jEnterpriseStandalone`:
 
 ```go
-func (r *Neo4jRestoreReconciler) getTargetCluster(ctx context.Context, restore *neo4jv1alpha1.Neo4jRestore) (*neo4jv1alpha1.Neo4jEnterpriseCluster, error) {
-    key := types.NamespacedName{Name: restore.Spec.TargetCluster, Namespace: restore.Namespace}
+func (r *Neo4jRestoreReconciler) getClusterRef(ctx context.Context, restore *neo4jv1alpha1.Neo4jRestore) (*neo4jv1alpha1.Neo4jEnterpriseCluster, error) {
+    key := types.NamespacedName{Name: restore.Spec.ClusterRef, Namespace: restore.Namespace}
 
     cluster := &neo4jv1alpha1.Neo4jEnterpriseCluster{}
     if err := r.Get(ctx, key, cluster); err == nil {
@@ -1340,7 +1340,7 @@ func (r *Neo4jRestoreReconciler) getTargetCluster(ctx context.Context, restore *
 
     standalone := &neo4jv1alpha1.Neo4jEnterpriseStandalone{}
     if err := r.Get(ctx, key, standalone); err != nil {
-        return nil, fmt.Errorf("target %q not found as cluster or standalone: %w", restore.Spec.TargetCluster, err)
+        return nil, fmt.Errorf("target %q not found as cluster or standalone: %w", restore.Spec.ClusterRef, err)
     }
     return standaloneToCluster(standalone), nil
 }

@@ -24,13 +24,6 @@ spec:
     className: standard  # Use your cluster's default storage class
     size: "10Gi"        # Adjust based on your data needs
 
-  # Persistence configuration
-  persistence:
-    enabled: true
-    retentionPolicy: Delete  # Delete PVCs when standalone is deleted
-    accessModes:
-      - ReadWriteOnce
-
   # Resource allocation
   resources:
     requests:

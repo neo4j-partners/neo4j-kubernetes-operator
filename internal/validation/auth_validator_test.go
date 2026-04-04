@@ -25,12 +25,11 @@ import (
 	neo4jv1alpha1 "github.com/priyolahiri/neo4j-kubernetes-operator/api/v1alpha1"
 )
 
-func clusterWithAuth(provider, secretRef string) *neo4jv1alpha1.Neo4jEnterpriseCluster {
+func clusterWithAuth(provider string) *neo4jv1alpha1.Neo4jEnterpriseCluster {
 	var auth *neo4jv1alpha1.AuthSpec
-	if provider != "" || secretRef != "" {
+	if provider != "" {
 		auth = &neo4jv1alpha1.AuthSpec{
-			Provider:  provider,
-			SecretRef: secretRef,
+			AuthenticationProviders: []string{provider},
 		}
 	}
 	return &neo4jv1alpha1.Neo4jEnterpriseCluster{
@@ -58,22 +57,20 @@ func TestAuthValidator_BackwardCompat_OldProviderField(t *testing.T) {
 	v := NewAuthValidator()
 
 	cases := []struct {
-		name      string
-		provider  string
-		secretRef string
-		wantErrs  int
+		name     string
+		provider string
+		wantErrs int
 	}{
-		{"native provider - no errors", "native", "", 0},
-		{"ldap with secretRef - no errors", "ldap", "my-ldap-secret", 0},
-		{"kerberos with secretRef - no errors", "kerberos", "my-krb-secret", 0},
-		{"jwt with secretRef - no errors", "jwt", "my-jwt-secret", 0},
-		{"ldap without secretRef - requires secretRef", "ldap", "", 1},
-		{"invalid provider - NotSupported", "invalid", "", 2},
+		{"native provider - no errors", "native", 0},
+		{"ldap provider - no errors", "ldap", 0},
+		{"kerberos provider - no errors", "kerberos", 0},
+		{"jwt provider - no errors", "jwt", 0},
+		{"invalid provider - NotSupported", "invalid", 1},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			cluster := clusterWithAuth(tc.provider, tc.secretRef)
+			cluster := clusterWithAuth(tc.provider)
 			errs := v.Validate(cluster)
 			if len(errs) != tc.wantErrs {
 				t.Errorf("expected %d errors, got %d: %v", tc.wantErrs, len(errs), errs)
@@ -88,8 +85,8 @@ func TestAuthValidator_BackwardCompat_LDAPWithTypedConfig(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"},
 		Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 			Auth: &neo4jv1alpha1.AuthSpec{
-				Provider: "ldap",
-				// No secretRef, but typed LDAP config is provided
+				AuthenticationProviders: []string{"ldap"},
+				AuthorizationProviders:  []string{"ldap"},
 				LDAP: &neo4jv1alpha1.Neo4jLDAPSpec{
 					Host: "ldap://ldap.example.com",
 				},
@@ -331,8 +328,8 @@ func TestAuthValidator_TrustStore_SecretRefRequired(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"},
 		Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 			Auth: &neo4jv1alpha1.AuthSpec{
-				TrustStore: &neo4jv1alpha1.TrustStoreSpec{
-					SecretRef: "", // empty
+				TrustStore: &neo4jv1alpha1.SecretKeyRef{
+					Name: "", // empty
 				},
 			},
 		},
@@ -349,9 +346,9 @@ func TestAuthValidator_TrustStore_Valid(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"},
 		Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
 			Auth: &neo4jv1alpha1.AuthSpec{
-				TrustStore: &neo4jv1alpha1.TrustStoreSpec{
-					SecretRef: "my-ca-cert",
-					Key:       "ca.crt",
+				TrustStore: &neo4jv1alpha1.SecretKeyRef{
+					Name: "my-ca-cert",
+					Key:  "ca.crt",
 				},
 			},
 		},

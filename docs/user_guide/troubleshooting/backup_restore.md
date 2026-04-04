@@ -578,7 +578,7 @@ kind: Neo4jRestore
 metadata:
   name: emergency-restore
 spec:
-  targetCluster: recovery-cluster
+  clusterRef: recovery-cluster
   source:
     type: backup
     backupRef: production-backup-latest
@@ -604,7 +604,7 @@ kind: Neo4jRestore
 metadata:
   name: pitr-emergency-restore
 spec:
-  targetCluster: recovery-cluster
+  clusterRef: recovery-cluster
   source:
     type: pitr
     backupRef: production-backup-latest

@@ -114,8 +114,8 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 						Tag:  getNeo4jImageTag(), // Use environment-specified version
 					},
 					Auth: &neo4jv1alpha1.AuthSpec{
-						Provider:    "native",
-						AdminSecret: "neo4j-admin-secret",
+						AuthenticationProviders: []string{"native"},
+						AdminSecret:             "neo4j-admin-secret",
 					},
 					Topology: neo4jv1alpha1.TopologyConfiguration{
 						Servers: 3,
@@ -341,8 +341,8 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 						Tag:  getNeo4jImageTag(), // Use environment-specified version
 					},
 					Auth: &neo4jv1alpha1.AuthSpec{
-						Provider:    "native",
-						AdminSecret: "neo4j-admin-secret",
+						AuthenticationProviders: []string{"native"},
+						AdminSecret:             "neo4j-admin-secret",
 					},
 					Topology: neo4jv1alpha1.TopologyConfiguration{
 						Servers: 3,
@@ -375,8 +375,8 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 						Tag:  getNeo4jImageTag(), // Use environment-specified version
 					},
 					Auth: &neo4jv1alpha1.AuthSpec{
-						Provider:    "native",
-						AdminSecret: "neo4j-admin-secret",
+						AuthenticationProviders: []string{"native"},
+						AdminSecret:             "neo4j-admin-secret",
 					},
 					Topology: neo4jv1alpha1.TopologyConfiguration{
 						Servers: 3,

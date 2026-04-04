@@ -808,6 +808,7 @@ func (r *Neo4jBackupReconciler) updateBackupStatus(ctx context.Context, backup *
 		}
 		latest.Status.Phase = phase
 		latest.Status.Message = message
+		latest.Status.ObservedGeneration = latest.Generation
 		condStatus, condReason := PhaseToConditionStatus(phase)
 		SetReadyCondition(&latest.Status.Conditions, latest.Generation, condStatus, condReason, message)
 		now := metav1.Now()

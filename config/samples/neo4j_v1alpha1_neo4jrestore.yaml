@@ -3,7 +3,7 @@ kind: Neo4jRestore
 metadata:
   name: example-restore
 spec:
-  targetCluster: sample-cluster
+  clusterRef: sample-cluster
   databaseName: exampledb
   source:
     type: backup
