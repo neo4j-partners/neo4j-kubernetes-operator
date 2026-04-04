@@ -503,6 +503,139 @@ If you encounter issues during migration:
    - [GitHub Issues](https://github.com/priyolahiri/neo4j-kubernetes-operator/issues)
    - [Neo4j Community](https://community.neo4j.com/)
 
+## Upgrading to v1.6.0-alpha (API Stabilization)
+
+v1.6.0-alpha includes breaking changes to the `v1alpha1` API in preparation for graduating to `v1beta1`. These changes fix field naming inconsistencies, remove deprecated fields, and resolve bugs.
+
+### Field renames
+
+| Resource | Old Field | New Field | Action |
+|----------|-----------|-----------|--------|
+| `Neo4jRestore` | `spec.targetCluster` | `spec.clusterRef` | Rename in YAML |
+| Auth TrustStore | `spec.auth.trustStore.secretRef` | `spec.auth.trustStore.name` | Rename in YAML |
+| Kerberos Keytab | `spec.auth.kerberos.keytab.secretRef` | `spec.auth.kerberos.keytab.name` | Rename in YAML |
+
+Example — before:
+```yaml
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jRestore
+spec:
+  targetCluster: my-cluster
+  databaseName: neo4j
+  source:
+    type: backup
+    backupRef: daily-backup
+```
+
+After:
+```yaml
+apiVersion: neo4j.neo4j.com/v1alpha1
+kind: Neo4jRestore
+spec:
+  clusterRef: my-cluster
+  databaseName: neo4j
+  source:
+    type: backup
+    backupRef: daily-backup
+```
+
+### Removed fields
+
+| Field | Replacement |
+|-------|-------------|
+| `spec.auth.provider` | `spec.auth.authenticationProviders` (list) |
+| `spec.auth.secretRef` | Use provider-specific typed configs (`spec.auth.ldap`, `spec.auth.oidc`, etc.) |
+| `spec.persistence` (standalone) | `spec.storage.retentionPolicy` (already present on StorageSpec) |
+| `spec.route` (standalone top-level) | `spec.service.route` (matching cluster pattern) |
+
+Example — migrating deprecated auth fields:
+
+Before:
+```yaml
+spec:
+  auth:
+    provider: ldap
+    secretRef: ldap-config
+```
+
+After:
+```yaml
+spec:
+  auth:
+    authenticationProviders: ["ldap"]
+    authorizationProviders: ["ldap"]
+    ldap:
+      host: "ldap://ldap.example.com:389"
+      authentication:
+        userDNTemplate: "uid={0},ou=users,dc=example,dc=com"
+```
+
+Example — migrating standalone persistence:
+
+Before:
+```yaml
+spec:
+  storage:
+    className: standard
+    size: "10Gi"
+  persistence:
+    enabled: true
+    retentionPolicy: Delete
+    accessModes: ["ReadWriteOnce"]
+```
+
+After:
+```yaml
+spec:
+  storage:
+    className: standard
+    size: "10Gi"
+    retentionPolicy: Delete
+```
+
+Example — migrating standalone route:
+
+Before:
+```yaml
+spec:
+  route:
+    enabled: true
+    host: neo4j.apps.example.com
+```
+
+After:
+```yaml
+spec:
+  service:
+    type: ClusterIP
+    route:
+      enabled: true
+      host: neo4j.apps.example.com
+```
+
+### Encryption algorithm rename
+
+If you use backup encryption with ChaCha20, update the algorithm name:
+
+| Old Value | New Value |
+|-----------|-----------|
+| `ChaCha20` | `ChaCha20Poly1305` |
+
+### Unified secret reference type
+
+`TrustStoreSpec`, `AuraTokenSecretRef`, and `KerberosKeytabSpec` have been replaced by a single `SecretKeyRef` type with `name` and `key` fields. The JSON structure for `AuraFleetManagement.tokenSecretRef` is unchanged (fields were already `name`/`key`). For `trustStore` and `kerberos.keytab`, the `secretRef` field is now `name`.
+
+### Quick upgrade checklist
+
+1. Search your manifests for `targetCluster:` and replace with `clusterRef:`
+2. Search for `auth.provider:` / `auth.secretRef:` and migrate to `authenticationProviders`/`authorizationProviders` with typed provider configs
+3. Search standalone manifests for `spec.route:` and move to `spec.service.route:`
+4. Search standalone manifests for `spec.persistence:` and move retention policy to `spec.storage.retentionPolicy:`
+5. Search for `trustStore.secretRef:` and rename to `trustStore.name:`
+6. Search for `kerberos.keytab.secretRef:` and rename to `kerberos.keytab.name:`
+7. If using `algorithm: ChaCha20` in backup encryption, change to `algorithm: ChaCha20Poly1305`
+8. Apply updated CRDs before deploying the new operator version
+
 ## What's Next
 
 After completing your migration:
