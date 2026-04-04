@@ -960,14 +960,31 @@ func TestValidateDatabaseName(t *testing.T) {
 			wantErrors: 0,
 		},
 		{
-			name:       "valid name with underscore prefix",
-			dbName:     "_internal",
+			name:       "valid name with dashes",
+			dbName:     "my-database",
 			wantErrors: 0,
 		},
 		{
 			name:       "valid name with dots",
 			dbName:     "my.database.v2",
 			wantErrors: 0,
+		},
+		{
+			name:       "valid name with dots and dashes",
+			dbName:     "my-db.v2",
+			wantErrors: 0,
+		},
+		{
+			name:       "invalid name with underscore",
+			dbName:     "my_database",
+			wantErrors: 1,
+			wantMsg:    "must start with a letter",
+		},
+		{
+			name:       "invalid name starts with underscore",
+			dbName:     "_internal",
+			wantErrors: 1,
+			wantMsg:    "must start with a letter",
 		},
 		{
 			name:       "empty name",
@@ -979,13 +996,13 @@ func TestValidateDatabaseName(t *testing.T) {
 			name:       "starts with number",
 			dbName:     "1badname",
 			wantErrors: 1,
-			wantMsg:    "must start with a letter or underscore",
+			wantMsg:    "must start with a letter",
 		},
 		{
-			name:       "contains hyphen",
-			dbName:     "bad-name",
+			name:       "starts with dash",
+			dbName:     "-badname",
 			wantErrors: 1,
-			wantMsg:    "must start with a letter or underscore",
+			wantMsg:    "must start with a letter",
 		},
 		{
 			name:       "reserved name system",

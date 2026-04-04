@@ -339,7 +339,7 @@ kubectl logs -n neo4j-operator-system deployment/neo4j-operator-controller-manag
 27. **TLS CA Auto-Discovery**: `buildTLSConfig()` in `internal/neo4j/client.go` loads CA from cert-manager Secret (`{name}-tls-secret`) automatically; `TrustedCASecret` is an override; `InsecureSkipVerify` is fallback only
 28. **All Client Functions Must Handle TLS**: `NewClientForEnterprise`, `NewClientForEnterpriseStandalone`, AND `NewClientForPod` all call `buildTLSConfig()`; split-brain detector uses dynamic `bolt+s://` scheme
 29. **ObservedGeneration**: Set `status.observedGeneration = latest.Generation` on every status update in both cluster and standalone controllers
-30. **Name Length Validation**: Cluster names max 56 chars (DNS label 63 minus `-server` suffix); standalone max 63 chars; database names max 65 chars, must match `^[a-zA-Z_][a-zA-Z0-9_.]*$`
+30. **Name Length Validation**: Cluster names max 56 chars (DNS label 63 minus `-server` suffix); standalone max 63 chars; database names max 65 chars, must match `^[a-zA-Z][a-zA-Z0-9.\-]*$`
 31. **serverRoles Validation**: Index must be in `[0, servers-1]`, no duplicates, cannot set ALL to SECONDARY
 32. **Standalone Diagnostics**: `collectStandaloneDiagnostics()` runs `SHOW DATABASES` when monitoring enabled and phase Ready; non-fatal like cluster diagnostics
 33. **Standalone UpgradeStrategy**: Pre-upgrade health check via `VerifyConnectivity`; `autoPauseOnFailure` blocks upgrade if health check fails; STS update strategy set from spec

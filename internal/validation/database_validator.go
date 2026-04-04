@@ -50,9 +50,10 @@ type DatabaseValidationResult struct {
 	Warnings []string
 }
 
-// neo4jDatabaseNamePattern matches valid Neo4j database names: starts with letter or underscore,
-// followed by alphanumeric characters, underscores, or dots.
-var neo4jDatabaseNamePattern = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_.]*$`)
+// neo4jDatabaseNamePattern matches valid Neo4j database names: starts with a letter,
+// followed by letters, digits, dots, or dashes.
+// See: https://neo4j.com/docs/operations-manual/5/database-administration/standard-databases/naming-databases/
+var neo4jDatabaseNamePattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9.\-]*$`)
 
 const maxDatabaseNameLength = 65
 
@@ -73,7 +74,7 @@ func validateDatabaseName(name string, fldPath *field.Path) (field.ErrorList, []
 
 	if !neo4jDatabaseNamePattern.MatchString(name) {
 		allErrs = append(allErrs, field.Invalid(fldPath, name,
-			"must start with a letter or underscore and contain only alphanumeric characters, underscores, or dots"))
+			"must start with a letter and contain only letters, digits, dots, or dashes"))
 	}
 
 	if strings.EqualFold(name, "system") {
