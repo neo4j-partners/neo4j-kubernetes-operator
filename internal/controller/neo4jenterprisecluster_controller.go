@@ -845,7 +845,7 @@ func (r *Neo4jEnterpriseClusterReconciler) envVarsEqual(current, desired []corev
 			// Desired env var present but with wrong value — needs update.
 			return false
 		}
-		if !envVarSourceEqual(currentEnv.ValueFrom, env.ValueFrom) {
+		if !r.envVarSourceEqual(currentEnv.ValueFrom, env.ValueFrom) {
 			// SecretKeyRef / ConfigMapKeyRef / FieldRef mismatch — needs update.
 			return false
 		}
@@ -856,7 +856,7 @@ func (r *Neo4jEnterpriseClusterReconciler) envVarsEqual(current, desired []corev
 
 // envVarSourceEqual compares two EnvVarSource pointers for the purposes of template
 // change detection. Nil == Nil, and non-nil sources are compared structurally.
-func envVarSourceEqual(a, b *corev1.EnvVarSource) bool {
+func (r *Neo4jEnterpriseClusterReconciler) envVarSourceEqual(a, b *corev1.EnvVarSource) bool {
 	if a == nil && b == nil {
 		return true
 	}
