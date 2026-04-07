@@ -675,63 +675,46 @@ make operator-logs
 
 ### Demo Environment
 
+The demo deploys a TLS-enabled standalone instance and a 3-node TLS-enabled cluster, creates databases with sample data, and demonstrates external access.
+
 #### `make demo-setup`
-**Description**: Set up complete demo environment
+**Description**: Set up complete demo environment (Kind cluster + cert-manager + operator). Lists existing clusters that will be destroyed and asks for confirmation.
 **Usage**: `make demo-setup`
-**Features**:
-- Creates cluster if needed
-- Deploys operator
-- Prepares demo resources
-**Example**:
-```bash
-make demo-setup
-# 🎪 Complete demo environment ready
-```
 
 #### `make demo`
-**Description**: Run interactive operator demo
+**Description**: Run interactive operator demo with full environment setup. Asks for confirmation before destructive steps (destroying existing clusters, deleting previous demo resources). At the end, prompts whether to clean up.
 **Usage**: `make demo`
-**Dependencies**: `demo-setup`
-**Example**:
-```bash
-make demo
-# 🎪 Interactive demonstration
-# 💬 Guided walkthrough
-# 📚 Educational content
-```
+**Includes**: Environment setup (interactive)
 
 #### `make demo-fast`
-**Description**: Run automated demo without confirmations
+**Description**: Run automated demo without confirmations (includes setup)
 **Usage**: `make demo-fast`
-**Dependencies**: `demo-setup`
-**Example**:
-```bash
-make demo-fast
-# 🚀 Fast automated demo
-# ⚡ No user interaction required
-```
+**Includes**: Environment setup (auto-confirmed)
 
 #### `make demo-only`
-**Description**: Run fast demo without environment setup (assumes cluster exists)
+**Description**: Run fast demo without environment setup (assumes cluster and operator exist)
 **Usage**: `make demo-only`
-**Dependencies**: Existing cluster and operator
-**Example**:
-```bash
-make demo-only
-# 🎪 Demo on existing environment
-# ⚡ Skips setup phase
-```
 
 #### `make demo-interactive`
-**Description**: Run interactive demo without environment setup
+**Description**: Run interactive demo without environment setup (assumes cluster and operator exist)
 **Usage**: `make demo-interactive`
-**Dependencies**: Existing cluster and operator
-**Example**:
-```bash
-make demo-interactive
-# 🎪 Interactive demo on existing setup
-# 💬 User-guided walkthrough
-```
+
+#### `make demo-cleanup`
+**Description**: Clean up all demo resources (databases, standalone, cluster, admin secret) without running the demo
+**Usage**: `make demo-cleanup`
+
+#### Demo script flags
+
+The demo script (`scripts/demo.sh`) accepts these flags:
+
+| Flag | Description |
+|------|-------------|
+| `--skip-confirmations` | Skip all interactive prompts |
+| `--cleanup` | Automatically clean up demo resources after completion |
+| `--cleanup-only` | Only clean up resources from a previous demo run |
+| `--speed fast\|normal\|slow` | Control demo pacing |
+| `--namespace NAMESPACE` | Kubernetes namespace (default: `default`) |
+| `--password PASSWORD` | Admin password (default: `demo123456`) |
 
 ## Dependencies
 

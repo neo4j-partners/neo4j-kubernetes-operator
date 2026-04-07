@@ -125,6 +125,8 @@ Certificates are mounted as:
 
 ## Connecting to TLS-Enabled Neo4j
 
+When TLS is enabled, the operator sets `server.bolt.tls_level=REQUIRED` on both cluster and standalone deployments. This means **plain `bolt://` connections are rejected** — clients must use `bolt+s://` (with CA verification) or `bolt+ssc://` (self-signed cert, skips hostname verification).
+
 ### Using Neo4j Browser
 
 ```bash
@@ -148,8 +150,9 @@ bolt+ssc://localhost:7687
 ### Using cypher-shell
 
 ```bash
-# From within the cluster
-kubectl exec -it <pod-name> -- cypher-shell -u neo4j -p <password>
+# From within the cluster (via kubectl exec)
+kubectl exec -it <pod-name> -c neo4j -- cypher-shell \
+  -a bolt+ssc://localhost:7687 -u neo4j -p <password>
 
 # From outside (after port-forward)
 cypher-shell -a bolt+ssc://localhost:7687 -u neo4j -p <password>

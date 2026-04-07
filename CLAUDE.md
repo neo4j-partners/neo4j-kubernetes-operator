@@ -203,7 +203,7 @@ spec:
       kind: ClusterIssuer
 ```
 Auto-generates SSL policies for `https`/`bolt`, certs at `/ssl/`, sets `dbms.ssl.policy.cluster.trust_all=true`.
-TLS-enabled → `bolt+s://` scheme; TLS-disabled → `bolt://`.
+TLS-enabled → `server.bolt.tls_level=REQUIRED`, `bolt+s://` scheme; TLS-disabled → `bolt://`. Plain `bolt://` connections are rejected when TLS is enabled.
 
 ## Neo4j Plugin Support
 
@@ -343,6 +343,9 @@ kubectl logs -n neo4j-operator-system deployment/neo4j-operator-controller-manag
 31. **serverRoles Validation**: Index must be in `[0, servers-1]`, no duplicates, cannot set ALL to SECONDARY
 32. **Standalone Diagnostics**: `collectStandaloneDiagnostics()` runs `SHOW DATABASES` when monitoring enabled and phase Ready; non-fatal like cluster diagnostics
 33. **Standalone UpgradeStrategy**: Pre-upgrade health check via `VerifyConnectivity`; `autoPauseOnFailure` blocks upgrade if health check fails; STS update strategy set from spec
+34. **Standalone Health Probes**: Readiness/liveness/startup probes via `/conf/health.sh` (checks process + HTTP 7474); ConfigMap includes `health.sh` alongside `neo4j.conf` with `DefaultMode: 0755`
+35. **Bolt TLS REQUIRED**: Both cluster and standalone set `server.bolt.tls_level=REQUIRED` when TLS enabled; plain `bolt://` rejected
+36. **Deprecated Config Keys**: Validator warns on `dbms.logs.query.enabled` (use `db.logs.query.enabled`); always use `db.*` namespace for Neo4j 5.x+ settings
 
 ## Reports
 
