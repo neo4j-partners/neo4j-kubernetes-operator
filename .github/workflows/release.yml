@@ -295,9 +295,9 @@ jobs:
 
         ## 📋 Requirements
 
-        - Kubernetes 1.28+
+        - Kubernetes 1.30+
         - Neo4j Enterprise 5.26+ or CalVer 2025.01.0+
-        - cert-manager (for TLS)
+        - cert-manager v1.20+ (for TLS)
 
         ## 🔗 Container Images
 

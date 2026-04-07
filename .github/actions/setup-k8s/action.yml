@@ -5,7 +5,7 @@ inputs:
   kind-version:
     description: 'Kind version to use'
     required: false
-    default: 'v0.20.0'
+    default: 'v0.27.0'
 
 runs:
   using: 'composite'
