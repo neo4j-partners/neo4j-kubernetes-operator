@@ -221,7 +221,7 @@ func TestDatabaseValidator_ValidateTopology(t *testing.T) {
 			if tt.shouldContainError != "" {
 				found := false
 				for _, err := range result.Errors {
-					if containsString(err.Error(), tt.shouldContainError) {
+					if strings.Contains(err.Error(), tt.shouldContainError) {
 						found = true
 						break
 					}
@@ -232,7 +232,7 @@ func TestDatabaseValidator_ValidateTopology(t *testing.T) {
 			if tt.shouldContainWarning != "" {
 				found := false
 				for _, warning := range result.Warnings {
-					if containsString(warning, tt.shouldContainWarning) {
+					if strings.Contains(warning, tt.shouldContainWarning) {
 						found = true
 						break
 					}
@@ -315,7 +315,7 @@ func TestDatabaseValidator_ValidateCypherLanguage(t *testing.T) {
 			if tt.shouldContainError != "" {
 				found := false
 				for _, err := range result.Errors {
-					if containsString(err.Error(), tt.shouldContainError) {
+					if strings.Contains(err.Error(), tt.shouldContainError) {
 						found = true
 						break
 					}
@@ -326,7 +326,7 @@ func TestDatabaseValidator_ValidateCypherLanguage(t *testing.T) {
 			if tt.shouldContainWarning != "" {
 				found := false
 				for _, warning := range result.Warnings {
-					if containsString(warning, tt.shouldContainWarning) {
+					if strings.Contains(warning, tt.shouldContainWarning) {
 						found = true
 						break
 					}
@@ -528,7 +528,7 @@ func TestDatabaseValidator_ValidateSeedURI(t *testing.T) {
 			if tt.shouldContainError != "" {
 				found := false
 				for _, err := range result.Errors {
-					if containsString(err.Error(), tt.shouldContainError) {
+					if strings.Contains(err.Error(), tt.shouldContainError) {
 						found = true
 						break
 					}
@@ -539,7 +539,7 @@ func TestDatabaseValidator_ValidateSeedURI(t *testing.T) {
 			if tt.shouldContainWarning != "" {
 				found := false
 				for _, warning := range result.Warnings {
-					if containsString(warning, tt.shouldContainWarning) {
+					if strings.Contains(warning, tt.shouldContainWarning) {
 						found = true
 						break
 					}
@@ -665,7 +665,7 @@ func TestDatabaseValidator_ValidateSeedConfiguration(t *testing.T) {
 			if tt.shouldContainError != "" {
 				found := false
 				for _, err := range result.Errors {
-					if containsString(err.Error(), tt.shouldContainError) {
+					if strings.Contains(err.Error(), tt.shouldContainError) {
 						found = true
 						break
 					}
@@ -676,7 +676,7 @@ func TestDatabaseValidator_ValidateSeedConfiguration(t *testing.T) {
 			if tt.shouldContainWarning != "" {
 				found := false
 				for _, warning := range result.Warnings {
-					if containsString(warning, tt.shouldContainWarning) {
+					if strings.Contains(warning, tt.shouldContainWarning) {
 						found = true
 						break
 					}
@@ -685,19 +685,6 @@ func TestDatabaseValidator_ValidateSeedConfiguration(t *testing.T) {
 			}
 		})
 	}
-}
-
-// Helper function to check if a string contains a substring
-func containsString(haystack, needle string) bool {
-	return len(needle) > 0 && len(haystack) >= len(needle) &&
-		func() bool {
-			for i := 0; i <= len(haystack)-len(needle); i++ {
-				if haystack[i:i+len(needle)] == needle {
-					return true
-				}
-			}
-			return false
-		}()
 }
 
 func TestDatabaseValidator_ValidateStandalone(t *testing.T) {
@@ -843,7 +830,7 @@ func TestDatabaseValidator_ValidateStandalone(t *testing.T) {
 			for _, expectedErr := range tt.errorMessages {
 				found := false
 				for _, actualErr := range result.Errors {
-					if containsString(actualErr.Error(), expectedErr) {
+					if strings.Contains(actualErr.Error(), expectedErr) {
 						found = true
 						break
 					}
@@ -855,7 +842,7 @@ func TestDatabaseValidator_ValidateStandalone(t *testing.T) {
 			for _, expectedWarn := range tt.warningMessages {
 				found := false
 				for _, actualWarn := range result.Warnings {
-					if containsString(actualWarn, expectedWarn) {
+					if strings.Contains(actualWarn, expectedWarn) {
 						found = true
 						break
 					}
