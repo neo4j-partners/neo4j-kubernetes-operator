@@ -10,10 +10,10 @@ Welcome to the Neo4j Enterprise Operator project! This guide covers everything y
 
 | Tool | Version | Install |
 |------|---------|---------|
-| Go | 1.24+ | [golang.org/doc/install](https://golang.org/doc/install) |
+| Go | 1.25+ | [golang.org/doc/install](https://golang.org/doc/install) |
 | Docker | Latest | [docs.docker.com/get-docker](https://docs.docker.com/get-docker/) |
 | kubectl | Latest | [kubernetes.io/docs/tasks/tools](https://kubernetes.io/docs/tasks/tools/install-kubectl/) |
-| Kind | 0.20.0+ | `brew install kind` (macOS) or [kind.sigs.k8s.io](https://kind.sigs.k8s.io/docs/user/quick-start/#installation) |
+| Kind | 0.27.0+ | `brew install kind` (macOS) or [kind.sigs.k8s.io](https://kind.sigs.k8s.io/docs/user/quick-start/#installation) |
 | make | Any | Pre-installed on macOS/Linux |
 | git | Any | [git-scm.com](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git) |
 
@@ -42,7 +42,7 @@ The project includes a `.tool-versions` file that pins the exact tool versions u
 # Install mise (one-time)
 curl https://mise.jdx.dev/install.sh | sh
 
-# Install all pinned versions (Go 1.24.1, Kind 0.20.0, kubectl 1.31.0, etc.)
+# Install all pinned versions (Go 1.25, Kind 0.27.0, kubectl 1.31.0, etc.)
 mise install
 ```
 

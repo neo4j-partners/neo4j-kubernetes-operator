@@ -7,8 +7,8 @@ This guide will walk you through the process of deploying your first Neo4j Enter
 *   A Kubernetes cluster (v1.21+)
 *   `kubectl` installed and configured
 *   Neo4j Enterprise Edition (evaluation license acceptable for testing)
-*   Go 1.24+ (for building from source)
-*   cert-manager 1.18+ (optional, for TLS-enabled deployments)
+*   Go 1.25+ (for building from source)
+*   cert-manager 1.20+ (optional, for TLS-enabled deployments)
 
 ## Installation
 

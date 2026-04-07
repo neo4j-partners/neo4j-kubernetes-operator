@@ -4,7 +4,7 @@ This Helm chart deploys the Neo4j Enterprise Operator for Kubernetes, which mana
 
 ## Prerequisites
 
-- Kubernetes 1.21+
+- Kubernetes 1.30+
 - Helm 3.8+
 - kubectl configured to access your cluster
 - (Optional) cert-manager for TLS certificate management

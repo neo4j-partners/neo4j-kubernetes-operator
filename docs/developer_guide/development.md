@@ -12,7 +12,7 @@ This guide explains how to set up your development environment and get started w
 - **Go**: Version 1.24+ (for development and testing)
 - **Docker**: Container runtime for building images
 - **kubectl**: Kubernetes CLI tool
-- **Kind**: **MANDATORY** - Kubernetes in Docker for local clusters v0.20+ (see installation below)
+- **Kind**: **MANDATORY** - Kubernetes in Docker for local clusters v0.27+ (see installation below)
 - **make**: Build automation (GNU Make)
 
 ### Kind Installation (Required)
