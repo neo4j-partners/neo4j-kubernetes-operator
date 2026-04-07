@@ -279,7 +279,7 @@ jobs:
         ## ⚠️ Breaking Changes (v1.6.0-alpha)
 
         This release includes API field changes in preparation for v1beta1 promotion.
-        **Manifests from v1.5.0-alpha and earlier require updates before upgrading.**
+        **Manifests from v1.6.0-alpha and earlier require updates before upgrading.**
 
         Key changes:
         - \`Neo4jRestore\`: \`spec.targetCluster\` renamed to \`spec.clusterRef\`

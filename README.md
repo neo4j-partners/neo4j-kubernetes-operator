@@ -569,7 +569,7 @@ Note: "Compliance-ready logging and auditing" means the operator exposes Neo4j l
 
 ### v1.6.0-alpha: API Stabilization (Breaking Changes)
 
-> **⚠️ Upgrading from v1.5.0-alpha or earlier requires manifest changes.** See the [Migration Guide](docs/user_guide/migration_guide.md#upgrading-to-v160-alpha-api-stabilization) for details.
+> **⚠️ Upgrading from v1.6.0-alpha or earlier requires manifest changes.** See the [Migration Guide](docs/user_guide/migration_guide.md#upgrading-to-v160-alpha-api-stabilization) for details.
 
 Key changes: `targetCluster` renamed to `clusterRef` in Neo4jRestore, deprecated `auth.provider`/`auth.secretRef` removed in favor of `authenticationProviders`/`authorizationProviders` lists, standalone `spec.route` and `spec.persistence` consolidated into existing fields, secret reference types unified into `SecretKeyRef`.
 
