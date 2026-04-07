@@ -1668,7 +1668,7 @@ dbms.ssl.policy.cluster.client_auth=NONE
 dbms.ssl.policy.cluster.tls_versions=TLSv1.3,TLSv1.2
 
 # Enable TLS for connectors
-server.bolt.tls_level=OPTIONAL
+server.bolt.tls_level=REQUIRED
 `
 	}
 

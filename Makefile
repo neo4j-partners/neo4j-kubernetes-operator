@@ -736,7 +736,8 @@ dev-watch: ## Auto-rebuild and redeploy on code changes (requires watchexec or f
 ##@ Development Environment
 
 .PHONY: demo
-demo: demo-setup ## Run interactive demo of the operator capabilities
+demo: ## Run interactive demo of the operator capabilities (includes setup)
+	@./scripts/demo-setup.sh
 	@echo "Starting Neo4j Kubernetes Operator demo..."
 	@./scripts/demo.sh
 
@@ -754,6 +755,11 @@ demo-only: ## Run fast demo without environment setup (assumes cluster exists)
 demo-interactive: ## Run interactive demo without environment setup (assumes cluster exists)
 	@echo "Running interactive demo on existing environment..."
 	@./scripts/demo.sh
+
+.PHONY: demo-cleanup
+demo-cleanup: ## Clean up all demo resources (standalone, cluster, databases, secrets)
+	@echo "Cleaning up demo resources..."
+	@./scripts/demo.sh --cleanup-only
 
 .PHONY: demo-setup
 demo-setup: ## Setup complete demo environment (cluster + operator)

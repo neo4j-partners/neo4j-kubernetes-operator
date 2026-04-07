@@ -605,20 +605,19 @@ func (r *Neo4jEnterpriseStandaloneReconciler) createConfigMap(standalone *neo4jv
 	// Add basic server configuration
 	configLines = append(configLines, "# Basic Server Configuration")
 	configLines = append(configLines, "server.default_listen_address=0.0.0.0")
-	configLines = append(configLines, "server.bolt.enabled=true")
-	configLines = append(configLines, "server.bolt.listen_address=:7687")
 	configLines = append(configLines, "server.http.enabled=true")
 	configLines = append(configLines, "server.http.listen_address=:7474")
-	configLines = append(configLines, "")
 
 	// Add TLS configuration if enabled
 	if standalone.Spec.TLS != nil && standalone.Spec.TLS.Mode == "cert-manager" {
-		configLines = append(configLines, "# TLS Configuration")
-		configLines = append(configLines, "server.https.enabled=true")
-		configLines = append(configLines, "server.https.listen_address=0.0.0.0:7473")
+		// Bolt with TLS — listen on all interfaces with TLS required
 		configLines = append(configLines, "server.bolt.enabled=true")
 		configLines = append(configLines, "server.bolt.listen_address=0.0.0.0:7687")
 		configLines = append(configLines, "server.bolt.tls_level=REQUIRED")
+		configLines = append(configLines, "")
+		configLines = append(configLines, "# TLS Configuration")
+		configLines = append(configLines, "server.https.enabled=true")
+		configLines = append(configLines, "server.https.listen_address=0.0.0.0:7473")
 		configLines = append(configLines, "")
 		configLines = append(configLines, "# SSL Policy for HTTPS")
 		configLines = append(configLines, "dbms.ssl.policy.https.enabled=true")
@@ -635,6 +634,11 @@ func (r *Neo4jEnterpriseStandaloneReconciler) createConfigMap(standalone *neo4jv
 		configLines = append(configLines, "dbms.ssl.policy.bolt.public_certificate=tls.crt")
 		configLines = append(configLines, "dbms.ssl.policy.bolt.client_auth=NONE")
 		configLines = append(configLines, "dbms.ssl.policy.bolt.tls_versions=TLSv1.3,TLSv1.2")
+		configLines = append(configLines, "")
+	} else {
+		// Bolt without TLS
+		configLines = append(configLines, "server.bolt.enabled=true")
+		configLines = append(configLines, "server.bolt.listen_address=:7687")
 		configLines = append(configLines, "")
 	}
 
@@ -684,7 +688,76 @@ func (r *Neo4jEnterpriseStandaloneReconciler) createConfigMap(standalone *neo4jv
 		},
 		Data: map[string]string{
 			"neo4j.conf": neo4jConf,
+			"health.sh":  buildStandaloneHealthScript(),
 		},
+	}
+}
+
+// buildStandaloneHealthScript creates a health check script for standalone deployments
+func buildStandaloneHealthScript() string {
+	return `#!/bin/bash
+# Health check script for Neo4j standalone
+
+# Check if Neo4j process is running
+if ! (pgrep -f "EnterpriseEntryPoint" > /dev/null || pgrep -f "Neo4jEnterprise" > /dev/null); then
+    echo "Neo4j process not running"
+    exit 1
+fi
+
+# Check if HTTP port is responding
+if (echo > /dev/tcp/localhost/7474) >/dev/null 2>&1; then
+    echo "Neo4j HTTP port responding - healthy"
+    exit 0
+fi
+
+echo "Neo4j process running but HTTP port not responding"
+exit 1
+`
+}
+
+// buildStandaloneReadinessProbe creates a readiness probe for standalone deployments
+func buildStandaloneReadinessProbe() *corev1.Probe {
+	return &corev1.Probe{
+		ProbeHandler: corev1.ProbeHandler{
+			Exec: &corev1.ExecAction{
+				Command: []string{"/bin/bash", "-c", "/conf/health.sh"},
+			},
+		},
+		InitialDelaySeconds: 30,
+		PeriodSeconds:       10,
+		TimeoutSeconds:      5,
+		FailureThreshold:    6, // Allow up to 60s after initial delay
+	}
+}
+
+// buildStandaloneLivenessProbe creates a liveness probe for standalone deployments
+func buildStandaloneLivenessProbe() *corev1.Probe {
+	return &corev1.Probe{
+		ProbeHandler: corev1.ProbeHandler{
+			Exec: &corev1.ExecAction{
+				Command: []string{"/bin/bash", "-c", "/conf/health.sh"},
+			},
+		},
+		InitialDelaySeconds: 90,
+		PeriodSeconds:       30,
+		TimeoutSeconds:      5,
+		FailureThreshold:    3,
+	}
+}
+
+// buildStandaloneStartupProbe creates a startup probe for standalone deployments
+func buildStandaloneStartupProbe() *corev1.Probe {
+	return &corev1.Probe{
+		ProbeHandler: corev1.ProbeHandler{
+			Exec: &corev1.ExecAction{
+				Command: []string{"/bin/bash", "-c", "/conf/health.sh"},
+			},
+		},
+		InitialDelaySeconds: 15,
+		PeriodSeconds:       10,
+		TimeoutSeconds:      5,
+		FailureThreshold:    30, // Allow up to 5 minutes for startup (30 * 10s)
+		SuccessThreshold:    1,
 	}
 }
 
@@ -868,6 +941,9 @@ func (r *Neo4jEnterpriseStandaloneReconciler) createStatefulSet(standalone *neo4
 									}
 									return corev1.ResourceRequirements{}
 								}(),
+								ReadinessProbe: buildStandaloneReadinessProbe(),
+								LivenessProbe:  buildStandaloneLivenessProbe(),
+								StartupProbe:   buildStandaloneStartupProbe(),
 							},
 							r.buildBackupSidecarContainer(standalone),
 						},
@@ -955,9 +1031,13 @@ func (r *Neo4jEnterpriseStandaloneReconciler) updateStatus(ctx context.Context, 
 	condStatus, condReason := PhaseToConditionStatus(phase)
 	SetReadyCondition(&latestStandalone.Status.Conditions, latestStandalone.Generation, condStatus, condReason, message)
 
-	// Update endpoints
+	// Update endpoints — use bolt+s:// when TLS is enabled
+	boltScheme := "bolt"
+	if standalone.Spec.TLS != nil && standalone.Spec.TLS.Mode == "cert-manager" {
+		boltScheme = "bolt+s"
+	}
 	latestStandalone.Status.Endpoints = &neo4jv1alpha1.EndpointStatus{
-		Bolt:  fmt.Sprintf("bolt://%s-service.%s.svc.cluster.local:7687", standalone.Name, standalone.Namespace),
+		Bolt:  fmt.Sprintf("%s://%s-service.%s.svc.cluster.local:7687", boltScheme, standalone.Name, standalone.Namespace),
 		HTTP:  fmt.Sprintf("http://%s-service.%s.svc.cluster.local:7474", standalone.Name, standalone.Namespace),
 		HTTPS: fmt.Sprintf("https://%s-service.%s.svc.cluster.local:7473", standalone.Name, standalone.Namespace),
 	}
@@ -1207,7 +1287,7 @@ func (r *Neo4jEnterpriseStandaloneReconciler) buildVolumeMounts(standalone *neo4
 func (r *Neo4jEnterpriseStandaloneReconciler) buildVolumes(standalone *neo4jv1alpha1.Neo4jEnterpriseStandalone) []corev1.Volume {
 	volumes := []corev1.Volume{}
 
-	// Add ConfigMap volume (always present now)
+	// Add ConfigMap volume (always present now, 0755 for executable health.sh)
 	volumes = append(volumes, corev1.Volume{
 		Name: "neo4j-config",
 		VolumeSource: corev1.VolumeSource{
@@ -1215,6 +1295,7 @@ func (r *Neo4jEnterpriseStandaloneReconciler) buildVolumes(standalone *neo4jv1al
 				LocalObjectReference: corev1.LocalObjectReference{
 					Name: fmt.Sprintf("%s-config", standalone.Name),
 				},
+				DefaultMode: func() *int32 { mode := int32(0o755); return &mode }(),
 			},
 		},
 	})

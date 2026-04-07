@@ -52,7 +52,7 @@ spec:
     # server.bolt.thread_pool_max_size: "400"
 
     # Query performance settings
-    dbms.logs.query.enabled: "INFO"
+    db.logs.query.enabled: "INFO"
     dbms.logs.query.threshold: "500ms"
     dbms.logs.query.page_logging_enabled: "true"
 

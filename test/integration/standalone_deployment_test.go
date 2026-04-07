@@ -311,7 +311,7 @@ var _ = Describe("Neo4jEnterpriseStandalone Integration Tests", func() {
 					Config: map[string]string{
 						"server.memory.heap.initial_size": "1G",
 						"server.memory.heap.max_size":     "2G",
-						"dbms.logs.query.enabled":         "true",
+						"db.logs.query.enabled":           "true",
 						"dbms.logs.query.threshold":       "1s",
 					},
 					Env: []corev1.EnvVar{
@@ -365,7 +365,7 @@ var _ = Describe("Neo4jEnterpriseStandalone Integration Tests", func() {
 				customConfigs := []string{
 					"server.memory.heap.initial_size=1G",
 					"server.memory.heap.max_size=2G",
-					"dbms.logs.query.enabled=true",
+					"db.logs.query.enabled=true",
 					"dbms.logs.query.threshold=1s",
 				}
 

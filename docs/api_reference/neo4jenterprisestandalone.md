@@ -113,7 +113,7 @@ config:
   server.memory.heap.max_size: "2G"
   server.memory.pagecache.size: "1G"
   dbms.security.procedures.unrestricted: "gds.*,apoc.*"
-  dbms.logs.query.enabled: "true"
+  db.logs.query.enabled: "true"
   dbms.logs.query.threshold: "1s"
   # Neo4j 5.26+ configuration syntax
   server.default_listen_address: "0.0.0.0"
@@ -474,7 +474,7 @@ spec:
     server.memory.heap.initial_size: "3G"
     server.memory.heap.max_size: "6G"
     server.memory.pagecache.size: "2G"
-    dbms.logs.query.enabled: "true"
+    db.logs.query.enabled: "true"
     dbms.logs.query.threshold: "1s"
 ```
 
@@ -576,7 +576,7 @@ spec:
     server.memory.heap.initial_size: "3G"
     server.memory.heap.max_size: "6G"
     server.memory.pagecache.size: "2G"
-    dbms.logs.query.enabled: "true"
+    db.logs.query.enabled: "true"
     dbms.logs.query.threshold: "500ms"
 
   env:

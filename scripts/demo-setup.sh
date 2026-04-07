@@ -38,12 +38,25 @@ main() {
     log_header "Neo4j Kubernetes Operator Demo Setup"
 
     log_info "This script will set up a complete demo environment including:"
-    log_info "  • Clean slate (destroy existing dev/test clusters)"
-    log_info "  • Fresh Kind development cluster"
+    log_info "  • Fresh Kind development cluster (neo4j-operator-dev)"
     log_info "  • cert-manager with self-signed ClusterIssuer"
     log_info "  • Neo4j Kubernetes Operator"
     log_info "  • All prerequisites for the demo"
     echo
+
+    # Detect existing clusters that would be destroyed
+    local existing_clusters=""
+    if kind get clusters 2>/dev/null | grep -q "neo4j-operator-dev"; then
+        existing_clusters="${existing_clusters}  • neo4j-operator-dev (development cluster)\n"
+    fi
+    if kind get clusters 2>/dev/null | grep -q "neo4j-operator-test"; then
+        existing_clusters="${existing_clusters}  • neo4j-operator-test (test cluster)\n"
+    fi
+
+    if [[ -n "${existing_clusters}" ]]; then
+        echo -e "${YELLOW}[WARNING]${NC} The following Kind clusters will be DESTROYED:"
+        echo -e "${existing_clusters}"
+    fi
 
     # Check if running in automated mode
     if [[ "${SKIP_SETUP_CONFIRMATION:-false}" == "true" ]]; then
@@ -85,18 +98,30 @@ main() {
     log_info "Checking cert-manager..."
     kubectl get clusterissuer ca-cluster-issuer
 
-    log_info "Checking operator deployment..."
-    kubectl get deployment -n neo4j-operator-system
+    # Detect which namespace the operator was deployed to
+    local operator_namespace=""
+    if kubectl get deployment neo4j-operator-controller-manager -n neo4j-operator-dev >/dev/null 2>&1; then
+        operator_namespace="neo4j-operator-dev"
+    elif kubectl get deployment neo4j-operator-controller-manager -n neo4j-operator-system >/dev/null 2>&1; then
+        operator_namespace="neo4j-operator-system"
+    fi
 
-    log_info "Verifying operator pods are running..."
-    kubectl get pods -n neo4j-operator-system
+    if [[ -n "${operator_namespace}" ]]; then
+        log_info "Checking operator deployment in ${operator_namespace}..."
+        kubectl get deployment -n "${operator_namespace}"
+
+        log_info "Verifying operator pods are running..."
+        kubectl get pods -n "${operator_namespace}"
+    else
+        log_info "Operator namespace not detected — verify with: make operator-status"
+    fi
 
     log_success "Demo environment setup complete!"
     echo
     log_info "Environment details:"
     log_info "  • Cluster: neo4j-operator-dev (Kind)"
     log_info "  • Context: kind-neo4j-operator-dev"
-    log_info "  • Operator: Deployed in neo4j-operator-system namespace"
+    log_info "  • Operator: Deployed in ${operator_namespace:-unknown} namespace"
     log_info "  • cert-manager: ClusterIssuer 'ca-cluster-issuer' ready"
     echo
     log_info "Ready to run the demo:"

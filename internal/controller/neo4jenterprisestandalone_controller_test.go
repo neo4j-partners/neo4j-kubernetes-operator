@@ -210,7 +210,7 @@ var _ = Describe("Neo4jEnterpriseStandalone Controller", func() {
 			standalone.Spec.Config = map[string]string{
 				"server.memory.heap.initial_size": "1G",
 				"server.memory.heap.max_size":     "2G",
-				"dbms.logs.query.enabled":         "true",
+				"db.logs.query.enabled":           "true",
 			}
 
 			By("Creating the standalone resource")
@@ -235,7 +235,7 @@ var _ = Describe("Neo4jEnterpriseStandalone Controller", func() {
 				// Verify custom config is present
 				return containsString(neo4jConf, "server.memory.heap.initial_size=1G") &&
 					containsString(neo4jConf, "server.memory.heap.max_size=2G") &&
-					containsString(neo4jConf, "dbms.logs.query.enabled=true")
+					containsString(neo4jConf, "db.logs.query.enabled=true")
 			}, timeout, interval).Should(BeTrue())
 		})
 	})
@@ -513,6 +513,151 @@ var _ = Describe("Neo4jEnterpriseStandalone Controller", func() {
 			Skip("Ingress tests require additional setup in envtest")
 			// Note: Full Ingress testing would require setting up a fake ingress controller
 			// This is a placeholder for manual testing
+		})
+	})
+
+	Context("When verifying health probes on standalone container", func() {
+		It("Should configure readiness, liveness, and startup probes", func() {
+			By("Creating the standalone resource")
+			Expect(k8sClient.Create(ctx, standalone)).Should(Succeed())
+
+			By("Waiting for StatefulSet to be created with health probes")
+			Eventually(func() bool {
+				statefulSet := &appsv1.StatefulSet{}
+				err := k8sClient.Get(ctx, types.NamespacedName{
+					Name:      standaloneName,
+					Namespace: namespaceName,
+				}, statefulSet)
+				if err != nil {
+					return false
+				}
+
+				containers := statefulSet.Spec.Template.Spec.Containers
+				if len(containers) == 0 {
+					return false
+				}
+
+				// Find the neo4j container
+				var neo4jContainer *corev1.Container
+				for i := range containers {
+					if containers[i].Name == "neo4j" {
+						neo4jContainer = &containers[i]
+						break
+					}
+				}
+				if neo4jContainer == nil {
+					return false
+				}
+
+				// Verify all three probes are set
+				return neo4jContainer.ReadinessProbe != nil &&
+					neo4jContainer.LivenessProbe != nil &&
+					neo4jContainer.StartupProbe != nil
+			}, timeout, interval).Should(BeTrue())
+
+			By("Verifying probe commands reference health.sh")
+			statefulSet := &appsv1.StatefulSet{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      standaloneName,
+				Namespace: namespaceName,
+			}, statefulSet)).Should(Succeed())
+
+			var neo4jContainer corev1.Container
+			for _, c := range statefulSet.Spec.Template.Spec.Containers {
+				if c.Name == "neo4j" {
+					neo4jContainer = c
+					break
+				}
+			}
+
+			Expect(neo4jContainer.ReadinessProbe.Exec.Command).To(ContainElement("/conf/health.sh"))
+			Expect(neo4jContainer.LivenessProbe.Exec.Command).To(ContainElement("/conf/health.sh"))
+			Expect(neo4jContainer.StartupProbe.Exec.Command).To(ContainElement("/conf/health.sh"))
+		})
+
+		It("Should include health.sh in the ConfigMap", func() {
+			By("Creating the standalone resource")
+			Expect(k8sClient.Create(ctx, standalone)).Should(Succeed())
+
+			By("Waiting for ConfigMap with health.sh")
+			Eventually(func() bool {
+				configMap := &corev1.ConfigMap{}
+				err := k8sClient.Get(ctx, types.NamespacedName{
+					Name:      standaloneName + "-config",
+					Namespace: namespaceName,
+				}, configMap)
+				if err != nil {
+					return false
+				}
+
+				healthScript, exists := configMap.Data["health.sh"]
+				if !exists {
+					return false
+				}
+
+				// Verify the health script checks the HTTP port
+				return containsString(healthScript, "/dev/tcp/localhost/7474") &&
+					containsString(healthScript, "#!/bin/bash")
+			}, timeout, interval).Should(BeTrue())
+		})
+
+		It("Should set ConfigMap volume DefaultMode to 0755 for executable scripts", func() {
+			By("Creating the standalone resource")
+			Expect(k8sClient.Create(ctx, standalone)).Should(Succeed())
+
+			By("Waiting for StatefulSet with executable ConfigMap volume")
+			Eventually(func() bool {
+				statefulSet := &appsv1.StatefulSet{}
+				err := k8sClient.Get(ctx, types.NamespacedName{
+					Name:      standaloneName,
+					Namespace: namespaceName,
+				}, statefulSet)
+				if err != nil {
+					return false
+				}
+
+				// Find the neo4j-config volume
+				for _, vol := range statefulSet.Spec.Template.Spec.Volumes {
+					if vol.Name == "neo4j-config" && vol.ConfigMap != nil {
+						return vol.ConfigMap.DefaultMode != nil && *vol.ConfigMap.DefaultMode == int32(0o755)
+					}
+				}
+				return false
+			}, timeout, interval).Should(BeTrue())
+		})
+	})
+
+	Context("When creating a standalone with TLS and checking bolt endpoint scheme", func() {
+		It("Should use bolt:// in endpoints when TLS is disabled", func() {
+			By("Setting TLS to disabled")
+			standalone.Spec.TLS = &neo4jv1alpha1.TLSSpec{
+				Mode: "disabled",
+			}
+
+			By("Creating the standalone resource")
+			Expect(k8sClient.Create(ctx, standalone)).Should(Succeed())
+
+			By("Waiting for StatefulSet to be created")
+			Eventually(func() bool {
+				statefulSet := &appsv1.StatefulSet{}
+				err := k8sClient.Get(ctx, types.NamespacedName{
+					Name:      standaloneName,
+					Namespace: namespaceName,
+				}, statefulSet)
+				return err == nil
+			}, timeout, interval).Should(BeTrue())
+
+			By("Verifying standalone status has bolt:// scheme")
+			Eventually(func() string {
+				err := k8sClient.Get(ctx, types.NamespacedName{
+					Name:      standaloneName,
+					Namespace: namespaceName,
+				}, standalone)
+				if err != nil || standalone.Status.Endpoints == nil {
+					return ""
+				}
+				return standalone.Status.Endpoints.Bolt
+			}, timeout, interval).Should(ContainSubstring("bolt://"))
 		})
 	})
 

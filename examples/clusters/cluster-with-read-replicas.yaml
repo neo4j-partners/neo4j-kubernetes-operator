@@ -45,7 +45,7 @@ spec:
     # Query routing configuration for read scaling
     dbms.routing.default_router: "SERVER"
     # Enable query logging for monitoring read performance
-    dbms.logs.query.enabled: "INFO"
+    db.logs.query.enabled: "INFO"
 
 ---
 # Note: Create admin secret before deploying:

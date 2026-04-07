@@ -458,7 +458,7 @@ kubectl port-forward svc/<service-name> 7474:7474
    ```yaml
    spec:
      config:
-       dbms.logs.query.enabled: "true"
+       db.logs.query.enabled: "true"
        dbms.logs.query.threshold: "1s"
    ```
 

@@ -109,7 +109,7 @@ spec:
     server.memory.pagecache.size: "8G"
 
     # Query performance
-    dbms.logs.query.enabled: "INFO"
+    db.logs.query.enabled: "INFO"
     dbms.logs.query.threshold: "1s"
     dbms.logs.query.page_logging_enabled: "true"
 
@@ -136,7 +136,7 @@ spec:
     server.memory.pagecache.size: "512M"
 
     # Development-friendly settings
-    dbms.logs.query.enabled: "true"
+    db.logs.query.enabled: "true"
     dbms.security.procedures.unrestricted: "gds.*,apoc.*"
     dbms.security.allow_csv_import_from_file_urls: "true"
 ```

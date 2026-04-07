@@ -66,7 +66,7 @@ func TestBuildConfigMapForEnterprise_TLSConfiguration(t *testing.T) {
 
 	// Test connector configuration
 	assert.Contains(t, neo4jConf, "server.https.enabled=true", "should enable HTTPS")
-	assert.Contains(t, neo4jConf, "server.bolt.tls_level=OPTIONAL", "should set Bolt TLS level to OPTIONAL")
+	assert.Contains(t, neo4jConf, "server.bolt.tls_level=REQUIRED", "should set Bolt TLS level to REQUIRED when TLS is enabled")
 
 	// Test startup script for parallel pod management compatibility
 	startupScript := configMap.Data["startup.sh"]

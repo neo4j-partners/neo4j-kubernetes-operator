@@ -55,7 +55,7 @@ spec:
   # Custom Neo4j configuration for production
   config:
     # Enable query logging for monitoring
-    dbms.logs.query.enabled: "INFO"
+    db.logs.query.enabled: "INFO"
     # Increase transaction timeout for long operations
     dbms.transaction.timeout: "60s"
     # Enable metrics collection

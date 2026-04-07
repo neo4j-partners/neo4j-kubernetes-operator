@@ -75,7 +75,7 @@ spec:
     dbms.security.procedures.unrestricted: "gds.*,apoc.*"
 
     # Logging settings
-    dbms.logs.query.enabled: "true"
+    db.logs.query.enabled: "true"
     dbms.logs.query.threshold: "500ms"
 
     # Performance settings

@@ -58,7 +58,7 @@ spec:
     server.memory.pagecache.size: "512m"
 
     # Development settings
-    dbms.logs.query.enabled: "INFO"
+    db.logs.query.enabled: "INFO"
     dbms.logs.query.threshold: "100ms"
 
     # Enable browser on all interfaces

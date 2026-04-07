@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Neo4j Kubernetes Operator Demo Script
 # This script demonstrates the core capabilities of the Neo4j Kubernetes Operator
-# including single-node and multi-node TLS-enabled cluster deployments
+# including single-node standalone and multi-node HA cluster deployments
 
 # Colors for beautiful output
 readonly RED='\033[0;31m'
@@ -21,6 +21,7 @@ ADMIN_PASSWORD=${ADMIN_PASSWORD:-"demo123456"}
 CLUSTER_NAME_SINGLE=${CLUSTER_NAME_SINGLE:-"neo4j-single"}
 CLUSTER_NAME_MULTI=${CLUSTER_NAME_MULTI:-"neo4j-cluster"}
 SKIP_CONFIRMATIONS=${SKIP_CONFIRMATIONS:-false}
+CLEANUP_AFTER=${CLEANUP_AFTER:-false}
 DEMO_SPEED=${DEMO_SPEED:-normal} # fast, normal, slow
 
 # Timing configuration based on demo speed
@@ -285,11 +286,33 @@ show_connection_info() {
 
 # Cleanup existing clusters
 cleanup_existing() {
-    log_section "Cleaning Up Existing Resources"
+    # Check if any demo resources exist
+    local has_standalone=false
+    local has_cluster=false
+    if kubectl get neo4jenterprisestandalone "${CLUSTER_NAME_SINGLE}" -n "${DEMO_NAMESPACE}" >/dev/null 2>&1; then
+        has_standalone=true
+    fi
+    if kubectl get neo4jenterprisecluster "${CLUSTER_NAME_MULTI}" -n "${DEMO_NAMESPACE}" >/dev/null 2>&1; then
+        has_cluster=true
+    fi
 
-    log_info "Removing any existing demo resources..."
-    log_command "kubectl delete neo4jenterprisestandalone ${CLUSTER_NAME_SINGLE} -n ${DEMO_NAMESPACE} --ignore-not-found=true"
-    log_command "kubectl delete neo4jenterprisecluster ${CLUSTER_NAME_MULTI} -n ${DEMO_NAMESPACE} --ignore-not-found=true"
+    if [[ "${has_standalone}" == "false" && "${has_cluster}" == "false" ]]; then
+        log_info "No existing demo resources found — skipping cleanup."
+        return 0
+    fi
+
+    log_section "Existing Demo Resources Detected"
+    if [[ "${has_standalone}" == "true" ]]; then
+        log_warning "Found existing standalone: ${CLUSTER_NAME_SINGLE} in namespace ${DEMO_NAMESPACE}"
+    fi
+    if [[ "${has_cluster}" == "true" ]]; then
+        log_warning "Found existing cluster: ${CLUSTER_NAME_MULTI} in namespace ${DEMO_NAMESPACE}"
+    fi
+    log_info "These resources will be deleted before starting the demo."
+
+    confirm "Proceed with deleting existing demo resources?"
+
+    log_info "Removing existing demo resources..."
     kubectl delete neo4jenterprisestandalone "${CLUSTER_NAME_SINGLE}" -n "${DEMO_NAMESPACE}" --ignore-not-found=true &
     kubectl delete neo4jenterprisecluster "${CLUSTER_NAME_MULTI}" -n "${DEMO_NAMESPACE}" --ignore-not-found=true &
     wait
@@ -339,7 +362,7 @@ deploy_single_node() {
     log_manifest "Creating single-node standalone manifest:"
     log_info "This manifest will create a Neo4j Enterprise Standalone with:"
     log_info "  • Single Neo4j instance (no clustering)"
-    log_info "  • TLS disabled for simplicity"
+    log_info "  • TLS via cert-manager (self-signed CA)"
     log_info "  • Standard resource allocation"
     log_info "  • 10Gi storage"
     echo
@@ -354,24 +377,19 @@ metadata:
 spec:
   image:
     repo: neo4j
-    tag: "5.26-enterprise"
+    tag: "5.26.0-enterprise"
     pullPolicy: IfNotPresent
-
-
-  # Required environment variables
-  env:
-    - name: NEO4J_ACCEPT_LICENSE_AGREEMENT
-      value: "yes"
 
   # Authentication configuration
   auth:
+    authenticationProviders: ["native"]
     adminSecret: neo4j-admin-secret
 
   # Resource allocation
   resources:
     requests:
       cpu: "200m"
-      memory: "1Gi"
+      memory: "1.5Gi"
     limits:
       cpu: "500m"
       memory: "2Gi"
@@ -381,14 +399,16 @@ spec:
     className: standard
     size: "10Gi"
 
-  # TLS disabled for simplicity in single-node demo
+  # TLS via cert-manager
   tls:
-    mode: disabled
+    mode: cert-manager
+    issuerRef:
+      name: ca-cluster-issuer
+      kind: ClusterIssuer
 
   # Basic configuration for standalone
   config:
-    dbms.logs.query.enabled: "INFO"
-    metrics.enabled: "true"
+    db.logs.query.enabled: "INFO"
     server.memory.heap.initial_size: "512M"
     server.memory.heap.max_size: "1G"
 EOF
@@ -409,6 +429,7 @@ EOF
     log_info "  • Service for client connections"
     log_info "  • ConfigMap with Neo4j configuration"
     log_info "  • PersistentVolumeClaim for data storage"
+    log_info "  • cert-manager Certificate for TLS"
 
     # Wait for deployment
     show_progress $PAUSE_MEDIUM "Waiting for cluster initialization"
@@ -417,18 +438,18 @@ EOF
     wait_for_pods "app=${CLUSTER_NAME_SINGLE}" "${DEMO_NAMESPACE}" 180 1
 
     show_cluster_status "${CLUSTER_NAME_SINGLE}" "${DEMO_NAMESPACE}" "standalone"
-    show_connection_info "${CLUSTER_NAME_SINGLE}" "${DEMO_NAMESPACE}" false "standalone"
+    show_connection_info "${CLUSTER_NAME_SINGLE}" "${DEMO_NAMESPACE}" true "standalone"
 
     # Verify standalone is working by connecting to Neo4j
     log_section "Standalone Verification"
 
     log_info "Connecting to Neo4j standalone to verify it's operational..."
-    log_command "kubectl exec ${CLUSTER_NAME_SINGLE}-0 -- cypher-shell -u neo4j -p ${ADMIN_PASSWORD} \"SHOW DATABASES\""
+    log_command "kubectl exec ${CLUSTER_NAME_SINGLE}-0 -c neo4j -- cypher-shell -a bolt+ssc://localhost:7687 -u neo4j -p ${ADMIN_PASSWORD} \"SHOW DATABASES\""
 
-    # Wait a moment for Neo4j to fully start if needed
-    sleep 5
+    # Wait for Neo4j to fully initialize (bolt listener starts after pod readiness)
+    show_progress 15 "Waiting for Neo4j to fully initialize"
 
-    if kubectl exec "${CLUSTER_NAME_SINGLE}-0" -n "${DEMO_NAMESPACE}" -- cypher-shell -u neo4j -p "${ADMIN_PASSWORD}" "SHOW DATABASES" 2>/dev/null; then
+    if kubectl exec "${CLUSTER_NAME_SINGLE}-0" -c neo4j -n "${DEMO_NAMESPACE}" -- cypher-shell -a "bolt+ssc://localhost:7687" -u neo4j -p "${ADMIN_PASSWORD}" "SHOW DATABASES" 2>/dev/null; then
         log_success "Standalone Neo4j is fully operational!"
         log_demo "The SHOW DATABASES output confirms Neo4j is ready for use"
     else
@@ -447,15 +468,16 @@ EOF
 
     demonstrate_standalone_database_creation
 
-    confirm "Ready to proceed to the multi-node TLS-enabled cluster demo?"
+    confirm "Ready to proceed to the multi-node TLS cluster demo?"
 }
 
-# Deploy multi-node TLS cluster
-deploy_multi_node_tls() {
+# Deploy multi-node HA cluster
+deploy_multi_node_cluster() {
     log_header "DEMO PART 2: Multi-Node High Availability Neo4j Cluster"
 
     log_demo "Now we'll deploy a production-ready 3-node Neo4j cluster with:"
     log_demo "  • High availability through clustering"
+    log_demo "  • TLS encryption via cert-manager"
     log_demo "  • Raft consensus for data consistency"
     log_demo "  • Read and write scalability"
     log_demo "  • Automatic failover and recovery"
@@ -468,13 +490,14 @@ deploy_multi_node_tls() {
     log_manifest "Creating multi-node cluster manifest:"
     log_info "This manifest will create a Neo4j Enterprise cluster with:"
     log_info "  • 3 server nodes (HA clustering)"
+    log_info "  • TLS via cert-manager (self-signed CA)"
     log_info "  • Optimized resource allocation for Kind"
-    log_info "  • 5Gi storage per node"
+    log_info "  • 10Gi storage per node"
     log_info "  • Automatic cluster formation"
     log_info "  • Production-ready configuration"
     echo
 
-    # Create TLS-enabled cluster manifest
+    # Create cluster manifest
     local manifest=$(cat << EOF
 apiVersion: neo4j.neo4j.com/v1alpha1
 kind: Neo4jEnterpriseCluster
@@ -484,28 +507,23 @@ metadata:
 spec:
   image:
     repo: neo4j
-    tag: "5.26-enterprise"
+    tag: "5.26.0-enterprise"
     pullPolicy: IfNotPresent
-
-
-  # Required environment variables
-  env:
-    - name: NEO4J_ACCEPT_LICENSE_AGREEMENT
-      value: "yes"
 
   # Authentication configuration
   auth:
+    authenticationProviders: ["native"]
     adminSecret: neo4j-admin-secret
 
   # Multi-node topology for high availability
   topology:
     servers: 3
 
-  # Production resource allocation
+  # Resource allocation (1.5Gi minimum for Neo4j Enterprise)
   resources:
     requests:
-      cpu: "300m"
-      memory: "1Gi"
+      cpu: "200m"
+      memory: "1.5Gi"
     limits:
       cpu: "1"
       memory: "2Gi"
@@ -515,19 +533,18 @@ spec:
     className: standard
     size: "10Gi"
 
-  # TLS disabled for demo simplicity
-  # In production, use cert-manager for TLS
+  # TLS via cert-manager
   tls:
-    mode: disabled
+    mode: cert-manager
+    issuerRef:
+      name: ca-cluster-issuer
+      kind: ClusterIssuer
 
-  # Production configuration
+  # Cluster configuration
   config:
-    dbms.cluster.discovery.version: "V2_ONLY"
-    dbms.logs.query.enabled: "INFO"
+    db.logs.query.enabled: "INFO"
     dbms.transaction.timeout: "60s"
     metrics.enabled: "true"
-    server.metrics.prometheus.enabled: "true"
-    server.metrics.prometheus.endpoint: "0.0.0.0:2004"
 EOF
 )
 
@@ -539,28 +556,14 @@ EOF
     log_command "kubectl apply -f -"
     echo "${manifest}" | kubectl apply -f -
 
-    log_success "Multi-node TLS cluster manifest applied!"
+    log_success "Multi-node cluster manifest applied!"
 
     log_info "The operator is now creating the following resources:"
     log_info "  • StatefulSet with 3 replicas (server nodes)"
     log_info "  • cert-manager Certificate for TLS"
-    log_info "  • Client and headless services with TLS support"
+    log_info "  • Client and headless services with TLS"
     log_info "  • ConfigMap with cluster and TLS configuration"
     log_info "  • 3 PersistentVolumeClaims for distributed data"
-
-    # Show certificate creation
-    show_progress $PAUSE_SHORT "Waiting for certificate creation"
-
-    log_section "TLS Certificate Status"
-    log_command "kubectl get certificates -n ${DEMO_NAMESPACE}"
-    echo
-    kubectl get certificates -n "${DEMO_NAMESPACE}" | grep "${CLUSTER_NAME_MULTI}" || log_info "Certificate still being created..."
-    echo
-
-    log_demo "cert-manager is automatically:"
-    log_demo "  • Generating TLS certificates using the self-signed CA"
-    log_demo "  • Creating Kubernetes secrets with private keys and certificates"
-    log_demo "  • Managing certificate renewal before expiration"
 
     # Wait for cluster deployment with detailed progress
     log_section "Cluster Formation Progress"
@@ -594,26 +597,18 @@ EOF
     # Final status display
     show_cluster_status "${CLUSTER_NAME_MULTI}" "${DEMO_NAMESPACE}"
 
-    log_section "TLS Configuration Verification"
-
-    # Show TLS certificate details
-    if kubectl get certificate "${CLUSTER_NAME_MULTI}-tls" -n "${DEMO_NAMESPACE}" &>/dev/null; then
-        kubectl get certificate "${CLUSTER_NAME_MULTI}-tls" -n "${DEMO_NAMESPACE}" -o wide
-        log_success "TLS certificate is ready and issued!"
-    fi
-
     show_connection_info "${CLUSTER_NAME_MULTI}" "${DEMO_NAMESPACE}" true
 
     # Verify cluster formation by connecting to Neo4j
     log_section "Cluster Formation Verification"
 
     log_info "Connecting to Neo4j cluster to verify all servers are active..."
-    log_command "kubectl exec ${CLUSTER_NAME_MULTI}-server-0 -- cypher-shell -u neo4j -p ${ADMIN_PASSWORD} \"SHOW SERVERS\""
+    log_command "kubectl exec ${CLUSTER_NAME_MULTI}-server-0 -c neo4j -- cypher-shell -a bolt+ssc://localhost:7687 -u neo4j -p ${ADMIN_PASSWORD} -d system \"SHOW SERVERS\""
 
-    # Wait a moment for cluster to stabilize if needed
-    sleep 10
+    # Wait for cluster to stabilize (bolt listeners start after pod readiness)
+    show_progress 30 "Waiting for cluster to stabilize"
 
-    if kubectl exec "${CLUSTER_NAME_MULTI}-server-0" -n "${DEMO_NAMESPACE}" -- cypher-shell -u neo4j -p "${ADMIN_PASSWORD}" "SHOW SERVERS" 2>/dev/null; then
+    if kubectl exec "${CLUSTER_NAME_MULTI}-server-0" -c neo4j -n "${DEMO_NAMESPACE}" -- cypher-shell -a "bolt+ssc://localhost:7687" -u neo4j -p "${ADMIN_PASSWORD}" -d system "SHOW SERVERS" 2>/dev/null; then
         log_success "All cluster servers are active and communicating!"
         log_demo "The SHOW SERVERS output confirms:"
         log_demo "  • All 3 servers are 'Enabled' and 'Available'"
@@ -624,7 +619,7 @@ EOF
         log_info "In production, clusters typically need 2-5 minutes to fully stabilize"
     fi
 
-    log_success "Multi-node TLS cluster is fully operational!"
+    log_success "Multi-node cluster is fully operational!"
 
     log_demo "The cluster now provides:"
     log_demo "  ✓ High availability with 3 server nodes"
@@ -641,27 +636,27 @@ demonstrate_standalone_external_access() {
     log_demo "Let's demonstrate how to access the Neo4j standalone externally:"
     log_demo "  • Development port-forwarding (most common)"
     log_demo "  • Service configuration options"
-    log_demo "  • Simple HTTP access (no TLS complexity)"
+    log_demo "  • Secure TLS connections"
 
     log_info "Setting up port-forward to standalone..."
-    log_command "kubectl port-forward svc/${CLUSTER_NAME_SINGLE}-service -n ${DEMO_NAMESPACE} 7474:7474 7687:7687 &"
+    log_command "kubectl port-forward svc/${CLUSTER_NAME_SINGLE}-service -n ${DEMO_NAMESPACE} 7473:7473 7687:7687 &"
 
     # Start port-forward in background
-    kubectl port-forward svc/${CLUSTER_NAME_SINGLE}-service -n ${DEMO_NAMESPACE} 7474:7474 7687:7687 >/dev/null 2>&1 &
+    kubectl port-forward svc/${CLUSTER_NAME_SINGLE}-service -n ${DEMO_NAMESPACE} 7473:7473 7687:7687 >/dev/null 2>&1 &
     local pf_pid=$!
 
     sleep 3
 
     log_success "Port-forward established! Neo4j standalone is accessible at:"
-    log_info "  • Neo4j Browser: http://localhost:7474 (HTTP - simple setup)"
-    log_info "  • Bolt Protocol:  bolt://localhost:7687 (No TLS for development)"
+    log_info "  • Neo4j Browser: https://localhost:7473 (TLS enabled)"
+    log_info "  • Bolt Protocol:  bolt+ssc://localhost:7687 (TLS with self-signed cert)"
     log_info "  • Credentials:    neo4j / ${ADMIN_PASSWORD}"
 
     log_demo "At this point, you could:"
-    log_demo "  1. Open http://localhost:7474 in your web browser"
-    log_demo "  2. Connect with Neo4j Desktop: bolt://localhost:7687"
-    log_demo "  3. Use cypher-shell: cypher-shell -a bolt://localhost:7687 -u neo4j -p ${ADMIN_PASSWORD}"
-    log_demo "  4. Connect applications using simplified Neo4j driver configuration"
+    log_demo "  1. Open https://localhost:7473 in your web browser"
+    log_demo "  2. Connect with Neo4j Desktop: bolt+ssc://localhost:7687"
+    log_demo "  3. Use cypher-shell: cypher-shell -a bolt+ssc://localhost:7687 -u neo4j -p ${ADMIN_PASSWORD}"
+    log_demo "  4. Connect applications using Neo4j driver with TLS configuration"
 
     show_progress 3 "Simulating external client connection"
 
@@ -669,10 +664,10 @@ demonstrate_standalone_external_access() {
     log_command "Verifying HTTP and Bolt ports are accessible..."
 
     if command -v curl >/dev/null 2>&1; then
-        if timeout 5 curl -s http://localhost:7474 >/dev/null 2>&1; then
-            log_success "HTTP port (7474) is accessible via port-forward!"
+        if timeout 5 curl -sk https://localhost:7473 >/dev/null 2>&1; then
+            log_success "HTTPS port (7473) is accessible via port-forward!"
         else
-            log_info "HTTP port verification skipped (connection still establishing)"
+            log_info "HTTPS port verification skipped (connection still establishing)"
         fi
     fi
 
@@ -809,17 +804,17 @@ EOF
 
     log_section "Neo4j Database Verification"
     log_info "Verifying the database exists within Neo4j standalone..."
-    log_command "kubectl exec ${CLUSTER_NAME_SINGLE}-0 -n ${DEMO_NAMESPACE} -- cypher-shell -u neo4j -p ${ADMIN_PASSWORD} \"SHOW DATABASES\""
-    kubectl exec ${CLUSTER_NAME_SINGLE}-0 -n ${DEMO_NAMESPACE} -- cypher-shell -u neo4j -p ${ADMIN_PASSWORD} "SHOW DATABASES"
+    log_command "kubectl exec ${CLUSTER_NAME_SINGLE}-0 -c neo4j -n ${DEMO_NAMESPACE} -- cypher-shell -a bolt+ssc://localhost:7687 -u neo4j -p ${ADMIN_PASSWORD} \"SHOW DATABASES\""
+    kubectl exec ${CLUSTER_NAME_SINGLE}-0 -c neo4j -n ${DEMO_NAMESPACE} -- cypher-shell -a "bolt+ssc://localhost:7687" -u neo4j -p ${ADMIN_PASSWORD} "SHOW DATABASES"
 
     log_success "Databases are visible in Neo4j standalone!"
     log_demo "You should see 'system', 'neo4j', and 'products' databases listed"
 
     log_section "Sample Data Verification"
     log_info "Checking if sample product data was loaded correctly..."
-    log_command "kubectl exec ${CLUSTER_NAME_SINGLE}-0 -n ${DEMO_NAMESPACE} -- cypher-shell -u neo4j -p ${ADMIN_PASSWORD} -d products \"MATCH (p:Product) RETURN p.productId, p.name, p.price, p.category\""
+    log_command "kubectl exec ${CLUSTER_NAME_SINGLE}-0 -c neo4j -n ${DEMO_NAMESPACE} -- cypher-shell -a bolt+ssc://localhost:7687 -u neo4j -p ${ADMIN_PASSWORD} -d products \"MATCH (p:Product) RETURN p.productId, p.name, p.price, p.category\""
 
-    if kubectl exec ${CLUSTER_NAME_SINGLE}-0 -n ${DEMO_NAMESPACE} -- cypher-shell -u neo4j -p ${ADMIN_PASSWORD} -d products "MATCH (p:Product) RETURN p.productId, p.name, p.price, p.category" 2>/dev/null; then
+    if kubectl exec ${CLUSTER_NAME_SINGLE}-0 -c neo4j -n ${DEMO_NAMESPACE} -- cypher-shell -a "bolt+ssc://localhost:7687" -u neo4j -p ${ADMIN_PASSWORD} -d products "MATCH (p:Product) RETURN p.productId, p.name, p.price, p.category" 2>/dev/null; then
         log_success "Sample data loaded successfully!"
         log_demo "Products are available and queryable in the new database"
     else
@@ -842,7 +837,6 @@ demonstrate_external_access() {
     log_demo "We'll demonstrate the most practical access methods:"
     log_demo "  • kubectl port-forward for development and administration"
     log_demo "  • Service exposure concepts for production environments"
-    log_demo "  • Secure TLS connections from external clients"
 
     confirm "Ready to demonstrate external access?"
 
@@ -854,27 +848,27 @@ demonstrate_external_access() {
     log_info "  • Secure tunneling through kubectl authentication"
     log_info "  • No need to expose services publicly"
 
-    log_demo "Setting up port-forward to cluster..."
-    log_command "kubectl port-forward svc/${CLUSTER_NAME_MULTI}-client -n ${DEMO_NAMESPACE} 7474:7474 7687:7687 &"
+    log_demo "Setting up port-forward to cluster (TLS-enabled)..."
+    log_command "kubectl port-forward svc/${CLUSTER_NAME_MULTI}-client -n ${DEMO_NAMESPACE} 7473:7473 7687:7687 &"
 
     # Start port-forward in background
-    kubectl port-forward svc/${CLUSTER_NAME_MULTI}-client -n ${DEMO_NAMESPACE} 7474:7474 7687:7687 > /tmp/port-forward.log 2>&1 &
+    kubectl port-forward svc/${CLUSTER_NAME_MULTI}-client -n ${DEMO_NAMESPACE} 7473:7473 7687:7687 > /tmp/port-forward.log 2>&1 &
     local pf_pid=$!
 
     # Wait for port-forward to establish
     sleep 3
 
     log_success "Port-forward established! Neo4j is now accessible at:"
-    echo -e "${CYAN}  • Neo4j Browser: https://localhost:7474 (TLS enabled)${NC}"
-    echo -e "${CYAN}  • Bolt Protocol:  bolt+s://localhost:7687 (TLS enabled)${NC}"
+    echo -e "${CYAN}  • Neo4j Browser: https://localhost:7473 (TLS enabled)${NC}"
+    echo -e "${CYAN}  • Bolt Protocol:  bolt+ssc://localhost:7687 (TLS with self-signed cert)${NC}"
     echo -e "${CYAN}  • Credentials:    neo4j / ${ADMIN_PASSWORD}${NC}"
     echo
 
     log_demo "At this point, you could:"
-    log_demo "  1. Open https://localhost:7474 in your web browser"
+    log_demo "  1. Open https://localhost:7473 in your web browser"
     log_demo "  2. Connect with Neo4j Desktop or other tools"
-    log_demo "  3. Use cypher-shell: cypher-shell -a bolt+s://localhost:7687 -u neo4j -p ${ADMIN_PASSWORD}"
-    log_demo "  4. Connect applications using Neo4j drivers"
+    log_demo "  3. Use cypher-shell: cypher-shell -a bolt+ssc://localhost:7687 -u neo4j -p ${ADMIN_PASSWORD}"
+    log_demo "  4. Connect applications using Neo4j drivers with TLS"
 
     show_progress $PAUSE_MEDIUM "Simulating external client connection"
 
@@ -882,10 +876,14 @@ demonstrate_external_access() {
     log_section "Testing External Connection"
     log_command "Connecting via port-forward to verify external access..."
 
-    if command -v nc >/dev/null 2>&1; then
-        if nc -z localhost 7474; then
-            log_success "HTTP port (7474) is accessible via port-forward!"
+    if command -v curl >/dev/null 2>&1; then
+        if timeout 5 curl -sk https://localhost:7473 >/dev/null 2>&1; then
+            log_success "HTTPS port (7473) is accessible via port-forward!"
+        else
+            log_info "HTTPS port verification skipped (connection still establishing)"
         fi
+    fi
+    if command -v nc >/dev/null 2>&1; then
         if nc -z localhost 7687; then
             log_success "Bolt port (7687) is accessible via port-forward!"
         fi
@@ -958,7 +956,7 @@ metadata:
   name: orders-database
   namespace: ${DEMO_NAMESPACE}
 spec:
-  # Reference to our TLS cluster
+  # Reference to our cluster
   clusterRef: ${CLUSTER_NAME_MULTI}
 
   # Database name as it appears in Neo4j
@@ -1046,9 +1044,9 @@ EOF
     log_section "Neo4j Database Verification"
 
     log_info "Verifying the database exists within Neo4j cluster..."
-    log_command "kubectl exec ${CLUSTER_NAME_MULTI}-server-0 -- cypher-shell -u neo4j -p ${ADMIN_PASSWORD} \"SHOW DATABASES\""
+    log_command "kubectl exec ${CLUSTER_NAME_MULTI}-server-0 -c neo4j -- cypher-shell -a bolt+ssc://localhost:7687 -u neo4j -p ${ADMIN_PASSWORD} -d system \"SHOW DATABASES\""
 
-    if kubectl exec "${CLUSTER_NAME_MULTI}-server-0" -n "${DEMO_NAMESPACE}" -- cypher-shell -u neo4j -p "${ADMIN_PASSWORD}" "SHOW DATABASES" 2>/dev/null; then
+    if kubectl exec "${CLUSTER_NAME_MULTI}-server-0" -c neo4j -n "${DEMO_NAMESPACE}" -- cypher-shell -a "bolt+ssc://localhost:7687" -u neo4j -p "${ADMIN_PASSWORD}" -d system "SHOW DATABASES" 2>/dev/null; then
         log_success "Databases are visible in Neo4j cluster!"
         log_demo "You should see both 'system', 'neo4j' and 'orders' databases listed"
     else
@@ -1059,9 +1057,9 @@ EOF
     log_section "Sample Data Verification"
 
     log_info "Checking if initial data was loaded correctly..."
-    log_command "kubectl exec ${CLUSTER_NAME_MULTI}-server-0 -- cypher-shell -u neo4j -p ${ADMIN_PASSWORD} -d orders \"MATCH (o:Order) RETURN o.orderId, o.status, o.amount\""
+    log_command "kubectl exec ${CLUSTER_NAME_MULTI}-server-0 -c neo4j -- cypher-shell -a bolt+ssc://localhost:7687 -u neo4j -p ${ADMIN_PASSWORD} -d orders \"MATCH (o:Order) RETURN o.orderId, o.status, o.amount\""
 
-    if kubectl exec "${CLUSTER_NAME_MULTI}-server-0" -n "${DEMO_NAMESPACE}" -- cypher-shell -u neo4j -p "${ADMIN_PASSWORD}" -d orders "MATCH (o:Order) RETURN o.orderId, o.status, o.amount" 2>/dev/null; then
+    if kubectl exec "${CLUSTER_NAME_MULTI}-server-0" -c neo4j -n "${DEMO_NAMESPACE}" -- cypher-shell -a "bolt+ssc://localhost:7687" -u neo4j -p "${ADMIN_PASSWORD}" -d orders "MATCH (o:Order) RETURN o.orderId, o.status, o.amount" 2>/dev/null; then
         log_success "Sample data loaded successfully!"
         log_demo "The 'orders' database now contains:"
         log_demo "  • Unique constraint on Order.orderId"
@@ -1083,26 +1081,63 @@ EOF
     confirm "Ready to see the demo summary?"
 }
 
+# Clean up all demo resources
+demo_cleanup() {
+    log_section "Cleaning Up Demo Resources"
+
+    log_info "Deleting Neo4jDatabase resources..."
+    kubectl delete neo4jdatabase products-database-standalone -n "${DEMO_NAMESPACE}" --ignore-not-found=true &
+    kubectl delete neo4jdatabase orders-database -n "${DEMO_NAMESPACE}" --ignore-not-found=true &
+    wait
+
+    log_info "Deleting Neo4j standalone and cluster..."
+    kubectl delete neo4jenterprisestandalone "${CLUSTER_NAME_SINGLE}" -n "${DEMO_NAMESPACE}" --ignore-not-found=true &
+    kubectl delete neo4jenterprisecluster "${CLUSTER_NAME_MULTI}" -n "${DEMO_NAMESPACE}" --ignore-not-found=true &
+    wait
+
+    log_info "Waiting for pods to terminate..."
+    local timeout=120
+    local elapsed=0
+    while [[ $elapsed -lt $timeout ]]; do
+        local remaining=$(kubectl get pods -l "app=${CLUSTER_NAME_SINGLE}" -n "${DEMO_NAMESPACE}" --no-headers 2>/dev/null | wc -l | tr -d ' ')
+        remaining=$((remaining + $(kubectl get pods -l "neo4j.com/cluster=${CLUSTER_NAME_MULTI}" -n "${DEMO_NAMESPACE}" --no-headers 2>/dev/null | wc -l | tr -d ' ')))
+        if [[ "${remaining}" -eq 0 ]]; then
+            break
+        fi
+        echo -n "."
+        sleep 2
+        elapsed=$((elapsed + 2))
+    done
+    echo
+
+    log_info "Removing admin secret..."
+    kubectl delete secret neo4j-admin-secret -n "${DEMO_NAMESPACE}" --ignore-not-found=true
+
+    log_success "Demo resources cleaned up!"
+}
+
 # Demo summary and next steps
 show_demo_summary() {
     log_header "DEMO SUMMARY"
 
     log_demo "We successfully demonstrated the Neo4j Kubernetes Operator capabilities:"
     echo
-    echo -e "${GREEN}✓ Single-Node Standalone${NC}"
+    echo -e "${GREEN}✓ Single-Node Standalone (TLS)${NC}"
     echo "  • Perfect for development and testing"
     echo "  • Simple deployment and management"
+    echo "  • TLS encryption via cert-manager"
     echo "  • Resource efficient"
     echo "  • No clustering overhead"
-    echo "  • External access via port-forward (HTTP/Bolt)"
+    echo "  • Secure external access via port-forward (HTTPS/Bolt+TLS)"
     echo "  • Database creation without topology complexity"
     echo
-    echo -e "${GREEN}✓ Multi-Node HA Cluster${NC}"
+    echo -e "${GREEN}✓ Multi-Node HA Cluster (TLS)${NC}"
     echo "  • Production-ready high availability"
     echo "  • Automatic cluster formation"
+    echo "  • TLS encryption for all communications"
     echo "  • Raft consensus and data consistency"
     echo "  • Horizontal scaling capabilities"
-    echo "  • Secure TLS external access"
+    echo "  • Secure external access via port-forward (HTTPS/Bolt+TLS)"
     echo "  • Advanced database topology distribution"
     echo
 
@@ -1110,11 +1145,35 @@ show_demo_summary() {
     log_command "kubectl get neo4jenterprisestandalone,neo4jenterprisecluster -n ${DEMO_NAMESPACE} -o wide"
     kubectl get neo4jenterprisestandalone,neo4jenterprisecluster -n "${DEMO_NAMESPACE}" -o wide
 
-    log_section "Cleanup"
-    log_info "To clean up the demo resources:"
-    echo "  kubectl delete neo4jdatabase products-database-standalone orders-database -n ${DEMO_NAMESPACE}"
-    echo "  kubectl delete neo4jenterprisestandalone ${CLUSTER_NAME_SINGLE} -n ${DEMO_NAMESPACE}"
-    echo "  kubectl delete neo4jenterprisecluster ${CLUSTER_NAME_MULTI} -n ${DEMO_NAMESPACE}"
+    # Handle cleanup
+    if [[ "${CLEANUP_AFTER}" == "true" ]]; then
+        log_info "Cleaning up demo resources (--cleanup flag set)..."
+        demo_cleanup
+    else
+        if [[ "${SKIP_CONFIRMATIONS}" == "true" ]]; then
+            log_section "Cleanup"
+            log_info "To clean up the demo resources, run:"
+            echo "  ./scripts/demo.sh --cleanup-only"
+            echo "  # or manually:"
+            echo "  kubectl delete neo4jdatabase products-database-standalone orders-database -n ${DEMO_NAMESPACE}"
+            echo "  kubectl delete neo4jenterprisestandalone ${CLUSTER_NAME_SINGLE} -n ${DEMO_NAMESPACE}"
+            echo "  kubectl delete neo4jenterprisecluster ${CLUSTER_NAME_MULTI} -n ${DEMO_NAMESPACE}"
+        else
+            echo
+            local response
+            read -r -p "$(echo -e "${CYAN}Clean up demo resources? [y/N]${NC} ")" response
+            case "${response}" in
+                [yY][eE][sS]|[yY])
+                    demo_cleanup
+                    ;;
+                *)
+                    log_section "Cleanup"
+                    log_info "To clean up later, run:"
+                    echo "  ./scripts/demo.sh --cleanup-only"
+                    ;;
+            esac
+        fi
+    fi
     echo
 
     log_success "Demo completed successfully! 🎉"
@@ -1147,7 +1206,7 @@ validate_prerequisites() {
 
     # Check for cert-manager
     if ! kubectl get clusterissuer ca-cluster-issuer >/dev/null 2>&1; then
-        log_warning "ca-cluster-issuer not found - TLS demo may fail"
+        log_warning "ca-cluster-issuer not found - TLS features will not be available"
         log_info "Run 'make demo-setup' to set up the demo environment"
     fi
 
@@ -1171,9 +1230,9 @@ main() {
 
     log_demo "Welcome to the Neo4j Kubernetes Operator demonstration!"
     log_demo "This demo will showcase:"
-    log_demo "  1. Single-node cluster deployment"
-    log_demo "  2. Multi-node TLS-enabled cluster deployment"
-    log_demo "  3. External access to Neo4j clusters"
+    log_demo "  1. Single-node TLS standalone deployment"
+    log_demo "  2. Multi-node TLS HA cluster deployment"
+    log_demo "  3. Secure external access to Neo4j"
     log_demo "  4. Neo4jDatabase creation and management"
     log_demo "  5. Complete operator capabilities"
     echo
@@ -1197,7 +1256,7 @@ main() {
 
     sleep $PAUSE_MEDIUM
 
-    deploy_multi_node_tls
+    deploy_multi_node_cluster
 
     sleep $PAUSE_SHORT
 
@@ -1213,6 +1272,7 @@ main() {
 }
 
 # Handle script arguments
+CLEANUP_ONLY=false
 while [[ $# -gt 0 ]]; do
     case $1 in
         --namespace)
@@ -1225,6 +1285,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         --skip-confirmations)
             SKIP_CONFIRMATIONS=true
+            shift
+            ;;
+        --cleanup)
+            CLEANUP_AFTER=true
+            shift
+            ;;
+        --cleanup-only)
+            CLEANUP_ONLY=true
             shift
             ;;
         --speed)
@@ -1241,6 +1309,8 @@ Options:
   --namespace NAMESPACE     Kubernetes namespace for demo (default: default)
   --password PASSWORD       Admin password (default: demo123456)
   --skip-confirmations      Skip interactive confirmations
+  --cleanup                 Clean up demo resources after the demo completes
+  --cleanup-only            Only clean up resources from a previous demo run
   --speed SPEED             Demo speed: fast, normal, slow (default: normal)
   --help, -h                Show this help
 
@@ -1248,11 +1318,14 @@ Environment Variables:
   DEMO_NAMESPACE           Same as --namespace
   ADMIN_PASSWORD           Same as --password
   SKIP_CONFIRMATIONS       Set to 'true' to skip confirmations
+  CLEANUP_AFTER            Set to 'true' to clean up after demo
   DEMO_SPEED              Same as --speed
 
 Examples:
   $0                                    # Interactive demo
   $0 --skip-confirmations --speed fast  # Fast automated demo
+  $0 --cleanup                          # Interactive demo with cleanup at end
+  $0 --cleanup-only                     # Clean up resources from previous demo
   $0 --namespace demo --password secret123  # Custom namespace and password
 EOF
             exit 0
@@ -1265,5 +1338,11 @@ EOF
     esac
 done
 
-# Run the demo
-main "$@"
+# Run cleanup-only or full demo
+if [[ "${CLEANUP_ONLY}" == "true" ]]; then
+    log_header "Neo4j Kubernetes Operator Demo Cleanup"
+    validate_prerequisites
+    demo_cleanup
+else
+    main "$@"
+fi

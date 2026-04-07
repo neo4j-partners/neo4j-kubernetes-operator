@@ -36,7 +36,7 @@ func TestConfigValidator_ValidateDiscoveryRestrictions(t *testing.T) {
 		{
 			name: "valid configuration without discovery settings",
 			config: map[string]string{
-				"dbms.logs.query.enabled":  "INFO",
+				"db.logs.query.enabled":    "INFO",
 				"dbms.transaction.timeout": "60s",
 				"metrics.enabled":          "true",
 			},
@@ -126,6 +126,52 @@ func TestConfigValidator_ValidateDiscoveryRestrictions(t *testing.T) {
 				}
 				assert.True(t, found, "Expected error type %s not found. Available types: %v. Errors: %v", tt.errorType, errorTypes, errors)
 			}
+		})
+	}
+}
+
+func TestConfigValidator_DeprecatedKeys(t *testing.T) {
+	validator := NewConfigValidator()
+
+	tests := []struct {
+		name         string
+		config       map[string]string
+		expectErrors bool
+	}{
+		{
+			name: "deprecated dbms.logs.query.enabled should warn",
+			config: map[string]string{
+				"dbms.logs.query.enabled": "INFO",
+			},
+			expectErrors: true,
+		},
+		{
+			name: "correct db.logs.query.enabled should not warn",
+			config: map[string]string{
+				"db.logs.query.enabled": "INFO",
+			},
+			expectErrors: false,
+		},
+		{
+			name: "deprecated dbms.default_database should warn",
+			config: map[string]string{
+				"dbms.default_database": "mydb",
+			},
+			expectErrors: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cluster := &neo4jv1alpha1.Neo4jEnterpriseCluster{
+				Spec: neo4jv1alpha1.Neo4jEnterpriseClusterSpec{
+					Config: tt.config,
+				},
+			}
+
+			errors := validator.Validate(cluster)
+			hasErrors := len(errors) > 0
+			assert.Equal(t, tt.expectErrors, hasErrors, "Deprecated key expectation mismatch for config %v: %v", tt.config, errors)
 		})
 	}
 }

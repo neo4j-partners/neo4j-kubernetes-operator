@@ -252,7 +252,7 @@ Add Neo4j-specific settings:
 
 ```yaml
 config:
-  dbms.logs.query.enabled: "INFO"
+  db.logs.query.enabled: "INFO"
   dbms.transaction.timeout: "60s"
   metrics.enabled: "true"
 ```

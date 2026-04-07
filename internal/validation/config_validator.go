@@ -47,6 +47,7 @@ func (v *ConfigValidator) Validate(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster
 		"dbms.default_database": "use dbms.setDefaultDatabase() procedure instead",
 		"db.format":             "standard and high_limit formats are deprecated, use block format",
 		"dbms.integrations.cloud_storage.s3.region": "replaced by new cloud storage integration settings",
+		"dbms.logs.query.enabled":                   "renamed to db.logs.query.enabled in Neo4j 5.x+",
 	}
 
 	// Check for unsupported manual discovery configuration.
