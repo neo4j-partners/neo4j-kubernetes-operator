@@ -352,6 +352,40 @@ spec:
           verbs:
           - create
         serviceAccountName: neo4j-operator-controller-manager
+      permissions:
+      - rules:
+        - apiGroups:
+          - ""
+          resources:
+          - configmaps
+          verbs:
+          - get
+          - list
+          - watch
+          - create
+          - update
+          - patch
+          - delete
+        - apiGroups:
+          - coordination.k8s.io
+          resources:
+          - leases
+          verbs:
+          - get
+          - list
+          - watch
+          - create
+          - update
+          - patch
+          - delete
+        - apiGroups:
+          - ""
+          resources:
+          - events
+          verbs:
+          - create
+          - patch
+        serviceAccountName: neo4j-operator-controller-manager
       deployments:
       - label:
           app.kubernetes.io/managed-by: kustomize
