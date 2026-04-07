@@ -2085,11 +2085,6 @@ func isVersionSupported(version string) bool {
 		return minor == 26
 	}
 
-	// Legacy support for 4.x (if needed)
-	if major == 4 {
-		return minor >= 4 // Must be version 4.4 or higher
-	}
-
 	return false
 }
 
