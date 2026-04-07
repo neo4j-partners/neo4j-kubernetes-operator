@@ -12,7 +12,7 @@ NC='\033[0m' # No Color
 # Configuration
 CLUSTER_NAME="neo4j-operator-dev"
 NAMESPACE="neo4j-operator-system"
-CERT_MANAGER_VERSION="v1.18.5"
+CERT_MANAGER_VERSION="v1.20.0"
 # PROMETHEUS_VERSION="v0.68.0"  # Reserved for future Prometheus setup
 
 print_status() {

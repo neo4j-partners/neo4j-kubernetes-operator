@@ -12,7 +12,7 @@ echo "=== Neo4j Operator Webhook Testing Script ==="
 echo "1. Checking cert-manager..."
 if ! kubectl get ns cert-manager &>/dev/null; then
     echo "❌ cert-manager not found. Installing..."
-    kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.18.5/cert-manager.yaml
+    kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.20.0/cert-manager.yaml
     echo "⏳ Waiting for cert-manager to be ready..."
     kubectl wait --for=condition=available deployment/cert-manager -n cert-manager --timeout=300s
     kubectl wait --for=condition=available deployment/cert-manager-webhook -n cert-manager --timeout=300s

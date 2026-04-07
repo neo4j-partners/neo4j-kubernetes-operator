@@ -130,7 +130,7 @@ kubectl exec <pod-name> -c neo4j -- cypher-shell -u neo4j -p <password> "SHOW SE
 
 **Kind Clusters**:
 - Development: `neo4j-operator-dev` | Test: `neo4j-operator-test`
-- Both include cert-manager v1.18.5 with `ca-cluster-issuer`
+- Both include cert-manager v1.20.0 with `ca-cluster-issuer`
 
 **Test Resource Config**: CPU 50m–200m, memory ≥ 1.5Gi (Enterprise minimum), storage 500Mi–1Gi.
 
