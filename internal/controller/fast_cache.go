@@ -488,3 +488,8 @@ func (fcc *FastCacheClient) IsObjectNamespaced(obj runtime.Object) (bool, error)
 func (fcc *FastCacheClient) SubResource(subResource string) client.SubResourceClient {
 	return fcc.directClient.SubResource(subResource)
 }
+
+// Apply implements client.Client interface for Server-Side Apply (controller-runtime v0.23+)
+func (fcc *FastCacheClient) Apply(ctx context.Context, obj runtime.ApplyConfiguration, opts ...client.ApplyOption) error {
+	return fcc.directClient.Apply(ctx, obj, opts...)
+}
