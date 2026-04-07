@@ -17,6 +17,8 @@ The `Neo4jEnterpriseStandalone` custom resource manages single-node Neo4j Enterp
 
 - **Single StatefulSet**: `{standalone-name}` with 1 replica
 - **Single Pod**: Named `{standalone-name}-0`
+- **Health Probes**: Readiness, liveness, and startup probes using `/conf/health.sh` (checks Neo4j process and HTTP port)
+- **ConfigMap**: `{standalone-name}-config` containing `neo4j.conf` and `health.sh`
 - **Database Compatibility**: Supports Neo4jDatabase resources for automated database creation
 - **Plugin Compatibility**: Full support for Neo4jPlugin installation and management
 - **Backup Integration**: Compatible with Neo4jBackup/Restore for data protection
@@ -318,11 +320,18 @@ Indicates if the standalone deployment is ready for connections.
 Detailed conditions about the deployment state.
 
 #### `endpoints` (EndpointStatus)
-Connection endpoints for the Neo4j instance.
+Connection endpoints for the Neo4j instance. The bolt scheme reflects the TLS configuration: `bolt+s://` when TLS is enabled, `bolt://` when disabled.
 
 ```yaml
+# TLS disabled
 endpoints:
   bolt: "bolt://standalone-neo4j-service.default.svc.cluster.local:7687"
+  http: "http://standalone-neo4j-service.default.svc.cluster.local:7474"
+  https: "https://standalone-neo4j-service.default.svc.cluster.local:7473"
+
+# TLS enabled (cert-manager)
+endpoints:
+  bolt: "bolt+s://standalone-neo4j-service.default.svc.cluster.local:7687"
   http: "http://standalone-neo4j-service.default.svc.cluster.local:7474"
   https: "https://standalone-neo4j-service.default.svc.cluster.local:7473"
 ```
