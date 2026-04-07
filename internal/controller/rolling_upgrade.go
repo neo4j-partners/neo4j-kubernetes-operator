@@ -253,7 +253,7 @@ func (r *RollingUpgradeOrchestrator) upgradeServers(
 
 	// Prime the StatefulSet with the target image and freeze all pod restarts by
 	// setting partition = replicas.  No pod will restart until we lower the partition.
-	serverSts, err = r.updateServerStatefulSet(ctx, cluster, func(sts *appsv1.StatefulSet) {
+	_, err = r.updateServerStatefulSet(ctx, cluster, func(sts *appsv1.StatefulSet) {
 		sts.Spec.Template.Spec.Containers[0].Image = newImage
 		if sts.Spec.Template.Annotations == nil {
 			sts.Spec.Template.Annotations = make(map[string]string)
