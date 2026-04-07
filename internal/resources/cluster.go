@@ -2064,13 +2064,10 @@ dbms.routing.default_router=SERVER
 internal.dbms.cluster.discovery.resolution_timeout=1d`
 }
 
-// getMinInitialPrimariesSetting returns the correct config key for the
-// "minimum primaries before bootstrap" guard, which differs between versions.
-func getMinInitialPrimariesSetting(cluster *neo4jv1alpha1.Neo4jEnterpriseCluster) string {
-	if isCalverImage(cluster.Spec.Image.Tag) {
-		// 2025.x renamed the setting (same semantics, new namespace)
-		return "dbms.cluster.minimum_initial_system_primaries_count"
-	}
+// getMinInitialPrimariesSetting returns the config key for the
+// "minimum primaries before bootstrap" guard. The key is the same
+// in both Neo4j 5.26.x and 2025.x CalVer.
+func getMinInitialPrimariesSetting(_ *neo4jv1alpha1.Neo4jEnterpriseCluster) string {
 	return "dbms.cluster.minimum_initial_system_primaries_count"
 }
 
