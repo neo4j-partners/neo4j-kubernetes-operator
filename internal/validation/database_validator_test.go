@@ -120,7 +120,7 @@ func TestDatabaseValidator_ValidateTopology(t *testing.T) {
 				},
 			},
 			expectedErrors:     1,
-			expectedWarnings:   2, // Zero primary error + excessive ratio warning + remaining servers warning
+			expectedWarnings:   2, // excessive ratio warning + remaining servers warning
 			shouldContainError: "at least 1 primary is required for database operation",
 		},
 		{
