@@ -819,19 +819,17 @@ func (r *Neo4jEnterpriseClusterReconciler) containerSecurityContextEqual(current
 	return equality.Semantic.DeepEqual(current, desired)
 }
 
+// envVarsEqual performs a subset check: every env var in desired must be present
+// in current with the correct value, but extra env vars in current are tolerated.
+//
+// This is intentionally NOT a strict length+value equality check. The Neo4jPlugin
+// controller (and reconcileAuraFleetManagement) live-patches the StatefulSet to add
+// env vars (e.g. NEO4J_PLUGINS, NEO4J_APOC_*) that are not part of the cluster
+// controller's desired template. A strict count check would make those additions
+// look like a "significant change", causing the cluster controller to overwrite the
+// StatefulSet on every reconcile and creating an infinite oscillation between the
+// two controllers.
 func (r *Neo4jEnterpriseClusterReconciler) envVarsEqual(current, desired []corev1.EnvVar) bool {
-	// Intentionally NOT checking len(current) == len(desired).
-	//
-	// The Neo4jPlugin controller (and reconcileAuraFleetManagement) live-patches the StatefulSet
-	// to add env vars (e.g. NEO4J_PLUGINS, NEO4J_APOC_*) that are not part of the cluster
-	// controller's desired template. A strict count equality check would make those additions
-	// look like a "significant change" and cause the cluster controller to overwrite the
-	// StatefulSet template on every reconcile, removing plugin-controller env vars and creating
-	// an infinite oscillation between the two controllers.
-	//
-	// The correct invariant is: every env var the cluster controller *wants* must be present
-	// in the current StatefulSet with the correct value. Extra env vars in the current
-	// StatefulSet (added by plugin controllers) are intentionally tolerated.
 	currentMap := make(map[string]corev1.EnvVar)
 	for _, env := range current {
 		currentMap[env.Name] = env
