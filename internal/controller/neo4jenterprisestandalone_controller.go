@@ -715,7 +715,9 @@ exit 1
 `
 }
 
-// buildStandaloneReadinessProbe creates a readiness probe for standalone deployments
+// buildStandaloneReadinessProbe creates a readiness probe for standalone deployments.
+// The startup probe gates this — initialDelaySeconds is 0 because by the time
+// this probe runs, the startup probe has already confirmed Neo4j is responding.
 func buildStandaloneReadinessProbe() *corev1.Probe {
 	return &corev1.Probe{
 		ProbeHandler: corev1.ProbeHandler{
@@ -723,14 +725,15 @@ func buildStandaloneReadinessProbe() *corev1.Probe {
 				Command: []string{"/bin/bash", "-c", "/conf/health.sh"},
 			},
 		},
-		InitialDelaySeconds: 30,
+		InitialDelaySeconds: 0,
 		PeriodSeconds:       10,
 		TimeoutSeconds:      5,
-		FailureThreshold:    6, // Allow up to 60s after initial delay
+		FailureThreshold:    3,
 	}
 }
 
-// buildStandaloneLivenessProbe creates a liveness probe for standalone deployments
+// buildStandaloneLivenessProbe creates a liveness probe for standalone deployments.
+// Gated by the startup probe — only runs after Neo4j is confirmed healthy.
 func buildStandaloneLivenessProbe() *corev1.Probe {
 	return &corev1.Probe{
 		ProbeHandler: corev1.ProbeHandler{
@@ -738,14 +741,16 @@ func buildStandaloneLivenessProbe() *corev1.Probe {
 				Command: []string{"/bin/bash", "-c", "/conf/health.sh"},
 			},
 		},
-		InitialDelaySeconds: 90,
+		InitialDelaySeconds: 0,
 		PeriodSeconds:       30,
 		TimeoutSeconds:      5,
 		FailureThreshold:    3,
 	}
 }
 
-// buildStandaloneStartupProbe creates a startup probe for standalone deployments
+// buildStandaloneStartupProbe creates a startup probe for standalone deployments.
+// This is the only probe that runs during initial Neo4j startup. Readiness and
+// liveness probes are disabled until this succeeds.
 func buildStandaloneStartupProbe() *corev1.Probe {
 	return &corev1.Probe{
 		ProbeHandler: corev1.ProbeHandler{
@@ -753,7 +758,7 @@ func buildStandaloneStartupProbe() *corev1.Probe {
 				Command: []string{"/bin/bash", "-c", "/conf/health.sh"},
 			},
 		},
-		InitialDelaySeconds: 15,
+		InitialDelaySeconds: 10,
 		PeriodSeconds:       10,
 		TimeoutSeconds:      5,
 		FailureThreshold:    30, // Allow up to 5 minutes for startup (30 * 10s)
