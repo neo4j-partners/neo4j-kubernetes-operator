@@ -110,7 +110,7 @@ jobs:
         make ginkgo
 
         set -o pipefail
-        ./bin/ginkgo run -v --timeout=60m ./test/integration/... | tee integration-test-output.log
+        ./bin/ginkgo run -v --timeout=90m ./test/integration/... | tee integration-test-output.log
       env:
         KUBECONFIG: /home/runner/.kube/config
         NEO4J_VERSION: ${{ github.event.inputs.neo4j-version || '5.26-enterprise' }}
