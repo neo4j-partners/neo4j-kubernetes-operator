@@ -993,6 +993,71 @@ func TestBuildBackupFromAddressesStandaloneEquivalent(t *testing.T) {
 	assert.Equal(t, "my-cluster-server-0.my-cluster-headless.ops.svc.cluster.local:6362", addrs)
 }
 
+func TestBuildBackupStatefulSet_Structure(t *testing.T) {
+	cluster := &neo4jv1beta1.Neo4jEnterpriseCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-cluster", Namespace: "default"},
+		Spec: neo4jv1beta1.Neo4jEnterpriseClusterSpec{
+			Image:    neo4jv1beta1.ImageSpec{Repo: "neo4j", Tag: "5.26.0-enterprise"},
+			Topology: neo4jv1beta1.TopologyConfiguration{Servers: 3},
+			Storage:  neo4jv1beta1.StorageSpec{ClassName: "standard", Size: "10Gi"},
+			Auth:     &neo4jv1beta1.AuthSpec{AdminSecret: "neo4j-admin-secret"},
+			Backups:  &neo4jv1beta1.BackupsSpec{},
+		},
+	}
+
+	sts := resources.BuildBackupStatefulSet(cluster)
+	require.NotNil(t, sts, "backup StatefulSet should be created when backups enabled")
+
+	// Replicas
+	require.NotNil(t, sts.Spec.Replicas)
+	assert.Equal(t, int32(1), *sts.Spec.Replicas, "backup should have 1 replica")
+
+	// Labels
+	assert.Equal(t, "test-cluster", sts.Labels["neo4j.com/cluster"])
+	assert.Equal(t, "backup", sts.Labels["neo4j.com/component"])
+
+	// Container
+	containers := sts.Spec.Template.Spec.Containers
+	require.Len(t, containers, 1, "should have exactly 1 container")
+	assert.Equal(t, "backup", containers[0].Name)
+
+	// Environment variables
+	envMap := make(map[string]string)
+	for _, env := range containers[0].Env {
+		if env.Value != "" {
+			envMap[env.Name] = env.Value
+		}
+	}
+	assert.Equal(t, "yes", envMap["NEO4J_ACCEPT_LICENSE_AGREEMENT"])
+	assert.Equal(t, "test-cluster", envMap["NEO4J_CLUSTER_NAME"])
+
+	// Volume mounts
+	mountMap := make(map[string]string)
+	for _, vm := range containers[0].VolumeMounts {
+		mountMap[vm.Name] = vm.MountPath
+	}
+	assert.Equal(t, "/backups", mountMap["backup-storage"], "should mount backup-storage at /backups")
+	assert.Equal(t, "/backup-requests", mountMap["backup-requests"], "should mount backup-requests at /backup-requests")
+
+	// VolumeClaimTemplates
+	require.Len(t, sts.Spec.VolumeClaimTemplates, 1, "should have 1 PVC template")
+	assert.Equal(t, "backup-storage", sts.Spec.VolumeClaimTemplates[0].Name)
+}
+
+func TestBuildBackupStatefulSet_NilWhenDisabled(t *testing.T) {
+	cluster := &neo4jv1beta1.Neo4jEnterpriseCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-cluster", Namespace: "default"},
+		Spec: neo4jv1beta1.Neo4jEnterpriseClusterSpec{
+			Image:    neo4jv1beta1.ImageSpec{Repo: "neo4j", Tag: "5.26.0-enterprise"},
+			Topology: neo4jv1beta1.TopologyConfiguration{Servers: 3},
+			Storage:  neo4jv1beta1.StorageSpec{ClassName: "standard", Size: "10Gi"},
+		},
+	}
+
+	sts := resources.BuildBackupStatefulSet(cluster)
+	assert.Nil(t, sts, "backup StatefulSet should be nil when backups not configured")
+}
+
 func TestBuildPodSpecForEnterprise_WithPullSecrets(t *testing.T) {
 	cluster := &neo4jv1beta1.Neo4jEnterpriseCluster{
 		Spec: neo4jv1beta1.Neo4jEnterpriseClusterSpec{
