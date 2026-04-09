@@ -313,7 +313,8 @@ func (r *Neo4jBackupReconciler) createBackupJob(ctx context.Context, backup *neo
 			Labels:    labels,
 		},
 		Spec: batchv1.JobSpec{
-			BackoffLimit: &backoffLimit,
+			TTLSecondsAfterFinished: func() *int32 { v := int32(300); return &v }(),
+			BackoffLimit:            &backoffLimit,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{Labels: labels},
 				Spec: corev1.PodSpec{
@@ -369,7 +370,8 @@ func (r *Neo4jBackupReconciler) createBackupCronJob(ctx context.Context, backup 
 		cronJob.Spec.JobTemplate = batchv1.JobTemplateSpec{
 			ObjectMeta: metav1.ObjectMeta{Labels: labels},
 			Spec: batchv1.JobSpec{
-				BackoffLimit: &backoffLimit,
+				TTLSecondsAfterFinished: func() *int32 { v := int32(300); return &v }(),
+				BackoffLimit:            &backoffLimit,
 				Template: corev1.PodTemplateSpec{
 					ObjectMeta: metav1.ObjectMeta{Labels: labels},
 					Spec: corev1.PodSpec{
@@ -455,6 +457,15 @@ func (r *Neo4jBackupReconciler) buildBackupCommand(backup *neo4jv1beta1.Neo4jBac
 		}
 		if backup.Spec.Options.SkipRecovery {
 			cmd += " --skip-recovery=true"
+		}
+		if backup.Spec.Options.ParallelRecovery {
+			cmd += " --parallel-recovery=true"
+		}
+		if backup.Spec.Options.KeepFailed {
+			cmd += " --keep-failed=true"
+		}
+		if backup.Spec.Options.IncludeMetadata != "" && version.SupportsMetadataOption() {
+			cmd += " --include-metadata=" + backup.Spec.Options.IncludeMetadata
 		}
 		for _, arg := range backup.Spec.Options.AdditionalArgs {
 			cmd += " " + arg
@@ -707,7 +718,8 @@ func (r *Neo4jBackupReconciler) cleanupBackupArtifacts(ctx context.Context, back
 			Labels:    cleanupLabels,
 		},
 		Spec: batchv1.JobSpec{
-			BackoffLimit: &backoffLimit,
+			TTLSecondsAfterFinished: func() *int32 { v := int32(300); return &v }(),
+			BackoffLimit:            &backoffLimit,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{Labels: cleanupLabels},
 				Spec: corev1.PodSpec{

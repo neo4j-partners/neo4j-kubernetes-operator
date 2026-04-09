@@ -123,6 +123,18 @@ type BackupOptions struct {
 	// Strongly recommended when --to-path points to cloud storage to avoid
 	// filling the Neo4j working directory.
 	TempPath string `json:"tempPath,omitempty"`
+
+	// IncludeMetadata controls which metadata (users, roles) is included in the backup.
+	// Supported values: "all" (default), "none", "users", "roles".
+	// Requires Neo4j 5.26+.
+	// +kubebuilder:validation:Enum=all;none;users;roles
+	IncludeMetadata string `json:"includeMetadata,omitempty"`
+
+	// ParallelRecovery enables multi-threaded transaction application during backup.
+	ParallelRecovery bool `json:"parallelRecovery,omitempty"`
+
+	// KeepFailed preserves failed backup artifacts for debugging instead of deleting them.
+	KeepFailed bool `json:"keepFailed,omitempty"`
 }
 
 // EncryptionSpec defines encryption configuration for backup and restore operations

@@ -430,7 +430,8 @@ func (r *Neo4jRestoreReconciler) createRestoreJob(ctx context.Context, restore *
 			},
 		},
 		Spec: batchv1.JobSpec{
-			BackoffLimit: func(i int32) *int32 { return &i }(1), // Restore should not retry
+			TTLSecondsAfterFinished: func() *int32 { v := int32(300); return &v }(),
+			BackoffLimit:            func(i int32) *int32 { return &i }(1), // Restore should not retry
 			Template: corev1.PodTemplateSpec{
 				Spec: corev1.PodSpec{
 					RestartPolicy:   corev1.RestartPolicyNever,
@@ -465,7 +466,7 @@ func (r *Neo4jRestoreReconciler) createRestoreJob(ctx context.Context, restore *
 							VolumeMounts: r.buildRestoreVolumeMounts(restore),
 						},
 					},
-					Volumes: r.buildRestoreVolumes(restore),
+					Volumes: r.buildRestoreVolumes(ctx, restore),
 				},
 			},
 		},
@@ -546,9 +547,6 @@ func (r *Neo4jRestoreReconciler) buildRestoreFromPath(restore *neo4jv1beta1.Neo4
 		return restore.Spec.Source.BackupPath
 	}
 	basePath := st.Path
-	if basePath == "" {
-		basePath = ""
-	}
 	backupFile := restore.Spec.Source.BackupPath
 	// Combine storage path and backup filename
 	var fullPath string
@@ -609,6 +607,14 @@ func (r *Neo4jRestoreReconciler) buildRestoreCommand(ctx context.Context, restor
 		cmd += " --overwrite-destination=true"
 	}
 
+	// Add --temp-path for cloud restores to avoid filling ephemeral disk
+	if restore.Spec.Source.Storage != nil {
+		st := restore.Spec.Source.Storage.Type
+		if st == "s3" || st == "gcs" || st == "azure" {
+			cmd += " --temp-path=/tmp/neo4j-restore"
+		}
+	}
+
 	// Add point-in-time restore if specified
 	if restore.Spec.Source.PointInTime != nil {
 		t := restore.Spec.Source.PointInTime.Time.UTC()
@@ -647,7 +653,30 @@ func (r *Neo4jRestoreReconciler) buildPITRRestoreCommand(_ context.Context, rest
 		case "backup":
 			backupPath = fmt.Sprintf("/backup/%s", pitrConfig.BaseBackup.BackupRef)
 		case "storage":
-			backupPath = pitrConfig.BaseBackup.BackupPath
+			// Construct cloud URI if storage has cloud type, otherwise use local path
+			if pitrConfig.BaseBackup.Storage != nil {
+				st := pitrConfig.BaseBackup.Storage
+				basePath := st.Path
+				backupFile := pitrConfig.BaseBackup.BackupPath
+				fullPath := backupFile
+				if basePath != "" && backupFile != "" {
+					fullPath = fmt.Sprintf("%s/%s", basePath, backupFile)
+				} else if basePath != "" {
+					fullPath = basePath
+				}
+				switch st.Type {
+				case "s3":
+					backupPath = fmt.Sprintf("s3://%s/%s", st.Bucket, fullPath)
+				case "gcs":
+					backupPath = fmt.Sprintf("gs://%s/%s", st.Bucket, fullPath)
+				case "azure":
+					backupPath = fmt.Sprintf("azb://%s/%s", st.Bucket, fullPath)
+				default:
+					backupPath = fmt.Sprintf("/backup/%s", backupFile)
+				}
+			} else {
+				backupPath = pitrConfig.BaseBackup.BackupPath
+			}
 		default:
 			return "", fmt.Errorf("invalid base backup type: %s", pitrConfig.BaseBackup.Type)
 		}
@@ -707,12 +736,17 @@ func (r *Neo4jRestoreReconciler) buildRestoreVolumeMounts(restore *neo4jv1beta1.
 	return mounts
 }
 
-func (r *Neo4jRestoreReconciler) buildRestoreVolumes(restore *neo4jv1beta1.Neo4jRestore) []corev1.Volume {
+func (r *Neo4jRestoreReconciler) buildRestoreVolumes(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore) []corev1.Volume {
 	var dataVolume corev1.Volume
 	if restore.Spec.StopCluster {
-		// For offline restore, write directly to the first server pod's data PVC so the
-		// restored store is available when the StatefulSet is scaled back up.
+		// For offline restore, write directly to the first pod's data PVC.
+		// Clusters use "data-{name}-server-0", standalones use "neo4j-data-{name}-0".
 		dataPVCName := fmt.Sprintf("data-%s-server-0", restore.Spec.ClusterRef)
+		pvc := &corev1.PersistentVolumeClaim{}
+		if err := r.Get(ctx, types.NamespacedName{Name: dataPVCName, Namespace: restore.Namespace}, pvc); err != nil {
+			// Cluster PVC not found — try standalone naming
+			dataPVCName = fmt.Sprintf("neo4j-data-%s-0", restore.Spec.ClusterRef)
+		}
 		dataVolume = corev1.Volume{
 			Name: "neo4j-data",
 			VolumeSource: corev1.VolumeSource{
@@ -832,14 +866,34 @@ func (r *Neo4jRestoreReconciler) buildRestoreVolumes(restore *neo4jv1beta1.Neo4j
 	return volumes
 }
 
+// resolveStatefulSetName finds the StatefulSet for a cluster or standalone.
+// Clusters use "{name}-server", standalones use just "{name}".
+func (r *Neo4jRestoreReconciler) resolveStatefulSetName(ctx context.Context, cluster *neo4jv1beta1.Neo4jEnterpriseCluster) (string, error) {
+	// Try cluster naming convention first: {name}-server
+	serverName := cluster.Name + "-server"
+	sts := &appsv1.StatefulSet{}
+	if err := r.Get(ctx, types.NamespacedName{Name: serverName, Namespace: cluster.Namespace}, sts); err == nil {
+		return serverName, nil
+	}
+	// Fall back to standalone naming: {name} (no suffix)
+	if err := r.Get(ctx, types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}, sts); err == nil {
+		return cluster.Name, nil
+	}
+	return "", fmt.Errorf("StatefulSet not found for %s (tried %s-server and %s)", cluster.Name, cluster.Name, cluster.Name)
+}
+
 func (r *Neo4jRestoreReconciler) stopCluster(ctx context.Context, cluster *neo4jv1beta1.Neo4jEnterpriseCluster) error {
 	logger := log.FromContext(ctx)
 	logger.Info("Stopping cluster for restore", "cluster", cluster.Name)
 
-	// Get the StatefulSet for the cluster (named {cluster-name}-server in server-based architecture)
+	stsName, err := r.resolveStatefulSetName(ctx, cluster)
+	if err != nil {
+		return err
+	}
+
 	sts := &appsv1.StatefulSet{}
 	stsKey := types.NamespacedName{
-		Name:      cluster.Name + "-server",
+		Name:      stsName,
 		Namespace: cluster.Namespace,
 	}
 
@@ -893,10 +947,14 @@ func (r *Neo4jRestoreReconciler) startCluster(ctx context.Context, cluster *neo4
 	logger := log.FromContext(ctx)
 	logger.Info("Starting cluster after restore", "cluster", cluster.Name)
 
-	// Get the StatefulSet for the cluster (named {cluster-name}-server in server-based architecture)
+	stsName, err := r.resolveStatefulSetName(ctx, cluster)
+	if err != nil {
+		return err
+	}
+
 	sts := &appsv1.StatefulSet{}
 	stsKey := types.NamespacedName{
-		Name:      cluster.Name + "-server",
+		Name:      stsName,
 		Namespace: cluster.Namespace,
 	}
 

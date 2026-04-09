@@ -157,12 +157,31 @@ spec:
                           key
                         type: string
                     type: object
+                  includeMetadata:
+                    description: |-
+                      IncludeMetadata controls which metadata (users, roles) is included in the backup.
+                      Supported values: "all" (default), "none", "users", "roles".
+                      Requires Neo4j 5.26+.
+                    enum:
+                    - all
+                    - none
+                    - users
+                    - roles
+                    type: string
+                  keepFailed:
+                    description: KeepFailed preserves failed backup artifacts for
+                      debugging instead of deleting them.
+                    type: boolean
                   pageCache:
                     description: Page cache size for backup operation (e.g., "4G")
                     pattern: ^[0-9]+[KMG]?$
                     type: string
                   parallelDownload:
                     description: Enable parallel download for remote backups
+                    type: boolean
+                  parallelRecovery:
+                    description: ParallelRecovery enables multi-threaded transaction
+                      application during backup.
                     type: boolean
                   preferDiffAsParent:
                     description: |-
