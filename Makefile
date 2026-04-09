@@ -569,6 +569,7 @@ endif
 	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
 	go run ./scripts/update-alm-examples config/manifests/bases/neo4j-kubernetes-operator.clusterserviceversion.yaml
 	$(KUSTOMIZE) build config/manifests | $(OPERATOR_SDK) generate bundle $(BUNDLE_GEN_FLAGS)
+	sed -i'' -e 's|containerImage: .*|containerImage: $(IMG)|' bundle/manifests/neo4j-kubernetes-operator.clusterserviceversion.yaml
 	go run ./scripts/update-alm-examples bundle/manifests/neo4j-kubernetes-operator.clusterserviceversion.yaml
 	$(OPERATOR_SDK) bundle validate ./bundle
 
