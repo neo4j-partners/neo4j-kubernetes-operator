@@ -310,7 +310,8 @@ spec:
   options:
     compress: true
     backupType: FULL
-    tempPath: /tmp/neo4j-backup-temp
+    tempStorage:\
+      size: "50Gi"
     encryption:
       enabled: true
       keySecret: backup-encryption-key
@@ -344,7 +345,8 @@ spec:
   options:
     compress: true
     backupType: FULL
-    tempPath: /tmp/neo4j-backup-temp
+    tempStorage:\
+      size: "50Gi"
 ```
 
 ### Single-Database Backup to S3
@@ -374,7 +376,8 @@ spec:
   options:
     compress: true
     backupType: AUTO
-    tempPath: /tmp/neo4j-backup-temp
+    tempStorage:\
+      size: "50Gi"
 ```
 
 ### Differential Backup with preferDiffAsParent (CalVer 2025.04+)
@@ -400,7 +403,8 @@ spec:
   options:
     backupType: DIFF
     preferDiffAsParent: true   # Requires Neo4j CalVer 2025.04+
-    tempPath: /tmp/neo4j-backup-temp
+    tempStorage:\
+      size: "50Gi"
     compress: true
 ```
 
@@ -462,7 +466,8 @@ spec:
   options:
     backupType: AUTO
     pageCache: "8G"
-    tempPath: /tmp/neo4j-backup-temp
+    tempStorage:\
+      size: "50Gi"
 ```
 
 ### GCS Backup with Static Service Account Credentials
@@ -490,7 +495,8 @@ spec:
   options:
     backupType: AUTO
     pageCache: "8G"
-    tempPath: /tmp/neo4j-backup-temp
+    tempStorage:\
+      size: "50Gi"
 ```
 
 ### Azure Backup with Azure Workload Identity
@@ -525,7 +531,8 @@ spec:
   options:
     compress: true
     backupType: FULL
-    tempPath: /tmp/neo4j-backup-temp
+    tempStorage:\
+      size: "50Gi"
 ```
 
 ### Azure Backup with Static Credentials
@@ -553,7 +560,8 @@ spec:
   options:
     compress: true
     backupType: FULL
-    tempPath: /tmp/neo4j-backup-temp
+    tempStorage:\
+      size: "50Gi"
 ```
 
 ## Monitoring
