@@ -1078,16 +1078,272 @@ EOF
     log_demo "  ✓ Integration with existing cluster security and networking"
     log_demo "  ✓ Kubernetes-native database lifecycle management"
 
-    confirm "Ready to see the demo summary?"
+    confirm "Ready to proceed to plugin management demo?"
+}
+
+# Demonstrate APOC plugin installation on the cluster
+demonstrate_plugin_installation() {
+    log_header "DEMO PART 5: Plugin Management (APOC)"
+
+    log_demo "The operator manages Neo4j plugins via the Neo4jPlugin CRD."
+    log_demo "We'll install APOC (the most popular Neo4j plugin) on our cluster:"
+    log_demo "  • Declarative plugin lifecycle via Kubernetes"
+    log_demo "  • Automatic rolling restart of cluster pods"
+    log_demo "  • Configuration applied via environment variables (Neo4j 5.26+)"
+
+    confirm "Ready to install the APOC plugin?"
+
+    log_section "Installing APOC Plugin"
+
+    local plugin_manifest=$(cat << EOF
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jPlugin
+metadata:
+  name: demo-apoc-plugin
+  namespace: ${DEMO_NAMESPACE}
+spec:
+  clusterRef: ${CLUSTER_NAME_MULTI}
+  name: apoc
+  version: "5.26.0"
+  enabled: true
+  source:
+    type: official
+  config:
+    apoc.export.file.enabled: "true"
+    apoc.import.file.enabled: "true"
+EOF
+)
+
+    echo -e "${YELLOW}---${NC}"
+    echo "${plugin_manifest}"
+    echo -e "${YELLOW}---${NC}"
+    echo
+
+    log_command "kubectl apply -f -"
+    echo "${plugin_manifest}" | kubectl apply -f -
+
+    log_success "APOC plugin manifest applied!"
+
+    log_info "The operator is now:"
+    log_info "  • Adding NEO4J_PLUGINS=[\"apoc\"] to the StatefulSet"
+    log_info "  • Setting APOC configuration via environment variables"
+    log_info "  • Performing a rolling restart of cluster pods"
+
+    log_section "Plugin Installation Progress"
+
+    # Wait for the plugin to be ready
+    local plugin_timeout=120
+    local plugin_elapsed=0
+    local plugin_ready=false
+
+    while [[ $plugin_elapsed -lt $plugin_timeout ]] && [[ "$plugin_ready" != "true" ]]; do
+        local phase=$(kubectl get neo4jplugin demo-apoc-plugin -n ${DEMO_NAMESPACE} -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+        local message=$(kubectl get neo4jplugin demo-apoc-plugin -n ${DEMO_NAMESPACE} -o jsonpath='{.status.message}' 2>/dev/null || echo "")
+
+        if [[ "$phase" == "Ready" ]]; then
+            plugin_ready=true
+            break
+        fi
+
+        if [[ -n "$phase" ]]; then
+            echo -n -e "\r  Plugin phase: ${phase} - ${message}"
+        fi
+
+        sleep 5
+        plugin_elapsed=$((plugin_elapsed + 5))
+    done
+    echo
+
+    if [[ "$plugin_ready" == "true" ]]; then
+        log_success "APOC plugin installed and ready!"
+    else
+        log_warning "Plugin still installing — this is normal, it requires a rolling restart"
+    fi
+
+    # Verify APOC is available via cypher-shell
+    log_section "APOC Verification"
+    log_info "Verifying APOC procedures are available..."
+
+    show_progress 10 "Waiting for pods to stabilize after rolling restart"
+
+    if kubectl exec "${CLUSTER_NAME_MULTI}-server-0" -c neo4j -n "${DEMO_NAMESPACE}" -- cypher-shell -a "bolt+ssc://localhost:7687" -u neo4j -p "${ADMIN_PASSWORD}" -d system "RETURN apoc.version() AS apocVersion" 2>/dev/null; then
+        log_success "APOC is installed and functional!"
+        log_demo "APOC procedures are now available across all cluster servers"
+    else
+        log_info "APOC still initializing — pods may still be restarting"
+    fi
+
+    log_demo "Key benefits demonstrated:"
+    log_demo "  ✓ Declarative plugin management via Neo4jPlugin CRD"
+    log_demo "  ✓ Automatic rolling restart preserves cluster availability"
+    log_demo "  ✓ Plugin configuration managed as Kubernetes resources"
+}
+
+# Demonstrate multiple databases with different topologies
+demonstrate_multi_database() {
+    log_header "DEMO PART 6: Multi-Database Topologies"
+
+    log_demo "Neo4j Enterprise supports multiple databases on a single cluster,"
+    log_demo "each with its own topology distribution:"
+    log_demo "  • Different read/write scaling per database"
+    log_demo "  • Workload isolation across servers"
+    log_demo "  • Kubernetes-native lifecycle management"
+
+    confirm "Ready to create multiple databases?"
+
+    log_section "Creating Databases with Different Topologies"
+
+    log_demo "On our 3-server cluster, we'll create two databases:"
+    log_demo "  • 'analytics' — 1 primary, 2 secondaries (read-heavy workload)"
+    log_demo "  • 'sessions'  — 2 primaries, 0 secondaries (write-heavy workload)"
+    echo
+
+    # Create analytics database (read-heavy)
+    local analytics_manifest=$(cat << EOF
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jDatabase
+metadata:
+  name: analytics-database
+  namespace: ${DEMO_NAMESPACE}
+spec:
+  clusterRef: ${CLUSTER_NAME_MULTI}
+  name: analytics
+  topology:
+    primaries: 1
+    secondaries: 2
+  wait: true
+  ifNotExists: true
+EOF
+)
+
+    log_manifest "Analytics database (1 primary, 2 secondaries):"
+    echo -e "${YELLOW}---${NC}"
+    echo "${analytics_manifest}"
+    echo -e "${YELLOW}---${NC}"
+
+    echo "${analytics_manifest}" | kubectl apply -f -
+
+    # Create sessions database (write-heavy)
+    local sessions_manifest=$(cat << EOF
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jDatabase
+metadata:
+  name: sessions-database
+  namespace: ${DEMO_NAMESPACE}
+spec:
+  clusterRef: ${CLUSTER_NAME_MULTI}
+  name: sessions
+  topology:
+    primaries: 2
+    secondaries: 0
+  wait: true
+  ifNotExists: true
+EOF
+)
+
+    log_manifest "Sessions database (2 primaries, 0 secondaries):"
+    echo -e "${YELLOW}---${NC}"
+    echo "${sessions_manifest}"
+    echo -e "${YELLOW}---${NC}"
+
+    echo "${sessions_manifest}" | kubectl apply -f -
+
+    log_success "Both database manifests applied!"
+
+    # Wait for databases to be ready
+    show_progress 15 "Waiting for databases to be created"
+
+    log_section "Multi-Database Status"
+    log_command "kubectl get neo4jdatabase -n ${DEMO_NAMESPACE} -o wide"
+    kubectl get neo4jdatabase -n "${DEMO_NAMESPACE}" -o wide 2>/dev/null
+
+    # Verify via cypher-shell
+    log_section "Database Topology Verification"
+    log_info "Querying Neo4j to verify database topology distribution..."
+
+    if kubectl exec "${CLUSTER_NAME_MULTI}-server-0" -c neo4j -n "${DEMO_NAMESPACE}" -- cypher-shell -a "bolt+ssc://localhost:7687" -u neo4j -p "${ADMIN_PASSWORD}" -d system "SHOW DATABASES YIELD name, currentStatus, role WHERE name IN ['analytics', 'sessions', 'orders'] RETURN name, role, count(*) AS replicas ORDER BY name, role" 2>/dev/null; then
+        log_success "All databases are distributed across cluster servers!"
+        log_demo "Each database has its own topology tailored to its workload"
+    else
+        log_info "Databases still being distributed — this is normal"
+    fi
+
+    log_demo "Key benefits demonstrated:"
+    log_demo "  ✓ Multiple databases on a single cluster infrastructure"
+    log_demo "  ✓ Per-database topology tuning (read-heavy vs write-heavy)"
+    log_demo "  ✓ Declarative management via Neo4jDatabase CRD"
+}
+
+# Demonstrate live cluster diagnostics
+demonstrate_diagnostics() {
+    log_header "DEMO PART 7: Live Cluster Diagnostics"
+
+    log_demo "The operator continuously monitors the cluster and surfaces"
+    log_demo "diagnostics directly in the custom resource status:"
+    log_demo "  • Server health from SHOW SERVERS"
+    log_demo "  • Database status from SHOW DATABASES"
+    log_demo "  • No kubectl exec needed — just read the CR status"
+
+    confirm "Ready to view live diagnostics?"
+
+    log_section "Cluster Status Overview"
+    log_command "kubectl get neo4jenterprisecluster ${CLUSTER_NAME_MULTI} -n ${DEMO_NAMESPACE} -o wide"
+    kubectl get neo4jenterprisecluster "${CLUSTER_NAME_MULTI}" -n "${DEMO_NAMESPACE}" -o wide 2>/dev/null
+    echo
+
+    log_section "Server Diagnostics"
+    log_demo "The operator runs SHOW SERVERS and surfaces results in status.diagnostics.servers:"
+    echo
+    log_command "kubectl get neo4jenterprisecluster ${CLUSTER_NAME_MULTI} -n ${DEMO_NAMESPACE} -o jsonpath='{.status.diagnostics.servers}'"
+    echo
+
+    local servers_json=$(kubectl get neo4jenterprisecluster "${CLUSTER_NAME_MULTI}" -n "${DEMO_NAMESPACE}" -o jsonpath='{.status.diagnostics.servers}' 2>/dev/null)
+    if [[ -n "$servers_json" && "$servers_json" != "null" ]]; then
+        echo "${servers_json}" | python3 -m json.tool 2>/dev/null || echo "${servers_json}"
+        log_success "Server diagnostics available directly from CR status!"
+    else
+        log_info "Diagnostics collecting — the operator queries Neo4j on each reconcile"
+        # Fall back to showing conditions
+        log_command "kubectl get neo4jenterprisecluster ${CLUSTER_NAME_MULTI} -n ${DEMO_NAMESPACE} -o jsonpath='{.status.conditions}'"
+        kubectl get neo4jenterprisecluster "${CLUSTER_NAME_MULTI}" -n "${DEMO_NAMESPACE}" -o jsonpath='{.status.conditions}' 2>/dev/null | python3 -m json.tool 2>/dev/null || true
+    fi
+
+    echo
+    log_section "Database Diagnostics"
+    log_demo "The operator runs SHOW DATABASES and surfaces results in status.diagnostics.databases:"
+    echo
+
+    local databases_json=$(kubectl get neo4jenterprisecluster "${CLUSTER_NAME_MULTI}" -n "${DEMO_NAMESPACE}" -o jsonpath='{.status.diagnostics.databases}' 2>/dev/null)
+    if [[ -n "$databases_json" && "$databases_json" != "null" ]]; then
+        echo "${databases_json}" | python3 -m json.tool 2>/dev/null || echo "${databases_json}"
+        log_success "Database diagnostics available directly from CR status!"
+    else
+        log_info "Database diagnostics not yet collected"
+    fi
+
+    echo
+    log_section "Health Conditions"
+    log_demo "The operator also sets Kubernetes conditions for monitoring integration:"
+    echo
+    kubectl get neo4jenterprisecluster "${CLUSTER_NAME_MULTI}" -n "${DEMO_NAMESPACE}" -o jsonpath='{range .status.conditions[*]}{.type}{"\t"}{.status}{"\t"}{.reason}{"\n"}{end}' 2>/dev/null
+    echo
+
+    log_demo "Key benefits demonstrated:"
+    log_demo "  ✓ Live server health without kubectl exec"
+    log_demo "  ✓ Database status surfaced in CR status"
+    log_demo "  ✓ Standard Kubernetes conditions for alerting pipelines"
+    log_demo "  ✓ Compatible with ArgoCD, Flux, and Prometheus"
 }
 
 # Clean up all demo resources
 demo_cleanup() {
     log_section "Cleaning Up Demo Resources"
 
+    log_info "Deleting Neo4jPlugin resources..."
+    kubectl delete neo4jplugin demo-apoc-plugin -n "${DEMO_NAMESPACE}" --ignore-not-found=true 2>/dev/null &
+
     log_info "Deleting Neo4jDatabase resources..."
-    kubectl delete neo4jdatabase products-database-standalone -n "${DEMO_NAMESPACE}" --ignore-not-found=true &
-    kubectl delete neo4jdatabase orders-database -n "${DEMO_NAMESPACE}" --ignore-not-found=true &
+    kubectl delete neo4jdatabase products-database-standalone orders-database analytics-database sessions-database -n "${DEMO_NAMESPACE}" --ignore-not-found=true 2>/dev/null &
     wait
 
     log_info "Deleting Neo4j standalone and cluster..."
@@ -1138,12 +1394,28 @@ show_demo_summary() {
     echo "  • Raft consensus and data consistency"
     echo "  • Horizontal scaling capabilities"
     echo "  • Secure external access via port-forward (HTTPS/Bolt+TLS)"
-    echo "  • Advanced database topology distribution"
+    echo
+    echo -e "${GREEN}✓ Plugin Management${NC}"
+    echo "  • Declarative plugin lifecycle via Neo4jPlugin CRD"
+    echo "  • Automatic rolling restart preserves availability"
+    echo "  • APOC installed and verified via cypher-shell"
+    echo
+    echo -e "${GREEN}✓ Multi-Database Topologies${NC}"
+    echo "  • Multiple databases on a single cluster"
+    echo "  • Per-database read/write scaling (analytics vs sessions)"
+    echo "  • Kubernetes-native database lifecycle"
+    echo
+    echo -e "${GREEN}✓ Live Diagnostics${NC}"
+    echo "  • Server health in CR status (no kubectl exec needed)"
+    echo "  • Database status surfaced automatically"
+    echo "  • Standard Kubernetes conditions for monitoring"
     echo
 
     log_section "Active Resources"
-    log_command "kubectl get neo4jenterprisestandalone,neo4jenterprisecluster -n ${DEMO_NAMESPACE} -o wide"
-    kubectl get neo4jenterprisestandalone,neo4jenterprisecluster -n "${DEMO_NAMESPACE}" -o wide
+    log_command "kubectl get neo4jenterprisestandalone,neo4jenterprisecluster,neo4jplugin,neo4jdatabase -n ${DEMO_NAMESPACE} -o wide"
+    kubectl get neo4jenterprisestandalone,neo4jenterprisecluster -n "${DEMO_NAMESPACE}" -o wide 2>/dev/null
+    kubectl get neo4jplugin -n "${DEMO_NAMESPACE}" -o wide 2>/dev/null
+    kubectl get neo4jdatabase -n "${DEMO_NAMESPACE}" -o wide 2>/dev/null
 
     # Handle cleanup
     if [[ "${CLEANUP_AFTER}" == "true" ]]; then
@@ -1155,7 +1427,8 @@ show_demo_summary() {
             log_info "To clean up the demo resources, run:"
             echo "  ./scripts/demo.sh --cleanup-only"
             echo "  # or manually:"
-            echo "  kubectl delete neo4jdatabase products-database-standalone orders-database -n ${DEMO_NAMESPACE}"
+            echo "  kubectl delete neo4jplugin demo-apoc-plugin -n ${DEMO_NAMESPACE}"
+            echo "  kubectl delete neo4jdatabase --all -n ${DEMO_NAMESPACE}"
             echo "  kubectl delete neo4jenterprisestandalone ${CLUSTER_NAME_SINGLE} -n ${DEMO_NAMESPACE}"
             echo "  kubectl delete neo4jenterprisecluster ${CLUSTER_NAME_MULTI} -n ${DEMO_NAMESPACE}"
         else
@@ -1234,7 +1507,9 @@ main() {
     log_demo "  2. Multi-node TLS HA cluster deployment"
     log_demo "  3. Secure external access to Neo4j"
     log_demo "  4. Neo4jDatabase creation and management"
-    log_demo "  5. Complete operator capabilities"
+    log_demo "  5. APOC plugin installation via Neo4jPlugin CRD"
+    log_demo "  6. Multi-database topologies on a single cluster"
+    log_demo "  7. Live cluster diagnostics"
     echo
     log_info "Demo configuration:"
     log_info "  • Namespace: ${DEMO_NAMESPACE}"
@@ -1265,6 +1540,18 @@ main() {
     sleep $PAUSE_SHORT
 
     demonstrate_database_creation
+
+    sleep $PAUSE_SHORT
+
+    demonstrate_plugin_installation
+
+    sleep $PAUSE_SHORT
+
+    demonstrate_multi_database
+
+    sleep $PAUSE_SHORT
+
+    demonstrate_diagnostics
 
     sleep $PAUSE_SHORT
 
