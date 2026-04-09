@@ -420,7 +420,7 @@ jobs:
           echo "updateGraph: semver-mode" > "${OPERATOR_DIR}/ci.yaml"
         fi
 
-    - name: Create PR to upstream community-operators
+    - name: Sync fork with upstream and create PR
       env:
         GH_TOKEN: ${{ secrets.OPERATORHUB_PAT }}
         CLEAN_TAG: ${{ needs.determine-tag.outputs.clean_tag }}
@@ -429,22 +429,31 @@ jobs:
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
 
+        # Sync fork's main with upstream to avoid drift
+        git remote add upstream https://github.com/k8s-operatorhub/community-operators.git
+        git fetch upstream main
+        git checkout main
+        git merge upstream/main --no-edit
+        git push origin main
+
         BRANCH="neo4j-kubernetes-operator-${CLEAN_TAG}"
         git checkout -b "${BRANCH}"
         git add "operators/neo4j-kubernetes-operator/"
         git commit --signoff -m "operator neo4j-kubernetes-operator (${CLEAN_TAG})"
         git push origin "${BRANCH}"
 
-        gh pr create \
-          --repo k8s-operatorhub/community-operators \
-          --head "priyolahiri:${BRANCH}" \
-          --title "operator neo4j-kubernetes-operator (${CLEAN_TAG})" \
-          --body "$(cat <<EOF
+        cat > /tmp/pr-body.md <<EOF
         ### New operator version
 
         Operator: neo4j-kubernetes-operator
         Version: ${CLEAN_TAG}
 
-        Automated submission from [release v${CLEAN_TAG}](https://github.com/${{ github.repository }}/releases/tag/v${CLEAN_TAG}).
+        Automated submission from [release v${CLEAN_TAG}](https://github.com/priyolahiri/neo4j-kubernetes-operator/releases/tag/v${CLEAN_TAG}).
         EOF
-        )"
+        sed -i 's/^        //' /tmp/pr-body.md
+
+        gh pr create \
+          --repo k8s-operatorhub/community-operators \
+          --head "priyolahiri:${BRANCH}" \
+          --title "operator neo4j-kubernetes-operator (${CLEAN_TAG})" \
+          --body-file /tmp/pr-body.md
