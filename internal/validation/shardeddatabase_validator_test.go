@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"k8s.io/apimachinery/pkg/util/validation/field"
 
 	neo4jv1beta1 "github.com/neo4j-partners/neo4j-kubernetes-operator/api/v1beta1"
 )
@@ -203,21 +202,3 @@ func TestContainsStringItem(t *testing.T) {
 	assert.False(t, containsStringItem([]string{}, "a"))
 	assert.False(t, containsStringItem(nil, "a"))
 }
-
-// ShardedDatabaseValidationResult must have Errors and Warnings fields
-// for these tests to compile. If the struct uses field.ErrorList, adjust accordingly.
-func testResultHasErrors(result *ShardedDatabaseValidationResult) bool {
-	return len(result.Errors) > 0
-}
-
-func testResultHasFieldError(result *ShardedDatabaseValidationResult, fieldPath string) bool {
-	for _, err := range result.Errors {
-		if err.Field == fieldPath {
-			return true
-		}
-	}
-	return false
-}
-
-// Ensure ShardedDatabaseValidationResult type matches what the validator uses
-var _ = field.ErrorList{}

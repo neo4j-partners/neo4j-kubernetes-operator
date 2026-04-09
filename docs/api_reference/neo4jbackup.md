@@ -216,16 +216,29 @@ Fine-grained backup execution options.
 | `compress` | `bool` | ❌ | Compress the backup (default: `true`) |
 | `backupType` | `string` | ❌ | Backup type: `"FULL"`, `"DIFF"`, `"AUTO"` (default) |
 | `preferDiffAsParent` | `bool` | ❌ | Use the latest differential backup as the parent when creating a new differential backup (default: `false`). Maps to `--prefer-diff-as-parent`. **Requires CalVer 2025.04+** — an error is returned at runtime if the target version does not support this flag. |
-| `tempPath` | `string` | ❌ | Local directory path for temporary files during backup. **Strongly recommended for cloud storage** to avoid filling Neo4j's working directory during streaming. Maps to `--temp-path`. Example: `"/tmp/neo4j-backup-temp"` |
+| `tempPath` | `string` | ❌ | Local directory path for temporary files during backup. When `tempStorage` is configured, this is set automatically. Only set manually if you are mounting your own volume. Maps to `--temp-path`. |
+| `tempStorage` | [`*TempStorageSpec`](#tempstoragespec) | ❌ | Provisions a PVC for temporary staging files during cloud backups. The operator mounts this PVC and passes `--temp-path` automatically. Recommended for large databases to avoid filling ephemeral disk. |
 | `pageCache` | `string` | ❌ | Page cache size hint (e.g., `"4G"`). Must match pattern `^[0-9]+[KMG]?$` |
 | `encryption` | [`*EncryptionSpec`](#encryptionspec) | ❌ | Backup encryption configuration |
 | `verify` | `bool` | ❌ | Verify backup integrity after creation |
 | `parallelDownload` | `bool` | ❌ | Enable parallel download for remote backups |
 | `remoteAddressResolution` | `bool` | ❌ | Resolve remote addresses during backup |
 | `skipRecovery` | `bool` | ❌ | Skip the recovery step after backup |
+| `includeMetadata` | `string` | ❌ | Controls which metadata is included in the backup. Values: `"all"` (default), `"none"`, `"users"`, `"roles"`. Requires Neo4j 5.26+. |
+| `parallelRecovery` | `bool` | ❌ | Enable multi-threaded transaction application during backup |
+| `keepFailed` | `bool` | ❌ | Preserve failed backup artifacts for debugging instead of deleting them |
 | `additionalArgs` | `[]string` | ❌ | Additional arguments passed verbatim to `neo4j-admin database backup` |
 
 > **`preferDiffAsParent` version requirement**: This flag was introduced in Neo4j CalVer 2025.04. Using it against Neo4j 5.26.x or CalVer 2025.01–2025.03 will cause the backup Job to fail with an unsupported argument error. The operator validates this at runtime and returns an error before creating the Job.
+
+### TempStorageSpec
+
+Provisions temporary staging storage for cloud backup/restore. The operator creates a PVC, mounts it at `/tmp/neo4j-staging` in the Job pod, and passes `--temp-path=/tmp/neo4j-staging` to `neo4j-admin`. The PVC is owned by the Job and garbage-collected when the Job's TTL expires.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `size` | `string` | ✅ | Size of the temporary PVC (e.g., `"50Gi"`). Should be at least as large as the expected backup artifact. Must match pattern `^[0-9]+(Ki\|Mi\|Gi\|Ti)?$` |
+| `storageClassName` | `string` | ❌ | StorageClass for the temporary PVC. If empty, uses the cluster default. |
 
 ### EncryptionSpec
 
@@ -235,6 +248,7 @@ Backup encryption configuration.
 |-------|------|----------|-------------|
 | `enabled` | `bool` | ❌ | Enable backup encryption |
 | `keySecret` | `string` | ❌ | Name of a Kubernetes Secret containing the encryption key |
+| `keySecretKey` | `string` | ❌ | Key within the Secret containing the encryption key (default: `"key"`) |
 | `algorithm` | `string` | ❌ | Encryption algorithm: `"AES256"` (default) or `"ChaCha20Poly1305"` |
 
 ## Status

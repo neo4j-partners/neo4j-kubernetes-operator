@@ -84,8 +84,10 @@ func TestGenerateConnectionExamples(t *testing.T) {
 			externalIP:  "",
 			hasTLS:      true,
 			checkFunc: func(t *testing.T, examples *neo4jv1beta1.ConnectionExamples) {
-				assert.Contains(t, examples.BrowserURL, "https://<node-ip>:<node-port>:7473")
-				assert.Contains(t, examples.BoltURI, "bolt+ssc://<node-ip>:<bolt-node-port>:7687")
+				assert.Contains(t, examples.BrowserURL, "https://<node-ip>:<https-node-port>")
+				assert.NotContains(t, examples.BrowserURL, ":7473")
+				assert.Contains(t, examples.BoltURI, "bolt+ssc://<node-ip>:<bolt-node-port>")
+				assert.NotContains(t, examples.BoltURI, ":7687")
 			},
 		},
 	}

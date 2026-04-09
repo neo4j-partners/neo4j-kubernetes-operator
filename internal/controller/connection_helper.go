@@ -19,6 +19,10 @@ func GenerateConnectionExamples(name, namespace string, serviceType corev1.Servi
 	var baseHost string
 	var boltHost string
 
+	// For NodePort, the port IS the dynamically assigned node port, so the host
+	// already includes the port placeholder. For other types, port is appended.
+	nodePort := serviceType == corev1.ServiceTypeNodePort
+
 	switch serviceType {
 	case corev1.ServiceTypeLoadBalancer:
 		if externalIP != "" && externalIP != "<pending>" {
@@ -29,22 +33,36 @@ func GenerateConnectionExamples(name, namespace string, serviceType corev1.Servi
 			boltHost = "<external-ip>"
 		}
 	case corev1.ServiceTypeNodePort:
-		baseHost = "<node-ip>:<node-port>"
-		boltHost = "<node-ip>:<bolt-node-port>"
+		baseHost = "<node-ip>"
+		boltHost = "<node-ip>"
 	default: // ClusterIP
 		baseHost = "localhost"
 		boltHost = "localhost"
 	}
 
 	// Browser URL
-	if hasTLS {
+	if nodePort {
+		if hasTLS {
+			examples.BrowserURL = fmt.Sprintf("https://%s:<https-node-port>", baseHost)
+		} else {
+			examples.BrowserURL = fmt.Sprintf("http://%s:<http-node-port>", baseHost)
+		}
+	} else if hasTLS {
 		examples.BrowserURL = fmt.Sprintf("https://%s:7473", baseHost)
 	} else {
 		examples.BrowserURL = fmt.Sprintf("http://%s:7474", baseHost)
 	}
 
 	// Bolt URIs
-	if hasTLS {
+	if nodePort {
+		if hasTLS {
+			examples.BoltURI = fmt.Sprintf("bolt+ssc://%s:<bolt-node-port>", boltHost)
+			examples.Neo4jURI = fmt.Sprintf("neo4j+ssc://%s:<bolt-node-port>", boltHost)
+		} else {
+			examples.BoltURI = fmt.Sprintf("bolt://%s:<bolt-node-port>", boltHost)
+			examples.Neo4jURI = fmt.Sprintf("neo4j://%s:<bolt-node-port>", boltHost)
+		}
+	} else if hasTLS {
 		examples.BoltURI = fmt.Sprintf("bolt+ssc://%s:7687", boltHost)
 		examples.Neo4jURI = fmt.Sprintf("neo4j+ssc://%s:7687", boltHost)
 	} else {
@@ -75,6 +93,10 @@ func GenerateStandaloneConnectionExamples(name, namespace string, serviceType co
 	var baseHost string
 	var boltHost string
 
+	// For NodePort, the port IS the dynamically assigned node port, so the host
+	// already includes the port placeholder. For other types, port is appended.
+	nodePort := serviceType == corev1.ServiceTypeNodePort
+
 	switch serviceType {
 	case corev1.ServiceTypeLoadBalancer:
 		if externalIP != "" && externalIP != "<pending>" {
@@ -85,22 +107,36 @@ func GenerateStandaloneConnectionExamples(name, namespace string, serviceType co
 			boltHost = "<external-ip>"
 		}
 	case corev1.ServiceTypeNodePort:
-		baseHost = "<node-ip>:<node-port>"
-		boltHost = "<node-ip>:<bolt-node-port>"
+		baseHost = "<node-ip>"
+		boltHost = "<node-ip>"
 	default: // ClusterIP
 		baseHost = "localhost"
 		boltHost = "localhost"
 	}
 
 	// Browser URL
-	if hasTLS {
+	if nodePort {
+		if hasTLS {
+			examples.BrowserURL = fmt.Sprintf("https://%s:<https-node-port>", baseHost)
+		} else {
+			examples.BrowserURL = fmt.Sprintf("http://%s:<http-node-port>", baseHost)
+		}
+	} else if hasTLS {
 		examples.BrowserURL = fmt.Sprintf("https://%s:7473", baseHost)
 	} else {
 		examples.BrowserURL = fmt.Sprintf("http://%s:7474", baseHost)
 	}
 
 	// Bolt URIs
-	if hasTLS {
+	if nodePort {
+		if hasTLS {
+			examples.BoltURI = fmt.Sprintf("bolt+ssc://%s:<bolt-node-port>", boltHost)
+			examples.Neo4jURI = fmt.Sprintf("neo4j+ssc://%s:<bolt-node-port>", boltHost)
+		} else {
+			examples.BoltURI = fmt.Sprintf("bolt://%s:<bolt-node-port>", boltHost)
+			examples.Neo4jURI = fmt.Sprintf("neo4j://%s:<bolt-node-port>", boltHost)
+		}
+	} else if hasTLS {
 		examples.BoltURI = fmt.Sprintf("bolt+ssc://%s:7687", boltHost)
 		examples.Neo4jURI = fmt.Sprintf("neo4j+ssc://%s:7687", boltHost)
 	} else {

@@ -145,14 +145,14 @@ func (r *Neo4jRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	targetCluster, err := r.getClusterRef(ctx, restore)
 	if err != nil {
 		logger.Error(err, "Failed to get target cluster")
-		r.updateRestoreStatus(ctx, restore, "Failed", fmt.Sprintf("Failed to get target cluster: %v", err))
+		r.updateRestoreStatus(ctx, restore, StatusFailed, fmt.Sprintf("Failed to get target cluster: %v", err))
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 	}
 
 	// Validate Neo4j version compatibility (5.26+ or 2025.01+)
 	if err := r.validateNeo4jVersion(targetCluster); err != nil {
 		logger.Error(err, "Neo4j version validation failed")
-		r.updateRestoreStatus(ctx, restore, "Failed", fmt.Sprintf("Neo4j version not supported: %v", err))
+		r.updateRestoreStatus(ctx, restore, StatusFailed, fmt.Sprintf("Neo4j version not supported: %v", err))
 		return ctrl.Result{}, err
 	}
 
@@ -163,7 +163,7 @@ func (r *Neo4jRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	}
 
 	// Check if restore is running
-	if restore.Status.Phase == "Running" {
+	if restore.Status.Phase == StatusRunning {
 		return r.checkRestoreProgress(ctx, restore, targetCluster)
 	}
 
@@ -200,7 +200,7 @@ func (r *Neo4jRestoreReconciler) startRestore(ctx context.Context, restore *neo4
 	// Validate restore request
 	if err := r.validateRestore(ctx, restore); err != nil {
 		logger.Error(err, "Restore validation failed")
-		r.updateRestoreStatus(ctx, restore, "Failed", fmt.Sprintf("Validation failed: %v", err))
+		r.updateRestoreStatus(ctx, restore, StatusFailed, fmt.Sprintf("Validation failed: %v", err))
 		return ctrl.Result{}, err
 	}
 
@@ -208,7 +208,7 @@ func (r *Neo4jRestoreReconciler) startRestore(ctx context.Context, restore *neo4
 	if !restore.Spec.Force {
 		if err := r.checkDatabaseExists(ctx, restore, cluster); err != nil {
 			logger.Error(err, "Database existence check failed")
-			r.updateRestoreStatus(ctx, restore, "Failed", fmt.Sprintf("Database check failed: %v", err))
+			r.updateRestoreStatus(ctx, restore, StatusFailed, fmt.Sprintf("Database check failed: %v", err))
 			return ctrl.Result{}, err
 		}
 	}
@@ -217,7 +217,7 @@ func (r *Neo4jRestoreReconciler) startRestore(ctx context.Context, restore *neo4
 	if restore.Spec.StopCluster {
 		if err := r.stopCluster(ctx, cluster); err != nil {
 			logger.Error(err, "Failed to stop cluster")
-			r.updateRestoreStatus(ctx, restore, "Failed", fmt.Sprintf("Failed to stop cluster: %v", err))
+			r.updateRestoreStatus(ctx, restore, StatusFailed, fmt.Sprintf("Failed to stop cluster: %v", err))
 			return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 		}
 	}
@@ -226,7 +226,7 @@ func (r *Neo4jRestoreReconciler) startRestore(ctx context.Context, restore *neo4
 	if restore.Spec.Options != nil && restore.Spec.Options.PreRestore != nil {
 		if err := r.runRestoreHooks(ctx, restore, cluster, restore.Spec.Options.PreRestore, "pre-restore"); err != nil {
 			logger.Error(err, "Pre-restore hooks failed")
-			r.updateRestoreStatus(ctx, restore, "Failed", fmt.Sprintf("Pre-restore hooks failed: %v", err))
+			r.updateRestoreStatus(ctx, restore, StatusFailed, fmt.Sprintf("Pre-restore hooks failed: %v", err))
 			return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 		}
 	}
@@ -235,12 +235,12 @@ func (r *Neo4jRestoreReconciler) startRestore(ctx context.Context, restore *neo4
 	job, err := r.createRestoreJob(ctx, restore, cluster)
 	if err != nil {
 		logger.Error(err, "Failed to create restore job")
-		r.updateRestoreStatus(ctx, restore, "Failed", fmt.Sprintf("Failed to create restore job: %v", err))
+		r.updateRestoreStatus(ctx, restore, StatusFailed, fmt.Sprintf("Failed to create restore job: %v", err))
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 	}
 
 	// Update status
-	r.updateRestoreStatus(ctx, restore, "Running", fmt.Sprintf("Restore job %s created", job.Name))
+	r.updateRestoreStatus(ctx, restore, StatusRunning, fmt.Sprintf("Restore job %s created", job.Name))
 	r.Recorder.Event(restore, corev1.EventTypeNormal, EventReasonRestoreStarted, fmt.Sprintf("Restore job %s started", job.Name))
 
 	return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
@@ -267,7 +267,7 @@ func (r *Neo4jRestoreReconciler) checkRestoreProgress(ctx context.Context, resto
 
 	if job.Status.Failed > 0 {
 		// Restore failed
-		r.updateRestoreStatus(ctx, restore, "Failed", "Restore job failed")
+		r.updateRestoreStatus(ctx, restore, StatusFailed, "Restore job failed")
 		r.Recorder.Event(restore, corev1.EventTypeWarning, EventReasonRestoreFailed, "Restore job failed")
 		return ctrl.Result{}, nil
 	}
@@ -290,14 +290,14 @@ func (r *Neo4jRestoreReconciler) handleRestoreSuccess(ctx context.Context, resto
 	if restore.Spec.StopCluster {
 		if err := r.startCluster(ctx, cluster); err != nil {
 			logger.Error(err, "Failed to start cluster after restore")
-			r.updateRestoreStatus(ctx, restore, "Failed", fmt.Sprintf("Failed to start cluster after restore: %v", err))
+			r.updateRestoreStatus(ctx, restore, StatusFailed, fmt.Sprintf("Failed to start cluster after restore: %v", err))
 			return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 		}
 
 		// Wait for cluster to be ready
 		if err := r.waitForClusterReady(ctx, cluster); err != nil {
 			logger.Error(err, "Cluster not ready after restore")
-			r.updateRestoreStatus(ctx, restore, "Failed", fmt.Sprintf("Cluster not ready after restore: %v", err))
+			r.updateRestoreStatus(ctx, restore, StatusFailed, fmt.Sprintf("Cluster not ready after restore: %v", err))
 			return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 		}
 	}
@@ -306,7 +306,7 @@ func (r *Neo4jRestoreReconciler) handleRestoreSuccess(ctx context.Context, resto
 	if restore.Spec.Options != nil && restore.Spec.Options.PostRestore != nil {
 		if err := r.runRestoreHooks(ctx, restore, cluster, restore.Spec.Options.PostRestore, "post-restore"); err != nil {
 			logger.Error(err, "Post-restore hooks failed")
-			r.updateRestoreStatus(ctx, restore, "Failed", fmt.Sprintf("Post-restore hooks failed: %v", err))
+			r.updateRestoreStatus(ctx, restore, StatusFailed, fmt.Sprintf("Post-restore hooks failed: %v", err))
 			return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 		}
 	}
@@ -319,7 +319,7 @@ func (r *Neo4jRestoreReconciler) handleRestoreSuccess(ctx context.Context, resto
 	}
 
 	// Restore completed successfully
-	r.updateRestoreStatus(ctx, restore, "Completed", "Restore completed successfully")
+	r.updateRestoreStatus(ctx, restore, StatusCompleted, "Restore completed successfully")
 	r.Recorder.Event(restore, corev1.EventTypeNormal, EventReasonRestoreCompleted, "Restore completed successfully")
 
 	return ctrl.Result{}, nil
