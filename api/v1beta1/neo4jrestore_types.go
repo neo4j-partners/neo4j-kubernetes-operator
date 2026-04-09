@@ -141,6 +141,12 @@ type RestoreOptionsSpec struct {
 	// Additional neo4j-admin restore arguments
 	AdditionalArgs []string `json:"additionalArgs,omitempty"`
 
+	// TempPath is a local directory for temporary files during restore.
+	// Recommended when restoring from cloud storage (S3/GCS/Azure) to avoid
+	// filling the container's ephemeral disk. Defaults to /tmp/neo4j-restore
+	// for cloud restores if not set.
+	TempPath string `json:"tempPath,omitempty"`
+
 	// Pre-restore hooks
 	PreRestore *RestoreHooks `json:"preRestore,omitempty"`
 

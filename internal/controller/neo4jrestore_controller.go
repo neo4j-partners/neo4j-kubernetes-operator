@@ -607,8 +607,11 @@ func (r *Neo4jRestoreReconciler) buildRestoreCommand(ctx context.Context, restor
 		cmd += " --overwrite-destination=true"
 	}
 
-	// Add --temp-path for cloud restores to avoid filling ephemeral disk
-	if restore.Spec.Source.Storage != nil {
+	// Add --temp-path to avoid filling ephemeral disk.
+	// User-specified tempPath takes priority; defaults to /tmp/neo4j-restore for cloud sources.
+	if restore.Spec.Options != nil && restore.Spec.Options.TempPath != "" {
+		cmd += " --temp-path=" + restore.Spec.Options.TempPath
+	} else if restore.Spec.Source.Storage != nil {
 		st := restore.Spec.Source.Storage.Type
 		if st == "s3" || st == "gcs" || st == "azure" {
 			cmd += " --temp-path=/tmp/neo4j-restore"

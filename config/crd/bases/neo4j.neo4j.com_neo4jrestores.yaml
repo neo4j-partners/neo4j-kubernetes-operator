@@ -498,6 +498,13 @@ spec:
                   replaceExisting:
                     description: Replace existing database
                     type: boolean
+                  tempPath:
+                    description: |-
+                      TempPath is a local directory for temporary files during restore.
+                      Recommended when restoring from cloud storage (S3/GCS/Azure) to avoid
+                      filling the container's ephemeral disk. Defaults to /tmp/neo4j-restore
+                      for cloud restores if not set.
+                    type: string
                   verifyBackup:
                     description: Verify backup before restore
                     type: boolean
