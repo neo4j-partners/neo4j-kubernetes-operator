@@ -210,13 +210,18 @@ spec:
                       be too small for large databases. The operator mounts this PVC and passes
                       --temp-path automatically.
                     properties:
-                      name:
+                      size:
                         description: |-
-                          Name of an existing PVC to mount as temporary staging storage.
-                          Should be at least as large as the expected backup/restore size.
+                          Size of the temporary PVC (e.g., "50Gi"). Should be at least as large
+                          as the expected backup/restore artifact.
+                        pattern: ^[0-9]+(Ki|Mi|Gi|Ti)?$
+                        type: string
+                      storageClassName:
+                        description: StorageClassName for the temporary PVC. If empty,
+                          uses the cluster default.
                         type: string
                     required:
-                    - name
+                    - size
                     type: object
                   verify:
                     description: Verify backup integrity after creation

@@ -77,7 +77,7 @@ The operator runs a Kubernetes **Job** that executes `neo4j-admin database backu
 1. You create a `Neo4jBackup` resource.
 2. The operator creates a Kubernetes Job using the same Neo4j Enterprise image as your cluster.
 3. The Job runs `neo4j-admin database backup --from=<server-pod-fqdn>:6362 --to-path=<destination>` against each server pod.
-4. For cloud storage destinations (`s3://`, `gs://`, `azb://`), `neo4j-admin` streams data directly to the cloud — no intermediate local copy is required (though `tempPath` is strongly recommended; see below).
+4. For cloud storage destinations (`s3://`, `gs://`, `azb://`), `neo4j-admin` streams data directly to the cloud — no intermediate local copy is required. For large databases, configure `tempStorage` to provision a PVC for staging (see [Temporary Storage for Cloud Operations](#temporary-storage-for-cloud-operations)).
 5. The operator updates the `Neo4jBackup` status as the Job progresses.
 
 **Backup listen address**: The operator automatically configures `server.backup.listen_address=0.0.0.0:6362` in each server pod's `neo4j.conf`, so backup Jobs can reach any server pod without additional manual configuration.
@@ -246,7 +246,8 @@ spec:
   options:
     backupType: FULL
     compress: true
-    tempPath: /tmp/neo4j-backup-staging
+    tempStorage:
+      size: "20Gi"
 ```
 
 > **External MinIO over TLS**: Change `endpointURL` to `https://minio.example.com`. Ensure your MinIO TLS certificate is trusted by the container (or use a properly signed cert). Self-signed certs require mounting the CA into the pod — use `additionalArgs` to pass `--ssl-certificate-authorities` if needed.
@@ -431,7 +432,8 @@ spec:
   options:
     compress: true
     verify: true
-    tempPath: /tmp/neo4j-backup-temp
+    tempStorage:\
+      size: "50Gi"
   retention:
     maxAge: "30d"
     maxCount: 10
@@ -463,7 +465,8 @@ spec:
   options:
     compress: true
     verify: true
-    tempPath: /tmp/neo4j-backup-temp
+    tempStorage:\
+      size: "50Gi"
   retention:
     maxAge: "30d"
     maxCount: 10
@@ -492,7 +495,8 @@ spec:
   options:
     compress: true
     verify: true
-    tempPath: /tmp/neo4j-backup-temp
+    tempStorage:\
+      size: "50Gi"
   retention:
     maxAge: "30d"
     maxCount: 10
@@ -519,7 +523,8 @@ spec:
   options:
     compress: true
     verify: true
-    tempPath: /tmp/neo4j-backup-temp
+    tempStorage:\
+      size: "50Gi"
 ```
 
 ### Database Backup Examples
@@ -548,7 +553,8 @@ spec:
   options:
     compress: true
     verify: true
-    tempPath: /tmp/neo4j-backup-temp
+    tempStorage:\
+      size: "50Gi"
     encryption:
       enabled: true
       keySecret: backup-encryption-key
@@ -577,7 +583,8 @@ spec:
   options:
     compress: true
     verify: true
-    tempPath: /tmp/neo4j-backup-temp
+    tempStorage:\
+      size: "50Gi"
 ```
 
 ### Differential Backups
@@ -604,7 +611,8 @@ spec:
     backupType: DIFF
     compress: true
     verify: true
-    tempPath: /tmp/neo4j-backup-temp
+    tempStorage:\
+      size: "50Gi"
 ```
 
 #### `preferDiffAsParent` (CalVer 2025.04+ only)
@@ -615,7 +623,8 @@ By default, differential backups use the most recent **full** backup as their pa
 options:
   backupType: DIFF
   preferDiffAsParent: true  # CalVer 2025.04+ only
-  tempPath: /tmp/neo4j-backup-temp
+  tempStorage:\
+    size: "50Gi"
 ```
 
 This option is ignored on Neo4j 5.26.x (semver) and CalVer versions before 2025.04.
@@ -626,7 +635,8 @@ For cloud storage destinations, `neo4j-admin` may use local disk space during st
 
 ```yaml
 options:
-  tempPath: /tmp/neo4j-backup-temp
+  tempStorage:\
+    size: "50Gi"
 ```
 
 **Strongly recommended for all cloud storage backups.** The directory is created automatically if it does not exist.
@@ -657,7 +667,8 @@ spec:
   options:
     compress: true
     verify: true
-    tempPath: /tmp/neo4j-backup-temp
+    tempStorage:\
+      size: "50Gi"
   retention:
     maxAge: "168h"
     maxCount: 7
@@ -697,7 +708,8 @@ spec:
   options:
     compress: true
     verify: true
-    tempPath: /tmp/neo4j-backup-temp
+    tempStorage:\
+      size: "50Gi"
     encryption:
       enabled: true
       keySecret: backup-encryption-key
@@ -789,14 +801,16 @@ spec:
     storage:
       type: s3
       bucket: backup-bucket
-      path: neo4j-backups/cluster/backup-20250104-120000
+      path: neo4j-backups/cluster
       cloud:
         provider: aws
         credentialsSecretRef: aws-backup-creds
-    backupPath: /backup/cluster/backup-20250104-120000
+    backupPath: backup-20250104-120000.backup
   options:
     verifyBackup: true
     replaceExisting: true
+    tempStorage:
+      size: "50Gi"
   force: true
   stopCluster: true
 ```
@@ -1156,6 +1170,28 @@ storage:
 
 Only one of `credentialsSecretRef` or `identity` should be specified at a time.
 
+### Temporary Storage for Cloud Operations
+
+Cloud backups and restores require local staging space for `neo4j-admin`. Without explicit temp storage, staging uses the container's ephemeral disk, which may be too small for large databases.
+
+The `tempStorage` field tells the operator to create a PVC for staging automatically:
+
+```yaml
+spec:
+  options:
+    tempStorage:
+      size: "50Gi"              # should be >= expected backup size
+      storageClassName: gp3     # optional, uses cluster default if omitted
+```
+
+The operator:
+1. Creates a PVC named `{backup-name}-temp-staging` (or `{restore-name}-temp-staging`)
+2. Sets the CR as owner — the PVC is garbage-collected when the backup/restore CR is deleted
+3. Mounts the PVC at `/tmp/neo4j-staging` in the Job pod
+4. Passes `--temp-path=/tmp/neo4j-staging` to `neo4j-admin`
+
+If you prefer to manage the PVC yourself, use `tempPath` instead (points to any path you've mounted via `additionalArgs` or other means).
+
 ### Backup Options Reference
 
 ```yaml
@@ -1172,8 +1208,23 @@ options:
   # Verify backup integrity after creation
   verify: true
 
-  # Temporary directory for cloud streaming (strongly recommended for cloud storage)
-  tempPath: /tmp/neo4j-backup-temp
+  # Operator-managed staging PVC for cloud operations (recommended for large databases)
+  tempStorage:
+    size: "50Gi"
+    storageClassName: gp3  # optional
+
+  # Manual temp path (alternative to tempStorage — you must mount the volume yourself)
+  # tempPath: /my/mounted/volume
+
+  # Include users/roles metadata in backup (Neo4j 5.26+)
+  # Values: all (default), none, users, roles
+  includeMetadata: all
+
+  # Multi-threaded transaction application during backup
+  parallelRecovery: false
+
+  # Preserve failed backup artifacts for debugging
+  keepFailed: false
 
   # Encryption at rest
   encryption:
