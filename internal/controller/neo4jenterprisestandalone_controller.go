@@ -302,8 +302,10 @@ func (r *Neo4jEnterpriseStandaloneReconciler) reconcileStandalone(ctx context.Co
 		return ctrl.Result{}, fmt.Errorf("failed to update status: %w", err)
 	}
 
-	// Collect live diagnostics when monitoring enabled and standalone is Ready (non-fatal)
-	if standalone.Spec.Monitoring != nil && standalone.Spec.Monitoring.Enabled && standalone.Status.Phase == "Ready" {
+	// Collect live diagnostics when standalone is Ready (non-fatal).
+	// Diagnostics are collected by default; only skipped when monitoring is explicitly disabled.
+	standaloneMonitoringDisabled := standalone.Spec.Monitoring != nil && !standalone.Spec.Monitoring.Enabled
+	if !standaloneMonitoringDisabled && standalone.Status.Phase == "Ready" {
 		if diagErr := r.collectStandaloneDiagnostics(ctx, standalone); diagErr != nil {
 			logger.Error(diagErr, "Failed to collect standalone diagnostics (non-fatal)")
 		}

@@ -428,10 +428,11 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 		}
 	}
 
-	// Collect live diagnostics when Monitoring is enabled and cluster is Ready.
-	// Diagnostics collection is non-fatal: failures are surfaced in status.diagnostics.collectionError.
-	if cluster.Spec.Monitoring != nil && cluster.Spec.Monitoring.Enabled &&
-		cluster.Status.Phase == "Ready" {
+	// Collect live diagnostics when cluster is Ready.
+	// Diagnostics are collected by default (monitoring nil or monitoring.enabled=true).
+	// Only skipped when monitoring is explicitly disabled.
+	monitoringDisabled := cluster.Spec.Monitoring != nil && !cluster.Spec.Monitoring.Enabled
+	if !monitoringDisabled && cluster.Status.Phase == "Ready" {
 		neo4jDiagClient, diagClientErr := r.createNeo4jClient(ctx, cluster)
 		if diagClientErr != nil {
 			logger.V(1).Info("Skipping diagnostics collection: could not create Neo4j client", "error", diagClientErr)
@@ -503,6 +504,24 @@ func (r *Neo4jEnterpriseClusterReconciler) handleDeletion(ctx context.Context, c
 		logger.Info("Successfully cleaned up PVCs")
 	} else {
 		logger.Info("Retaining PVCs due to Retain retention policy", "retentionPolicy", retentionPolicy)
+	}
+
+	// Explicitly delete StatefulSets to avoid slow GC with blockOwnerDeletion
+	serverStsName := fmt.Sprintf("%s-server", cluster.Name)
+	serverSts := &appsv1.StatefulSet{}
+	if err := r.Get(ctx, types.NamespacedName{Name: serverStsName, Namespace: cluster.Namespace}, serverSts); err == nil {
+		logger.Info("Deleting server StatefulSet", "name", serverStsName)
+		if err := r.Delete(ctx, serverSts); err != nil {
+			logger.Error(err, "Failed to delete server StatefulSet")
+		}
+	}
+	backupStsName := fmt.Sprintf("%s-backup", cluster.Name)
+	backupSts := &appsv1.StatefulSet{}
+	if err := r.Get(ctx, types.NamespacedName{Name: backupStsName, Namespace: cluster.Namespace}, backupSts); err == nil {
+		logger.Info("Deleting backup StatefulSet", "name", backupStsName)
+		if err := r.Delete(ctx, backupSts); err != nil {
+			logger.Error(err, "Failed to delete backup StatefulSet")
+		}
 	}
 
 	logger.Info("Removing finalizer from cluster", "finalizers", cluster.Finalizers, "deletionTimestamp", cluster.DeletionTimestamp)

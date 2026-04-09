@@ -1343,35 +1343,43 @@ demonstrate_diagnostics() {
 demo_cleanup() {
     log_section "Cleaning Up Demo Resources"
 
-    log_info "Deleting Neo4jPlugin resources..."
-    kubectl delete neo4jplugin demo-apoc-plugin -n "${DEMO_NAMESPACE}" --ignore-not-found=true 2>/dev/null &
-
-    log_info "Deleting Neo4jDatabase resources..."
-    kubectl delete neo4jdatabase products-database-standalone orders-database analytics-database sessions-database -n "${DEMO_NAMESPACE}" --ignore-not-found=true 2>/dev/null &
-    wait
-
-    log_info "Deleting Neo4j standalone and cluster..."
-    kubectl delete neo4jenterprisestandalone "${CLUSTER_NAME_SINGLE}" -n "${DEMO_NAMESPACE}" --ignore-not-found=true &
-    kubectl delete neo4jenterprisecluster "${CLUSTER_NAME_MULTI}" -n "${DEMO_NAMESPACE}" --ignore-not-found=true &
-    wait
-
-    log_info "Waiting for pods to terminate..."
-    local timeout=120
-    local elapsed=0
-    while [[ $elapsed -lt $timeout ]]; do
-        local remaining=$(kubectl get pods -l "app=${CLUSTER_NAME_SINGLE}" -n "${DEMO_NAMESPACE}" --no-headers 2>/dev/null | wc -l | tr -d ' ')
-        remaining=$((remaining + $(kubectl get pods -l "neo4j.com/cluster=${CLUSTER_NAME_MULTI}" -n "${DEMO_NAMESPACE}" --no-headers 2>/dev/null | wc -l | tr -d ' ')))
-        if [[ "${remaining}" -eq 0 ]]; then
-            break
-        fi
-        echo -n "."
-        sleep 2
-        elapsed=$((elapsed + 2))
+    # Step 1: Strip finalizers from all Neo4j CRs so deletion is immediate
+    log_info "Removing finalizers from all Neo4j resources..."
+    for crd in neo4jplugin neo4jdatabase neo4jenterprisestandalone neo4jenterprisecluster neo4jbackup neo4jrestore; do
+        kubectl get "$crd" -n "${DEMO_NAMESPACE}" -o name 2>/dev/null | while read resource; do
+            kubectl patch "$resource" -n "${DEMO_NAMESPACE}" --type=merge -p '{"metadata":{"finalizers":[]}}' 2>/dev/null
+        done
     done
-    echo
 
-    log_info "Removing admin secret..."
-    kubectl delete secret neo4j-admin-secret -n "${DEMO_NAMESPACE}" --ignore-not-found=true
+    # Step 2: Delete all Neo4j CRs in parallel (instant since finalizers are gone)
+    log_info "Deleting all Neo4j custom resources..."
+    kubectl delete neo4jplugin --all -n "${DEMO_NAMESPACE}" --ignore-not-found=true --wait=false 2>/dev/null &
+    kubectl delete neo4jdatabase --all -n "${DEMO_NAMESPACE}" --ignore-not-found=true --wait=false 2>/dev/null &
+    kubectl delete neo4jenterprisestandalone --all -n "${DEMO_NAMESPACE}" --ignore-not-found=true --wait=false 2>/dev/null &
+    kubectl delete neo4jenterprisecluster --all -n "${DEMO_NAMESPACE}" --ignore-not-found=true --wait=false 2>/dev/null &
+    wait
+
+    # Step 3: Delete orphaned StatefulSets and jobs directly
+    log_info "Deleting StatefulSets and jobs..."
+    kubectl delete sts -l "neo4j.com/cluster=${CLUSTER_NAME_MULTI}" -n "${DEMO_NAMESPACE}" --ignore-not-found=true --wait=false 2>/dev/null &
+    kubectl delete sts "${CLUSTER_NAME_SINGLE}" -n "${DEMO_NAMESPACE}" --ignore-not-found=true --wait=false 2>/dev/null &
+    kubectl delete jobs -l "neo4j.com/cluster=${CLUSTER_NAME_MULTI}" -n "${DEMO_NAMESPACE}" --ignore-not-found=true 2>/dev/null &
+    wait
+
+    # Step 4: Force-delete pods with no grace period
+    log_info "Force-deleting pods..."
+    kubectl delete pods -l "app=${CLUSTER_NAME_SINGLE}" -n "${DEMO_NAMESPACE}" --ignore-not-found=true --grace-period=0 --force 2>/dev/null &
+    kubectl delete pods -l "neo4j.com/cluster=${CLUSTER_NAME_MULTI}" -n "${DEMO_NAMESPACE}" --ignore-not-found=true --grace-period=0 --force 2>/dev/null &
+    wait
+
+    # Step 5: Clean up secrets, services, configmaps, PVCs
+    log_info "Cleaning up remaining resources..."
+    kubectl delete secret neo4j-admin-secret -n "${DEMO_NAMESPACE}" --ignore-not-found=true 2>/dev/null
+    kubectl delete svc -l "neo4j.com/cluster=${CLUSTER_NAME_MULTI}" -n "${DEMO_NAMESPACE}" --ignore-not-found=true 2>/dev/null
+    kubectl delete svc "${CLUSTER_NAME_SINGLE}-service" -n "${DEMO_NAMESPACE}" --ignore-not-found=true 2>/dev/null
+    kubectl delete configmap "${CLUSTER_NAME_SINGLE}-config" -n "${DEMO_NAMESPACE}" --ignore-not-found=true 2>/dev/null
+    kubectl delete pvc -l "app=${CLUSTER_NAME_SINGLE}" -n "${DEMO_NAMESPACE}" --ignore-not-found=true 2>/dev/null
+    kubectl delete pvc -l "neo4j.com/cluster=${CLUSTER_NAME_MULTI}" -n "${DEMO_NAMESPACE}" --ignore-not-found=true 2>/dev/null
 
     log_success "Demo resources cleaned up!"
 }

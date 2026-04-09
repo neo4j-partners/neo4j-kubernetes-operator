@@ -509,6 +509,7 @@ func (r *Neo4jPluginReconciler) removePluginFromDeployment(ctx context.Context, 
 			},
 		},
 		Spec: batchv1.JobSpec{
+			TTLSecondsAfterFinished: func() *int32 { v := int32(300); return &v }(), // Clean up completed jobs after 5 minutes
 			Template: corev1.PodTemplateSpec{
 				Spec: corev1.PodSpec{
 					SecurityContext: hardenedPluginPodSecurityContext(),
