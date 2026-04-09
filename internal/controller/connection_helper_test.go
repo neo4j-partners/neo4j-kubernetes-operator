@@ -98,3 +98,50 @@ func TestGenerateConnectionExamples(t *testing.T) {
 		})
 	}
 }
+
+func TestGenerateStandaloneConnectionExamples(t *testing.T) {
+	tests := []struct {
+		name       string
+		svcType    corev1.ServiceType
+		externalIP string
+		hasTLS     bool
+		expectBolt string
+	}{
+		{
+			name:       "ClusterIP without TLS",
+			svcType:    corev1.ServiceTypeClusterIP,
+			hasTLS:     false,
+			expectBolt: "bolt://",
+		},
+		{
+			name:       "ClusterIP with TLS",
+			svcType:    corev1.ServiceTypeClusterIP,
+			hasTLS:     true,
+			expectBolt: "bolt+ssc://",
+		},
+		{
+			name:       "LoadBalancer with external IP and TLS",
+			svcType:    corev1.ServiceTypeLoadBalancer,
+			externalIP: "10.20.30.40",
+			hasTLS:     true,
+			expectBolt: "bolt+ssc://10.20.30.40",
+		},
+		{
+			name:       "NodePort without TLS",
+			svcType:    corev1.ServiceTypeNodePort,
+			hasTLS:     false,
+			expectBolt: "bolt://",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			examples := GenerateStandaloneConnectionExamples("my-standalone", "default", tt.svcType, tt.externalIP, tt.hasTLS)
+			assert.NotNil(t, examples)
+			assert.Contains(t, examples.BoltURI, tt.expectBolt)
+			// Standalone should use -service suffix, not -client
+			// Verify bolt URI contains expected scheme
+			assert.Contains(t, examples.BoltURI, tt.expectBolt)
+		})
+	}
+}

@@ -397,3 +397,107 @@ func TestPluginSourceValidation(t *testing.T) {
 		})
 	}
 }
+
+func TestGetPluginType(t *testing.T) {
+	r := &Neo4jPluginReconciler{}
+
+	tests := []struct {
+		name     string
+		plugin   string
+		expected PluginType
+	}{
+		{"apoc", "apoc", PluginTypeEnvironmentOnly},
+		{"apoc-extended", "apoc-extended", PluginTypeEnvironmentOnly},
+		{"gds", "graph-data-science", PluginTypeNeo4jConfig},
+		{"gds shorthand", "gds", PluginTypeNeo4jConfig},
+		{"bloom", "bloom", PluginTypeNeo4jConfig},
+		{"genai", "genai", PluginTypeNeo4jConfig},
+		{"unknown", "some-custom-plugin", PluginTypeNeo4jConfig},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, r.getPluginType(tt.plugin))
+		})
+	}
+}
+
+func TestIsEnvironmentVariableOnlyPlugin(t *testing.T) {
+	r := &Neo4jPluginReconciler{}
+	assert.True(t, r.isEnvironmentVariableOnlyPlugin("apoc"))
+	assert.True(t, r.isEnvironmentVariableOnlyPlugin("apoc-extended"))
+	assert.False(t, r.isEnvironmentVariableOnlyPlugin("gds"))
+	assert.False(t, r.isEnvironmentVariableOnlyPlugin("bloom"))
+	assert.False(t, r.isEnvironmentVariableOnlyPlugin("unknown"))
+}
+
+func TestRequiresAutomaticSecurityConfiguration(t *testing.T) {
+	r := &Neo4jPluginReconciler{}
+	assert.True(t, r.requiresAutomaticSecurityConfiguration("bloom"))
+	assert.True(t, r.requiresAutomaticSecurityConfiguration("graph-data-science"))
+	assert.True(t, r.requiresAutomaticSecurityConfiguration("gds"))
+	assert.True(t, r.requiresAutomaticSecurityConfiguration("fleet-management"))
+	assert.False(t, r.requiresAutomaticSecurityConfiguration("apoc"))
+	assert.False(t, r.requiresAutomaticSecurityConfiguration("unknown"))
+}
+
+func TestGetAutomaticSecuritySettings(t *testing.T) {
+	r := &Neo4jPluginReconciler{}
+
+	t.Run("bloom settings", func(t *testing.T) {
+		settings := r.getAutomaticSecuritySettings("bloom")
+		assert.Contains(t, settings, "dbms.security.procedures.unrestricted")
+		assert.Contains(t, settings["dbms.security.procedures.unrestricted"], "bloom.*")
+		assert.Contains(t, settings, "server.unmanaged_extension_classes")
+	})
+
+	t.Run("gds settings", func(t *testing.T) {
+		settings := r.getAutomaticSecuritySettings("graph-data-science")
+		assert.Contains(t, settings, "dbms.security.procedures.unrestricted")
+		assert.Contains(t, settings["dbms.security.procedures.unrestricted"], "gds.*")
+	})
+
+	t.Run("fleet-management settings", func(t *testing.T) {
+		settings := r.getAutomaticSecuritySettings("fleet-management")
+		assert.Contains(t, settings, "dbms.security.procedures.unrestricted")
+		assert.Contains(t, settings, "dbms.security.procedures.allowlist")
+	})
+
+	t.Run("unknown returns empty map", func(t *testing.T) {
+		settings := r.getAutomaticSecuritySettings("apoc")
+		assert.Empty(t, settings)
+	})
+}
+
+func TestIsSecuritySetting(t *testing.T) {
+	r := &Neo4jPluginReconciler{}
+	assert.True(t, r.isSecuritySetting("dbms.security.procedures.unrestricted"))
+	assert.True(t, r.isSecuritySetting("dbms.security.procedures.allowlist"))
+	assert.True(t, r.isSecuritySetting("server.unmanaged_extension_classes"))
+	assert.True(t, r.isSecuritySetting("dbms.bloom.license_file"))
+	assert.False(t, r.isSecuritySetting("server.memory.heap.max_size"))
+	assert.False(t, r.isSecuritySetting("gds.maxConcurrentRequests"))
+}
+
+func TestFilterNeo4jClientConfig(t *testing.T) {
+	r := &Neo4jPluginReconciler{}
+	config := map[string]string{
+		"apoc.load.json":                     "true",  // should be filtered (apoc prefix)
+		"gds.enterprise.license_file":        "/path", // should be filtered (non-dynamic)
+		"dbms.security.procedures.allowlist": "gds.*", // should be filtered (non-dynamic)
+		"gds.maxConcurrentRequests":          "4",     // should be kept (dynamic)
+	}
+	filtered := r.filterNeo4jClientConfig(config)
+	assert.NotContains(t, filtered, "apoc.load.json")
+	assert.NotContains(t, filtered, "gds.enterprise.license_file")
+	assert.NotContains(t, filtered, "dbms.security.procedures.allowlist")
+	assert.Contains(t, filtered, "gds.maxConcurrentRequests")
+}
+
+func TestHasRuntimeSecurityConfiguration(t *testing.T) {
+	r := &Neo4jPluginReconciler{}
+	// Currently always returns false per the code comment
+	assert.False(t, r.hasRuntimeSecurityConfiguration(nil))
+	assert.False(t, r.hasRuntimeSecurityConfiguration(&neo4jv1beta1.PluginSecurity{
+		AllowedProcedures: []string{"gds.*"},
+	}))
+}
