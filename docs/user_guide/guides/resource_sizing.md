@@ -184,7 +184,7 @@ spec:
     server.memory.pagecache.size: "6G"
 
     # Performance tuning (Neo4j 5.26+ settings)
-    dbms.memory.transaction.total.max: "2G"
+    server.memory.transaction.total.max: "2G"
     server.bolt.thread_pool_max_size: "400"
 ```
 
@@ -219,12 +219,12 @@ spec:
     # Leaves 1GB (8%) for OS
 
     # Transaction memory limits (Neo4j recommended)
-    dbms.memory.transaction.total.max: "1G"        # Global transaction memory limit
+    server.memory.transaction.total.max: "1G"        # Global transaction memory limit
     db.memory.transaction.total.max: "512M"        # Per-database limit
     db.memory.transaction.max: "256M"              # Per-transaction limit
 
     # Off-heap memory
-    dbms.memory.off_heap.max_size: "512M"
+    server.memory.off_heap.max_size: "512M"
 ```
 
 ### JVM and Garbage Collection Tuning
@@ -305,7 +305,7 @@ spec:
     # Query optimization
     dbms.cypher.runtime: "pipelined"
     dbms.cypher.planner: "cost"
-    dbms.memory.transaction.total.max: "4G"
+    server.memory.transaction.total.max: "4G"
 
     # Parallelism
     dbms.threads.worker_count: "16"
@@ -375,7 +375,7 @@ spec:
     # Leaves 6GB for OS-managed vector index memory
 
     # Transaction memory for complex vector queries
-    dbms.memory.transaction.total.max: "2G"
+    server.memory.transaction.total.max: "2G"
 
     # Vector-specific optimizations
     dbms.cypher.runtime: "parallel"  # For vector operations
@@ -858,9 +858,9 @@ This guide follows Neo4j's official performance documentation for versions 5.26+
    - Proper GC tuning parameters
 
 4. **Transaction Memory**
-   - Global limits with `dbms.memory.transaction.total.max`
+   - Global limits with `server.memory.transaction.total.max`
    - Per-database limits with `db.memory.transaction.total.max`
-   - Per-transaction limits with `dbms.memory.transaction.max`
+   - Per-transaction limits with `server.memory.transaction.max`
 
 5. **Vector Index Support (2025.x)**
    - Formula: `Heap + PageCache + 0.25×(Vector Index Size) + OS`

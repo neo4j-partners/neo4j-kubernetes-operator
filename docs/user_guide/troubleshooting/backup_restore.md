@@ -448,8 +448,8 @@ kubectl top pod production-cluster-server-0
    spec:
      config:
        # Increase buffer sizes for backup operations
-       dbms.memory.off_heap.max_size: "2g"
-       dbms.memory.pagecache.size: "4g"
+       server.memory.off_heap.max_size: "2g"
+       server.memory.pagecache.size: "4g"
    ```
 
 ### Slow Restore Performance

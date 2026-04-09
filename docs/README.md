@@ -18,7 +18,7 @@ The [User Guide](user_guide) is for users of the Neo4j Enterprise Operator. It c
 *   **[Guides](user_guide/guides)**: In-depth guides on specific topics, such as:
     *   [Configuration Best Practices](user_guide/guides/configuration_best_practices.md) - Neo4j 5.26+ configuration guidelines and **seed URI best practices**
     *   [Backup and Restore](user_guide/guides/backup_restore.md) - Comprehensive backup and restore operations including PITR
-    *   [Backup & Restore Troubleshooting](user_guide/guides/troubleshooting_backup_restore.md) - Troubleshooting guide for backup/restore issues
+    *   [Backup & Restore Troubleshooting](user_guide/troubleshooting/backup_restore.md) - Troubleshooting guide for backup/restore issues
     *   [MCP Client Setup](user_guide/guides/mcp_client_setup.md) - Connect VSCode/Claude to MCP over HTTP
     *   [Security](user_guide/guides/security.md)
     *   [Performance](user_guide/guides/performance.md)
