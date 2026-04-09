@@ -208,3 +208,39 @@ func TestBuildRestoreCloudEnvVars_NilWhenNoCredentials(t *testing.T) {
 	envs := r.buildRestoreCloudEnvVars(restore)
 	assert.Nil(t, envs, "should return nil when no credentials secret, allowing ambient cloud identity")
 }
+
+func TestBuildRestoreFromPath_S3WithTempStorage(t *testing.T) {
+	restore := &neo4jv1beta1.Neo4jRestore{
+		Spec: neo4jv1beta1.Neo4jRestoreSpec{
+			Source: neo4jv1beta1.RestoreSource{
+				Type:       "storage",
+				BackupPath: "mydb.backup",
+				Storage: &neo4jv1beta1.StorageLocation{
+					Type:   "s3",
+					Bucket: "bucket",
+					Path:   "backups",
+				},
+			},
+			Options: &neo4jv1beta1.RestoreOptionsSpec{
+				TempStorage: &neo4jv1beta1.TempStorageSpec{
+					Size: "50Gi",
+				},
+			},
+		},
+	}
+	r := &Neo4jRestoreReconciler{}
+
+	// Cloud URI should be constructed regardless of tempStorage
+	path := r.buildRestoreFromPath(restore)
+	assert.Equal(t, "s3://bucket/backups/mydb.backup", path)
+
+	// Volume mounts should include temp-staging
+	mounts := r.buildRestoreVolumeMounts(restore)
+	hasTempMount := false
+	for _, m := range mounts {
+		if m.Name == "temp-staging" && m.MountPath == "/tmp/neo4j-staging" {
+			hasTempMount = true
+		}
+	}
+	assert.True(t, hasTempMount, "should mount temp-staging PVC at /tmp/neo4j-staging")
+}
