@@ -55,13 +55,21 @@ make demo-only
 make demo-interactive
 ```
 
+### Setup only (no demo)
+
+```bash
+make demo-setup
+```
+
+Creates the Kind cluster, installs cert-manager, and deploys the operator — but does not run the demo. Useful if you want to deploy resources manually afterward.
+
 ### Clean up demo resources
 
 ```bash
 make demo-cleanup
 ```
 
-Deletes all resources created by the demo (databases, plugins, standalone, cluster, secrets) without running the demo.
+Deletes all resources created by the demo (databases, plugins, standalone, cluster, secrets) without running the demo. Uses forced cleanup (strips finalizers, force-deletes pods) for fast teardown (~5 seconds).
 
 ## Script Options
 
@@ -169,7 +177,7 @@ Neo4j cluster formation requires all pods to discover each other. In Kind, this 
 The APOC plugin requires a rolling restart of all cluster pods. Each pod restarts sequentially to maintain availability. Allow 2-3 minutes for a 3-node cluster.
 
 ### Diagnostics section shows empty
-Ensure `spec.monitoring.enabled: true` is set on the cluster. Diagnostics are collected during reconciliation, so they may take 30-60 seconds to appear after enabling.
+Diagnostics are collected by default whenever the cluster is Ready. They may take 30-60 seconds to appear after cluster formation. If still empty, check that `spec.monitoring.enabled` is not explicitly set to `false`.
 
 ### cypher-shell connection refused
 Neo4j's bolt listener starts after the pod readiness probe passes. Wait 10-15 seconds after pod Ready before connecting. The demo includes appropriate delays.
