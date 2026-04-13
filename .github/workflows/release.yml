@@ -277,7 +277,7 @@ jobs:
         PY
 
     - name: Create GitHub Release
-      uses: softprops/action-gh-release@v2
+      uses: softprops/action-gh-release@v3
       with:
         tag_name: ${{ steps.release-notes.outputs.TAG_NAME }}
         name: Neo4j Kubernetes Operator ${{ steps.release-notes.outputs.TAG_NAME }}
