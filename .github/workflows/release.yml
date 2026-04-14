@@ -67,7 +67,7 @@ jobs:
     # exactly, guaranteeing the released manifests are identical to what was
     # validated here without re-running controller-gen a second time.
     - name: Upload generated manifests
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v7
       with:
         name: generated-manifests
         path: config/crd/bases/
