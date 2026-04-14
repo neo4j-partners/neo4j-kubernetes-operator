@@ -186,7 +186,7 @@ jobs:
     # This ensures the released manifests are byte-for-byte identical to what
     # was validated, without running controller-gen a second time.
     - name: Download generated manifests
-      uses: actions/download-artifact@v5
+      uses: actions/download-artifact@v8
       with:
         name: generated-manifests
         path: config/crd/bases/
