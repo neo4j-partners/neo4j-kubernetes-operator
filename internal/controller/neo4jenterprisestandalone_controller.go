@@ -1160,11 +1160,12 @@ func (r *Neo4jEnterpriseStandaloneReconciler) cleanupResources(ctx context.Conte
 
 	// Cleanup based on retention policy (uses spec.storage.retentionPolicy, matching cluster pattern)
 	if standalone.Spec.Storage.RetentionPolicy == "Delete" || standalone.Spec.Storage.RetentionPolicy == "" {
-		// Delete PVCs
+		// Delete PVCs. Selector must match labels emitted by resources.GetLabelsForPVC,
+		// which is what the standalone StatefulSet's VolumeClaimTemplates are labeled with.
+		// Previously used "app=<name>" which only appears on pods, not PVCs — making this a no-op.
 		pvcList := &corev1.PersistentVolumeClaimList{}
-		if err := r.List(ctx, pvcList, client.InNamespace(standalone.Namespace), client.MatchingLabels{
-			"app": standalone.Name,
-		}); err != nil {
+		if err := r.List(ctx, pvcList, client.InNamespace(standalone.Namespace),
+			client.MatchingLabels(resources.PVCSelectorByInstance(standalone.Name))); err != nil {
 			logger.Error(err, "Failed to list PVCs")
 			return err
 		}

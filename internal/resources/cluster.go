@@ -936,6 +936,37 @@ func GetLabelsForPVC(instanceName, role string) map[string]string {
 	}
 }
 
+// ServerPodSelector returns labels that uniquely identify the server pods of
+// an Enterprise cluster — excluding sibling pods such as the backup pod, which
+// does not set app.kubernetes.io/instance.
+//
+// This selector is the canonical way for controllers to List server pods; any
+// change here must keep the returned labels as a subset of those emitted by
+// getLabelsForEnterpriseServer, and the contract is asserted in
+// cluster_selectors_test.go.
+func ServerPodSelector(clusterName string) map[string]string {
+	return map[string]string{
+		"app.kubernetes.io/instance":  clusterName,
+		"app.kubernetes.io/component": "database",
+	}
+}
+
+// StandalonePodSelector returns labels that match the pods of a
+// Neo4jEnterpriseStandalone. Must stay in sync with the pod template labels
+// set by Neo4jEnterpriseStandaloneReconciler.createStatefulSet.
+func StandalonePodSelector(standaloneName string) map[string]string {
+	return map[string]string{"app": standaloneName}
+}
+
+// PVCSelectorByInstance returns labels that match every PVC of a given
+// Enterprise or Standalone instance. Must stay in sync with GetLabelsForPVC.
+func PVCSelectorByInstance(instanceName string) map[string]string {
+	return map[string]string{
+		"app.kubernetes.io/name":     "neo4j",
+		"app.kubernetes.io/instance": instanceName,
+	}
+}
+
 func getLabelsForEnterprise(cluster *neo4jv1beta1.Neo4jEnterpriseCluster, role string) map[string]string {
 	labels := map[string]string{
 		"app.kubernetes.io/name":       "neo4j",

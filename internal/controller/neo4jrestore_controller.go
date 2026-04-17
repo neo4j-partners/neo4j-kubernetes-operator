@@ -42,6 +42,7 @@ import (
 
 	neo4jv1beta1 "github.com/neo4j-partners/neo4j-kubernetes-operator/api/v1beta1"
 	"github.com/neo4j-partners/neo4j-kubernetes-operator/internal/neo4j"
+	"github.com/neo4j-partners/neo4j-kubernetes-operator/internal/resources"
 	"github.com/neo4j-partners/neo4j-kubernetes-operator/internal/validation"
 )
 
@@ -993,10 +994,8 @@ func (r *Neo4jRestoreReconciler) stopCluster(ctx context.Context, cluster *neo4j
 			return fmt.Errorf("timeout waiting for cluster to stop")
 		case <-ticker.C:
 			pods := &corev1.PodList{}
-			if err := r.List(ctx, pods, client.InNamespace(cluster.Namespace), client.MatchingLabels{
-				"app.kubernetes.io/instance":  cluster.Name,
-				"app.kubernetes.io/component": "database",
-			}); err != nil {
+			if err := r.List(ctx, pods, client.InNamespace(cluster.Namespace),
+				client.MatchingLabels(resources.ServerPodSelector(cluster.Name))); err != nil {
 				logger.Error(err, "Failed to list pods")
 				continue
 			}
@@ -1070,10 +1069,8 @@ func (r *Neo4jRestoreReconciler) waitForClusterReady(ctx context.Context, cluste
 		case <-ticker.C:
 			// Check if all pods are ready
 			pods := &corev1.PodList{}
-			if err := r.List(ctx, pods, client.InNamespace(cluster.Namespace), client.MatchingLabels{
-				"app.kubernetes.io/instance":  cluster.Name,
-				"app.kubernetes.io/component": "database",
-			}); err != nil {
+			if err := r.List(ctx, pods, client.InNamespace(cluster.Namespace),
+				client.MatchingLabels(resources.ServerPodSelector(cluster.Name))); err != nil {
 				logger.Error(err, "Failed to list pods")
 				continue
 			}

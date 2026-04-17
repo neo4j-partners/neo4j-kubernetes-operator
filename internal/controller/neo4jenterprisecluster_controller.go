@@ -540,10 +540,7 @@ func (r *Neo4jEnterpriseClusterReconciler) cleanupPVCs(ctx context.Context, clus
 
 	// List PVCs that belong to this cluster
 	pvcList := &corev1.PersistentVolumeClaimList{}
-	labelSelector := client.MatchingLabels{
-		"app.kubernetes.io/name":     "neo4j",
-		"app.kubernetes.io/instance": cluster.Name,
-	}
+	labelSelector := client.MatchingLabels(resources.PVCSelectorByInstance(cluster.Name))
 
 	if err := r.List(ctx, pvcList, client.InNamespace(cluster.Namespace), labelSelector); err != nil {
 		return fmt.Errorf("failed to list PVCs for cluster %s: %w", cluster.Name, err)

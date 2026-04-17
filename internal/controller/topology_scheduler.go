@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	neo4jv1beta1 "github.com/neo4j-partners/neo4j-kubernetes-operator/api/v1beta1"
+	"github.com/neo4j-partners/neo4j-kubernetes-operator/internal/resources"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -300,10 +301,7 @@ func (ts *TopologyScheduler) GetTopologyDistribution(ctx context.Context, cluste
 	pods := &corev1.PodList{}
 	listOpts := []client.ListOption{
 		client.InNamespace(cluster.Namespace),
-		client.MatchingLabels(map[string]string{
-			"app.kubernetes.io/name":     "neo4j",
-			"app.kubernetes.io/instance": cluster.Name,
-		}),
+		client.MatchingLabels(resources.ServerPodSelector(cluster.Name)),
 	}
 
 	if err := ts.List(ctx, pods, listOpts...); err != nil {
