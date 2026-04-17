@@ -483,10 +483,8 @@ func (r *Neo4jPluginReconciler) uninstallPlugin(ctx context.Context, plugin *neo
 		return fmt.Errorf("failed to remove plugin from deployment: %w", err)
 	}
 
-	// Clean up plugin dependencies
-	if err := r.cleanupDependencies(ctx, plugin); err != nil {
-		logger.Error(err, "Failed to cleanup dependencies")
-	}
+	// Dependencies are folded into the parent plugin's NEO4J_PLUGINS env var
+	// by installPlugin; there are no separate Neo4jPlugin CRs to clean up.
 
 	logger.Info("Plugin uninstalled successfully")
 	return nil
@@ -555,24 +553,6 @@ func (r *Neo4jPluginReconciler) removePluginFromDeployment(ctx context.Context, 
 
 	// Wait for job completion
 	return r.waitForJobCompletion(ctx, removeJob)
-}
-
-func (r *Neo4jPluginReconciler) cleanupDependencies(ctx context.Context, plugin *neo4jv1beta1.Neo4jPlugin) error {
-	// Clean up dependency plugins created for this plugin
-	dependencyPlugins := &neo4jv1beta1.Neo4jPluginList{}
-	if err := r.List(ctx, dependencyPlugins, client.InNamespace(plugin.Namespace), client.MatchingLabels{
-		"neo4j.plugin/parent": plugin.Name,
-	}); err != nil {
-		return fmt.Errorf("failed to list dependency plugins: %w", err)
-	}
-
-	for _, depPlugin := range dependencyPlugins.Items {
-		if err := r.Delete(ctx, &depPlugin); err != nil && !errors.IsNotFound(err) {
-			return fmt.Errorf("failed to delete dependency plugin %s: %w", depPlugin.Name, err)
-		}
-	}
-
-	return nil
 }
 
 func (r *Neo4jPluginReconciler) updatePluginStatus(ctx context.Context, plugin *neo4jv1beta1.Neo4jPlugin, phase, message string) {
