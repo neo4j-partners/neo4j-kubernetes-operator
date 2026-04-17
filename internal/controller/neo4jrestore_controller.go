@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -165,6 +166,14 @@ func (r *Neo4jRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	// Check if restore is running
 	if restore.Status.Phase == StatusRunning {
 		return r.checkRestoreProgress(ctx, restore, targetCluster)
+	}
+
+	// A previously failed restore for the same spec generation must not silently retry.
+	// The user must bump spec (new generation) or delete/recreate the CR to trigger a retry.
+	if restore.Status.Phase == StatusFailed && restore.Status.ObservedGeneration == restore.Generation {
+		logger.Info("Restore previously failed; not retrying until spec changes or resource is recreated",
+			"message", restore.Status.Message)
+		return ctrl.Result{}, nil
 	}
 
 	// Start restore process
@@ -663,9 +672,7 @@ func (r *Neo4jRestoreReconciler) buildRestoreCommand(ctx context.Context, restor
 
 	// Add additional arguments if specified
 	if restore.Spec.Options != nil && len(restore.Spec.Options.AdditionalArgs) > 0 {
-		for _, arg := range restore.Spec.Options.AdditionalArgs {
-			cmd += " " + arg
-		}
+		cmd += " " + strings.Join(restore.Spec.Options.AdditionalArgs, " ")
 	}
 
 	return cmd, nil
@@ -987,7 +994,8 @@ func (r *Neo4jRestoreReconciler) stopCluster(ctx context.Context, cluster *neo4j
 		case <-ticker.C:
 			pods := &corev1.PodList{}
 			if err := r.List(ctx, pods, client.InNamespace(cluster.Namespace), client.MatchingLabels{
-				"app.kubernetes.io/instance": cluster.Name + "-server",
+				"app.kubernetes.io/instance":  cluster.Name,
+				"app.kubernetes.io/component": "database",
 			}); err != nil {
 				logger.Error(err, "Failed to list pods")
 				continue
@@ -1063,7 +1071,8 @@ func (r *Neo4jRestoreReconciler) waitForClusterReady(ctx context.Context, cluste
 			// Check if all pods are ready
 			pods := &corev1.PodList{}
 			if err := r.List(ctx, pods, client.InNamespace(cluster.Namespace), client.MatchingLabels{
-				"app.kubernetes.io/instance": cluster.Name + "-server",
+				"app.kubernetes.io/instance":  cluster.Name,
+				"app.kubernetes.io/component": "database",
 			}); err != nil {
 				logger.Error(err, "Failed to list pods")
 				continue
