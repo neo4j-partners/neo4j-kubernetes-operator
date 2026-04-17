@@ -1103,9 +1103,14 @@ type PodAntiAffinityConfig struct {
 type TopologyConfiguration struct {
 	// Servers specifies the number of Neo4j servers in the cluster
 	// Servers self-organize and can host databases in primary or secondary mode
+	// The hard cap of 100 is an operator-imposed safety rail, not a Neo4j
+	// limit. Realistic deployments rarely exceed ~10 servers; see the soft
+	// warning emitted by internal/validation/topology_validator.go for the
+	// coordination-overhead rationale. Scale reads via secondary replicas
+	// (spec.topology.serverRoles) rather than raw server count.
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Minimum=2
-	// +kubebuilder:validation:Maximum=20
+	// +kubebuilder:validation:Maximum=100
 	Servers int32 `json:"servers"`
 
 	// ServerModeConstraint optionally constrains all servers to a specific mode
