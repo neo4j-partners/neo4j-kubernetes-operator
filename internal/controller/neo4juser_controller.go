@@ -648,6 +648,25 @@ func containsString(slice []string, s string) bool {
 	return false
 }
 
+// sha256Hex returns the hex-encoded SHA-256 of b.
+//
+// IMPORTANT: this is NOT used as a password-storage hash and is NOT used in
+// any authentication path. The operator computes a digest of the password
+// Secret's value purely as a change-detection fingerprint — equality
+// comparison only — so the controller can answer "did the Secret rotate
+// since I last applied it?" on each reconcile loop. The actual password
+// authentication is performed by Neo4j against its own (scrypt-based)
+// hash in the `system` database; the password text itself lives in the
+// Kubernetes Secret. For change detection what matters is collision
+// resistance (SHA-256 is correct), not computational cost (slow hashes
+// like bcrypt/Argon2/scrypt would actively hurt the loop for zero
+// security benefit). The fingerprint sits in `status.passwordSecretHash`,
+// which requires `get neo4jusers` RBAC; an attacker with that permission
+// can already read the operator's Secret directly via `get secrets`, so
+// the hash leaks no information not otherwise available.
+//
+// codeql[go/weak-sensitive-data-hashing]: Intentional — fingerprint for
+// Secret-rotation detection, not a password-storage hash. See doc above.
 func sha256Hex(b []byte) string {
 	sum := sha256.Sum256(b)
 	return hex.EncodeToString(sum[:])
