@@ -97,6 +97,11 @@ make fmt / make lint / make lint-lenient / make vet / make security / make tidy
 # CRDs
 make install / make uninstall
 
+# Generators / packaging sync (see ## Generated artifacts below)
+make sync-all                # regenerate every artifact from sources
+make ship-prep               # sync-all + bundle + lint + CSV coverage; pre-release one-shot
+make check-drift             # CI gate: fails if any generated file is out of sync
+
 # Operator logs/status
 make operator-logs / make operator-status
 kubectl logs -n neo4j-operator deployment/neo4j-operator-controller-manager
@@ -411,6 +416,33 @@ kubectl logs -n neo4j-operator-system deployment/neo4j-operator-controller-manag
 50. **`Neo4jRoleBinding` overlap with `Neo4jUser`**: validator rejects bindings whose `clusterRef`+`username` match an existing `Neo4jUser` CR in the same namespace. Two CRs racing on the same role grants is a footgun — pick one model.
 51. **`Neo4jRoleBinding.spec.enforceExclusive`**: defaults to false. With false, the binding only manages roles in `.spec.roles` (and previously-recorded `status.grantedRoles` for revoke-on-removal). With true, any role on the user not in `.spec.roles` is revoked. Never flip the default — non-exclusive is what makes the CR safe to use alongside other tooling.
 52. **Diagnostics `Users`/`Roles` lists are bounded**: `maxDiagnosticUsers`/`maxDiagnosticRoles` cap the slice length to keep CRD size reasonable; the full count is in `UserCount`/`RoleCount`. Never remove the cap without a corresponding pruning strategy — large user/role tables would otherwise blow up the CRD.
+
+## Generated artifacts
+
+Several files in this repo are generated, not hand-written. Editing them directly is wasted work — the next sync overwrites your changes. Sources of truth:
+
+| Generated file | Source | Regenerate via |
+|---|---|---|
+| `config/rbac/role.yaml` | `+kubebuilder:rbac:` markers in `internal/controller/*.go` | `make manifests` |
+| `config/crd/bases/*.yaml` | Go types in `api/v1beta1/*` + kubebuilder markers | `make manifests` |
+| `api/v1beta1/zz_generated.deepcopy.go` | Go types in `api/v1beta1/*` | `make generate` |
+| `config/crd/kustomization.yaml` (resources list) | files in `config/crd/bases/` | `make sync-kustomize` |
+| `config/samples/kustomization.yaml` (resources list) | `config/samples/neo4j_*.yaml` filenames | `make sync-kustomize` |
+| `config/rbac/<crd>_{editor,viewer}_role.yaml` + RBAC kustomization | `spec.{group,names.plural,names.singular}` from each CRD base | `make sync-editor-viewer-roles` |
+| `charts/neo4j-operator/crds/*.yaml` | `config/crd/bases/*.yaml` | `make helm-sync-crds` |
+| `charts/neo4j-operator/templates/clusterrole.yaml` | `config/rbac/role.yaml` rules | `make helm-sync-rbac` |
+| `charts/neo4j-operator/Chart.yaml` (`artifacthub.io/crds` annotation) | CRD bases + curated descriptions in `scripts/helm-sync-artifacthub-crds.sh` | `make helm-sync-artifacthub-crds` |
+| `bundle/manifests/*` and `bundle/metadata/*` (OperatorHub) | `config/manifests/bases/*.csv.yaml` + everything above | `make bundle` |
+
+Two umbrella targets:
+- **`make sync-all`** — runs every regeneration step (no bundle).
+- **`make ship-prep`** — `sync-all` + `bundle` + `helm-lint` + `check-csv-coverage`. Run before tagging a release.
+
+CI gate:
+- **`make check-drift`** — runs `sync-all` + `bundle`, then `git diff --exit-code` (ignoring the `createdAt:` timestamp the operator-sdk stamps). Fails if any committed file is stale. Use this in CI to enforce that whoever changes a source also commits the regenerated output.
+
+53. **Never hand-edit generated files**: edit the source listed above instead. Each generated file carries a `# This file is GENERATED. DO NOT EDIT.` header; check-drift will revert tampering.
+54. **`scripts/helm-sync-artifacthub-crds.sh` requires a description per CRD**: when adding a CRD, also add a `case "$kind" in ... esac` row to the script. The script exits non-zero if a CRD has no mapped description, so you can't forget.
 
 ## Reports
 

@@ -23,37 +23,37 @@ annotations:
   artifacthub.io/operatorCapabilities: Full Lifecycle
   artifacthub.io/prerelease: "false"
   artifacthub.io/license: Apache-2.0
-  artifacthub.io/crds: |
+  artifacthub.io/crds: |-
+    - kind: Neo4jBackup
+      version: v1beta1
+      description: Manages Neo4j backup operations
+    - kind: Neo4jDatabase
+      version: v1beta1
+      description: Manages Neo4j databases within clusters
     - kind: Neo4jEnterpriseCluster
       version: v1beta1
       description: Manages Neo4j Enterprise cluster deployments
     - kind: Neo4jEnterpriseStandalone
       version: v1beta1
       description: Manages Neo4j Enterprise standalone deployments
-    - kind: Neo4jDatabase
-      version: v1beta1
-      description: Manages Neo4j databases within clusters
-    - kind: Neo4jShardedDatabase
-      version: v1beta1
-      description: Manages Neo4j property-sharded databases (Infinigraph, GA in 2025.12+)
-    - kind: Neo4jBackup
-      version: v1beta1
-      description: Manages Neo4j backup operations
-    - kind: Neo4jRestore
-      version: v1beta1
-      description: Manages Neo4j restore operations
     - kind: Neo4jPlugin
       version: v1beta1
       description: Manages Neo4j plugin installations (APOC, GDS, Bloom, etc.)
-    - kind: Neo4jUser
+    - kind: Neo4jRestore
       version: v1beta1
-      description: Declarative Neo4j user management (passwords from Secrets, role bindings, status, external auth)
-    - kind: Neo4jRole
-      version: v1beta1
-      description: Declarative Neo4j role management with privilege-drift reconciliation
+      description: Manages Neo4j restore operations
     - kind: Neo4jRoleBinding
       version: v1beta1
       description: Role grants for users provisioned externally (SSO/LDAP/OIDC first-login)
+    - kind: Neo4jRole
+      version: v1beta1
+      description: Declarative Neo4j role management with privilege-drift reconciliation
+    - kind: Neo4jShardedDatabase
+      version: v1beta1
+      description: Manages Neo4j property-sharded databases (Infinigraph, GA in 2025.12+)
+    - kind: Neo4jUser
+      version: v1beta1
+      description: Declarative Neo4j user management (passwords from Secrets, role bindings, status, external auth)
   artifacthub.io/recommendations: |
     - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
       description: For TLS certificate management

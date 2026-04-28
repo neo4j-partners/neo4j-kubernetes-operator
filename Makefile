@@ -341,6 +341,53 @@ helm-sync-crds: manifests ## Sync generated CRDs into Helm chart crds/ directory
 	cp config/crd/bases/*.yaml charts/neo4j-operator/crds/
 	@echo "Helm chart CRDs synced."
 
+.PHONY: helm-sync-rbac
+helm-sync-rbac: manifests yq ## Regenerate the Helm chart's ClusterRole template from config/rbac/role.yaml.
+	@YQ=$(YQ) ./scripts/helm-sync-rbac.sh
+
+.PHONY: helm-sync-artifacthub-crds
+helm-sync-artifacthub-crds: yq ## Refresh artifacthub.io/crds annotation in Chart.yaml from config/crd/bases/.
+	@YQ=$(YQ) ./scripts/helm-sync-artifacthub-crds.sh
+
+.PHONY: sync-kustomize
+sync-kustomize: yq ## Regenerate config/crd/kustomization.yaml + config/samples/kustomization.yaml from disk.
+	@YQ=$(YQ) ./scripts/sync-kustomize.sh
+
+.PHONY: sync-editor-viewer-roles
+sync-editor-viewer-roles: yq ## Generate per-CRD editor + viewer ClusterRoles into config/rbac/.
+	@YQ=$(YQ) ./scripts/sync-editor-viewer-roles.sh
+
+.PHONY: check-csv-coverage
+check-csv-coverage: yq ## Fail if any CRD is missing from the OperatorHub CSV.
+	@YQ=$(YQ) ./scripts/check-csv-coverage.sh
+
+.PHONY: sync-all
+sync-all: manifests generate sync-kustomize sync-editor-viewer-roles helm-sync-crds helm-sync-rbac helm-sync-artifacthub-crds ## Run every generator + sync step (does not run bundle).
+	@echo "All sync targets completed."
+
+.PHONY: ship-prep
+ship-prep: sync-all bundle helm-lint check-csv-coverage ## One-stop pre-release: regenerate everything, build the bundle, validate.
+	@echo ""
+	@echo "Ship-prep complete. Review 'git status' and commit any changes before tagging a release."
+
+.PHONY: check-drift
+check-drift: sync-all bundle ## CI gate: regenerate everything and fail if anything is out of date.
+	@echo "Verifying generated files are committed..."
+	@# operator-sdk stamps createdAt: on every bundle build, so ignore that
+	@# specific line (it's not real drift). Everything else must match HEAD.
+	@if ! git diff --exit-code --quiet -I'^    createdAt:' -- \
+	    config/crd config/rbac config/samples config/manifests \
+	    charts/neo4j-operator bundle; then \
+	    echo ""; \
+	    echo "ERROR: generated files are out of date." >&2; \
+	    echo "Run 'make sync-all bundle' locally and commit the result." >&2; \
+	    git --no-pager diff --stat -I'^    createdAt:' -- \
+	        config/crd config/rbac config/samples config/manifests \
+	        charts/neo4j-operator bundle >&2; \
+	    exit 1; \
+	fi
+	@echo "All generated artifacts are in sync."
+
 .PHONY: helm-lint
 helm-lint: ## Lint the Helm chart
 	helm lint charts/neo4j-operator
@@ -370,7 +417,7 @@ helm-uninstall: ## Uninstall the operator using Helm chart
 	helm uninstall neo4j-operator --namespace neo4j-operator-system
 
 .PHONY: helm-package
-helm-package: helm-sync-crds ## Package the Helm chart (syncs CRDs first)
+helm-package: helm-sync-crds helm-sync-rbac helm-sync-artifacthub-crds ## Package the Helm chart (regenerates CRDs, ClusterRole, and ArtifactHub annotation first)
 	helm package charts/neo4j-operator
 
 .PHONY: helm-docs
@@ -487,6 +534,7 @@ CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
 GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
 GINKGO = $(LOCALBIN)/ginkgo
+YQ ?= $(LOCALBIN)/yq
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.4.3
@@ -494,6 +542,7 @@ CONTROLLER_TOOLS_VERSION ?= v0.19.0
 ENVTEST_VERSION ?= release-0.19
 GOLANGCI_LINT_VERSION ?= v1.64.8
 GINKGO_VERSION ?= v2.25.2
+YQ_VERSION ?= v4.45.1
 
 .PHONY: kustomize
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
@@ -519,6 +568,11 @@ $(GOLANGCI_LINT): $(LOCALBIN)
 ginkgo: $(GINKGO) ## Download ginkgo locally if necessary.
 $(GINKGO): $(LOCALBIN)
 	$(call go-install-tool,$(GINKGO),github.com/onsi/ginkgo/v2/ginkgo,$(GINKGO_VERSION))
+
+.PHONY: yq
+yq: $(YQ) ## Download yq locally if necessary (used by sync targets).
+$(YQ): $(LOCALBIN)
+	$(call go-install-tool,$(YQ),github.com/mikefarah/yq/v4,$(YQ_VERSION))
 
 # go-install-tool will 'go install' any package with custom target and name of binary, if it doesn't exist
 # $1 - target path with name of binary
