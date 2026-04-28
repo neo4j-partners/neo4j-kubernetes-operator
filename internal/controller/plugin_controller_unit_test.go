@@ -292,6 +292,30 @@ func TestMergeNeo4jPluginList(t *testing.T) {
 			newPlugin: "fleet-management",
 			expected:  `["apoc","bloom","fleet-management"]`,
 		},
+		{
+			name:      "empty string is treated as empty list",
+			existing:  "",
+			newPlugin: "apoc",
+			expected:  `["apoc"]`,
+		},
+		{
+			name:      "whitespace-only is treated as empty list",
+			existing:  "   ",
+			newPlugin: "apoc",
+			expected:  `["apoc"]`,
+		},
+		{
+			name:      "rejects non-JSON garbage (was silently parsed as a fake plugin previously)",
+			existing:  "not a json array",
+			newPlugin: "apoc",
+			wantErr:   true,
+		},
+		{
+			name:      "rejects malformed JSON",
+			existing:  `["apoc",`,
+			newPlugin: "fleet-management",
+			wantErr:   true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -303,6 +327,67 @@ func TestMergeNeo4jPluginList(t *testing.T) {
 				assert.NoError(t, err)
 				assert.Equal(t, tt.expected, result)
 			}
+		})
+	}
+}
+
+func TestIsMergeableCSVKey(t *testing.T) {
+	mergeable := []string{
+		"dbms.security.procedures.allowlist",
+		"dbms.security.procedures.unrestricted",
+		"dbms.security.procedures.denylist",
+		"dbms.security.http_auth_allowlist",
+		"server.unmanaged_extension_classes",
+	}
+	for _, k := range mergeable {
+		t.Run("mergeable: "+k, func(t *testing.T) {
+			assert.True(t, isMergeableCSVKey(k))
+		})
+	}
+
+	notMergeable := []string{
+		"my.custom.allowlist",                    // user-supplied with substring "allowlist"
+		"NEO4J_MY_ALLOWLIST_SETTING",             // GHAS reviewer's example
+		"dbms.security.procedures.allowlist.foo", // dotted suffix
+		"some.random.unrestricted",               // user-supplied with substring "unrestricted"
+		"dbms.security.procedures",               // prefix
+		"",                                       // empty
+	}
+	for _, k := range notMergeable {
+		t.Run("not mergeable: "+k, func(t *testing.T) {
+			assert.False(t, isMergeableCSVKey(k))
+		})
+	}
+}
+
+func TestMergeCSV(t *testing.T) {
+	cases := []struct {
+		name     string
+		a, b     string
+		expected string
+	}{
+		{"both empty", "", "", ""},
+		{"a empty", "", "x,y", "x,y"},
+		{"b empty", "x,y", "", "x,y"},
+		{"disjoint", "x,y", "z", "x,y,z"},
+		{"overlap is deduped", "x,y", "y,z", "x,y,z"},
+		{"identical inputs", "a,b,c", "a,b,c", "a,b,c"},
+		{"whitespace trimmed", " x , y ", "y, z ", "x,y,z"},
+		{"empty entries dropped", "x,,y", ",,z,,", "x,y,z"},
+		{
+			// The Bloom failure mode this change fixes: previously,
+			// `env.Value + "," + value` would have produced
+			// "/,/browser.*,/bloom.*,/,/browser.*,/bloom.*" on the
+			// second reconcile. mergeCSV produces the union.
+			name:     "bloom http_auth_allowlist roundtrip",
+			a:        "/,/browser.*,/bloom.*",
+			b:        "/,/browser.*,/bloom.*",
+			expected: "/,/browser.*,/bloom.*",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, mergeCSV(tc.a, tc.b))
 		})
 	}
 }
