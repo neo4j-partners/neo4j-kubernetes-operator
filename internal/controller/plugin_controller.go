@@ -110,8 +110,19 @@ func (r *Neo4jPluginReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	// Get target deployment (cluster or standalone)
 	deployment, err := r.getTargetDeployment(ctx, plugin)
 	if err != nil {
-		logger.Error(err, "Failed to get target deployment")
-		r.updatePluginStatus(ctx, plugin, "Failed", fmt.Sprintf("Target deployment not found: %v", err))
+		logger.Error(err, "Failed to get target deployment",
+			"clusterRef", plugin.Spec.ClusterRef, "namespace", plugin.Namespace)
+		r.updatePluginStatus(
+			ctx,
+			plugin,
+			"Failed",
+			fmt.Sprintf(
+				"Target deployment not found (clusterRef=%q, namespace=%q): %v",
+				plugin.Spec.ClusterRef,
+				plugin.Namespace,
+				err,
+			),
+		)
 		return ctrl.Result{}, nil // Don't return error - status is set correctly
 	}
 
@@ -320,9 +331,11 @@ func (r *Neo4jPluginReconciler) waitForDeploymentReady(ctx context.Context, depl
 	for {
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("context cancelled while waiting for deployment: %w", ctx.Err())
+			return fmt.Errorf("context cancelled while waiting for %s deployment %s/%s: %w",
+				deployment.Type, deployment.Namespace, deployment.Name, ctx.Err())
 		case <-timeout:
-			return fmt.Errorf("timeout waiting for cluster to be ready")
+			return fmt.Errorf("timeout waiting for %s deployment %s/%s to be ready",
+				deployment.Type, deployment.Namespace, deployment.Name)
 		case <-ticker.C:
 			// Check if all pods are ready
 			pods := &corev1.PodList{}
@@ -357,7 +370,8 @@ func (r *Neo4jPluginReconciler) waitForDeploymentReady(ctx context.Context, depl
 			}
 
 			if allReady {
-				logger.Info("Cluster is ready")
+				logger.Info("Deployment is ready",
+					"type", deployment.Type, "name", deployment.Name)
 				return nil
 			}
 
@@ -1160,19 +1174,39 @@ func (r *Neo4jPluginReconciler) waitForJobCompletion(ctx context.Context, job *b
 	for {
 		select {
 		case <-timeout:
-			return fmt.Errorf("job completion timeout")
+			return fmt.Errorf("timeout waiting for job %s/%s to complete", job.Namespace, job.Name)
 		case <-ticker.C:
 			if err := r.Get(ctx, client.ObjectKeyFromObject(job), job); err != nil {
-				return fmt.Errorf("failed to get job status: %w", err)
+				return fmt.Errorf("failed to get status of job %s/%s: %w", job.Namespace, job.Name, err)
 			}
 
 			if job.Status.Succeeded > 0 {
-				logger.Info("Job completed successfully")
+				logger.Info("Job completed successfully", "job", job.Name, "namespace", job.Namespace)
 				return nil
 			}
 
 			if job.Status.Failed > 0 {
-				return fmt.Errorf("job failed")
+				// Inspect the JobFailed condition for a richer error message.
+				var failureReason, failureMessage string
+				for _, condition := range job.Status.Conditions {
+					if condition.Type == batchv1.JobFailed && condition.Status == corev1.ConditionTrue {
+						failureReason = condition.Reason
+						failureMessage = condition.Message
+						break
+					}
+				}
+				if failureReason != "" || failureMessage != "" {
+					return fmt.Errorf(
+						"job %s/%s failed (failed=%d): reason=%q message=%q",
+						job.Namespace,
+						job.Name,
+						job.Status.Failed,
+						failureReason,
+						failureMessage,
+					)
+				}
+				return fmt.Errorf("job %s/%s failed (failed=%d)",
+					job.Namespace, job.Name, job.Status.Failed)
 			}
 
 			// Still running, continue waiting
