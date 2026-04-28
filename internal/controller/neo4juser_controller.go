@@ -562,13 +562,31 @@ func (r *Neo4jUserReconciler) setNamedCondition(ctx context.Context, user *neo4j
 	}
 }
 
-// SetupWithManager registers the controller. The user reconciler watches
-// Neo4jRole as well, so role creation/deletion enqueues users in the same
-// namespace whose `.spec.roles` reference that role.
+// SetupWithManager registers the controller and wires up watches:
+//   - Neo4jRole: re-reconciles users with PendingDependencies when a referenced
+//     role is created.
+//   - Neo4jEnterpriseCluster / Neo4jEnterpriseStandalone: re-reconciles every
+//     user pointing at a changed cluster, so users react immediately to the
+//     cluster's Ready condition flipping (otherwise we wait up to 30s for the
+//     next requeue, which compounds across multiple cluster status updates
+//     during formation and can starve the user reconcile in CI).
 func (r *Neo4jUserReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	c := mgr.GetClient()
+	enqueueUsersForCluster := EnqueueDependentsForClusterChange(
+		c,
+		func() client.ObjectList { return &neo4jv1beta1.Neo4jUserList{} },
+		func(list client.ObjectList, emit func(name, namespace, clusterRef string)) {
+			users := list.(*neo4jv1beta1.Neo4jUserList)
+			for i := range users.Items {
+				u := &users.Items[i]
+				emit(u.Name, u.Namespace, u.Spec.ClusterRef)
+			}
+		},
+	)
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&neo4jv1beta1.Neo4jUser{}).
+		Watches(&neo4jv1beta1.Neo4jEnterpriseCluster{}, enqueueUsersForCluster).
+		Watches(&neo4jv1beta1.Neo4jEnterpriseStandalone{}, enqueueUsersForCluster).
 		Watches(&neo4jv1beta1.Neo4jRole{}, handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
 			role, ok := obj.(*neo4jv1beta1.Neo4jRole)
 			if !ok {

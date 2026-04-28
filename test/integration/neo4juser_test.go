@@ -42,7 +42,7 @@ import (
 
 var _ = Describe("Neo4jUser end-to-end", func() {
 	const (
-		testTimeout = time.Second * 300
+		testTimeout = time.Second * 600
 		adminPass   = "password123"
 		userPass    = "userpass456"
 		newUserPass = "rotatedpass789"

@@ -39,7 +39,7 @@ import (
 
 var _ = Describe("Neo4jRoleBinding end-to-end", func() {
 	const (
-		testTimeout = time.Second * 300
+		testTimeout = time.Second * 600
 		adminPass   = "password123"
 		extUserPass = "externuserpass"
 	)

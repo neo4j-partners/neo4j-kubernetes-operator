@@ -417,12 +417,30 @@ func (r *Neo4jRoleBindingReconciler) setNamedCondition(ctx context.Context, rb *
 	}
 }
 
-// SetupWithManager registers the controller. Watches Neo4jRole so bindings
-// pending on a missing role re-reconcile when the role lands.
+// SetupWithManager registers the controller and wires up watches:
+//   - Neo4jRole: bindings pending on a missing role re-reconcile when the
+//     role lands.
+//   - Neo4jEnterpriseCluster / Neo4jEnterpriseStandalone: re-reconcile every
+//     binding pointing at a changed cluster, so bindings react immediately
+//     to the cluster's Ready condition flipping (otherwise we wait up to
+//     30s for the next requeue).
 func (r *Neo4jRoleBindingReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	c := mgr.GetClient()
+	enqueueBindingsForCluster := EnqueueDependentsForClusterChange(
+		c,
+		func() client.ObjectList { return &neo4jv1beta1.Neo4jRoleBindingList{} },
+		func(list client.ObjectList, emit func(name, namespace, clusterRef string)) {
+			bindings := list.(*neo4jv1beta1.Neo4jRoleBindingList)
+			for i := range bindings.Items {
+				b := &bindings.Items[i]
+				emit(b.Name, b.Namespace, b.Spec.ClusterRef)
+			}
+		},
+	)
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&neo4jv1beta1.Neo4jRoleBinding{}).
+		Watches(&neo4jv1beta1.Neo4jEnterpriseCluster{}, enqueueBindingsForCluster).
+		Watches(&neo4jv1beta1.Neo4jEnterpriseStandalone{}, enqueueBindingsForCluster).
 		Watches(&neo4jv1beta1.Neo4jRole{}, handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
 			role, ok := obj.(*neo4jv1beta1.Neo4jRole)
 			if !ok {

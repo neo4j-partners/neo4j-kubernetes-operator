@@ -417,10 +417,27 @@ func effectiveRoleName(role *neo4jv1beta1.Neo4jRole) string {
 	return role.Name
 }
 
-// SetupWithManager registers the controller.
+// SetupWithManager registers the controller and watches the cluster /
+// standalone CRs whose state transitions should re-trigger role
+// reconciliation (Pending → Ready). Without this watch, roles only
+// notice cluster status changes on their next 30-second requeue, which
+// can starve reconciles in CI when clusters bootstrap quickly.
 func (r *Neo4jRoleReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	enqueueRolesForCluster := EnqueueDependentsForClusterChange(
+		mgr.GetClient(),
+		func() client.ObjectList { return &neo4jv1beta1.Neo4jRoleList{} },
+		func(list client.ObjectList, emit func(name, namespace, clusterRef string)) {
+			roles := list.(*neo4jv1beta1.Neo4jRoleList)
+			for i := range roles.Items {
+				role := &roles.Items[i]
+				emit(role.Name, role.Namespace, role.Spec.ClusterRef)
+			}
+		},
+	)
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&neo4jv1beta1.Neo4jRole{}).
+		Watches(&neo4jv1beta1.Neo4jEnterpriseCluster{}, enqueueRolesForCluster).
+		Watches(&neo4jv1beta1.Neo4jEnterpriseStandalone{}, enqueueRolesForCluster).
 		WithOptions(controller.Options{MaxConcurrentReconciles: r.MaxConcurrentReconciles}).
 		Complete(r)
 }

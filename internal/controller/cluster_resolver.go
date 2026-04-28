@@ -24,6 +24,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	neo4jv1beta1 "github.com/neo4j-partners/neo4j-kubernetes-operator/api/v1beta1"
 	"github.com/neo4j-partners/neo4j-kubernetes-operator/internal/neo4j"
@@ -80,6 +82,50 @@ func (r ResolvedTarget) NewClient(c client.Client) (*neo4j.Client, error) {
 	default:
 		return nil, fmt.Errorf("ResolvedTarget has neither Cluster nor Standalone")
 	}
+}
+
+// EnqueueDependentsForClusterChange returns a handler.EventHandler that, when
+// the named Neo4jEnterpriseCluster or Neo4jEnterpriseStandalone changes,
+// enqueues every CR in the same namespace whose `clusterRef` matches the
+// changed object's name.
+//
+// Both cluster and standalone reconcilers update status repeatedly during
+// formation (Pending → Forming → Ready, plus diagnostics flips). Without
+// this watch, dependent controllers (Neo4jUser, Neo4jRole, Neo4jRoleBinding)
+// only see those transitions on their next 30-second requeue, which can
+// add minutes of perceived latency in CI. With it, the dependent reconcile
+// runs immediately on each cluster status update.
+//
+// `list` must be a fresh, empty list of the dependent type
+// (e.g. `&neo4jv1beta1.Neo4jUserList{}`); `extractClusterRef` extracts the
+// `clusterRef` field from a single item.
+func EnqueueDependentsForClusterChange(
+	c client.Client,
+	newList func() client.ObjectList,
+	walk func(client.ObjectList, func(name string, namespace string, clusterRef string)),
+) handler.EventHandler {
+	return handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
+		// The triggering object is a Neo4jEnterpriseCluster or
+		// Neo4jEnterpriseStandalone. We only need its name and namespace.
+		changedName := obj.GetName()
+		changedNS := obj.GetNamespace()
+		if changedName == "" || changedNS == "" {
+			return nil
+		}
+		list := newList()
+		if err := c.List(ctx, list, client.InNamespace(changedNS)); err != nil {
+			return nil
+		}
+		var reqs []reconcile.Request
+		walk(list, func(name, namespace, clusterRef string) {
+			if clusterRef == changedName {
+				reqs = append(reqs, reconcile.Request{
+					NamespacedName: types.NamespacedName{Namespace: namespace, Name: name},
+				})
+			}
+		})
+		return reqs
+	})
 }
 
 // ResolveClusterRef looks up a clusterRef in a given namespace. It first
