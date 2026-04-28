@@ -1197,8 +1197,9 @@ type MonitoringSpec struct {
 
 	// +kubebuilder:default="INFO"
 	// +kubebuilder:validation:Enum=OFF;INFO;VERBOSE
-	// Query log verbosity level. OFF disables query logging, INFO logs queries
-	// exceeding the slow query threshold, VERBOSE logs all queries.
+	// Query log verbosity level. Use OFF to disable query logging, INFO to
+	// log only slow queries (those exceeding slowQueryThreshold), and
+	// VERBOSE to log all queries regardless of duration.
 	QueryLogLevel string `json:"queryLogLevel,omitempty"`
 
 	// +kubebuilder:default=false
@@ -1224,7 +1225,9 @@ type MonitoringSpec struct {
 
 // QuerySamplingConfig defines query sampling
 type QuerySamplingConfig struct {
-	// Sampling rate (0.0 to 1.0)
+	// Sampling rate as a decimal between 0 and 1 inclusive — for example
+	// "0.5" for 50% sampling, "1.0" for every query, "0" to disable.
+	// +kubebuilder:validation:Pattern=`^(0(\.\d+)?|1(\.0+)?)$`
 	Rate string `json:"rate,omitempty"`
 
 	// Maximum queries to sample per second
