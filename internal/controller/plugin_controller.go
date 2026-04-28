@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -680,11 +681,15 @@ func (r *Neo4jPluginReconciler) installPluginViaEnvironment(ctx context.Context,
 			exists := false
 			for i, env := range neo4jContainer.Env {
 				if env.Name == envVarName {
-					// Merge values for allowlist/unrestricted settings
-					if strings.Contains(key, "allowlist") || strings.Contains(key, "unrestricted") {
-						if !strings.Contains(env.Value, value) {
-							neo4jContainer.Env[i].Value = env.Value + "," + value
-						}
+					// Merge (union, dedup) for known comma-separated settings.
+					// Previously we used strings.Contains(key, "allowlist"|"unrestricted")
+					// which technically covered all our known keys — but a user-typed
+					// custom setting like `my.custom.allowlist` could trigger merge
+					// semantics that aren't appropriate. And the old "value+,+new"
+					// concat produced duplicates whenever the existing value was
+					// itself multi-valued (e.g. Bloom's http_auth_allowlist).
+					if isMergeableCSVKey(key) {
+						neo4jContainer.Env[i].Value = mergeCSV(env.Value, value)
 					}
 					exists = true
 					break
@@ -747,19 +752,22 @@ func (r *Neo4jPluginReconciler) installPluginViaEnvironment(ctx context.Context,
 				Value: fmt.Sprintf("[%s]", strings.Join(quotedPlugins, ",")),
 			})
 		} else {
-			// Update existing NEO4J_PLUGINS - parse and add all new plugins
+			// Update existing NEO4J_PLUGINS — delegate to the same helper used
+			// in the outer block (above) so the merge is JSON-aware,
+			// idempotent, and bug-free. The previous inline implementation
+			// here read `currentValue` once but then mutated only
+			// `pluginsEnvVar.Value`, leaving `currentValue` stale across
+			// loop iterations — only the first plugin in pluginsToInstall
+			// would actually land in the env var.
 			currentValue := pluginsEnvVar.Value
 			for _, plugin := range pluginsToInstall {
-				quotedPlugin := fmt.Sprintf("\"%s\"", plugin)
-				if !strings.Contains(currentValue, quotedPlugin) {
-					if currentValue == "[]" || currentValue == "" {
-						pluginsEnvVar.Value = fmt.Sprintf("[\"%s\"]", plugin)
-					} else {
-						currentValue = strings.TrimSuffix(currentValue, "]")
-						pluginsEnvVar.Value = fmt.Sprintf("%s,\"%s\"]", currentValue, plugin)
-					}
+				updated, err := r.addPluginToList(currentValue, plugin)
+				if err != nil {
+					return fmt.Errorf("failed to update plugin list: %w", err)
 				}
+				currentValue = updated
 			}
+			pluginsEnvVar.Value = currentValue
 		}
 
 		// Add plugin-specific configuration as environment variables
@@ -1092,20 +1100,74 @@ func (r *Neo4jPluginReconciler) addPluginToList(existing string, newPlugin strin
 	return MergeNeo4jPluginList(existing, newPlugin)
 }
 
+// mergeableCSVKeys is the closed set of plugin-driven Neo4j config keys whose
+// values are comma-separated lists where merging the union (rather than
+// overwriting one with the other) is the correct behaviour. Keep this list
+// closed — substring matches are dangerous: a user-supplied setting like
+// `my.custom.allowlist` should not silently get merge semantics.
+var mergeableCSVKeys = map[string]struct{}{
+	"dbms.security.procedures.allowlist":    {},
+	"dbms.security.procedures.unrestricted": {},
+	"dbms.security.procedures.denylist":     {},
+	"dbms.security.http_auth_allowlist":     {},
+	"server.unmanaged_extension_classes":    {},
+}
+
+// isMergeableCSVKey reports whether a Neo4j config key carries a CSV value
+// that should be unioned (rather than overwritten) when both an existing
+// env var and a plugin-required setting specify a value.
+func isMergeableCSVKey(key string) bool {
+	_, ok := mergeableCSVKeys[key]
+	return ok
+}
+
+// mergeCSV returns the deduplicated comma-separated union of a and b,
+// preserving first-seen order. Whitespace around each element is trimmed;
+// empty elements are dropped.
+//
+// Used for security/extension settings (see mergeableCSVKeys) where
+// multiple sources contribute entries — typically the user via
+// plugin.Spec.Config plus the operator's required defaults for the
+// plugin. The previous code concatenated `existing + "," + new` blindly,
+// which produced duplicate-laden values when `new` was itself
+// multi-element (e.g. Bloom's `http_auth_allowlist`).
+func mergeCSV(a, b string) string {
+	seen := make(map[string]struct{})
+	var out []string
+	for _, src := range [...]string{a, b} {
+		for _, p := range strings.Split(src, ",") {
+			p = strings.TrimSpace(p)
+			if p == "" {
+				continue
+			}
+			if _, dup := seen[p]; dup {
+				continue
+			}
+			seen[p] = struct{}{}
+			out = append(out, p)
+		}
+	}
+	return strings.Join(out, ",")
+}
+
 // MergeNeo4jPluginList parses the existing NEO4J_PLUGINS JSON array value and adds
 // newPlugin if it is not already present. Returns the (possibly unchanged) JSON array.
-// Expected format: ["plugin1","plugin2"]
-// This is intentionally exported so other controllers (e.g. fleet management reconciler)
-// can perform the same idempotent merge without duplicating the logic.
+// Expected format: ["plugin1","plugin2"].
+//
+// This is intentionally exported so other controllers (e.g. the fleet
+// management reconciler) can perform the same idempotent merge without
+// duplicating the logic.
+//
+// Uses encoding/json rather than ad-hoc string trimming so values with
+// whitespace, embedded escapes, or unusual but legal JSON formatting
+// round-trip correctly. Empty/whitespace input is treated as the empty
+// list (the env var is sometimes literally "" before the operator has
+// touched it).
 func MergeNeo4jPluginList(existing string, newPlugin string) (string, error) {
-	cleaned := strings.Trim(existing, "[]")
-	cleaned = strings.ReplaceAll(cleaned, "\"", "")
-
 	var plugins []string
-	if cleaned != "" {
-		plugins = strings.Split(cleaned, ",")
-		for i := range plugins {
-			plugins[i] = strings.TrimSpace(plugins[i])
+	if strings.TrimSpace(existing) != "" {
+		if err := json.Unmarshal([]byte(existing), &plugins); err != nil {
+			return "", fmt.Errorf("failed to parse existing NEO4J_PLUGINS as JSON array: %w", err)
 		}
 	}
 
@@ -1116,12 +1178,11 @@ func MergeNeo4jPluginList(existing string, newPlugin string) (string, error) {
 	}
 
 	plugins = append(plugins, newPlugin)
-
-	var quotedPlugins []string
-	for _, plugin := range plugins {
-		quotedPlugins = append(quotedPlugins, fmt.Sprintf("\"%s\"", plugin))
+	merged, err := json.Marshal(plugins)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal merged NEO4J_PLUGINS: %w", err)
 	}
-	return fmt.Sprintf("[%s]", strings.Join(quotedPlugins, ",")), nil
+	return string(merged), nil
 }
 
 func (r *Neo4jPluginReconciler) SetupWithManager(mgr ctrl.Manager) error {
