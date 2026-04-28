@@ -278,8 +278,14 @@ spec:
               passwordSecretHash:
                 description: |-
                   PasswordSecretHash is a SHA-256 fingerprint of the password value
-                  last applied. Used to detect Secret rotation. The password itself is
-                  never persisted here.
+                  last applied to the cluster. It is a change-detection fingerprint —
+                  not a password-storage hash and not used in any authentication path.
+                  The controller uses it to answer "did the Secret rotate since the
+                  last reconcile?" via equality comparison; the actual password lives
+                  in the referenced Kubernetes Secret and Neo4j stores its own hash
+                  (currently scrypt-based) inside the `system` database. SHA-256 is
+                  the right choice here — collision resistance is what matters for
+                  change detection; computational cost would only slow the loop.
                 type: string
               phase:
                 description: 'Phase is a coarse summary: Pending, Ready, Failed.'
