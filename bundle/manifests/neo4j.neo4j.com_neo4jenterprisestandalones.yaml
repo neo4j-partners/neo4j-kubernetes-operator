@@ -1,9 +1,9 @@
----
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.19.0
+  creationTimestamp: null
   name: neo4jenterprisestandalones.neo4j.neo4j.com
 spec:
   group: neo4j.neo4j.com
@@ -2674,8 +2674,9 @@ spec:
                   queryLogLevel:
                     default: INFO
                     description: |-
-                      Query log verbosity level. OFF disables query logging, INFO logs queries
-                      exceeding the slow query threshold, VERBOSE logs all queries.
+                      Query log verbosity level. Use OFF to disable query logging, INFO to
+                      log only slow queries (those exceeding slowQueryThreshold), and
+                      VERBOSE to log all queries regardless of duration.
                     enum:
                     - "OFF"
                     - INFO
@@ -2689,7 +2690,10 @@ spec:
                         format: int32
                         type: integer
                       rate:
-                        description: Sampling rate (0.0 to 1.0)
+                        description: |-
+                          Sampling rate as a decimal between 0 and 1 inclusive — for example
+                          "0.5" for 50% sampling, "1.0" for every query, "0" to disable.
+                        pattern: ^(0(\.\d+)?|1(\.0+)?)$
                         type: string
                     type: object
                   slowQueryThreshold:
@@ -4022,3 +4026,9 @@ spec:
     storage: true
     subresources:
       status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: null
+  storedVersions: null

@@ -9,7 +9,7 @@ The `Neo4jEnterpriseCluster` Custom Resource Definition (CRD) manages Neo4j Ente
 - **Supported Neo4j Versions**: 5.26.x (last semver LTS) and 2025.01.0+ (CalVer)
 - **Architecture**: Server-based deployment with unified StatefulSet
 - **Minimum Servers**: 2 (required for clustering)
-- **Maximum Servers**: 20 (validated limit)
+- **Maximum Servers**: 100 (validated limit)
 
 ## Architecture
 

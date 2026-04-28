@@ -329,13 +329,13 @@ spec:
 
 1. **Cluster Formation Issues (Rare with Current Configuration)**
    - The parallel startup strategy and topology-aligned minimum primaries configuration eliminate most formation issues
-   - Check pod logs: `kubectl logs <pod-name>` for any startup errors
-   - Verify all pods can resolve DNS: `kubectl exec <pod> -- nslookup <cluster>-discovery`
+   - Check pod logs: `kubectl logs {cluster-name}-server-0` for any startup errors
+   - Verify all pods can resolve DNS: `kubectl exec {cluster-name}-server-0 -- nslookup {cluster-name}-headless`
 
-2. **Discovery Service**
-   - Verify discovery service exists: `kubectl get service {cluster-name}-discovery`
-   - Check endpoints include all pods: `kubectl describe endpoints {cluster-name}-discovery`
+2. **Discovery (LIST resolver via headless service)**
+   - The operator uses LIST discovery against the StatefulSet's `-headless` service (the legacy `-discovery` ClusterIP service exists for backward compatibility but is NOT used by the V2 discovery path).
    - Verify the headless service exists: `kubectl get service {cluster-name}-headless`
+   - Check endpoints include all pods: `kubectl describe endpoints {cluster-name}-headless`
    - Check that pod FQDNs resolve: `kubectl exec {cluster-name}-server-0 -- nslookup {cluster-name}-server-0.{cluster-name}-headless.{ns}.svc.cluster.local`
    - Inspect the startup script for correct LIST endpoints: `kubectl get configmap {cluster-name}-config -o yaml | grep -A2 resolver_type`
    - Verify pod has correct ServiceAccount: `kubectl get pod {cluster-name}-server-0 -o jsonpath='{.spec.serviceAccountName}'`
