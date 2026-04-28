@@ -53,6 +53,11 @@ The [API Reference](api_reference) contains detailed information about the opera
 *   **[Neo4jDatabase](api_reference/neo4jdatabase.md)** - Enhanced with IF NOT EXISTS, WAIT/NOWAIT, topology support, and **seed URI functionality**
 *   **[Neo4jPlugin](api_reference/neo4jplugin.md)** - Smart plugin management with Neo4j 5.26+ compatibility
 *   **[Neo4jShardedDatabase](api_reference/neo4jshardeddatabase.md)** - Property sharding for horizontal scaling
+*   **[Neo4jUser](api_reference/neo4juser.md)** - Declarative user management (passwords from Secrets, role bindings, suspend/active, external auth)
+*   **[Neo4jRole](api_reference/neo4jrole.md)** - Declarative role management with privilege-drift reconciliation
+*   **[Neo4jRoleBinding](api_reference/neo4jrolebinding.md)** - Manage role grants for SSO/LDAP-provisioned users the operator does not own
+
+See also: **[User & Role Management Guide](user_guide/user_role_management.md)** for an end-to-end walkthrough.
 
 ## 🚀 End-to-End Examples
 

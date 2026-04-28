@@ -1090,6 +1090,11 @@ func (r *Neo4jEnterpriseStandaloneReconciler) collectStandaloneDiagnostics(ctx c
 		}
 	}
 
+	collectUsersAndRoles(ctx, neo4jClient,
+		&diagnostics.Users, &diagnostics.UserCount,
+		&diagnostics.Roles, &diagnostics.RoleCount,
+		&diagnostics.CollectionError, logger)
+
 	now := metav1.Now()
 	diagnostics.LastCollected = &now
 

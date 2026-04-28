@@ -1343,14 +1343,144 @@ EOF
     show_resource_dashboard
 }
 
+# Demonstrate declarative user, role, and privilege management
+demonstrate_user_role_management() {
+    log_header 7 "👥" "Declarative User & Role Management"
+
+    log_demo "The operator manages Neo4j users, roles, and privileges as Kubernetes resources:"
+    log_demo "  • Neo4jRole — role + privileges, with drift reconciliation"
+    log_demo "  • Neo4jUser — user identity, password (from Secret), role bindings"
+    log_demo "  • Neo4jRoleBinding — bind external (SSO) users to roles"
+    log_demo ""
+    log_demo "Privileges live on the role, not on users — bind users to roles by name."
+
+    confirm "Ready to create a role and a bound user?"
+
+    # Read password into a Secret first; the password Secret is the single source of truth.
+    local user_password="reader-pass-$(date +%s)"
+
+    log_section "Step 1: Password Secret"
+    log_command "kubectl create secret generic demo-reader-creds ..."
+    kubectl create secret generic demo-reader-creds \
+        -n "${DEMO_NAMESPACE}" \
+        --from-literal=password="${user_password}" \
+        --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+    log_success "Secret 'demo-reader-creds' created"
+    echo
+
+    log_section "Step 2: Neo4jRole — read-only privileges"
+
+    local role_manifest=$(cat << EOF
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jRole
+metadata:
+  name: demo-analytics-reader
+  namespace: ${DEMO_NAMESPACE}
+spec:
+  clusterRef: ${CLUSTER_NAME_MULTI}
+  name: demo_analytics_reader
+  privileges:
+    - "GRANT ACCESS ON DATABASE neo4j TO demo_analytics_reader"
+    - "GRANT MATCH {*} ON GRAPH neo4j NODES * TO demo_analytics_reader"
+    - "DENY WRITE ON GRAPH neo4j TO demo_analytics_reader"
+EOF
+)
+    show_manifest "${role_manifest}"
+    echo
+    log_command "kubectl apply -f -"
+    echo "${role_manifest}" | kubectl apply -f - >/dev/null
+    log_success "Neo4jRole 'demo-analytics-reader' applied"
+
+    log_info "The role controller will:"
+    log_info "  • Run CREATE ROLE demo_analytics_reader"
+    log_info "  • Apply each GRANT/DENY statement"
+    log_info "  • Read SHOW ROLE PRIVILEGES on every reconcile to detect drift"
+    echo
+
+    log_section "Step 3: Neo4jUser bound to the role"
+
+    local user_manifest=$(cat << EOF
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jUser
+metadata:
+  name: demo-reader
+  namespace: ${DEMO_NAMESPACE}
+spec:
+  clusterRef: ${CLUSTER_NAME_MULTI}
+  username: demo_reader
+  passwordSecretRef:
+    name: demo-reader-creds
+  roles:
+    - demo_analytics_reader
+EOF
+)
+    show_manifest "${user_manifest}"
+    echo
+    log_command "kubectl apply -f -"
+    echo "${user_manifest}" | kubectl apply -f - >/dev/null
+    log_success "Neo4jUser 'demo-reader' applied"
+    echo
+
+    log_section "Waiting for both resources to reach Ready"
+
+    local rb_timeout=60
+    local rb_elapsed=0
+    while [[ $rb_elapsed -lt $rb_timeout ]]; do
+        local role_phase=$(kubectl get neo4jrole demo-analytics-reader -n "${DEMO_NAMESPACE}" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+        local user_phase=$(kubectl get neo4juser demo-reader -n "${DEMO_NAMESPACE}" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+        echo -n -e "\r  role=${role_phase:-pending}  user=${user_phase:-pending}      "
+        if [[ "$role_phase" == "Ready" && "$user_phase" == "Ready" ]]; then
+            echo
+            log_success "Role and user both Ready"
+            break
+        fi
+        sleep 3
+        rb_elapsed=$((rb_elapsed + 3))
+    done
+    echo
+
+    log_section "Verification"
+    log_demo "We can authenticate as demo_reader and see the role granted:"
+    echo
+
+    log_command "kubectl exec ${CLUSTER_NAME_MULTI}-server-0 -- cypher-shell -u demo_reader -p ... 'SHOW CURRENT USER YIELD user, roles'"
+    if kubectl exec "${CLUSTER_NAME_MULTI}-server-0" -c neo4j -n "${DEMO_NAMESPACE}" -- \
+        cypher-shell -a "bolt+ssc://localhost:7687" -u demo_reader -p "${user_password}" \
+        "SHOW CURRENT USER YIELD user, roles" 2>/dev/null; then
+        log_success "demo_reader can authenticate and is bound to demo_analytics_reader"
+    else
+        log_warning "Could not authenticate as demo_reader (TLS/timing issue — re-run if needed)"
+    fi
+    echo
+
+    log_section "Privilege drift correction"
+    log_demo "The operator reconciles privileges on every loop. If you REVOKE a privilege"
+    log_demo "out-of-band, the operator restores it on the next reconcile."
+    log_demo ""
+    log_demo "Try it:"
+    log_demo "  kubectl exec ${CLUSTER_NAME_MULTI}-server-0 -- cypher-shell -u neo4j -p ... \\"
+    log_demo "    'REVOKE ACCESS ON DATABASE neo4j FROM demo_analytics_reader'"
+    log_demo "  # ~30s later: SHOW ROLE demo_analytics_reader PRIVILEGES — ACCESS is back"
+    echo
+
+    log_demo "Key benefits demonstrated:"
+    log_demo "  ✓ Users, roles, and privileges as Kubernetes resources"
+    log_demo "  ✓ Passwords sourced from Secrets (rotation = update Secret)"
+    log_demo "  ✓ Privilege drift auto-corrected against SHOW ROLE PRIVILEGES"
+    log_demo "  ✓ GitOps-friendly RBAC alongside infrastructure"
+    log_elapsed
+    show_resource_dashboard
+}
+
 # Demonstrate live cluster diagnostics
 demonstrate_diagnostics() {
-    log_header 7 "🔍" "Live Cluster Diagnostics"
+    log_header 8 "🔍" "Live Cluster Diagnostics"
 
     log_demo "The operator continuously monitors the cluster and surfaces"
     log_demo "diagnostics directly in the custom resource status:"
     log_demo "  • Server health from SHOW SERVERS"
     log_demo "  • Database status from SHOW DATABASES"
+    log_demo "  • Users and roles from SHOW USERS / SHOW ROLES"
     log_demo "  • No kubectl exec needed — just read the CR status"
 
     confirm "Ready to view live diagnostics?"
@@ -1391,6 +1521,26 @@ demonstrate_diagnostics() {
     fi
 
     echo
+    log_section "User & Role Diagnostics"
+    log_demo "SHOW USERS / SHOW ROLES results are surfaced for observability of"
+    log_demo "Neo4jUser / Neo4jRole reconciliation (capped at 50 entries each):"
+    echo
+
+    local users_count=$(kubectl get neo4jenterprisecluster "${CLUSTER_NAME_MULTI}" -n "${DEMO_NAMESPACE}" -o jsonpath='{.status.diagnostics.userCount}' 2>/dev/null)
+    local roles_count=$(kubectl get neo4jenterprisecluster "${CLUSTER_NAME_MULTI}" -n "${DEMO_NAMESPACE}" -o jsonpath='{.status.diagnostics.roleCount}' 2>/dev/null)
+    if [[ -n "$users_count" || -n "$roles_count" ]]; then
+        log_command "kubectl get neo4jenterprisecluster ${CLUSTER_NAME_MULTI} -n ${DEMO_NAMESPACE} -o jsonpath='{.status.diagnostics.users}'"
+        local users_json=$(kubectl get neo4jenterprisecluster "${CLUSTER_NAME_MULTI}" -n "${DEMO_NAMESPACE}" -o jsonpath='{.status.diagnostics.users}' 2>/dev/null)
+        if [[ -n "$users_json" && "$users_json" != "null" ]]; then
+            echo "${users_json}" | python3 -m json.tool 2>/dev/null || echo "${users_json}"
+        fi
+        log_info "userCount=${users_count:-?}  roleCount=${roles_count:-?}"
+        log_success "User/role diagnostics surfaced from CR status"
+    else
+        log_info "User/role diagnostics not yet collected (operator runs on each reconcile)"
+    fi
+
+    echo
     log_section "Health Conditions"
     log_demo "The operator also sets Kubernetes conditions for monitoring integration:"
     echo
@@ -1399,7 +1549,7 @@ demonstrate_diagnostics() {
 
     log_demo "Key benefits demonstrated:"
     log_demo "  ✓ Live server health without kubectl exec"
-    log_demo "  ✓ Database status surfaced in CR status"
+    log_demo "  ✓ Database, user, and role status surfaced in CR status"
     log_demo "  ✓ Standard Kubernetes conditions for alerting pipelines"
     log_demo "  ✓ Compatible with ArgoCD, Flux, and Prometheus"
 }
@@ -1408,9 +1558,11 @@ demonstrate_diagnostics() {
 demo_cleanup() {
     log_section "Cleaning Up Demo Resources"
 
-    # Step 1: Strip finalizers from all Neo4j CRs so deletion is immediate
+    # Step 1: Strip finalizers from all Neo4j CRs so deletion is immediate.
+    # Order matters at delete time (bindings → users → roles → databases) but
+    # finalizer stripping is order-independent.
     log_info "Removing finalizers from all Neo4j resources..."
-    for crd in neo4jplugin neo4jdatabase neo4jenterprisestandalone neo4jenterprisecluster neo4jbackup neo4jrestore; do
+    for crd in neo4jrolebinding neo4juser neo4jrole neo4jplugin neo4jdatabase neo4jenterprisestandalone neo4jenterprisecluster neo4jbackup neo4jrestore; do
         kubectl get "$crd" -n "${DEMO_NAMESPACE}" -o name 2>/dev/null | while read resource; do
             kubectl patch "$resource" -n "${DEMO_NAMESPACE}" --type=merge -p '{"metadata":{"finalizers":[]}}' 2>/dev/null
         done
@@ -1418,6 +1570,9 @@ demo_cleanup() {
 
     # Step 2: Delete all Neo4j CRs in parallel (instant since finalizers are gone)
     log_info "Deleting all Neo4j custom resources..."
+    kubectl delete neo4jrolebinding --all -n "${DEMO_NAMESPACE}" --ignore-not-found=true --wait=false 2>/dev/null &
+    kubectl delete neo4juser --all -n "${DEMO_NAMESPACE}" --ignore-not-found=true --wait=false 2>/dev/null &
+    kubectl delete neo4jrole --all -n "${DEMO_NAMESPACE}" --ignore-not-found=true --wait=false 2>/dev/null &
     kubectl delete neo4jplugin --all -n "${DEMO_NAMESPACE}" --ignore-not-found=true --wait=false 2>/dev/null &
     kubectl delete neo4jdatabase --all -n "${DEMO_NAMESPACE}" --ignore-not-found=true --wait=false 2>/dev/null &
     kubectl delete neo4jenterprisestandalone --all -n "${DEMO_NAMESPACE}" --ignore-not-found=true --wait=false 2>/dev/null &
@@ -1440,6 +1595,7 @@ demo_cleanup() {
     # Step 5: Clean up secrets, services, configmaps, PVCs
     log_info "Cleaning up remaining resources..."
     kubectl delete secret neo4j-admin-secret -n "${DEMO_NAMESPACE}" --ignore-not-found=true 2>/dev/null
+    kubectl delete secret demo-reader-creds -n "${DEMO_NAMESPACE}" --ignore-not-found=true 2>/dev/null
     kubectl delete svc -l "neo4j.com/cluster=${CLUSTER_NAME_MULTI}" -n "${DEMO_NAMESPACE}" --ignore-not-found=true 2>/dev/null
     kubectl delete svc "${CLUSTER_NAME_SINGLE}-service" -n "${DEMO_NAMESPACE}" --ignore-not-found=true 2>/dev/null
     kubectl delete configmap "${CLUSTER_NAME_SINGLE}-config" -n "${DEMO_NAMESPACE}" --ignore-not-found=true 2>/dev/null
@@ -1459,7 +1615,7 @@ show_demo_summary() {
 
     echo -e "  ${DIM}┌──────────────────────────────────────────────────────────────────────┐${NC}"
     echo -e "  ${DIM}│${NC}                                                                      ${DIM}│${NC}"
-    echo -e "  ${DIM}│${NC}  ${GREEN}${BOLD}All 7 demo parts completed successfully${NC}              ${DIM}${total_min}m ${total_sec}s total${NC}  ${DIM}│${NC}"
+    echo -e "  ${DIM}│${NC}  ${GREEN}${BOLD}All 8 demo parts completed successfully${NC}              ${DIM}${total_min}m ${total_sec}s total${NC}  ${DIM}│${NC}"
     echo -e "  ${DIM}│${NC}                                                                      ${DIM}│${NC}"
     echo -e "  ${DIM}│${NC}  ${GREEN}✔${NC} Part 1  TLS Standalone deployment                                 ${DIM}│${NC}"
     echo -e "  ${DIM}│${NC}  ${GREEN}✔${NC} Part 2  TLS HA Cluster (3 servers, Raft consensus)                ${DIM}│${NC}"
@@ -1467,7 +1623,8 @@ show_demo_summary() {
     echo -e "  ${DIM}│${NC}  ${GREEN}✔${NC} Part 4  Database creation with schema and sample data             ${DIM}│${NC}"
     echo -e "  ${DIM}│${NC}  ${GREEN}✔${NC} Part 5  APOC plugin via Neo4jPlugin CRD                           ${DIM}│${NC}"
     echo -e "  ${DIM}│${NC}  ${GREEN}✔${NC} Part 6  Multi-database topologies (read-heavy + write-heavy)      ${DIM}│${NC}"
-    echo -e "  ${DIM}│${NC}  ${GREEN}✔${NC} Part 7  Live diagnostics from CR status                           ${DIM}│${NC}"
+    echo -e "  ${DIM}│${NC}  ${GREEN}✔${NC} Part 7  Declarative user & role management                        ${DIM}│${NC}"
+    echo -e "  ${DIM}│${NC}  ${GREEN}✔${NC} Part 8  Live diagnostics from CR status                           ${DIM}│${NC}"
     echo -e "  ${DIM}│${NC}                                                                      ${DIM}│${NC}"
     echo -e "  ${DIM}└──────────────────────────────────────────────────────────────────────┘${NC}"
     echo
@@ -1479,6 +1636,7 @@ show_demo_summary() {
     kubectl get neo4jenterprisestandalone,neo4jenterprisecluster -n "${DEMO_NAMESPACE}" -o wide 2>/dev/null
     kubectl get neo4jplugin -n "${DEMO_NAMESPACE}" -o wide 2>/dev/null
     kubectl get neo4jdatabase -n "${DEMO_NAMESPACE}" -o wide 2>/dev/null
+    kubectl get neo4jrole,neo4juser,neo4jrolebinding -n "${DEMO_NAMESPACE}" -o wide 2>/dev/null
 
     # Handle cleanup
     if [[ "${CLEANUP_AFTER}" == "true" ]]; then
@@ -1567,7 +1725,7 @@ main() {
     echo -e "  ${PURPLE}${BOLD}Welcome to the Neo4j Kubernetes Operator demonstration!${NC}"
     echo
     echo -e "  ${DIM}This demo deploys real Neo4j Enterprise instances and walks through${NC}"
-    echo -e "  ${DIM}the operator's core capabilities in 7 parts:${NC}"
+    echo -e "  ${DIM}the operator's core capabilities in 8 parts:${NC}"
     echo
     echo -e "  ${WHITE} 1${NC}  🚀  TLS standalone deployment"
     echo -e "  ${WHITE} 2${NC}  🏗️   TLS HA cluster (3 servers)"
@@ -1575,7 +1733,8 @@ main() {
     echo -e "  ${WHITE} 4${NC}  🗄️   Database creation with sample data"
     echo -e "  ${WHITE} 5${NC}  🔌  APOC plugin installation"
     echo -e "  ${WHITE} 6${NC}  📊  Multi-database topologies"
-    echo -e "  ${WHITE} 7${NC}  🔍  Live cluster diagnostics"
+    echo -e "  ${WHITE} 7${NC}  👥  Declarative user & role management"
+    echo -e "  ${WHITE} 8${NC}  🔍  Live cluster diagnostics"
     echo
     echo -e "  ${DIM}┌────────────────────────────────────────────┐${NC}"
     echo -e "  ${DIM}│${NC}  Namespace: ${BOLD}${DEMO_NAMESPACE}${NC}  Speed: ${BOLD}${DEMO_SPEED}${NC}  ${DIM}│${NC}"
@@ -1615,6 +1774,10 @@ main() {
     sleep $PAUSE_SHORT
 
     demonstrate_multi_database
+
+    sleep $PAUSE_SHORT
+
+    demonstrate_user_role_management
 
     sleep $PAUSE_SHORT
 

@@ -97,6 +97,11 @@ make fmt / make lint / make lint-lenient / make vet / make security / make tidy
 # CRDs
 make install / make uninstall
 
+# Generators / packaging sync (see ## Generated artifacts below)
+make sync-all                # regenerate every artifact from sources
+make ship-prep               # sync-all + bundle + lint + CSV coverage; pre-release one-shot
+make check-drift             # CI gate: fails if any generated file is out of sync
+
 # Operator logs/status
 make operator-logs / make operator-status
 kubectl logs -n neo4j-operator deployment/neo4j-operator-controller-manager
@@ -315,6 +320,32 @@ Works with both `Neo4jEnterpriseCluster` and `Neo4jEnterpriseStandalone`. `Datab
 
 **Standalone deployments require `NEO4J_AUTH` env var** for automatic password setup (critical for Neo4jDatabase support).
 
+## Neo4jUser, Neo4jRole & Neo4jRoleBinding CRDs
+
+Three CRDs, one design rule: **privileges live on `Neo4jRole`, not on `Neo4jUser` or `Neo4jRoleBinding`**. Users carry only `roles: []` bindings; roles carry `privileges: []`; bindings carry only `roles: []`. See `docs/user_guide/user_role_management.md` for the end-to-end picture.
+
+**Files:**
+- `api/v1beta1/neo4juser_types.go`, `api/v1beta1/neo4jrole_types.go`, `api/v1beta1/neo4jrolebinding_types.go` — CRD types
+- `internal/controller/neo4juser_controller.go`, `neo4jrole_controller.go`, `neo4jrolebinding_controller.go` — reconcilers
+- `internal/controller/cluster_resolver.go` — shared `ResolveClusterRef` helper
+- `internal/controller/diagnostics_users_roles.go` — shared `collectUsersAndRoles` helper used by both cluster and standalone diagnostic collectors
+- `internal/neo4j/users.go` — `ShowUser`, `AlterUser` (with `AlterUserOptions` builder), `ShowRole`, `CreateRoleAdvanced`, `DropRoleIfExists`, `DropUserIfExists`, `ShowRolePrivileges`, `ListUserRoles` (replaces buggy `GetUserRoles`), `ListUsers`, `ListRoles`
+- `internal/neo4j/privileges.go` — `CanonicalisePrivilegeStatement`, `DerivePrivilegeRevoke`, `PrivilegeStatementMatchesRole` for diff-based reconciliation
+- `internal/validation/user_validator.go`, `role_validator.go`, `rolebinding_validator.go` — controller-side validators (per CLAUDE.md rule #26)
+
+**Reconciliation source-of-truth:**
+- `Neo4jUser.spec` is authoritative for password (via Secret hash), `accountStatus`, `homeDatabase`, `roles`, `externalAuth`. Drift is reverted on every loop.
+- `Neo4jRole.spec.privileges` is authoritative when `enforcePrivileges: true` (default). Manual `GRANT/REVOKE` outside the operator is reverted.
+- Built-in roles (`PUBLIC`, `reader`, etc.) require `adoptBuiltin: true` to be managed; they are never dropped on CR delete.
+- `PUBLIC` is auto-assigned by Neo4j and never granted/revoked by the operator.
+
+**Watches:** the `Neo4jUser` controller watches `Neo4jRole` (in `SetupWithManager`) so users with missing custom roles re-reconcile when their roles land.
+
+**Key Cypher commands** (all run against `system` DB):
+- User: `CREATE USER`, `ALTER USER` (compound, REMOVE clauses before SET), `DROP USER IF EXISTS`, `SHOW USERS WITH AUTH`, `GRANT/REVOKE ROLE`
+- Role: `CREATE ROLE [AS COPY OF]`, `DROP ROLE IF EXISTS`, `SHOW ROLES`, `SHOW ROLE <r> PRIVILEGES AS COMMANDS YIELD command, immutable`
+- Privileges: `GRANT/DENY/REVOKE ... ON ... TO/FROM ...` — REVOKEs are derived textually, not user-supplied
+
 ## Key Implementation Patterns
 
 **Resource Version Conflict**: Always wrap with `retry.RetryOnConflict(retry.DefaultRetry, ...)` — required for Neo4j 2025.01.0 cluster formation.
@@ -370,6 +401,48 @@ kubectl logs -n neo4j-operator-system deployment/neo4j-operator-controller-manag
 35. **Bolt TLS REQUIRED**: Both cluster and standalone set `server.bolt.tls_level=REQUIRED` when TLS enabled; plain `bolt://` rejected
 36. **Deprecated Config Keys**: Validator warns on `dbms.logs.query.enabled` (use `db.logs.query.enabled`); always use `db.*` namespace for Neo4j 5.x+ settings
 37. **Default Database Topology**: `neo4j` database gets 1 primary, 0 secondaries by default; `initial.dbms.default_primaries_count`/`default_secondaries_count` only work at first bootstrap; use `ALTER DATABASE` to change post-bootstrap
+38. **Privileges live on `Neo4jRole`, not `Neo4jUser`**: never inline `GRANT/DENY` on a user. Users carry only `roles: []` bindings. Putting privileges on users re-implements RBAC inside-out and creates merge conflicts when two CRs touch the same role.
+39. **PUBLIC role is implicit**: never include in role grants/revokes; the user controller filters it out of both desired and actual role sets. Listing PUBLIC in `Neo4jUser.spec.roles` produces a warning, not an error.
+40. **Built-in role guard**: `Neo4jRole` validator rejects names in `{PUBLIC,reader,editor,publisher,architect,admin}` unless `spec.adoptBuiltin=true`. Adopted built-ins are NEVER dropped on CR delete (only the finalizer is released).
+41. **Privilege drift via `SHOW ROLE PRIVILEGES AS COMMANDS`**: source of truth is `Neo4jRole.spec.privileges`. The controller canonicalises both sides (`CanonicalisePrivilegeStatement`), diffs as sets, derives REVOKEs textually via `DerivePrivilegeRevoke`. Immutable rows (immutable=true column) are excluded from the revoke set and surfaced via `status.privilegeDrift`. `enforcePrivileges: false` skips the revoke pass entirely.
+42. **Privilege statement validation**: each entry in `Neo4jRole.spec.privileges` MUST start with GRANT or DENY (REVOKE is rejected — the operator derives REVOKEs) and end with `TO <spec.name>`. Otherwise the canonicaliser cannot derive the matching REVOKE when the privilege is removed from spec.
+43. **`GetUserRoles` in `internal/neo4j/client.go` is buggy**: it queries `SHOW USER PRIVILEGES YIELD role`, returning one row per privilege instead of per role. Use `Client.ListUserRoles` or `Client.ShowUser` instead.
+44. **Password rotation via Secret hash**: `Neo4jUser` controller stores SHA-256 of the password Secret value in `status.passwordSecretHash`; rotation is detected when the hash changes. The password is never persisted in CR fields. Skip `SET PASSWORD` when only `externalAuth` is configured.
+45. **`ALTER USER` clause ordering**: REMOVE clauses MUST precede SET clauses on a single statement. The `AlterUserOptions` builder honours this — never hand-roll ALTER USER strings.
+46. **`Neo4jUser.spec.roles` referencing missing custom roles**: do NOT fail the reconcile. Set the `PendingDependencies` condition and requeue; the user controller watches `Neo4jRole` and re-reconciles when the role lands.
+47. **Same-namespace `clusterRef` for users/roles**: cross-namespace references are not supported in v1; both CRDs are namespace-scoped. If multi-tenant patterns become a real ask, design an opt-in via a `Neo4jClusterAccessGrant` CR — do not silently widen the lookup.
+48. **Identifier quoting in Cypher**: all role/user names are wrapped with backticks via `escapeBackticks()` (which doubles embedded backticks). Never `fmt.Sprintf` user-controlled names directly into Cypher; password and provider IDs go through driver parameters.
+49. **`Neo4jRoleBinding` never creates or drops users**: it only manages role grants for users provisioned externally (SSO/LDAP first-login). If the user is absent the binding sits in `UserNotFound` and waits — do not change this behaviour without a migration, since users may not exist until first authentication.
+50. **`Neo4jRoleBinding` overlap with `Neo4jUser`**: validator rejects bindings whose `clusterRef`+`username` match an existing `Neo4jUser` CR in the same namespace. Two CRs racing on the same role grants is a footgun — pick one model.
+51. **`Neo4jRoleBinding.spec.enforceExclusive`**: defaults to false. With false, the binding only manages roles in `.spec.roles` (and previously-recorded `status.grantedRoles` for revoke-on-removal). With true, any role on the user not in `.spec.roles` is revoked. Never flip the default — non-exclusive is what makes the CR safe to use alongside other tooling.
+52. **Diagnostics `Users`/`Roles` lists are bounded**: `maxDiagnosticUsers`/`maxDiagnosticRoles` cap the slice length to keep CRD size reasonable; the full count is in `UserCount`/`RoleCount`. Never remove the cap without a corresponding pruning strategy — large user/role tables would otherwise blow up the CRD.
+
+## Generated artifacts
+
+Several files in this repo are generated, not hand-written. Editing them directly is wasted work — the next sync overwrites your changes. Sources of truth:
+
+| Generated file | Source | Regenerate via |
+|---|---|---|
+| `config/rbac/role.yaml` | `+kubebuilder:rbac:` markers in `internal/controller/*.go` | `make manifests` |
+| `config/crd/bases/*.yaml` | Go types in `api/v1beta1/*` + kubebuilder markers | `make manifests` |
+| `api/v1beta1/zz_generated.deepcopy.go` | Go types in `api/v1beta1/*` | `make generate` |
+| `config/crd/kustomization.yaml` (resources list) | files in `config/crd/bases/` | `make sync-kustomize` |
+| `config/samples/kustomization.yaml` (resources list) | `config/samples/neo4j_*.yaml` filenames | `make sync-kustomize` |
+| `config/rbac/<crd>_{editor,viewer}_role.yaml` + RBAC kustomization | `spec.{group,names.plural,names.singular}` from each CRD base | `make sync-editor-viewer-roles` |
+| `charts/neo4j-operator/crds/*.yaml` | `config/crd/bases/*.yaml` | `make helm-sync-crds` |
+| `charts/neo4j-operator/templates/clusterrole.yaml` | `config/rbac/role.yaml` rules | `make helm-sync-rbac` |
+| `charts/neo4j-operator/Chart.yaml` (`artifacthub.io/crds` annotation) | CRD bases + curated descriptions in `scripts/helm-sync-artifacthub-crds.sh` | `make helm-sync-artifacthub-crds` |
+| `bundle/manifests/*` and `bundle/metadata/*` (OperatorHub) | `config/manifests/bases/*.csv.yaml` + everything above | `make bundle` |
+
+Two umbrella targets:
+- **`make sync-all`** — runs every regeneration step (no bundle).
+- **`make ship-prep`** — `sync-all` + `bundle` + `helm-lint` + `check-csv-coverage`. Run before tagging a release.
+
+CI gate:
+- **`make check-drift`** — runs `sync-all` + `bundle`, then `git diff --exit-code` (ignoring the `createdAt:` timestamp the operator-sdk stamps). Fails if any committed file is stale. Use this in CI to enforce that whoever changes a source also commits the regenerated output.
+
+53. **Never hand-edit generated files**: edit the source listed above instead. Each generated file carries a `# This file is GENERATED. DO NOT EDIT.` header; check-drift will revert tampering.
+54. **`scripts/helm-sync-artifacthub-crds.sh` requires a description per CRD**: when adding a CRD, also add a `case "$kind" in ... esac` row to the script. The script exits non-zero if a CRD has no mapped description, so you can't forget.
 
 ## Reports
 

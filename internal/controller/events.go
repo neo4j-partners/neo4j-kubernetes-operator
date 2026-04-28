@@ -87,3 +87,54 @@ const (
 	EventReasonClusterNotReady      = "ClusterNotReady"
 	EventReasonClientCreationFailed = "ClientCreationFailed"
 )
+
+// User and role management events
+const (
+	EventReasonUserCreated         = "UserCreated"
+	EventReasonUserUpdated         = "UserUpdated"
+	EventReasonUserDeleted         = "UserDeleted"
+	EventReasonUserReady           = "UserReady"
+	EventReasonUserDeletionFailed  = "UserDeletionFailed"
+	EventReasonUserSyncFailed      = "UserSyncFailed"
+	EventReasonPasswordRotated     = "PasswordRotated"
+	EventReasonRolesGranted        = "RolesGranted"
+	EventReasonRolesRevoked        = "RolesRevoked"
+	EventReasonRolePending         = "RolePending"
+	EventReasonRoleCreated         = "RoleCreated"
+	EventReasonRoleDeleted         = "RoleDeleted"
+	EventReasonRoleReady           = "RoleReady"
+	EventReasonRoleDeletionFailed  = "RoleDeletionFailed"
+	EventReasonRoleSyncFailed      = "RoleSyncFailed"
+	EventReasonPrivilegesApplied   = "PrivilegesApplied"
+	EventReasonPrivilegesDriftKept = "PrivilegesDriftKept"
+)
+
+// User and role-binding management events
+const (
+	EventReasonBindingCreated = "BindingCreated"
+	EventReasonBindingUpdated = "BindingUpdated"
+	EventReasonBindingDeleted = "BindingDeleted"
+	EventReasonBindingFailed  = "BindingFailed"
+	EventReasonUserNotFound   = "UserNotFound"
+)
+
+// Conditions used by the user/role/binding reconcilers.
+const (
+	ConditionTypeRolesSynced         = "RolesSynced"
+	ConditionTypePasswordSynced      = "PasswordSynced"
+	ConditionTypePendingDependencies = "PendingDependencies"
+	ConditionTypeClusterNotReady     = "ClusterNotReady"
+	ConditionTypePrivilegesSynced    = "PrivilegesSynced"
+	ConditionTypeUserNotFound        = "UserNotFound"
+)
+
+const (
+	ConditionReasonRolesSynced       = "RolesMatch"
+	ConditionReasonRolesPending      = "RolesPending"
+	ConditionReasonPasswordSynced    = "PasswordMatchesSecret"
+	ConditionReasonClusterNotReady   = "ClusterNotReady"
+	ConditionReasonUserReady         = "UserReady"
+	ConditionReasonRoleReady         = "RoleReady"
+	ConditionReasonPrivilegesSynced  = "PrivilegesMatch"
+	ConditionReasonPrivilegesDrifted = "PrivilegesDrifted"
+)

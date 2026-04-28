@@ -344,21 +344,41 @@ When adding new Custom Resource Definitions:
    - Implement validation logic
    - Add to validation framework
 
-4. **Update RBAC** (`config/rbac/`):
+4. **Add RBAC markers** (no manual `config/rbac/` edits needed):
    ```go
-   // Add RBAC markers to controller
    //+kubebuilder:rbac:groups=neo4j.neo4j.com,resources=mynewresources,verbs=get;list;watch;create;update;patch;delete
+   //+kubebuilder:rbac:groups=neo4j.neo4j.com,resources=mynewresources/status,verbs=get;update;patch
+   //+kubebuilder:rbac:groups=neo4j.neo4j.com,resources=mynewresources/finalizers,verbs=update
    ```
+   These flow through `make manifests` into `config/rbac/role.yaml` and from there into the Helm chart's ClusterRole via `make helm-sync-rbac`.
 
-5. **Generate Code**:
+5. **Add a sample manifest** (used by the OperatorHub CSV's `alm-examples`):
    ```bash
-   make manifests generate
+   # config/samples/neo4j_v1beta1_mynewresource.yaml
    ```
 
-6. **Add Tests**:
-   - Unit tests for controller logic
-   - Integration tests for full workflow
-   - Example configurations
+6. **Wire the controller into `cmd/main.go`** (production + development controller maps + cache config).
+
+7. **Add a description to the artifacthub-crds map**:
+   Edit `scripts/helm-sync-artifacthub-crds.sh` and add a `case "$kind" in` row for your new Kind. The script fails loudly if any CRD lacks a description, so you can't forget.
+
+8. **Run the full sync pipeline** (single command):
+   ```bash
+   make ship-prep
+   ```
+   This regenerates: CRDs, RBAC, DeepCopy, kustomize lists, editor/viewer roles, the Helm chart's CRDs and ClusterRole, the ArtifactHub annotation, and the OperatorHub bundle. It also lints the Helm chart and verifies CSV coverage.
+
+9. **Add documentation**:
+   - API reference: `docs/api_reference/<kind>.md` (mirror an existing one).
+   - User guide entry if the resource introduces a new workflow.
+   - Update the CRD list in `README.md` and `docs/README.md`.
+
+10. **Add tests**:
+    - Unit tests for validators and any custom logic.
+    - Integration tests in `test/integration/` (one Ginkgo file per CRD; mirror `test/integration/neo4juser_test.go`).
+    - Add cleanup logic to `cleanupCustomResourcesInNamespace` in `test/integration/integration_suite_test.go`.
+
+CI's `check-drift` job runs `make sync-all bundle` and fails the PR if anything is out of date — this enforces step 8.
 
 ### Performance Considerations
 

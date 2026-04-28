@@ -25,6 +25,7 @@ The Operator deploys Neo4j EE v5.26+.  It supports both clustered and standalone
   - [Cleanup](#cleanup)
   - [Development Installation](#development-installation)
 - [Database Management](#-database-management)
+- [User & Role Management](#-user--role-management)
 - [Property Sharding](#-property-sharding-infinigraph-ga)
 - [Backup and Restore](#-backup-and-restore)
 - [Examples](#-examples)
@@ -229,6 +230,96 @@ EOF
 - [Database from S3 backup](examples/databases/database-from-s3-seed.yaml)
 - [Database from existing backup](examples/databases/database-dump-vs-backup-seed.yaml)
 
+## 👥 User & Role Management
+
+Once a cluster or standalone is `Ready`, manage Neo4j users, roles, and privileges declaratively via three CRDs. Privileges live on roles; users are bound to roles by name.
+
+> **Prerequisites**: A `Neo4jEnterpriseCluster` or `Neo4jEnterpriseStandalone` in `Ready` phase. Enterprise edition only (RBAC roles and `accountStatus: suspended` are Enterprise-only Neo4j features).
+
+### Step 1: Create a custom role with privileges (`Neo4jRole`)
+
+The role's privileges are reconciled against `SHOW ROLE PRIVILEGES AS COMMANDS` on every loop. Any out-of-band `REVOKE` is reverted unless `enforcePrivileges: false`.
+
+```bash
+kubectl apply -f - <<EOF
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jRole
+metadata:
+  name: analytics-reader
+spec:
+  clusterRef: minimal-cluster   # or your standalone's name
+  privileges:
+    - "GRANT ACCESS ON DATABASE neo4j TO analytics-reader"
+    - "GRANT MATCH {*} ON GRAPH neo4j NODES * TO analytics-reader"
+    - "DENY WRITE ON GRAPH neo4j TO analytics-reader"
+EOF
+```
+
+Built-in roles (`reader`, `editor`, `publisher`, `architect`, `admin`) don't need a `Neo4jRole` — bind to them directly.
+
+### Step 2: Create a user (`Neo4jUser`) — password sourced from a Secret
+
+```bash
+# Password lives in the Secret, never in the CR. Rotation = update the Secret;
+# the controller detects the change via SHA-256 hash and applies ALTER USER.
+kubectl create secret generic analytics-reader-creds \
+  --from-literal=password='ChangeMe123!'
+
+kubectl apply -f - <<EOF
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jUser
+metadata:
+  name: analytics-reader
+spec:
+  clusterRef: minimal-cluster
+  username: analytics_reader
+  passwordSecretRef:
+    name: analytics-reader-creds
+  roles:
+    - analytics-reader      # custom role from Step 1
+EOF
+```
+
+If the role doesn't exist yet, the user enters `PendingDependencies` and reconciles automatically when it lands.
+
+### Step 3: Inspect status
+
+```bash
+kubectl get neo4juser analytics-reader -o jsonpath='{.status.currentRoles}'
+kubectl get neo4jrole analytics-reader -o jsonpath='{.status.appliedPrivileges}'
+
+# Cluster-level rollup (when monitoring.enabled=true, default):
+kubectl get neo4jenterprisecluster minimal-cluster -o jsonpath='{.status.diagnostics.users}'
+kubectl get neo4jenterprisecluster minimal-cluster -o jsonpath='{.status.diagnostics.roles}'
+```
+
+### Bonus: Bind an SSO/LDAP user the operator does NOT own
+
+When users are provisioned externally (typically by Neo4j on first OIDC/LDAP login), use `Neo4jRoleBinding` — it manages role grants without ever creating or dropping the user.
+
+```bash
+kubectl apply -f - <<EOF
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jRoleBinding
+metadata:
+  name: alice-binding
+spec:
+  clusterRef: minimal-cluster
+  username: alice@example.com   # SSO-provisioned, no Neo4jUser CR
+  roles: [editor, analytics-reader]
+EOF
+```
+
+If the user doesn't exist yet, the binding sits in `UserNotFound` and reconciles when it appears.
+
+**Documentation and more examples:**
+
+- [User & Role Management Guide](docs/user_guide/user_role_management.md) — end-to-end walkthrough with troubleshooting
+- [Neo4jUser API reference](docs/api_reference/neo4juser.md)
+- [Neo4jRole API reference](docs/api_reference/neo4jrole.md)
+- [Neo4jRoleBinding API reference](docs/api_reference/neo4jrolebinding.md)
+- [`examples/users-roles/`](examples/users-roles/) — six end-to-end YAMLs covering native users, custom roles, SSO bindings, suspension, external auth, and built-in adoption
+
 ## 🔄 Property Sharding (Infinigraph GA)
 
 Property sharding (Infinigraph) was introduced and is GA as of Neo4j 2025.12. It keeps the graph shard (nodes/relationships) in a Raft group while distributing properties across property shards for horizontal scale.
@@ -402,10 +493,19 @@ After cloning the repository, ready-to-use configurations are available in the `
 - **[LoadBalancer cluster](examples/clusters/loadbalancer-cluster.yaml)** - External access with cloud load balancer
 - **[Ingress cluster](examples/clusters/ingress-cluster.yaml)** - HTTPS access via Ingress controller
 
-### Plugin Management (NEW!)
+### Plugin Management
 - **[Cluster plugin example](examples/plugins/cluster-plugin-example.yaml)** - Install APOC on a Neo4jEnterpriseCluster
 - **[Standalone plugin example](examples/plugins/standalone-plugin-example.yaml)** - Install Graph Data Science on standalone
 - **[Plugin documentation](examples/plugins/README.md)** - Complete guide to plugin management
+
+### Users & Roles (NEW!)
+- **[Read-only user](examples/users-roles/01-readonly-user.yaml)** - Bind to the built-in `reader` role
+- **[Custom role with user](examples/users-roles/02-custom-role-with-user.yaml)** - The canonical pattern: a Neo4jRole carrying privileges plus a Neo4jUser bound to it
+- **[Suspended user](examples/users-roles/03-suspended-user.yaml)** - Disable an account without dropping it
+- **[External authentication](examples/users-roles/04-external-auth.yaml)** - OIDC + LDAP only (no native password)
+- **[Adopt a built-in role](examples/users-roles/05-adopt-builtin.yaml)** - Tighten privileges on `editor` with `adoptBuiltin: true`
+- **[Bind an SSO user to roles](examples/users-roles/06-rolebinding-sso-user.yaml)** - `Neo4jRoleBinding` for users provisioned externally (LDAP/OIDC first-login)
+- **[Users & Roles documentation](examples/users-roles/README.md)** - End-to-end declarative RBAC
 
 ### Property Sharding (Infinigraph GA - Neo4j 2025.12+)
 - **[Basic property sharding](examples/property_sharding/basic-property-sharding.yaml)** - Simple property sharded database setup
@@ -460,6 +560,10 @@ spec:
 
 See [authentication example](examples/clusters/auth-example.yaml) for complete configuration.
 
+### Declarative Users, Roles & Privileges
+
+Beyond the bootstrap admin secret, you can manage application-level users, roles, and privileges declaratively via the [`Neo4jUser`](docs/api_reference/neo4juser.md) and [`Neo4jRole`](docs/api_reference/neo4jrole.md) CRDs. Passwords come from `Secret`s, role bindings are reconciled like any other resource, and privilege drift is auto-corrected. See the [User & Role Management Guide](docs/user_guide/user_role_management.md).
+
 ## 📚 Documentation Structure
 
 ### 👥 User Guides
@@ -487,6 +591,11 @@ Complete CRD documentation for all custom resources:
 - [Neo4jDatabase](docs/api_reference/neo4jdatabase.md)
 - [Neo4jShardedDatabase](docs/api_reference/neo4jshardeddatabase.md) - Property sharded databases (Infinigraph, GA in 2025.12+)
 - [Neo4jPlugin](docs/api_reference/neo4jplugin.md)
+- [Neo4jUser](docs/api_reference/neo4juser.md) - Declarative user management (passwords, roles, status, external auth)
+- [Neo4jRole](docs/api_reference/neo4jrole.md) - Declarative role management with privilege-drift reconciliation
+- [Neo4jRoleBinding](docs/api_reference/neo4jrolebinding.md) - Role grants for externally-provisioned users (SSO/LDAP/OIDC)
+
+See the [User & Role Management Guide](docs/user_guide/user_role_management.md) for an end-to-end walkthrough.
 
 ## ✨ Key Features
 
@@ -566,6 +675,18 @@ kubectl logs -l app.kubernetes.io/name=neo4j-operator
 Note: "Compliance-ready logging and auditing" means the operator exposes Neo4j logging/audit controls via `spec.config` and emits Kubernetes Events for key actions; you still need to enable the desired Neo4j log settings and ship/retain logs per your compliance requirements.
 
 ## 🎯 Recent Improvements
+
+### Declarative User & Role Management (April 2026)
+
+Three new CRDs — **`Neo4jUser`**, **`Neo4jRole`**, and **`Neo4jRoleBinding`** — close the last imperative gap in the operator. Users, roles, and privileges are now expressible as Kubernetes resources alongside infrastructure, with full GitOps support and automatic drift reconciliation.
+
+- **`Neo4jUser`**: identity, password (sourced from `Secret`), `accountStatus`, home database, role bindings, and external auth providers (OIDC/LDAP). Password rotation triggered automatically when the Secret value changes.
+- **`Neo4jRole`**: role existence and privilege management with full `SHOW ROLE PRIVILEGES AS COMMANDS`-based drift reconciliation. Manual `GRANT/REVOKE` outside the operator is reverted on the next loop unless `enforcePrivileges: false`. Built-in roles (`reader`, `editor`, etc.) protected by default; opt in via `adoptBuiltin: true`.
+- **`Neo4jRoleBinding`**: role grants for users provisioned externally (SSO/LDAP first-login users that the operator does not own). Never creates or drops the user; only manages role grants. Optional `enforceExclusive: true` for strict role-set control.
+- **Privileges live on the role, not the user.** Bind users to roles via `Neo4jUser.spec.roles` or `Neo4jRoleBinding.spec.roles`. Roles can be referenced before they exist — the user/binding enters `PendingDependencies` and reconciles automatically when the role lands.
+- **Live diagnostics**: when `spec.monitoring.enabled=true` (default), the cluster/standalone status now surfaces `SHOW USERS` / `SHOW ROLES` summaries in `status.diagnostics`, so you can observe the effect of declarative RBAC without `kubectl exec`.
+
+See the [User & Role Management Guide](docs/user_guide/user_role_management.md) and the [users-roles examples](examples/users-roles/).
 
 ### v1.7.0-alpha: API Version Bump to v1beta1 (Breaking Changes)
 

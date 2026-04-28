@@ -1590,6 +1590,14 @@ func (qm *QueryMonitor) CollectDiagnostics(ctx context.Context, cluster *neo4jv1
 		}
 	}
 
+	// Collect users + roles. Best-effort: if the connected user lacks
+	// SHOW USER / SHOW ROLE privilege, we leave the lists empty rather than
+	// failing the whole diagnostics pass.
+	collectUsersAndRoles(ctx, neo4jClient,
+		&diagnostics.Users, &diagnostics.UserCount,
+		&diagnostics.Roles, &diagnostics.RoleCount,
+		&diagnostics.CollectionError, logger)
+
 	now := metav1.Now()
 	diagnostics.LastCollected = &now
 

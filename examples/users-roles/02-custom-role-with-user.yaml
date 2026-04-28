@@ -1,0 +1,43 @@
+# A custom role with explicit privileges, plus a user bound to it.
+#
+# This is the canonical pattern: model "what can be done" as a Neo4jRole
+# and "who can do it" as a Neo4jUser referencing the role by name. The
+# user controller watches Neo4jRole, so the user reconciles automatically
+# when the role lands.
+
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jRole
+metadata:
+  name: analytics-reader
+  namespace: prod
+spec:
+  clusterRef: prod-cluster
+  # spec.name defaults to metadata.name; both are "analytics_reader"-style.
+  # Each privilege MUST end with `TO <name>` so the controller can derive
+  # the matching REVOKE if the privilege is later removed from the spec.
+  privileges:
+    - "GRANT ACCESS ON DATABASE analytics TO analytics-reader"
+    - "GRANT MATCH {*} ON GRAPH analytics NODES * TO analytics-reader"
+    - "DENY WRITE ON GRAPH analytics TO analytics-reader"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: analytics-reader-creds
+  namespace: prod
+type: Opaque
+stringData:
+  password: "AnotherStrongOne!"
+---
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jUser
+metadata:
+  name: analytics-reader
+  namespace: prod
+spec:
+  clusterRef: prod-cluster
+  username: analytics_reader
+  passwordSecretRef:
+    name: analytics-reader-creds
+  roles:
+    - analytics-reader   # references the Neo4jRole above by spec.name

@@ -161,11 +161,25 @@ tilt ci            # run once and exit (useful for validation)
    make smoke-test   # Deploys a standalone instance and waits for Ready
    ```
 
-5. **If you modified API types** (`api/v1beta1/`):
+5. **If you modified API types or RBAC markers** (`api/v1beta1/`, `internal/controller/`):
    ```bash
-   make generate manifests   # Regenerate DeepCopy and CRDs
+   # Single command — regenerates everything: DeepCopy, CRDs, RBAC,
+   # kustomize lists, helm chart CRDs + ClusterRole + ArtifactHub
+   # annotation, OperatorHub bundle.  Also lints the chart and verifies
+   # OperatorHub CSV coverage.
+   make ship-prep
    ```
-   If using Tilt, this happens automatically.
+   For an iterative loop (no bundle build), `make sync-all` is faster.
+   CI's `check-drift` job will fail the PR if any generated file is out
+   of date, so always run this before pushing.
+
+   If you're adding a *new* CRD, also add a description case to
+   `scripts/helm-sync-artifacthub-crds.sh` — the script exits non-zero
+   if any CRD lacks a description.
+
+   If using Tilt, individual `make manifests generate` happen
+   automatically; the packaging syncs (`make ship-prep`) still need to
+   run before commit.
 
 ## Testing
 

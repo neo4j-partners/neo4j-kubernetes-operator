@@ -367,6 +367,30 @@ func cleanupCustomResourcesInNamespace(namespace string) {
 			cleanupResource(&item, namespace, "Neo4jPlugin")
 		}
 	}
+
+	// Clean up Neo4j Role Bindings (must precede Users + Roles so DROP USER/DROP ROLE succeed)
+	bindingList := &neo4jv1beta1.Neo4jRoleBindingList{}
+	if err := k8sClient.List(ctx, bindingList, client.InNamespace(namespace)); err == nil {
+		for _, item := range bindingList.Items {
+			cleanupResource(&item, namespace, "Neo4jRoleBinding")
+		}
+	}
+
+	// Clean up Neo4j Users (must precede Roles so DROP ROLE succeeds)
+	userList := &neo4jv1beta1.Neo4jUserList{}
+	if err := k8sClient.List(ctx, userList, client.InNamespace(namespace)); err == nil {
+		for _, item := range userList.Items {
+			cleanupResource(&item, namespace, "Neo4jUser")
+		}
+	}
+
+	// Clean up Neo4j Roles
+	roleList := &neo4jv1beta1.Neo4jRoleList{}
+	if err := k8sClient.List(ctx, roleList, client.InNamespace(namespace)); err == nil {
+		for _, item := range roleList.Items {
+			cleanupResource(&item, namespace, "Neo4jRole")
+		}
+	}
 }
 
 // cleanupResource removes finalizers and deletes a resource
