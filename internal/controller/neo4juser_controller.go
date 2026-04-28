@@ -627,12 +627,25 @@ func effectiveUsername(user *neo4jv1beta1.Neo4jUser) string {
 	return user.Name
 }
 
-// normaliseRoles trims, deduplicates and sorts a role-name slice.
+// normaliseRoles trims, deduplicates, sorts, and filters out the implicit
+// PUBLIC role from a role-name slice.
+//
+// PUBLIC is auto-assigned to every Neo4j user — it always shows up in
+// `SHOW USERS YIELD roles`, but listing it in spec.roles has no effect
+// (the validator warns). Filtering here means downstream `rolesEqual`
+// comparisons match cleanly: a fresh user with `roles: [reader]` has live
+// roles `[PUBLIC, reader]`, which after this filter becomes `[reader]` on
+// both sides of the diff. Without this filter the user would sit in
+// `Pending` forever — observed empirically as a 9+ min reconcile loop in
+// CI before the spec timeout fires.
 func normaliseRoles(in []string) []string {
 	set := map[string]struct{}{}
 	for _, r := range in {
 		r = strings.TrimSpace(r)
 		if r == "" {
+			continue
+		}
+		if strings.EqualFold(r, "PUBLIC") {
 			continue
 		}
 		set[r] = struct{}{}
