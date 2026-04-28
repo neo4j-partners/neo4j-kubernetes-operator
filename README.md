@@ -25,6 +25,7 @@ The Operator deploys Neo4j EE v5.26+.  It supports both clustered and standalone
   - [Cleanup](#cleanup)
   - [Development Installation](#development-installation)
 - [Database Management](#-database-management)
+- [User & Role Management](#-user--role-management)
 - [Property Sharding](#-property-sharding-infinigraph-ga)
 - [Backup and Restore](#-backup-and-restore)
 - [Examples](#-examples)
@@ -228,6 +229,96 @@ EOF
 - [Database for standalone instance](examples/database/database-standalone.yaml)
 - [Database from S3 backup](examples/databases/database-from-s3-seed.yaml)
 - [Database from existing backup](examples/databases/database-dump-vs-backup-seed.yaml)
+
+## 👥 User & Role Management
+
+Once a cluster or standalone is `Ready`, manage Neo4j users, roles, and privileges declaratively via three CRDs. Privileges live on roles; users are bound to roles by name.
+
+> **Prerequisites**: A `Neo4jEnterpriseCluster` or `Neo4jEnterpriseStandalone` in `Ready` phase. Enterprise edition only (RBAC roles and `accountStatus: suspended` are Enterprise-only Neo4j features).
+
+### Step 1: Create a custom role with privileges (`Neo4jRole`)
+
+The role's privileges are reconciled against `SHOW ROLE PRIVILEGES AS COMMANDS` on every loop. Any out-of-band `REVOKE` is reverted unless `enforcePrivileges: false`.
+
+```bash
+kubectl apply -f - <<EOF
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jRole
+metadata:
+  name: analytics-reader
+spec:
+  clusterRef: minimal-cluster   # or your standalone's name
+  privileges:
+    - "GRANT ACCESS ON DATABASE neo4j TO analytics-reader"
+    - "GRANT MATCH {*} ON GRAPH neo4j NODES * TO analytics-reader"
+    - "DENY WRITE ON GRAPH neo4j TO analytics-reader"
+EOF
+```
+
+Built-in roles (`reader`, `editor`, `publisher`, `architect`, `admin`) don't need a `Neo4jRole` — bind to them directly.
+
+### Step 2: Create a user (`Neo4jUser`) — password sourced from a Secret
+
+```bash
+# Password lives in the Secret, never in the CR. Rotation = update the Secret;
+# the controller detects the change via SHA-256 hash and applies ALTER USER.
+kubectl create secret generic analytics-reader-creds \
+  --from-literal=password='ChangeMe123!'
+
+kubectl apply -f - <<EOF
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jUser
+metadata:
+  name: analytics-reader
+spec:
+  clusterRef: minimal-cluster
+  username: analytics_reader
+  passwordSecretRef:
+    name: analytics-reader-creds
+  roles:
+    - analytics-reader      # custom role from Step 1
+EOF
+```
+
+If the role doesn't exist yet, the user enters `PendingDependencies` and reconciles automatically when it lands.
+
+### Step 3: Inspect status
+
+```bash
+kubectl get neo4juser analytics-reader -o jsonpath='{.status.currentRoles}'
+kubectl get neo4jrole analytics-reader -o jsonpath='{.status.appliedPrivileges}'
+
+# Cluster-level rollup (when monitoring.enabled=true, default):
+kubectl get neo4jenterprisecluster minimal-cluster -o jsonpath='{.status.diagnostics.users}'
+kubectl get neo4jenterprisecluster minimal-cluster -o jsonpath='{.status.diagnostics.roles}'
+```
+
+### Bonus: Bind an SSO/LDAP user the operator does NOT own
+
+When users are provisioned externally (typically by Neo4j on first OIDC/LDAP login), use `Neo4jRoleBinding` — it manages role grants without ever creating or dropping the user.
+
+```bash
+kubectl apply -f - <<EOF
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jRoleBinding
+metadata:
+  name: alice-binding
+spec:
+  clusterRef: minimal-cluster
+  username: alice@example.com   # SSO-provisioned, no Neo4jUser CR
+  roles: [editor, analytics-reader]
+EOF
+```
+
+If the user doesn't exist yet, the binding sits in `UserNotFound` and reconciles when it appears.
+
+**Documentation and more examples:**
+
+- [User & Role Management Guide](docs/user_guide/user_role_management.md) — end-to-end walkthrough with troubleshooting
+- [Neo4jUser API reference](docs/api_reference/neo4juser.md)
+- [Neo4jRole API reference](docs/api_reference/neo4jrole.md)
+- [Neo4jRoleBinding API reference](docs/api_reference/neo4jrolebinding.md)
+- [`examples/users-roles/`](examples/users-roles/) — six end-to-end YAMLs covering native users, custom roles, SSO bindings, suspension, external auth, and built-in adoption
 
 ## 🔄 Property Sharding (Infinigraph GA)
 
