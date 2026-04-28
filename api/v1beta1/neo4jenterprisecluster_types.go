@@ -843,6 +843,29 @@ type ClusterDiagnosticsStatus struct {
 	// +optional
 	Databases []DatabaseDiagnosticInfo `json:"databases,omitempty"`
 
+	// Users lists the users currently present in the cluster's `system` database
+	// (from SHOW USERS). Useful for observing the effect of Neo4jUser /
+	// Neo4jRoleBinding reconciliation. Bounded summary — see UserCount for the
+	// total when this list is truncated.
+	// +optional
+	Users []UserDiagnosticInfo `json:"users,omitempty"`
+
+	// UserCount is the total number of users observed via SHOW USERS, even
+	// when the Users slice is truncated for size.
+	// +optional
+	UserCount int `json:"userCount,omitempty"`
+
+	// Roles lists the roles currently present in the cluster's `system`
+	// database (from SHOW ROLES YIELD role, immutable). Useful for observing
+	// the effect of Neo4jRole reconciliation.
+	// +optional
+	Roles []RoleDiagnosticInfo `json:"roles,omitempty"`
+
+	// RoleCount is the total number of roles observed via SHOW ROLES, even
+	// when the Roles slice is truncated for size.
+	// +optional
+	RoleCount int `json:"roleCount,omitempty"`
+
 	// LastCollected is the timestamp of the most recent successful diagnostics collection.
 	// +optional
 	LastCollected *metav1.Time `json:"lastCollected,omitempty"`
@@ -851,6 +874,36 @@ type ClusterDiagnosticsStatus struct {
 	// Empty when collection succeeds.
 	// +optional
 	CollectionError string `json:"collectionError,omitempty"`
+}
+
+// UserDiagnosticInfo summarises one row of `SHOW USERS`.
+type UserDiagnosticInfo struct {
+	// User is the username.
+	User string `json:"user"`
+
+	// Roles is the set of roles directly granted to the user (excluding the
+	// implicit PUBLIC role).
+	// +optional
+	Roles []string `json:"roles,omitempty"`
+
+	// Suspended is true when STATUS = SUSPENDED.
+	// +optional
+	Suspended bool `json:"suspended,omitempty"`
+
+	// HomeDatabase is the user's configured home database, if any.
+	// +optional
+	HomeDatabase string `json:"homeDatabase,omitempty"`
+}
+
+// RoleDiagnosticInfo summarises one row of `SHOW ROLES YIELD role, immutable`.
+type RoleDiagnosticInfo struct {
+	// Role is the role name.
+	Role string `json:"role"`
+
+	// Immutable is true when the role was created with `CREATE IMMUTABLE ROLE`
+	// or is one of the built-in immutable roles.
+	// +optional
+	Immutable bool `json:"immutable,omitempty"`
 }
 
 // ServerDiagnosticInfo holds the observed state of a single Neo4j server.

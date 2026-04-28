@@ -1,0 +1,25 @@
+# Granting roles to a user the operator does NOT manage as a Neo4jUser.
+#
+# Use Neo4jRoleBinding when the user is provisioned externally — typically by
+# Neo4j on first OIDC/LDAP login, or by a bulk import outside the operator —
+# and you want declarative control over which Neo4j roles they hold.
+#
+# The binding never creates or drops the user. If the user does not exist
+# at reconcile time the binding sits in the `UserNotFound` condition and
+# reconciles automatically when the user appears.
+#
+# A Neo4jRoleBinding for a username already managed by a Neo4jUser CR in
+# the same namespace is rejected by the validator — pick one or the other.
+
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jRoleBinding
+metadata:
+  name: alice-binding
+  namespace: prod
+spec:
+  clusterRef: prod-cluster
+  username: alice@example.com   # SSO-provisioned user, NOT a Neo4jUser CR
+  roles:
+    - editor
+    - analytics-reader          # may reference a Neo4jRole; pending until it exists
+  # enforceExclusive: true      # uncomment to revoke any role not in .spec.roles

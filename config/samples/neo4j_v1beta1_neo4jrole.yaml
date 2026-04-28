@@ -1,0 +1,10 @@
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jRole
+metadata:
+  name: example-role
+spec:
+  clusterRef: sample-cluster
+  name: analytics_reader
+  privileges:
+    - "GRANT ACCESS ON DATABASE neo4j TO analytics_reader"
+    - "GRANT MATCH {*} ON GRAPH neo4j NODES * TO analytics_reader"

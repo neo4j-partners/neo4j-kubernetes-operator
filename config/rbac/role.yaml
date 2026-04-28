@@ -148,7 +148,10 @@ rules:
   - neo4jenterprisestandalones
   - neo4jplugins
   - neo4jrestores
+  - neo4jrolebindings
+  - neo4jroles
   - neo4jshardeddatabases
+  - neo4jusers
   verbs:
   - create
   - delete
@@ -166,7 +169,10 @@ rules:
   - neo4jenterprisestandalones/finalizers
   - neo4jplugins/finalizers
   - neo4jrestores/finalizers
+  - neo4jrolebindings/finalizers
+  - neo4jroles/finalizers
   - neo4jshardeddatabases/finalizers
+  - neo4jusers/finalizers
   verbs:
   - update
 - apiGroups:
@@ -178,7 +184,10 @@ rules:
   - neo4jenterprisestandalones/status
   - neo4jplugins/status
   - neo4jrestores/status
+  - neo4jrolebindings/status
+  - neo4jroles/status
   - neo4jshardeddatabases/status
+  - neo4jusers/status
   verbs:
   - get
   - patch

@@ -176,6 +176,25 @@ type StandaloneDiagnosticsStatus struct {
 	// +optional
 	Databases []DatabaseDiagnosticInfo `json:"databases,omitempty"`
 
+	// Users lists the users currently present in the standalone's `system`
+	// database (from SHOW USERS). Useful for observing the effect of
+	// Neo4jUser / Neo4jRoleBinding reconciliation.
+	// +optional
+	Users []UserDiagnosticInfo `json:"users,omitempty"`
+
+	// UserCount is the total number of users observed via SHOW USERS.
+	// +optional
+	UserCount int `json:"userCount,omitempty"`
+
+	// Roles lists the roles currently present in the standalone's `system`
+	// database (from SHOW ROLES YIELD role, immutable).
+	// +optional
+	Roles []RoleDiagnosticInfo `json:"roles,omitempty"`
+
+	// RoleCount is the total number of roles observed via SHOW ROLES.
+	// +optional
+	RoleCount int `json:"roleCount,omitempty"`
+
 	// LastCollected is the timestamp of the most recent successful diagnostics collection.
 	// +optional
 	LastCollected *metav1.Time `json:"lastCollected,omitempty"`

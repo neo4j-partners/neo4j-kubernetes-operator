@@ -2,11 +2,11 @@ apiVersion: operators.coreos.com/v1beta1
 kind: ClusterServiceVersion
 metadata:
   annotations:
-    alm-examples: "[\n  {\n    \"apiVersion\": \"neo4j.neo4j.com/v1beta1\",\n    \"kind\": \"Neo4jBackup\",\n    \"metadata\": {\n      \"name\": \"example-backup\"\n    },\n    \"spec\": {\n      \"options\": {\n        \"backupType\": \"FULL\",\n        \"compress\": true\n      },\n      \"storage\": {\n        \"pvc\": {\n          \"name\": \"neo4j-backup-pvc\",\n          \"size\": \"20Gi\",\n          \"storageClassName\": \"standard\"\n        },\n        \"type\": \"pvc\"\n      },\n      \"target\": {\n        \"kind\": \"Cluster\",\n        \"name\": \"sample-cluster\"\n      }\n    }\n  },\n  {\n    \"apiVersion\": \"neo4j.neo4j.com/v1beta1\",\n    \"kind\": \"Neo4jDatabase\",\n    \"metadata\": {\n      \"name\": \"example-database\"\n    },\n    \"spec\": {\n      \"clusterRef\": \"sample-cluster\",\n      \"name\": \"exampledb\"\n    }\n  },\n  {\n    \"apiVersion\": \"neo4j.neo4j.com/v1beta1\",\n    \"kind\": \"Neo4jEnterpriseCluster\",\n    \"metadata\": {\n      \"name\": \"sample-cluster\"\n    },\n    \"spec\": {\n      \"auth\": {\n        \"adminSecret\": \"neo4j-admin-secret\"\n      },\n      \"image\": {\n        \"repo\": \"neo4j\",\n        \"tag\": \"5.26.0-enterprise\"\n      },\n      \"storage\": {\n        \"className\": \"standard\",\n        \"size\": \"10Gi\"\n      },\n      \"topology\": {\n        \"servers\": 3\n      }\n    }\n  },\n  {\n    \"apiVersion\": \"neo4j.neo4j.com/v1beta1\",\n    \"kind\": \"Neo4jEnterpriseStandalone\",\n    \"metadata\": {\n      \"name\": \"sample-standalone\"\n    },\n    \"spec\": {\n      \"auth\": {\n        \"adminSecret\": \"neo4j-admin-secret\"\n      },\n      \"image\": {\n        \"repo\": \"neo4j\",\n        \"tag\": \"5.26.0-enterprise\"\n      },\n      \"storage\": {\n        \"className\": \"standard\",\n        \"size\": \"10Gi\"\n      }\n    }\n  },\n  {\n    \"apiVersion\": \"neo4j.neo4j.com/v1beta1\",\n    \"kind\": \"Neo4jPlugin\",\n    \"metadata\": {\n      \"labels\": {\n        \"app.kubernetes.io/managed-by\": \"kustomize\",\n        \"app.kubernetes.io/name\": \"neo4j-kubernetes-operator\"\n      },\n      \"name\": \"neo4jplugin-cluster-sample\",\n      \"namespace\": \"default\"\n    },\n    \"spec\": {\n      \"clusterRef\": \"neo4jenterprisecluster-sample\",\n      \"config\": {\n        \"apoc.export.file.enabled\": \"true\",\n        \"apoc.import.file.enabled\": \"true\",\n        \"apoc.import.file.use_neo4j_config\": \"true\"\n      },\n      \"enabled\": true,\n      \"name\": \"apoc\",\n      \"source\": {\n        \"type\": \"official\"\n      },\n      \"version\": \"5.26.0\"\n    }\n  },\n  {\n    \"apiVersion\": \"neo4j.neo4j.com/v1beta1\",\n    \"kind\": \"Neo4jPlugin\",\n    \"metadata\": {\n      \"labels\": {\n        \"app.kubernetes.io/managed-by\": \"kustomize\",\n        \"app.kubernetes.io/name\": \"neo4j-kubernetes-operator\"\n      },\n      \"name\": \"neo4jplugin-standalone-sample\",\n      \"namespace\": \"default\"\n    },\n    \"spec\": {\n      \"clusterRef\": \"neo4jenterprisestandalone-sample\",\n      \"config\": {\n        \"gds.enterprise.license_file\": \"/licenses/gds.license\"\n      },\n      \"dependencies\": [\n        {\n          \"name\": \"apoc\",\n          \"optional\": false,\n          \"versionConstraint\": \"\\u003e=5.26.0\"\n        }\n      ],\n      \"enabled\": true,\n      \"name\": \"graph-data-science\",\n      \"resources\": {\n        \"cpuLimit\": \"500m\",\n        \"memoryLimit\": \"1Gi\",\n        \"threadPoolSize\": 4\n      },\n      \"security\": {\n        \"allowedProcedures\": [\n          \"gds.*\",\n          \"apoc.load.*\"\n        ],\n        \"sandbox\": true\n      },\n      \"source\": {\n        \"type\": \"community\"\n      },\n      \"version\": \"2.10.0\"\n    }\n  },\n  {\n    \"apiVersion\": \"neo4j.neo4j.com/v1beta1\",\n    \"kind\": \"Neo4jRestore\",\n    \"metadata\": {\n      \"name\": \"example-restore\"\n    },\n    \"spec\": {\n      \"clusterRef\": \"sample-cluster\",\n      \"databaseName\": \"exampledb\",\n      \"source\": {\n        \"backupRef\": \"example-backup\",\n        \"type\": \"backup\"\n      }\n    }\n  },\n  {\n    \"apiVersion\": \"neo4j.neo4j.com/v1beta1\",\n    \"kind\": \"Neo4jShardedDatabase\",\n    \"metadata\": {\n      \"name\": \"example-sharded\"\n    },\n    \"spec\": {\n      \"clusterRef\": \"sample-cluster\",\n      \"defaultCypherLanguage\": \"25\",\n      \"name\": \"shardeddb\",\n      \"propertySharding\": {\n        \"graphShard\": {\n          \"primaries\": 1,\n          \"secondaries\": 0\n        },\n        \"propertyShardTopology\": {\n          \"replicas\": 1\n        },\n        \"propertyShards\": 2\n      }\n    }\n  }\n]"
+    alm-examples: "[\n  {\n    \"apiVersion\": \"neo4j.neo4j.com/v1beta1\",\n    \"kind\": \"Neo4jBackup\",\n    \"metadata\": {\n      \"name\": \"example-backup\"\n    },\n    \"spec\": {\n      \"options\": {\n        \"backupType\": \"FULL\",\n        \"compress\": true\n      },\n      \"storage\": {\n        \"pvc\": {\n          \"name\": \"neo4j-backup-pvc\",\n          \"size\": \"20Gi\",\n          \"storageClassName\": \"standard\"\n        },\n        \"type\": \"pvc\"\n      },\n      \"target\": {\n        \"kind\": \"Cluster\",\n        \"name\": \"sample-cluster\"\n      }\n    }\n  },\n  {\n    \"apiVersion\": \"neo4j.neo4j.com/v1beta1\",\n    \"kind\": \"Neo4jDatabase\",\n    \"metadata\": {\n      \"name\": \"example-database\"\n    },\n    \"spec\": {\n      \"clusterRef\": \"sample-cluster\",\n      \"name\": \"exampledb\"\n    }\n  },\n  {\n    \"apiVersion\": \"neo4j.neo4j.com/v1beta1\",\n    \"kind\": \"Neo4jEnterpriseCluster\",\n    \"metadata\": {\n      \"name\": \"sample-cluster\"\n    },\n    \"spec\": {\n      \"auth\": {\n        \"adminSecret\": \"neo4j-admin-secret\"\n      },\n      \"image\": {\n        \"repo\": \"neo4j\",\n        \"tag\": \"5.26.0-enterprise\"\n      },\n      \"storage\": {\n        \"className\": \"standard\",\n        \"size\": \"10Gi\"\n      },\n      \"topology\": {\n        \"servers\": 3\n      }\n    }\n  },\n  {\n    \"apiVersion\": \"neo4j.neo4j.com/v1beta1\",\n    \"kind\": \"Neo4jEnterpriseStandalone\",\n    \"metadata\": {\n      \"name\": \"sample-standalone\"\n    },\n    \"spec\": {\n      \"auth\": {\n        \"adminSecret\": \"neo4j-admin-secret\"\n      },\n      \"image\": {\n        \"repo\": \"neo4j\",\n        \"tag\": \"5.26.0-enterprise\"\n      },\n      \"storage\": {\n        \"className\": \"standard\",\n        \"size\": \"10Gi\"\n      }\n    }\n  },\n  {\n    \"apiVersion\": \"neo4j.neo4j.com/v1beta1\",\n    \"kind\": \"Neo4jPlugin\",\n    \"metadata\": {\n      \"labels\": {\n        \"app.kubernetes.io/managed-by\": \"kustomize\",\n        \"app.kubernetes.io/name\": \"neo4j-kubernetes-operator\"\n      },\n      \"name\": \"neo4jplugin-cluster-sample\",\n      \"namespace\": \"default\"\n    },\n    \"spec\": {\n      \"clusterRef\": \"neo4jenterprisecluster-sample\",\n      \"config\": {\n        \"apoc.export.file.enabled\": \"true\",\n        \"apoc.import.file.enabled\": \"true\",\n        \"apoc.import.file.use_neo4j_config\": \"true\"\n      },\n      \"enabled\": true,\n      \"name\": \"apoc\",\n      \"source\": {\n        \"type\": \"official\"\n      },\n      \"version\": \"5.26.0\"\n    }\n  },\n  {\n    \"apiVersion\": \"neo4j.neo4j.com/v1beta1\",\n    \"kind\": \"Neo4jPlugin\",\n    \"metadata\": {\n      \"labels\": {\n        \"app.kubernetes.io/managed-by\": \"kustomize\",\n        \"app.kubernetes.io/name\": \"neo4j-kubernetes-operator\"\n      },\n      \"name\": \"neo4jplugin-standalone-sample\",\n      \"namespace\": \"default\"\n    },\n    \"spec\": {\n      \"clusterRef\": \"neo4jenterprisestandalone-sample\",\n      \"config\": {\n        \"gds.enterprise.license_file\": \"/licenses/gds.license\"\n      },\n      \"dependencies\": [\n        {\n          \"name\": \"apoc\",\n          \"optional\": false,\n          \"versionConstraint\": \"\\u003e=5.26.0\"\n        }\n      ],\n      \"enabled\": true,\n      \"name\": \"graph-data-science\",\n      \"resources\": {\n        \"cpuLimit\": \"500m\",\n        \"memoryLimit\": \"1Gi\",\n        \"threadPoolSize\": 4\n      },\n      \"security\": {\n        \"allowedProcedures\": [\n          \"gds.*\",\n          \"apoc.load.*\"\n        ],\n        \"sandbox\": true\n      },\n      \"source\": {\n        \"type\": \"community\"\n      },\n      \"version\": \"2.10.0\"\n    }\n  },\n  {\n    \"apiVersion\": \"neo4j.neo4j.com/v1beta1\",\n    \"kind\": \"Neo4jRestore\",\n    \"metadata\": {\n      \"name\": \"example-restore\"\n    },\n    \"spec\": {\n      \"clusterRef\": \"sample-cluster\",\n      \"databaseName\": \"exampledb\",\n      \"source\": {\n        \"backupRef\": \"example-backup\",\n        \"type\": \"backup\"\n      }\n    }\n  },\n  {\n    \"apiVersion\": \"neo4j.neo4j.com/v1beta1\",\n    \"kind\": \"Neo4jRole\",\n    \"metadata\": {\n      \"name\": \"example-role\"\n    },\n    \"spec\": {\n      \"clusterRef\": \"sample-cluster\",\n      \"name\": \"analytics_reader\",\n      \"privileges\": [\n        \"GRANT ACCESS ON DATABASE neo4j TO analytics_reader\",\n        \"GRANT MATCH {*} ON GRAPH neo4j NODES * TO analytics_reader\"\n      ]\n    }\n  },\n  {\n    \"apiVersion\": \"neo4j.neo4j.com/v1beta1\",\n    \"kind\": \"Neo4jRoleBinding\",\n    \"metadata\": {\n      \"name\": \"example-rolebinding\"\n    },\n    \"spec\": {\n      \"clusterRef\": \"sample-cluster\",\n      \"roles\": [\n        \"editor\"\n      ],\n      \"username\": \"alice@example.com\"\n    }\n  },\n  {\n    \"apiVersion\": \"neo4j.neo4j.com/v1beta1\",\n    \"kind\": \"Neo4jShardedDatabase\",\n    \"metadata\": {\n      \"name\": \"example-sharded\"\n    },\n    \"spec\": {\n      \"clusterRef\": \"sample-cluster\",\n      \"defaultCypherLanguage\": \"25\",\n      \"name\": \"shardeddb\",\n      \"propertySharding\": {\n        \"graphShard\": {\n          \"primaries\": 1,\n          \"secondaries\": 0\n        },\n        \"propertyShardTopology\": {\n          \"replicas\": 1\n        },\n        \"propertyShards\": 2\n      }\n    }\n  },\n  {\n    \"apiVersion\": \"neo4j.neo4j.com/v1beta1\",\n    \"kind\": \"Neo4jUser\",\n    \"metadata\": {\n      \"name\": \"example-user\"\n    },\n    \"spec\": {\n      \"clusterRef\": \"sample-cluster\",\n      \"passwordSecretRef\": {\n        \"name\": \"app-reader-creds\"\n      },\n      \"roles\": [\n        \"reader\"\n      ],\n      \"username\": \"app_reader\"\n    }\n  }\n]"
     capabilities: Full Lifecycle
     categories: Database
     containerImage: ghcr.io/priyolahiri/neo4j-kubernetes-operator:latest
-    createdAt: "2026-04-28T13:36:34Z"
+    createdAt: "2026-04-28T14:52:38Z"
     description: Automates Neo4j Enterprise graph database clusters and standalone
       instances on Kubernetes.
     operators.operatorframework.io/builder: operator-sdk-v1.39.1
@@ -49,11 +49,30 @@ spec:
       kind: Neo4jRestore
       name: neo4jrestores.neo4j.neo4j.com
       version: v1beta1
+    - description: Neo4jRoleBinding manages role grants for users provisioned externally
+        (e.g. SSO/LDAP first-login). The operator never creates or drops the user;
+        it only manages role grants.
+      displayName: Neo4j Role Binding
+      kind: Neo4jRoleBinding
+      name: neo4jrolebindings.neo4j.neo4j.com
+      version: v1beta1
+    - description: Neo4jRole declaratively manages a role in Neo4j and its privileges,
+        with full drift reconciliation against SHOW ROLE PRIVILEGES AS COMMANDS.
+      displayName: Neo4j Role
+      kind: Neo4jRole
+      name: neo4jroles.neo4j.neo4j.com
+      version: v1beta1
     - description: Neo4jShardedDatabase is the Schema for the neo4jshardeddatabases
         API
       displayName: Neo4j Sharded Database
       kind: Neo4jShardedDatabase
       name: neo4jshardeddatabases.neo4j.neo4j.com
+      version: v1beta1
+    - description: Neo4jUser declaratively manages a user in Neo4j (password from
+        a Secret, role bindings, account status, home database, external auth providers).
+      displayName: Neo4j User
+      kind: Neo4jUser
+      name: neo4jusers.neo4j.neo4j.com
       version: v1beta1
   description: |
     The Neo4j Enterprise Operator for Kubernetes automates the deployment and
@@ -72,8 +91,9 @@ spec:
     - Scheduled backups to S3, GCS, Azure Blob Storage, or PVC with encryption and retention
     - Point-in-time restore and cross-cloud disaster recovery
     - Database lifecycle management via Neo4jDatabase CRD
+    - Declarative user, role, and privilege management via Neo4jUser, Neo4jRole, and Neo4jRoleBinding CRDs
     - Property sharding (Infinigraph) support for Neo4j 2025.12+
-    - Live cluster diagnostics surfaced in CR status
+    - Live cluster diagnostics surfaced in CR status (servers, databases, users, roles)
     - Prometheus metrics, ServiceMonitor, and PrometheusRule integration
     - Neo4j Aura Fleet Management integration
 
@@ -232,7 +252,10 @@ spec:
           - neo4jenterprisestandalones
           - neo4jplugins
           - neo4jrestores
+          - neo4jrolebindings
+          - neo4jroles
           - neo4jshardeddatabases
+          - neo4jusers
           verbs:
           - create
           - delete
@@ -250,7 +273,10 @@ spec:
           - neo4jenterprisestandalones/finalizers
           - neo4jplugins/finalizers
           - neo4jrestores/finalizers
+          - neo4jrolebindings/finalizers
+          - neo4jroles/finalizers
           - neo4jshardeddatabases/finalizers
+          - neo4jusers/finalizers
           verbs:
           - update
         - apiGroups:
@@ -262,7 +288,10 @@ spec:
           - neo4jenterprisestandalones/status
           - neo4jplugins/status
           - neo4jrestores/status
+          - neo4jrolebindings/status
+          - neo4jroles/status
           - neo4jshardeddatabases/status
+          - neo4jusers/status
           verbs:
           - get
           - patch

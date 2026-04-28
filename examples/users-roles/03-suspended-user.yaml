@@ -1,0 +1,20 @@
+# Suspending a user during a security incident.
+#
+# `accountStatus: suspended` issues `ALTER USER ... SET STATUS SUSPENDED`,
+# which for native users revokes role assignments client-side until you
+# flip the field back to `active`. The Neo4jUser CR remains; you don't
+# need to recreate the user to re-enable it.
+
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jUser
+metadata:
+  name: compromised-user
+  namespace: prod
+spec:
+  clusterRef: prod-cluster
+  username: compromised_user
+  passwordSecretRef:
+    name: compromised-user-creds
+  accountStatus: suspended
+  roles:
+    - publisher

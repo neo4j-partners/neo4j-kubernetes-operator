@@ -1,0 +1,11 @@
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jUser
+metadata:
+  name: example-user
+spec:
+  clusterRef: sample-cluster
+  username: app_reader
+  passwordSecretRef:
+    name: app-reader-creds
+  roles:
+    - reader

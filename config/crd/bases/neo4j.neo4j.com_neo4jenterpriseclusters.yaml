@@ -3995,6 +3995,32 @@ spec:
                       successful diagnostics collection.
                     format: date-time
                     type: string
+                  roleCount:
+                    description: |-
+                      RoleCount is the total number of roles observed via SHOW ROLES, even
+                      when the Roles slice is truncated for size.
+                    type: integer
+                  roles:
+                    description: |-
+                      Roles lists the roles currently present in the cluster's `system`
+                      database (from SHOW ROLES YIELD role, immutable). Useful for observing
+                      the effect of Neo4jRole reconciliation.
+                    items:
+                      description: RoleDiagnosticInfo summarises one row of `SHOW
+                        ROLES YIELD role, immutable`.
+                      properties:
+                        immutable:
+                          description: |-
+                            Immutable is true when the role was created with `CREATE IMMUTABLE ROLE`
+                            or is one of the built-in immutable roles.
+                          type: boolean
+                        role:
+                          description: Role is the role name.
+                          type: string
+                      required:
+                      - role
+                      type: object
+                    type: array
                   servers:
                     description: Servers lists the most recently observed state of
                       each server in the cluster.
@@ -4027,6 +4053,42 @@ spec:
                       - hostingDatabases
                       - name
                       - state
+                      type: object
+                    type: array
+                  userCount:
+                    description: |-
+                      UserCount is the total number of users observed via SHOW USERS, even
+                      when the Users slice is truncated for size.
+                    type: integer
+                  users:
+                    description: |-
+                      Users lists the users currently present in the cluster's `system` database
+                      (from SHOW USERS). Useful for observing the effect of Neo4jUser /
+                      Neo4jRoleBinding reconciliation. Bounded summary — see UserCount for the
+                      total when this list is truncated.
+                    items:
+                      description: UserDiagnosticInfo summarises one row of `SHOW
+                        USERS`.
+                      properties:
+                        homeDatabase:
+                          description: HomeDatabase is the user's configured home
+                            database, if any.
+                          type: string
+                        roles:
+                          description: |-
+                            Roles is the set of roles directly granted to the user (excluding the
+                            implicit PUBLIC role).
+                          items:
+                            type: string
+                          type: array
+                        suspended:
+                          description: Suspended is true when STATUS = SUSPENDED.
+                          type: boolean
+                        user:
+                          description: User is the username.
+                          type: string
+                      required:
+                      - user
                       type: object
                     type: array
                 type: object
