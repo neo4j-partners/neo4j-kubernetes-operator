@@ -232,7 +232,7 @@ var _ = Describe("Neo4jUser end-to-end", func() {
 		Eventually(func() bool {
 			cmd := exec.CommandContext(ctx, "kubectl", "exec",
 				podName, "-n", namespace.Name, "--",
-				"cypher-shell", "-u", "neo4j", "-p", adminPass,
+				"cypher-shell", "--format", "plain", "-u", "neo4j", "-p", adminPass,
 				"SHOW USERS YIELD user WHERE user = 'appuser' RETURN count(*) AS n",
 			)
 			out, err := cmd.CombinedOutput()
@@ -240,10 +240,14 @@ var _ = Describe("Neo4jUser end-to-end", func() {
 				GinkgoWriter.Printf("cypher-shell SHOW USERS failed: %v; output: %s\n", err, string(out))
 				return false
 			}
-			text := string(out)
-			// User is gone when the count line is "0" and the username does
-			// not appear anywhere in the output.
-			return strings.Contains(text, "\n0\n") && !strings.Contains(text, "appuser\n")
+			// `--format plain` produces:
+			//   n
+			//   <count>
+			// Take the last non-empty line and check it equals "0", rather
+			// than depending on \n placement around the count value.
+			lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+			lastValue := strings.TrimSpace(lines[len(lines)-1])
+			return lastValue == "0"
 		}, clusterTimeout, interval).Should(BeTrue(), "DROP USER must remove appuser from SHOW USERS")
 	})
 })
