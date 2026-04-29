@@ -199,7 +199,7 @@ var _ = Describe("Neo4jRoleBinding end-to-end", func() {
 			}
 			text := string(out)
 			// reader must no longer appear in this user's roles list
-			return strings.Contains(text, "externuser") == false ||
+			return !strings.Contains(text, "externuser") ||
 				!strings.Contains(text, "reader")
 		}, clusterTimeout, interval).Should(BeTrue(), "binding deletion must revoke the reader role")
 
