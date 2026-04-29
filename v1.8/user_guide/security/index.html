@@ -3687,13 +3687,13 @@
 </span><span id="__span-1-33"><a id="__codelineno-1-33" name="__codelineno-1-33" href="#__codelineno-1-33"></a><span class="w">    </span><span class="c1"># Cluster SSL (for server-to-server communication)</span>
 </span><span id="__span-1-34"><a id="__codelineno-1-34" name="__codelineno-1-34" href="#__codelineno-1-34"></a><span class="w">    </span><span class="nt">dbms.ssl.policy.cluster.enabled</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
 </span><span id="__span-1-35"><a id="__codelineno-1-35" name="__codelineno-1-35" href="#__codelineno-1-35"></a><span class="w">    </span><span class="nt">dbms.ssl.policy.cluster.base_directory</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;/ssl&quot;</span>
-</span><span id="__span-1-36"><a id="__codelineno-1-36" name="__codelineno-1-36" href="#__codelineno-1-36"></a><span class="w">    </span><span class="nt">dbms.ssl.policy.cluster.trust_all</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;false&quot;</span><span class="w">   </span><span class="c1"># Use proper certificate validation</span>
+</span><span id="__span-1-36"><a id="__codelineno-1-36" name="__codelineno-1-36" href="#__codelineno-1-36"></a><span class="w">    </span><span class="nt">dbms.ssl.policy.cluster.trust_all</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;false&quot;</span><span class="w">   </span><span class="c1"># Validate peer certificates against the cluster truststore (mounted at /ssl/cluster/trusted/); set to &quot;true&quot; only for development</span>
 </span></code></pre></div>
 <h2 id="authentication-configuration">Authentication Configuration<a class="headerlink" href="#authentication-configuration" title="Anchor link to this section">&para;</a></h2>
 <p>The operator provides first-class, typed configuration for external authentication providers. When you use the typed fields (described below), the operator automatically generates the correct <code>neo4j.conf</code> entries — you do not need to manually place <code>dbms.security.*</code> keys in <code>spec.config</code>.</p>
 <p><strong>Where to start:</strong>
 - <strong>Most deployments</strong>: <a href="#native-authentication">Native Authentication</a> — just create an admin secret and go.
-- <strong>Corporate SSO</strong>: <a href="#oidc--sso-integration">OIDC / SSO Integration</a> — Okta, Azure AD, Google, or any OIDC provider.
+- <strong>Corporate SSO</strong>: <a href="#oidc-sso-integration">OIDC / SSO Integration</a> — Okta, Azure AD, Google, or any OIDC provider.
 - <strong>Active Directory / LDAP</strong>: <a href="#ldap-integration">LDAP Integration</a> — bind templates, group mapping, nested groups.
 - <strong>Internal CAs</strong>: <a href="#jvm-truststore-for-internal-cas">JVM TrustStore</a> — if your LDAP/OIDC endpoints use certificates signed by a private CA.</p>
 <h3 id="multi-provider-support">Multi-Provider Support<a class="headerlink" href="#multi-provider-support" title="Anchor link to this section">&para;</a></h3>
@@ -3816,7 +3816,7 @@
 <tr>
 <td><code>ldap.useStartTLS</code></td>
 <td><code>dbms.security.ldap.use_starttls</code></td>
-<td>Enable STARTTLS (use with <code>ldap://</code>, not <code>ldaps://</code>)</td>
+<td>Upgrade a plain <code>ldap://</code> connection to TLS via STARTTLS after the initial connect. Do not use with <code>ldaps://</code>, which negotiates TLS at connect time.</td>
 </tr>
 <tr>
 <td><code>ldap.authentication.userDNTemplate</code></td>
@@ -4439,17 +4439,21 @@
 </span><span id="__span-31-7"><a id="__codelineno-31-7" name="__codelineno-31-7" href="#__codelineno-31-7"></a><span class="w">      </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ClusterIssuer</span>
 </span><span id="__span-31-8"><a id="__codelineno-31-8" name="__codelineno-31-8" href="#__codelineno-31-8"></a>
 </span><span id="__span-31-9"><a id="__codelineno-31-9" name="__codelineno-31-9" href="#__codelineno-31-9"></a><span class="w">  </span><span class="nt">config</span><span class="p">:</span>
-</span><span id="__span-31-10"><a id="__codelineno-31-10" name="__codelineno-31-10" href="#__codelineno-31-10"></a><span class="w">    </span><span class="c1"># Strong encryption requirements</span>
-</span><span id="__span-31-11"><a id="__codelineno-31-11" name="__codelineno-31-11" href="#__codelineno-31-11"></a><span class="w">    </span><span class="nt">dbms.ssl.policy.bolt.ciphers</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256&quot;</span>
-</span><span id="__span-31-12"><a id="__codelineno-31-12" name="__codelineno-31-12" href="#__codelineno-31-12"></a><span class="w">    </span><span class="nt">dbms.ssl.policy.https.ciphers</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256&quot;</span>
-</span><span id="__span-31-13"><a id="__codelineno-31-13" name="__codelineno-31-13" href="#__codelineno-31-13"></a>
-</span><span id="__span-31-14"><a id="__codelineno-31-14" name="__codelineno-31-14" href="#__codelineno-31-14"></a><span class="w">    </span><span class="c1"># Authentication and session management</span>
-</span><span id="__span-31-15"><a id="__codelineno-31-15" name="__codelineno-31-15" href="#__codelineno-31-15"></a><span class="w">    </span><span class="nt">dbms.security.auth_minimum_password_length</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;12&quot;</span>
-</span><span id="__span-31-16"><a id="__codelineno-31-16" name="__codelineno-31-16" href="#__codelineno-31-16"></a><span class="w">    </span><span class="nt">dbms.security.auth_cache_ttl</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;15m&quot;</span>
+</span><span id="__span-31-10"><a id="__codelineno-31-10" name="__codelineno-31-10" href="#__codelineno-31-10"></a><span class="w">    </span><span class="c1"># Strong encryption requirements (PCI DSS v4.0 requires TLS 1.2 minimum;</span>
+</span><span id="__span-31-11"><a id="__codelineno-31-11" name="__codelineno-31-11" href="#__codelineno-31-11"></a><span class="w">    </span><span class="c1"># TLS 1.3 is strongly preferred. The settings below pin both Bolt and HTTPS</span>
+</span><span id="__span-31-12"><a id="__codelineno-31-12" name="__codelineno-31-12" href="#__codelineno-31-12"></a><span class="w">    </span><span class="c1"># to TLS 1.2/1.3 and restrict ciphers to AEAD-only suites.)</span>
+</span><span id="__span-31-13"><a id="__codelineno-31-13" name="__codelineno-31-13" href="#__codelineno-31-13"></a><span class="w">    </span><span class="nt">dbms.ssl.policy.bolt.tls_versions</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;TLSv1.2,TLSv1.3&quot;</span>
+</span><span id="__span-31-14"><a id="__codelineno-31-14" name="__codelineno-31-14" href="#__codelineno-31-14"></a><span class="w">    </span><span class="nt">dbms.ssl.policy.https.tls_versions</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;TLSv1.2,TLSv1.3&quot;</span>
+</span><span id="__span-31-15"><a id="__codelineno-31-15" name="__codelineno-31-15" href="#__codelineno-31-15"></a><span class="w">    </span><span class="nt">dbms.ssl.policy.bolt.ciphers</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256&quot;</span>
+</span><span id="__span-31-16"><a id="__codelineno-31-16" name="__codelineno-31-16" href="#__codelineno-31-16"></a><span class="w">    </span><span class="nt">dbms.ssl.policy.https.ciphers</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256&quot;</span>
 </span><span id="__span-31-17"><a id="__codelineno-31-17" name="__codelineno-31-17" href="#__codelineno-31-17"></a>
-</span><span id="__span-31-18"><a id="__codelineno-31-18" name="__codelineno-31-18" href="#__codelineno-31-18"></a><span class="w">    </span><span class="c1"># Access logging</span>
-</span><span id="__span-31-19"><a id="__codelineno-31-19" name="__codelineno-31-19" href="#__codelineno-31-19"></a><span class="w">    </span><span class="nt">db.logs.query.enabled</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;INFO&quot;</span>
-</span><span id="__span-31-20"><a id="__codelineno-31-20" name="__codelineno-31-20" href="#__codelineno-31-20"></a><span class="w">    </span><span class="nt">dbms.logs.security.level</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;INFO&quot;</span>
+</span><span id="__span-31-18"><a id="__codelineno-31-18" name="__codelineno-31-18" href="#__codelineno-31-18"></a><span class="w">    </span><span class="c1"># Authentication and session management</span>
+</span><span id="__span-31-19"><a id="__codelineno-31-19" name="__codelineno-31-19" href="#__codelineno-31-19"></a><span class="w">    </span><span class="nt">dbms.security.auth_minimum_password_length</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;12&quot;</span>
+</span><span id="__span-31-20"><a id="__codelineno-31-20" name="__codelineno-31-20" href="#__codelineno-31-20"></a><span class="w">    </span><span class="nt">dbms.security.auth_cache_ttl</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;15m&quot;</span>
+</span><span id="__span-31-21"><a id="__codelineno-31-21" name="__codelineno-31-21" href="#__codelineno-31-21"></a>
+</span><span id="__span-31-22"><a id="__codelineno-31-22" name="__codelineno-31-22" href="#__codelineno-31-22"></a><span class="w">    </span><span class="c1"># Access logging</span>
+</span><span id="__span-31-23"><a id="__codelineno-31-23" name="__codelineno-31-23" href="#__codelineno-31-23"></a><span class="w">    </span><span class="nt">db.logs.query.enabled</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;INFO&quot;</span>
+</span><span id="__span-31-24"><a id="__codelineno-31-24" name="__codelineno-31-24" href="#__codelineno-31-24"></a><span class="w">    </span><span class="nt">dbms.logs.security.level</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;INFO&quot;</span>
 </span></code></pre></div>
 <h2 id="security-best-practices-checklist">Security Best Practices Checklist<a class="headerlink" href="#security-best-practices-checklist" title="Anchor link to this section">&para;</a></h2>
 <h3 id="deployment-security">Deployment Security<a class="headerlink" href="#deployment-security" title="Anchor link to this section">&para;</a></h3>
@@ -4522,7 +4526,7 @@
 <p>For additional security guidance, see:
 - <a href="../guides/configuration_best_practices/">Configuration Best Practices</a>
 - <a href="../configuration/tls/">TLS Configuration Guide</a>
-- <a href="../guides/backup_restore/#security-considerations">Backup Security</a>
+- <a href="../guides/backup_restore/#security-best-practices">Backup Security</a>
 - <a href="../troubleshooting/split-brain-recovery/">Split-Brain Recovery</a></p>
 
 

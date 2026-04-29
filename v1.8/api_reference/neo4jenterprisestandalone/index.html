@@ -4006,7 +4006,7 @@
 <tr>
 <td><code>tag</code></td>
 <td><code>string</code></td>
-<td><strong>Required</strong>. Neo4j version tag (5.26.x last semver LTS, or 2025.x.x CalVer required)</td>
+<td><strong>Required</strong>. Neo4j version tag — 5.26 LTS or any CalVer release (2025.x, 2026.x, and onward)</td>
 </tr>
 <tr>
 <td><code>pullPolicy</code></td>
@@ -4022,7 +4022,7 @@
 </table>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">image</span><span class="p">:</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">repo</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j</span><span class="w">                    </span><span class="c1"># Docker repository</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;5.26.0-enterprise&quot;</span><span class="w">       </span><span class="c1"># Neo4j version (5.26.x last semver LTS or 2025.x.x CalVer required)</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;5.26.0-enterprise&quot;</span><span class="w">       </span><span class="c1"># Neo4j version: 5.26 LTS or any CalVer release (2025.x, 2026.x, ...)</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">pullPolicy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">IfNotPresent</span><span class="w">       </span><span class="c1"># Image pull policy</span>
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span><span class="nt">pullSecrets</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[]</span><span class="w">                </span><span class="c1"># Image pull secrets</span>
 </span></code></pre></div>
@@ -4054,8 +4054,8 @@
 </tr>
 <tr>
 <td><code>backupStorage</code></td>
-<td><a href="#backupstoragespec"><code>*BackupStorageSpec</code></a></td>
-<td>Additional storage for backups</td>
+<td><a href="../neo4jenterprisecluster/#backupstoragespec"><code>*BackupStorageSpec</code></a></td>
+<td>Additional storage for backups (same shape as on <code>Neo4jEnterpriseCluster</code>)</td>
 </tr>
 </tbody>
 </table>
@@ -4715,7 +4715,7 @@ For the full type definition see <a href="../neo4jenterprisecluster/#aurafleetma
 </span><span id="__span-30-2"><a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>neo4jenterprisestandalone<span class="w"> </span>&lt;name&gt;
 </span><span id="__span-30-3"><a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a>
 </span><span id="__span-30-4"><a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a><span class="c1"># Common validation issues:</span>
-</span><span id="__span-30-5"><a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a><span class="c1"># - Invalid Neo4j version (must be 5.26.x last semver LTS or 2025.x.x CalVer)</span>
+</span><span id="__span-30-5"><a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a><span class="c1"># - Invalid Neo4j version (must be 5.26 LTS or a CalVer release: 2025.x, 2026.x, etc.)</span>
 </span><span id="__span-30-6"><a id="__codelineno-30-6" name="__codelineno-30-6" href="#__codelineno-30-6"></a><span class="c1"># - Clustering configurations in spec.config</span>
 </span><span id="__span-30-7"><a id="__codelineno-30-7" name="__codelineno-30-7" href="#__codelineno-30-7"></a><span class="c1"># - Invalid storage size format</span>
 </span></code></pre></div>
