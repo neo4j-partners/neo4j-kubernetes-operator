@@ -12,7 +12,8 @@ The operator ships with an interactive demo that showcases its core capabilities
 | 4 | **Database Management** | Neo4jDatabase on standalone (products) and cluster (orders) with sample data |
 | 5 | **Plugin Management** | APOC plugin via Neo4jPlugin CRD with rolling restart |
 | 6 | **Multi-Database Topologies** | Two databases on the same cluster with different primary/secondary distributions |
-| 7 | **Live Diagnostics** | Server health and database status from CR status (no kubectl exec) |
+| 7 | **Declarative User & Role Management** | Neo4jRole with explicit privileges + Neo4jUser bound to the role, password sourced from a Secret |
+| 8 | **Live Diagnostics** | Server, database, user, and role state from CR status (no kubectl exec) |
 
 ## Prerequisites
 
@@ -144,11 +145,27 @@ Creates two additional databases on the same cluster:
 - `sessions`: 2 primaries, 0 secondaries (optimized for writes)
 - Verified with `SHOW DATABASES` showing role distribution
 
-### Part 7: Live Diagnostics
+### Part 7: Declarative User & Role Management
+
+Demonstrates the `Neo4jUser` / `Neo4jRole` / `Neo4jRoleBinding` CRDs against the running cluster:
+
+- Creates a Kubernetes `Secret` holding the user password (the operator never sees the password directly — it reads the Secret on every reconcile and fingerprints it for change detection).
+- Applies a `Neo4jRole` with explicit `GRANT`/`DENY` privileges. The role controller runs `CREATE ROLE`, applies each privilege statement, and reads `SHOW ROLE PRIVILEGES AS COMMANDS` on every reconcile to detect drift.
+- Applies a `Neo4jUser` bound to the role via `spec.roles`. The user controller runs `CREATE USER` with the password from the Secret and grants the bound roles.
+- Verifies the user can authenticate against the cluster via `cypher-shell` and that `SHOW USERS` reports the expected role set.
+
+Key design rules surfaced in this part:
+
+- **Privileges live on the role, not the user.** `Neo4jUser` carries only role bindings; never inline `GRANT`/`DENY` statements.
+- **Drift is reconciled.** A manual `REVOKE` against the cluster is reverted on the next reconcile unless `enforcePrivileges: false`.
+- **Built-in roles are protected.** Names like `reader`, `editor`, `admin` are rejected unless `adoptBuiltin: true`.
+
+### Part 8: Live Diagnostics
 
 Reads `status.diagnostics` from the cluster CR:
 - `status.diagnostics.servers` — name, address, state, health for each server
 - `status.diagnostics.databases` — name, status, role for each database replica
+- `status.diagnostics.users` / `status.diagnostics.roles` — capped at 50 entries each, with full counts in `userCount` / `roleCount`
 - `status.conditions` — Ready, ServersHealthy, DatabasesHealthy
 
 ## Timing
@@ -162,7 +179,8 @@ Reads `status.diagnostics` from the cluster CR:
 | Part 4: Databases | ~1 min |
 | Part 5: APOC plugin | ~3 min (rolling restart) |
 | Part 6: Multi-database | ~30s |
-| Part 7: Diagnostics | ~10s |
+| Part 7: User & role management | ~30s |
+| Part 8: Diagnostics | ~10s |
 | **Total** | **~10-12 min** |
 
 ## Troubleshooting
