@@ -88,9 +88,9 @@ kind: Neo4jPlugin
 | `source` | [`PluginSource`](#pluginsource) | ❌ | Plugin source configuration (default: official repository) |
 | `dependencies` | [`[]PluginDependency`](#plugindependency) | ❌ | Plugin dependencies (automatically resolved) |
 | `config` | `map[string]string` | ❌ | Plugin-specific configuration (becomes `NEO4J_*` env vars) |
-| `license` | [`PluginLicense`](#pluginlicense) | ❌ | License configuration for commercial plugins |
+| `license` | `PluginLicense` | ❌ | License configuration for commercial plugins |
 | `security` | [`PluginSecurity`](#pluginsecurity) | ❌ | Security settings and procedure restrictions |
-| `resources` | [`PluginResourceRequirements`](#pluginresourcerequirements) | ❌ | Resource requirements for plugin operations |
+| `resources` | `PluginResourceRequirements` | ❌ | Resource requirements for plugin operations (CPU/memory limits, thread pool size) |
 
 ### PluginSource
 

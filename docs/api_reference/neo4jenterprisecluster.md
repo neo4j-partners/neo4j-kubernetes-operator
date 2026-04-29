@@ -91,7 +91,7 @@ The `Neo4jEnterpriseClusterSpec` defines the desired state of a Neo4j Enterprise
 | `ui` | [`UISpec`](#uispec) | Neo4j UI configuration |
 | `mcp` | [`MCPServerSpec`](#mcpserverspec) | MCP server deployment and exposure settings |
 | `propertySharding` | [`PropertyShardingSpec`](#propertyshardingspec) | Property sharding configuration (Neo4j 2025.12+) |
-| `monitoring` | [`MonitoringSpec`](#querymonitoringspec) | Query monitoring configuration |
+| `monitoring` | [`MonitoringSpec`](#monitoringspec) | Query monitoring configuration |
 | `auraFleetManagement` | [`AuraFleetManagementSpec`](#aurafleetmanagementspec) | Aura Fleet Management integration (optional) |
 
 ## Type Definitions
@@ -164,13 +164,13 @@ Specifies role constraints for individual servers.
 | `authorizationProviders` | `[]string` | Ordered list of authorization providers. Default: `["native"]` |
 | `adminSecret` | `string` | Secret containing admin username and password (keys: `username`, `password`) |
 | `externalSecrets` | [`*ExternalSecretsConfig`](#externalsecretsconfig) | External secrets configuration |
-| `passwordPolicy` | [`*PasswordPolicySpec`](#passwordpolicyspec) | Password policy configuration |
+| `passwordPolicy` | `*PasswordPolicySpec` | Password policy configuration (minimum length, character class requirements) |
 | `ldap` | [`*Neo4jLDAPSpec`](#neo4jldapspec) | LDAP authentication and authorization configuration |
 | `oidc` | `map[string]`[`Neo4jOIDCProviderSpec`](#neo4joidcproviderspec) | OIDC/SSO providers. Map key = provider name (used in `authenticationProviders` as `oidc-<key>`) |
 | `jwt` | [`*JWTAuthSpec`](#jwtauthspec) | JWT authentication configuration |
 | `kerberos` | [`*KerberosAuthSpec`](#kerberosauthspec) | Kerberos authentication configuration |
 | `authCacheTTL` | `string` | Auth cache TTL (e.g., `"10m"`, `"600s"`). Maps to `dbms.security.auth_cache_ttl` |
-| `trustStore` | [`*SecretKeyRef`](#secretkeyref) | Custom JVM truststore for LDAPS or OIDC with internal CAs |
+| `trustStore` | [`*SecretKeyRef`](#secretkeyref-truststore) | Custom JVM truststore for LDAPS or OIDC with internal CAs |
 
 ### Neo4jLDAPSpec
 
@@ -232,7 +232,7 @@ Specifies role constraints for individual servers.
 | `username` | `string` | JWT claim for Neo4j username (default: `"sub"`) |
 | `groups` | `string` | JWT claim for groups/roles |
 
-### SecretKeyRef
+### SecretKeyRef (TrustStore)
 
 | Field | Type | Description |
 |---|---|---|
@@ -260,9 +260,9 @@ Specifies role constraints for individual servers.
 |---|---|---|
 | `realm` | `string` | Kerberos realm |
 | `servicePrincipal` | `string` | Service principal |
-| `keytab` | [`*SecretKeyRef`](#secretkeyref-1) | Keytab configuration |
+| `keytab` | [`*SecretKeyRef`](#secretkeyref-keytab) | Keytab configuration |
 
-### SecretKeyRef
+### SecretKeyRef (Keytab)
 
 | Field | Type | Description |
 |---|---|---|
@@ -372,7 +372,7 @@ Enables integration with [Neo4j Aura Fleet Management](https://neo4j.com/docs/au
 | Field | Type | Description |
 |---|---|---|
 | `enabled` | `bool` | Enable Aura Fleet Management integration (default: `false`) |
-| `tokenSecretRef` | [`*SecretKeyRef`](#secretkeyref-2) | Reference to the Kubernetes Secret holding the Aura registration token (optional; registration deferred if omitted) |
+| `tokenSecretRef` | [`*SecretKeyRef`](#secretkeyref-token) | Reference to the Kubernetes Secret holding the Aura registration token (optional; registration deferred if omitted) |
 
 **Status fields** (read-only, set by the operator):
 
@@ -396,7 +396,7 @@ See [Aura Fleet Management Guide](../user_guide/aura_fleet_management.md) for fu
 
 ---
 
-### SecretKeyRef
+### SecretKeyRef (Token)
 
 | Field | Type | Description |
 |---|---|---|
@@ -764,7 +764,7 @@ The `Neo4jEnterpriseClusterStatus` represents the observed state of the cluster.
 | `ready` | `bool` | Whether the cluster is ready |
 | `message` | `string` | Human-readable status message |
 | `conditions` | `[]metav1.Condition` | Cluster conditions |
-| `replicas` | [`map[string]ReplicaStatus`](#replicastatus) | Status of each replica |
+| `replicas` | `map[string]ReplicaStatus` | Status of each replica (servers / ready counts) |
 | `clusterID` | `string` | Neo4j cluster ID |
 | `endpoints` | [`EndpointStatus`](#endpointstatus) | Service endpoints |
 | `version` | `string` | Current Neo4j version |

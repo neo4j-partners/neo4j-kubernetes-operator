@@ -357,4 +357,4 @@ For additional performance guidance, see:
 - [Configuration Best Practices](guides/configuration_best_practices.md)
 - [Resource Sizing Guide](guides/resource_sizing.md)
 - [Monitoring Guide](guides/monitoring.md)
-- [Backup Performance](guides/backup_restore.md#performance-considerations)
+- [Backup and Restore](guides/backup_restore.md)

@@ -461,6 +461,6 @@ Contributors are recognized in:
 - **[Architecture Guide](architecture.md)**: System design and components
 - **[Development Guide](development.md)**: Local development setup
 - **[Testing Guide](testing.md)**: Testing strategy and patterns
-- **[User Guides](../user_guide/)**: User-facing documentation
+- **[User Guides](../user_guide/installation.md)**: User-facing documentation (start with the Installation Guide)
 
 Thank you for contributing to the Neo4j Enterprise Operator! Your contributions help make Neo4j deployments easier and more reliable for everyone.

@@ -72,7 +72,7 @@ Defines storage configuration for the Neo4j data volume.
 | `className` | `string` | **Required**. Storage class name (immutable after creation) |
 | `size` | `string` | **Required**. Storage size (e.g., `"10Gi"`). Can be increased after creation — the operator automatically expands the PVC and recreates the StatefulSet with zero downtime. **Cannot be decreased.** Requires `allowVolumeExpansion: true` on the StorageClass. |
 | `retentionPolicy` | `string` | PVC retention policy: `"Delete"` (default) permanently removes PVCs on deletion; `"Retain"` preserves them. **Use `Retain` for production to prevent data loss.** See [Storage and PVC Retention](../user_guide/configuration.md#storage-and-pvc-retention). |
-| `backupStorage` | [`*BackupStorageSpec`](#backupstoragespec) | Additional storage for backups |
+| `backupStorage` | [`*BackupStorageSpec`](neo4jenterprisecluster.md#backupstoragespec) | Additional storage for backups (same shape as on `Neo4jEnterpriseCluster`) |
 
 ```yaml
 storage:

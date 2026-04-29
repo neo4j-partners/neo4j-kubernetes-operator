@@ -38,7 +38,7 @@ kubectl logs job/simple-backup-backup
 
 ### Next Steps by User Type
 
-- **Teams/Production**: Continue to [Cloud Storage Setup](#cloud-storage-examples) → [Scheduled Backups](#scheduled-backup-examples)
+- **Teams/Production**: Continue to [Cloud Storage Authentication](#cloud-storage-authentication) → [Scheduled Backups](#scheduled-backup-examples)
 - **Developers**: Try [Database-Specific Backups](#database-backup-examples) → [Restore Testing](#simple-restore-examples)
 - **Enterprise**: Jump to [Point-in-Time Recovery](#point-in-time-recovery-pitr) → [Advanced Configuration](#advanced-configuration)
 

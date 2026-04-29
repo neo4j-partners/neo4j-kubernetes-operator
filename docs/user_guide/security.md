@@ -90,7 +90,7 @@ The operator provides first-class, typed configuration for external authenticati
 
 **Where to start:**
 - **Most deployments**: [Native Authentication](#native-authentication) — just create an admin secret and go.
-- **Corporate SSO**: [OIDC / SSO Integration](#oidc--sso-integration) — Okta, Azure AD, Google, or any OIDC provider.
+- **Corporate SSO**: [OIDC / SSO Integration](#oidc-sso-integration) — Okta, Azure AD, Google, or any OIDC provider.
 - **Active Directory / LDAP**: [LDAP Integration](#ldap-integration) — bind templates, group mapping, nested groups.
 - **Internal CAs**: [JVM TrustStore](#jvm-truststore-for-internal-cas) — if your LDAP/OIDC endpoints use certificates signed by a private CA.
 
@@ -866,5 +866,5 @@ spec:
 For additional security guidance, see:
 - [Configuration Best Practices](guides/configuration_best_practices.md)
 - [TLS Configuration Guide](configuration/tls.md)
-- [Backup Security](guides/backup_restore.md#security-considerations)
+- [Backup Security](guides/backup_restore.md#security-best-practices)
 - [Split-Brain Recovery](troubleshooting/split-brain-recovery.md)
