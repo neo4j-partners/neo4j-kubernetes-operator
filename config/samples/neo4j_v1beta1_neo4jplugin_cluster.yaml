@@ -8,7 +8,7 @@ metadata:
   namespace: default
 spec:
   # References a Neo4jEnterpriseCluster deployment
-  clusterRef: neo4jenterprisecluster-sample
+  clusterRef: sample-cluster
 
   # Plugin configuration
   name: apoc
