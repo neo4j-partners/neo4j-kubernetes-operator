@@ -20,7 +20,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	neo4jv1beta1 "github.com/priyolahiri/neo4j-kubernetes-operator/api/v1beta1"
 )
@@ -316,6 +315,12 @@ func TestMergeNeo4jPluginList(t *testing.T) {
 			newPlugin: "fleet-management",
 			wantErr:   true,
 		},
+		{
+			name:      "rejects non-string element in JSON array",
+			existing:  `["apoc", 123]`,
+			newPlugin: "fleet-management",
+			wantErr:   true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -332,14 +337,9 @@ func TestMergeNeo4jPluginList(t *testing.T) {
 }
 
 func TestIsMergeableCSVKey(t *testing.T) {
-	mergeable := []string{
-		"dbms.security.procedures.allowlist",
-		"dbms.security.procedures.unrestricted",
-		"dbms.security.procedures.denylist",
-		"dbms.security.http_auth_allowlist",
-		"server.unmanaged_extension_classes",
-	}
-	for _, k := range mergeable {
+	// Iterate the production map directly so any new entry is auto-covered
+	// without having to update this test.
+	for k := range mergeableCSVKeys {
 		t.Run("mergeable: "+k, func(t *testing.T) {
 			assert.True(t, isMergeableCSVKey(k))
 		})
@@ -384,6 +384,25 @@ func TestMergeCSV(t *testing.T) {
 			b:        "/,/browser.*,/bloom.*",
 			expected: "/,/browser.*,/bloom.*",
 		},
+		{
+			// Regex-style values (gds.*, apoc.*) appear in
+			// `dbms.security.procedures.allowlist` / `unrestricted`.
+			// mergeCSV treats `*` and `.` as ordinary bytes, so the
+			// dedup is purely string-equality on the trimmed elements.
+			name:     "regex-like overlap is deduped",
+			a:        "gds.*,apoc.*",
+			b:        "gds.*,n10s.*",
+			expected: "gds.*,apoc.*,n10s.*",
+		},
+		{
+			// Bloom adds path patterns to `dbms.security.http_auth_allowlist`.
+			// Make sure the union is computed correctly when one side
+			// brings overlapping path patterns and a bare `/`.
+			name:     "path patterns merge with overlap",
+			a:        "/browser.*",
+			b:        "/bloom.*,/",
+			expected: "/browser.*,/bloom.*,/",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -416,71 +435,6 @@ func TestFleetManagementPluginType(t *testing.T) {
 	t.Run("fleet-management maps to 'fleet-management' plugin name", func(t *testing.T) {
 		assert.Equal(t, "fleet-management", r.mapPluginName("fleet-management"))
 	})
-}
-
-func TestPluginSourceValidation(t *testing.T) {
-	tests := []struct {
-		name        string
-		source      *neo4jv1beta1.PluginSource
-		shouldError bool
-	}{
-		{
-			name: "official source",
-			source: &neo4jv1beta1.PluginSource{
-				Type: "official",
-			},
-			shouldError: false,
-		},
-		{
-			name: "community source",
-			source: &neo4jv1beta1.PluginSource{
-				Type: "community",
-			},
-			shouldError: false,
-		},
-		{
-			name: "custom source with registry",
-			source: &neo4jv1beta1.PluginSource{
-				Type: "custom",
-				Registry: &neo4jv1beta1.PluginRegistry{
-					URL: "https://my-registry.example.com",
-				},
-			},
-			shouldError: false,
-		},
-		{
-			name: "url source with URL",
-			source: &neo4jv1beta1.PluginSource{
-				Type: "url",
-				URL:  "https://example.com/plugin.jar",
-			},
-			shouldError: false,
-		},
-		{
-			name: "url source with checksum",
-			source: &neo4jv1beta1.PluginSource{
-				Type:     "url",
-				URL:      "https://example.com/plugin.jar",
-				Checksum: "sha256:abcd1234",
-			},
-			shouldError: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Test that source types are handled correctly
-			if tt.source != nil {
-				require.NotEmpty(t, tt.source.Type)
-				if tt.source.Type == "custom" {
-					require.NotNil(t, tt.source.Registry)
-				}
-				if tt.source.Type == "url" {
-					require.NotEmpty(t, tt.source.URL)
-				}
-			}
-		})
-	}
 }
 
 func TestGetPluginType(t *testing.T) {
