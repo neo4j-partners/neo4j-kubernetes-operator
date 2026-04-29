@@ -35,41 +35,11 @@ helm install neo4j-operator oci://ghcr.io/neo4j-partners/charts/neo4j-operator \
   --create-namespace
 ```
 
-## Breaking Changes
+## Upgrading
 
-> **Upgrading from any previous version requires manifest updates.**
-> See the [Migration Guide](./docs/user_guide/migration_guide.md) for step-by-step instructions.
-
-### API Version: v1alpha1 to v1beta1
-
-All CRDs graduated from `neo4j.neo4j.com/v1alpha1` to `neo4j.neo4j.com/v1beta1`.
-Every manifest must be updated:
-
-```bash
-# Batch update all manifests
-find /path/to/manifests -name '*.yaml' -exec \
-  sed -i 's|neo4j.neo4j.com/v1alpha1|neo4j.neo4j.com/v1beta1|g' {} +
-```
-
-### Bolt TLS Enforcement
-
-When TLS is enabled, `server.bolt.tls_level` is now `REQUIRED` (was `OPTIONAL`).
-Plain `bolt://` connections are rejected — use `bolt+s://` or `bolt+ssc://`.
-
-### Deprecated Config Key
-
-`dbms.logs.query.enabled` — use `db.logs.query.enabled` instead.
-
-### Cumulative changes from v1.6.0-alpha
-
-If upgrading from v1.5.0-alpha or earlier, also apply these v1.6.0-alpha changes:
-- `Neo4jRestore`: `spec.targetCluster` changed to `spec.clusterRef`
-- `AuthSpec`: `provider`/`secretRef` removed — use `authenticationProviders`/`authorizationProviders`
-- Standalone: `spec.route` changed to `spec.service.route`; `spec.persistence` changed to `spec.storage.retentionPolicy`
-- TrustStore/Kerberos: `secretRef` changed to `name`
-- Backup encryption: `ChaCha20` changed to `ChaCha20Poly1305`
-
-**[Full Migration Guide](./docs/user_guide/migration_guide.md)**
+Breaking changes are documented in the [Migration Guide](https://neo4j-partners.github.io/neo4j-kubernetes-operator/user_guide/migration_guide/),
+grouped by release. Before deploying this version, check the guide for any
+manifest updates required since the release you're currently running.
 
 ## Requirements
 

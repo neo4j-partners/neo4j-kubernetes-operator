@@ -17,6 +17,9 @@ The Operator deploys Neo4j EE v5.26+.  It supports both clustered and standalone
  > - **No official Neo4j support**: This project is not an official Neo4j product and is not supported by Neo4j, Inc. in any capacity. The maintainer is a Product Manager at Neo4j, but maintains this project in a personal capacity. Support is provided solely by the maintainer on a best-effort basis through [GitHub Issues](https://github.com/neo4j-partners/neo4j-kubernetes-operator/issues).
 > - **Breaking changes**: As an alpha project, APIs and behavior may change between releases without notice.
 
+> [!TIP]
+> 📖 **Documentation site**: [neo4j-partners.github.io/neo4j-kubernetes-operator](https://neo4j-partners.github.io/neo4j-kubernetes-operator/) — searchable, versioned, with a release dropdown. The links below point at the in-repo markdown for GitHub-flavoured rendering; the same content is on the docs site with full-text search.
+
 ## 📑 Table of Contents
 
 - [Requirements](#-requirements)
@@ -548,6 +551,8 @@ See [authentication example](examples/clusters/auth-example.yaml) for complete c
 Beyond the bootstrap admin secret, you can manage application-level users, roles, and privileges declaratively via the [`Neo4jUser`](docs/api_reference/neo4juser.md) and [`Neo4jRole`](docs/api_reference/neo4jrole.md) CRDs. Passwords come from `Secret`s, role bindings are reconciled like any other resource, and privilege drift is auto-corrected. See the [User & Role Management Guide](docs/user_guide/user_role_management.md).
 
 ## 📚 Documentation Structure
+
+> The full documentation is rendered at [neo4j-partners.github.io/neo4j-kubernetes-operator](https://neo4j-partners.github.io/neo4j-kubernetes-operator/) with search and a per-release version selector. The links below point at the in-repo source so they remain accurate when this README is read directly on GitHub.
 
 ### 👥 User Guides
 - **[Getting Started](docs/user_guide/getting_started.md)** - Installation and first cluster
