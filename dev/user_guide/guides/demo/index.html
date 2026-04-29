@@ -1672,10 +1672,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#part-7-live-diagnostics" class="md-nav__link">
+  <a href="#part-7-declarative-user-role-management" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Part 7: Live Diagnostics
+        Part 7: Declarative User &amp; Role Management
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#part-8-live-diagnostics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Part 8: Live Diagnostics
       
     </span>
   </a>
@@ -2912,10 +2923,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#part-7-live-diagnostics" class="md-nav__link">
+  <a href="#part-7-declarative-user-role-management" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Part 7: Live Diagnostics
+        Part 7: Declarative User &amp; Role Management
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#part-8-live-diagnostics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Part 8: Live Diagnostics
       
     </span>
   </a>
@@ -3079,8 +3101,13 @@
 </tr>
 <tr>
 <td>7</td>
+<td><strong>Declarative User &amp; Role Management</strong></td>
+<td>Neo4jRole with explicit privileges + Neo4jUser bound to the role, password sourced from a Secret</td>
+</tr>
+<tr>
+<td>8</td>
 <td><strong>Live Diagnostics</strong></td>
-<td>Server health and database status from CR status (no kubectl exec)</td>
+<td>Server, database, user, and role state from CR status (no kubectl exec)</td>
 </tr>
 </tbody>
 </table>
@@ -3175,10 +3202,25 @@
 - <code>analytics</code>: 1 primary, 2 secondaries (optimized for reads)
 - <code>sessions</code>: 2 primaries, 0 secondaries (optimized for writes)
 - Verified with <code>SHOW DATABASES</code> showing role distribution</p>
-<h3 id="part-7-live-diagnostics">Part 7: Live Diagnostics<a class="headerlink" href="#part-7-live-diagnostics" title="Anchor link to this section">&para;</a></h3>
+<h3 id="part-7-declarative-user-role-management">Part 7: Declarative User &amp; Role Management<a class="headerlink" href="#part-7-declarative-user-role-management" title="Anchor link to this section">&para;</a></h3>
+<p>Demonstrates the <code>Neo4jUser</code> / <code>Neo4jRole</code> / <code>Neo4jRoleBinding</code> CRDs against the running cluster:</p>
+<ul>
+<li>Creates a Kubernetes <code>Secret</code> holding the user password (the operator never sees the password directly — it reads the Secret on every reconcile and fingerprints it for change detection).</li>
+<li>Applies a <code>Neo4jRole</code> with explicit <code>GRANT</code>/<code>DENY</code> privileges. The role controller runs <code>CREATE ROLE</code>, applies each privilege statement, and reads <code>SHOW ROLE PRIVILEGES AS COMMANDS</code> on every reconcile to detect drift.</li>
+<li>Applies a <code>Neo4jUser</code> bound to the role via <code>spec.roles</code>. The user controller runs <code>CREATE USER</code> with the password from the Secret and grants the bound roles.</li>
+<li>Verifies the user can authenticate against the cluster via <code>cypher-shell</code> and that <code>SHOW USERS</code> reports the expected role set.</li>
+</ul>
+<p>Key design rules surfaced in this part:</p>
+<ul>
+<li><strong>Privileges live on the role, not the user.</strong> <code>Neo4jUser</code> carries only role bindings; never inline <code>GRANT</code>/<code>DENY</code> statements.</li>
+<li><strong>Drift is reconciled.</strong> A manual <code>REVOKE</code> against the cluster is reverted on the next reconcile unless <code>enforcePrivileges: false</code>.</li>
+<li><strong>Built-in roles are protected.</strong> Names like <code>reader</code>, <code>editor</code>, <code>admin</code> are rejected unless <code>adoptBuiltin: true</code>.</li>
+</ul>
+<h3 id="part-8-live-diagnostics">Part 8: Live Diagnostics<a class="headerlink" href="#part-8-live-diagnostics" title="Anchor link to this section">&para;</a></h3>
 <p>Reads <code>status.diagnostics</code> from the cluster CR:
 - <code>status.diagnostics.servers</code> — name, address, state, health for each server
 - <code>status.diagnostics.databases</code> — name, status, role for each database replica
+- <code>status.diagnostics.users</code> / <code>status.diagnostics.roles</code> — capped at 50 entries each, with full counts in <code>userCount</code> / <code>roleCount</code>
 - <code>status.conditions</code> — Ready, ServersHealthy, DatabasesHealthy</p>
 <h2 id="timing">Timing<a class="headerlink" href="#timing" title="Anchor link to this section">&para;</a></h2>
 <table>
@@ -3218,7 +3260,11 @@
 <td>~30s</td>
 </tr>
 <tr>
-<td>Part 7: Diagnostics</td>
+<td>Part 7: User &amp; role management</td>
+<td>~30s</td>
+</tr>
+<tr>
+<td>Part 8: Diagnostics</td>
 <td>~10s</td>
 </tr>
 <tr>

@@ -3693,7 +3693,7 @@
 <p>The operator provides first-class, typed configuration for external authentication providers. When you use the typed fields (described below), the operator automatically generates the correct <code>neo4j.conf</code> entries — you do not need to manually place <code>dbms.security.*</code> keys in <code>spec.config</code>.</p>
 <p><strong>Where to start:</strong>
 - <strong>Most deployments</strong>: <a href="#native-authentication">Native Authentication</a> — just create an admin secret and go.
-- <strong>Corporate SSO</strong>: <a href="#oidc--sso-integration">OIDC / SSO Integration</a> — Okta, Azure AD, Google, or any OIDC provider.
+- <strong>Corporate SSO</strong>: <a href="#oidc-sso-integration">OIDC / SSO Integration</a> — Okta, Azure AD, Google, or any OIDC provider.
 - <strong>Active Directory / LDAP</strong>: <a href="#ldap-integration">LDAP Integration</a> — bind templates, group mapping, nested groups.
 - <strong>Internal CAs</strong>: <a href="#jvm-truststore-for-internal-cas">JVM TrustStore</a> — if your LDAP/OIDC endpoints use certificates signed by a private CA.</p>
 <h3 id="multi-provider-support">Multi-Provider Support<a class="headerlink" href="#multi-provider-support" title="Anchor link to this section">&para;</a></h3>
@@ -4522,7 +4522,7 @@
 <p>For additional security guidance, see:
 - <a href="../guides/configuration_best_practices/">Configuration Best Practices</a>
 - <a href="../configuration/tls/">TLS Configuration Guide</a>
-- <a href="../guides/backup_restore/#security-considerations">Backup Security</a>
+- <a href="../guides/backup_restore/#security-best-practices">Backup Security</a>
 - <a href="../troubleshooting/split-brain-recovery/">Split-Brain Recovery</a></p>
 
 

@@ -2100,10 +2100,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#secretkeyref" class="md-nav__link">
+  <a href="#secretkeyref-truststore" class="md-nav__link">
     <span class="md-ellipsis">
       
-        SecretKeyRef
+        SecretKeyRef (TrustStore)
       
     </span>
   </a>
@@ -2144,10 +2144,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#secretkeyref_1" class="md-nav__link">
+  <a href="#secretkeyref-keytab" class="md-nav__link">
     <span class="md-ellipsis">
       
-        SecretKeyRef
+        SecretKeyRef (Keytab)
       
     </span>
   </a>
@@ -2254,10 +2254,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#secretkeyref_2" class="md-nav__link">
+  <a href="#secretkeyref-token" class="md-nav__link">
     <span class="md-ellipsis">
       
-        SecretKeyRef
+        SecretKeyRef (Token)
       
     </span>
   </a>
@@ -3661,10 +3661,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#secretkeyref" class="md-nav__link">
+  <a href="#secretkeyref-truststore" class="md-nav__link">
     <span class="md-ellipsis">
       
-        SecretKeyRef
+        SecretKeyRef (TrustStore)
       
     </span>
   </a>
@@ -3705,10 +3705,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#secretkeyref_1" class="md-nav__link">
+  <a href="#secretkeyref-keytab" class="md-nav__link">
     <span class="md-ellipsis">
       
-        SecretKeyRef
+        SecretKeyRef (Keytab)
       
     </span>
   </a>
@@ -3815,10 +3815,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#secretkeyref_2" class="md-nav__link">
+  <a href="#secretkeyref-token" class="md-nav__link">
     <span class="md-ellipsis">
       
-        SecretKeyRef
+        SecretKeyRef (Token)
       
     </span>
   </a>
@@ -4641,7 +4641,7 @@
 </tr>
 <tr>
 <td><code>monitoring</code></td>
-<td><a href="#querymonitoringspec"><code>MonitoringSpec</code></a></td>
+<td><a href="#monitoringspec"><code>MonitoringSpec</code></a></td>
 <td>Query monitoring configuration</td>
 </tr>
 <tr>
@@ -4847,8 +4847,8 @@
 </tr>
 <tr>
 <td><code>passwordPolicy</code></td>
-<td><a href="#passwordpolicyspec"><code>*PasswordPolicySpec</code></a></td>
-<td>Password policy configuration</td>
+<td><code>*PasswordPolicySpec</code></td>
+<td>Password policy configuration (minimum length, character class requirements)</td>
 </tr>
 <tr>
 <td><code>ldap</code></td>
@@ -4877,7 +4877,7 @@
 </tr>
 <tr>
 <td><code>trustStore</code></td>
-<td><a href="#secretkeyref"><code>*SecretKeyRef</code></a></td>
+<td><a href="#secretkeyref-truststore"><code>*SecretKeyRef</code></a></td>
 <td>Custom JVM truststore for LDAPS or OIDC with internal CAs</td>
 </tr>
 </tbody>
@@ -5117,7 +5117,7 @@
 </tr>
 </tbody>
 </table>
-<h3 id="secretkeyref">SecretKeyRef<a class="headerlink" href="#secretkeyref" title="Anchor link to this section">&para;</a></h3>
+<h3 id="secretkeyref-truststore">SecretKeyRef (TrustStore)<a class="headerlink" href="#secretkeyref-truststore" title="Anchor link to this section">&para;</a></h3>
 <table>
 <thead>
 <tr>
@@ -5210,12 +5210,12 @@
 </tr>
 <tr>
 <td><code>keytab</code></td>
-<td><a href="#secretkeyref-1"><code>*SecretKeyRef</code></a></td>
+<td><a href="#secretkeyref-keytab"><code>*SecretKeyRef</code></a></td>
 <td>Keytab configuration</td>
 </tr>
 </tbody>
 </table>
-<h3 id="secretkeyref_1">SecretKeyRef<a class="headerlink" href="#secretkeyref_1" title="Anchor link to this section">&para;</a></h3>
+<h3 id="secretkeyref-keytab">SecretKeyRef (Keytab)<a class="headerlink" href="#secretkeyref-keytab" title="Anchor link to this section">&para;</a></h3>
 <table>
 <thead>
 <tr>
@@ -5524,7 +5524,7 @@
 </tr>
 <tr>
 <td><code>tokenSecretRef</code></td>
-<td><a href="#secretkeyref-2"><code>*SecretKeyRef</code></a></td>
+<td><a href="#secretkeyref-token"><code>*SecretKeyRef</code></a></td>
 <td>Reference to the Kubernetes Secret holding the Aura registration token (optional; registration deferred if omitted)</td>
 </tr>
 </tbody>
@@ -5561,7 +5561,7 @@
 </span></code></pre></div>
 <p>See <a href="../../user_guide/aura_fleet_management/">Aura Fleet Management Guide</a> for full setup instructions.</p>
 <hr />
-<h3 id="secretkeyref_2">SecretKeyRef<a class="headerlink" href="#secretkeyref_2" title="Anchor link to this section">&para;</a></h3>
+<h3 id="secretkeyref-token">SecretKeyRef (Token)<a class="headerlink" href="#secretkeyref-token" title="Anchor link to this section">&para;</a></h3>
 <table>
 <thead>
 <tr>
@@ -6605,8 +6605,8 @@
 </tr>
 <tr>
 <td><code>replicas</code></td>
-<td><a href="#replicastatus"><code>map[string]ReplicaStatus</code></a></td>
-<td>Status of each replica</td>
+<td><code>map[string]ReplicaStatus</code></td>
+<td>Status of each replica (servers / ready counts)</td>
 </tr>
 <tr>
 <td><code>clusterID</code></td>
