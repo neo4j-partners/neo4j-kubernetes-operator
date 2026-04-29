@@ -161,7 +161,8 @@ spec:
   # Virtual database name (what users connect to)
   name: products
 
-  # Required for property sharding
+  # Cypher language version: "5" or "25". Property sharding requires Cypher 25,
+  # which is only available on Neo4j 2025.x or later.
   defaultCypherLanguage: "25"
 
   # Property sharding configuration

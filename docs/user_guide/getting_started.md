@@ -4,7 +4,7 @@ This guide will walk you through the process of deploying your first Neo4j Enter
 
 ## Prerequisites
 
-*   A Kubernetes cluster (v1.21+)
+*   A Kubernetes cluster (v1.30+)
 *   `kubectl` installed and configured
 *   Neo4j Enterprise Edition (evaluation license acceptable for testing)
 *   Go 1.25+ (for building from source)
@@ -284,7 +284,7 @@ metadata:
 spec:
   clusterRef: basic-sharding-cluster
   name: largedata
-  defaultCypherLanguage: "25"
+  defaultCypherLanguage: "25"  # Cypher language version: "5" or "25". Cypher 25 requires Neo4j 2025.x or later.
   propertySharding:
     propertyShards: 4
     graphShard:
