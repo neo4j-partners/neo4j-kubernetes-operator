@@ -2893,23 +2893,27 @@
 <li><strong>Multi-namespace</strong>: one operator manages a fixed list of namespaces.</li>
 </ul>
 <p><strong>2) Install with Helm (recommended)</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Cluster scope (default)</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>helm<span class="w"> </span>install<span class="w"> </span>neo4j-operator<span class="w"> </span>oci://ghcr.io/neo4j-partners/charts/neo4j-operator<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span>--namespace<span class="w"> </span>neo4j-operator-system<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span>--create-namespace
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="c1"># Namespace scope</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>helm<span class="w"> </span>install<span class="w"> </span>neo4j-operator<span class="w"> </span>oci://ghcr.io/neo4j-partners/charts/neo4j-operator<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">  </span>--namespace<span class="w"> </span>team-a<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">  </span>--create-namespace<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">  </span>--set<span class="w"> </span><span class="nv">operatorMode</span><span class="o">=</span>namespace
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="c1"># Multi-namespace scope</span>
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>helm<span class="w"> </span>install<span class="w"> </span>neo4j-operator<span class="w"> </span>oci://ghcr.io/neo4j-partners/charts/neo4j-operator<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="w">  </span>--namespace<span class="w"> </span>neo4j-operator-system<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="w">  </span>--create-namespace<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="w">  </span>--set<span class="w"> </span><span class="nv">operatorMode</span><span class="o">=</span>namespaces<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="w">  </span>--set<span class="w"> </span><span class="nv">watchNamespaces</span><span class="o">={</span>team-a,team-b<span class="o">}</span>
+<p>The examples below use the Helm chart repository (available from v1.8.0 onwards). For pre-v1.8.0 releases, substitute <code>neo4j/neo4j-operator</code> with <code>oci://ghcr.io/neo4j-partners/charts/neo4j-operator</code>.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>helm<span class="w"> </span>repo<span class="w"> </span>add<span class="w"> </span>neo4j<span class="w"> </span>https://neo4j-partners.github.io/neo4j-kubernetes-operator/charts
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>helm<span class="w"> </span>repo<span class="w"> </span>update
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1"># Cluster scope (default)</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>helm<span class="w"> </span>install<span class="w"> </span>neo4j-operator<span class="w"> </span>neo4j/neo4j-operator<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">  </span>--namespace<span class="w"> </span>neo4j-operator-system<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">  </span>--create-namespace
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="c1"># Namespace scope</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>helm<span class="w"> </span>install<span class="w"> </span>neo4j-operator<span class="w"> </span>neo4j/neo4j-operator<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">  </span>--namespace<span class="w"> </span>team-a<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">  </span>--create-namespace<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">  </span>--set<span class="w"> </span><span class="nv">operatorMode</span><span class="o">=</span>namespace
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="c1"># Multi-namespace scope</span>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>helm<span class="w"> </span>install<span class="w"> </span>neo4j-operator<span class="w"> </span>neo4j/neo4j-operator<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="w">  </span>--namespace<span class="w"> </span>neo4j-operator-system<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="w">  </span>--create-namespace<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="w">  </span>--set<span class="w"> </span><span class="nv">operatorMode</span><span class="o">=</span>namespaces<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="w">  </span>--set<span class="w"> </span><span class="nv">watchNamespaces</span><span class="o">={</span>team-a,team-b<span class="o">}</span>
 </span></code></pre></div>
 <p><strong>3) Development? Use Kind and in-cluster only.</strong></p>
 <p>Use <code>make dev-cluster</code> and <code>make deploy-dev</code>. Do not run the operator on your host.</p>
@@ -3017,14 +3021,14 @@ Explicit flags and Helm values always override the mode defaults.</p>
 </span></code></pre></div>
 <p>Examples:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Development mode + cluster scope</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>helm<span class="w"> </span>upgrade<span class="w"> </span>--install<span class="w"> </span>neo4j-operator<span class="w"> </span>oci://ghcr.io/neo4j-partners/charts/neo4j-operator<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>helm<span class="w"> </span>upgrade<span class="w"> </span>--install<span class="w"> </span>neo4j-operator<span class="w"> </span>neo4j/neo4j-operator<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span>--namespace<span class="w"> </span>neo4j-operator-dev<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">  </span>--create-namespace<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">  </span>--set<span class="w"> </span><span class="nv">developmentMode</span><span class="o">=</span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">  </span>--set<span class="w"> </span><span class="nv">logLevel</span><span class="o">=</span>debug
 </span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>
 </span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="c1"># Multi-namespace scope</span>
-</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>helm<span class="w"> </span>upgrade<span class="w"> </span>--install<span class="w"> </span>neo4j-operator<span class="w"> </span>oci://ghcr.io/neo4j-partners/charts/neo4j-operator<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>helm<span class="w"> </span>upgrade<span class="w"> </span>--install<span class="w"> </span>neo4j-operator<span class="w"> </span>neo4j/neo4j-operator<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="w">  </span>--namespace<span class="w"> </span>neo4j-operator-system<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="w">  </span>--create-namespace<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="w">  </span>--set<span class="w"> </span><span class="nv">operatorMode</span><span class="o">=</span>namespaces<span class="w"> </span><span class="se">\</span>

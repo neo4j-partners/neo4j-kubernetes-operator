@@ -466,10 +466,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#method-1-quick-install-from-github-release-recommended" class="md-nav__link">
+  <a href="#method-1-helm-chart-repository-recommended" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Method 1: Quick Install from GitHub Release (Recommended)
+        Method 1: Helm Chart Repository (Recommended)
       
     </span>
   </a>
@@ -477,10 +477,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#method-2-helm-installation-from-cloned-repository" class="md-nav__link">
+  <a href="#method-2-oci-registry" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Method 2: Helm Installation (from cloned repository)
+        Method 2: OCI Registry
       
     </span>
   </a>
@@ -488,10 +488,32 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#method-3-git-clone-with-make-targets" class="md-nav__link">
+  <a href="#method-3-quick-install-from-github-release" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Method 3: Git Clone with Make Targets
+        Method 3: Quick Install from GitHub Release
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#method-4-helm-from-cloned-repository" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Method 4: Helm from Cloned Repository
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#method-5-git-clone-with-make-targets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Method 5: Git Clone with Make Targets
       
     </span>
   </a>
@@ -666,10 +688,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#quick-install-uninstallation" class="md-nav__link">
+  <a href="#helm-uninstallation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Quick Install Uninstallation
+        Helm Uninstallation
       
     </span>
   </a>
@@ -677,10 +699,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#helm-uninstallation" class="md-nav__link">
+  <a href="#quick-install-uninstallation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Helm Uninstallation
+        Quick Install Uninstallation
       
     </span>
   </a>
@@ -2797,10 +2819,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#method-1-quick-install-from-github-release-recommended" class="md-nav__link">
+  <a href="#method-1-helm-chart-repository-recommended" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Method 1: Quick Install from GitHub Release (Recommended)
+        Method 1: Helm Chart Repository (Recommended)
       
     </span>
   </a>
@@ -2808,10 +2830,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#method-2-helm-installation-from-cloned-repository" class="md-nav__link">
+  <a href="#method-2-oci-registry" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Method 2: Helm Installation (from cloned repository)
+        Method 2: OCI Registry
       
     </span>
   </a>
@@ -2819,10 +2841,32 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#method-3-git-clone-with-make-targets" class="md-nav__link">
+  <a href="#method-3-quick-install-from-github-release" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Method 3: Git Clone with Make Targets
+        Method 3: Quick Install from GitHub Release
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#method-4-helm-from-cloned-repository" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Method 4: Helm from Cloned Repository
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#method-5-git-clone-with-make-targets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Method 5: Git Clone with Make Targets
       
     </span>
   </a>
@@ -2997,10 +3041,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#quick-install-uninstallation" class="md-nav__link">
+  <a href="#helm-uninstallation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Quick Install Uninstallation
+        Helm Uninstallation
       
     </span>
   </a>
@@ -3008,10 +3052,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#helm-uninstallation" class="md-nav__link">
+  <a href="#quick-install-uninstallation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Helm Uninstallation
+        Quick Install Uninstallation
       
     </span>
   </a>
@@ -3184,81 +3228,99 @@
 <h1 id="installation-guide">Installation Guide<a class="headerlink" href="#installation-guide" title="Anchor link to this section">&para;</a></h1>
 <p>This guide provides detailed instructions for installing the Neo4j Enterprise Operator for Kubernetes.</p>
 <h2 id="quick-installation">Quick Installation<a class="headerlink" href="#quick-installation" title="Anchor link to this section">&para;</a></h2>
-<h3 id="method-1-quick-install-from-github-release-recommended">Method 1: Quick Install from GitHub Release (Recommended)<a class="headerlink" href="#method-1-quick-install-from-github-release-recommended" title="Anchor link to this section">&para;</a></h3>
-<p>The fastest way to install the operator for production use is directly from a GitHub release:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Install the latest release (includes CRDs and operator)</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nv">RELEASE_VERSION</span><span class="o">=</span>v1.0.0<span class="w">  </span><span class="c1"># Replace with desired version</span>
+<h3 id="method-1-helm-chart-repository-recommended">Method 1: Helm Chart Repository (Recommended)<a class="headerlink" href="#method-1-helm-chart-repository-recommended" title="Anchor link to this section">&para;</a></h3>
+<blockquote>
+<p>Available from v1.8.0 onwards. The chart repository is hosted at
+<code>https://neo4j-partners.github.io/neo4j-kubernetes-operator/charts</code> and is
+updated automatically on every operator release.</p>
+</blockquote>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>helm<span class="w"> </span>repo<span class="w"> </span>add<span class="w"> </span>neo4j<span class="w"> </span>https://neo4j-partners.github.io/neo4j-kubernetes-operator/charts
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>helm<span class="w"> </span>repo<span class="w"> </span>update
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases/download/<span class="si">${</span><span class="nv">RELEASE_VERSION</span><span class="si">}</span>/neo4j-kubernetes-operator-complete.yaml
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>helm<span class="w"> </span>install<span class="w"> </span>neo4j-operator<span class="w"> </span>neo4j/neo4j-operator<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span>--namespace<span class="w"> </span>neo4j-operator-system<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">  </span>--create-namespace
+</span></code></pre></div>
+<p><strong>Pin to a specific version</strong>:
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>helm<span class="w"> </span>install<span class="w"> </span>neo4j-operator<span class="w"> </span>neo4j/neo4j-operator<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span>--version<span class="w"> </span><span class="m">1</span>.8.0<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span>--namespace<span class="w"> </span>neo4j-operator-system<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span>--create-namespace
+</span></code></pre></div></p>
+<p><strong>Customise installation values</strong>:
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># View available configuration options</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>helm<span class="w"> </span>show<span class="w"> </span>values<span class="w"> </span>neo4j/neo4j-operator
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>helm<span class="w"> </span>install<span class="w"> </span>neo4j-operator<span class="w"> </span>neo4j/neo4j-operator<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span>--namespace<span class="w"> </span>neo4j-operator-system<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">  </span>--create-namespace<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">  </span>--set<span class="w"> </span>resources.limits.memory<span class="o">=</span>512Mi
+</span></code></pre></div></p>
+<p><strong>Upgrade</strong>:
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>helm<span class="w"> </span>repo<span class="w"> </span>update
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>helm<span class="w"> </span>upgrade<span class="w"> </span>neo4j-operator<span class="w"> </span>neo4j/neo4j-operator<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span>--namespace<span class="w"> </span>neo4j-operator-system
+</span></code></pre></div></p>
+<p><strong>Uninstall</strong>:
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>helm<span class="w"> </span>uninstall<span class="w"> </span>neo4j-operator<span class="w"> </span>--namespace<span class="w"> </span>neo4j-operator-system
+</span></code></pre></div></p>
+<h3 id="method-2-oci-registry">Method 2: OCI Registry<a class="headerlink" href="#method-2-oci-registry" title="Anchor link to this section">&para;</a></h3>
+<p>Available for all releases (including pre-v1.8.0). Helm 3.8 or later is required for OCI support.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>helm<span class="w"> </span>install<span class="w"> </span>neo4j-operator<span class="w"> </span>oci://ghcr.io/neo4j-partners/charts/neo4j-operator<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span>--version<span class="w"> </span><span class="m">1</span>.8.0<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span>--namespace<span class="w"> </span>neo4j-operator-system<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">  </span>--create-namespace
+</span></code></pre></div>
+<p>Use the chart version without the <code>v</code> prefix (for example, <code>1.8.0</code>).</p>
+<h3 id="method-3-quick-install-from-github-release">Method 3: Quick Install from GitHub Release<a class="headerlink" href="#method-3-quick-install-from-github-release" title="Anchor link to this section">&para;</a></h3>
+<p>For environments where running <code>helm</code> is inconvenient, every release also publishes a single kubectl-applyable YAML bundle:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nv">RELEASE_VERSION</span><span class="o">=</span>v1.8.0<span class="w">  </span><span class="c1"># Replace with desired version</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases/download/<span class="si">${</span><span class="nv">RELEASE_VERSION</span><span class="si">}</span>/neo4j-kubernetes-operator-complete.yaml
 </span></code></pre></div>
 <p><strong>What this installs</strong>:
 - Custom Resource Definitions (CRDs)
-- Operator Deployment (using multi-arch images from ghcr.io)
+- Operator Deployment (multi-arch images from ghcr.io)
 - All required RBAC permissions (ClusterRole, ClusterRoleBinding, ServiceAccount)
-- Deployed to <code>neo4j-operator-system</code> namespace</p>
+- Deployed to the <code>neo4j-operator-system</code> namespace</p>
 <p><strong>To find available releases</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Visit: https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1"># Or use the GitHub CLI:</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>gh<span class="w"> </span>release<span class="w"> </span>list<span class="w"> </span>--repo<span class="w"> </span>neo4j-partners/neo4j-kubernetes-operator
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Visit: https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="c1"># Or use the GitHub CLI:</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>gh<span class="w"> </span>release<span class="w"> </span>list<span class="w"> </span>--repo<span class="w"> </span>neo4j-partners/neo4j-kubernetes-operator
 </span></code></pre></div></p>
-<p><strong>CRDs Only Installation</strong> (if you want to manage the operator deployment separately):
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases/download/<span class="si">${</span><span class="nv">RELEASE_VERSION</span><span class="si">}</span>/neo4j-kubernetes-operator.yaml
+<p><strong>CRDs only</strong> (manage the operator deployment separately):
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases/download/<span class="si">${</span><span class="nv">RELEASE_VERSION</span><span class="si">}</span>/neo4j-kubernetes-operator.yaml
 </span></code></pre></div></p>
-<p><strong>Supported Architectures</strong>: linux/amd64, linux/arm64</p>
-<h3 id="method-2-helm-installation-from-cloned-repository">Method 2: Helm Installation (from cloned repository)<a class="headerlink" href="#method-2-helm-installation-from-cloned-repository" title="Anchor link to this section">&para;</a></h3>
-<p>Install using Helm for simplified configuration management:</p>
-<blockquote>
-<p><strong>Note</strong>: Helm charts are not yet published to a Helm repository. You must clone the repository to use this installation method. We plan to publish Helm charts to an OCI registry (e.g., ghcr.io) in a future release.</p>
-</blockquote>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Clone the repository</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/neo4j-partners/neo4j-kubernetes-operator.git
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="nb">cd</span><span class="w"> </span>neo4j-kubernetes-operator
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="c1"># Checkout the latest release tag</span>
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="nv">LATEST_TAG</span><span class="o">=</span><span class="k">$(</span>git<span class="w"> </span>describe<span class="w"> </span>--tags<span class="w"> </span>--abbrev<span class="o">=</span><span class="m">0</span><span class="k">)</span>
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>git<span class="w"> </span>checkout<span class="w"> </span><span class="nv">$LATEST_TAG</span>
-</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>
-</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="c1"># Install using Helm (automatically handles RBAC)</span>
-</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>helm<span class="w"> </span>install<span class="w"> </span>neo4j-operator<span class="w"> </span>./charts/neo4j-operator<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="w">  </span>--namespace<span class="w"> </span>neo4j-operator-system<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="w">  </span>--create-namespace
+<p><strong>Supported architectures</strong>: linux/amd64, linux/arm64</p>
+<h3 id="method-4-helm-from-cloned-repository">Method 4: Helm from Cloned Repository<a class="headerlink" href="#method-4-helm-from-cloned-repository" title="Anchor link to this section">&para;</a></h3>
+<p>Useful for testing an unreleased commit or customising the chart locally.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/neo4j-partners/neo4j-kubernetes-operator.git
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="nb">cd</span><span class="w"> </span>neo4j-kubernetes-operator
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="nv">LATEST_TAG</span><span class="o">=</span><span class="k">$(</span>git<span class="w"> </span>describe<span class="w"> </span>--tags<span class="w"> </span>--abbrev<span class="o">=</span><span class="m">0</span><span class="k">)</span>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>git<span class="w"> </span>checkout<span class="w"> </span><span class="nv">$LATEST_TAG</span><span class="w">    </span><span class="c1"># or omit to test main</span>
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>helm<span class="w"> </span>install<span class="w"> </span>neo4j-operator<span class="w"> </span>./charts/neo4j-operator<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="w">  </span>--namespace<span class="w"> </span>neo4j-operator-system<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="w">  </span>--create-namespace
 </span></code></pre></div>
-<p><strong>Helm Installation Benefits</strong>:
-- Simplified configuration through values.yaml
-- Easy upgrades with <code>helm upgrade</code>
-- Automatic RBAC setup
-- Customizable installation parameters</p>
-<p><strong>Customize Helm installation</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># View available configuration options</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>helm<span class="w"> </span>show<span class="w"> </span>values<span class="w"> </span>./charts/neo4j-operator
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># Install with custom values</span>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>helm<span class="w"> </span>install<span class="w"> </span>neo4j-operator<span class="w"> </span>./charts/neo4j-operator<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">  </span>--namespace<span class="w"> </span>neo4j-operator-system<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">  </span>--create-namespace<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">  </span>--set<span class="w"> </span>image.tag<span class="o">=</span>v1.0.0<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="w">  </span>--set<span class="w"> </span>resources.limits.memory<span class="o">=</span>512Mi
-</span></code></pre></div></p>
-<p><strong>Uninstall via Helm</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>helm<span class="w"> </span>uninstall<span class="w"> </span>neo4j-operator<span class="w"> </span>--namespace<span class="w"> </span>neo4j-operator-system
-</span></code></pre></div></p>
-<h3 id="method-3-git-clone-with-make-targets">Method 3: Git Clone with Make Targets<a class="headerlink" href="#method-3-git-clone-with-make-targets" title="Anchor link to this section">&para;</a></h3>
+<h3 id="method-5-git-clone-with-make-targets">Method 5: Git Clone with Make Targets<a class="headerlink" href="#method-5-git-clone-with-make-targets" title="Anchor link to this section">&para;</a></h3>
 <p>For development, customization, or when you need to build from source:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Clone the repository</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/neo4j-partners/neo4j-kubernetes-operator.git
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="nb">cd</span><span class="w"> </span>neo4j-kubernetes-operator
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="c1"># Checkout the latest release tag</span>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="nv">LATEST_TAG</span><span class="o">=</span><span class="k">$(</span>git<span class="w"> </span>describe<span class="w"> </span>--tags<span class="w"> </span>--abbrev<span class="o">=</span><span class="m">0</span><span class="k">)</span>
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>git<span class="w"> </span>checkout<span class="w"> </span><span class="nv">$LATEST_TAG</span>
-</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>
-</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="c1"># Install CRDs and operator</span>
-</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>make<span class="w"> </span>install<span class="w">      </span><span class="c1"># Install CRDs into your cluster</span>
-</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>make<span class="w"> </span>deploy-prod<span class="w">  </span><span class="c1"># Deploy operator (builds and uses local image)</span>
-</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>
-</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="c1"># Alternative deployment options:</span>
-</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a>make<span class="w"> </span>deploy-prod-local<span class="w">     </span><span class="c1"># Explicit local build and deploy to Kind cluster</span>
-</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a>make<span class="w"> </span>deploy-prod-registry<span class="w">  </span><span class="c1"># Deploy from ghcr.io registry (requires authentication)</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Clone the repository</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/neo4j-partners/neo4j-kubernetes-operator.git
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="nb">cd</span><span class="w"> </span>neo4j-kubernetes-operator
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="c1"># Checkout the latest release tag</span>
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="nv">LATEST_TAG</span><span class="o">=</span><span class="k">$(</span>git<span class="w"> </span>describe<span class="w"> </span>--tags<span class="w"> </span>--abbrev<span class="o">=</span><span class="m">0</span><span class="k">)</span>
+</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>git<span class="w"> </span>checkout<span class="w"> </span><span class="nv">$LATEST_TAG</span>
+</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a>
+</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="c1"># Install CRDs and operator</span>
+</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a>make<span class="w"> </span>install<span class="w">      </span><span class="c1"># Install CRDs into your cluster</span>
+</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a>make<span class="w"> </span>deploy-prod<span class="w">  </span><span class="c1"># Deploy operator (builds and uses local image)</span>
+</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a>
+</span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a><span class="c1"># Alternative deployment options:</span>
+</span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a>make<span class="w"> </span>deploy-prod-local<span class="w">     </span><span class="c1"># Explicit local build and deploy to Kind cluster</span>
+</span><span id="__span-10-15"><a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a>make<span class="w"> </span>deploy-prod-registry<span class="w">  </span><span class="c1"># Deploy from ghcr.io registry (requires authentication)</span>
 </span></code></pre></div>
 <p><strong>What this installs</strong>:
 - Custom Resource Definitions (CRDs)
@@ -3267,88 +3329,88 @@
 - ServiceAccount and ClusterRole bindings</p>
 <h2 id="development-installation">Development Installation<a class="headerlink" href="#development-installation" title="Anchor link to this section">&para;</a></h2>
 <p>For active development and testing with local images:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Clone and setup development environment</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/neo4j-partners/neo4j-kubernetes-operator.git
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="nb">cd</span><span class="w"> </span>neo4j-kubernetes-operator
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="c1"># Create development cluster (uses Kind)</span>
-</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>make<span class="w"> </span>dev-cluster
-</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>
-</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="c1"># Deploy operator (recommended for in-cluster testing)</span>
-</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>make<span class="w"> </span>operator-setup<span class="w">  </span><span class="c1"># Automated setup (detects cluster and deploys)</span>
-</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>
-</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="c1"># Manual deployment options:</span>
-</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a>make<span class="w"> </span>deploy-dev<span class="w">      </span><span class="c1"># Development namespace with debug features (builds local image)</span>
-</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a>make<span class="w"> </span>deploy-prod<span class="w">     </span><span class="c1"># Production namespace (builds local image)</span>
-</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a>
-</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="c1"># Registry-based deployment:</span>
-</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a>make<span class="w"> </span>deploy-dev-registry<span class="w">   </span><span class="c1"># Deploy from registry (requires authentication)</span>
-</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a>make<span class="w"> </span>deploy-prod-registry<span class="w">  </span><span class="c1"># Deploy from ghcr.io registry</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Clone and setup development environment</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/neo4j-partners/neo4j-kubernetes-operator.git
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="nb">cd</span><span class="w"> </span>neo4j-kubernetes-operator
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="c1"># Create development cluster (uses Kind)</span>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>make<span class="w"> </span>dev-cluster
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>
+</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="c1"># Deploy operator (recommended for in-cluster testing)</span>
+</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a>make<span class="w"> </span>operator-setup<span class="w">  </span><span class="c1"># Automated setup (detects cluster and deploys)</span>
+</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a>
+</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a><span class="c1"># Manual deployment options:</span>
+</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a>make<span class="w"> </span>deploy-dev<span class="w">      </span><span class="c1"># Development namespace with debug features (builds local image)</span>
+</span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a>make<span class="w"> </span>deploy-prod<span class="w">     </span><span class="c1"># Production namespace (builds local image)</span>
+</span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a>
+</span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a><span class="c1"># Registry-based deployment:</span>
+</span><span id="__span-11-16"><a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a>make<span class="w"> </span>deploy-dev-registry<span class="w">   </span><span class="c1"># Deploy from registry (requires authentication)</span>
+</span><span id="__span-11-17"><a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a>make<span class="w"> </span>deploy-prod-registry<span class="w">  </span><span class="c1"># Deploy from ghcr.io registry</span>
 </span></code></pre></div>
 <h2 id="advanced-installation-methods">Advanced Installation Methods<a class="headerlink" href="#advanced-installation-methods" title="Anchor link to this section">&para;</a></h2>
 <h3 id="custom-kustomize-configuration">Custom Kustomize Configuration<a class="headerlink" href="#custom-kustomize-configuration" title="Anchor link to this section">&para;</a></h3>
 <p>For customized deployments with specific namespace, labels, or resource configurations:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># After cloning and checking out the latest tag</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="c1"># Create your own kustomization</span>
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>cat<span class="w"> </span>&gt;<span class="w"> </span>kustomization.yaml<span class="w"> </span><span class="s">&lt;&lt; EOF</span>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="s">apiVersion: kustomize.config.k8s.io/v1beta1</span>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="s">kind: Kustomization</span>
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="s">resources:</span>
-</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="s">- config/default</span>
-</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>
-</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="s"># Customize namespace</span>
-</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="s">namespace: my-neo4j-operator</span>
-</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a>
-</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="s"># Add custom labels</span>
-</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="s">commonLabels:</span>
-</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="s">  environment: production</span>
-</span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a><span class="s">  team: database</span>
-</span><span id="__span-8-17"><a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a>
-</span><span id="__span-8-18"><a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a><span class="s"># Customize images (optional)</span>
-</span><span id="__span-8-19"><a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a><span class="s">images:</span>
-</span><span id="__span-8-20"><a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a><span class="s">- name: ghcr.io/neo4j-partners/neo4j-kubernetes-operator</span>
-</span><span id="__span-8-21"><a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a><span class="s">  newTag: v1.0.0</span>
-</span><span id="__span-8-22"><a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a><span class="s">EOF</span>
-</span><span id="__span-8-23"><a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a>
-</span><span id="__span-8-24"><a id="__codelineno-8-24" name="__codelineno-8-24" href="#__codelineno-8-24"></a><span class="c1"># Apply custom configuration</span>
-</span><span id="__span-8-25"><a id="__codelineno-8-25" name="__codelineno-8-25" href="#__codelineno-8-25"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-k<span class="w"> </span>.
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># After cloning and checking out the latest tag</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="c1"># Create your own kustomization</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>cat<span class="w"> </span>&gt;<span class="w"> </span>kustomization.yaml<span class="w"> </span><span class="s">&lt;&lt; EOF</span>
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="s">apiVersion: kustomize.config.k8s.io/v1beta1</span>
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="s">kind: Kustomization</span>
+</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>
+</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="s">resources:</span>
+</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="s">- config/default</span>
+</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a>
+</span><span id="__span-12-10"><a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a><span class="s"># Customize namespace</span>
+</span><span id="__span-12-11"><a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a><span class="s">namespace: my-neo4j-operator</span>
+</span><span id="__span-12-12"><a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a>
+</span><span id="__span-12-13"><a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a><span class="s"># Add custom labels</span>
+</span><span id="__span-12-14"><a id="__codelineno-12-14" name="__codelineno-12-14" href="#__codelineno-12-14"></a><span class="s">commonLabels:</span>
+</span><span id="__span-12-15"><a id="__codelineno-12-15" name="__codelineno-12-15" href="#__codelineno-12-15"></a><span class="s">  environment: production</span>
+</span><span id="__span-12-16"><a id="__codelineno-12-16" name="__codelineno-12-16" href="#__codelineno-12-16"></a><span class="s">  team: database</span>
+</span><span id="__span-12-17"><a id="__codelineno-12-17" name="__codelineno-12-17" href="#__codelineno-12-17"></a>
+</span><span id="__span-12-18"><a id="__codelineno-12-18" name="__codelineno-12-18" href="#__codelineno-12-18"></a><span class="s"># Customize images (optional)</span>
+</span><span id="__span-12-19"><a id="__codelineno-12-19" name="__codelineno-12-19" href="#__codelineno-12-19"></a><span class="s">images:</span>
+</span><span id="__span-12-20"><a id="__codelineno-12-20" name="__codelineno-12-20" href="#__codelineno-12-20"></a><span class="s">- name: ghcr.io/neo4j-partners/neo4j-kubernetes-operator</span>
+</span><span id="__span-12-21"><a id="__codelineno-12-21" name="__codelineno-12-21" href="#__codelineno-12-21"></a><span class="s">  newTag: v1.0.0</span>
+</span><span id="__span-12-22"><a id="__codelineno-12-22" name="__codelineno-12-22" href="#__codelineno-12-22"></a><span class="s">EOF</span>
+</span><span id="__span-12-23"><a id="__codelineno-12-23" name="__codelineno-12-23" href="#__codelineno-12-23"></a>
+</span><span id="__span-12-24"><a id="__codelineno-12-24" name="__codelineno-12-24" href="#__codelineno-12-24"></a><span class="c1"># Apply custom configuration</span>
+</span><span id="__span-12-25"><a id="__codelineno-12-25" name="__codelineno-12-25" href="#__codelineno-12-25"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-k<span class="w"> </span>.
 </span></code></pre></div>
 <h3 id="alternative-deployment-configurations">Alternative Deployment Configurations<a class="headerlink" href="#alternative-deployment-configurations" title="Anchor link to this section">&para;</a></h3>
 <p>After cloning the repository, you can use different deployment configurations based on your environment:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Production deployment (optimized resource limits, no debug logging)</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>make<span class="w"> </span>deploy-prod<span class="w">           </span><span class="c1"># Builds and deploys local image</span>
-</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="c1"># or</span>
-</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>make<span class="w"> </span>deploy-prod-registry<span class="w">  </span><span class="c1"># Deploy from ghcr.io registry</span>
-</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>
-</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="c1"># Development deployment (with debug logging enabled, relaxed resource limits)</span>
-</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>make<span class="w"> </span>deploy-dev<span class="w">            </span><span class="c1"># Builds and deploys local dev image</span>
-</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="c1"># or</span>
-</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>make<span class="w"> </span>deploy-dev-registry<span class="w">   </span><span class="c1"># Deploy from registry</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Production deployment (optimized resource limits, no debug logging)</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>make<span class="w"> </span>deploy-prod<span class="w">           </span><span class="c1"># Builds and deploys local image</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="c1"># or</span>
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>make<span class="w"> </span>deploy-prod-registry<span class="w">  </span><span class="c1"># Deploy from ghcr.io registry</span>
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="c1"># Development deployment (with debug logging enabled, relaxed resource limits)</span>
+</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a>make<span class="w"> </span>deploy-dev<span class="w">            </span><span class="c1"># Builds and deploys local dev image</span>
+</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="c1"># or</span>
+</span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a>make<span class="w"> </span>deploy-dev-registry<span class="w">   </span><span class="c1"># Deploy from registry</span>
 </span></code></pre></div>
 <h2 id="verifying-the-installation">Verifying the Installation<a class="headerlink" href="#verifying-the-installation" title="Anchor link to this section">&para;</a></h2>
 <p>After installation, verify that the operator is running:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Check operator pod status (default namespace: neo4j-operator-system)</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>neo4j-operator-system
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
-</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="c1"># Check CRDs are installed</span>
-</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>kubectl<span class="w"> </span>get<span class="w"> </span>crd<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>neo4j
-</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>
-</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="c1"># View operator logs</span>
-</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>neo4j-operator-system<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/name<span class="o">=</span>neo4j-operator
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Check operator pod status (default namespace: neo4j-operator-system)</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>neo4j-operator-system
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="c1"># Check CRDs are installed</span>
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>kubectl<span class="w"> </span>get<span class="w"> </span>crd<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>neo4j
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>
+</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="c1"># View operator logs</span>
+</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>neo4j-operator-system<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/name<span class="o">=</span>neo4j-operator
 </span></code></pre></div>
 <p>Expected output:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Pod should be Running</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>NAME<span class="w">                                        </span>READY<span class="w">   </span>STATUS<span class="w">    </span>RESTARTS<span class="w">   </span>AGE
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>neo4j-operator-controller-manager-xxx<span class="w">       </span><span class="m">2</span>/2<span class="w">     </span>Running<span class="w">   </span><span class="m">0</span><span class="w">          </span>1m
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>
-</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="c1"># CRDs should be present</span>
-</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>neo4jbackups.neo4j.neo4j.com
-</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>neo4jdatabases.neo4j.neo4j.com
-</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a>neo4jenterpriseclusters.neo4j.neo4j.com
-</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a>neo4jenterprisestandalones.neo4j.neo4j.com
-</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a>neo4jplugins.neo4j.neo4j.com
-</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a>neo4jrestores.neo4j.neo4j.com
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Pod should be Running</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>NAME<span class="w">                                        </span>READY<span class="w">   </span>STATUS<span class="w">    </span>RESTARTS<span class="w">   </span>AGE
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>neo4j-operator-controller-manager-xxx<span class="w">       </span><span class="m">2</span>/2<span class="w">     </span>Running<span class="w">   </span><span class="m">0</span><span class="w">          </span>1m
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="c1"># CRDs should be present</span>
+</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a>neo4jbackups.neo4j.neo4j.com
+</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a>neo4jdatabases.neo4j.neo4j.com
+</span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a>neo4jenterpriseclusters.neo4j.neo4j.com
+</span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a>neo4jenterprisestandalones.neo4j.neo4j.com
+</span><span id="__span-15-10"><a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a>neo4jplugins.neo4j.neo4j.com
+</span><span id="__span-15-11"><a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a>neo4jrestores.neo4j.neo4j.com
 </span></code></pre></div></p>
 <h2 id="available-make-targets">Available Make Targets<a class="headerlink" href="#available-make-targets" title="Anchor link to this section">&para;</a></h2>
 <p>After cloning the repository, you have access to these make targets:</p>
@@ -3465,155 +3527,159 @@
 <p>After installing the operator, you can deploy your first Neo4j instance using examples.</p>
 <h3 id="option-1-using-examples-from-github-release">Option 1: Using Examples from GitHub Release<a class="headerlink" href="#option-1-using-examples-from-github-release" title="Anchor link to this section">&para;</a></h3>
 <p>Download example configurations from the release:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Download examples archive</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="nv">RELEASE_VERSION</span><span class="o">=</span>v1.0.0<span class="w">  </span><span class="c1"># Replace with your installed version</span>
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>curl<span class="w"> </span>-LO<span class="w"> </span>https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases/download/<span class="si">${</span><span class="nv">RELEASE_VERSION</span><span class="si">}</span>/examples-<span class="si">${</span><span class="nv">RELEASE_VERSION</span><span class="p">#v</span><span class="si">}</span>.tar.gz
-</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>
-</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="c1"># Extract examples</span>
-</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>tar<span class="w"> </span>-xzf<span class="w"> </span>examples-<span class="si">${</span><span class="nv">RELEASE_VERSION</span><span class="p">#v</span><span class="si">}</span>.tar.gz
-</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a>
-</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="c1"># Create admin secret (required for Neo4j authentication)</span>
-</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a>kubectl<span class="w"> </span>create<span class="w"> </span>secret<span class="w"> </span>generic<span class="w"> </span>neo4j-admin-secret<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-12-10"><a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a><span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">username</span><span class="o">=</span>neo4j<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-12-11"><a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a><span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">password</span><span class="o">=</span>your-secure-password
-</span><span id="__span-12-12"><a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a>
-</span><span id="__span-12-13"><a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a><span class="c1"># Deploy your first Neo4j instance</span>
-</span><span id="__span-12-14"><a id="__codelineno-12-14" name="__codelineno-12-14" href="#__codelineno-12-14"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>examples/standalone/single-node-standalone.yaml
-</span><span id="__span-12-15"><a id="__codelineno-12-15" name="__codelineno-12-15" href="#__codelineno-12-15"></a>
-</span><span id="__span-12-16"><a id="__codelineno-12-16" name="__codelineno-12-16" href="#__codelineno-12-16"></a><span class="c1"># Check deployment status</span>
-</span><span id="__span-12-17"><a id="__codelineno-12-17" name="__codelineno-12-17" href="#__codelineno-12-17"></a>kubectl<span class="w"> </span>get<span class="w"> </span>neo4jenterprisestandalone
-</span><span id="__span-12-18"><a id="__codelineno-12-18" name="__codelineno-12-18" href="#__codelineno-12-18"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods
-</span><span id="__span-12-19"><a id="__codelineno-12-19" name="__codelineno-12-19" href="#__codelineno-12-19"></a>
-</span><span id="__span-12-20"><a id="__codelineno-12-20" name="__codelineno-12-20" href="#__codelineno-12-20"></a><span class="c1"># Access Neo4j Browser</span>
-</span><span id="__span-12-21"><a id="__codelineno-12-21" name="__codelineno-12-21" href="#__codelineno-12-21"></a>kubectl<span class="w"> </span>port-forward<span class="w"> </span>svc/standalone-neo4j-service<span class="w"> </span><span class="m">7474</span>:7474
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Download examples archive</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="nv">RELEASE_VERSION</span><span class="o">=</span>v1.0.0<span class="w">  </span><span class="c1"># Replace with your installed version</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>curl<span class="w"> </span>-LO<span class="w"> </span>https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases/download/<span class="si">${</span><span class="nv">RELEASE_VERSION</span><span class="si">}</span>/examples-<span class="si">${</span><span class="nv">RELEASE_VERSION</span><span class="p">#v</span><span class="si">}</span>.tar.gz
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>
+</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="c1"># Extract examples</span>
+</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>tar<span class="w"> </span>-xzf<span class="w"> </span>examples-<span class="si">${</span><span class="nv">RELEASE_VERSION</span><span class="p">#v</span><span class="si">}</span>.tar.gz
+</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a>
+</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="c1"># Create admin secret (required for Neo4j authentication)</span>
+</span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a>kubectl<span class="w"> </span>create<span class="w"> </span>secret<span class="w"> </span>generic<span class="w"> </span>neo4j-admin-secret<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-10"><a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a><span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">username</span><span class="o">=</span>neo4j<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-16-11"><a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a><span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">password</span><span class="o">=</span>your-secure-password
+</span><span id="__span-16-12"><a id="__codelineno-16-12" name="__codelineno-16-12" href="#__codelineno-16-12"></a>
+</span><span id="__span-16-13"><a id="__codelineno-16-13" name="__codelineno-16-13" href="#__codelineno-16-13"></a><span class="c1"># Deploy your first Neo4j instance</span>
+</span><span id="__span-16-14"><a id="__codelineno-16-14" name="__codelineno-16-14" href="#__codelineno-16-14"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>examples/standalone/single-node-standalone.yaml
+</span><span id="__span-16-15"><a id="__codelineno-16-15" name="__codelineno-16-15" href="#__codelineno-16-15"></a>
+</span><span id="__span-16-16"><a id="__codelineno-16-16" name="__codelineno-16-16" href="#__codelineno-16-16"></a><span class="c1"># Check deployment status</span>
+</span><span id="__span-16-17"><a id="__codelineno-16-17" name="__codelineno-16-17" href="#__codelineno-16-17"></a>kubectl<span class="w"> </span>get<span class="w"> </span>neo4jenterprisestandalone
+</span><span id="__span-16-18"><a id="__codelineno-16-18" name="__codelineno-16-18" href="#__codelineno-16-18"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods
+</span><span id="__span-16-19"><a id="__codelineno-16-19" name="__codelineno-16-19" href="#__codelineno-16-19"></a>
+</span><span id="__span-16-20"><a id="__codelineno-16-20" name="__codelineno-16-20" href="#__codelineno-16-20"></a><span class="c1"># Access Neo4j Browser</span>
+</span><span id="__span-16-21"><a id="__codelineno-16-21" name="__codelineno-16-21" href="#__codelineno-16-21"></a>kubectl<span class="w"> </span>port-forward<span class="w"> </span>svc/standalone-neo4j-service<span class="w"> </span><span class="m">7474</span>:7474
 </span></code></pre></div>
 <h3 id="option-2-using-examples-from-cloned-repository">Option 2: Using Examples from Cloned Repository<a class="headerlink" href="#option-2-using-examples-from-cloned-repository" title="Anchor link to this section">&para;</a></h3>
 <p>If you cloned the repository, examples are available in the local <code>examples/</code> directory:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Create admin secret (required for Neo4j authentication)</span>
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>kubectl<span class="w"> </span>create<span class="w"> </span>secret<span class="w"> </span>generic<span class="w"> </span>neo4j-admin-secret<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">username</span><span class="o">=</span>neo4j<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">password</span><span class="o">=</span>your-secure-password
-</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>
-</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="c1"># Deploy your first Neo4j instance</span>
-</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>examples/standalone/single-node-standalone.yaml
-</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a>
-</span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="c1"># Check deployment status</span>
-</span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a>kubectl<span class="w"> </span>get<span class="w"> </span>neo4jenterprisestandalone
-</span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods
-</span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a>
-</span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a><span class="c1"># Access Neo4j Browser</span>
-</span><span id="__span-13-14"><a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a>kubectl<span class="w"> </span>port-forward<span class="w"> </span>svc/standalone-neo4j-service<span class="w"> </span><span class="m">7474</span>:7474
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Create admin secret (required for Neo4j authentication)</span>
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>kubectl<span class="w"> </span>create<span class="w"> </span>secret<span class="w"> </span>generic<span class="w"> </span>neo4j-admin-secret<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">username</span><span class="o">=</span>neo4j<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">password</span><span class="o">=</span>your-secure-password
+</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>
+</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="c1"># Deploy your first Neo4j instance</span>
+</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>examples/standalone/single-node-standalone.yaml
+</span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a>
+</span><span id="__span-17-9"><a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a><span class="c1"># Check deployment status</span>
+</span><span id="__span-17-10"><a id="__codelineno-17-10" name="__codelineno-17-10" href="#__codelineno-17-10"></a>kubectl<span class="w"> </span>get<span class="w"> </span>neo4jenterprisestandalone
+</span><span id="__span-17-11"><a id="__codelineno-17-11" name="__codelineno-17-11" href="#__codelineno-17-11"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods
+</span><span id="__span-17-12"><a id="__codelineno-17-12" name="__codelineno-17-12" href="#__codelineno-17-12"></a>
+</span><span id="__span-17-13"><a id="__codelineno-17-13" name="__codelineno-17-13" href="#__codelineno-17-13"></a><span class="c1"># Access Neo4j Browser</span>
+</span><span id="__span-17-14"><a id="__codelineno-17-14" name="__codelineno-17-14" href="#__codelineno-17-14"></a>kubectl<span class="w"> </span>port-forward<span class="w"> </span>svc/standalone-neo4j-service<span class="w"> </span><span class="m">7474</span>:7474
 </span></code></pre></div>
 <h2 id="uninstalling-the-operator">Uninstalling the Operator<a class="headerlink" href="#uninstalling-the-operator" title="Anchor link to this section">&para;</a></h2>
+<h3 id="helm-uninstallation">Helm Uninstallation<a class="headerlink" href="#helm-uninstallation" title="Anchor link to this section">&para;</a></h3>
+<p>If you installed via Helm (Methods 1, 2, or 4):</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Uninstall the Helm release</span>
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>helm<span class="w"> </span>uninstall<span class="w"> </span>neo4j-operator<span class="w"> </span>--namespace<span class="w"> </span>neo4j-operator-system
+</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>
+</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="c1"># Optionally delete the namespace</span>
+</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>namespace<span class="w"> </span>neo4j-operator-system
+</span><span id="__span-18-6"><a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a>
+</span><span id="__span-18-7"><a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a><span class="c1"># Note: CRDs are not automatically deleted by Helm uninstall</span>
+</span><span id="__span-18-8"><a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a><span class="c1"># To remove CRDs manually (WARNING: This deletes all Neo4j instances):</span>
+</span><span id="__span-18-9"><a id="__codelineno-18-9" name="__codelineno-18-9" href="#__codelineno-18-9"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>crd<span class="w"> </span>neo4jbackups.neo4j.neo4j.com
+</span><span id="__span-18-10"><a id="__codelineno-18-10" name="__codelineno-18-10" href="#__codelineno-18-10"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>crd<span class="w"> </span>neo4jdatabases.neo4j.neo4j.com
+</span><span id="__span-18-11"><a id="__codelineno-18-11" name="__codelineno-18-11" href="#__codelineno-18-11"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>crd<span class="w"> </span>neo4jenterpriseclusters.neo4j.neo4j.com
+</span><span id="__span-18-12"><a id="__codelineno-18-12" name="__codelineno-18-12" href="#__codelineno-18-12"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>crd<span class="w"> </span>neo4jenterprisestandalones.neo4j.neo4j.com
+</span><span id="__span-18-13"><a id="__codelineno-18-13" name="__codelineno-18-13" href="#__codelineno-18-13"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>crd<span class="w"> </span>neo4jplugins.neo4j.neo4j.com
+</span><span id="__span-18-14"><a id="__codelineno-18-14" name="__codelineno-18-14" href="#__codelineno-18-14"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>crd<span class="w"> </span>neo4jrestores.neo4j.neo4j.com
+</span><span id="__span-18-15"><a id="__codelineno-18-15" name="__codelineno-18-15" href="#__codelineno-18-15"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>crd<span class="w"> </span>neo4jroles.neo4j.neo4j.com
+</span><span id="__span-18-16"><a id="__codelineno-18-16" name="__codelineno-18-16" href="#__codelineno-18-16"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>crd<span class="w"> </span>neo4jrolebindings.neo4j.neo4j.com
+</span><span id="__span-18-17"><a id="__codelineno-18-17" name="__codelineno-18-17" href="#__codelineno-18-17"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>crd<span class="w"> </span>neo4jusers.neo4j.neo4j.com
+</span><span id="__span-18-18"><a id="__codelineno-18-18" name="__codelineno-18-18" href="#__codelineno-18-18"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>crd<span class="w"> </span>neo4jshardeddatabases.neo4j.neo4j.com
+</span></code></pre></div>
 <h3 id="quick-install-uninstallation">Quick Install Uninstallation<a class="headerlink" href="#quick-install-uninstallation" title="Anchor link to this section">&para;</a></h3>
-<p>If you installed using Method 1 (GitHub Release):</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Get the release version you installed</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="nv">RELEASE_VERSION</span><span class="o">=</span>v1.0.0<span class="w">  </span><span class="c1"># Replace with your installed version</span>
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>
-</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="c1"># Delete the operator and CRDs</span>
-</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>-f<span class="w"> </span>https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases/download/<span class="si">${</span><span class="nv">RELEASE_VERSION</span><span class="si">}</span>/neo4j-kubernetes-operator-complete.yaml
+<p>If you installed using Method 3 (kubectl apply from a GitHub release):</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Get the release version you installed</span>
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="nv">RELEASE_VERSION</span><span class="o">=</span>v1.8.0<span class="w">  </span><span class="c1"># Replace with your installed version</span>
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>
+</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="c1"># Delete the operator and CRDs</span>
+</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>-f<span class="w"> </span>https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases/download/<span class="si">${</span><span class="nv">RELEASE_VERSION</span><span class="si">}</span>/neo4j-kubernetes-operator-complete.yaml
 </span></code></pre></div>
 <p><strong>Warning</strong>: Deleting CRDs will also delete all Neo4j instances managed by the operator.</p>
-<h3 id="helm-uninstallation">Helm Uninstallation<a class="headerlink" href="#helm-uninstallation" title="Anchor link to this section">&para;</a></h3>
-<p>If you installed using Method 2 (Helm):</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Uninstall the Helm release</span>
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>helm<span class="w"> </span>uninstall<span class="w"> </span>neo4j-operator<span class="w"> </span>--namespace<span class="w"> </span>neo4j-operator-system
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>
-</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="c1"># Optionally delete the namespace</span>
-</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>namespace<span class="w"> </span>neo4j-operator-system
-</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a>
-</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="c1"># Note: CRDs are not automatically deleted by Helm uninstall</span>
-</span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="c1"># To remove CRDs manually (WARNING: This deletes all Neo4j instances):</span>
-</span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>crd<span class="w"> </span>neo4jbackups.neo4j.neo4j.com
-</span><span id="__span-15-10"><a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>crd<span class="w"> </span>neo4jdatabases.neo4j.neo4j.com
-</span><span id="__span-15-11"><a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>crd<span class="w"> </span>neo4jenterpriseclusters.neo4j.neo4j.com
-</span><span id="__span-15-12"><a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>crd<span class="w"> </span>neo4jenterprisestandalones.neo4j.neo4j.com
-</span><span id="__span-15-13"><a id="__codelineno-15-13" name="__codelineno-15-13" href="#__codelineno-15-13"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>crd<span class="w"> </span>neo4jplugins.neo4j.neo4j.com
-</span><span id="__span-15-14"><a id="__codelineno-15-14" name="__codelineno-15-14" href="#__codelineno-15-14"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>crd<span class="w"> </span>neo4jrestores.neo4j.neo4j.com
-</span></code></pre></div>
 <h3 id="make-targets-uninstallation">Make Targets Uninstallation<a class="headerlink" href="#make-targets-uninstallation" title="Anchor link to this section">&para;</a></h3>
-<p>If you installed using Method 3 (Git Clone with Make):</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># From the cloned repository directory</span>
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="nb">cd</span><span class="w"> </span>neo4j-kubernetes-operator
-</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>
-</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="c1"># Undeploy operator (keeps CRDs and Neo4j instances)</span>
-</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>make<span class="w"> </span>undeploy-prod<span class="w">  </span><span class="c1"># If you used deploy-prod</span>
-</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="c1"># or</span>
-</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a>make<span class="w"> </span>undeploy-dev<span class="w">   </span><span class="c1"># If you used deploy-dev</span>
-</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a>
-</span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a><span class="c1"># Uninstall CRDs (WARNING: This deletes all Neo4j instances)</span>
-</span><span id="__span-16-10"><a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a>make<span class="w"> </span>uninstall
+<p>If you installed using Method 5 (Git Clone with Make):</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># From the cloned repository directory</span>
+</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="nb">cd</span><span class="w"> </span>neo4j-kubernetes-operator
+</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>
+</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="c1"># Undeploy operator (keeps CRDs and Neo4j instances)</span>
+</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a>make<span class="w"> </span>undeploy-prod<span class="w">  </span><span class="c1"># If you used deploy-prod</span>
+</span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a><span class="c1"># or</span>
+</span><span id="__span-20-7"><a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a>make<span class="w"> </span>undeploy-dev<span class="w">   </span><span class="c1"># If you used deploy-dev</span>
+</span><span id="__span-20-8"><a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a>
+</span><span id="__span-20-9"><a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a><span class="c1"># Uninstall CRDs (WARNING: This deletes all Neo4j instances)</span>
+</span><span id="__span-20-10"><a id="__codelineno-20-10" name="__codelineno-20-10" href="#__codelineno-20-10"></a>make<span class="w"> </span>uninstall
 </span></code></pre></div>
 <p><strong>Complete Cleanup</strong> (removes everything):
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Remove all Neo4j instances first (if you want to preserve data, backup first)</span>
-</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>neo4jenterpriseclusters<span class="w"> </span>--all<span class="w"> </span>-A
-</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>neo4jenterprisestandalones<span class="w"> </span>--all<span class="w"> </span>-A
-</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>
-</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="c1"># Undeploy operator</span>
-</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a>make<span class="w"> </span>undeploy-prod<span class="w">  </span><span class="c1"># or make undeploy-dev</span>
-</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a>
-</span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a><span class="c1"># Uninstall CRDs</span>
-</span><span id="__span-17-9"><a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a>make<span class="w"> </span>uninstall
-</span><span id="__span-17-10"><a id="__codelineno-17-10" name="__codelineno-17-10" href="#__codelineno-17-10"></a>
-</span><span id="__span-17-11"><a id="__codelineno-17-11" name="__codelineno-17-11" href="#__codelineno-17-11"></a><span class="c1"># Delete namespace (optional)</span>
-</span><span id="__span-17-12"><a id="__codelineno-17-12" name="__codelineno-17-12" href="#__codelineno-17-12"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>namespace<span class="w"> </span>neo4j-operator-system
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># Remove all Neo4j instances first (if you want to preserve data, backup first)</span>
+</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>neo4jenterpriseclusters<span class="w"> </span>--all<span class="w"> </span>-A
+</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>neo4jenterprisestandalones<span class="w"> </span>--all<span class="w"> </span>-A
+</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a>
+</span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a><span class="c1"># Undeploy operator</span>
+</span><span id="__span-21-6"><a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a>make<span class="w"> </span>undeploy-prod<span class="w">  </span><span class="c1"># or make undeploy-dev</span>
+</span><span id="__span-21-7"><a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a>
+</span><span id="__span-21-8"><a id="__codelineno-21-8" name="__codelineno-21-8" href="#__codelineno-21-8"></a><span class="c1"># Uninstall CRDs</span>
+</span><span id="__span-21-9"><a id="__codelineno-21-9" name="__codelineno-21-9" href="#__codelineno-21-9"></a>make<span class="w"> </span>uninstall
+</span><span id="__span-21-10"><a id="__codelineno-21-10" name="__codelineno-21-10" href="#__codelineno-21-10"></a>
+</span><span id="__span-21-11"><a id="__codelineno-21-11" name="__codelineno-21-11" href="#__codelineno-21-11"></a><span class="c1"># Delete namespace (optional)</span>
+</span><span id="__span-21-12"><a id="__codelineno-21-12" name="__codelineno-21-12" href="#__codelineno-21-12"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>namespace<span class="w"> </span>neo4j-operator-system
 </span></code></pre></div></p>
 <h2 id="troubleshooting-installation">Troubleshooting Installation<a class="headerlink" href="#troubleshooting-installation" title="Anchor link to this section">&para;</a></h2>
 <h3 id="common-issues">Common Issues<a class="headerlink" href="#common-issues" title="Anchor link to this section">&para;</a></h3>
 <h4 id="1-crds-not-installing">1. CRDs Not Installing<a class="headerlink" href="#1-crds-not-installing" title="Anchor link to this section">&para;</a></h4>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Check if CRDs exist</span>
-</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>crd<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>neo4j
-</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>
-</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="c1"># If missing, install CRDs manually</span>
-</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a>make<span class="w"> </span>install
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># Check if CRDs exist</span>
+</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>crd<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>neo4j
+</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>
+</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="c1"># If missing, install CRDs manually</span>
+</span><span id="__span-22-5"><a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a>make<span class="w"> </span>install
 </span></code></pre></div>
 <h4 id="2-operator-pod-not-starting">2. Operator Pod Not Starting<a class="headerlink" href="#2-operator-pod-not-starting" title="Anchor link to this section">&para;</a></h4>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Check operator logs</span>
-</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>neo4j-operator-system<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/name<span class="o">=</span>neo4j-operator
-</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>
-</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="c1"># Check operator pod events</span>
-</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>pod<span class="w"> </span>-n<span class="w"> </span>neo4j-operator-system<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/name<span class="o">=</span>neo4j-operator
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="c1"># Check operator logs</span>
+</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>neo4j-operator-system<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/name<span class="o">=</span>neo4j-operator
+</span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a>
+</span><span id="__span-23-4"><a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a><span class="c1"># Check operator pod events</span>
+</span><span id="__span-23-5"><a id="__codelineno-23-5" name="__codelineno-23-5" href="#__codelineno-23-5"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>pod<span class="w"> </span>-n<span class="w"> </span>neo4j-operator-system<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/name<span class="o">=</span>neo4j-operator
 </span></code></pre></div>
 <h4 id="3-rbac-permission-issues">3. RBAC Permission Issues<a class="headerlink" href="#3-rbac-permission-issues" title="Anchor link to this section">&para;</a></h4>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># Check if ServiceAccount exists</span>
-</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>sa<span class="w"> </span>-n<span class="w"> </span>neo4j-operator-system
-</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>
-</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="c1"># Check ClusterRole and ClusterRoleBinding</span>
-</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a>kubectl<span class="w"> </span>get<span class="w"> </span>clusterrole<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>neo4j-operator
-</span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a>kubectl<span class="w"> </span>get<span class="w"> </span>clusterrolebinding<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>neo4j-operator
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="c1"># Check if ServiceAccount exists</span>
+</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>sa<span class="w"> </span>-n<span class="w"> </span>neo4j-operator-system
+</span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a>
+</span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a><span class="c1"># Check ClusterRole and ClusterRoleBinding</span>
+</span><span id="__span-24-5"><a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a>kubectl<span class="w"> </span>get<span class="w"> </span>clusterrole<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>neo4j-operator
+</span><span id="__span-24-6"><a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a>kubectl<span class="w"> </span>get<span class="w"> </span>clusterrolebinding<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>neo4j-operator
 </span></code></pre></div>
 <h4 id="4-image-pull-errors">4. Image Pull Errors<a class="headerlink" href="#4-image-pull-errors" title="Anchor link to this section">&para;</a></h4>
 <p>If the operator pod shows <code>ImagePullBackOff</code> or <code>ErrImagePull</code>:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># Check pod events for image pull errors</span>
-</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>pod<span class="w"> </span>-n<span class="w"> </span>neo4j-operator-system<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/name<span class="o">=</span>neo4j-operator
-</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>
-</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a><span class="c1"># Verify image exists and is accessible</span>
-</span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a>docker<span class="w"> </span>pull<span class="w"> </span>ghcr.io/neo4j-partners/neo4j-kubernetes-operator:latest
-</span><span id="__span-21-6"><a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a>
-</span><span id="__span-21-7"><a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a><span class="c1"># For private registries, create image pull secret</span>
-</span><span id="__span-21-8"><a id="__codelineno-21-8" name="__codelineno-21-8" href="#__codelineno-21-8"></a>kubectl<span class="w"> </span>create<span class="w"> </span>secret<span class="w"> </span>docker-registry<span class="w"> </span>ghcr-secret<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-21-9"><a id="__codelineno-21-9" name="__codelineno-21-9" href="#__codelineno-21-9"></a><span class="w">  </span>--docker-server<span class="o">=</span>ghcr.io<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-21-10"><a id="__codelineno-21-10" name="__codelineno-21-10" href="#__codelineno-21-10"></a><span class="w">  </span>--docker-username<span class="o">=</span>&lt;github-username&gt;<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-21-11"><a id="__codelineno-21-11" name="__codelineno-21-11" href="#__codelineno-21-11"></a><span class="w">  </span>--docker-password<span class="o">=</span>&lt;github-token&gt;<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-21-12"><a id="__codelineno-21-12" name="__codelineno-21-12" href="#__codelineno-21-12"></a><span class="w">  </span>--namespace<span class="o">=</span>neo4j-operator-system
-</span><span id="__span-21-13"><a id="__codelineno-21-13" name="__codelineno-21-13" href="#__codelineno-21-13"></a>
-</span><span id="__span-21-14"><a id="__codelineno-21-14" name="__codelineno-21-14" href="#__codelineno-21-14"></a><span class="c1"># Add imagePullSecrets to deployment</span>
-</span><span id="__span-21-15"><a id="__codelineno-21-15" name="__codelineno-21-15" href="#__codelineno-21-15"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>deployment<span class="w"> </span>neo4j-operator-controller-manager<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-21-16"><a id="__codelineno-21-16" name="__codelineno-21-16" href="#__codelineno-21-16"></a><span class="w">  </span>-n<span class="w"> </span>neo4j-operator-system<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-21-17"><a id="__codelineno-21-17" name="__codelineno-21-17" href="#__codelineno-21-17"></a><span class="w">  </span>--type<span class="o">=</span><span class="s1">&#39;json&#39;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-21-18"><a id="__codelineno-21-18" name="__codelineno-21-18" href="#__codelineno-21-18"></a><span class="w">  </span>-p<span class="o">=</span><span class="s1">&#39;[{&quot;op&quot;: &quot;add&quot;, &quot;path&quot;: &quot;/spec/template/spec/imagePullSecrets&quot;, &quot;value&quot;: [{&quot;name&quot;: &quot;ghcr-secret&quot;}]}]&#39;</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="c1"># Check pod events for image pull errors</span>
+</span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>pod<span class="w"> </span>-n<span class="w"> </span>neo4j-operator-system<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/name<span class="o">=</span>neo4j-operator
+</span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a>
+</span><span id="__span-25-4"><a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a><span class="c1"># Verify image exists and is accessible</span>
+</span><span id="__span-25-5"><a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a>docker<span class="w"> </span>pull<span class="w"> </span>ghcr.io/neo4j-partners/neo4j-kubernetes-operator:latest
+</span><span id="__span-25-6"><a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a>
+</span><span id="__span-25-7"><a id="__codelineno-25-7" name="__codelineno-25-7" href="#__codelineno-25-7"></a><span class="c1"># For private registries, create image pull secret</span>
+</span><span id="__span-25-8"><a id="__codelineno-25-8" name="__codelineno-25-8" href="#__codelineno-25-8"></a>kubectl<span class="w"> </span>create<span class="w"> </span>secret<span class="w"> </span>docker-registry<span class="w"> </span>ghcr-secret<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-25-9"><a id="__codelineno-25-9" name="__codelineno-25-9" href="#__codelineno-25-9"></a><span class="w">  </span>--docker-server<span class="o">=</span>ghcr.io<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-25-10"><a id="__codelineno-25-10" name="__codelineno-25-10" href="#__codelineno-25-10"></a><span class="w">  </span>--docker-username<span class="o">=</span>&lt;github-username&gt;<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-25-11"><a id="__codelineno-25-11" name="__codelineno-25-11" href="#__codelineno-25-11"></a><span class="w">  </span>--docker-password<span class="o">=</span>&lt;github-token&gt;<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-25-12"><a id="__codelineno-25-12" name="__codelineno-25-12" href="#__codelineno-25-12"></a><span class="w">  </span>--namespace<span class="o">=</span>neo4j-operator-system
+</span><span id="__span-25-13"><a id="__codelineno-25-13" name="__codelineno-25-13" href="#__codelineno-25-13"></a>
+</span><span id="__span-25-14"><a id="__codelineno-25-14" name="__codelineno-25-14" href="#__codelineno-25-14"></a><span class="c1"># Add imagePullSecrets to deployment</span>
+</span><span id="__span-25-15"><a id="__codelineno-25-15" name="__codelineno-25-15" href="#__codelineno-25-15"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>deployment<span class="w"> </span>neo4j-operator-controller-manager<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-25-16"><a id="__codelineno-25-16" name="__codelineno-25-16" href="#__codelineno-25-16"></a><span class="w">  </span>-n<span class="w"> </span>neo4j-operator-system<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-25-17"><a id="__codelineno-25-17" name="__codelineno-25-17" href="#__codelineno-25-17"></a><span class="w">  </span>--type<span class="o">=</span><span class="s1">&#39;json&#39;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-25-18"><a id="__codelineno-25-18" name="__codelineno-25-18" href="#__codelineno-25-18"></a><span class="w">  </span>-p<span class="o">=</span><span class="s1">&#39;[{&quot;op&quot;: &quot;add&quot;, &quot;path&quot;: &quot;/spec/template/spec/imagePullSecrets&quot;, &quot;value&quot;: [{&quot;name&quot;: &quot;ghcr-secret&quot;}]}]&#39;</span>
 </span></code></pre></div>
 <p><strong>Note</strong>: The ghcr.io images are public for this operator, so authentication should not be required for pulling images.</p>
 <h4 id="5-manifest-url-not-found-404-error">5. Manifest URL Not Found (404 Error)<a class="headerlink" href="#5-manifest-url-not-found-404-error" title="Anchor link to this section">&para;</a></h4>
 <p>If you get a 404 error when applying manifests from GitHub releases:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># Verify the release exists</span>
-</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>gh<span class="w"> </span>release<span class="w"> </span>list<span class="w"> </span>--repo<span class="w"> </span>neo4j-partners/neo4j-kubernetes-operator
-</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>
-</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="c1"># Or visit: https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases</span>
-</span><span id="__span-22-5"><a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a>
-</span><span id="__span-22-6"><a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a><span class="c1"># Ensure you&#39;re using the correct version format (with &#39;v&#39; prefix)</span>
-</span><span id="__span-22-7"><a id="__codelineno-22-7" name="__codelineno-22-7" href="#__codelineno-22-7"></a><span class="c1"># Correct: v1.0.0</span>
-</span><span id="__span-22-8"><a id="__codelineno-22-8" name="__codelineno-22-8" href="#__codelineno-22-8"></a><span class="c1"># Incorrect: 1.0.0</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="c1"># Verify the release exists</span>
+</span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a>gh<span class="w"> </span>release<span class="w"> </span>list<span class="w"> </span>--repo<span class="w"> </span>neo4j-partners/neo4j-kubernetes-operator
+</span><span id="__span-26-3"><a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a>
+</span><span id="__span-26-4"><a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a><span class="c1"># Or visit: https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases</span>
+</span><span id="__span-26-5"><a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a>
+</span><span id="__span-26-6"><a id="__codelineno-26-6" name="__codelineno-26-6" href="#__codelineno-26-6"></a><span class="c1"># Ensure you&#39;re using the correct version format (with &#39;v&#39; prefix)</span>
+</span><span id="__span-26-7"><a id="__codelineno-26-7" name="__codelineno-26-7" href="#__codelineno-26-7"></a><span class="c1"># Correct: v1.0.0</span>
+</span><span id="__span-26-8"><a id="__codelineno-26-8" name="__codelineno-26-8" href="#__codelineno-26-8"></a><span class="c1"># Incorrect: 1.0.0</span>
 </span></code></pre></div>
 <h3 id="installation-requirements">Installation Requirements<a class="headerlink" href="#installation-requirements" title="Anchor link to this section">&para;</a></h3>
 <ul>
@@ -3624,12 +3690,12 @@
 </ul>
 <blockquote>
 <p><strong>OpenShift note</strong>: Clusters enforcing SCCs with allocated UID/FSGroup ranges should disable the chart’s pod security context so SCC can inject IDs, then bind an appropriate SCC (e.g., <code>restricted</code>) to the operator service account:
-<div class="language-text highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>helm install neo4j-operator ./charts/neo4j-operator \
-</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>  --namespace neo4j-operator-system \
-</span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a>  --create-namespace \
-</span><span id="__span-23-4"><a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a>  --set podSecurityContextEnabled=false
-</span><span id="__span-23-5"><a id="__codelineno-23-5" name="__codelineno-23-5" href="#__codelineno-23-5"></a>
-</span><span id="__span-23-6"><a id="__codelineno-23-6" name="__codelineno-23-6" href="#__codelineno-23-6"></a>oc adm policy add-scc-to-user restricted -z neo4j-operator -n neo4j-operator-system
+<div class="language-text highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>helm install neo4j-operator ./charts/neo4j-operator \
+</span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a>  --namespace neo4j-operator-system \
+</span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a>  --create-namespace \
+</span><span id="__span-27-4"><a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a>  --set podSecurityContextEnabled=false
+</span><span id="__span-27-5"><a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a>
+</span><span id="__span-27-6"><a id="__codelineno-27-6" name="__codelineno-27-6" href="#__codelineno-27-6"></a>oc adm policy add-scc-to-user restricted -z neo4j-operator -n neo4j-operator-system
 </span></code></pre></div></p>
 </blockquote>
 <h3 id="installing-via-olm-on-openshift">Installing via OLM on OpenShift<a class="headerlink" href="#installing-via-olm-on-openshift" title="Anchor link to this section">&para;</a></h3>
