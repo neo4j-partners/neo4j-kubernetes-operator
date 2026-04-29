@@ -4,22 +4,80 @@ This guide provides detailed instructions for installing the Neo4j Enterprise Op
 
 ## Quick Installation
 
-### Method 1: Quick Install from GitHub Release (Recommended)
+### Method 1: Helm Chart Repository (Recommended)
 
-The fastest way to install the operator for production use is directly from a GitHub release:
+> Available from v1.8.0 onwards. The chart repository is hosted at
+> `https://neo4j-partners.github.io/neo4j-kubernetes-operator/charts` and is
+> updated automatically on every operator release.
 
 ```bash
-# Install the latest release (includes CRDs and operator)
-RELEASE_VERSION=v1.0.0  # Replace with desired version
+helm repo add neo4j https://neo4j-partners.github.io/neo4j-kubernetes-operator/charts
+helm repo update
+
+helm install neo4j-operator neo4j/neo4j-operator \
+  --namespace neo4j-operator-system \
+  --create-namespace
+```
+
+**Pin to a specific version**:
+```bash
+helm install neo4j-operator neo4j/neo4j-operator \
+  --version 1.8.0 \
+  --namespace neo4j-operator-system \
+  --create-namespace
+```
+
+**Customise installation values**:
+```bash
+# View available configuration options
+helm show values neo4j/neo4j-operator
+
+helm install neo4j-operator neo4j/neo4j-operator \
+  --namespace neo4j-operator-system \
+  --create-namespace \
+  --set resources.limits.memory=512Mi
+```
+
+**Upgrade**:
+```bash
+helm repo update
+helm upgrade neo4j-operator neo4j/neo4j-operator \
+  --namespace neo4j-operator-system
+```
+
+**Uninstall**:
+```bash
+helm uninstall neo4j-operator --namespace neo4j-operator-system
+```
+
+### Method 2: OCI Registry
+
+Available for all releases (including pre-v1.8.0). Helm 3.8 or later is required for OCI support.
+
+```bash
+helm install neo4j-operator oci://ghcr.io/neo4j-partners/charts/neo4j-operator \
+  --version 1.8.0 \
+  --namespace neo4j-operator-system \
+  --create-namespace
+```
+
+Use the chart version without the `v` prefix (for example, `1.8.0`).
+
+### Method 3: Quick Install from GitHub Release
+
+For environments where running `helm` is inconvenient, every release also publishes a single kubectl-applyable YAML bundle:
+
+```bash
+RELEASE_VERSION=v1.8.0  # Replace with desired version
 
 kubectl apply -f https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases/download/${RELEASE_VERSION}/neo4j-kubernetes-operator-complete.yaml
 ```
 
 **What this installs**:
 - Custom Resource Definitions (CRDs)
-- Operator Deployment (using multi-arch images from ghcr.io)
+- Operator Deployment (multi-arch images from ghcr.io)
 - All required RBAC permissions (ClusterRole, ClusterRoleBinding, ServiceAccount)
-- Deployed to `neo4j-operator-system` namespace
+- Deployed to the `neo4j-operator-system` namespace
 
 **To find available releases**:
 ```bash
@@ -28,59 +86,30 @@ kubectl apply -f https://github.com/neo4j-partners/neo4j-kubernetes-operator/rel
 gh release list --repo neo4j-partners/neo4j-kubernetes-operator
 ```
 
-**CRDs Only Installation** (if you want to manage the operator deployment separately):
+**CRDs only** (manage the operator deployment separately):
 ```bash
 kubectl apply -f https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases/download/${RELEASE_VERSION}/neo4j-kubernetes-operator.yaml
 ```
 
-**Supported Architectures**: linux/amd64, linux/arm64
+**Supported architectures**: linux/amd64, linux/arm64
 
-### Method 2: Helm Installation (from cloned repository)
+### Method 4: Helm from Cloned Repository
 
-Install using Helm for simplified configuration management:
-
-> **Note**: Helm charts are not yet published to a Helm repository. You must clone the repository to use this installation method. We plan to publish Helm charts to an OCI registry (e.g., ghcr.io) in a future release.
+Useful for testing an unreleased commit or customising the chart locally.
 
 ```bash
-# Clone the repository
 git clone https://github.com/neo4j-partners/neo4j-kubernetes-operator.git
 cd neo4j-kubernetes-operator
 
-# Checkout the latest release tag
 LATEST_TAG=$(git describe --tags --abbrev=0)
-git checkout $LATEST_TAG
+git checkout $LATEST_TAG    # or omit to test main
 
-# Install using Helm (automatically handles RBAC)
 helm install neo4j-operator ./charts/neo4j-operator \
   --namespace neo4j-operator-system \
   --create-namespace
 ```
 
-**Helm Installation Benefits**:
-- Simplified configuration through values.yaml
-- Easy upgrades with `helm upgrade`
-- Automatic RBAC setup
-- Customizable installation parameters
-
-**Customize Helm installation**:
-```bash
-# View available configuration options
-helm show values ./charts/neo4j-operator
-
-# Install with custom values
-helm install neo4j-operator ./charts/neo4j-operator \
-  --namespace neo4j-operator-system \
-  --create-namespace \
-  --set image.tag=v1.0.0 \
-  --set resources.limits.memory=512Mi
-```
-
-**Uninstall via Helm**:
-```bash
-helm uninstall neo4j-operator --namespace neo4j-operator-system
-```
-
-### Method 3: Git Clone with Make Targets
+### Method 5: Git Clone with Make Targets
 
 For development, customization, or when you need to build from source:
 
@@ -302,23 +331,9 @@ kubectl port-forward svc/standalone-neo4j-service 7474:7474
 
 ## Uninstalling the Operator
 
-### Quick Install Uninstallation
-
-If you installed using Method 1 (GitHub Release):
-
-```bash
-# Get the release version you installed
-RELEASE_VERSION=v1.0.0  # Replace with your installed version
-
-# Delete the operator and CRDs
-kubectl delete -f https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases/download/${RELEASE_VERSION}/neo4j-kubernetes-operator-complete.yaml
-```
-
-**Warning**: Deleting CRDs will also delete all Neo4j instances managed by the operator.
-
 ### Helm Uninstallation
 
-If you installed using Method 2 (Helm):
+If you installed via Helm (Methods 1, 2, or 4):
 
 ```bash
 # Uninstall the Helm release
@@ -335,11 +350,29 @@ kubectl delete crd neo4jenterpriseclusters.neo4j.neo4j.com
 kubectl delete crd neo4jenterprisestandalones.neo4j.neo4j.com
 kubectl delete crd neo4jplugins.neo4j.neo4j.com
 kubectl delete crd neo4jrestores.neo4j.neo4j.com
+kubectl delete crd neo4jroles.neo4j.neo4j.com
+kubectl delete crd neo4jrolebindings.neo4j.neo4j.com
+kubectl delete crd neo4jusers.neo4j.neo4j.com
+kubectl delete crd neo4jshardeddatabases.neo4j.neo4j.com
 ```
+
+### Quick Install Uninstallation
+
+If you installed using Method 3 (kubectl apply from a GitHub release):
+
+```bash
+# Get the release version you installed
+RELEASE_VERSION=v1.8.0  # Replace with your installed version
+
+# Delete the operator and CRDs
+kubectl delete -f https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases/download/${RELEASE_VERSION}/neo4j-kubernetes-operator-complete.yaml
+```
+
+**Warning**: Deleting CRDs will also delete all Neo4j instances managed by the operator.
 
 ### Make Targets Uninstallation
 
-If you installed using Method 3 (Git Clone with Make):
+If you installed using Method 5 (Git Clone with Make):
 
 ```bash
 # From the cloned repository directory

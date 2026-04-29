@@ -12,21 +12,34 @@ This Helm chart deploys the Neo4j Enterprise Operator for Kubernetes, which mana
 
 ## Installation
 
-### Add Helm Repository (when published)
+### From the Helm chart repository (recommended, available from v1.8.0 onwards)
 
 ```bash
-helm repo add neo4j-operator https://neo4j-partners.github.io/neo4j-kubernetes-operator
+helm repo add neo4j https://neo4j-partners.github.io/neo4j-kubernetes-operator/charts
 helm repo update
+
+helm install neo4j-operator neo4j/neo4j-operator \
+  --namespace neo4j-operator-system \
+  --create-namespace
 ```
 
-### Install from Source
+### From the OCI registry (all releases)
 
 ```bash
-# Clone the repository
+helm install neo4j-operator oci://ghcr.io/neo4j-partners/charts/neo4j-operator \
+  --version 1.8.0 \
+  --namespace neo4j-operator-system \
+  --create-namespace
+```
+
+Use the chart version without the `v` prefix.
+
+### From Source
+
+```bash
 git clone https://github.com/neo4j-partners/neo4j-kubernetes-operator.git
 cd neo4j-kubernetes-operator
 
-# Install the chart (automatically creates ClusterRole and RBAC permissions)
 helm install neo4j-operator ./charts/neo4j-operator \
   --namespace neo4j-operator-system \
   --create-namespace

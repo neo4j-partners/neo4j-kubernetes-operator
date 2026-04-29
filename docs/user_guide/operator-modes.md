@@ -38,20 +38,25 @@ Choose both explicitly so your deployment matches your environment and security 
 
 **2) Install with Helm (recommended)**
 
+The examples below use the Helm chart repository (available from v1.8.0 onwards). For pre-v1.8.0 releases, substitute `neo4j/neo4j-operator` with `oci://ghcr.io/neo4j-partners/charts/neo4j-operator`.
+
 ```bash
+helm repo add neo4j https://neo4j-partners.github.io/neo4j-kubernetes-operator/charts
+helm repo update
+
 # Cluster scope (default)
-helm install neo4j-operator oci://ghcr.io/neo4j-partners/charts/neo4j-operator \
+helm install neo4j-operator neo4j/neo4j-operator \
   --namespace neo4j-operator-system \
   --create-namespace
 
 # Namespace scope
-helm install neo4j-operator oci://ghcr.io/neo4j-partners/charts/neo4j-operator \
+helm install neo4j-operator neo4j/neo4j-operator \
   --namespace team-a \
   --create-namespace \
   --set operatorMode=namespace
 
 # Multi-namespace scope
-helm install neo4j-operator oci://ghcr.io/neo4j-partners/charts/neo4j-operator \
+helm install neo4j-operator neo4j/neo4j-operator \
   --namespace neo4j-operator-system \
   --create-namespace \
   --set operatorMode=namespaces \
@@ -193,14 +198,14 @@ Examples:
 
 ```bash
 # Development mode + cluster scope
-helm upgrade --install neo4j-operator oci://ghcr.io/neo4j-partners/charts/neo4j-operator \
+helm upgrade --install neo4j-operator neo4j/neo4j-operator \
   --namespace neo4j-operator-dev \
   --create-namespace \
   --set developmentMode=true \
   --set logLevel=debug
 
 # Multi-namespace scope
-helm upgrade --install neo4j-operator oci://ghcr.io/neo4j-partners/charts/neo4j-operator \
+helm upgrade --install neo4j-operator neo4j/neo4j-operator \
   --namespace neo4j-operator-system \
   --create-namespace \
   --set operatorMode=namespaces \

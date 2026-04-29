@@ -48,62 +48,44 @@ The Operator deploys Neo4j EE v5.26+.  It supports both clustered and standalone
 
 ### Installation
 
-Installation requires cloning from source:
+1. **Install the operator** using Helm. Three supported paths:
 
-1. **Clone the repository** and checkout the latest tag:
-
+   **Helm chart repository (recommended, available from v1.8.0 onwards)**:
    ```bash
-   # Clone the repository
-   git clone https://github.com/neo4j-partners/neo4j-kubernetes-operator.git
-   cd neo4j-kubernetes-operator
-
-   # Checkout the latest release tag
-   LATEST_TAG=$(git describe --tags --abbrev=0)
-   git checkout $LATEST_TAG
-   ```
-
-2. **Install the operator** using Helm (recommended) or make targets:
-
-   **Helm Installation (Recommended)**:
-   ```bash
-   # Install using Helm chart (automatically handles RBAC)
-   helm install neo4j-operator ./charts/neo4j-operator \
+   helm repo add neo4j https://neo4j-partners.github.io/neo4j-kubernetes-operator/charts
+   helm repo update
+   helm install neo4j-operator neo4j/neo4j-operator \
      --namespace neo4j-operator-system \
      --create-namespace
    ```
+
+   **OCI registry (all releases)**:
    ```bash
-   # Install from GHCR OCI registry
    helm install neo4j-operator oci://ghcr.io/neo4j-partners/charts/neo4j-operator \
      --version <release-version> \
      --namespace neo4j-operator-system \
      --create-namespace
    ```
-   Note: use the chart version without the `v` prefix (for example, `0.2.0`).
+   Use the chart version without the `v` prefix (for example, `1.8.0`).
 
-   **Make Targets**:
+   **From a cloned repository** (testing an unreleased commit, or customising the chart locally):
    ```bash
-   # Install CRDs into your cluster
-   make install
+   git clone https://github.com/neo4j-partners/neo4j-kubernetes-operator.git
+   cd neo4j-kubernetes-operator
+   LATEST_TAG=$(git describe --tags --abbrev=0)
+   git checkout $LATEST_TAG    # or omit to install from main
 
-   # Deploy the operator (choose based on your environment)
-   make deploy-prod        # Production deployment (uses local neo4j-operator:latest image)
-   make deploy-dev         # Development deployment (uses local neo4j-operator:dev image)
-
-   # Registry-based deployment (requires cluster-admin permissions)
-   make deploy-prod-registry  # Deploy from Docker Hub registry (auto-checks RBAC)
-   make deploy-dev-registry   # Deploy dev overlay with registry image (auto-checks RBAC)
-
-   # For users without cluster-admin permissions
-   make deploy-namespace-scoped  # Deploy with namespace-only permissions (limited functionality)
+   helm install neo4j-operator ./charts/neo4j-operator \
+     --namespace neo4j-operator-system \
+     --create-namespace
    ```
 
-   **Note**:
-   - **Helm chart** automatically creates all necessary RBAC permissions
-   - **Registry deployments** automatically check and help set up RBAC permissions
-   - If you encounter permission errors, the operator will guide you through the setup process
-   - **RBAC scope**: `operatorMode=cluster` and `operatorMode=namespaces` install ClusterRole/ClusterRoleBinding; `operatorMode=namespace` installs Role/RoleBinding in a single namespace (details: docs/user_guide/operator-modes.md)
+   **Notes**:
+   - The Helm chart automatically creates all necessary RBAC permissions.
+   - **RBAC scope**: `operatorMode=cluster` and `operatorMode=namespaces` install ClusterRole/ClusterRoleBinding; `operatorMode=namespace` installs Role/RoleBinding in a single namespace (details: [docs/user_guide/operator-modes.md](docs/user_guide/operator-modes.md)).
+   - For `make`-driven installation (operator development workflow with locally built images), see [Development Installation](#development-installation) below.
 
-3. **Create admin credentials** (Required for authentication):
+2. **Create admin credentials** (Required for authentication):
 
    ```bash
    kubectl create secret generic neo4j-admin-secret \
@@ -113,7 +95,7 @@ Installation requires cloning from source:
 
    **Important**: The operator manages authentication through Kubernetes secrets. Do not set NEO4J_AUTH directly in environment variables.
 
-4. **Deploy your first Neo4j instance**:
+3. **Deploy your first Neo4j instance**:
 
    **For single-node development** (non-clustered):
 
@@ -127,7 +109,7 @@ Installation requires cloning from source:
    kubectl apply -f examples/clusters/minimal-cluster.yaml
    ```
 
-5. **Access your Neo4j instance**:
+4. **Access your Neo4j instance**:
 
    ```bash
    # For standalone deployment
@@ -139,7 +121,7 @@ Installation requires cloning from source:
 
    Open <http://localhost:7474> in your browser.
 
-6. **Verify your installation** (Optional):
+5. **Verify your installation** (Optional):
 
    ```bash
    # Run unit tests (fast, no cluster required)
@@ -457,24 +439,25 @@ make uninstall
 
 ### Development Installation
 
-For development work with locally built images:
+For contributors building the operator from source and deploying locally built images:
 
 ```bash
 # Create development cluster
 make dev-cluster
 
 # Deploy operator (uses local images by default)
-make deploy-dev   # Deploy to dev namespace with local neo4j-operator:dev image
+make deploy-dev    # Deploy with local neo4j-operator:dev image
 # or
-make deploy-prod  # Deploy to prod namespace with local neo4j-operator:latest image
+make deploy-prod   # Deploy with local neo4j-operator:latest image
 
-# Alternative: Use automated setup (detects available clusters)
+# Alternative: automated setup (detects available clusters)
 make operator-setup
 
-# Note: Production deployment now uses local images by default
+# For users without cluster-admin permissions
+make deploy-namespace-scoped
 ```
 
-For additional deployment options, see the Installation section above.
+If `make deploy-*` reports RBAC errors, the target prints the exact commands needed to grant the missing permissions. For installing the chart from a cloned repository without local image builds, see the third path under [Installation](#installation) above.
 
 ## 💡 Examples
 
