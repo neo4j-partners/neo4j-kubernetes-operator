@@ -168,14 +168,28 @@ var _ = Describe("Neo4jRole end-to-end", func() {
 			ContainSubstring("GRANTED"),
 		))
 
+		By("Waiting for the role controller to fully settle before injecting drift")
+		Eventually(func(g Gomega) {
+			r := &neo4jv1beta1.Neo4jRole{}
+			g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: "analytics-reader", Namespace: namespace.Name}, r)).To(Succeed())
+			g.Expect(r.Status.Phase).To(Equal("Ready"))
+			g.Expect(r.Status.ObservedGeneration).To(Equal(r.Generation))
+			g.Expect(r.Status.AppliedPrivileges).To(HaveLen(len(r.Spec.Privileges)))
+		}, clusterTimeout, interval).Should(Succeed())
+
+		// Small pause to let any in-flight reconcile finish before issuing the
+		// manual REVOKE — concurrent privilege writes on the same role can
+		// fail with a transaction conflict on the system database.
+		time.Sleep(5 * time.Second)
+
 		By("Manually revoking ACCESS to simulate drift")
 		cmd := exec.CommandContext(ctx, "kubectl", "exec",
 			podName, "-n", namespace.Name, "--",
 			"cypher-shell", "-u", "neo4j", "-p", adminPass,
 			"REVOKE ACCESS ON DATABASE neo4j FROM analytics_reader",
 		)
-		_, err := cmd.CombinedOutput()
-		Expect(err).ToNot(HaveOccurred())
+		out, err := cmd.CombinedOutput()
+		Expect(err).ToNot(HaveOccurred(), "cypher-shell REVOKE failed; output: %s", string(out))
 
 		By("Waiting for the operator to re-apply the GRANT (drift reconciliation)")
 		Eventually(func() bool {
