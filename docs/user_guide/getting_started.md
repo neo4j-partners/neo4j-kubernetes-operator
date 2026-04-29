@@ -284,7 +284,7 @@ metadata:
 spec:
   clusterRef: basic-sharding-cluster
   name: largedata
-  defaultCypherLanguage: "25"
+  defaultCypherLanguage: "25"  # Cypher language version: "5" or "25". Cypher 25 requires Neo4j 2025.x or later.
   propertySharding:
     propertyShards: 4
     graphShard:
