@@ -1,0 +1,4680 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="A Kubernetes operator for Neo4j Enterprise — declarative clusters, databases, users, roles, backups, and plugins.">
+      
+      
+        <meta name="author" content="Neo4j Partners">
+      
+      
+        <link rel="canonical" href="https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.8/developer_guide/architecture/">
+      
+      
+        <link rel="prev" href="../development/">
+      
+      
+        <link rel="next" href="../testing/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Architecture - Neo4j Kubernetes Operator</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,300i,400,400i,700,700i%7CJetBrains+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Inter";--md-code-font:"JetBrains Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="blue">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#architecture-overview" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Neo4j Kubernetes Operator" class="md-header__button md-logo" aria-label="Neo4j Kubernetes Operator" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Neo4j Kubernetes Operator
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Architecture
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="blue"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="blue" data-md-color-accent="blue"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+          <a href="javascript:void(0)" class="md-search__icon md-icon" title="Share" aria-label="Share" data-clipboard data-clipboard-text="" data-md-component="search-share" tabindex="-1">
+            
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91s2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08"/></svg>
+          </a>
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    neo4j-partners/neo4j-kubernetes-operator
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Neo4j Kubernetes Operator" class="md-nav__button md-logo" aria-label="Neo4j Kubernetes Operator" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Neo4j Kubernetes Operator
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    neo4j-partners/neo4j-kubernetes-operator
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user_guide/getting_started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quickstart
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user_guide/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user_guide/deployment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deployment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user_guide/operator-modes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operator Modes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user_guide/migration_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migration Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user_guide/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user_guide/tls_certificates/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TLS Certificates
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user_guide/configuration/tls/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TLS (Detailed)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user_guide/external_access/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    External Access
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user_guide/clustering/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Clustering
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user_guide/topology_placement/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Topology Placement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user_guide/property_sharding/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Property Sharding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user_guide/aura_fleet_management/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Aura Fleet Management
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user_guide/user_role_management/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User & Role Management
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user_guide/performance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Performance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user_guide/security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user_guide/guides/configuration_best_practices/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration Best Practices
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user_guide/guides/backup_restore/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backup & Restore
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user_guide/guides/backup-disk-management/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backup Disk Management
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user_guide/guides/backup-sidecar-requirements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backup Sidecar Requirements
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user_guide/guides/storage_expansion/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Storage Expansion
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user_guide/guides/upgrades/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Upgrades
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user_guide/guides/resource_sizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Resource Sizing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user_guide/guides/performance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Performance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user_guide/guides/fault_tolerance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fault Tolerance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user_guide/guides/security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user_guide/guides/seed-uri/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Seed URI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user_guide/guides/monitoring/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Monitoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user_guide/guides/prometheus-grafana-setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prometheus & Grafana
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user_guide/guides/kubernetes-events/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kubernetes Events
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user_guide/guides/mcp_client_setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Client Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user_guide/guides/demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Demo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user_guide/guides/troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Troubleshooting
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user_guide/troubleshooting/backup_restore/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backup & Restore
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user_guide/troubleshooting/split-brain-recovery/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Split-Brain Recovery
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Quick Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../quick-reference/operator-modes-cheat-sheet/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operator Modes Cheat Sheet
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user_guide/quick-reference/split-brain-recovery-quick-ref/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Split-Brain Recovery
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api_reference/neo4jenterprisecluster/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Neo4jEnterpriseCluster
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api_reference/neo4jenterprisestandalone/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Neo4jEnterpriseStandalone
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api_reference/neo4jdatabase/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Neo4jDatabase
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api_reference/neo4jshardeddatabase/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Neo4jShardedDatabase
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api_reference/neo4juser/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Neo4jUser
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api_reference/neo4jrole/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Neo4jRole
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api_reference/neo4jrolebinding/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Neo4jRoleBinding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api_reference/neo4jplugin/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Neo4jPlugin
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api_reference/neo4jbackup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Neo4jBackup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api_reference/neo4jrestore/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Neo4jRestore
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../gitops/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitOps Integration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Developer Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../development/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#core-design-principles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core Design Principles
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#current-architecture-august-2025" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Current Architecture (August 2025)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Current Architecture (August 2025)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#server-based-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Server-Based Architecture
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Server-Based Architecture">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#key-changes-from-legacy-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Changes from Legacy Architecture
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#current-implementation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Current Implementation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#centralized-backup-system" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Centralized Backup System
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#custom-resource-definitions-crds" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Custom Resource Definitions (CRDs)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Custom Resource Definitions (CRDs)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#core-deployment-crds" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core Deployment CRDs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Core Deployment CRDs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#neo4jenterprisecluster-neo4jenterprisecluster_typesgo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Neo4jEnterpriseCluster (neo4jenterprisecluster_types.go)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#neo4jenterprisestandalone-neo4jenterprisestandalone_typesgo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Neo4jEnterpriseStandalone (neo4jenterprisestandalone_types.go)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#database-management-crds" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Database Management CRDs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Database Management CRDs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#neo4jdatabase-neo4jdatabase_typesgo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Neo4jDatabase (neo4jdatabase_types.go)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#neo4jplugin-neo4jplugin_typesgo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Neo4jPlugin (neo4jplugin_types.go)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#backup-restore-crds" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Backup &amp; Restore CRDs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Backup &amp; Restore CRDs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#neo4jbackup-neo4jbackup_typesgo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Neo4jBackup (neo4jbackup_types.go)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#neo4jrestore-neo4jrestore_typesgo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Neo4jRestore (neo4jrestore_types.go)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#controllers-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Controllers Architecture
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Controllers Architecture">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#core-controllers-internalcontroller" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core Controllers (internal/controller/)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Core Controllers (internal/controller/)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#neo4jenterprisecluster-controller-neo4jenterprisecluster_controllergo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Neo4jEnterpriseCluster Controller (neo4jenterprisecluster_controller.go)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#neo4jenterprisestandalone-controller-neo4jenterprisestandalone_controllergo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Neo4jEnterpriseStandalone Controller (neo4jenterprisestandalone_controller.go)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#database-controller-neo4jdatabase_controllergo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Database Controller (neo4jdatabase_controller.go)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#plugin-controller-plugin_controllergo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plugin Controller (plugin_controller.go)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#backup-controller-neo4jbackup_controllergo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Backup Controller (neo4jbackup_controller.go)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#restore-controller-neo4jrestore_controllergo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Restore Controller (neo4jrestore_controller.go)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#validation-framework-internalvalidation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation Framework (internal/validation/)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Validation Framework (internal/validation/)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#comprehensive-validation-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Comprehensive Validation Architecture
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Comprehensive Validation Architecture">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#core-validators" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core Validators:
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#enhanced-validation-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Enhanced Validation Features:
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#database-validator-enhancements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Database Validator Enhancements
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#neo4j-version-compatibility" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Neo4j Version Compatibility
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Neo4j Version Compatibility">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#supported-versions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Supported Versions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#version-specific-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Version-Specific Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Version-Specific Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#discovery-configuration-list-resolver-injected-by-startup-script" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Discovery Configuration (LIST resolver, injected by startup script):
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#modern-configuration-standards" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Modern Configuration Standards:
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#database-creation-syntax" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Database Creation Syntax
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Database Creation Syntax">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#neo4j-526-cypher-5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Neo4j 5.26+ (Cypher 5):
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#neo4j-2025x-cypher-25" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Neo4j 2025.x (Cypher 25):
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#resource-management-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resource Management Architecture
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Resource Management Architecture">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#intelligent-resource-handling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Intelligent Resource Handling
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Intelligent Resource Handling">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#resource-builders-internalresources" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resource Builders (internal/resources/):
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#server-based-resource-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Server-Based Resource Patterns:
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#performance-optimizations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Performance Optimizations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Performance Optimizations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#reconciliation-efficiency" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reconciliation Efficiency:
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#startup-optimization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Startup Optimization:
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security Architecture
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Security Architecture">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#rbac-configuration-configrbac" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RBAC Configuration (config/rbac/)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="RBAC Configuration (config/rbac/)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#core-rbac-resources" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core RBAC Resources:
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#discovery-rbac-critical" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Discovery RBAC (Critical):
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tlsssl-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TLS/SSL Support:
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#monitoring-observability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Monitoring &amp; Observability
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Monitoring &amp; Observability">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#resource-monitoring-internalmonitoring" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resource Monitoring (internal/monitoring/):
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#status-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Status Management:
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#monitoring-and-live-diagnostics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Monitoring and Live Diagnostics
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#integration-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Integration Architecture
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Integration Architecture">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#external-system-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        External System Integration:
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#kubernetes-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Kubernetes Integration:
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#testing-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Testing Architecture
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Testing Architecture">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#test-strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test Strategy:
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test-infrastructure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test Infrastructure:
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#migration-compatibility" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Migration &amp; Compatibility
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Migration &amp; Compatibility">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#legacy-architecture-migration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Legacy Architecture Migration:
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#future-extensibility" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Future Extensibility:
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#development-best-practices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Development Best Practices
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Development Best Practices">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#code-organization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Code Organization:
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#performance-considerations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Performance Considerations:
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../testing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Testing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../makefile_reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Makefile Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../openshift_olm/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OpenShift OLM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#core-design-principles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core Design Principles
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#current-architecture-august-2025" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Current Architecture (August 2025)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Current Architecture (August 2025)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#server-based-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Server-Based Architecture
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Server-Based Architecture">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#key-changes-from-legacy-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Changes from Legacy Architecture
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#current-implementation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Current Implementation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#centralized-backup-system" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Centralized Backup System
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#custom-resource-definitions-crds" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Custom Resource Definitions (CRDs)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Custom Resource Definitions (CRDs)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#core-deployment-crds" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core Deployment CRDs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Core Deployment CRDs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#neo4jenterprisecluster-neo4jenterprisecluster_typesgo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Neo4jEnterpriseCluster (neo4jenterprisecluster_types.go)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#neo4jenterprisestandalone-neo4jenterprisestandalone_typesgo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Neo4jEnterpriseStandalone (neo4jenterprisestandalone_types.go)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#database-management-crds" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Database Management CRDs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Database Management CRDs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#neo4jdatabase-neo4jdatabase_typesgo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Neo4jDatabase (neo4jdatabase_types.go)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#neo4jplugin-neo4jplugin_typesgo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Neo4jPlugin (neo4jplugin_types.go)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#backup-restore-crds" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Backup &amp; Restore CRDs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Backup &amp; Restore CRDs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#neo4jbackup-neo4jbackup_typesgo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Neo4jBackup (neo4jbackup_types.go)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#neo4jrestore-neo4jrestore_typesgo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Neo4jRestore (neo4jrestore_types.go)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#controllers-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Controllers Architecture
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Controllers Architecture">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#core-controllers-internalcontroller" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core Controllers (internal/controller/)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Core Controllers (internal/controller/)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#neo4jenterprisecluster-controller-neo4jenterprisecluster_controllergo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Neo4jEnterpriseCluster Controller (neo4jenterprisecluster_controller.go)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#neo4jenterprisestandalone-controller-neo4jenterprisestandalone_controllergo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Neo4jEnterpriseStandalone Controller (neo4jenterprisestandalone_controller.go)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#database-controller-neo4jdatabase_controllergo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Database Controller (neo4jdatabase_controller.go)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#plugin-controller-plugin_controllergo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plugin Controller (plugin_controller.go)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#backup-controller-neo4jbackup_controllergo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Backup Controller (neo4jbackup_controller.go)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#restore-controller-neo4jrestore_controllergo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Restore Controller (neo4jrestore_controller.go)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#validation-framework-internalvalidation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation Framework (internal/validation/)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Validation Framework (internal/validation/)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#comprehensive-validation-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Comprehensive Validation Architecture
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Comprehensive Validation Architecture">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#core-validators" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core Validators:
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#enhanced-validation-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Enhanced Validation Features:
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#database-validator-enhancements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Database Validator Enhancements
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#neo4j-version-compatibility" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Neo4j Version Compatibility
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Neo4j Version Compatibility">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#supported-versions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Supported Versions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#version-specific-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Version-Specific Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Version-Specific Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#discovery-configuration-list-resolver-injected-by-startup-script" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Discovery Configuration (LIST resolver, injected by startup script):
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#modern-configuration-standards" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Modern Configuration Standards:
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#database-creation-syntax" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Database Creation Syntax
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Database Creation Syntax">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#neo4j-526-cypher-5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Neo4j 5.26+ (Cypher 5):
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#neo4j-2025x-cypher-25" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Neo4j 2025.x (Cypher 25):
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#resource-management-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resource Management Architecture
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Resource Management Architecture">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#intelligent-resource-handling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Intelligent Resource Handling
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Intelligent Resource Handling">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#resource-builders-internalresources" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resource Builders (internal/resources/):
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#server-based-resource-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Server-Based Resource Patterns:
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#performance-optimizations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Performance Optimizations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Performance Optimizations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#reconciliation-efficiency" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reconciliation Efficiency:
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#startup-optimization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Startup Optimization:
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security Architecture
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Security Architecture">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#rbac-configuration-configrbac" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RBAC Configuration (config/rbac/)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="RBAC Configuration (config/rbac/)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#core-rbac-resources" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core RBAC Resources:
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#discovery-rbac-critical" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Discovery RBAC (Critical):
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tlsssl-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TLS/SSL Support:
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#monitoring-observability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Monitoring &amp; Observability
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Monitoring &amp; Observability">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#resource-monitoring-internalmonitoring" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resource Monitoring (internal/monitoring/):
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#status-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Status Management:
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#monitoring-and-live-diagnostics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Monitoring and Live Diagnostics
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#integration-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Integration Architecture
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Integration Architecture">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#external-system-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        External System Integration:
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#kubernetes-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Kubernetes Integration:
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#testing-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Testing Architecture
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Testing Architecture">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#test-strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test Strategy:
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test-infrastructure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test Infrastructure:
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#migration-compatibility" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Migration &amp; Compatibility
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Migration &amp; Compatibility">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#legacy-architecture-migration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Legacy Architecture Migration:
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#future-extensibility" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Future Extensibility:
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#development-best-practices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Development Best Practices
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Development Best Practices">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#code-organization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Code Organization:
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#performance-considerations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Performance Considerations:
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/edit/main/docs/developer_guide/architecture.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="architecture-overview">Architecture Overview<a class="headerlink" href="#architecture-overview" title="Anchor link to this section">&para;</a></h1>
+<p>This guide provides a comprehensive overview of the Neo4j Enterprise Operator's architecture, design principles, and current implementation status as of August 2025.</p>
+<h2 id="core-design-principles">Core Design Principles<a class="headerlink" href="#core-design-principles" title="Anchor link to this section">&para;</a></h2>
+<p>The Neo4j Enterprise Operator follows cloud-native best practices with a focus on:</p>
+<ul>
+<li><strong>Production Stability</strong>: Optimized reconciliation frequency and efficient resource management</li>
+<li><strong>Performance</strong>: Intelligent rate limiting and status update optimization</li>
+<li><strong>Server-Based Architecture</strong>: Unified server deployments with self-organizing roles</li>
+<li><strong>Resource Efficiency</strong>: Centralized backup system (70% resource reduction)</li>
+<li><strong>Observability</strong>: Comprehensive monitoring and operational insights</li>
+<li><strong>Validation</strong>: Proactive resource validation and recommendations</li>
+</ul>
+<h2 id="current-architecture-august-2025">Current Architecture (August 2025)<a class="headerlink" href="#current-architecture-august-2025" title="Anchor link to this section">&para;</a></h2>
+<h3 id="server-based-architecture">Server-Based Architecture<a class="headerlink" href="#server-based-architecture" title="Anchor link to this section">&para;</a></h3>
+<p>The operator has evolved to use a <strong>unified server-based architecture</strong> where Neo4j servers self-organize into primary/secondary roles:</p>
+<h4 id="key-changes-from-legacy-architecture">Key Changes from Legacy Architecture<a class="headerlink" href="#key-changes-from-legacy-architecture" title="Anchor link to this section">&para;</a></h4>
+<ul>
+<li><strong>Before</strong>: Separate primary/secondary StatefulSets with complex orchestration</li>
+<li><strong>After</strong>: Single <code>{cluster-name}-server</code> StatefulSet with self-organizing servers</li>
+<li><strong>Benefit</strong>: Simplified resource management, improved scaling, reduced complexity</li>
+</ul>
+<h4 id="current-implementation">Current Implementation<a class="headerlink" href="#current-implementation" title="Anchor link to this section">&para;</a></h4>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Neo4jEnterpriseCluster topology</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nt">topology</span><span class="p">:</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="nt">servers</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span><span class="w">  </span><span class="c1"># Creates: my-cluster-server StatefulSet (replicas: 3)</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="c1"># Pods: my-cluster-server-0, my-cluster-server-1, my-cluster-server-2</span>
+</span></code></pre></div>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Neo4jEnterpriseStandalone deployment</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1"># Creates: my-standalone StatefulSet (replicas: 1)</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="c1"># Pod: my-standalone-0</span>
+</span></code></pre></div>
+<h3 id="centralized-backup-system">Centralized Backup System<a class="headerlink" href="#centralized-backup-system" title="Anchor link to this section">&para;</a></h3>
+<p><strong>Major Efficiency Improvement</strong>: Replaced expensive per-pod backup sidecars with centralized backup architecture:</p>
+<ul>
+<li><strong>Resource Efficiency</strong>: 100m CPU/256Mi memory per cluster vs N×200m CPU/512Mi per sidecar</li>
+<li><strong>Resource Savings</strong>: ~70% reduction in backup-related resource usage</li>
+<li><strong>Architecture</strong>: Single <code>{cluster-name}-backup-0</code> StatefulSet per cluster</li>
+<li><strong>Connectivity</strong>: Connects to cluster via client service using Bolt protocol</li>
+<li><strong>Neo4j 5.26+ Support</strong>: Modern backup syntax with automated path creation</li>
+</ul>
+<h2 id="custom-resource-definitions-crds">Custom Resource Definitions (CRDs)<a class="headerlink" href="#custom-resource-definitions-crds" title="Anchor link to this section">&para;</a></h2>
+<p>The operator defines six core CRDs located in <code>api/v1beta1/</code>:</p>
+<h3 id="core-deployment-crds">Core Deployment CRDs<a class="headerlink" href="#core-deployment-crds" title="Anchor link to this section">&para;</a></h3>
+<h4 id="neo4jenterprisecluster-neo4jenterprisecluster_typesgo">Neo4jEnterpriseCluster (<code>neo4jenterprisecluster_types.go</code>)<a class="headerlink" href="#neo4jenterprisecluster-neo4jenterprisecluster_typesgo" title="Anchor link to this section">&para;</a></h4>
+<ul>
+<li><strong>Purpose</strong>: High-availability clustered Neo4j Enterprise deployments</li>
+<li><strong>Architecture</strong>: Server-based with <code>{cluster-name}-server</code> StatefulSet</li>
+<li><strong>Minimum Topology</strong>: 2+ servers (enforced by validation)</li>
+<li><strong>Server Organization</strong>: Servers self-organize into primary/secondary roles for databases</li>
+<li><strong>Scaling</strong>: Horizontal scaling supported with topology validation</li>
+<li><strong>Discovery</strong>: LIST resolver with static pod FQDNs; V2_ONLY explicitly set for 5.26.x, implicit for 2025.x+</li>
+<li><strong>Resource Pattern</strong>: Single StatefulSet replaces complex multi-StatefulSet architecture</li>
+</ul>
+<p><strong>Key Fields</strong>:
+<div class="language-go highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kd">type</span><span class="w"> </span><span class="nx">Neo4jEnterpriseClusterSpec</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">    </span><span class="nx">Image</span><span class="w">    </span><span class="nx">ImageSpec</span><span class="w">              </span><span class="s">`json:&quot;image&quot;`</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">    </span><span class="nx">Topology</span><span class="w"> </span><span class="nx">TopologyConfiguration</span><span class="w">  </span><span class="s">`json:&quot;topology&quot;`</span><span class="w">  </span><span class="c1">// servers: N</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">    </span><span class="nx">Storage</span><span class="w">  </span><span class="nx">StorageSpec</span><span class="w">           </span><span class="s">`json:&quot;storage&quot;`</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">    </span><span class="c1">// ... additional fields</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="p">}</span>
+</span></code></pre></div></p>
+<h4 id="neo4jenterprisestandalone-neo4jenterprisestandalone_typesgo">Neo4jEnterpriseStandalone (<code>neo4jenterprisestandalone_types.go</code>)<a class="headerlink" href="#neo4jenterprisestandalone-neo4jenterprisestandalone_typesgo" title="Anchor link to this section">&para;</a></h4>
+<ul>
+<li><strong>Purpose</strong>: Single-node Neo4j Enterprise deployments</li>
+<li><strong>Architecture</strong>: Uses clustering infrastructure but fixed at 1 replica</li>
+<li><strong>Use Cases</strong>: Development, testing, simple production workloads</li>
+<li><strong>StatefulSet</strong>: <code>{standalone-name}</code> (no "-server" suffix)</li>
+<li><strong>Configuration</strong>: Modern clustering approach with single member (Neo4j 5.26+)</li>
+<li><strong>Restrictions</strong>: Cannot scale beyond 1 replica</li>
+</ul>
+<h3 id="database-management-crds">Database Management CRDs<a class="headerlink" href="#database-management-crds" title="Anchor link to this section">&para;</a></h3>
+<h4 id="neo4jdatabase-neo4jdatabase_typesgo">Neo4jDatabase (<code>neo4jdatabase_types.go</code>)<a class="headerlink" href="#neo4jdatabase-neo4jdatabase_typesgo" title="Anchor link to this section">&para;</a></h4>
+<ul>
+<li><strong>Purpose</strong>: Manages database lifecycle within clusters and standalone deployments</li>
+<li><strong>Dual Support</strong>: Works with both Neo4jEnterpriseCluster and Neo4jEnterpriseStandalone</li>
+<li><strong>Enhanced Validation</strong>: DatabaseValidator supports automatic deployment type detection</li>
+<li><strong>Neo4j 5.26+ Syntax</strong>: Uses modern <code>TOPOLOGY</code> clause for database creation</li>
+<li><strong>Standalone Fix</strong>: Added NEO4J_AUTH environment variable for automatic authentication</li>
+</ul>
+<p><strong>Key Features</strong>:
+<div class="language-go highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kd">type</span><span class="w"> </span><span class="nx">Neo4jDatabaseSpec</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">    </span><span class="nx">ClusterRef</span><span class="w"> </span><span class="kt">string</span><span class="w">           </span><span class="s">`json:&quot;clusterRef&quot;`</span><span class="w">     </span><span class="c1">// References cluster OR standalone</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">    </span><span class="nx">Name</span><span class="w">       </span><span class="kt">string</span><span class="w">           </span><span class="s">`json:&quot;name&quot;`</span><span class="w">           </span><span class="c1">// Database name</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">    </span><span class="nx">Topology</span><span class="w">   </span><span class="nx">DatabaseTopology</span><span class="w"> </span><span class="s">`json:&quot;topology&quot;`</span><span class="w">       </span><span class="c1">// Primary/secondary counts</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">    </span><span class="nx">IfNotExists</span><span class="w"> </span><span class="kt">bool</span><span class="w">            </span><span class="s">`json:&quot;ifNotExists&quot;`</span><span class="w">    </span><span class="c1">// CREATE IF NOT EXISTS</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="p">}</span>
+</span></code></pre></div></p>
+<h4 id="neo4jplugin-neo4jplugin_typesgo">Neo4jPlugin (<code>neo4jplugin_types.go</code>)<a class="headerlink" href="#neo4jplugin-neo4jplugin_typesgo" title="Anchor link to this section">&para;</a></h4>
+<ul>
+<li><strong>Purpose</strong>: Manages Neo4j plugin installation and configuration</li>
+<li><strong>Dual Architecture Support</strong>: Enhanced for server-based cluster + standalone compatibility</li>
+<li><strong>Deployment Detection</strong>: Automatic cluster vs standalone recognition</li>
+<li><strong>Resource Naming</strong>: Handles <code>{cluster-name}-server</code> vs <code>{standalone-name}</code> patterns</li>
+<li><strong>Plugin Sources</strong>: Official, community, custom registry, direct URL support</li>
+</ul>
+<h3 id="backup-restore-crds">Backup &amp; Restore CRDs<a class="headerlink" href="#backup-restore-crds" title="Anchor link to this section">&para;</a></h3>
+<h4 id="neo4jbackup-neo4jbackup_typesgo">Neo4jBackup (<code>neo4jbackup_types.go</code>)<a class="headerlink" href="#neo4jbackup-neo4jbackup_typesgo" title="Anchor link to this section">&para;</a></h4>
+<ul>
+<li><strong>Purpose</strong>: Manages backup operations for both clusters and standalone deployments</li>
+<li><strong>Centralized Architecture</strong>: Uses single backup pod per cluster (not sidecars)</li>
+<li><strong>Target Support</strong>: Can backup both cluster and standalone deployments</li>
+<li><strong>Neo4j 5.26+ Support</strong>: Modern backup syntax with <code>--to-path</code> parameter</li>
+</ul>
+<h4 id="neo4jrestore-neo4jrestore_typesgo">Neo4jRestore (<code>neo4jrestore_types.go</code>)<a class="headerlink" href="#neo4jrestore-neo4jrestore_typesgo" title="Anchor link to this section">&para;</a></h4>
+<ul>
+<li><strong>Purpose</strong>: Manages database restoration from backups</li>
+<li><strong>Point-in-Time Recovery</strong>: Supports <code>--restore-until</code> for precise recovery</li>
+<li><strong>Cross-Deployment Support</strong>: Can restore to different deployment types</li>
+</ul>
+<h2 id="controllers-architecture">Controllers Architecture<a class="headerlink" href="#controllers-architecture" title="Anchor link to this section">&para;</a></h2>
+<h3 id="core-controllers-internalcontroller">Core Controllers (<code>internal/controller/</code>)<a class="headerlink" href="#core-controllers-internalcontroller" title="Anchor link to this section">&para;</a></h3>
+<h4 id="neo4jenterprisecluster-controller-neo4jenterprisecluster_controllergo">Neo4jEnterpriseCluster Controller (<code>neo4jenterprisecluster_controller.go</code>)<a class="headerlink" href="#neo4jenterprisecluster-controller-neo4jenterprisecluster_controllergo" title="Anchor link to this section">&para;</a></h4>
+<p><strong>Primary cluster management controller with server-based architecture:</strong></p>
+<p><strong>Performance Optimizations</strong>:
+- <strong>Efficient Reconciliation</strong>: Reduced from ~18,000 to ~34 reconciliations per minute
+- <strong>Smart Status Updates</strong>: Only updates when cluster state changes
+- <strong>ConfigMap Debouncing</strong>: 2-minute debounce prevents restart loops
+- <strong>Resource Version Conflict Handling</strong>: Retry logic for concurrent updates</p>
+<p><strong>Server-Based Implementation</strong>:
+- <strong>Single StatefulSet</strong>: Creates <code>{cluster-name}-server</code> instead of separate primary/secondary
+- <strong>Self-Organizing Servers</strong>: Neo4j servers automatically assign database hosting roles
+- <strong>Simplified Resource Management</strong>: Unified pod templates and configuration
+- <strong>Certificate DNS</strong>: Includes all server pod names in TLS certificates</p>
+<p><strong>Split-Brain Detection</strong>:
+- <strong>Location</strong>: <code>internal/controller/splitbrain_detector.go</code>
+- <strong>Multi-Pod Analysis</strong>: Connects to each server to compare cluster views
+- <strong>Automatic Repair</strong>: Restarts orphaned pods to rejoin main cluster
+- <strong>Production Ready</strong>: Comprehensive logging and fallback mechanisms</p>
+<h4 id="neo4jenterprisestandalone-controller-neo4jenterprisestandalone_controllergo">Neo4jEnterpriseStandalone Controller (<code>neo4jenterprisestandalone_controller.go</code>)<a class="headerlink" href="#neo4jenterprisestandalone-controller-neo4jenterprisestandalone_controllergo" title="Anchor link to this section">&para;</a></h4>
+<p><strong>Single-node deployment controller:</strong></p>
+<p><strong>Key Features</strong>:
+- <strong>Clustering Infrastructure</strong>: Uses same infrastructure as clusters (Neo4j 5.26+ approach)
+- <strong>Single Member Configuration</strong>: Sets up clustering with single server
+- <strong>Resource Management</strong>: Handles ConfigMap, Service, and StatefulSet
+- <strong>Status Tracking</strong>: Comprehensive status updates for standalone instances</p>
+<h4 id="database-controller-neo4jdatabase_controllergo">Database Controller (<code>neo4jdatabase_controller.go</code>)<a class="headerlink" href="#database-controller-neo4jdatabase_controllergo" title="Anchor link to this section">&para;</a></h4>
+<p><strong>Enhanced for dual deployment support:</strong>
+- <strong>Automatic Detection</strong>: Tries cluster lookup first, then standalone fallback
+- <strong>Neo4j Client Creation</strong>: <code>NewClientForEnterprise()</code> vs <code>NewClientForEnterpriseStandalone()</code>
+- <strong>Authentication Handling</strong>: Manages NEO4J_AUTH for standalone deployments
+- <strong>Syntax Support</strong>: Neo4j 5.26+ and 2025.x database creation syntax</p>
+<h4 id="plugin-controller-plugin_controllergo">Plugin Controller (<code>plugin_controller.go</code>)<a class="headerlink" href="#plugin-controller-plugin_controllergo" title="Anchor link to this section">&para;</a></h4>
+<p><strong>Manages plugin lifecycle with architecture compatibility:</strong>
+- <strong>DeploymentInfo Abstraction</strong>: Unified handling of cluster/standalone types
+- <strong>Resource Naming</strong>: Correct StatefulSet names (<code>{cluster-name}-server</code> vs <code>{standalone-name}</code>)
+- <strong>Pod Labels</strong>: Applies appropriate labels for each deployment type
+- <strong>Plugin Sources</strong>: Official, community, custom registries, direct URLs</p>
+<h4 id="backup-controller-neo4jbackup_controllergo">Backup Controller (<code>neo4jbackup_controller.go</code>)<a class="headerlink" href="#backup-controller-neo4jbackup_controllergo" title="Anchor link to this section">&para;</a></h4>
+<p><strong>Centralized backup management:</strong>
+- <strong>Architecture</strong>: Single backup StatefulSet per cluster
+- <strong>Resource Efficiency</strong>: 70% reduction in backup resource usage
+- <strong>Cross-Deployment Support</strong>: Backs up both clusters and standalone deployments
+- <strong>Modern Syntax</strong>: Neo4j 5.26+ compatible backup commands</p>
+<h4 id="restore-controller-neo4jrestore_controllergo">Restore Controller (<code>neo4jrestore_controller.go</code>)<a class="headerlink" href="#restore-controller-neo4jrestore_controllergo" title="Anchor link to this section">&para;</a></h4>
+<p><strong>Database restoration management:</strong>
+- <strong>Point-in-Time Recovery</strong>: Supports precise timestamp restoration
+- <strong>Flexible Targets</strong>: Can restore to different deployment types
+- <strong>Validation</strong>: Ensures target deployment compatibility</p>
+<h2 id="validation-framework-internalvalidation">Validation Framework (<code>internal/validation/</code>)<a class="headerlink" href="#validation-framework-internalvalidation" title="Anchor link to this section">&para;</a></h2>
+<h3 id="comprehensive-validation-architecture">Comprehensive Validation Architecture<a class="headerlink" href="#comprehensive-validation-architecture" title="Anchor link to this section">&para;</a></h3>
+<h4 id="core-validators">Core Validators:<a class="headerlink" href="#core-validators" title="Anchor link to this section">&para;</a></h4>
+<ul>
+<li><strong>TopologyValidator</strong> (<code>topology_validator.go</code>): Cluster topology and server count validation</li>
+<li><strong>ClusterValidator</strong> (<code>cluster_validator.go</code>): Cluster-specific configuration validation</li>
+<li><strong>MemoryValidator</strong> (<code>memory_validator.go</code>): Neo4j memory settings vs container limits</li>
+<li><strong>ResourceValidator</strong> (<code>resource_validator.go</code>): CPU, memory, and storage validation</li>
+<li><strong>TLSValidator</strong> (<code>tls_validator.go</code>): TLS/SSL configuration validation</li>
+<li><strong>DatabaseValidator</strong> (<code>database_validator.go</code>): Database creation and topology validation</li>
+</ul>
+<h4 id="enhanced-validation-features">Enhanced Validation Features:<a class="headerlink" href="#enhanced-validation-features" title="Anchor link to this section">&para;</a></h4>
+<ul>
+<li><strong>Dual CRD Validation</strong>: Separate validation rules for cluster vs standalone</li>
+<li><strong>Server-Based Topology</strong>: Validates server counts instead of primary/secondary counts</li>
+<li><strong>Resource Recommendations</strong>: Suggests optimal resource allocation</li>
+<li><strong>Configuration Restrictions</strong>: Prevents clustering settings in standalone deployments</li>
+<li><strong>Neo4j Version Compatibility</strong>: Validates settings against Neo4j 5.26+ and 2025.x</li>
+</ul>
+<h3 id="database-validator-enhancements">Database Validator Enhancements<a class="headerlink" href="#database-validator-enhancements" title="Anchor link to this section">&para;</a></h3>
+<ul>
+<li><strong>Automatic Deployment Detection</strong>: Tries cluster first, then standalone</li>
+<li><strong>Appropriate Client Creation</strong>: Uses correct client type for deployment</li>
+<li><strong>Clear Error Messages</strong>: Distinguishes between cluster and standalone validation failures</li>
+</ul>
+<h2 id="neo4j-version-compatibility">Neo4j Version Compatibility<a class="headerlink" href="#neo4j-version-compatibility" title="Anchor link to this section">&para;</a></h2>
+<h3 id="supported-versions">Supported Versions<a class="headerlink" href="#supported-versions" title="Anchor link to this section">&para;</a></h3>
+<ul>
+<li><strong>Neo4j 5.26.x</strong>: Last semver LTS release (5.26.0, 5.26.1, etc.) — no 5.27+ semver versions exist</li>
+<li><strong>Neo4j 2025.x+</strong>: Calver format (2025.01.0, 2025.02.0, etc.)</li>
+</ul>
+<h3 id="version-specific-configuration">Version-Specific Configuration<a class="headerlink" href="#version-specific-configuration" title="Anchor link to this section">&para;</a></h3>
+<h4 id="discovery-configuration-list-resolver-injected-by-startup-script">Discovery Configuration (LIST resolver, injected by startup script):<a class="headerlink" href="#discovery-configuration-list-resolver-injected-by-startup-script" title="Anchor link to this section">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>5.26.x (SemVer)</th>
+<th>2025.x+ / 2026.x+ (CalVer)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>dbms.cluster.discovery.resolver_type</code></td>
+<td><code>LIST</code></td>
+<td><code>LIST</code></td>
+</tr>
+<tr>
+<td><code>dbms.cluster.discovery.version</code></td>
+<td><code>V2_ONLY</code> (explicit)</td>
+<td><em>(omitted — V2 is only protocol)</em></td>
+</tr>
+<tr>
+<td>Endpoints key</td>
+<td><code>dbms.cluster.discovery.v2.endpoints</code></td>
+<td><code>dbms.cluster.endpoints</code></td>
+</tr>
+<tr>
+<td>Endpoint port</td>
+<td><strong>6000</strong> (tcp-tx)</td>
+<td><strong>6000</strong> (tcp-tx)</td>
+</tr>
+<tr>
+<td>Bootstrap hint</td>
+<td><code>internal.dbms.cluster.discovery.system_bootstrapping_strategy=me/other</code></td>
+<td><em>(not used)</em></td>
+</tr>
+</tbody>
+</table>
+<p>Port 5000 (<code>tcp-discovery</code>) is the <strong>deprecated V1 discovery port — never used by this operator</strong>.
+CalVer detection: <code>ParseVersion()</code> → <code>IsCalver</code> (<code>major &gt;= 2025</code>) covers 2026.x+ automatically.</p>
+<h4 id="modern-configuration-standards">Modern Configuration Standards:<a class="headerlink" href="#modern-configuration-standards" title="Anchor link to this section">&para;</a></h4>
+<ul>
+<li><strong>Memory</strong>: <code>server.memory.*</code> (not deprecated <code>dbms.memory.*</code>)</li>
+<li><strong>TLS/SSL</strong>: <code>server.https.*</code> and <code>server.bolt.*</code> (not <code>dbms.connector.*</code>)</li>
+<li><strong>Database Format</strong>: <code>db.format: "block"</code> (not deprecated formats)</li>
+<li><strong>Discovery</strong>: managed entirely by operator startup script — do not set in <code>spec.config</code></li>
+</ul>
+<h3 id="database-creation-syntax">Database Creation Syntax<a class="headerlink" href="#database-creation-syntax" title="Anchor link to this section">&para;</a></h3>
+<h4 id="neo4j-526-cypher-5">Neo4j 5.26+ (Cypher 5):<a class="headerlink" href="#neo4j-526-cypher-5" title="Anchor link to this section">&para;</a></h4>
+<div class="language-cypher highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">CREATE</span><span class="w"> </span><span class="n">DATABASE</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="o">[</span><span class="n">IF</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="n">EXISTS</span><span class="o">]</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="o">[</span><span class="n">TOPOLOGY</span><span class="w"> </span><span class="n">n</span><span class="w"> </span><span class="n">PRIMAR</span><span class="p">{</span><span class="n">Y</span><span class="p">|</span><span class="n">IES</span><span class="p">}</span><span class="w"> </span><span class="o">[</span><span class="n">m</span><span class="w"> </span><span class="n">SECONDAR</span><span class="p">{</span><span class="n">Y</span><span class="p">|</span><span class="n">IES</span><span class="p">}</span><span class="o">]]</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="o">[</span><span class="n">OPTIONS</span><span class="w"> </span><span class="s">&quot;{&quot;</span><span class="w"> </span><span class="n">option</span><span class="p">:</span><span class="w"> </span><span class="n">value</span><span class="o">[</span><span class="p">,</span><span class="w"> </span><span class="p">...</span><span class="o">]</span><span class="w"> </span><span class="s">&quot;}&quot;</span><span class="o">]</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="o">[</span><span class="n">WAIT</span><span class="w"> </span><span class="o">[</span><span class="n">n</span><span class="w"> </span><span class="o">[</span><span class="n">SEC</span><span class="o">[</span><span class="n">OND</span><span class="o">[</span><span class="n">S</span><span class="o">]]]]</span><span class="p">|</span><span class="n">NOWAIT</span><span class="o">]</span>
+</span></code></pre></div>
+<h4 id="neo4j-2025x-cypher-25">Neo4j 2025.x (Cypher 25):<a class="headerlink" href="#neo4j-2025x-cypher-25" title="Anchor link to this section">&para;</a></h4>
+<div class="language-cypher highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">CREATE</span><span class="w"> </span><span class="n">DATABASE</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="o">[</span><span class="n">IF</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="n">EXISTS</span><span class="o">]</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="o">[[</span><span class="k">SET</span><span class="o">]</span><span class="w"> </span><span class="n">DEFAULT</span><span class="w"> </span><span class="n">LANGUAGE</span><span class="w"> </span><span class="n">CYPHER</span><span class="w"> </span><span class="p">{</span><span class="m">5</span><span class="p">|</span><span class="m">25</span><span class="p">}</span><span class="o">]</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="o">[[</span><span class="k">SET</span><span class="o">]</span><span class="w"> </span><span class="n">TOPOLOGY</span><span class="w"> </span><span class="n">n</span><span class="w"> </span><span class="n">PRIMARIES</span><span class="w"> </span><span class="o">[</span><span class="n">m</span><span class="w"> </span><span class="n">SECONDARIES</span><span class="o">]]</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="o">[</span><span class="n">OPTIONS</span><span class="w"> </span><span class="s">&quot;{&quot;</span><span class="w"> </span><span class="n">option</span><span class="p">:</span><span class="w"> </span><span class="n">value</span><span class="o">[</span><span class="p">,</span><span class="w"> </span><span class="p">...</span><span class="o">]</span><span class="w"> </span><span class="s">&quot;}&quot;</span><span class="o">]</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="o">[</span><span class="n">WAIT</span><span class="w"> </span><span class="o">[</span><span class="n">n</span><span class="w"> </span><span class="o">[</span><span class="n">SEC</span><span class="o">[</span><span class="n">OND</span><span class="o">[</span><span class="n">S</span><span class="o">]]]]</span><span class="p">|</span><span class="n">NOWAIT</span><span class="o">]</span>
+</span></code></pre></div>
+<h2 id="resource-management-architecture">Resource Management Architecture<a class="headerlink" href="#resource-management-architecture" title="Anchor link to this section">&para;</a></h2>
+<h3 id="intelligent-resource-handling">Intelligent Resource Handling<a class="headerlink" href="#intelligent-resource-handling" title="Anchor link to this section">&para;</a></h3>
+<h4 id="resource-builders-internalresources">Resource Builders (<code>internal/resources/</code>):<a class="headerlink" href="#resource-builders-internalresources" title="Anchor link to this section">&para;</a></h4>
+<ul>
+<li><strong>ClusterBuilder</strong> (<code>cluster.go</code>): Server-based StatefulSet creation</li>
+<li><strong>StandaloneBuilder</strong> (<code>standalone.go</code>): Single-node deployment resources</li>
+<li><strong>ConfigMapBuilder</strong>: Unified configuration for both deployment types</li>
+<li><strong>ServiceBuilder</strong>: Client and discovery services</li>
+<li><strong>BackupBuilder</strong>: Centralized backup StatefulSet</li>
+</ul>
+<h4 id="server-based-resource-patterns">Server-Based Resource Patterns:<a class="headerlink" href="#server-based-resource-patterns" title="Anchor link to this section">&para;</a></h4>
+<ul>
+<li><strong>StatefulSet Naming</strong>: <code>{cluster-name}-server</code> for clusters, <code>{standalone-name}</code> for standalone</li>
+<li><strong>Pod Naming</strong>: <code>{cluster-name}-server-0</code>, <code>{cluster-name}-server-1</code>, etc.</li>
+<li><strong>Service Names</strong>: <code>{cluster-name}-client</code>, <code>{cluster-name}-discovery</code></li>
+<li><strong>Backup Resources</strong>: <code>{cluster-name}-backup-0</code> (centralized)</li>
+</ul>
+<h3 id="performance-optimizations">Performance Optimizations<a class="headerlink" href="#performance-optimizations" title="Anchor link to this section">&para;</a></h3>
+<h4 id="reconciliation-efficiency">Reconciliation Efficiency:<a class="headerlink" href="#reconciliation-efficiency" title="Anchor link to this section">&para;</a></h4>
+<ul>
+<li><strong>Rate Limiting</strong>: Intelligent rate limiting prevents API server overload</li>
+<li><strong>Status Update Efficiency</strong>: Only updates when state actually changes</li>
+<li><strong>Event Filtering</strong>: Reduces unnecessary reconciliation triggers</li>
+<li><strong>ConfigMap Hashing</strong>: Hash-based change detection prevents unnecessary updates</li>
+</ul>
+<h4 id="startup-optimization">Startup Optimization:<a class="headerlink" href="#startup-optimization" title="Anchor link to this section">&para;</a></h4>
+<ul>
+<li><strong>Parallel Pod Management</strong>: All server pods start simultaneously</li>
+<li><strong>Minimum Primaries = 1</strong>: First pod forms cluster immediately</li>
+<li><strong>PublishNotReadyAddresses</strong>: Discovery includes pending pods</li>
+<li><strong>Resource Version Conflict Retry</strong>: Handles concurrent updates gracefully</li>
+</ul>
+<h2 id="security-architecture">Security Architecture<a class="headerlink" href="#security-architecture" title="Anchor link to this section">&para;</a></h2>
+<h3 id="rbac-configuration-configrbac">RBAC Configuration (<code>config/rbac/</code>)<a class="headerlink" href="#rbac-configuration-configrbac" title="Anchor link to this section">&para;</a></h3>
+<h4 id="core-rbac-resources">Core RBAC Resources:<a class="headerlink" href="#core-rbac-resources" title="Anchor link to this section">&para;</a></h4>
+<ul>
+<li><strong>Principle of Least Privilege</strong>: Minimal required permissions</li>
+<li><strong>ClusterRole Design</strong>: Cross-namespace operations support</li>
+<li><strong>Service Account Security</strong>: Dedicated accounts with specific roles</li>
+</ul>
+<h4 id="discovery-rbac-critical">Discovery RBAC (Critical):<a class="headerlink" href="#discovery-rbac-critical" title="Anchor link to this section">&para;</a></h4>
+<p>Each cluster gets automatic RBAC creation:
+- <strong>ServiceAccount</strong>: <code>{cluster-name}-discovery</code>
+- <strong>Role</strong>: Services and endpoints permissions
+- <strong>RoleBinding</strong>: Links account to role
+- <strong>Endpoints Permission</strong>: <strong>CRITICAL</strong> for cluster formation</p>
+<h3 id="tlsssl-support">TLS/SSL Support:<a class="headerlink" href="#tlsssl-support" title="Anchor link to this section">&para;</a></h3>
+<ul>
+<li><strong>Cert-Manager Integration</strong>: Automatic certificate provisioning</li>
+<li><strong>SSL Policy Configuration</strong>: Separate policies for <code>https</code>, <code>bolt</code>, and <code>cluster</code> scopes</li>
+<li><strong>Trust All for Cluster</strong>: <code>dbms.ssl.policy.cluster.trust_all=true</code> for formation</li>
+<li><strong>Certificate DNS Names</strong>: Includes all server pod names</li>
+</ul>
+<h2 id="monitoring-observability">Monitoring &amp; Observability<a class="headerlink" href="#monitoring-observability" title="Anchor link to this section">&para;</a></h2>
+<h3 id="resource-monitoring-internalmonitoring">Resource Monitoring (<code>internal/monitoring/</code>):<a class="headerlink" href="#resource-monitoring-internalmonitoring" title="Anchor link to this section">&para;</a></h3>
+<ul>
+<li><strong>ResourceMonitor</strong> (<code>resource_monitor.go</code>): Real-time utilization tracking</li>
+<li><strong>Performance Metrics</strong>: Controller performance and reconciliation efficiency</li>
+<li><strong>Operational Insights</strong>: ConfigMap update patterns and debounce effectiveness</li>
+</ul>
+<h3 id="status-management">Status Management:<a class="headerlink" href="#status-management" title="Anchor link to this section">&para;</a></h3>
+<ul>
+<li><strong>Enhanced Status Updates</strong>: Detailed cluster state tracking</li>
+<li><strong>Condition Management</strong>: Comprehensive status conditions with proper transitions</li>
+<li><strong>Event Recording</strong>: Structured events for debugging and monitoring</li>
+<li><strong>Connection Examples</strong>: Automatic generation of connection strings</li>
+</ul>
+<h3 id="monitoring-and-live-diagnostics">Monitoring and Live Diagnostics<a class="headerlink" href="#monitoring-and-live-diagnostics" title="Anchor link to this section">&para;</a></h3>
+<p>The <code>MonitoringSpec</code> field (<code>spec.monitoring</code>) drives two distinct
+responsibilities inside the cluster controller:</p>
+<p><strong>1. Infrastructure setup</strong> (<code>ReconcileMonitoring</code>):
+Creates Kubernetes resources for metrics collection:
+- <code>{cluster-name}-metrics</code> Service — exposes port 2004 for Prometheus scraping
+- <code>{cluster-name}-monitoring</code> ServiceMonitor — tells the Prometheus Operator to scrape the metrics service
+- Neo4j config flags (<code>server.metrics.prometheus.enabled=true</code>, <code>prometheus.io/*</code> annotations)</p>
+<p>Runs on every reconcile regardless of cluster phase.</p>
+<p><strong>2. Live diagnostics</strong> (<code>CollectDiagnostics</code>):
+Runs <code>SHOW SERVERS</code> and <code>SHOW DATABASES</code> via the Bolt client when the cluster is <code>Ready</code>:
+- Writes results to <code>status.diagnostics</code> (<code>ClusterDiagnosticsStatus</code>)
+- Sets <code>ServersHealthy</code> condition (<code>True</code> when all servers are <code>state=Enabled</code> and <code>health=Available</code>)
+- Sets <code>DatabasesHealthy</code> condition (<code>True</code> when all user databases have <code>status=online</code>; the <code>system</code> database is excluded)
+- Updates <code>neo4j_operator_server_health</code> Prometheus gauge per server (labels: <code>cluster_name</code>, <code>namespace</code>, <code>server_name</code>, <code>server_address</code>)
+- Non-fatal: collection errors are surfaced in <code>status.diagnostics.collectionError</code> and the conditions are set to <code>Unknown</code> with reason <code>DiagnosticsUnavailable</code></p>
+<p>The diagnostics Bolt client is created fresh per-reconcile and closed with <code>defer</code>. It
+never shares state with the cluster formation or upgrade clients.</p>
+<p><strong>Architecture invariant:</strong> All status writes in <code>CollectDiagnostics</code> use
+<code>retry.RetryOnConflict</code> to handle concurrent updates without panicking.</p>
+<p><strong>Condition constants</strong> (defined in <code>internal/controller/conditions.go</code>):
+- <code>ConditionTypeServersHealthy = "ServersHealthy"</code>
+- <code>ConditionTypeDatabasesHealthy = "DatabasesHealthy"</code>
+- Reason values: <code>AllServersHealthy</code>, <code>ServerDegraded</code>, <code>AllDatabasesOnline</code>, <code>DatabaseOffline</code>, <code>DiagnosticsUnavailable</code></p>
+<h2 id="integration-architecture">Integration Architecture<a class="headerlink" href="#integration-architecture" title="Anchor link to this section">&para;</a></h2>
+<h3 id="external-system-integration">External System Integration:<a class="headerlink" href="#external-system-integration" title="Anchor link to this section">&para;</a></h3>
+<ul>
+<li><strong>Cert-Manager</strong>: TLS certificate lifecycle management</li>
+<li><strong>Prometheus</strong>: Metrics collection and alerting</li>
+<li><strong>External Secrets</strong>: Secret management integration</li>
+<li><strong>Storage Classes</strong>: Persistent volume provisioning</li>
+<li><strong>Cloud Providers</strong>: AWS, GCP, Azure LoadBalancer optimizations</li>
+</ul>
+<h3 id="kubernetes-integration">Kubernetes Integration:<a class="headerlink" href="#kubernetes-integration" title="Anchor link to this section">&para;</a></h3>
+<ul>
+<li><strong>Network Policies</strong>: Pod-to-pod communication security</li>
+<li><strong>Service Mesh</strong>: Istio/Linkerd compatibility</li>
+<li><strong>Ingress Controllers</strong>: External traffic routing with connection examples</li>
+<li><strong>Node Affinity</strong>: Topology spread and anti-affinity rules</li>
+</ul>
+<h2 id="testing-architecture">Testing Architecture<a class="headerlink" href="#testing-architecture" title="Anchor link to this section">&para;</a></h2>
+<h3 id="test-strategy">Test Strategy:<a class="headerlink" href="#test-strategy" title="Anchor link to this section">&para;</a></h3>
+<ul>
+<li><strong>Unit Tests</strong>: Controller logic and helper functions</li>
+<li><strong>Integration Tests</strong>: Full workflow testing with envtest</li>
+<li><strong>End-to-End Tests</strong>: Real cluster testing with Kind</li>
+<li><strong>Performance Tests</strong>: Reconciliation efficiency validation</li>
+</ul>
+<h3 id="test-infrastructure">Test Infrastructure:<a class="headerlink" href="#test-infrastructure" title="Anchor link to this section">&para;</a></h3>
+<ul>
+<li><strong>Ginkgo/Gomega</strong>: BDD-style testing framework</li>
+<li><strong>Envtest</strong>: Kubernetes API server for integration testing</li>
+<li><strong>Kind Clusters</strong>: Development and test cluster automation</li>
+<li><strong>Test Cleanup</strong>: Automatic finalizer removal and namespace cleanup</li>
+</ul>
+<h2 id="migration-compatibility">Migration &amp; Compatibility<a class="headerlink" href="#migration-compatibility" title="Anchor link to this section">&para;</a></h2>
+<h3 id="legacy-architecture-migration">Legacy Architecture Migration:<a class="headerlink" href="#legacy-architecture-migration" title="Anchor link to this section">&para;</a></h3>
+<ul>
+<li><strong>Backward Compatibility</strong>: Existing clusters continue to work</li>
+<li><strong>Gradual Migration</strong>: No breaking changes for existing deployments</li>
+<li><strong>Resource Name Updates</strong>: New deployments use server-based naming</li>
+<li><strong>Configuration Migration</strong>: Automatic handling of deprecated settings</li>
+</ul>
+<h3 id="future-extensibility">Future Extensibility:<a class="headerlink" href="#future-extensibility" title="Anchor link to this section">&para;</a></h3>
+<ul>
+<li><strong>Plugin System</strong>: Neo4j plugin management framework</li>
+<li><strong>Custom Metrics</strong>: Extensible monitoring capabilities</li>
+<li><strong>Event Handling</strong>: Pluggable event system for custom integrations</li>
+<li><strong>Multi-Architecture</strong>: Support for different deployment patterns</li>
+</ul>
+<h2 id="development-best-practices">Development Best Practices<a class="headerlink" href="#development-best-practices" title="Anchor link to this section">&para;</a></h2>
+<h3 id="code-organization">Code Organization:<a class="headerlink" href="#code-organization" title="Anchor link to this section">&para;</a></h3>
+<ul>
+<li><strong>Controller Pattern</strong>: Standard Kubernetes controller pattern</li>
+<li><strong>Builder Pattern</strong>: Resource builders for clean separation</li>
+<li><strong>Validation Framework</strong>: Centralized validation with clear error messages</li>
+<li><strong>Testing Strategy</strong>: Comprehensive test coverage with multiple levels</li>
+</ul>
+<h3 id="performance-considerations">Performance Considerations:<a class="headerlink" href="#performance-considerations" title="Anchor link to this section">&para;</a></h3>
+<ul>
+<li><strong>Memory Usage</strong>: Optimized for large-scale deployments</li>
+<li><strong>API Efficiency</strong>: Minimal API calls with intelligent caching</li>
+<li><strong>Resource Creation</strong>: Parallel resource creation where possible</li>
+<li><strong>Error Handling</strong>: Graceful error handling with proper recovery</li>
+</ul>
+<p>This architecture provides a solid foundation for managing Neo4j Enterprise deployments in Kubernetes with high performance, reliability, and operational simplicity.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../development/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Development">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Development
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../testing/" class="md-footer__link md-footer__link--next" aria-label="Next: Testing">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Testing
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://hub.docker.com/r/neo4j/neo4j-enterprise" target="_blank" rel="noopener" title="hub.docker.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M349.9 236.3h-66.1v-59.4h66.1zm0-204.3h-66.1v60.7h66.1zm78.2 144.8H362v59.4h66.1zm-156.3-72.1h-66.1v60.1h66.1zm78.1 0h-66.1v60.1h66.1zm276.8 100c-14.4-9.7-47.6-13.2-73.1-8.4-3.3-24-16.7-44.9-41.1-63.7l-14-9.3-9.3 14c-18.4 27.8-23.4 73.6-3.7 103.8-8.7 4.7-25.8 11.1-48.4 10.7H2.4c-8.7 50.8 5.8 116.8 44 162.1 37.1 43.9 92.7 66.2 165.4 66.2 157.4 0 273.9-72.5 328.4-204.2 21.4.4 67.6.1 91.3-45.2 1.5-2.5 6.6-13.2 8.5-17.1zm-511.1-27.9h-66v59.4h66.1v-59.4zm78.1 0h-66.1v59.4h66.1zm78.1 0h-66.1v59.4h66.1zm-78.1-72.1h-66.1v60.1h66.1z"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.indexes", "navigation.top", "navigation.footer", "search.suggest", "search.share", "search.highlight", "content.code.copy", "content.code.annotate", "content.action.edit", "content.tabs.link", "toc.follow"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
