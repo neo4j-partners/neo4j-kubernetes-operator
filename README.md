@@ -43,7 +43,7 @@ The Operator deploys Neo4j EE v5.26+.  It supports both clustered and standalone
 ## 📋 Requirements
 
 - **Neo4j**: Version 5.26.x (last semver LTS) or 2025.x.x+ (CalVer — the successor versioning scheme)
-- **Kubernetes**: Version 1.21 or higher
+- **Kubernetes**: Version 1.30 or higher
 - **Go**: Version 1.24+ (for development)
 - **cert-manager**: Version 1.18+ (optional, only required for TLS-enabled Neo4j deployments)
 

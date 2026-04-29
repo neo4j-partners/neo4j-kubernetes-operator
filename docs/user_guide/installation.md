@@ -479,9 +479,9 @@ gh release list --repo priyolahiri/neo4j-kubernetes-operator
 
 ### Installation Requirements
 
-- **Kubernetes**: Version 1.21 or higher
-- **Neo4j**: Version 5.26.x (last semver LTS) or 2025.x.x+ (CalVer — the successor versioning scheme)
-- **cert-manager**: Version 1.5+ (optional, only required for TLS-enabled Neo4j deployments)
+- **Kubernetes**: Version 1.30 or higher
+- **Neo4j**: Version 5.26 LTS (the final SemVer release) or any CalVer release (2025.x, 2026.x, and onward)
+- **cert-manager**: Version 1.20+ (optional, only required for TLS-enabled Neo4j deployments)
 - **Permissions**: Cluster-admin access for CRD and RBAC installation
 
 > **OpenShift note**: Clusters enforcing SCCs with allocated UID/FSGroup ranges should disable the chart’s pod security context so SCC can inject IDs, then bind an appropriate SCC (e.g., `restricted`) to the operator service account:

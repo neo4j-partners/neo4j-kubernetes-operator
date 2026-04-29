@@ -4,6 +4,7 @@ description: Neo4j Enterprise Operator for Kubernetes - Manages Neo4j Enterprise
 type: application
 version: 0.0.1
 appVersion: "0.0.1"
+kubeVersion: ">=1.30.0-0"
 keywords:
   - neo4j
   - graph
@@ -63,7 +64,7 @@ annotations:
       email: priyolahiri@users.noreply.github.com
   artifacthub.io/links: |
     - name: Documentation
-      url: https://github.com/priyolahiri/neo4j-kubernetes-operator/tree/main/docs
+      url: https://priyolahiri.github.io/neo4j-kubernetes-operator/
     - name: Support
       url: https://github.com/priyolahiri/neo4j-kubernetes-operator/issues
   artifacthub.io/changes: |
