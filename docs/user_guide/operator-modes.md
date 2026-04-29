@@ -38,7 +38,7 @@ Choose both explicitly so your deployment matches your environment and security 
 
 **2) Install with Helm (recommended)**
 
-The examples below use the Helm chart repository (available from v1.8.0 onwards). For pre-v1.8.0 releases, substitute `neo4j/neo4j-operator` with `oci://ghcr.io/priyolahiri/charts/neo4j-operator`.
+The examples below use the Helm chart repository. See the [Installation Guide](installation.md) for the full set of installation methods (chart repo, OCI registry, kubectl-apply bundle, source clone).
 
 ```bash
 helm repo add neo4j https://priyolahiri.github.io/neo4j-kubernetes-operator/charts
@@ -251,7 +251,7 @@ Cache strategy controls how aggressively the operator caches resources via contr
 |----------|----------|-------------|
 | `standard` | Default controller-runtime cache for types used by controllers. | Large/stable clusters. |
 | `lazy` | Caches essential Neo4j CRDs and uses a longer resync in production. | RBAC-restricted or large clusters. |
-| `selective` | Caches a reduced set of Neo4j CRDs. | Resource-constrained environments. |
+| `selective` | Caches only the high-frequency Neo4j CRDs (cluster, standalone, database, backup, restore); plugin/user/role objects are read directly when needed. | Resource-constrained environments. |
 | `on-demand` | Caches essential Neo4j CRDs; other types use the direct client. | Default choice. |
 | `none` | Direct API client; skips caching entirely. | Fast dev iteration only. |
 
@@ -264,7 +264,7 @@ Set via:
 --skip-cache-wait      # readiness does not wait for cache sync
 ```
 
-Note: `--lazy-informers` is accepted but currently does not change behavior; prefer `--cache-strategy`.
+Note: `--lazy-informers` is accepted for backward compatibility with older deployment manifests but is currently a no-op (the flag's value is ignored by `configureDevelopmentCache`). Use `--cache-strategy` for all new deployments.
 
 ## Controller Selection (Dev Mode)
 
