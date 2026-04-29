@@ -200,6 +200,7 @@ var _ = Describe("Neo4jRole end-to-end", func() {
 			)
 			out, err := cmd.CombinedOutput()
 			if err != nil {
+				GinkgoWriter.Printf("cypher-shell SHOW ROLE PRIVILEGES failed: %v; output: %s\n", err, string(out))
 				return false
 			}
 			// Count > 0 — the access privilege has been re-granted.
@@ -220,6 +221,7 @@ var _ = Describe("Neo4jRole end-to-end", func() {
 			)
 			out, err := cmd.CombinedOutput()
 			if err != nil {
+				GinkgoWriter.Printf("cypher-shell SHOW ROLES failed: %v; output: %s\n", err, string(out))
 				return false
 			}
 			return strings.Contains(string(out), "\n0\n")

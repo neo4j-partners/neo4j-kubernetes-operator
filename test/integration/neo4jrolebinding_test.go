@@ -135,8 +135,11 @@ var _ = Describe("Neo4jRoleBinding end-to-end", func() {
 				"cypher-shell", "-u", "neo4j", "-p", adminPass,
 				fmt.Sprintf("CREATE USER externuser SET PASSWORD '%s' CHANGE NOT REQUIRED", extUserPass),
 			)
-			_, err := cmd.CombinedOutput()
-			return err
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				return fmt.Errorf("cypher-shell CREATE USER failed: %w; output: %s", err, string(out))
+			}
+			return nil
 		}, clusterTimeout, interval).Should(Succeed())
 
 		By("Creating a Neo4jRoleBinding granting reader to externuser")
@@ -191,6 +194,7 @@ var _ = Describe("Neo4jRoleBinding end-to-end", func() {
 			)
 			out, err := cmd.CombinedOutput()
 			if err != nil {
+				GinkgoWriter.Printf("cypher-shell SHOW USERS failed: %v; output: %s\n", err, string(out))
 				return false
 			}
 			text := string(out)

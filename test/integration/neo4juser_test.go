@@ -182,8 +182,11 @@ var _ = Describe("Neo4jUser end-to-end", func() {
 				"cypher-shell", "-u", "appuser", "-p", userPass,
 				"RETURN 1",
 			)
-			_, err := cmd.CombinedOutput()
-			return err
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				return fmt.Errorf("cypher-shell auth as appuser failed: %w; output: %s", err, string(out))
+			}
+			return nil
 		}, clusterTimeout, interval).Should(Succeed())
 
 		By("Capturing initial passwordSecretHash")
@@ -214,8 +217,11 @@ var _ = Describe("Neo4jUser end-to-end", func() {
 				"cypher-shell", "-u", "appuser", "-p", newUserPass,
 				"RETURN 1",
 			)
-			_, err := cmd.CombinedOutput()
-			return err
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				return fmt.Errorf("cypher-shell auth as appuser (rotated password) failed: %w; output: %s", err, string(out))
+			}
+			return nil
 		}, clusterTimeout, interval).Should(Succeed())
 
 		By("Deleting the Neo4jUser CR")
@@ -231,6 +237,7 @@ var _ = Describe("Neo4jUser end-to-end", func() {
 			)
 			out, err := cmd.CombinedOutput()
 			if err != nil {
+				GinkgoWriter.Printf("cypher-shell SHOW USERS failed: %v; output: %s\n", err, string(out))
 				return false
 			}
 			text := string(out)
