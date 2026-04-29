@@ -81,7 +81,7 @@ spec:
     # Cluster SSL (for server-to-server communication)
     dbms.ssl.policy.cluster.enabled: "true"
     dbms.ssl.policy.cluster.base_directory: "/ssl"
-    dbms.ssl.policy.cluster.trust_all: "false"   # Use proper certificate validation
+    dbms.ssl.policy.cluster.trust_all: "false"   # Validate peer certificates against the cluster truststore (mounted at /ssl/cluster/trusted/); set to "true" only for development
 ```
 
 ## Authentication Configuration
@@ -230,7 +230,7 @@ stringData:
 | Field | Neo4j Config Key | Description |
 |-------|-----------------|-------------|
 | `ldap.host` | `dbms.security.ldap.host` | LDAP server URL (`ldap://` or `ldaps://`) |
-| `ldap.useStartTLS` | `dbms.security.ldap.use_starttls` | Enable STARTTLS (use with `ldap://`, not `ldaps://`) |
+| `ldap.useStartTLS` | `dbms.security.ldap.use_starttls` | Upgrade a plain `ldap://` connection to TLS via STARTTLS after the initial connect. Do not use with `ldaps://`, which negotiates TLS at connect time. |
 | `ldap.authentication.userDNTemplate` | `dbms.security.ldap.authentication.user_dn_template` | DN template, `{0}` = username |
 | `ldap.authentication.searchForAttribute` | `dbms.security.ldap.authentication.search_for_attribute` | Use attribute search instead of DN template |
 | `ldap.authentication.attribute` | `dbms.security.ldap.authentication.attribute` | Attribute to search (e.g., `samaccountname`) |
@@ -785,7 +785,11 @@ spec:
       kind: ClusterIssuer
 
   config:
-    # Strong encryption requirements
+    # Strong encryption requirements (PCI DSS v4.0 requires TLS 1.2 minimum;
+    # TLS 1.3 is strongly preferred. The settings below pin both Bolt and HTTPS
+    # to TLS 1.2/1.3 and restrict ciphers to AEAD-only suites.)
+    dbms.ssl.policy.bolt.tls_versions: "TLSv1.2,TLSv1.3"
+    dbms.ssl.policy.https.tls_versions: "TLSv1.2,TLSv1.3"
     dbms.ssl.policy.bolt.ciphers: "TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256"
     dbms.ssl.policy.https.ciphers: "TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256"
 
