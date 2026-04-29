@@ -2893,7 +2893,7 @@
 <li><strong>Multi-namespace</strong>: one operator manages a fixed list of namespaces.</li>
 </ul>
 <p><strong>2) Install with Helm (recommended)</strong></p>
-<p>The examples below use the Helm chart repository (available from v1.8.0 onwards). For pre-v1.8.0 releases, substitute <code>neo4j/neo4j-operator</code> with <code>oci://ghcr.io/neo4j-partners/charts/neo4j-operator</code>.</p>
+<p>The examples below use the Helm chart repository. See the <a href="../installation/">Installation Guide</a> for the full set of installation methods (chart repo, OCI registry, kubectl-apply bundle, source clone).</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>helm<span class="w"> </span>repo<span class="w"> </span>add<span class="w"> </span>neo4j<span class="w"> </span>https://neo4j-partners.github.io/neo4j-kubernetes-operator/charts
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>helm<span class="w"> </span>repo<span class="w"> </span>update
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
@@ -3078,7 +3078,7 @@ Explicit flags and Helm values always override the mode defaults.</p>
 </tr>
 <tr>
 <td><code>selective</code></td>
-<td>Caches a reduced set of Neo4j CRDs.</td>
+<td>Caches only the high-frequency Neo4j CRDs (cluster, standalone, database, backup, restore); plugin/user/role objects are read directly when needed.</td>
 <td>Resource-constrained environments.</td>
 </tr>
 <tr>
@@ -3099,7 +3099,7 @@ Explicit flags and Helm values always override the mode defaults.</p>
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>--ultra-fast<span class="w">           </span><span class="c1"># equivalent to none and enables skip-cache-wait</span>
 </span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>--skip-cache-wait<span class="w">      </span><span class="c1"># readiness does not wait for cache sync</span>
 </span></code></pre></div>
-<p>Note: <code>--lazy-informers</code> is accepted but currently does not change behavior; prefer <code>--cache-strategy</code>.</p>
+<p>Note: <code>--lazy-informers</code> is accepted for backward compatibility with older deployment manifests but is currently a no-op (the flag's value is ignored by <code>configureDevelopmentCache</code>). Use <code>--cache-strategy</code> for all new deployments.</p>
 <h2 id="controller-selection-dev-mode">Controller Selection (Dev Mode)<a class="headerlink" href="#controller-selection-dev-mode" title="Anchor link to this section">&para;</a></h2>
 <p>In development mode, you can load only a subset of controllers:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>--controllers<span class="o">=</span>cluster,standalone,database
