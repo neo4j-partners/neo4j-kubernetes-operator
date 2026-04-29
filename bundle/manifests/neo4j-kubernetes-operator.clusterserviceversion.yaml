@@ -6,7 +6,7 @@ metadata:
     capabilities: Full Lifecycle
     categories: Database
     containerImage: ghcr.io/priyolahiri/neo4j-kubernetes-operator:latest
-    createdAt: "2026-04-29T14:19:15Z"
+    createdAt: "2026-04-29T14:24:11Z"
     description: Automates Neo4j Enterprise graph database clusters and standalone
       instances on Kubernetes.
     operators.operatorframework.io/builder: operator-sdk-v1.39.1
@@ -80,8 +80,8 @@ spec:
     instances on Kubernetes.
 
     ### Supported Deployments
-    - **Neo4jEnterpriseCluster** — High-availability clusters (2-100 servers) with
-      automatic discovery, split-brain detection, and rolling upgrades
+    - **Neo4jEnterpriseCluster** — High-availability clusters (minimum 2 servers; tens of
+      servers in practice) with automatic discovery, split-brain detection, and rolling upgrades
     - **Neo4jEnterpriseStandalone** — Single-node instances for development and testing
 
     ### Key Features

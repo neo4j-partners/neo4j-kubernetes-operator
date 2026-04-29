@@ -77,8 +77,8 @@ spec:
     instances on Kubernetes.
 
     ### Supported Deployments
-    - **Neo4jEnterpriseCluster** — High-availability clusters (2-100 servers) with
-      automatic discovery, split-brain detection, and rolling upgrades
+    - **Neo4jEnterpriseCluster** — High-availability clusters (minimum 2 servers; tens of
+      servers in practice) with automatic discovery, split-brain detection, and rolling upgrades
     - **Neo4jEnterpriseStandalone** — Single-node instances for development and testing
 
     ### Key Features
