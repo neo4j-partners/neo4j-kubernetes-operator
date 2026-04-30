@@ -680,6 +680,21 @@ func (r *Neo4jEnterpriseStandaloneReconciler) createConfigMap(standalone *neo4jv
 		configLines = append(configLines, fmt.Sprintf("%s=%s", key, value))
 	}
 
+	// Trusted-CA truststore JVM args (legacy spec.auth.trustStore + new
+	// spec.trustedCASecrets). Emitted as `server.jvm.additional=...` so the
+	// init container's truststore JKS is picked up by every JVM (incl. OIDC
+	// HTTP client, LDAPS, plugin downloads, replication that uses default
+	// JVM trust). User-supplied server.jvm.additional values via spec.Config
+	// are preserved — Neo4j accepts repeated `server.jvm.additional=...` keys
+	// and concatenates them.
+	if len(standalone.Spec.TrustedCASecrets) > 0 ||
+		(standalone.Spec.Auth != nil && standalone.Spec.Auth.TrustStore != nil) {
+		configLines = append(configLines,
+			"server.jvm.additional=-Djavax.net.ssl.trustStore=/truststore/truststore.jks",
+			"server.jvm.additional=-Djavax.net.ssl.trustStorePassword=changeit",
+		)
+	}
+
 	// Join all lines
 	neo4jConf := strings.Join(configLines, "\n")
 
@@ -928,9 +943,14 @@ func (r *Neo4jEnterpriseStandaloneReconciler) createStatefulSet(standalone *neo4
 				},
 				Spec: func() corev1.PodSpec {
 					image := fmt.Sprintf("%s:%s", standalone.Spec.Image.Repo, standalone.Spec.Image.Tag)
+					var legacyTrustStore *neo4jv1beta1.SecretKeyRef
+					if standalone.Spec.Auth != nil {
+						legacyTrustStore = standalone.Spec.Auth.TrustStore
+					}
+					trustedCAs := resources.CollectTrustedCASecrets(legacyTrustStore, standalone.Spec.TrustedCASecrets)
 					var initContainers []corev1.Container
-					if standalone.Spec.Auth != nil && standalone.Spec.Auth.TrustStore != nil {
-						initContainers = append(initContainers, resources.BuildTrustStoreInitContainer(image, standalone.Spec.Auth.TrustStore))
+					if len(trustedCAs) > 0 {
+						initContainers = append(initContainers, resources.BuildTrustStoreInitContainer(image, trustedCAs))
 					}
 					return corev1.PodSpec{
 						InitContainers: initContainers,
@@ -1288,9 +1308,16 @@ func (r *Neo4jEnterpriseStandaloneReconciler) buildVolumeMounts(standalone *neo4
 		})
 	}
 
-	// Add truststore volume mount for LDAPS/OIDC with internal CAs
-	if standalone.Spec.Auth != nil && standalone.Spec.Auth.TrustStore != nil {
+	// Add truststore volume mount when any trusted CA is configured (legacy
+	// spec.auth.trustStore or new spec.trustedCASecrets list).
+	if len(standalone.Spec.TrustedCASecrets) > 0 ||
+		(standalone.Spec.Auth != nil && standalone.Spec.Auth.TrustStore != nil) {
 		volumeMounts = append(volumeMounts, resources.TrustStoreVolumeMount)
+	}
+
+	// User-supplied extra volume mounts.
+	if len(standalone.Spec.ExtraVolumeMounts) > 0 {
+		volumeMounts = append(volumeMounts, standalone.Spec.ExtraVolumeMounts...)
 	}
 
 	return volumeMounts
@@ -1325,9 +1352,19 @@ func (r *Neo4jEnterpriseStandaloneReconciler) buildVolumes(standalone *neo4jv1be
 		})
 	}
 
-	// Add truststore volumes for LDAPS/OIDC with internal CAs
-	if standalone.Spec.Auth != nil && standalone.Spec.Auth.TrustStore != nil {
-		volumes = append(volumes, resources.BuildTrustStoreVolumes(standalone.Spec.Auth.TrustStore)...)
+	// Add truststore volumes (legacy spec.auth.trustStore + new spec.trustedCASecrets).
+	var legacyTrustStore *neo4jv1beta1.SecretKeyRef
+	if standalone.Spec.Auth != nil {
+		legacyTrustStore = standalone.Spec.Auth.TrustStore
+	}
+	trustedCAs := resources.CollectTrustedCASecrets(legacyTrustStore, standalone.Spec.TrustedCASecrets)
+	if len(trustedCAs) > 0 {
+		volumes = append(volumes, resources.BuildTrustStoreVolumes(trustedCAs)...)
+	}
+
+	// User-supplied extra volumes.
+	if len(standalone.Spec.ExtraVolumes) > 0 {
+		volumes = append(volumes, standalone.Spec.ExtraVolumes...)
 	}
 
 	// Add backup requests volume for backup sidecar

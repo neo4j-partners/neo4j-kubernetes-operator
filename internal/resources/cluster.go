@@ -1325,6 +1325,15 @@ func BuildPodSpecForEnterprise(cluster *neo4jv1beta1.Neo4jEnterpriseCluster, ser
 		}
 	}
 
+	// Compute the merged set of trusted CAs (legacy spec.auth.trustStore folded
+	// into spec.trustedCASecrets) up front so both the volumeMounts block below
+	// and the volumes/initContainers block further down see the same value.
+	var legacyTrustStore *neo4jv1beta1.SecretKeyRef
+	if cluster.Spec.Auth != nil {
+		legacyTrustStore = cluster.Spec.Auth.TrustStore
+	}
+	trustedCAs := CollectTrustedCASecrets(legacyTrustStore, cluster.Spec.TrustedCASecrets)
+
 	// Volume mounts
 	volumeMounts := []corev1.VolumeMount{
 		{
@@ -1354,9 +1363,16 @@ func BuildPodSpecForEnterprise(cluster *neo4jv1beta1.Neo4jEnterpriseCluster, ser
 		})
 	}
 
-	// Add truststore volume mount for LDAPS/OIDC with internal CAs
-	if cluster.Spec.Auth != nil && cluster.Spec.Auth.TrustStore != nil {
+	// Add truststore volume mount when any trusted CA is configured (either
+	// the legacy spec.auth.trustStore or the new spec.trustedCASecrets list).
+	if len(trustedCAs) > 0 {
 		volumeMounts = append(volumeMounts, TrustStoreVolumeMount)
+	}
+
+	// User-supplied extra volume mounts (must reference volumes in spec.extraVolumes
+	// or one of the built-in volumes). Validated for path collisions upstream.
+	if len(cluster.Spec.ExtraVolumeMounts) > 0 {
+		volumeMounts = append(volumeMounts, cluster.Spec.ExtraVolumeMounts...)
 	}
 
 	// Build container
@@ -1487,16 +1503,25 @@ func BuildPodSpecForEnterprise(cluster *neo4jv1beta1.Neo4jEnterpriseCluster, ser
 		})
 	}
 
-	// Add truststore volumes for LDAPS/OIDC with internal CAs
-	if cluster.Spec.Auth != nil && cluster.Spec.Auth.TrustStore != nil {
-		volumes = append(volumes, BuildTrustStoreVolumes(cluster.Spec.Auth.TrustStore)...)
+	// trustedCAs was computed up-front (above the volumeMounts block) — wire
+	// up Secret-backed volumes + the writable EmptyDir for the truststore.
+	if len(trustedCAs) > 0 {
+		volumes = append(volumes, BuildTrustStoreVolumes(trustedCAs)...)
+	}
+
+	// User-supplied extra volumes (escape hatch for arbitrary mounts —
+	// per-policy SSL truststores for cross-cluster replication, plugin JARs,
+	// custom configs, etc.). Wired straight through; mount paths are checked
+	// by the validator against operator-managed paths.
+	if len(cluster.Spec.ExtraVolumes) > 0 {
+		volumes = append(volumes, cluster.Spec.ExtraVolumes...)
 	}
 
 	// Build init containers
 	var initContainers []corev1.Container
-	if cluster.Spec.Auth != nil && cluster.Spec.Auth.TrustStore != nil {
+	if len(trustedCAs) > 0 {
 		image := fmt.Sprintf("%s:%s", cluster.Spec.Image.Repo, cluster.Spec.Image.Tag)
-		initContainers = append(initContainers, BuildTrustStoreInitContainer(image, cluster.Spec.Auth.TrustStore))
+		initContainers = append(initContainers, BuildTrustStoreInitContainer(image, trustedCAs))
 	}
 
 	// Build pod spec - backup is now handled by centralized StatefulSet, not sidecars
@@ -2277,8 +2302,11 @@ func buildJVMSettings(cluster *neo4jv1beta1.Neo4jEnterpriseCluster) string {
 	// Exit on OOM for better container behavior
 	jvmFlags = append(jvmFlags, "-XX:+ExitOnOutOfMemoryError")
 
-	// Add JVM truststore flags for LDAPS/OIDC with internal CAs
-	if cluster.Spec.Auth != nil && cluster.Spec.Auth.TrustStore != nil {
+	// Add JVM truststore flags whenever any trusted CA is configured (either
+	// the legacy spec.auth.trustStore or the new spec.trustedCASecrets list).
+	hasTrustedCAs := len(cluster.Spec.TrustedCASecrets) > 0 ||
+		(cluster.Spec.Auth != nil && cluster.Spec.Auth.TrustStore != nil)
+	if hasTrustedCAs {
 		jvmFlags = append(jvmFlags,
 			"-Djavax.net.ssl.trustStore=/truststore/truststore.jks",
 			"-Djavax.net.ssl.trustStorePassword=changeit",
@@ -2711,44 +2739,119 @@ func BuildAuthEnvVars(auth *neo4jv1beta1.AuthSpec) []corev1.EnvVar {
 	}
 }
 
-// BuildTrustStoreInitContainer creates an init container that converts a PEM CA cert into a JKS truststore.
-func BuildTrustStoreInitContainer(image string, trustStore *neo4jv1beta1.SecretKeyRef) corev1.Container {
-	caKey := trustStore.Key
-	if caKey == "" {
-		caKey = "ca.crt"
+// trustedCASecretVolumeName returns the volume name for a single trusted-CA Secret.
+// We namespace these so they don't collide with the truststore EmptyDir or each other.
+func trustedCASecretVolumeName(secretName string) string {
+	return "trusted-ca-" + secretName
+}
+
+// trustedCASecretMountPath returns the mount path for a single trusted-CA Secret
+// inside the init container.
+func trustedCASecretMountPath(secretName string) string {
+	return "/trusted-ca/" + secretName
+}
+
+// CollectTrustedCASecrets folds the legacy singular `spec.auth.trustStore`
+// field into the new plural `spec.trustedCASecrets` list, returning the merged
+// set the resource builder should wire up. The legacy entry is normalised to
+// a TrustedCASecret with key default "ca.crt" if not specified. Duplicate
+// names are de-duplicated, with the explicit list winning over the legacy
+// field.
+func CollectTrustedCASecrets(legacy *neo4jv1beta1.SecretKeyRef, plural []neo4jv1beta1.TrustedCASecret) []neo4jv1beta1.TrustedCASecret {
+	out := make([]neo4jv1beta1.TrustedCASecret, 0, len(plural)+1)
+	seen := map[string]struct{}{}
+	for _, ca := range plural {
+		if ca.Name == "" {
+			continue
+		}
+		if _, dup := seen[ca.Name]; dup {
+			continue
+		}
+		seen[ca.Name] = struct{}{}
+		out = append(out, ca)
 	}
+	if legacy != nil && legacy.Name != "" {
+		if _, dup := seen[legacy.Name]; !dup {
+			out = append(out, neo4jv1beta1.TrustedCASecret{Name: legacy.Name, Key: legacy.Key})
+		}
+	}
+	return out
+}
+
+// BuildTrustStoreInitContainer creates an init container that seeds a writable
+// JKS truststore from the JDK's default cacerts (preserving trust in public
+// CAs) and then imports each supplied PEM CA Secret with the Secret name as
+// keytool alias.
+//
+// The resulting truststore lives at `/truststore/truststore.jks` (password
+// `changeit`, the JVM default). JVM additional flags wired by the resource
+// builder point Neo4j at this file.
+func BuildTrustStoreInitContainer(image string, cas []neo4jv1beta1.TrustedCASecret) corev1.Container {
+	if len(cas) == 0 {
+		return corev1.Container{}
+	}
+
+	mounts := []corev1.VolumeMount{
+		{Name: "truststore", MountPath: "/truststore"},
+	}
+
+	// Seed from JDK cacerts so public CAs (Let's Encrypt, etc.) keep working.
+	// Then import each user-supplied CA with a unique alias.
+	cmd := `set -euo pipefail
+SRC="${JAVA_HOME}/lib/security/cacerts"
+DST=/truststore/truststore.jks
+cp "$SRC" "$DST"
+chmod 0644 "$DST"
+`
+	for _, ca := range cas {
+		key := ca.Key
+		if key == "" {
+			key = "ca.crt"
+		}
+		mountPath := trustedCASecretMountPath(ca.Name)
+		mounts = append(mounts, corev1.VolumeMount{
+			Name:      trustedCASecretVolumeName(ca.Name),
+			MountPath: mountPath,
+			ReadOnly:  true,
+		})
+		// Use the Secret name as the keytool alias. Names are unique by validation.
+		cmd += fmt.Sprintf("keytool -import -trustcacerts -keystore \"$DST\" -storepass changeit -noprompt -alias %q -file %q\n",
+			ca.Name, mountPath+"/"+key)
+	}
+
 	return corev1.Container{
-		Name:  "truststore-init",
-		Image: image,
-		Command: []string{
-			"/bin/bash", "-c",
-			fmt.Sprintf("keytool -import -trustcacerts -keystore /truststore/truststore.jks -storepass changeit -noprompt -alias custom-ca -file /truststore-ca/%s", caKey),
-		},
-		VolumeMounts: []corev1.VolumeMount{
-			{Name: "truststore-ca", MountPath: "/truststore-ca", ReadOnly: true},
-			{Name: "truststore", MountPath: "/truststore"},
-		},
+		Name:         "truststore-init",
+		Image:        image,
+		Command:      []string{"/bin/bash", "-c", cmd},
+		VolumeMounts: mounts,
 	}
 }
 
-// BuildTrustStoreVolumes returns the volumes needed for JVM truststore support.
-func BuildTrustStoreVolumes(trustStore *neo4jv1beta1.SecretKeyRef) []corev1.Volume {
-	return []corev1.Volume{
-		{
-			Name: "truststore-ca",
+// BuildTrustStoreVolumes returns the volumes needed for JVM truststore support:
+// one Secret-backed volume per trusted CA, plus the writable EmptyDir that
+// holds the assembled truststore.
+func BuildTrustStoreVolumes(cas []neo4jv1beta1.TrustedCASecret) []corev1.Volume {
+	if len(cas) == 0 {
+		return nil
+	}
+	vols := make([]corev1.Volume, 0, len(cas)+1)
+	for _, ca := range cas {
+		vols = append(vols, corev1.Volume{
+			Name: trustedCASecretVolumeName(ca.Name),
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{
-					SecretName: trustStore.Name,
+					SecretName: ca.Name,
 				},
 			},
-		},
-		{
-			Name: "truststore",
-			VolumeSource: corev1.VolumeSource{
-				EmptyDir: &corev1.EmptyDirVolumeSource{},
-			},
-		},
+		})
 	}
+	vols = append(vols, corev1.Volume{
+		Name: "truststore",
+		VolumeSource: corev1.VolumeSource{
+			EmptyDir: &corev1.EmptyDirVolumeSource{},
+		},
+	})
+	return vols
 }
 
 // TrustStoreVolumeMount is the volume mount for the truststore in the main container

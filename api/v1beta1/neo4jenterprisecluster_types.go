@@ -92,6 +92,59 @@ type Neo4jEnterpriseClusterSpec struct {
 	// See: https://neo4j.com/docs/aura/fleet-management/
 	// +optional
 	AuraFleetManagement *AuraFleetManagementSpec `json:"auraFleetManagement,omitempty"`
+
+	// TrustedCASecrets references Secrets containing additional CA certificates
+	// (key defaults to "ca.crt") that Neo4j-the-server should trust for outgoing
+	// TLS connections — e.g. OIDC providers behind a corporate CA, LDAPS, Aura
+	// Fleet Management, plugin download mirrors, and cross-cluster replication
+	// when it uses default JVM trust.
+	//
+	// The operator copies the JDK default cacerts into a writable JKS truststore
+	// at `/truststore/truststore.jks` via an init container, then imports each
+	// supplied CA with the Secret name as the keytool alias. Public CAs in the
+	// JDK default store remain trusted.
+	//
+	// Cert-manager users: reference the Secret produced by a Certificate CR
+	// directly — the default key "ca.crt" matches what cert-manager writes.
+	//
+	// Supersedes the singular `spec.auth.trustStore` field; if both are set
+	// the legacy value is folded into this list and a deprecation warning is
+	// emitted by the validator.
+	// +optional
+	TrustedCASecrets []TrustedCASecret `json:"trustedCASecrets,omitempty"`
+
+	// ExtraVolumes are additional pod volumes to attach to the Neo4j pod.
+	// Mount points must be wired separately via `extraVolumeMounts`.
+	// Use this for plugin JARs, custom config, per-policy SSL truststores
+	// (e.g., for cross-cluster replication policies that use truststore_path),
+	// or any other content that needs to land at a specific path inside the
+	// Neo4j container.
+	// +optional
+	ExtraVolumes []corev1.Volume `json:"extraVolumes,omitempty"`
+
+	// ExtraVolumeMounts are additional volume mounts for the Neo4j container.
+	// Each entry must reference a volume defined either in `extraVolumes` or
+	// (rarely) one of the operator-managed volumes. Mount paths that collide
+	// with operator-managed paths (`/data`, `/logs`, `/conf`, `/ssl`,
+	// `/plugins`, `/truststore`, `/truststore-ca`) are rejected by the
+	// validator.
+	// +optional
+	ExtraVolumeMounts []corev1.VolumeMount `json:"extraVolumeMounts,omitempty"`
+}
+
+// TrustedCASecret references a Secret containing a PEM-encoded CA certificate
+// to be added to Neo4j-the-server's JVM truststore.
+//
+// The Secret name is also used as the keytool alias, so names must be unique
+// across the list. Defaults to key "ca.crt" — which matches the layout used
+// by cert-manager-issued Secrets.
+type TrustedCASecret struct {
+	// +kubebuilder:validation:Required
+	Name string `json:"name"`
+
+	// Key within the Secret. Defaults to "ca.crt".
+	// +optional
+	Key string `json:"key,omitempty"`
 }
 
 // ImageSpec defines the Neo4j image configuration
