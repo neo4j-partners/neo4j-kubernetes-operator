@@ -81,7 +81,7 @@ spec:
     # Cluster SSL (for server-to-server communication)
     dbms.ssl.policy.cluster.enabled: "true"
     dbms.ssl.policy.cluster.base_directory: "/ssl"
-    dbms.ssl.policy.cluster.trust_all: "false"   # Validate peer certificates against the cluster truststore (mounted at /ssl/cluster/trusted/); set to "true" only for development
+    dbms.ssl.policy.cluster.trust_all: "false"   # Validate peer certificates against the cluster truststore at /ssl/cluster/trusted/. When `tls.mode: cert-manager` is set on the cluster spec, the operator issues the cert via cert-manager, mounts the resulting Secret under /ssl/, and writes the CA bundle into /ssl/cluster/trusted/. Set to "true" only for development.
 ```
 
 ## Authentication Configuration
@@ -541,7 +541,7 @@ spec:
           app.kubernetes.io/name: neo4j
     ports:
     - protocol: TCP
-      port: 6000  # Discovery (V2)
+      port: 6000  # Neo4j Discovery Protocol v2 (cluster member discovery)
     - protocol: TCP
       port: 7000  # RAFT
 
@@ -785,11 +785,16 @@ spec:
       kind: ClusterIssuer
 
   config:
-    # Strong encryption requirements (PCI DSS v4.0 requires TLS 1.2 minimum;
-    # TLS 1.3 is strongly preferred. The settings below pin both Bolt and HTTPS
-    # to TLS 1.2/1.3 and restrict ciphers to AEAD-only suites.)
+    # Strong encryption requirements (PCI DSS v4.0 requires TLS 1.2 minimum).
+    # TLS 1.3 is strongly preferred; TLS 1.2 is included here for compatibility
+    # with mixed client environments (older Java drivers, legacy applications).
+    # If every client in your environment supports TLS 1.3, harden further by
+    # removing TLSv1.2 — see the TLS 1.3-only example commented out below.
     dbms.ssl.policy.bolt.tls_versions: "TLSv1.2,TLSv1.3"
     dbms.ssl.policy.https.tls_versions: "TLSv1.2,TLSv1.3"
+    # TLS 1.3-only hardening (uncomment if all clients support TLS 1.3):
+    # dbms.ssl.policy.bolt.tls_versions: "TLSv1.3"
+    # dbms.ssl.policy.https.tls_versions: "TLSv1.3"
     dbms.ssl.policy.bolt.ciphers: "TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256"
     dbms.ssl.policy.https.ciphers: "TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256"
 
