@@ -152,10 +152,17 @@ var _ = Describe("Neo4jAuthRule end-to-end", func() {
 		Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
 
 		By("Waiting for initial cluster phase=Ready")
+		lastClusterPhase := ""
 		Eventually(func() string {
 			c := &neo4jv1beta1.Neo4jEnterpriseCluster{}
 			if err := k8sClient.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: namespace.Name}, c); err != nil {
+				GinkgoWriter.Printf("[abac-e2e] get cluster err: %v\n", err)
 				return ""
+			}
+			if c.Status.Phase != lastClusterPhase {
+				GinkgoWriter.Printf("[abac-e2e] cluster phase: %q -> %q (gen=%d obsGen=%d)\n",
+					lastClusterPhase, c.Status.Phase, c.Generation, c.Status.ObservedGeneration)
+				lastClusterPhase = c.Status.Phase
 			}
 			return c.Status.Phase
 		}, clusterTimeout, interval).Should(Equal("Ready"))
@@ -180,9 +187,17 @@ var _ = Describe("Neo4jAuthRule end-to-end", func() {
 		//   2. Phase to return to Ready.
 		// Using a stable-Ready check (Ready for at least N consecutive
 		// observations) avoids racing the brief transition window.
+		lastRestartPhase := ""
+		var lastRestartObsGen int64 = -1
 		Eventually(func(g Gomega) {
 			c := &neo4jv1beta1.Neo4jEnterpriseCluster{}
 			g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: namespace.Name}, c)).To(Succeed())
+			if c.Status.Phase != lastRestartPhase || c.Status.ObservedGeneration != lastRestartObsGen {
+				GinkgoWriter.Printf("[abac-e2e] rolling restart progress: phase=%q gen=%d obsGen=%d\n",
+					c.Status.Phase, c.Generation, c.Status.ObservedGeneration)
+				lastRestartPhase = c.Status.Phase
+				lastRestartObsGen = c.Status.ObservedGeneration
+			}
 			g.Expect(c.Status.Phase).To(Equal("Ready"))
 			// observedGeneration must reflect the patched spec
 			g.Expect(c.Status.ObservedGeneration).To(BeNumerically(">=", c.Generation))
@@ -202,10 +217,17 @@ var _ = Describe("Neo4jAuthRule end-to-end", func() {
 			},
 		}
 		Expect(k8sClient.Create(ctx, role)).To(Succeed())
+		lastRolePhase := ""
 		Eventually(func() string {
 			r := &neo4jv1beta1.Neo4jRole{}
 			if err := k8sClient.Get(ctx, types.NamespacedName{Name: "analytics-reader", Namespace: namespace.Name}, r); err != nil {
+				GinkgoWriter.Printf("[abac-e2e] get role err: %v\n", err)
 				return ""
+			}
+			if r.Status.Phase != lastRolePhase {
+				GinkgoWriter.Printf("[abac-e2e] role analytics-reader phase: %q -> %q (gen=%d obsGen=%d conds=%s)\n",
+					lastRolePhase, r.Status.Phase, r.Generation, r.Status.ObservedGeneration, conditionsSummary(r.Status.Conditions))
+				lastRolePhase = r.Status.Phase
 			}
 			return r.Status.Phase
 		}, clusterTimeout, interval).Should(Equal("Ready"))
@@ -224,10 +246,17 @@ var _ = Describe("Neo4jAuthRule end-to-end", func() {
 		Expect(k8sClient.Create(ctx, authRule)).To(Succeed())
 
 		By("Waiting for the auth rule to reach status.phase=Ready")
+		lastRulePhase := ""
 		Eventually(func() string {
 			r := &neo4jv1beta1.Neo4jAuthRule{}
 			if err := k8sClient.Get(ctx, types.NamespacedName{Name: "analytics-team", Namespace: namespace.Name}, r); err != nil {
+				GinkgoWriter.Printf("[abac-e2e] get authrule err: %v\n", err)
 				return ""
+			}
+			if r.Status.Phase != lastRulePhase {
+				GinkgoWriter.Printf("[abac-e2e] authrule analytics-team phase: %q -> %q (gen=%d obsGen=%d appliedRoles=%v conds=%s)\n",
+					lastRulePhase, r.Status.Phase, r.Generation, r.Status.ObservedGeneration, r.Status.AppliedRoles, conditionsSummary(r.Status.Conditions))
+				lastRulePhase = r.Status.Phase
 			}
 			return r.Status.Phase
 		}, clusterTimeout, interval).Should(Equal("Ready"))
@@ -378,9 +407,15 @@ var _ = Describe("Neo4jAuthRule end-to-end", func() {
 		Expect(k8sClient.Create(ctx, authRule)).To(Succeed())
 
 		By("Waiting for OIDCProviderConfigured=False on the rule's status")
+		lastNoOIDCPhase := ""
 		Eventually(func(g Gomega) {
 			r := &neo4jv1beta1.Neo4jAuthRule{}
 			g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: "no-oidc", Namespace: namespace.Name}, r)).To(Succeed())
+			if r.Status.Phase != lastNoOIDCPhase {
+				GinkgoWriter.Printf("[abac-e2e] authrule no-oidc phase: %q -> %q conds=%s\n",
+					lastNoOIDCPhase, r.Status.Phase, conditionsSummary(r.Status.Conditions))
+				lastNoOIDCPhase = r.Status.Phase
+			}
 			g.Expect(r.Status.Phase).To(Equal("Pending"))
 			found := false
 			for _, c := range r.Status.Conditions {
@@ -392,6 +427,19 @@ var _ = Describe("Neo4jAuthRule end-to-end", func() {
 		}, clusterTimeout, interval).Should(Succeed())
 	})
 })
+
+// conditionsSummary renders a one-line summary of status conditions: "Type=Status(Reason)".
+// Used in test progress logs so we can see *why* a phase is stuck without dumping full structs.
+func conditionsSummary(conds []metav1.Condition) string {
+	if len(conds) == 0 {
+		return "[]"
+	}
+	parts := make([]string, 0, len(conds))
+	for _, c := range conds {
+		parts = append(parts, fmt.Sprintf("%s=%s(%s)", c.Type, c.Status, c.Reason))
+	}
+	return "[" + strings.Join(parts, ",") + "]"
+}
 
 // neo4jVersionSupportsAuthRules reports whether the Neo4j image tag picked by
 // getNeo4jImageTag() satisfies the AUTH RULE feature gate (2026.03+).
