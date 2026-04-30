@@ -7,6 +7,8 @@ resources:
   - metrics_auth_role.yaml
   - metrics_auth_role_binding.yaml
   - metrics_reader_role.yaml
+  - neo4jauthrule_editor_role.yaml
+  - neo4jauthrule_viewer_role.yaml
   - neo4jbackup_editor_role.yaml
   - neo4jbackup_viewer_role.yaml
   - neo4jdatabase_editor_role.yaml

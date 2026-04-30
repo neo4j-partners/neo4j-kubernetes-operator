@@ -513,12 +513,12 @@ EOF
     log_section "Standalone Verification"
 
     log_info "Connecting to Neo4j standalone to verify it's operational..."
-    log_command "kubectl exec ${CLUSTER_NAME_SINGLE}-0 -c neo4j -- cypher-shell -a bolt+ssc://localhost:7687 -u neo4j -p ${ADMIN_PASSWORD} \"SHOW DATABASES\""
+    log_command "kubectl exec ${CLUSTER_NAME_SINGLE}-0 -c neo4j -- cypher-shell --format plain -a bolt+ssc://localhost:7687 -u neo4j -p ${ADMIN_PASSWORD} \"SHOW DATABASES\""
 
     # Wait for Neo4j to fully initialize (bolt listener starts after pod readiness)
     show_progress 15 "Waiting for Neo4j to fully initialize"
 
-    if kubectl exec "${CLUSTER_NAME_SINGLE}-0" -c neo4j -n "${DEMO_NAMESPACE}" -- cypher-shell -a "bolt+ssc://localhost:7687" -u neo4j -p "${ADMIN_PASSWORD}" "SHOW DATABASES" 2>/dev/null; then
+    if kubectl exec "${CLUSTER_NAME_SINGLE}-0" -c neo4j -n "${DEMO_NAMESPACE}" -- cypher-shell --format plain -a "bolt+ssc://localhost:7687" -u neo4j -p "${ADMIN_PASSWORD}" "SHOW DATABASES" 2>/dev/null; then
         log_success "Standalone Neo4j is fully operational!"
         log_demo "The SHOW DATABASES output confirms Neo4j is ready for use"
     else
@@ -676,12 +676,12 @@ EOF
     log_section "Cluster Formation Verification"
 
     log_info "Connecting to Neo4j cluster to verify all servers are active..."
-    log_command "kubectl exec ${CLUSTER_NAME_MULTI}-server-0 -c neo4j -- cypher-shell -a bolt+ssc://localhost:7687 -u neo4j -p ${ADMIN_PASSWORD} -d system \"SHOW SERVERS\""
+    log_command "kubectl exec ${CLUSTER_NAME_MULTI}-server-0 -c neo4j -- cypher-shell --format plain -a bolt+ssc://localhost:7687 -u neo4j -p ${ADMIN_PASSWORD} -d system \"SHOW SERVERS\""
 
     # Wait for cluster to stabilize (bolt listeners start after pod readiness)
     show_progress 30 "Waiting for cluster to stabilize"
 
-    if kubectl exec "${CLUSTER_NAME_MULTI}-server-0" -c neo4j -n "${DEMO_NAMESPACE}" -- cypher-shell -a "bolt+ssc://localhost:7687" -u neo4j -p "${ADMIN_PASSWORD}" -d system "SHOW SERVERS" 2>/dev/null; then
+    if kubectl exec "${CLUSTER_NAME_MULTI}-server-0" -c neo4j -n "${DEMO_NAMESPACE}" -- cypher-shell --format plain -a "bolt+ssc://localhost:7687" -u neo4j -p "${ADMIN_PASSWORD}" -d system "SHOW SERVERS" 2>/dev/null; then
         log_success "All cluster servers are active and communicating!"
         log_demo "The SHOW SERVERS output confirms:"
         log_demo "  • All 3 servers are 'Enabled' and 'Available'"
@@ -730,7 +730,7 @@ demonstrate_standalone_external_access() {
     log_demo "At this point, you could:"
     log_demo "  1. Open https://localhost:7473 in your web browser"
     log_demo "  2. Connect with Neo4j Desktop: bolt+ssc://localhost:7687"
-    log_demo "  3. Use cypher-shell: cypher-shell -a bolt+ssc://localhost:7687 -u neo4j -p ${ADMIN_PASSWORD}"
+    log_demo "  3. Use cypher-shell: cypher-shell --format plain -a bolt+ssc://localhost:7687 -u neo4j -p ${ADMIN_PASSWORD}"
     log_demo "  4. Connect applications using Neo4j driver with TLS configuration"
 
     show_progress 3 "Simulating external client connection"
@@ -877,17 +877,17 @@ EOF
 
     log_section "Neo4j Database Verification"
     log_info "Verifying the database exists within Neo4j standalone..."
-    log_command "kubectl exec ${CLUSTER_NAME_SINGLE}-0 -c neo4j -n ${DEMO_NAMESPACE} -- cypher-shell -a bolt+ssc://localhost:7687 -u neo4j -p ${ADMIN_PASSWORD} \"SHOW DATABASES\""
-    kubectl exec ${CLUSTER_NAME_SINGLE}-0 -c neo4j -n ${DEMO_NAMESPACE} -- cypher-shell -a "bolt+ssc://localhost:7687" -u neo4j -p ${ADMIN_PASSWORD} "SHOW DATABASES"
+    log_command "kubectl exec ${CLUSTER_NAME_SINGLE}-0 -c neo4j -n ${DEMO_NAMESPACE} -- cypher-shell --format plain -a bolt+ssc://localhost:7687 -u neo4j -p ${ADMIN_PASSWORD} \"SHOW DATABASES\""
+    kubectl exec ${CLUSTER_NAME_SINGLE}-0 -c neo4j -n ${DEMO_NAMESPACE} -- cypher-shell --format plain -a "bolt+ssc://localhost:7687" -u neo4j -p ${ADMIN_PASSWORD} "SHOW DATABASES"
 
     log_success "Databases are visible in Neo4j standalone!"
     log_demo "You should see 'system', 'neo4j', and 'products' databases listed"
 
     log_section "Sample Data Verification"
     log_info "Checking if sample product data was loaded correctly..."
-    log_command "kubectl exec ${CLUSTER_NAME_SINGLE}-0 -c neo4j -n ${DEMO_NAMESPACE} -- cypher-shell -a bolt+ssc://localhost:7687 -u neo4j -p ${ADMIN_PASSWORD} -d products \"MATCH (p:Product) RETURN p.productId, p.name, p.price, p.category\""
+    log_command "kubectl exec ${CLUSTER_NAME_SINGLE}-0 -c neo4j -n ${DEMO_NAMESPACE} -- cypher-shell --format plain -a bolt+ssc://localhost:7687 -u neo4j -p ${ADMIN_PASSWORD} -d products \"MATCH (p:Product) RETURN p.productId, p.name, p.price, p.category\""
 
-    if kubectl exec ${CLUSTER_NAME_SINGLE}-0 -c neo4j -n ${DEMO_NAMESPACE} -- cypher-shell -a "bolt+ssc://localhost:7687" -u neo4j -p ${ADMIN_PASSWORD} -d products "MATCH (p:Product) RETURN p.productId, p.name, p.price, p.category" 2>/dev/null; then
+    if kubectl exec ${CLUSTER_NAME_SINGLE}-0 -c neo4j -n ${DEMO_NAMESPACE} -- cypher-shell --format plain -a "bolt+ssc://localhost:7687" -u neo4j -p ${ADMIN_PASSWORD} -d products "MATCH (p:Product) RETURN p.productId, p.name, p.price, p.category" 2>/dev/null; then
         log_success "Sample data loaded successfully!"
         log_demo "Products are available and queryable in the new database"
     else
@@ -940,7 +940,7 @@ demonstrate_external_access() {
     log_demo "At this point, you could:"
     log_demo "  1. Open https://localhost:7473 in your web browser"
     log_demo "  2. Connect with Neo4j Desktop or other tools"
-    log_demo "  3. Use cypher-shell: cypher-shell -a bolt+ssc://localhost:7687 -u neo4j -p ${ADMIN_PASSWORD}"
+    log_demo "  3. Use cypher-shell: cypher-shell --format plain -a bolt+ssc://localhost:7687 -u neo4j -p ${ADMIN_PASSWORD}"
     log_demo "  4. Connect applications using Neo4j drivers with TLS"
 
     show_progress $PAUSE_MEDIUM "Simulating external client connection"
@@ -1115,9 +1115,9 @@ EOF
     log_section "Neo4j Database Verification"
 
     log_info "Verifying the database exists within Neo4j cluster..."
-    log_command "kubectl exec ${CLUSTER_NAME_MULTI}-server-0 -c neo4j -- cypher-shell -a bolt+ssc://localhost:7687 -u neo4j -p ${ADMIN_PASSWORD} -d system \"SHOW DATABASES\""
+    log_command "kubectl exec ${CLUSTER_NAME_MULTI}-server-0 -c neo4j -- cypher-shell --format plain -a bolt+ssc://localhost:7687 -u neo4j -p ${ADMIN_PASSWORD} -d system \"SHOW DATABASES\""
 
-    if kubectl exec "${CLUSTER_NAME_MULTI}-server-0" -c neo4j -n "${DEMO_NAMESPACE}" -- cypher-shell -a "bolt+ssc://localhost:7687" -u neo4j -p "${ADMIN_PASSWORD}" -d system "SHOW DATABASES" 2>/dev/null; then
+    if kubectl exec "${CLUSTER_NAME_MULTI}-server-0" -c neo4j -n "${DEMO_NAMESPACE}" -- cypher-shell --format plain -a "bolt+ssc://localhost:7687" -u neo4j -p "${ADMIN_PASSWORD}" -d system "SHOW DATABASES" 2>/dev/null; then
         log_success "Databases are visible in Neo4j cluster!"
         log_demo "You should see both 'system', 'neo4j' and 'orders' databases listed"
     else
@@ -1128,9 +1128,9 @@ EOF
     log_section "Sample Data Verification"
 
     log_info "Checking if initial data was loaded correctly..."
-    log_command "kubectl exec ${CLUSTER_NAME_MULTI}-server-0 -c neo4j -- cypher-shell -a bolt+ssc://localhost:7687 -u neo4j -p ${ADMIN_PASSWORD} -d orders \"MATCH (o:Order) RETURN o.orderId, o.status, o.amount\""
+    log_command "kubectl exec ${CLUSTER_NAME_MULTI}-server-0 -c neo4j -- cypher-shell --format plain -a bolt+ssc://localhost:7687 -u neo4j -p ${ADMIN_PASSWORD} -d orders \"MATCH (o:Order) RETURN o.orderId, o.status, o.amount\""
 
-    if kubectl exec "${CLUSTER_NAME_MULTI}-server-0" -c neo4j -n "${DEMO_NAMESPACE}" -- cypher-shell -a "bolt+ssc://localhost:7687" -u neo4j -p "${ADMIN_PASSWORD}" -d orders "MATCH (o:Order) RETURN o.orderId, o.status, o.amount" 2>/dev/null; then
+    if kubectl exec "${CLUSTER_NAME_MULTI}-server-0" -c neo4j -n "${DEMO_NAMESPACE}" -- cypher-shell --format plain -a "bolt+ssc://localhost:7687" -u neo4j -p "${ADMIN_PASSWORD}" -d orders "MATCH (o:Order) RETURN o.orderId, o.status, o.amount" 2>/dev/null; then
         log_success "Sample data loaded successfully!"
         log_demo "The 'orders' database now contains:"
         log_demo "  • Unique constraint on Order.orderId"
@@ -1235,7 +1235,7 @@ EOF
 
     show_progress 10 "Waiting for pods to stabilize after rolling restart"
 
-    if kubectl exec "${CLUSTER_NAME_MULTI}-server-0" -c neo4j -n "${DEMO_NAMESPACE}" -- cypher-shell -a "bolt+ssc://localhost:7687" -u neo4j -p "${ADMIN_PASSWORD}" "RETURN apoc.version() AS apocVersion" 2>/dev/null; then
+    if kubectl exec "${CLUSTER_NAME_MULTI}-server-0" -c neo4j -n "${DEMO_NAMESPACE}" -- cypher-shell --format plain -a "bolt+ssc://localhost:7687" -u neo4j -p "${ADMIN_PASSWORD}" "RETURN apoc.version() AS apocVersion" 2>/dev/null; then
         log_success "APOC is installed and functional!"
         log_demo "APOC procedures are now available across all cluster servers"
     else
@@ -1328,7 +1328,7 @@ EOF
     log_section "Database Topology Verification"
     log_info "Querying Neo4j to verify database topology distribution..."
 
-    if kubectl exec "${CLUSTER_NAME_MULTI}-server-0" -c neo4j -n "${DEMO_NAMESPACE}" -- cypher-shell -a "bolt+ssc://localhost:7687" -u neo4j -p "${ADMIN_PASSWORD}" -d system "SHOW DATABASES YIELD name, currentStatus, role WHERE name IN ['analytics', 'sessions', 'orders'] RETURN name, role, count(*) AS replicas ORDER BY name, role" 2>/dev/null; then
+    if kubectl exec "${CLUSTER_NAME_MULTI}-server-0" -c neo4j -n "${DEMO_NAMESPACE}" -- cypher-shell --format plain -a "bolt+ssc://localhost:7687" -u neo4j -p "${ADMIN_PASSWORD}" -d system "SHOW DATABASES YIELD name, currentStatus, role WHERE name IN ['analytics', 'sessions', 'orders'] RETURN name, role, count(*) AS replicas ORDER BY name, role" 2>/dev/null; then
         log_success "All databases are distributed across cluster servers!"
         log_demo "Each database has its own topology tailored to its workload"
     else
@@ -1443,9 +1443,9 @@ EOF
     log_demo "We can authenticate as demo_reader and see the role granted:"
     echo
 
-    log_command "kubectl exec ${CLUSTER_NAME_MULTI}-server-0 -- cypher-shell -u demo_reader -p ... 'SHOW CURRENT USER YIELD user, roles'"
+    log_command "kubectl exec ${CLUSTER_NAME_MULTI}-server-0 -- cypher-shell --format plain -u demo_reader -p ... 'SHOW CURRENT USER YIELD user, roles'"
     if kubectl exec "${CLUSTER_NAME_MULTI}-server-0" -c neo4j -n "${DEMO_NAMESPACE}" -- \
-        cypher-shell -a "bolt+ssc://localhost:7687" -u demo_reader -p "${user_password}" \
+        cypher-shell --format plain -a "bolt+ssc://localhost:7687" -u demo_reader -p "${user_password}" \
         "SHOW CURRENT USER YIELD user, roles" 2>/dev/null; then
         log_success "demo_reader can authenticate and is bound to demo_analytics_reader"
     else
@@ -1458,7 +1458,7 @@ EOF
     log_demo "out-of-band, the operator restores it on the next reconcile."
     log_demo ""
     log_demo "Try it:"
-    log_demo "  kubectl exec ${CLUSTER_NAME_MULTI}-server-0 -- cypher-shell -u neo4j -p ... \\"
+    log_demo "  kubectl exec ${CLUSTER_NAME_MULTI}-server-0 -- cypher-shell --format plain -u neo4j -p ... \\"
     log_demo "    'REVOKE ACCESS ON DATABASE neo4j FROM demo_analytics_reader'"
     log_demo "  # ~30s later: SHOW ROLE demo_analytics_reader PRIVILEGES — ACCESS is back"
     echo

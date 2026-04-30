@@ -43,6 +43,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
+	certmgrv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	neo4jv1beta1 "github.com/priyolahiri/neo4j-kubernetes-operator/api/v1beta1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 )
@@ -158,6 +159,11 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 
 	err = apiextensionsv1.AddToScheme(clientgoscheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+
+	// cert-manager types — required by the Neo4jAuthRule e2e setup which
+	// issues a Certificate for the in-cluster OIDC stub.
+	err = certmgrv1.AddToScheme(clientgoscheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	k8sClient, err = client.New(cfg, client.Options{Scheme: clientgoscheme.Scheme})
@@ -607,7 +613,7 @@ func getCIAppropriateResourceRequirements() *corev1.ResourceRequirements {
 		// Multiple tests may run concurrently, so keep requests very low
 		return &corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("10m"), // Minimal CPU for scheduling
+				corev1.ResourceCPU:    resource.MustParse("50m"), // CI-stable floor: 10m starves Neo4j under throttling and was a contributor to drift-test flakes
 				corev1.ResourceMemory: resource.MustParse("1Gi"), // Closer to limit reduces OOMKill risk from overcommit
 			},
 			Limits: corev1.ResourceList{

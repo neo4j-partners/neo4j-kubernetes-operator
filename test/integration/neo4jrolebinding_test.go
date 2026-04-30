@@ -134,7 +134,7 @@ var _ = Describe("Neo4jRoleBinding end-to-end", func() {
 		Eventually(func() error {
 			cmd := exec.CommandContext(ctx, "kubectl", "exec",
 				podName, "-n", namespace.Name, "--",
-				"cypher-shell", "-u", "neo4j", "-p", adminPass,
+				"cypher-shell", "--format", "plain", "-u", "neo4j", "-p", adminPass,
 				fmt.Sprintf("CREATE USER externuser SET PASSWORD '%s' CHANGE NOT REQUIRED", extUserPass),
 			)
 			out, err := cmd.CombinedOutput()
@@ -168,7 +168,7 @@ var _ = Describe("Neo4jRoleBinding end-to-end", func() {
 		Eventually(func() string {
 			cmd := exec.CommandContext(ctx, "kubectl", "exec",
 				podName, "-n", namespace.Name, "--",
-				"cypher-shell", "-u", "neo4j", "-p", adminPass,
+				"cypher-shell", "--format", "plain", "-u", "neo4j", "-p", adminPass,
 				"SHOW USERS YIELD user, roles WHERE user = 'externuser' RETURN user, roles",
 			)
 			out, _ := cmd.CombinedOutput()
@@ -191,7 +191,7 @@ var _ = Describe("Neo4jRoleBinding end-to-end", func() {
 		Eventually(func() bool {
 			cmd := exec.CommandContext(ctx, "kubectl", "exec",
 				podName, "-n", namespace.Name, "--",
-				"cypher-shell", "-u", "neo4j", "-p", adminPass,
+				"cypher-shell", "--format", "plain", "-u", "neo4j", "-p", adminPass,
 				"SHOW USERS YIELD user, roles WHERE user = 'externuser' RETURN roles",
 			)
 			out, err := cmd.CombinedOutput()
@@ -199,16 +199,21 @@ var _ = Describe("Neo4jRoleBinding end-to-end", func() {
 				GinkgoWriter.Printf("cypher-shell SHOW USERS failed: %v; output: %s\n", err, string(out))
 				return false
 			}
-			text := string(out)
-			// reader must no longer appear in this user's roles list
-			return !strings.Contains(text, "externuser") ||
-				!strings.Contains(text, "reader")
+			// SHOW USERS output with --format plain is:
+			//   roles
+			//   [<role>, <role>, ...]
+			// The query RETURNs only the roles column, so the username
+			// itself is never in the output text. After binding deletion
+			// the user should still exist (we never drop externally-
+			// provisioned users) but its roles list must not contain
+			// "reader" — only PUBLIC and any roles granted out-of-band.
+			return !strings.Contains(string(out), "reader")
 		}, clusterTimeout, interval).Should(BeTrue(), "binding deletion must revoke the reader role")
 
 		By("Cleaning up the externally-created user")
 		_, _ = exec.CommandContext(ctx, "kubectl", "exec",
 			podName, "-n", namespace.Name, "--",
-			"cypher-shell", "-u", "neo4j", "-p", adminPass,
+			"cypher-shell", "--format", "plain", "-u", "neo4j", "-p", adminPass,
 			"DROP USER externuser IF EXISTS",
 		).CombinedOutput()
 	})

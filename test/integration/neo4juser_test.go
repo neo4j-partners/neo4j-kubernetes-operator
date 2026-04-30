@@ -169,7 +169,7 @@ var _ = Describe("Neo4jUser end-to-end", func() {
 		Eventually(func() string {
 			cmd := exec.CommandContext(ctx, "kubectl", "exec",
 				podName, "-n", namespace.Name, "--",
-				"cypher-shell", "-u", "neo4j", "-p", adminPass,
+				"cypher-shell", "--format", "plain", "-u", "neo4j", "-p", adminPass,
 				"SHOW USERS YIELD user, roles WHERE user = 'appuser' RETURN user, roles",
 			)
 			out, _ := cmd.CombinedOutput()
@@ -183,7 +183,7 @@ var _ = Describe("Neo4jUser end-to-end", func() {
 		Eventually(func() error {
 			cmd := exec.CommandContext(ctx, "kubectl", "exec",
 				podName, "-n", namespace.Name, "--",
-				"cypher-shell", "-u", "appuser", "-p", userPass,
+				"cypher-shell", "--format", "plain", "-u", "appuser", "-p", userPass,
 				"RETURN 1",
 			)
 			out, err := cmd.CombinedOutput()
@@ -218,7 +218,7 @@ var _ = Describe("Neo4jUser end-to-end", func() {
 		Eventually(func() error {
 			cmd := exec.CommandContext(ctx, "kubectl", "exec",
 				podName, "-n", namespace.Name, "--",
-				"cypher-shell", "-u", "appuser", "-p", newUserPass,
+				"cypher-shell", "--format", "plain", "-u", "appuser", "-p", newUserPass,
 				"RETURN 1",
 			)
 			out, err := cmd.CombinedOutput()
@@ -249,7 +249,15 @@ var _ = Describe("Neo4jUser end-to-end", func() {
 			//   <count>
 			// Take the last non-empty line and check it equals "0", rather
 			// than depending on \n placement around the count value.
-			lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+			//
+			// Defensive: cypher-shell could in principle emit empty output
+			// during a transient connection blip; bail to false rather than
+			// risk an off-by-one on the slice access.
+			trimmed := strings.TrimSpace(string(out))
+			if trimmed == "" {
+				return false
+			}
+			lines := strings.Split(trimmed, "\n")
 			lastValue := strings.TrimSpace(lines[len(lines)-1])
 			return lastValue == "0"
 		}, clusterTimeout, interval).Should(BeTrue(), "DROP USER must remove appuser from SHOW USERS")

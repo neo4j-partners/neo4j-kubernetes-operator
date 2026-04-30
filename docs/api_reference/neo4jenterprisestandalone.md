@@ -300,6 +300,54 @@ monitoring:
   obfuscateLiterals: false
 ```
 
+#### `trustedCASecrets` ([]TrustedCASecret)
+
+CA bundles to add to Neo4j's JVM truststore for outgoing TLS — OIDC providers
+behind a corporate CA, LDAPS to internal servers, plugin download mirrors,
+Aura Fleet Management endpoints with private trust.
+
+```yaml
+trustedCASecrets:
+  - name: corp-oidc-ca         # ca.crt is the default key
+  - name: ldap-internal-ca
+    key:  ldap.pem
+```
+
+Each Secret must contain a PEM-encoded CA certificate (default key `ca.crt`,
+matching what cert-manager-issued Secrets contain). The operator runs an
+init container that copies the JDK's default `cacerts` to a writable JKS,
+imports each supplied CA with the Secret name as the keytool alias, and sets
+`-Djavax.net.ssl.trustStore=/truststore/truststore.jks` on the JVM.
+
+The legacy singular `spec.auth.trustStore` continues to work and is folded
+into the same JKS at reconcile time. See the
+[shared TrustedCASecret reference](neo4jenterprisecluster.md#trustedcasecret)
+for full details and a cert-manager example.
+
+#### `extraVolumes` / `extraVolumeMounts`
+
+Arbitrary pod volumes + mount points for the Neo4j container. Used when:
+
+- A Neo4j SSL policy references a specific `truststore_path`
+  (`dbms.ssl.policy.<name>.truststore_path`) — `trustedCASecrets` only
+  populates the JVM-default truststore, not policy-specific paths.
+- Custom plugin JARs / configuration files need to live at a specific path.
+
+Mount paths that collide with operator-managed paths (`/data`, `/logs`,
+`/conf`, `/ssl`, `/plugins`, `/truststore`, `/truststore-ca`,
+`/var/lib/neo4j` and standard subdirectories) are rejected by the validator.
+
+```yaml
+extraVolumes:
+  - name: replica-truststore
+    secret:
+      secretName: replica-cluster-ca
+extraVolumeMounts:
+  - name: replica-truststore
+    mountPath: /var/lib/neo4j/policies/replica
+    readOnly: true
+```
+
 ## Status Fields
 
 The `Neo4jEnterpriseStandalone` status provides information about the current state of the deployment.

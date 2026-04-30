@@ -253,7 +253,7 @@ test_connectivity() {
 
     # Test with cypher-shell (if available)
     if command -v cypher-shell >/dev/null 2>&1; then
-        if echo "RETURN 1;" | cypher-shell -a bolt://localhost:7687 -u neo4j -p neo4jpassword; then
+        if echo "RETURN 1;" | cypher-shell --format plain -a bolt://localhost:7687 -u neo4j -p neo4jpassword; then
             log_success "Connectivity test passed"
         else
             log_warning "Connectivity test failed, but this might be expected in test environment"

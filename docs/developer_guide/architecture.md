@@ -69,6 +69,11 @@ type Neo4jEnterpriseClusterSpec struct {
     Image    ImageSpec              `json:"image"`
     Topology TopologyConfiguration  `json:"topology"`  // servers: N
     Storage  StorageSpec           `json:"storage"`
+    // Outbound TLS trust + escape hatches (see "Security Architecture
+    // > 6. Outbound trust" further down for the full lifecycle):
+    TrustedCASecrets  []TrustedCASecret    `json:"trustedCASecrets,omitempty"`
+    ExtraVolumes      []corev1.Volume      `json:"extraVolumes,omitempty"`
+    ExtraVolumeMounts []corev1.VolumeMount `json:"extraVolumeMounts,omitempty"`
     // ... additional fields
 }
 ```
@@ -80,6 +85,11 @@ type Neo4jEnterpriseClusterSpec struct {
 - **StatefulSet**: `{standalone-name}` (no "-server" suffix)
 - **Configuration**: Modern clustering approach with single member (Neo4j 5.26+)
 - **Restrictions**: Cannot scale beyond 1 replica
+- **Shared API surface**: Mirrors the cluster spec for `TrustedCASecrets` /
+  `ExtraVolumes` / `ExtraVolumeMounts`. The wire-up differs slightly: cluster
+  pods receive `-Djavax.net.ssl.trustStore=…` via the `NEO4J_server_jvm_additional`
+  env var, while standalone pods receive the same flags as `server.jvm.additional=…`
+  lines emitted into the ConfigMap-backed neo4j.conf.
 
 ### Database Management CRDs
 
@@ -191,7 +201,10 @@ type Neo4jDatabaseSpec struct {
 - **MemoryValidator** (`memory_validator.go`): Neo4j memory settings vs container limits
 - **ResourceValidator** (`resource_validator.go`): CPU, memory, and storage validation
 - **TLSValidator** (`tls_validator.go`): TLS/SSL configuration validation
+- **TruststoreValidator** (`truststore_validator.go`): unique Secret names in `spec.trustedCASecrets` (the name doubles as the keytool alias) plus reserved-mount-path collision check for `spec.extraVolumeMounts` (`/data`, `/logs`, `/conf`, `/ssl`, `/plugins`, `/truststore`, `/truststore-ca`, `/var/lib/neo4j/...`)
 - **DatabaseValidator** (`database_validator.go`): Database creation and topology validation
+- **AuthRuleValidator** (`authrule_validator.go`): Neo4jAuthRule name pattern + DDL-keyword guard on the condition expression (rejects CREATE / DROP / ALTER / GRANT / DENY / REVOKE / SHOW / RENAME and `;` injection)
+- **RoleValidator / UserValidator / RoleBindingValidator** (`role_validator.go`, `user_validator.go`, `rolebinding_validator.go`): privilege list, identifier rules, cross-CR overlap with `Neo4jUser`
 
 #### Enhanced Validation Features:
 - **Dual CRD Validation**: Separate validation rules for cluster vs standalone
@@ -261,12 +274,15 @@ CREATE DATABASE name [IF NOT EXISTS]
 - **ConfigMapBuilder**: Unified configuration for both deployment types
 - **ServiceBuilder**: Client and discovery services
 - **BackupBuilder**: Centralized backup StatefulSet
+- **TruststoreBuilder** (`cluster.go:BuildTrustStoreInitContainer / BuildTrustStoreVolumes / CollectTrustedCASecrets`): emits the per-Secret volume mounts, the writable `/truststore` EmptyDir, and the `truststore-init` init container (seeds `/truststore/truststore.jks` from `$JAVA_HOME/lib/security/cacerts`, then `keytool -import` for each `spec.trustedCASecrets` entry using the Secret name as alias). Reused by both cluster (env var) and standalone (ConfigMap) wire-up paths via `CollectTrustedCASecrets`, which folds the legacy singular `spec.auth.trustStore` into the new plural list.
 
 #### Server-Based Resource Patterns:
 - **StatefulSet Naming**: `{cluster-name}-server` for clusters, `{standalone-name}` for standalone
 - **Pod Naming**: `{cluster-name}-server-0`, `{cluster-name}-server-1`, etc.
 - **Service Names**: `{cluster-name}-client`, `{cluster-name}-discovery`
 - **Backup Resources**: `{cluster-name}-backup-0` (centralized)
+- **Truststore mount**: `/truststore/truststore.jks` (read-only, populated by the `truststore-init` init container; password is the JVM default `changeit`)
+- **User-supplied volumes**: `spec.extraVolumes` are appended to the pod spec verbatim; `spec.extraVolumeMounts` are appended to the Neo4j container's mounts after operator-managed mounts but before any backup-sidecar mounts. Operator-managed paths (`/data`, `/logs`, `/conf`, `/ssl`, `/plugins`, `/truststore`, `/truststore-ca`, `/var/lib/neo4j/...`) are off-limits and rejected by the validator.
 
 ### Performance Optimizations
 
@@ -298,11 +314,173 @@ Each cluster gets automatic RBAC creation:
 - **RoleBinding**: Links account to role
 - **Endpoints Permission**: **CRITICAL** for cluster formation
 
-### TLS/SSL Support:
-- **Cert-Manager Integration**: Automatic certificate provisioning
-- **SSL Policy Configuration**: Separate policies for `https`, `bolt`, and `cluster` scopes
-- **Trust All for Cluster**: `dbms.ssl.policy.cluster.trust_all=true` for formation
-- **Certificate DNS Names**: Includes all server pod names
+### TLS/SSL Support
+
+The operator integrates with [cert-manager](https://cert-manager.io/) for the
+full certificate lifecycle. The flow is the same for clusters and standalones,
+with one structural difference noted at the end.
+
+#### 1. Activation
+
+TLS is opt-in via `spec.tls`:
+
+```yaml
+spec:
+  tls:
+    mode: cert-manager
+    issuerRef:
+      name: ca-cluster-issuer
+      kind: ClusterIssuer
+```
+
+Validation (`internal/validation/tls_validator.go`) runs inline during
+reconciliation — no admission webhooks are used (CLAUDE.md rule #26). When
+`mode: disabled`, the entire TLS path is skipped and the deployment uses plain
+`bolt://` and `http://`.
+
+#### 2. Certificate creation
+
+`BuildCertificateForEnterprise` (`internal/resources/cluster.go`) emits a
+`cert-manager.io/v1` `Certificate` whose `dnsNames` cover every endpoint clients
+or peers may connect to:
+
+- The headless discovery service (`{cluster}-discovery`)
+- The client service (`{cluster}-client`)
+- Each individual server pod FQDN (`{cluster}-server-0.{cluster}-discovery.{ns}.svc.cluster.local`, …)
+- LoadBalancer hostnames where applicable
+
+The `Certificate` references the user-supplied `issuerRef` and writes its
+material into a Secret named `{resource-name}-tls-secret` (`tls.crt`, `tls.key`,
+`ca.crt`). cert-manager owns rotation; the operator never touches expiry.
+
+#### 3. Mounting into Neo4j pods
+
+The StatefulSet builder mounts the Secret read-only at `/ssl/`
+(`internal/resources/cluster.go:~1349`). Neo4j is then pointed at this directory
+via `server.directories.certificates=/ssl` along with three SSL policies that
+share the same key/cert/CA bundle:
+
+- `dbms.ssl.policy.bolt.*` — client traffic (`bolt+s://`)
+- `dbms.ssl.policy.https.*` — Browser/HTTP API
+- `dbms.ssl.policy.cluster.*` — RAFT and discovery between server pods
+
+`dbms.ssl.policy.cluster.trust_all=true` is set to allow servers to trust each
+other during cluster formation without per-pod CA pinning.
+
+When TLS is enabled, `server.bolt.tls_level=REQUIRED` is also set — plain
+`bolt://` connections are rejected (regression checklist item #16).
+
+#### 4. Operator-side TLS (outgoing Bolt connections)
+
+The operator reconciles the cluster by issuing Cypher commands over Bolt. Its
+client must trust the cert-manager-issued cert. `buildTLSConfig`
+(`internal/neo4j/client.go`) handles this:
+
+1. **Auto-discovery**: load `ca.crt` from the `{resource-name}-tls-secret`
+   Secret and pin it as the trusted CA for outgoing connections. This is the
+   default path — no user configuration required.
+2. **Override**: `spec.tls.trustedCASecret` lets users point at a different
+   Secret (e.g. when bringing their own CA outside cert-manager).
+3. **Fallback**: `InsecureSkipVerify` is used only during the brief window
+   before the Secret has been populated by cert-manager (regression checklist
+   item #27).
+
+All three Bolt entry points — `NewClientForEnterprise`,
+`NewClientForEnterpriseStandalone`, and `NewClientForPod` (used by the
+split-brain detector) — go through `buildTLSConfig`, so the scheme switches
+dynamically between `bolt+s://` and `bolt://` based on `spec.tls.mode`
+(checklist item #28).
+
+#### 5. Standalone differences
+
+`Neo4jEnterpriseStandalone` follows the same flow with two structural
+differences:
+
+- A single pod, so `dnsNames` is shorter (one server FQDN + the client service).
+- Neo4j configuration is delivered via a ConfigMap rather than StatefulSet env
+  vars; the `health.sh` probe (mounted alongside `neo4j.conf` with mode `0755`)
+  also lives in this ConfigMap (checklist item #34).
+
+#### 6. Outbound trust — `spec.trustedCASecrets` & `spec.extraVolumes`
+
+The cert-manager flow above governs Neo4j-the-server's *inbound* TLS (Bolt,
+HTTPS, intra-cluster RAFT). Neo4j also makes *outbound* TLS calls — to OIDC
+providers, LDAPS servers, Aura Fleet Management, plugin download mirrors, and
+in some cluster topologies to peer clusters for replication. When those
+endpoints use a CA the JDK doesn't trust by default, the operator wires a
+custom JVM truststore.
+
+**Sources of truth in code:**
+
+| Concern | Source |
+|---|---|
+| API types | `api/v1beta1/neo4jenterprisecluster_types.go:TrustedCASecret`, plus `Neo4jEnterpriseClusterSpec.TrustedCASecrets / ExtraVolumes / ExtraVolumeMounts` (mirrored on standalone) |
+| Validation | `internal/validation/truststore_validator.go` (unique Secret names, reserved-mount-path collision check) |
+| Init container + volumes | `internal/resources/cluster.go:BuildTrustStoreInitContainer / BuildTrustStoreVolumes / CollectTrustedCASecrets` |
+| JVM-additional wire-up (cluster) | `internal/resources/cluster.go` — env var `NEO4J_server_jvm_additional` |
+| JVM-additional wire-up (standalone) | `internal/controller/neo4jenterprisestandalone_controller.go:createConfigMap` — written as `server.jvm.additional=...` lines in the ConfigMap-backed neo4j.conf |
+
+**Init container flow** (one container, runs before Neo4j, image is the same
+Neo4j image so `keytool` is guaranteed to be present):
+
+1. `cp $JAVA_HOME/lib/security/cacerts /truststore/truststore.jks` — seeds
+   the writable JKS with the JDK's default trust roots so public CAs (Let's
+   Encrypt, DigiCert, etc.) keep working. Without this seed step Neo4j would
+   *lose* trust in public infrastructure when any custom CA was added.
+2. For each `TrustedCASecret`: `keytool -import -trustcacerts -alias <secret-name>
+   -file /trusted-ca/<secret-name>/<key>` (default key `ca.crt` matches the
+   layout of cert-manager-issued Secrets).
+3. The resulting JKS is mounted read-only at `/truststore/truststore.jks`
+   into the main Neo4j container.
+
+**JVM args**: `-Djavax.net.ssl.trustStore=/truststore/truststore.jks
+-Djavax.net.ssl.trustStorePassword=changeit` — appended to whatever the user
+supplied via `spec.config["server.jvm.additional"]`. Cluster pods receive
+these via the `NEO4J_server_jvm_additional` env var; standalone pods receive
+them as `server.jvm.additional=...` lines written into the ConfigMap-backed
+neo4j.conf.
+
+**Backward compatibility**: the older singular `spec.auth.trustStore`
+(`*SecretKeyRef`) is folded into the new list at reconcile time via
+`CollectTrustedCASecrets`. Both paths produce the same volumes, init
+container, and JVM flags. Names from the explicit `trustedCASecrets` list
+win on duplication.
+
+**Reserved paths for `ExtraVolumeMounts`**: `/data`, `/logs`, `/conf`,
+`/ssl`, `/plugins`, `/truststore`, `/truststore-ca`, `/var/lib/neo4j` (and
+its `data/`, `logs/`, `conf/`, `plugins/`, `certificates/` subdirectories)
+are all rejected by the validator — silently overlaying them would either
+destroy operator-managed content or fight the truststore-init flow.
+
+**Why this is needed for ABAC**: Neo4j 2026.04 hard-requires `https://` for
+every `dbms.security.oidc.<name>.*` URI and rejects `http://` at config-parse
+time, before boot. Test environments and self-hosted OIDC providers therefore
+need a TLS-fronted stub plus a trusted CA — `trustedCASecrets` is the
+ergonomic path; `extraVolumes` is the escape hatch when a Neo4j SSL policy
+references a per-policy `truststore_path`.
+
+#### 7. Adjacent integrations
+
+- **ExternalSecrets**: when `spec.auth.adminSecret` references a Secret managed
+  by ExternalSecrets, the operator resolves it identically — TLS material
+  remains under cert-manager's control regardless.
+- **`Neo4jAuthRule` (ABAC) and OIDC trust**: the auth-rule reconciler talks to
+  Neo4j via Bolt and does not directly interact with the JVM truststore.
+  However, the cluster *itself* needs trust to fetch the OIDC well-known
+  document — that's what `trustedCASecrets` configures.
+
+#### TLS/SSL quick reference
+
+| Concern | Source |
+|---|---|
+| Validation | `internal/validation/tls_validator.go`, `internal/validation/truststore_validator.go` |
+| Certificate CR shape | `internal/resources/cluster.go:BuildCertificateForEnterprise` |
+| `/ssl/` mount + SSL policies | `internal/resources/cluster.go` (~line 1349, ~line 1672) |
+| Operator outgoing Bolt TLS | `internal/neo4j/client.go:buildTLSConfig` |
+| Neo4j-server outgoing TLS truststore | `internal/resources/cluster.go:BuildTrustStoreInitContainer` (init container) + `NEO4J_server_jvm_additional` env var |
+| `spec.trustedCASecrets` API | `api/v1beta1/neo4jenterprisecluster_types.go:TrustedCASecret` |
+| `spec.extraVolumes` / `spec.extraVolumeMounts` API | same file, on the cluster + standalone specs |
+| Regression invariants | CLAUDE.md checklist items #16, #27, #28, #34 |
 
 ## Monitoring & Observability
 

@@ -94,6 +94,11 @@ func (v *StandaloneValidator) ValidateCreate(standalone *neo4jv1beta1.Neo4jEnter
 	// Aura Fleet Management validation
 	allErrs = append(allErrs, validateAuraFleetManagement(standalone.Spec.AuraFleetManagement, field.NewPath("spec", "auraFleetManagement"))...)
 
+	// Trusted CA Secrets + extra volume mounts (operator-managed path collision check)
+	allErrs = append(allErrs, ValidateTrustedCASecrets(standalone.Spec.TrustedCASecrets, field.NewPath("spec", "trustedCASecrets"))...)
+	allErrs = append(allErrs, ValidateExtraVolumes(standalone.Spec.ExtraVolumes, field.NewPath("spec", "extraVolumes"))...)
+	allErrs = append(allErrs, ValidateExtraVolumeMounts(standalone.Spec.ExtraVolumeMounts, field.NewPath("spec", "extraVolumeMounts"))...)
+
 	return allErrs
 }
 

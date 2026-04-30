@@ -1,0 +1,97 @@
+# Cluster that trusts an internal CA (e.g. for an OIDC provider behind a
+# corporate certificate authority) plus mounts an extra volume for a Neo4j
+# SSL policy that uses a per-policy truststore_path.
+#
+# Pattern:
+#   1. cert-manager Certificate produces a Secret containing tls.crt, tls.key,
+#      ca.crt — the operator only needs the ca.crt entry.
+#   2. spec.trustedCASecrets references that Secret. The default key "ca.crt"
+#      matches the cert-manager layout, so no `key` override is needed.
+#   3. The operator runs an init container that seeds /truststore/truststore.jks
+#      from the JDK's default cacerts (preserving public CA trust) and imports
+#      each supplied CA, then sets -Djavax.net.ssl.trustStore on the JVM.
+#   4. spec.extraVolumes + spec.extraVolumeMounts mount any other content the
+#      Neo4j pod needs at a specific path — used here for a per-policy
+#      truststore that a custom dbms.ssl.policy.* references via truststore_path.
+---
+# A separate Issuer/ClusterIssuer is assumed to exist; this Certificate just
+# produces the Secret the operator references.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: oidc-trusted-ca
+  namespace: neo4j-prod
+spec:
+  secretName: oidc-trusted-ca   # → referenced by trustedCASecrets[0].name below
+  duration: 8760h               # 1 year
+  issuerRef:
+    name: corp-ca-cluster-issuer
+    kind: ClusterIssuer
+  commonName: idp.corp.example.com
+  dnsNames:
+    - idp.corp.example.com
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: replica-cluster-truststore
+  namespace: neo4j-prod
+type: Opaque
+data:
+  # base64-encoded PEM of the peer cluster's CA. Replace with your real value.
+  ca.crt: PLACEHOLDER==
+---
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: prod-cluster
+  namespace: neo4j-prod
+spec:
+  image:
+    repo: neo4j
+    tag: 2026.04.0-enterprise
+  topology:
+    servers: 3
+  storage:
+    className: gp3-encrypted
+    size: 100Gi
+  auth:
+    adminSecret: neo4j-admin-secret
+    authenticationProviders: [native, oidc-corp]
+    authorizationProviders: [native, oidc-corp]
+    oidcProviders:
+      - name: corp
+        displayName: "Corporate SSO"
+        wellKnownDiscoveryURI: https://idp.corp.example.com/.well-known/openid-configuration
+        audience: neo4j
+        clientID: neo4j-cluster
+
+  # ─── 1. Declarative multi-CA trust ────────────────────────────────────────
+  # Neo4j's JVM truststore is augmented with each Secret's ca.crt entry. The
+  # JDK default cacerts are preserved, so public CAs (Let's Encrypt, etc.)
+  # still work alongside these internal CAs.
+  trustedCASecrets:
+    - name: oidc-trusted-ca           # cert-manager Certificate Secret
+    - name: replica-cluster-truststore
+
+  # ─── 2. Power-user escape hatch: arbitrary mounts ─────────────────────────
+  # Mount the same Secret a second time at a specific path so a custom
+  # dbms.ssl.policy.replica can reference it via truststore_path. (You
+  # only need this when the trusted CA must be at a particular file path,
+  # which is unusual outside cross-cluster replication policies.)
+  extraVolumes:
+    - name: replica-policy-truststore
+      secret:
+        secretName: replica-cluster-truststore
+  extraVolumeMounts:
+    - name: replica-policy-truststore
+      mountPath: /var/lib/neo4j/policies/replica
+      readOnly: true
+
+  config:
+    # Custom SSL policy used by cross-cluster replication, with its own
+    # truststore_path. Note: the value MUST be inside one of the spec.extraVolumes
+    # mounts, never inside an operator-managed path.
+    dbms.ssl.policy.replica.base_directory: /var/lib/neo4j/policies/replica
+    dbms.ssl.policy.replica.truststore_path: /var/lib/neo4j/policies/replica/ca.crt
+    dbms.ssl.policy.replica.truststore_password: ""

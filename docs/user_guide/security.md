@@ -250,6 +250,21 @@ stringData:
 
 The operator supports one or more OIDC providers via the `spec.auth.oidc` map. Each key becomes the provider name in Neo4j's config (`dbms.security.oidc.<name>.*`).
 
+> **⚠️ Neo4j 2026.x requires HTTPS for every OIDC URI.** `wellKnownDiscoveryURI`, `authEndpoint`, `tokenEndpoint`, `jwksURI`, `userInfoURI`, and `issuer` are all validated at config-parse time; an `http://` value causes Neo4j to refuse to start with `Error evaluating value for setting … does not have required scheme 'https'`. There is no insecure-mode override. Self-hosted IDPs that default to HTTP in dev need a TLS-terminating proxy (and the proxy's CA in [`spec.trustedCASecrets`](#jvm-truststore-for-internal-cas)) before the cluster can boot.
+
+#### OIDC + ABAC setup checklist
+
+Wiring up an OIDC provider — especially when used as an ABAC authorization provider — requires *four* coordinated config touchpoints. Missing any one surfaces as a different error from Neo4j:
+
+| Step | Where | What to set | Symptom if missed |
+|---|---|---|---|
+| 1. Provider block | `spec.config["dbms.security.oidc.<name>.*"]` (or use the typed `spec.auth.oidc.<name>` map below) | `display_name`, `well_known_discovery_uri` (https!), `audience`, `client_id` | `Failed to validate '[<name>]' …: entries must be a valid OIDC authorization provider` |
+| 2. Authentication providers | `spec.auth.authenticationProviders` | include `oidc-<name>` | OIDC sign-in is rejected |
+| 3. Authorization providers | `spec.auth.authorizationProviders` | include `oidc-<name>` | `entries must exist in dbms.security.authorization_providers. Invalid values: oidc-<name>` |
+| 4. ABAC provider list (only for `Neo4jAuthRule`) | `spec.config["dbms.security.abac.authorization_providers"]` | the prefixed name `oidc-<name>` (NOT bare `<name>`) | `entries must be a valid OIDC authorization provider` *or* `entries must exist in dbms.security.authorization_providers` |
+
+A complete worked example for ABAC is in [`examples/users-roles/07-authrule-abac.yaml`](../../examples/users-roles/07-authrule-abac.yaml); the integration test fixtures show the same pattern with a self-signed CA: [`test/integration/neo4jauthrule_test.go`](../../test/integration/neo4jauthrule_test.go).
+
 #### Single Provider (Okta)
 
 ```yaml
@@ -348,32 +363,114 @@ If your IdP does not support OIDC Discovery, specify endpoints manually:
 
 ### JVM TrustStore for Internal CAs
 
-When connecting to LDAPS servers or OIDC providers that use certificates signed by an internal CA (not publicly trusted), configure a custom JVM truststore:
+When Neo4j needs to make outgoing TLS connections to systems whose certificates
+are signed by an internal CA — LDAPS servers, OIDC providers behind a corporate
+CA, Aura Fleet Management endpoints, plugin download mirrors, cross-cluster
+replication peers — you need to add those CAs to Neo4j's JVM truststore.
+
+The operator supports this via two fields, in increasing order of flexibility:
+
+#### `spec.trustedCASecrets` — declarative multi-CA list (recommended)
+
+Reference one or more Secrets that contain a PEM-encoded CA. The default key
+is `ca.crt`, which matches the layout cert-manager produces for every
+Certificate it issues.
+
+```yaml
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jEnterpriseCluster
+spec:
+  # ... image, topology, etc.
+  trustedCASecrets:
+    - name: oidc-corporate-ca       # Secret with ca.crt (default key)
+    - name: ldap-internal-ca
+      key:  ldap.pem                # override the default key
+    - name: replica-cluster-ca      # CA of another Neo4j cluster we replicate to
+```
+
+For each entry, the operator:
+
+1. Mounts the Secret into the pod at `/trusted-ca/<secret-name>/`.
+2. Runs the `truststore-init` init container, which:
+   - Copies the JDK's default `cacerts` into a writable JKS at
+     `/truststore/truststore.jks`. This preserves trust in public CAs (Let's
+     Encrypt, DigiCert, etc.) — you don't lose access to the public web by
+     adding internal CAs.
+   - Runs `keytool -import` for each supplied CA, using the **Secret name as
+     the keytool alias**. Names must therefore be unique across the list.
+3. Sets `NEO4J_server_jvm_additional` (cluster) /
+   `server.jvm.additional=...` (standalone) with
+   `-Djavax.net.ssl.trustStore=/truststore/truststore.jks
+    -Djavax.net.ssl.trustStorePassword=changeit`.
+
+Cert-manager pattern (the most common case):
+
+```yaml
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: oidc-tls
+  namespace: neo4j-prod
+spec:
+  secretName: oidc-tls            # ← name to reference below
+  duration: 8760h
+  issuerRef:
+    name: corp-internal-ca
+    kind: ClusterIssuer
+  commonName: idp.corp.example.com
+  dnsNames: [idp.corp.example.com]
+---
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: prod-cluster
+  namespace: neo4j-prod
+spec:
+  # ...
+  trustedCASecrets:
+    - name: oidc-tls              # default key "ca.crt" matches cert-manager
+```
+
+#### `spec.auth.trustStore` — single-CA legacy form (deprecated)
+
+The pre-existing singular field still works for backward compatibility. The
+operator folds it into the same truststore alongside `trustedCASecrets` at
+reconcile time. New configurations should use `trustedCASecrets`.
 
 ```yaml
 spec:
   auth:
-    authenticationProviders: [ldap, native]
-    ldap:
-      host: "ldaps://ldap.internal.corp:636"
-      # ... other LDAP config
     trustStore:
-      name: corp-ca-cert             # Secret containing the CA certificate
-      key: ca.crt                   # Key in the Secret (default: ca.crt)
+      name: corp-ca-cert            # equivalent to trustedCASecrets:[{name: corp-ca-cert}]
+      key:  ca.crt
 ```
 
-Create the Secret with your CA certificate in PEM format:
+#### `spec.extraVolumes` / `spec.extraVolumeMounts` — escape hatch
 
-```bash
-kubectl create secret generic corp-ca-cert --from-file=ca.crt=/path/to/corporate-ca.pem
+For the rare case where Neo4j needs a CA at a *specific filesystem path* —
+typically because a Neo4j SSL policy references a per-policy `truststore_path`
+(e.g. cross-cluster replication policies) — use `extraVolumes` and
+`extraVolumeMounts` to wire arbitrary mounts into the Neo4j pod:
+
+```yaml
+spec:
+  extraVolumes:
+    - name: replica-truststore
+      secret:
+        secretName: replica-cluster-ca
+  extraVolumeMounts:
+    - name: replica-truststore
+      mountPath: /var/lib/neo4j/policies/replica
+      readOnly: true
+  config:
+    dbms.ssl.policy.replica.truststore_path: /var/lib/neo4j/policies/replica/ca.crt
+    dbms.ssl.policy.replica.truststore_password: ""
 ```
 
-The operator automatically:
-1. Mounts the CA certificate into the pod
-2. Runs an init container that converts the PEM to a JKS truststore using `keytool`
-3. Adds JVM flags (`-Djavax.net.ssl.trustStore=...`) so Neo4j trusts the internal CA
-
-This works for both LDAPS connections and OIDC providers behind internal CAs.
+Mount paths that collide with operator-managed paths (`/data`, `/logs`, `/conf`,
+`/ssl`, `/plugins`, `/truststore`, `/truststore-ca`, `/var/lib/neo4j/{data,logs,
+conf,plugins,certificates}`) are rejected by the validator at admission time.
 
 ### Group-to-Role Mapping
 
@@ -405,6 +502,52 @@ groupToRoleMapping:
 ```
 
 Multiple Neo4j roles can be assigned to a single group (comma-separated).
+
+### Attribute-Based Access Control (ABAC)
+
+Neo4j 2026.03 introduced **attribute-based access control (ABAC)** as a richer alternative to the static group-to-role mapping above. Where group-to-role mapping is a one-line key-value YAML lookup, ABAC lets you write Cypher conditions over arbitrary OIDC token claims, including time of day, list membership, and combinations of attributes.
+
+The operator exposes ABAC through the **[`Neo4jAuthRule`](../api_reference/neo4jauthrule.md)** CRD. Each rule has a Cypher condition that's evaluated against the user's OIDC token at authentication time; when the condition returns `true`, the listed roles are granted for that session.
+
+```yaml
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jAuthRule
+metadata:
+  name: emea-business-hours
+spec:
+  clusterRef: production
+  name: emea_business_hours
+  condition: |
+    abac.oidc.user_attribute('region') = 'EMEA'
+      AND time.transaction('UTC').hour >= 6
+      AND time.transaction('UTC').hour < 18
+  grantedRoles: [reader]
+```
+
+**Prerequisites:**
+
+- Neo4j 2026.03 or later. Older clusters cause the rule to sit in `AuthRuleVersionTooOld=True`.
+- The cluster's `spec.config` sets `dbms.security.abac.authorization_providers` to a configured OIDC provider name. Without it the rule sits in `OIDCProviderConfigured=False`.
+
+**Group-to-role mapping vs ABAC:**
+
+|  | Group-to-role mapping | ABAC (`Neo4jAuthRule`) |
+|---|---|---|
+| **Where it's defined** | `spec.auth.authorizationProviders[].groupToRoleMapping` on the cluster | Stand-alone `Neo4jAuthRule` resource |
+| **Input** | Group claim values | Any OIDC token claim, multiple at once |
+| **Logic** | Static key-value lookup | Arbitrary Cypher expression (operators, list functions, time, …) |
+| **Min Neo4j version** | All supported versions | 2026.03+ |
+| **Drift reconciliation** | Cluster-spec-driven (operator re-applies on every reconcile) | Per-rule, via `SHOW AUTH RULES` |
+
+Pick group-to-role mapping when your IdP already emits a clean group claim and the role assignment is a flat lookup. Pick ABAC when you need conditional logic, time-bounded grants, or claims beyond a single group attribute. The two coexist — you can have static group mappings for the bulk of your users and a handful of `Neo4jAuthRule` resources for special cases.
+
+See the [`Neo4jAuthRule` API reference](../api_reference/neo4jauthrule.md) for the full condition syntax, supported Cypher functions, and lifecycle. Worked examples live at [`examples/users-roles/07-authrule-abac.yaml`](https://github.com/priyolahiri/neo4j-kubernetes-operator/blob/main/examples/users-roles/07-authrule-abac.yaml).
+
+**Errors in your Cypher condition** are surfaced through the rule's `status` and Kubernetes events:
+
+- A syntactically-invalid condition (or one that calls a function outside the [allowed set](https://neo4j.com/docs/operations-manual/current/authentication-authorization/attribute-based-access-control/)) is rejected by Neo4j when the operator runs `CREATE OR REPLACE AUTH RULE`. The rule's `status.phase` becomes `Failed`, `status.message` includes the full Neo4j error, and a Warning event with reason `AuthRuleFailed` is recorded. Inspect with `kubectl describe neo4jauthrule <name>`.
+- DDL keywords (`CREATE`, `DROP`, `ALTER`, `GRANT`, `DENY`, `REVOKE`, `SHOW`, `RENAME`) and statement separators (`;`) in the condition are caught by the controller-side validator before any Cypher reaches Neo4j. Surfaces as `status.phase: "Failed"`, condition `Ready=False, reason=ValidationFailed`.
+- **Runtime evaluation errors** — for example a condition that calls `.hour` on a claim that turns out to be `NULL` for some user — happen at authentication time, *not* at rule creation. The rule's `status.phase` stays `Ready` because the rule itself is correctly installed; the symptom is that affected users fail to authenticate. Diagnose via Neo4j's `security.log`.
 
 ### Auth Cache TTL
 
@@ -785,14 +928,17 @@ spec:
       kind: ClusterIssuer
 
   config:
-    # Strong encryption requirements (PCI DSS v4.0 requires TLS 1.2 minimum).
-    # TLS 1.3 is strongly preferred; TLS 1.2 is included here for compatibility
-    # with mixed client environments (older Java drivers, legacy applications).
-    # If every client in your environment supports TLS 1.3, harden further by
-    # removing TLSv1.2 — see the TLS 1.3-only example commented out below.
+    # Strong encryption requirements. For PCI-aligned deployments use TLS 1.3
+    # as the default baseline; TLS 1.2 is shown below only for temporary
+    # legacy-client compatibility during migration. PCI DSS v4.0 mandates a
+    # TLS 1.2 minimum, but the standard expects active migration toward
+    # TLS 1.3, and several other regimes (FIPS-140-3 modules, NIST SP
+    # 800-52r2 in advisory mode) already discourage TLS 1.2 for new builds.
+    # If every client in your environment supports TLS 1.3, harden by
+    # removing TLSv1.2 — see the TLS 1.3-only target-state example below.
     dbms.ssl.policy.bolt.tls_versions: "TLSv1.2,TLSv1.3"
     dbms.ssl.policy.https.tls_versions: "TLSv1.2,TLSv1.3"
-    # TLS 1.3-only hardening (uncomment if all clients support TLS 1.3):
+    # TLS 1.3-only hardening (target state — recommended once clients migrate):
     # dbms.ssl.policy.bolt.tls_versions: "TLSv1.3"
     # dbms.ssl.policy.https.tls_versions: "TLSv1.3"
     dbms.ssl.policy.bolt.ciphers: "TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256"

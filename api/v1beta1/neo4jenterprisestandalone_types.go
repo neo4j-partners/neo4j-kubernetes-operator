@@ -79,6 +79,28 @@ type Neo4jEnterpriseStandaloneSpec struct {
 
 	// UpgradeStrategy specifies how to handle rolling upgrades
 	UpgradeStrategy *UpgradeStrategySpec `json:"upgradeStrategy,omitempty"`
+
+	// TrustedCASecrets references Secrets containing additional CA certificates
+	// (key defaults to "ca.crt") that Neo4j-the-server should trust for outgoing
+	// TLS connections — e.g. OIDC providers behind a corporate CA, LDAPS, Aura
+	// Fleet Management, and plugin download mirrors.
+	//
+	// See `Neo4jEnterpriseClusterSpec.TrustedCASecrets` for the full
+	// description; standalone behaviour is identical.
+	// +optional
+	TrustedCASecrets []TrustedCASecret `json:"trustedCASecrets,omitempty"`
+
+	// ExtraVolumes are additional pod volumes to attach to the Neo4j pod.
+	// Mount points must be wired separately via `extraVolumeMounts`.
+	// +optional
+	ExtraVolumes []corev1.Volume `json:"extraVolumes,omitempty"`
+
+	// ExtraVolumeMounts are additional volume mounts for the Neo4j container.
+	// Each entry must reference a volume defined in `extraVolumes`. Mount paths
+	// that collide with operator-managed paths (`/data`, `/logs`, `/conf`,
+	// `/ssl`, `/plugins`, `/truststore`, `/truststore-ca`) are rejected.
+	// +optional
+	ExtraVolumeMounts []corev1.VolumeMount `json:"extraVolumeMounts,omitempty"`
 }
 
 // Neo4jEnterpriseStandaloneStatus defines the observed state of Neo4jEnterpriseStandalone

@@ -118,6 +118,16 @@ const (
 	EventReasonUserNotFound   = "UserNotFound"
 )
 
+// Attribute-based access control (Neo4jAuthRule) events.
+const (
+	EventReasonAuthRuleCreated           = "AuthRuleCreated"
+	EventReasonAuthRuleUpdated           = "AuthRuleUpdated"
+	EventReasonAuthRuleDeleted           = "AuthRuleDeleted"
+	EventReasonAuthRuleFailed            = "AuthRuleFailed"
+	EventReasonAuthRuleVersionTooOld     = "AuthRuleVersionTooOld"
+	EventReasonOIDCProviderNotConfigured = "OIDCProviderNotConfigured"
+)
+
 // Conditions used by the user/role/binding reconcilers.
 const (
 	ConditionTypeRolesSynced         = "RolesSynced"

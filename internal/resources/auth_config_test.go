@@ -287,32 +287,88 @@ func TestBuildAuthEnvVars_LDAPNoSystemAccount(t *testing.T) {
 	assert.Empty(t, envVars)
 }
 
-func TestBuildTrustStoreInitContainer(t *testing.T) {
-	trustStore := &neo4jv1beta1.SecretKeyRef{
-		Name: "my-ca-secret",
-		Key:  "custom-ca.pem",
+func TestBuildTrustStoreInitContainer_SingleCA(t *testing.T) {
+	cas := []neo4jv1beta1.TrustedCASecret{
+		{Name: "my-ca-secret", Key: "custom-ca.pem"},
 	}
 
-	container := resources.BuildTrustStoreInitContainer("neo4j:5.26-enterprise", trustStore)
+	container := resources.BuildTrustStoreInitContainer("neo4j:5.26-enterprise", cas)
 
 	assert.Equal(t, "truststore-init", container.Name)
 	assert.Equal(t, "neo4j:5.26-enterprise", container.Image)
-	assert.Contains(t, container.Command[2], "/truststore-ca/custom-ca.pem")
+	// Init container seeds from JDK cacerts then imports each CA
+	assert.Contains(t, container.Command[2], "JAVA_HOME")
+	assert.Contains(t, container.Command[2], "cacerts")
+	assert.Contains(t, container.Command[2], "/trusted-ca/my-ca-secret/custom-ca.pem")
 	assert.Contains(t, container.Command[2], "keytool")
+	// 1 truststore EmptyDir + 1 per-CA Secret mount
 	require.Len(t, container.VolumeMounts, 2)
 }
 
-func TestBuildTrustStoreVolumes(t *testing.T) {
-	trustStore := &neo4jv1beta1.SecretKeyRef{
-		Name: "my-ca-secret",
+func TestBuildTrustStoreInitContainer_MultipleCAs(t *testing.T) {
+	cas := []neo4jv1beta1.TrustedCASecret{
+		{Name: "oidc-ca"}, // default key ca.crt
+		{Name: "ldap-ca", Key: "ldap.pem"},
 	}
 
-	volumes := resources.BuildTrustStoreVolumes(trustStore)
+	container := resources.BuildTrustStoreInitContainer("neo4j:5.26-enterprise", cas)
+
+	// Each CA gets its own mount + alias
+	assert.Contains(t, container.Command[2], "/trusted-ca/oidc-ca/ca.crt")
+	assert.Contains(t, container.Command[2], "/trusted-ca/ldap-ca/ldap.pem")
+	assert.Contains(t, container.Command[2], `-alias "oidc-ca"`)
+	assert.Contains(t, container.Command[2], `-alias "ldap-ca"`)
+	require.Len(t, container.VolumeMounts, 3) // truststore + 2 CAs
+}
+
+func TestBuildTrustStoreInitContainer_Empty(t *testing.T) {
+	container := resources.BuildTrustStoreInitContainer("neo4j:5.26-enterprise", nil)
+	assert.Empty(t, container.Name, "no CAs → no init container")
+}
+
+func TestBuildTrustStoreVolumes(t *testing.T) {
+	cas := []neo4jv1beta1.TrustedCASecret{
+		{Name: "my-ca-secret"},
+	}
+
+	volumes := resources.BuildTrustStoreVolumes(cas)
 	require.Len(t, volumes, 2)
 
-	assert.Equal(t, "truststore-ca", volumes[0].Name)
+	assert.Equal(t, "trusted-ca-my-ca-secret", volumes[0].Name)
 	assert.Equal(t, "my-ca-secret", volumes[0].Secret.SecretName)
 
 	assert.Equal(t, "truststore", volumes[1].Name)
 	assert.NotNil(t, volumes[1].EmptyDir)
+}
+
+func TestCollectTrustedCASecrets_LegacyOnly(t *testing.T) {
+	legacy := &neo4jv1beta1.SecretKeyRef{Name: "legacy-ca", Key: "ca.crt"}
+	cas := resources.CollectTrustedCASecrets(legacy, nil)
+	require.Len(t, cas, 1)
+	assert.Equal(t, "legacy-ca", cas[0].Name)
+}
+
+func TestCollectTrustedCASecrets_PluralOnly(t *testing.T) {
+	plural := []neo4jv1beta1.TrustedCASecret{{Name: "a"}, {Name: "b"}}
+	cas := resources.CollectTrustedCASecrets(nil, plural)
+	require.Len(t, cas, 2)
+}
+
+func TestCollectTrustedCASecrets_PluralWinsOverLegacyOnDuplicate(t *testing.T) {
+	legacy := &neo4jv1beta1.SecretKeyRef{Name: "shared", Key: "legacy-key"}
+	plural := []neo4jv1beta1.TrustedCASecret{{Name: "shared", Key: "plural-key"}}
+	cas := resources.CollectTrustedCASecrets(legacy, plural)
+	require.Len(t, cas, 1, "duplicate Secret name de-duplicated")
+	assert.Equal(t, "plural-key", cas[0].Key, "explicit list wins over legacy field")
+}
+
+func TestCollectTrustedCASecrets_Both(t *testing.T) {
+	legacy := &neo4jv1beta1.SecretKeyRef{Name: "legacy-only"}
+	plural := []neo4jv1beta1.TrustedCASecret{{Name: "plural-1"}, {Name: "plural-2"}}
+	cas := resources.CollectTrustedCASecrets(legacy, plural)
+	require.Len(t, cas, 3)
+	// Plural list comes first (matches code order)
+	assert.Equal(t, "plural-1", cas[0].Name)
+	assert.Equal(t, "plural-2", cas[1].Name)
+	assert.Equal(t, "legacy-only", cas[2].Name)
 }

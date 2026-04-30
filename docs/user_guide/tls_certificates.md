@@ -350,6 +350,32 @@ openssl s_client -showcerts -connect localhost:7687 < /dev/null
 openssl verify -CAfile ca.crt server.crt
 ```
 
+## Outbound TLS — trusting external CAs from inside Neo4j
+
+The sections above cover **inbound** TLS — clients connecting *to* Neo4j over
+Bolt/HTTPS. Neo4j also makes **outbound** TLS calls (OIDC providers, LDAPS,
+plugin downloads, cross-cluster replication peers, Aura Fleet Management).
+For those, Neo4j needs to *trust* the remote endpoint's CA.
+
+The operator exposes two fields for this:
+
+| Field | When to use |
+|---|---|
+| `spec.trustedCASecrets` (list of `{name, key}`) | Most cases. Adds each Secret's CA to Neo4j's JVM-default truststore. Works for OIDC, LDAPS, generic outbound HTTPS. Cert-manager-issued Secrets reference directly — default key `ca.crt` matches. |
+| `spec.extraVolumes` + `spec.extraVolumeMounts` | When a Neo4j SSL policy (e.g. cross-cluster replication) needs a CA at a specific filesystem path via `dbms.ssl.policy.<name>.truststore_path`. |
+
+The legacy singular `spec.auth.trustStore` continues to work and is folded
+into the same JKS at reconcile time.
+
+```yaml
+# cert-manager Certificate produces a Secret with ca.crt; reference it directly
+trustedCASecrets:
+  - name: corp-oidc-ca
+```
+
+Full prose in
+[Security Best Practices Guide § JVM TrustStore for Internal CAs](security.md#jvm-truststore-for-internal-cas).
+
 ## Related Documentation
 
 - [External Access Guide](./external_access.md)

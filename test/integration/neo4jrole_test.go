@@ -159,7 +159,7 @@ var _ = Describe("Neo4jRole end-to-end", func() {
 		Eventually(func() string {
 			cmd := exec.CommandContext(ctx, "kubectl", "exec",
 				podName, "-n", namespace.Name, "--",
-				"cypher-shell", "-u", "neo4j", "-p", adminPass,
+				"cypher-shell", "--format", "plain", "-u", "neo4j", "-p", adminPass,
 				"SHOW ROLE analytics_reader PRIVILEGES YIELD action, access RETURN action, access",
 			)
 			out, _ := cmd.CombinedOutput()
@@ -186,7 +186,7 @@ var _ = Describe("Neo4jRole end-to-end", func() {
 		By("Manually revoking ACCESS to simulate drift")
 		cmd := exec.CommandContext(ctx, "kubectl", "exec",
 			podName, "-n", namespace.Name, "--",
-			"cypher-shell", "-u", "neo4j", "-p", adminPass,
+			"cypher-shell", "--format", "plain", "-u", "neo4j", "-p", adminPass,
 			"REVOKE ACCESS ON DATABASE neo4j FROM analytics_reader",
 		)
 		out, err := cmd.CombinedOutput()
@@ -196,7 +196,7 @@ var _ = Describe("Neo4jRole end-to-end", func() {
 		Eventually(func() bool {
 			cmd := exec.CommandContext(ctx, "kubectl", "exec",
 				podName, "-n", namespace.Name, "--",
-				"cypher-shell", "-u", "neo4j", "-p", adminPass,
+				"cypher-shell", "--format", "plain", "-u", "neo4j", "-p", adminPass,
 				"SHOW ROLE analytics_reader PRIVILEGES YIELD action WHERE action = 'access' RETURN count(*) AS n",
 			)
 			out, err := cmd.CombinedOutput()
@@ -217,7 +217,7 @@ var _ = Describe("Neo4jRole end-to-end", func() {
 		Eventually(func() bool {
 			cmd := exec.CommandContext(ctx, "kubectl", "exec",
 				podName, "-n", namespace.Name, "--",
-				"cypher-shell", "-u", "neo4j", "-p", adminPass,
+				"cypher-shell", "--format", "plain", "-u", "neo4j", "-p", adminPass,
 				"SHOW ROLES YIELD role WHERE role = 'analytics_reader' RETURN count(*) AS n",
 			)
 			out, err := cmd.CombinedOutput()

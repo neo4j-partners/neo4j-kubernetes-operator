@@ -25,6 +25,9 @@ annotations:
   artifacthub.io/prerelease: "false"
   artifacthub.io/license: Apache-2.0
   artifacthub.io/crds: |-
+    - kind: Neo4jAuthRule
+      version: v1beta1
+      description: Attribute-based access control (ABAC) — claims-to-roles mapping evaluated at OIDC authentication time (Neo4j 2026.03+)
     - kind: Neo4jBackup
       version: v1beta1
       description: Manages Neo4j backup operations

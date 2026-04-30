@@ -164,6 +164,36 @@ spec:
     - "GRANT ACCESS ON DATABASE legacy TO legacy_role"
 ```
 
+## Property-Based Access Control (PBAC)
+
+`Neo4jRole.spec.privileges` accepts the full Cypher privilege grammar, including the `FOR pattern WHERE …` clause used by [property-based access control](https://neo4j.com/docs/operations-manual/current/authentication-authorization/property-based-access-control/). PBAC refines the existing `MATCH`, `READ`, and `TRAVERSE` privileges with per-row conditions on node or relationship properties.
+
+```yaml
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jRole
+metadata:
+  name: redacted-reader
+spec:
+  clusterRef: production
+  name: redacted_reader
+  privileges:
+    # Only allow traversal of Email nodes whose classification has been set
+    - "GRANT TRAVERSE ON GRAPH * FOR (n:Email) WHERE n.classification IS NOT NULL TO redacted_reader"
+    # Hide anything not classified UNCLASSIFIED or PUBLIC
+    - "DENY READ {*} ON GRAPH * FOR (n) WHERE NOT n.classification IN ['UNCLASSIFIED', 'PUBLIC'] TO redacted_reader"
+    # Filter relationships by property
+    - "GRANT READ {since} ON GRAPH * FOR ()-[o:OWNS]-() WHERE o.classification = 'UNCLASSIFIED' TO redacted_reader"
+```
+
+PBAC privileges flow through the same diff-and-reconcile loop as standard privileges. The canonicaliser upper-cases `WHERE`, `IS`, `NULL`, `IN`, `NOT`, `AND`, `OR`, and `FOR` so spec strings round-trip equal against `SHOW ROLE PRIVILEGES AS COMMANDS` regardless of input casing.
+
+**Limitations** (per upstream Neo4j docs):
+
+- **Single property per rule.** Each `WHERE` clause references one property only; chained comparisons across properties require multiple privileges.
+- **Sharded property databases are unsupported.** The role validator rejects PBAC privileges naming a `Neo4jShardedDatabase` and warns when `ON GRAPH *` is used in combination with `FOR pattern WHERE …` (silent ineffectiveness on any sharded DBs in scope).
+- **Performance overhead.** PBAC adds per-row evaluation, especially significant on `TRAVERSE` rules and on disk-backed storage. Profile before deploying widely; consider `block` storage format and label-based privileges where the row count is high.
+- **Property immutability.** If a user can write the property used in a PBAC rule, they can bypass the rule. Pair PBAC with a corresponding `DENY SET PROPERTY` privilege.
+
 ## Troubleshooting
 
 **`validation failed: ... privilege statement must end with TO <role>`**: every privilege must name the role being defined. Update the statement to end with `TO <spec.name>`.

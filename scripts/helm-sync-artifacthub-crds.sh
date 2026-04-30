@@ -39,6 +39,7 @@ describe() {
         Neo4jUser)                 echo "Declarative Neo4j user management (passwords from Secrets, role bindings, status, external auth)" ;;
         Neo4jRole)                 echo "Declarative Neo4j role management with privilege-drift reconciliation" ;;
         Neo4jRoleBinding)          echo "Role grants for users provisioned externally (SSO/LDAP/OIDC first-login)" ;;
+        Neo4jAuthRule)             echo "Attribute-based access control (ABAC) — claims-to-roles mapping evaluated at OIDC authentication time (Neo4j 2026.03+)" ;;
         *)                         return 1 ;;
     esac
 }

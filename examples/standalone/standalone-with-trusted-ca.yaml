@@ -1,0 +1,53 @@
+# Standalone Neo4j that trusts an internal CA so it can talk to a corporate
+# OIDC provider whose TLS cert isn't in the JDK's default truststore.
+#
+# Same pattern as examples/clusters/cluster-with-trusted-cas.yaml but for
+# the simpler standalone case.
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: oidc-trusted-ca
+  namespace: neo4j-dev
+spec:
+  secretName: oidc-trusted-ca           # → trustedCASecrets[0].name below
+  duration: 8760h
+  issuerRef:
+    name: corp-ca-cluster-issuer
+    kind: ClusterIssuer
+  commonName: idp.corp.example.com
+  dnsNames:
+    - idp.corp.example.com
+---
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jEnterpriseStandalone
+metadata:
+  name: dev-standalone
+  namespace: neo4j-dev
+spec:
+  image:
+    repo: neo4j
+    tag: 2026.04.0-enterprise
+  storage:
+    className: standard
+    size: 10Gi
+  auth:
+    adminSecret: neo4j-admin-secret
+    authenticationProviders: [native, oidc-corp]
+    authorizationProviders: [native, oidc-corp]
+    oidcProviders:
+      - name: corp
+        displayName: "Corporate SSO"
+        wellKnownDiscoveryURI: https://idp.corp.example.com/.well-known/openid-configuration
+        audience: neo4j
+        clientID: neo4j-standalone
+
+  # Neo4j's JVM truststore is augmented with this Secret's ca.crt entry so
+  # the well_known_discovery_uri fetch above succeeds. The JDK default cacerts
+  # are preserved — public CAs still work.
+  trustedCASecrets:
+    - name: oidc-trusted-ca
+
+  env:
+    - name: NEO4J_ACCEPT_LICENSE_AGREEMENT
+      value: "yes"

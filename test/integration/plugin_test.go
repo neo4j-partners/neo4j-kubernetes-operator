@@ -306,7 +306,7 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 			Eventually(func() int {
 				apocCheckCmd := exec.CommandContext(ctx, "kubectl", "exec",
 					podName, "-n", namespace.Name, "--",
-					"cypher-shell", "-u", "neo4j", "-p", "admin123",
+					"cypher-shell", "--format", "plain", "-u", "neo4j", "-p", "admin123",
 					"SHOW PROCEDURES YIELD name WHERE name STARTS WITH 'apoc' RETURN count(*) AS n",
 				)
 				apocOut, apocErr := apocCheckCmd.CombinedOutput()
