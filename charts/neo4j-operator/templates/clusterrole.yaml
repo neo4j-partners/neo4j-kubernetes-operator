@@ -153,6 +153,7 @@ rules:
 - apiGroups:
     - neo4j.neo4j.com
   resources:
+    - neo4jauthrules
     - neo4jbackups
     - neo4jdatabases
     - neo4jenterpriseclusters
@@ -174,6 +175,7 @@ rules:
 - apiGroups:
     - neo4j.neo4j.com
   resources:
+    - neo4jauthrules/finalizers
     - neo4jbackups/finalizers
     - neo4jdatabases/finalizers
     - neo4jenterpriseclusters/finalizers
@@ -189,6 +191,7 @@ rules:
 - apiGroups:
     - neo4j.neo4j.com
   resources:
+    - neo4jauthrules/status
     - neo4jbackups/status
     - neo4jdatabases/status
     - neo4jenterpriseclusters/status

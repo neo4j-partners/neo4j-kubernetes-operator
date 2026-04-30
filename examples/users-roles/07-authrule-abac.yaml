@@ -1,0 +1,82 @@
+# Attribute-based access control (ABAC) — map OIDC token claims to roles
+# at authentication time. Requires Neo4j 2026.03 or later, and the cluster
+# must configure dbms.security.abac.authorization_providers in spec.config.
+#
+# This example assumes:
+#   - A Neo4jEnterpriseCluster named "production" running Neo4j 2026.03+,
+#     with spec.config["dbms.security.abac.authorization_providers"] set to
+#     a configured OIDC provider (typically referenced from spec.auth.oidc).
+#   - A Neo4jRole named "analytics_reader" exists in the same namespace
+#     (or directly in Neo4j) — see example 02-custom-role-with-user.yaml.
+#
+# When a user authenticates via the configured OIDC provider, Neo4j
+# evaluates the condition expression below against their token claims.
+# If it returns true, the user is granted the listed roles for that
+# session. The grants are dropped automatically at session end.
+
+---
+# Match users whose OIDC `department` claim is "analytics"
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jAuthRule
+metadata:
+  name: analytics-team
+  namespace: default
+spec:
+  clusterRef: production
+  name: analytics_team
+  condition: abac.oidc.user_attribute('department') = 'analytics'
+  grantedRoles:
+    - analytics_reader
+  enabled: true
+
+---
+# Combined conditions: department AND location
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jAuthRule
+metadata:
+  name: engineering-uk
+  namespace: default
+spec:
+  clusterRef: production
+  name: engineering_uk
+  condition: |
+    abac.oidc.user_attribute('department') = 'engineering'
+    AND abac.oidc.user_attribute('location') = 'UK'
+  grantedRoles:
+    - editor
+
+---
+# List membership: any of a set of allowed countries in the user's claims
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jAuthRule
+metadata:
+  name: country-access
+  namespace: default
+spec:
+  clusterRef: production
+  name: country_access
+  condition: |
+    any(country IN abac.oidc.user_attribute('citizenshipCountries')
+        WHERE country IN ['US', 'GB', 'DE'])
+  grantedRoles:
+    - reader
+
+---
+# Time-bounded grant: only during EMEA business hours (06:00–18:00 UTC)
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jAuthRule
+metadata:
+  name: emea-business-hours
+  namespace: default
+spec:
+  clusterRef: production
+  name: emea_business_hours
+  condition: |
+    abac.oidc.user_attribute('region') = 'EMEA'
+      AND time.transaction('UTC').hour >= 6
+      AND time.transaction('UTC').hour < 18
+  grantedRoles:
+    - reader
+  # Drop the rule from Neo4j when this CR is deleted (default).
+  # Use "Retain" to keep the rule in Neo4j.
+  deletionPolicy: Drop

@@ -161,3 +161,63 @@ func TestIsBuiltInRole(t *testing.T) {
 		}
 	}
 }
+
+// PBAC: privileges referencing a Neo4jShardedDatabase must be rejected because
+// property-based access control is unsupported on sharded property databases.
+// `ON GRAPH *` should warn rather than reject.
+func TestRoleValidator_PBACOnSharded(t *testing.T) {
+	cluster := &neo4jv1beta1.Neo4jEnterpriseCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "production", Namespace: "ns"},
+	}
+	shard := &neo4jv1beta1.Neo4jShardedDatabase{
+		ObjectMeta: metav1.ObjectMeta{Name: "billing", Namespace: "ns"},
+		Spec: neo4jv1beta1.Neo4jShardedDatabaseSpec{
+			ClusterRef: "production",
+			Name:       "billing",
+		},
+	}
+	regularDB := &neo4jv1beta1.Neo4jDatabase{
+		ObjectMeta: metav1.ObjectMeta{Name: "analytics", Namespace: "ns"},
+		Spec:       neo4jv1beta1.Neo4jDatabaseSpec{ClusterRef: "production", Name: "analytics"},
+	}
+	v := NewRoleValidator(newRoleValidatorClient(t, cluster, shard, regularDB))
+
+	role := &neo4jv1beta1.Neo4jRole{
+		ObjectMeta: metav1.ObjectMeta{Name: "r", Namespace: "ns"},
+		Spec: neo4jv1beta1.Neo4jRoleSpec{
+			ClusterRef: "production",
+			Name:       "r",
+			Privileges: []string{
+				// PBAC against a sharded DB → must error
+				"GRANT MATCH {*} ON GRAPH billing FOR (n:Invoice) WHERE n.tier = 'free' TO r",
+				// PBAC against a non-sharded DB → ok
+				"GRANT MATCH {*} ON GRAPH analytics FOR (n:Event) WHERE n.tenant = 'public' TO r",
+				// PBAC against ON GRAPH * → warn, not error
+				"GRANT MATCH {*} ON GRAPH * FOR (n) WHERE n.classification IS NULL TO r",
+				// Non-PBAC privilege → no PBAC checks
+				"GRANT ACCESS ON DATABASE billing TO r",
+			},
+		},
+	}
+	res := v.Validate(context.Background(), role)
+
+	gotShardErr := false
+	for _, e := range res.Errors {
+		if strings.Contains(e.Error(), "billing") && strings.Contains(e.Error(), "sharded") {
+			gotShardErr = true
+		}
+	}
+	if !gotShardErr {
+		t.Errorf("expected an error rejecting PBAC on the sharded DB %q, got: %v", "billing", res.Errors)
+	}
+
+	gotStarWarn := false
+	for _, w := range res.Warnings {
+		if strings.Contains(w, "GRAPH *") {
+			gotStarWarn = true
+		}
+	}
+	if !gotStarWarn {
+		t.Errorf("expected a warning about PBAC on `ON GRAPH *`, got: %v", res.Warnings)
+	}
+}

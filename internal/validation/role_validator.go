@@ -134,6 +134,13 @@ func (v *RoleValidator) Validate(ctx context.Context, role *neo4jv1beta1.Neo4jRo
 	// clusterRef must resolve to a cluster or standalone in the same namespace.
 	v.validateClusterRef(ctx, role, result)
 
+	// PBAC sharded-database guard. Property-based access control (FOR pattern
+	// WHERE …) is unsupported on sharded property databases per
+	// https://neo4j.com/docs/operations-manual/current/authentication-authorization/property-based-access-control/.
+	// Reject privileges naming a Neo4jShardedDatabase by name; warn for `ON GRAPH *`
+	// which would silently no-op against any sharded DBs in scope.
+	v.validatePBACSharded(ctx, role, result)
+
 	return result
 }
 
@@ -167,6 +174,83 @@ func (v *RoleValidator) validateClusterRef(ctx context.Context, role *neo4jv1bet
 	}
 	result.Errors = append(result.Errors, field.NotFound(clusterRefPath,
 		fmt.Sprintf("no Neo4jEnterpriseCluster or Neo4jEnterpriseStandalone named %q in namespace %q", role.Spec.ClusterRef, role.Namespace)))
+}
+
+// validatePBACSharded rejects privileges that combine a `FOR pattern WHERE …`
+// clause (PBAC) with a database-name token (after `ON GRAPH`) that resolves to
+// a Neo4jShardedDatabase in the same namespace. Such a privilege would be
+// silently ineffective at runtime.
+//
+// `ON GRAPH *` (any-graph) cannot be statically resolved to a single sharded
+// DB, so we emit a warning rather than an error: the user may legitimately
+// want this privilege to apply to non-sharded databases on the same cluster.
+func (v *RoleValidator) validatePBACSharded(ctx context.Context, role *neo4jv1beta1.Neo4jRole, result *RoleValidationResult) {
+	if v.client == nil {
+		return
+	}
+	for i, stmt := range role.Spec.Privileges {
+		canon := neo4j.CanonicalisePrivilegeStatement(stmt)
+		if canon == "" {
+			continue
+		}
+		// PBAC always uses a `FOR ` token between the body and `TO <role>`.
+		// (FOR is upper-cased by the canonicaliser.)
+		if !strings.Contains(canon, " FOR ") {
+			continue
+		}
+		dbName := pbacDatabaseName(canon)
+		if dbName == "" {
+			continue
+		}
+		path := field.NewPath("spec", "privileges").Index(i)
+		if dbName == "*" {
+			result.Warnings = append(result.Warnings, fmt.Sprintf(
+				"spec.privileges[%d] uses property-based access control on `ON GRAPH *`; PBAC is silently ineffective against any Neo4jShardedDatabase in scope (https://neo4j.com/docs/operations-manual/current/authentication-authorization/property-based-access-control/).",
+				i,
+			))
+			continue
+		}
+		// Look up a Neo4jShardedDatabase named dbName in the role's namespace.
+		// If found AND it points at the same clusterRef, reject the privilege.
+		shard := &neo4jv1beta1.Neo4jShardedDatabase{}
+		err := v.client.Get(ctx, types.NamespacedName{Name: dbName, Namespace: role.Namespace}, shard)
+		if err != nil {
+			if errors.IsNotFound(err) {
+				continue
+			}
+			result.Warnings = append(result.Warnings,
+				fmt.Sprintf("could not check whether %q is a Neo4jShardedDatabase: %v", dbName, err))
+			continue
+		}
+		if shard.Spec.ClusterRef != role.Spec.ClusterRef {
+			// The sharded DB exists in this namespace but belongs to a
+			// different cluster — not our concern.
+			continue
+		}
+		result.Errors = append(result.Errors, field.Invalid(path, stmt,
+			fmt.Sprintf("property-based access control is unsupported on sharded property databases; %q is a Neo4jShardedDatabase. See https://neo4j.com/docs/operations-manual/current/authentication-authorization/property-based-access-control/.", dbName),
+		))
+	}
+}
+
+// pbacDatabaseName extracts the graph name from `ON GRAPH <name> ...` in a
+// canonicalised privilege. Returns "" if `ON GRAPH` is absent or the token
+// after it is not a bare identifier (e.g. backtick-escaped names with embedded
+// spaces are not supported here — they would be rare in practice and the
+// PBAC sharded-DB check is best-effort).
+func pbacDatabaseName(canon string) string {
+	const marker = "ON GRAPH "
+	idx := strings.Index(canon, marker)
+	if idx < 0 {
+		return ""
+	}
+	rest := canon[idx+len(marker):]
+	// First whitespace-delimited token after `ON GRAPH `.
+	end := strings.IndexAny(rest, " \t")
+	if end < 0 {
+		return strings.Trim(rest, "`")
+	}
+	return strings.Trim(rest[:end], "`")
 }
 
 func validateRoleName(name string, path *field.Path) field.ErrorList {

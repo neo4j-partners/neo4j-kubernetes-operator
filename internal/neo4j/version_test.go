@@ -303,6 +303,31 @@ func TestSupportsParallelDownload(t *testing.T) {
 	}
 }
 
+func TestSupportsAuthRules(t *testing.T) {
+	cases := []struct {
+		version string
+		want    bool
+	}{
+		// Pre-2026.03 — no AUTH RULE support
+		{"5.26.0-enterprise", false},
+		{"5.26.10-enterprise", false},
+		{"2025.01.0-enterprise", false},
+		{"2025.12.0-enterprise", false},
+		{"2026.01.0-enterprise", false},
+		{"2026.02.5-enterprise", false},
+		// 2026.03+ — AUTH RULE supported
+		{"2026.03.0-enterprise", true},
+		{"2026.04.1-enterprise", true},
+		{"2027.01.0-enterprise", true},
+	}
+	for _, tc := range cases {
+		v, _ := ParseVersion(tc.version)
+		if v.SupportsAuthRules() != tc.want {
+			t.Errorf("SupportsAuthRules(%s) = %v, want %v", tc.version, !tc.want, tc.want)
+		}
+	}
+}
+
 func TestGetRestoreCommand(t *testing.T) {
 	v, _ := ParseVersion("5.26.0-enterprise")
 

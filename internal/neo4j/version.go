@@ -261,3 +261,20 @@ func (v *Version) SupportsSourceDatabaseFilter() bool {
 	}
 	return false
 }
+
+// SupportsAuthRules reports whether this Neo4j version exposes the AUTH RULE
+// DDL used by attribute-based access control (ABAC). ABAC was introduced in
+// Neo4j 2026.03. 5.26 LTS and earlier CalVer (2025.x, 2026.01, 2026.02) do
+// not have AUTH RULE support; the Neo4jAuthRule controller refuses to
+// reconcile against clusters whose version returns false here.
+//
+// See https://neo4j.com/docs/operations-manual/current/authentication-authorization/attribute-based-access-control/.
+func (v *Version) SupportsAuthRules() bool {
+	if !v.IsCalver {
+		return false
+	}
+	if v.Major > 2026 {
+		return true
+	}
+	return v.Major == 2026 && v.Minor >= 3
+}

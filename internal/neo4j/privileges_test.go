@@ -162,3 +162,118 @@ func TestPrivilegeStatementVerb(t *testing.T) {
 		}
 	}
 }
+
+// Property-based access control (PBAC) statements add a `FOR pattern WHERE …`
+// clause to GRANT/DENY MATCH/READ/TRAVERSE. The canonicaliser does not parse
+// Cypher, so these tests pin down behaviour against representative shapes
+// drawn from
+// https://neo4j.com/docs/operations-manual/current/authentication-authorization/property-based-access-control/
+func TestCanonicalisePrivilegeStatement_PBAC(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{
+			name: "node label with simple equality WHERE",
+			in:   "grant read {address} on graph * for (n:Email|Website) where n.domain = 'exampledomain.com' to regularUsers",
+			want: "GRANT READ {address} ON GRAPH * FOR (n:Email|Website) WHERE n.domain = 'exampledomain.com' TO regularUsers",
+		},
+		{
+			name: "shorthand object notation",
+			in:   "GRANT READ {address} ON GRAPH * FOR (:Email|Website {domain: 'exampledomain.com'}) TO regularUsers",
+			want: "GRANT READ {address} ON GRAPH * FOR (:Email|Website {domain: 'exampledomain.com'}) TO regularUsers",
+		},
+		{
+			name: "relationship pattern with WHERE",
+			in:   "grant read {since} on graph * for ()-[o:OWNS]-() where o.classification = 'UNCLASSIFIED' to regularUsers",
+			want: "GRANT READ {since} ON GRAPH * FOR ()-[o:OWNS]-() WHERE o.classification = 'UNCLASSIFIED' TO regularUsers",
+		},
+		{
+			name: "IS NULL preserved",
+			in:   "grant traverse on graph * for (n:Email) where n.classification is null to regularUsers",
+			want: "GRANT TRAVERSE ON GRAPH * FOR (n:Email) WHERE n.classification IS NULL TO regularUsers",
+		},
+		{
+			name: "DENY with NOT IN list",
+			in:   "DENY READ {*} ON GRAPH * FOR (n) WHERE NOT n.classification IN ['UNCLASSIFIED', 'PUBLIC'] TO regularUsers",
+			want: "DENY READ {*} ON GRAPH * FOR (n) WHERE NOT n.classification IN ['UNCLASSIFIED', 'PUBLIC'] TO regularUsers",
+		},
+		{
+			name: "temporal date() function preserved",
+			in:   "GRANT READ {*} ON GRAPH * FOR (n) WHERE n.createdAt > date() TO regularUsers",
+			want: "GRANT READ {*} ON GRAPH * FOR (n) WHERE n.createdAt > date() TO regularUsers",
+		},
+		{
+			name: "extra whitespace inside WHERE is collapsed",
+			in:   "GRANT MATCH {*} ON GRAPH neo4j FOR (n:Email)   WHERE   n.domain  =   'example.com'  TO  reader",
+			want: "GRANT MATCH {*} ON GRAPH neo4j FOR (n:Email) WHERE n.domain = 'example.com' TO reader",
+		},
+		{
+			name: "single-quoted literal containing keywords is preserved",
+			in:   "GRANT READ {*} ON GRAPH * FOR (n) WHERE n.label = 'TO FROM GRANT' TO reader",
+			want: "GRANT READ {*} ON GRAPH * FOR (n) WHERE n.label = 'TO FROM GRANT' TO reader",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := CanonicalisePrivilegeStatement(tc.in); got != tc.want {
+				t.Errorf("CanonicalisePrivilegeStatement(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestDerivePrivilegeRevoke_PBAC(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{
+			name: "WHERE clause survives revoke derivation",
+			in:   "GRANT MATCH {*} ON GRAPH neo4j FOR (n:Email) WHERE n.domain = 'example.com' TO reader",
+			want: "REVOKE GRANT MATCH {*} ON GRAPH neo4j FOR (n:Email) WHERE n.domain = 'example.com' FROM reader",
+		},
+		{
+			name: "DENY + IS NULL",
+			in:   "DENY TRAVERSE ON GRAPH * FOR (n:Email) WHERE n.classification IS NULL TO regularUsers",
+			want: "REVOKE DENY TRAVERSE ON GRAPH * FOR (n:Email) WHERE n.classification IS NULL FROM regularUsers",
+		},
+		{
+			name: "relationship pattern + role with backticks",
+			in:   "GRANT READ {since} ON GRAPH * FOR ()-[o:OWNS]-() WHERE o.classification = 'UNCLASSIFIED' TO `regular users`",
+			want: "REVOKE GRANT READ {since} ON GRAPH * FOR ()-[o:OWNS]-() WHERE o.classification = 'UNCLASSIFIED' FROM `regular users`",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := DerivePrivilegeRevoke(tc.in)
+			if err != nil {
+				t.Fatalf("DerivePrivilegeRevoke(%q) returned error: %v", tc.in, err)
+			}
+			if got != tc.want {
+				t.Errorf("DerivePrivilegeRevoke(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestPrivilegeStatementMatchesRole_PBAC(t *testing.T) {
+	cases := []struct {
+		stmt string
+		role string
+		want bool
+	}{
+		{"GRANT READ {*} ON GRAPH * FOR (n) WHERE n.tier = 'free' TO regular_users", "regular_users", true},
+		{"GRANT READ {*} ON GRAPH * FOR (n) WHERE n.tier = 'free' TO regular_users", "admin_users", false},
+		{"DENY MATCH {*} ON GRAPH * FOR (n:Secret) TO analytics_reader", "analytics_reader", true},
+	}
+	for _, tc := range cases {
+		if got := PrivilegeStatementMatchesRole(tc.stmt, tc.role); got != tc.want {
+			t.Errorf("PrivilegeStatementMatchesRole(%q, %q) = %v, want %v", tc.stmt, tc.role, got, tc.want)
+		}
+	}
+}

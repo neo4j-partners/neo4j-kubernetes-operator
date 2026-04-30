@@ -1,6 +1,7 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
+  - neo4j_v1beta1_neo4jauthrule.yaml
   - neo4j_v1beta1_neo4jbackup.yaml
   - neo4j_v1beta1_neo4jdatabase.yaml
   - neo4j_v1beta1_neo4jenterprisecluster.yaml

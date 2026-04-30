@@ -1,0 +1,31 @@
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jAuthRule
+metadata:
+  name: emea-business-hours
+spec:
+  # References a Neo4jEnterpriseCluster running Neo4j 2026.03 or later, with
+  # dbms.security.abac.authorization_providers configured in spec.config.
+  clusterRef: sample-cluster
+
+  # Auth rule name as it appears in `SHOW AUTH RULES`.
+  name: emea_business_hours
+
+  # Cypher expression evaluated against the user's OIDC token at authentication
+  # time. Returning true grants the listed grantedRoles for the session.
+  condition: |
+    abac.oidc.user_attribute('region') = 'EMEA'
+      AND time.transaction('UTC').hour >= 6
+      AND time.transaction('UTC').hour < 18
+
+  enabled: true
+
+  grantedRoles:
+    - reader
+
+  # When true (default), revoke any role grants attached out-of-band that are
+  # not in spec.grantedRoles. Set to false to layer manual grants on top.
+  enforceRoles: true
+
+  # Drop the underlying AUTH RULE on CR delete (default). Use Retain to keep
+  # the rule and only release the finalizer.
+  deletionPolicy: Drop

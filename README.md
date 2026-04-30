@@ -582,6 +582,7 @@ Complete CRD documentation for all custom resources:
 - [Neo4jUser](docs/api_reference/neo4juser.md) - Declarative user management (passwords, roles, status, external auth)
 - [Neo4jRole](docs/api_reference/neo4jrole.md) - Declarative role management with privilege-drift reconciliation
 - [Neo4jRoleBinding](docs/api_reference/neo4jrolebinding.md) - Role grants for externally-provisioned users (SSO/LDAP/OIDC)
+- [Neo4jAuthRule](docs/api_reference/neo4jauthrule.md) - Attribute-based access control (ABAC); maps OIDC token claims to roles at authentication time (Neo4j 2026.03+)
 
 See the [User & Role Management Guide](docs/user_guide/user_role_management.md) for an end-to-end walkthrough.
 

@@ -129,6 +129,17 @@ var privilegeKeywords = map[string]struct{}{
 	"ANY":           {},
 	"AWAIT":         {},
 	"WAIT":          {},
+	// Property-based access control (PBAC) WHERE-clause keywords. These appear
+	// in `GRANT/DENY MATCH/READ/TRAVERSE … FOR pattern WHERE … TO role` and
+	// must be upper-cased so spec strings round-trip equal against the output
+	// of `SHOW ROLE PRIVILEGES AS COMMANDS`.
+	"WHERE": {},
+	"IS":    {},
+	"NULL":  {},
+	"NOT":   {},
+	"IN":    {},
+	"AND":   {},
+	"OR":    {},
 }
 
 var (

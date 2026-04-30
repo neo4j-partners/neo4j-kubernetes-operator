@@ -403,6 +403,16 @@ func setupProductionControllers(mgr ctrl.Manager) error {
 				Validator:    validation.NewRoleBindingValidator(mgr.GetClient()),
 			},
 		},
+		{
+			name: "Neo4jAuthRule",
+			controller: &controller.Neo4jAuthRuleReconciler{
+				Client:       mgr.GetClient(),
+				Scheme:       mgr.GetScheme(),
+				Recorder:     mgr.GetEventRecorderFor("neo4j-authrule-controller"),
+				RequeueAfter: controller.GetTestRequeueAfter(),
+				Validator:    validation.NewAuthRuleValidator(mgr.GetClient()),
+			},
+		},
 	}
 
 	for _, ctrl := range controllers {
@@ -509,6 +519,15 @@ func setupDevelopmentControllers(mgr ctrl.Manager, controllers []string) error {
 				RequeueAfter: controller.GetTestRequeueAfter(),
 				Validator:    validation.NewRoleBindingValidator(mgr.GetClient()),
 			}, "Neo4jRoleBinding"
+		},
+		"authrule": func() (interface{ SetupWithManager(ctrl.Manager) error }, string) {
+			return &controller.Neo4jAuthRuleReconciler{
+				Client:       mgr.GetClient(),
+				Scheme:       mgr.GetScheme(),
+				Recorder:     mgr.GetEventRecorderFor("neo4j-authrule-controller"),
+				RequeueAfter: controller.GetTestRequeueAfter(),
+				Validator:    validation.NewAuthRuleValidator(mgr.GetClient()),
+			}, "Neo4jAuthRule"
 		},
 	}
 
@@ -803,6 +822,7 @@ func configureOnDemandCache(base cache.Options) cache.Options {
 		&neo4jv1beta1.Neo4jUser{}:                 {},
 		&neo4jv1beta1.Neo4jRole{}:                 {},
 		&neo4jv1beta1.Neo4jRoleBinding{}:          {},
+		&neo4jv1beta1.Neo4jAuthRule{}:             {},
 	}
 
 	return base

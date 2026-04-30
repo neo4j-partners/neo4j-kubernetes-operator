@@ -247,6 +247,55 @@ Privileges created with `GRANT IMMUTABLE` cannot be revoked while authentication
 
 This is informational, not fatal — the role's `Ready` condition still reflects whether the *requested* privileges have been applied.
 
+### Attribute-based access control (ABAC)
+
+Where `Neo4jUser` and `Neo4jRoleBinding` map specific usernames to roles, **`Neo4jAuthRule`** maps *anyone whose OIDC token matches a condition* to roles. It's the operator's binding for Neo4j's [attribute-based access control](https://neo4j.com/docs/operations-manual/current/authentication-authorization/attribute-based-access-control/), introduced in Neo4j 2026.03.
+
+```yaml
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jAuthRule
+metadata:
+  name: emea-business-hours
+spec:
+  clusterRef: production
+  name: emea_business_hours
+  condition: |
+    abac.oidc.user_attribute('region') = 'EMEA'
+      AND time.transaction('UTC').hour >= 6
+      AND time.transaction('UTC').hour < 18
+  grantedRoles:
+    - reader
+```
+
+**Prerequisites** before any `Neo4jAuthRule` will reach `Ready`:
+
+1. The cluster runs Neo4j 2026.03 or later. Older clusters cause the rule to sit in `AuthRuleVersionTooOld=True`.
+2. The cluster's `spec.config` sets `dbms.security.abac.authorization_providers` to a configured OIDC provider name. The operator surfaces this as `OIDCProviderConfigured=True/False` on the rule's status; it does not auto-edit the cluster spec.
+3. Each role in `spec.grantedRoles` exists as a `Neo4jRole` in the same namespace, or directly in Neo4j. Missing roles park the rule in `PendingDependencies=True` until they land.
+
+**Drift reconciliation**: the controller reads `SHOW AUTH RULES` and converges. Editing the condition out-of-band, disabling the rule, or attaching extra role grants are all reverted on the next reconcile (set `enforceRoles: false` on the spec to stop revoking out-of-band grants).
+
+See the [`Neo4jAuthRule` API reference](../api_reference/neo4jauthrule.md) for the full spec, condition syntax, and limitations.
+
+### Property-based access control (PBAC)
+
+`Neo4jRole.spec.privileges` accepts the full Cypher privilege grammar, including the `FOR pattern WHERE …` clause used by [property-based access control](https://neo4j.com/docs/operations-manual/current/authentication-authorization/property-based-access-control/). PBAC refines `MATCH`, `READ`, and `TRAVERSE` privileges with per-row conditions on node or relationship properties:
+
+```yaml
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jRole
+metadata:
+  name: redacted-reader
+spec:
+  clusterRef: production
+  name: redacted_reader
+  privileges:
+    - "GRANT TRAVERSE ON GRAPH * FOR (n:Email) WHERE n.classification IS NOT NULL TO redacted_reader"
+    - "DENY READ {*} ON GRAPH * FOR (n) WHERE NOT n.classification IN ['UNCLASSIFIED', 'PUBLIC'] TO redacted_reader"
+```
+
+PBAC privileges flow through the same drift-reconciliation loop as ordinary privileges. The role validator rejects PBAC privileges that name a `Neo4jShardedDatabase` (PBAC is unsupported on sharded property databases) and warns when `ON GRAPH *` is combined with a PBAC `FOR pattern WHERE …` clause, since the privilege would silently no-op against any sharded DBs in scope. See the [`Neo4jRole` API reference](../api_reference/neo4jrole.md#property-based-access-control-pbac) for examples and the full list of upstream limitations (single-property rules, performance overhead, property-immutability requirement).
+
 ## Status conditions reference
 
 ### `Neo4jUser`

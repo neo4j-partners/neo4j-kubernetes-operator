@@ -35,6 +35,7 @@ enabled.
 | `Neo4jEnterpriseCluster` / `Neo4jEnterpriseStandalone` | Cluster and single-node deployments |
 | `Neo4jDatabase` | Database lifecycle with topology, seed URIs (S3, GCS, Azure), and point-in-time recovery |
 | `Neo4jUser`, `Neo4jRole`, `Neo4jRoleBinding` | Declarative user, role, and privilege management with drift reconciliation |
+| `Neo4jAuthRule` | Attribute-based access control (ABAC) — claims-to-roles mapping at OIDC authentication time (Neo4j 2026.03+) |
 | `Neo4jPlugin` | Plugin installation for APOC, GDS, Bloom, GenAI, N10s, and GraphQL with automatic security configuration |
 | `Neo4jBackup`, `Neo4jRestore` | FULL, DIFF, and AUTO backup types with point-in-time recovery |
 | `Neo4jShardedDatabase` | Property sharding for horizontal scale (GA in Neo4j 2025.12 and later CalVer releases) |
