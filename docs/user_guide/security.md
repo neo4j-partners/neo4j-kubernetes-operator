@@ -406,6 +406,52 @@ groupToRoleMapping:
 
 Multiple Neo4j roles can be assigned to a single group (comma-separated).
 
+### Attribute-Based Access Control (ABAC)
+
+Neo4j 2026.03 introduced **attribute-based access control (ABAC)** as a richer alternative to the static group-to-role mapping above. Where group-to-role mapping is a one-line key-value YAML lookup, ABAC lets you write Cypher conditions over arbitrary OIDC token claims, including time of day, list membership, and combinations of attributes.
+
+The operator exposes ABAC through the **[`Neo4jAuthRule`](../api_reference/neo4jauthrule.md)** CRD. Each rule has a Cypher condition that's evaluated against the user's OIDC token at authentication time; when the condition returns `true`, the listed roles are granted for that session.
+
+```yaml
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jAuthRule
+metadata:
+  name: emea-business-hours
+spec:
+  clusterRef: production
+  name: emea_business_hours
+  condition: |
+    abac.oidc.user_attribute('region') = 'EMEA'
+      AND time.transaction('UTC').hour >= 6
+      AND time.transaction('UTC').hour < 18
+  grantedRoles: [reader]
+```
+
+**Prerequisites:**
+
+- Neo4j 2026.03 or later. Older clusters cause the rule to sit in `AuthRuleVersionTooOld=True`.
+- The cluster's `spec.config` sets `dbms.security.abac.authorization_providers` to a configured OIDC provider name. Without it the rule sits in `OIDCProviderConfigured=False`.
+
+**Group-to-role mapping vs ABAC:**
+
+|  | Group-to-role mapping | ABAC (`Neo4jAuthRule`) |
+|---|---|---|
+| **Where it's defined** | `spec.auth.authorizationProviders[].groupToRoleMapping` on the cluster | Stand-alone `Neo4jAuthRule` resource |
+| **Input** | Group claim values | Any OIDC token claim, multiple at once |
+| **Logic** | Static key-value lookup | Arbitrary Cypher expression (operators, list functions, time, …) |
+| **Min Neo4j version** | All supported versions | 2026.03+ |
+| **Drift reconciliation** | Cluster-spec-driven (operator re-applies on every reconcile) | Per-rule, via `SHOW AUTH RULES` |
+
+Pick group-to-role mapping when your IdP already emits a clean group claim and the role assignment is a flat lookup. Pick ABAC when you need conditional logic, time-bounded grants, or claims beyond a single group attribute. The two coexist — you can have static group mappings for the bulk of your users and a handful of `Neo4jAuthRule` resources for special cases.
+
+See the [`Neo4jAuthRule` API reference](../api_reference/neo4jauthrule.md) for the full condition syntax, supported Cypher functions, and lifecycle. Worked examples live at [`examples/users-roles/07-authrule-abac.yaml`](https://github.com/priyolahiri/neo4j-kubernetes-operator/blob/main/examples/users-roles/07-authrule-abac.yaml).
+
+**Errors in your Cypher condition** are surfaced through the rule's `status` and Kubernetes events:
+
+- A syntactically-invalid condition (or one that calls a function outside the [allowed set](https://neo4j.com/docs/operations-manual/current/authentication-authorization/attribute-based-access-control/)) is rejected by Neo4j when the operator runs `CREATE OR REPLACE AUTH RULE`. The rule's `status.phase` becomes `Failed`, `status.message` includes the full Neo4j error, and a Warning event with reason `AuthRuleFailed` is recorded. Inspect with `kubectl describe neo4jauthrule <name>`.
+- DDL keywords (`CREATE`, `DROP`, `ALTER`, `GRANT`, `DENY`, `REVOKE`, `SHOW`, `RENAME`) and statement separators (`;`) in the condition are caught by the controller-side validator before any Cypher reaches Neo4j. Surfaces as `status.phase: "Failed"`, condition `Ready=False, reason=ValidationFailed`.
+- **Runtime evaluation errors** — for example a condition that calls `.hour` on a claim that turns out to be `NULL` for some user — happen at authentication time, *not* at rule creation. The rule's `status.phase` stays `Ready` because the rule itself is correctly installed; the symptom is that affected users fail to authenticate. Diagnose via Neo4j's `security.log`.
+
 ### Auth Cache TTL
 
 Control how long authentication results are cached:
