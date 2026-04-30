@@ -250,6 +250,21 @@ stringData:
 
 The operator supports one or more OIDC providers via the `spec.auth.oidc` map. Each key becomes the provider name in Neo4j's config (`dbms.security.oidc.<name>.*`).
 
+> **⚠️ Neo4j 2026.x requires HTTPS for every OIDC URI.** `wellKnownDiscoveryURI`, `authEndpoint`, `tokenEndpoint`, `jwksURI`, `userInfoURI`, and `issuer` are all validated at config-parse time; an `http://` value causes Neo4j to refuse to start with `Error evaluating value for setting … does not have required scheme 'https'`. There is no insecure-mode override. Self-hosted IDPs that default to HTTP in dev need a TLS-terminating proxy (and the proxy's CA in [`spec.trustedCASecrets`](#jvm-truststore-for-internal-cas)) before the cluster can boot.
+
+#### OIDC + ABAC setup checklist
+
+Wiring up an OIDC provider — especially when used as an ABAC authorization provider — requires *four* coordinated config touchpoints. Missing any one surfaces as a different error from Neo4j:
+
+| Step | Where | What to set | Symptom if missed |
+|---|---|---|---|
+| 1. Provider block | `spec.config["dbms.security.oidc.<name>.*"]` (or use the typed `spec.auth.oidc.<name>` map below) | `display_name`, `well_known_discovery_uri` (https!), `audience`, `client_id` | `Failed to validate '[<name>]' …: entries must be a valid OIDC authorization provider` |
+| 2. Authentication providers | `spec.auth.authenticationProviders` | include `oidc-<name>` | OIDC sign-in is rejected |
+| 3. Authorization providers | `spec.auth.authorizationProviders` | include `oidc-<name>` | `entries must exist in dbms.security.authorization_providers. Invalid values: oidc-<name>` |
+| 4. ABAC provider list (only for `Neo4jAuthRule`) | `spec.config["dbms.security.abac.authorization_providers"]` | the prefixed name `oidc-<name>` (NOT bare `<name>`) | `entries must be a valid OIDC authorization provider` *or* `entries must exist in dbms.security.authorization_providers` |
+
+A complete worked example for ABAC is in [`examples/users-roles/07-authrule-abac.yaml`](../../examples/users-roles/07-authrule-abac.yaml); the integration test fixtures show the same pattern with a self-signed CA: [`test/integration/neo4jauthrule_test.go`](../../test/integration/neo4jauthrule_test.go).
+
 #### Single Provider (Okta)
 
 ```yaml
