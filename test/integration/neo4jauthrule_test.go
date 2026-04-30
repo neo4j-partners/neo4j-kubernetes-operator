@@ -23,6 +23,8 @@ import (
 	"strings"
 	"time"
 
+	certmgrv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
+	cmmeta "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -37,7 +39,11 @@ import (
 
 const (
 	oidcStubName = "oidc-stub"
-	oidcStubPort = 8080
+	// nginx terminates TLS on this port and proxies to mock-oauth2-server
+	// on localhost:8080 inside the same Pod. Neo4j 2026.04 hard-requires
+	// https:// for OIDC URIs, so we cannot expose the plain HTTP port.
+	oidcStubTLSPort        = 8443
+	oidcStubName_TLSSecret = "oidc-stub-tls"
 )
 
 // These tests verify Neo4jAuthRule end-to-end. ABAC requires Neo4j 2026.03+;
@@ -143,11 +149,17 @@ var _ = Describe("Neo4jAuthRule end-to-end", func() {
 	})
 
 	It("creates a rule, reverts drift, drops on delete", SpecTimeout(testTimeout), func(ctx SpecContext) {
-		// Single-phase boot: the OIDC stub deployed in BeforeEach is already
-		// reachable, so we can include the abac + oidc provider block in the
-		// initial cluster config. Neo4j 2026.04 fetches the discovery doc at
-		// boot and accepts the provider; no rolling restart needed.
-		By("Creating a 2-server cluster with ABAC + OIDC provider configured")
+		// Single-phase boot. The TLS-fronted OIDC stub deployed in BeforeEach
+		// is reachable; spec.trustedCASecrets adds the cert-manager-issued CA
+		// to Neo4j's JVM truststore so the https:// well_known fetch succeeds.
+		// Neo4j 2026.04 hard-requires:
+		//   - https:// for every dbms.security.oidc.<name>.* URI (incl.
+		//     well_known_discovery_uri, jwks_uri, etc.)
+		//   - the OIDC provider name (prefixed `oidc-`) to appear in BOTH
+		//     dbms.security.authentication_providers AND
+		//     dbms.security.authorization_providers; abac.authorization_providers
+		//     is then a subset.
+		By("Creating a 2-server cluster with ABAC + OIDC + trustedCASecrets")
 		cluster = &neo4jv1beta1.Neo4jEnterpriseCluster{
 			ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: namespace.Name},
 			Spec: neo4jv1beta1.Neo4jEnterpriseClusterSpec{
@@ -156,13 +168,17 @@ var _ = Describe("Neo4jAuthRule end-to-end", func() {
 				Resources: getCIAppropriateResourceRequirements(),
 				Storage:   neo4jv1beta1.StorageSpec{ClassName: "standard", Size: "1Gi"},
 				Auth: &neo4jv1beta1.AuthSpec{
-					AuthenticationProviders: []string{"native"},
+					AuthenticationProviders: []string{"native", "oidc-test-oidc"},
+					AuthorizationProviders:  []string{"native", "oidc-test-oidc"},
 					AdminSecret:             "neo4j-admin-secret",
 				},
 				TLS: &neo4jv1beta1.TLSSpec{Mode: "disabled"},
 				Env: []corev1.EnvVar{{Name: "NEO4J_ACCEPT_LICENSE_AGREEMENT", Value: "eval"}},
+				TrustedCASecrets: []neo4jv1beta1.TrustedCASecret{
+					{Name: oidcStubName_TLSSecret}, // Secret produced by the cert-manager Certificate
+				},
 				Config: map[string]string{
-					"dbms.security.abac.authorization_providers":            "test-oidc",
+					"dbms.security.abac.authorization_providers":            "oidc-test-oidc",
 					"dbms.security.oidc.test-oidc.display_name":             "Test OIDC",
 					"dbms.security.oidc.test-oidc.well_known_discovery_uri": oidcDiscoveryURL,
 					"dbms.security.oidc.test-oidc.audience":                 "neo4j",
@@ -441,20 +457,80 @@ func neo4jVersionSupportsAuthRules() bool {
 	return v.SupportsAuthRules()
 }
 
-// setupOIDCStub deploys an in-cluster mock-oauth2-server (navikt/mock-oauth2-server)
-// Pod + Service in `ns` and returns the cluster-internal well-known discovery
-// URL for the "test-oidc" issuer. mock-oauth2-server serves a fully spec-compliant
-// OIDC discovery doc + JWKS without any pre-baked configuration; the issuer-id
-// is taken from the first path segment of the request, so we point Neo4j at
-// `/test-oidc/.well-known/openid-configuration`.
+// setupOIDCStub deploys an in-cluster TLS-fronted mock-oauth2-server in `ns`
+// and returns the cluster-internal HTTPS well-known discovery URL for the
+// "test-oidc" issuer. The stub is a two-container Pod:
 //
-// The stub is needed because Neo4j 2026.04 wedges during boot if
-// `dbms.security.abac.authorization_providers` references a name that has no
-// reachable `well_known_discovery_uri`. We never actually authenticate users;
-// Neo4j only needs to fetch and parse the discovery doc + JWKS to consider
-// the provider configured.
+//	mock-oauth2-server   — listens on plain HTTP localhost:8080, serves a
+//	                       spec-compliant OIDC discovery doc + JWKS; the
+//	                       issuer-id is the first URL path segment, so we
+//	                       point Neo4j at /test-oidc/...
+//	nginx (tls-proxy)    — listens on https:8443, terminates TLS using the
+//	                       cert-manager-issued cert, proxies plain HTTP to
+//	                       127.0.0.1:8080. Sets X-Forwarded-Proto: https so
+//	                       mock-oauth2-server returns https:// URLs in its
+//	                       discovery JSON (without this Neo4j boot fails on
+//	                       jwks_uri scheme validation).
+//
+// Why TLS at all? Neo4j 2026.04 hard-requires https:// for every OIDC URI in
+// its config. A plain-HTTP stub causes Neo4j to reject the config at parse
+// time (before even attempting boot).
+//
+// The cert-manager Certificate uses the existing ca-cluster-issuer ClusterIssuer
+// that the test environment already provisions. Neo4j is told to trust the
+// resulting CA via the new spec.trustedCASecrets field on the cluster.
 func setupOIDCStub(ctx context.Context, ns string) string {
-	const image = "ghcr.io/navikt/mock-oauth2-server:2.1.10"
+	// Issue a TLS cert via cert-manager. The Secret produced (`oidc-stub-tls`)
+	// contains tls.crt, tls.key, and ca.crt — the cluster references it
+	// directly in spec.trustedCASecrets to add the CA to Neo4j's truststore.
+	cert := &certmgrv1.Certificate{
+		ObjectMeta: metav1.ObjectMeta{Name: oidcStubName_TLSSecret, Namespace: ns},
+		Spec: certmgrv1.CertificateSpec{
+			SecretName: oidcStubName_TLSSecret,
+			Duration:   &metav1.Duration{Duration: 24 * time.Hour},
+			IssuerRef: cmmeta.ObjectReference{
+				Name: "ca-cluster-issuer",
+				Kind: "ClusterIssuer",
+			},
+			CommonName: fmt.Sprintf("%s.%s.svc.cluster.local", oidcStubName, ns),
+			DNSNames: []string{
+				oidcStubName,
+				fmt.Sprintf("%s.%s", oidcStubName, ns),
+				fmt.Sprintf("%s.%s.svc", oidcStubName, ns),
+				fmt.Sprintf("%s.%s.svc.cluster.local", oidcStubName, ns),
+			},
+		},
+	}
+	Expect(k8sClient.Create(ctx, cert)).To(Succeed())
+
+	// nginx config for the TLS terminator. X-Forwarded-Proto: https makes
+	// mock-oauth2-server emit https:// URLs in the discovery doc.
+	nginxCfg := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{Name: oidcStubName + "-nginx-cfg", Namespace: ns},
+		Data: map[string]string{
+			"nginx.conf": fmt.Sprintf(`
+events {}
+http {
+  server {
+    listen %d ssl;
+    ssl_certificate     /tls/tls.crt;
+    ssl_certificate_key /tls/tls.key;
+    location / {
+      proxy_pass http://127.0.0.1:8080;
+      proxy_set_header Host              $host:$server_port;
+      proxy_set_header X-Forwarded-Host  $host:$server_port;
+      proxy_set_header X-Forwarded-Proto https;
+      proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+    }
+  }
+}
+`, oidcStubTLSPort),
+		},
+	}
+	Expect(k8sClient.Create(ctx, nginxCfg)).To(Succeed())
+
+	const mockImage = "ghcr.io/navikt/mock-oauth2-server:2.1.10"
+	const nginxImage = "nginx:alpine"
 
 	stubPod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -463,33 +539,59 @@ func setupOIDCStub(ctx context.Context, ns string) string {
 			Labels:    map[string]string{"app": oidcStubName},
 		},
 		Spec: corev1.PodSpec{
-			Containers: []corev1.Container{{
-				Name:  "mock-oauth2",
-				Image: image,
-				Ports: []corev1.ContainerPort{{ContainerPort: oidcStubPort}},
-				Env: []corev1.EnvVar{
-					{Name: "SERVER_PORT", Value: fmt.Sprintf("%d", oidcStubPort)},
-				},
-				ReadinessProbe: &corev1.Probe{
-					ProbeHandler: corev1.ProbeHandler{
-						HTTPGet: &corev1.HTTPGetAction{
-							Path: "/test-oidc/.well-known/openid-configuration",
-							Port: intstr.FromInt(oidcStubPort),
+			Containers: []corev1.Container{
+				{
+					Name:  "mock-oauth2",
+					Image: mockImage,
+					Ports: []corev1.ContainerPort{{ContainerPort: 8080}},
+					Env:   []corev1.EnvVar{{Name: "SERVER_PORT", Value: "8080"}},
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
+							"cpu":    resource.MustParse("50m"),
+							"memory": resource.MustParse("128Mi"),
+						},
+						Limits: corev1.ResourceList{
+							"memory": resource.MustParse("512Mi"),
 						},
 					},
-					InitialDelaySeconds: 5,
-					PeriodSeconds:       2,
 				},
-				Resources: corev1.ResourceRequirements{
-					Requests: corev1.ResourceList{
-						"cpu":    resource.MustParse("50m"),
-						"memory": resource.MustParse("128Mi"),
+				{
+					Name:  "tls-proxy",
+					Image: nginxImage,
+					Ports: []corev1.ContainerPort{{ContainerPort: oidcStubTLSPort}},
+					VolumeMounts: []corev1.VolumeMount{
+						{Name: "nginx-cfg", MountPath: "/etc/nginx", ReadOnly: true},
+						{Name: "tls", MountPath: "/tls", ReadOnly: true},
 					},
-					Limits: corev1.ResourceList{
-						"memory": resource.MustParse("512Mi"),
+					ReadinessProbe: &corev1.Probe{
+						ProbeHandler: corev1.ProbeHandler{
+							TCPSocket: &corev1.TCPSocketAction{
+								Port: intstr.FromInt(oidcStubTLSPort),
+							},
+						},
+						InitialDelaySeconds: 3,
+						PeriodSeconds:       2,
 					},
 				},
-			}},
+			},
+			Volumes: []corev1.Volume{
+				{
+					Name: "nginx-cfg",
+					VolumeSource: corev1.VolumeSource{
+						ConfigMap: &corev1.ConfigMapVolumeSource{
+							LocalObjectReference: corev1.LocalObjectReference{Name: oidcStubName + "-nginx-cfg"},
+						},
+					},
+				},
+				{
+					Name: "tls",
+					VolumeSource: corev1.VolumeSource{
+						Secret: &corev1.SecretVolumeSource{
+							SecretName: oidcStubName_TLSSecret,
+						},
+					},
+				},
+			},
 		},
 	}
 	Expect(k8sClient.Create(ctx, stubPod)).To(Succeed())
@@ -499,14 +601,15 @@ func setupOIDCStub(ctx context.Context, ns string) string {
 		Spec: corev1.ServiceSpec{
 			Selector: map[string]string{"app": oidcStubName},
 			Ports: []corev1.ServicePort{{
-				Port:       oidcStubPort,
-				TargetPort: intstr.FromInt(oidcStubPort),
+				Name:       "https",
+				Port:       oidcStubTLSPort,
+				TargetPort: intstr.FromInt(oidcStubTLSPort),
 			}},
 		},
 	}
 	Expect(k8sClient.Create(ctx, stubSvc)).To(Succeed())
 
-	By("Waiting for OIDC stub Pod to be Ready")
+	By("Waiting for OIDC stub Pod to be Ready (cert-manager Cert + nginx + mock-oauth2)")
 	Eventually(func() bool {
 		p := &corev1.Pod{}
 		if err := k8sClient.Get(ctx, types.NamespacedName{Name: oidcStubName, Namespace: ns}, p); err != nil {
@@ -514,13 +617,13 @@ func setupOIDCStub(ctx context.Context, ns string) string {
 		}
 		for _, c := range p.Status.Conditions {
 			if c.Type == corev1.PodReady && c.Status == corev1.ConditionTrue {
-				GinkgoWriter.Printf("[abac-e2e] OIDC stub ready (image=%s)\n", image)
+				GinkgoWriter.Printf("[abac-e2e] OIDC stub ready (mock=%s, tls=%s)\n", mockImage, nginxImage)
 				return true
 			}
 		}
 		return false
 	}, 3*time.Minute, 2*time.Second).Should(BeTrue(), "OIDC stub pod did not become Ready within 3m")
 
-	return fmt.Sprintf("http://%s.%s.svc.cluster.local:%d/test-oidc/.well-known/openid-configuration",
-		oidcStubName, ns, oidcStubPort)
+	return fmt.Sprintf("https://%s.%s.svc.cluster.local:%d/test-oidc/.well-known/openid-configuration",
+		oidcStubName, ns, oidcStubTLSPort)
 }
