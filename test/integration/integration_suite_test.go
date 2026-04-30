@@ -607,7 +607,7 @@ func getCIAppropriateResourceRequirements() *corev1.ResourceRequirements {
 		// Multiple tests may run concurrently, so keep requests very low
 		return &corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("10m"), // Minimal CPU for scheduling
+				corev1.ResourceCPU:    resource.MustParse("50m"), // CI-stable floor: 10m starves Neo4j under throttling and was a contributor to drift-test flakes
 				corev1.ResourceMemory: resource.MustParse("1Gi"), // Closer to limit reduces OOMKill risk from overcommit
 			},
 			Limits: corev1.ResourceList{
