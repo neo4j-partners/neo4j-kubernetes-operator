@@ -413,6 +413,12 @@ Some privileges were created with `GRANT IMMUTABLE` outside the operator and can
 
 The user/role controllers reuse the same connection helper as `Neo4jDatabase`. If `Neo4jDatabase` works against the cluster, these will too. If neither works, check the cluster's `spec.auth.adminSecret` and TLS configuration.
 
+**Symptom**: `RoleSyncFailed` events with `Neo.ClientError.Cluster.NotALeader` on a multi-server cluster.
+
+Admin commands (`GRANT`, `REVOKE`, `CREATE/DROP ROLE`, etc.) must execute on the cluster leader. The operator uses the Neo4j routing scheme (`neo4j://`/`neo4j+s://`) so the driver auto-routes writes to the leader; if you see `NotALeader` errors anyway, the most likely cause is a stuck routing table on the operator's Bolt client (e.g. immediately after a manual leader rotation). The next reconcile (≤30s) refreshes the routing table and the operation succeeds.
+
+If the errors are persistent — not transient — check that `dbms.routing.getRoutingTable` is reachable from the operator pod (it normally is for any Enterprise 5.26+ cluster). Older operator versions used the direct `bolt://` scheme and produced this error symptom continuously on multi-server clusters; if you see persistent `NotALeader` events, ensure the operator image is up to date.
+
 ## Limits and non-goals
 
 - **Cluster admin user safety**: the operator refuses to manage usernames matching reserved keywords (`system`). The bootstrap admin user (defined by `cluster.spec.auth.adminSecret`) is technically manageable, but doing so is risky — a misconfigured `Neo4jUser` could lock the operator out of its own cluster. Prefer leaving it alone.
