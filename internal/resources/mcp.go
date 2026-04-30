@@ -557,11 +557,15 @@ func mcpNeo4jURIForCluster(cluster *neo4jv1beta1.Neo4jEnterpriseCluster) string 
 }
 
 func mcpNeo4jURIForStandalone(standalone *neo4jv1beta1.Neo4jEnterpriseStandalone) string {
+	// Use the routing scheme for parity with the cluster URI builder above.
+	// Single-member topologies still respond to dbms.routing.getRoutingTable
+	// (the lone server is reported as both reader and writer), so neo4j://
+	// works identically to bolt:// here.
 	serviceName := fmt.Sprintf("%s-service", standalone.Name)
 	if standalone.Spec.TLS != nil && standalone.Spec.TLS.Mode == CertManagerMode {
-		return fmt.Sprintf("bolt+ssc://%s.%s.svc.cluster.local:7687", serviceName, standalone.Namespace)
+		return fmt.Sprintf("neo4j+ssc://%s.%s.svc.cluster.local:7687", serviceName, standalone.Namespace)
 	}
-	return fmt.Sprintf("bolt://%s.%s.svc.cluster.local:7687", serviceName, standalone.Namespace)
+	return fmt.Sprintf("neo4j://%s.%s.svc.cluster.local:7687", serviceName, standalone.Namespace)
 }
 
 // buildMCPEnv constructs the environment variables for the official mcp/neo4j image.

@@ -370,25 +370,68 @@ other during cluster formation without per-pod CA pinning.
 When TLS is enabled, `server.bolt.tls_level=REQUIRED` is also set — plain
 `bolt://` connections are rejected (regression checklist item #16).
 
-#### 4. Operator-side TLS (outgoing Bolt connections)
+#### 4. Operator-side Bolt connection (outgoing)
 
-The operator reconciles the cluster by issuing Cypher commands over Bolt. Its
-client must trust the cert-manager-issued cert. `buildTLSConfig`
-(`internal/neo4j/client.go`) handles this:
+The operator reconciles the cluster by issuing Cypher commands over Bolt.
+Two separate concerns layer here: which scheme the URI uses (routing vs
+direct) and which CA the client trusts.
+
+**URI scheme — routing vs direct.** `buildConnectionURIForEnterprise`
+(`internal/neo4j/client.go`) uses the **routing scheme**:
+
+| Spec | Scheme |
+|---|---|
+| `spec.tls.mode: disabled` (or unset) | `neo4j://` |
+| `spec.tls.mode: cert-manager` | `neo4j+s://` |
+
+The routing scheme is mandatory. Cluster admin commands (CREATE/DROP USER,
+GRANT/REVOKE, CREATE/ALTER/DROP DATABASE, AUTH RULE management, etc.) must
+execute on the cluster leader; the Go driver routes write transactions to
+the leader **only under `neo4j://`**. Under the direct `bolt://` scheme,
+`AccessMode: AccessModeWrite` is silently ignored and connections land
+wherever K8s steered them via the `{cluster}-client` ClusterIP. The
+operator's Bolt clients used to use `bolt://`, which produced
+`Neo.ClientError.Cluster.NotALeader` on N-1 of every N reconciles and
+visible Ready ↔ Failed status flicker on the role/user/auth-rule
+controllers. See checklist item #62.
+
+The **single legitimate `bolt://` consumer** is
+`internal/controller/splitbrain_detector.go:createPodSpecificNeo4jClient`,
+which intentionally bypasses the routing layer to query each pod's RAFT
+view individually — the whole point of split-brain detection is to compare
+per-pod state, not to talk to the leader. Standalone deployments use the
+routing scheme too, for symmetry; on a single-member topology
+`getRoutingTable` reports the lone member as both reader and writer, so
+behavior is equivalent to direct connection.
+
+**Driver timeouts.** `NewClientForEnterprise` /
+`NewClientForEnterpriseStandalone` configure:
+- `ConnectionAcquisitionTimeout = 10s` — full budget for getting a
+  connection (includes routing-table fetch retries under `neo4j://`)
+- `SocketConnectTimeout = 5s` — TCP connect to a router member
+- `MaxTransactionRetryTime = 15s` — retry budget for transient errors
+
+These values are deliberately tight: an unreachable cluster fails fast
+instead of stalling the controller's reconcile queue behind hung Bolt
+calls. Healthy clusters complete the routing handshake in well under one
+second. See checklist item #63.
+
+**TLS.** `buildTLSConfig` (`internal/neo4j/client.go`) governs which CA the
+client trusts:
 
 1. **Auto-discovery**: load `ca.crt` from the `{resource-name}-tls-secret`
-   Secret and pin it as the trusted CA for outgoing connections. This is the
-   default path — no user configuration required.
+   Secret and pin it as the trusted CA for outgoing connections. This is
+   the default path — no user configuration required.
 2. **Override**: `spec.tls.trustedCASecret` lets users point at a different
    Secret (e.g. when bringing their own CA outside cert-manager).
 3. **Fallback**: `InsecureSkipVerify` is used only during the brief window
-   before the Secret has been populated by cert-manager (regression checklist
-   item #27).
+   before the Secret has been populated by cert-manager (regression
+   checklist item #27).
 
 All three Bolt entry points — `NewClientForEnterprise`,
-`NewClientForEnterpriseStandalone`, and `NewClientForPod` (used by the
-split-brain detector) — go through `buildTLSConfig`, so the scheme switches
-dynamically between `bolt+s://` and `bolt://` based on `spec.tls.mode`
+`NewClientForEnterpriseStandalone`, and `NewClientForPod` (split-brain
+detector) — go through `buildTLSConfig`, so the scheme switches
+dynamically between TLS-enabled and plain variants based on `spec.tls.mode`
 (checklist item #28).
 
 #### 5. Standalone differences

@@ -324,14 +324,20 @@ func NewClientForEnterprise(cluster *neo4jv1beta1.Neo4jEnterpriseCluster, k8sCli
 	config := func(c *config.Config) {
 		// Optimized connection pool settings
 		c.MaxConnectionLifetime = 30 * time.Minute
-		c.MaxConnectionPoolSize = 20                      // Reduced from 50 for better memory efficiency
-		c.ConnectionAcquisitionTimeout = 30 * time.Second // Increased for cluster startup scenarios
-		c.SocketConnectTimeout = 15 * time.Second         // Increased for Neo4j initialization time
+		c.MaxConnectionPoolSize = 20 // Reduced from 50 for better memory efficiency
+		// Connection acquisition is gated by SocketConnectTimeout (TCP) plus,
+		// for the routing scheme, the time to fetch the routing table from the
+		// initial member. 10s is generous for a healthy cluster (sub-second
+		// in practice) and tight enough that an unreachable cluster surfaces
+		// quickly — important because the operator's reconciles otherwise
+		// queue behind a stuck Bolt call.
+		c.ConnectionAcquisitionTimeout = 10 * time.Second
+		c.SocketConnectTimeout = 5 * time.Second
 		c.SocketKeepalive = true
 		c.ConnectionLivenessCheckTimeout = 10 * time.Second
 
 		// Connection pool optimization
-		c.MaxTransactionRetryTime = 30 * time.Second
+		c.MaxTransactionRetryTime = 15 * time.Second
 		c.FetchSize = 1000 // Optimized fetch size for memory efficiency
 
 		// Configure TLS if enabled
@@ -2088,10 +2094,19 @@ func isVersionSupported(version string) bool {
 	return false
 }
 
+// buildConnectionURIForStandalone returns the URI the operator's Bolt client
+// uses for a Neo4jEnterpriseStandalone deployment.
+//
+// We use the routing scheme (`neo4j://` / `neo4j+s://`) for parity with the
+// cluster builder. On a single-member topology the routing table contains
+// the lone server as both reader and writer, so behavior is equivalent to
+// the direct `bolt://` scheme — but staying on `neo4j://` keeps both code
+// paths uniform and is forward-compatible if a standalone is ever upgraded
+// to a multi-server topology.
 func buildConnectionURIForStandalone(standalone *neo4jv1beta1.Neo4jEnterpriseStandalone) string {
-	scheme := "bolt"
+	scheme := "neo4j"
 	if standalone.Spec.TLS != nil && standalone.Spec.TLS.Mode == "cert-manager" {
-		scheme = "bolt+s"
+		scheme = "neo4j+s"
 	}
 
 	// Use service for connection (standalone service naming pattern)
@@ -2101,14 +2116,35 @@ func buildConnectionURIForStandalone(standalone *neo4jv1beta1.Neo4jEnterpriseSta
 	return fmt.Sprintf("%s://%s:%d", scheme, host, port)
 }
 
+// buildConnectionURIForEnterprise returns the URI the operator's Bolt client
+// uses for a Neo4jEnterpriseCluster.
+//
+// CRITICAL: this MUST use the routing scheme (`neo4j://` / `neo4j+s://`),
+// not the direct scheme (`bolt://` / `bolt+s://`). Cluster admin commands
+// — `CREATE/DROP/ALTER USER`, `CREATE/DROP ROLE`, `GRANT/DENY/REVOKE`,
+// `CREATE/ALTER/DROP DATABASE`, `CREATE OR REPLACE/DROP/GRANT/REVOKE AUTH RULE`
+// — must execute on the cluster leader and return
+// `Neo.ClientError.Cluster.NotALeader` from any other member. The Go driver
+// honors `neo4j.SessionConfig{AccessMode: AccessModeWrite}` only under the
+// routing scheme; under the direct scheme it is silently ignored and queries
+// land on whatever pod K8s steered the underlying TCP connection to. With
+// the operator's `{cluster}-client` ClusterIP load-balancing across all
+// members, that yields a 1-in-N chance of hitting the leader on every
+// reconcile and produces visible Ready ↔ Failed status flicker on the
+// `Neo4jRole` / `Neo4jUser` / `Neo4jAuthRule` controllers.
+//
+// See CLAUDE.md regression checklist item on routing scheme; do not revert
+// to `bolt://` without an explicit replacement for leader routing.
 func buildConnectionURIForEnterprise(cluster *neo4jv1beta1.Neo4jEnterpriseCluster) string {
-	// Use bolt+s for TLS-enabled clusters, plain bolt for others
-	scheme := "bolt"
+	scheme := "neo4j"
 	if cluster.Spec.TLS != nil && cluster.Spec.TLS.Mode == "cert-manager" {
-		scheme = "bolt+s"
+		scheme = "neo4j+s"
 	}
 
-	// Use client service for connection
+	// Client service (ClusterIP) — selects across all server pods. The
+	// driver opens an initial routing connection to any member, calls
+	// `dbms.routing.getRoutingTable`, and routes write transactions to the
+	// leader.
 	host := fmt.Sprintf("%s-client.%s.svc.cluster.local", cluster.Name, cluster.Namespace)
 	port := 7687
 
