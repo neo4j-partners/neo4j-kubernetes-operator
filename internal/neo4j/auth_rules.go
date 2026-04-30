@@ -25,6 +25,12 @@ import (
 	neo4j "github.com/neo4j/neo4j-go-driver/v5/neo4j"
 )
 
+// AUTH RULE syntax is only parsed under Cypher 25. Neo4j 2026.x defaults the
+// system database to Cypher 5 unless explicitly opted in, so every AUTH RULE
+// statement we issue must be prefixed. Prepending the language directive is
+// safe even when the database default is already 25.
+const cypher25Prefix = "CYPHER 25 "
+
 // AuthRuleInfo is the projection of one row of `SHOW AUTH RULES`. Used by the
 // Neo4jAuthRule controller to diff desired vs. observed state.
 type AuthRuleInfo struct {
@@ -53,7 +59,7 @@ func (c *Client) ShowAuthRule(ctx context.Context, ruleName string) (*AuthRuleIn
 	// enabled, and roles (a list of strings). Filtering by name keeps the
 	// driver round-trip small even on large clusters.
 	result, err := session.Run(ctx,
-		"SHOW AUTH RULES YIELD name, condition, enabled, roles WHERE name = $name "+
+		cypher25Prefix+"SHOW AUTH RULES YIELD name, condition, enabled, roles WHERE name = $name "+
 			"RETURN name, condition, enabled, roles",
 		map[string]any{"name": ruleName},
 	)
@@ -89,7 +95,7 @@ func (c *Client) ListAuthRules(ctx context.Context) ([]AuthRuleInfo, error) {
 	defer session.Close(ctx)
 
 	result, err := session.Run(ctx,
-		"SHOW AUTH RULES YIELD name, condition, enabled, roles "+
+		cypher25Prefix+"SHOW AUTH RULES YIELD name, condition, enabled, roles "+
 			"RETURN name, condition, enabled, roles ORDER BY name",
 		nil,
 	)
@@ -134,7 +140,7 @@ func (c *Client) CreateOrReplaceAuthRule(ctx context.Context, ruleName, conditio
 		enabledClause = "SET ENABLED false"
 	}
 	query := fmt.Sprintf(
-		"CREATE OR REPLACE AUTH RULE `%s` SET CONDITION %s %s",
+		cypher25Prefix+"CREATE OR REPLACE AUTH RULE `%s` SET CONDITION %s %s",
 		escapeBackticks(ruleName),
 		condition,
 		enabledClause,
@@ -170,7 +176,7 @@ func (c *Client) AlterAuthRule(ctx context.Context, ruleName string, setConditio
 		}
 	}
 	query := fmt.Sprintf(
-		"ALTER AUTH RULE `%s` %s",
+		cypher25Prefix+"ALTER AUTH RULE `%s` %s",
 		escapeBackticks(ruleName),
 		strings.Join(clauses, " "),
 	)
@@ -189,7 +195,7 @@ func (c *Client) DropAuthRuleIfExists(ctx context.Context, ruleName string) erro
 	})
 	defer session.Close(ctx)
 
-	query := fmt.Sprintf("DROP AUTH RULE `%s` IF EXISTS", escapeBackticks(ruleName))
+	query := fmt.Sprintf(cypher25Prefix+"DROP AUTH RULE `%s` IF EXISTS", escapeBackticks(ruleName))
 	if _, err := session.Run(ctx, query, nil); err != nil {
 		return fmt.Errorf("failed to drop auth rule %s: %w", ruleName, err)
 	}
@@ -210,7 +216,7 @@ func (c *Client) GrantRolesToAuthRule(ctx context.Context, ruleName string, role
 
 	roleList := joinBacktickedIdentifiers(roles)
 	query := fmt.Sprintf(
-		"GRANT ROLES %s TO AUTH RULE `%s`",
+		cypher25Prefix+"GRANT ROLES %s TO AUTH RULE `%s`",
 		roleList,
 		escapeBackticks(ruleName),
 	)
@@ -234,7 +240,7 @@ func (c *Client) RevokeRolesFromAuthRule(ctx context.Context, ruleName string, r
 
 	roleList := joinBacktickedIdentifiers(roles)
 	query := fmt.Sprintf(
-		"REVOKE ROLES %s FROM AUTH RULE `%s`",
+		cypher25Prefix+"REVOKE ROLES %s FROM AUTH RULE `%s`",
 		roleList,
 		escapeBackticks(ruleName),
 	)
