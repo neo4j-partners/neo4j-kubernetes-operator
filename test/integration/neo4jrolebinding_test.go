@@ -134,7 +134,7 @@ var _ = Describe("Neo4jRoleBinding end-to-end", func() {
 		Eventually(func() error {
 			cmd := exec.CommandContext(ctx, "kubectl", "exec",
 				podName, "-n", namespace.Name, "--",
-				"cypher-shell", "-u", "neo4j", "-p", adminPass,
+				"cypher-shell", "--format", "plain", "-u", "neo4j", "-p", adminPass,
 				fmt.Sprintf("CREATE USER externuser SET PASSWORD '%s' CHANGE NOT REQUIRED", extUserPass),
 			)
 			out, err := cmd.CombinedOutput()
@@ -168,7 +168,7 @@ var _ = Describe("Neo4jRoleBinding end-to-end", func() {
 		Eventually(func() string {
 			cmd := exec.CommandContext(ctx, "kubectl", "exec",
 				podName, "-n", namespace.Name, "--",
-				"cypher-shell", "-u", "neo4j", "-p", adminPass,
+				"cypher-shell", "--format", "plain", "-u", "neo4j", "-p", adminPass,
 				"SHOW USERS YIELD user, roles WHERE user = 'externuser' RETURN user, roles",
 			)
 			out, _ := cmd.CombinedOutput()
@@ -213,7 +213,7 @@ var _ = Describe("Neo4jRoleBinding end-to-end", func() {
 		By("Cleaning up the externally-created user")
 		_, _ = exec.CommandContext(ctx, "kubectl", "exec",
 			podName, "-n", namespace.Name, "--",
-			"cypher-shell", "-u", "neo4j", "-p", adminPass,
+			"cypher-shell", "--format", "plain", "-u", "neo4j", "-p", adminPass,
 			"DROP USER externuser IF EXISTS",
 		).CombinedOutput()
 	})
