@@ -274,7 +274,7 @@ var _ = Describe("Neo4jAuthRule end-to-end", func() {
 			cmd := exec.CommandContext(ctx, "kubectl", "exec",
 				podName, "-n", namespace.Name, "--",
 				"cypher-shell", "--format", "plain", "-u", "neo4j", "-p", adminPass,
-				"SHOW AUTH RULES YIELD name, condition, enabled, roles "+
+				"CYPHER 25 SHOW AUTH RULES YIELD name, condition, enabled, roles "+
 					"WHERE name = 'analytics_team' "+
 					"RETURN name, condition, enabled, roles",
 			)
@@ -301,7 +301,7 @@ var _ = Describe("Neo4jAuthRule end-to-end", func() {
 		cmd := exec.CommandContext(ctx, "kubectl", "exec",
 			podName, "-n", namespace.Name, "--",
 			"cypher-shell", "--format", "plain", "-u", "neo4j", "-p", adminPass,
-			"DROP AUTH RULE analytics_team",
+			"CYPHER 25 DROP AUTH RULE analytics_team",
 		)
 		out, err := cmd.CombinedOutput()
 		Expect(err).ToNot(HaveOccurred(), "cypher-shell DROP AUTH RULE failed; output: %s", string(out))
@@ -311,7 +311,7 @@ var _ = Describe("Neo4jAuthRule end-to-end", func() {
 			cmd := exec.CommandContext(ctx, "kubectl", "exec",
 				podName, "-n", namespace.Name, "--",
 				"cypher-shell", "--format", "plain", "-u", "neo4j", "-p", adminPass,
-				"SHOW AUTH RULES YIELD name WHERE name = 'analytics_team' RETURN count(*) AS n",
+				"CYPHER 25 SHOW AUTH RULES YIELD name WHERE name = 'analytics_team' RETURN count(*) AS n",
 			)
 			out, err := cmd.CombinedOutput()
 			if err != nil {
@@ -331,7 +331,7 @@ var _ = Describe("Neo4jAuthRule end-to-end", func() {
 			cmd := exec.CommandContext(ctx, "kubectl", "exec",
 				podName, "-n", namespace.Name, "--",
 				"cypher-shell", "--format", "plain", "-u", "neo4j", "-p", adminPass,
-				"REVOKE ROLE analytics_reader FROM AUTH RULE analytics_team",
+				"CYPHER 25 REVOKE ROLE analytics_reader FROM AUTH RULE analytics_team",
 			)
 			out, err := cmd.CombinedOutput()
 			g.Expect(err).ToNot(HaveOccurred(), "REVOKE failed; output: %s", string(out))
@@ -342,7 +342,7 @@ var _ = Describe("Neo4jAuthRule end-to-end", func() {
 			cmd := exec.CommandContext(ctx, "kubectl", "exec",
 				podName, "-n", namespace.Name, "--",
 				"cypher-shell", "--format", "plain", "-u", "neo4j", "-p", adminPass,
-				"SHOW AUTH RULES YIELD name, roles WHERE name = 'analytics_team' RETURN roles",
+				"CYPHER 25 SHOW AUTH RULES YIELD name, roles WHERE name = 'analytics_team' RETURN roles",
 			)
 			out, _ := cmd.CombinedOutput()
 			return string(out)
@@ -357,7 +357,7 @@ var _ = Describe("Neo4jAuthRule end-to-end", func() {
 			cmd := exec.CommandContext(ctx, "kubectl", "exec",
 				podName, "-n", namespace.Name, "--",
 				"cypher-shell", "--format", "plain", "-u", "neo4j", "-p", adminPass,
-				"SHOW AUTH RULES YIELD name WHERE name = 'analytics_team' RETURN count(*) AS n",
+				"CYPHER 25 SHOW AUTH RULES YIELD name WHERE name = 'analytics_team' RETURN count(*) AS n",
 			)
 			out, err := cmd.CombinedOutput()
 			if err != nil {
