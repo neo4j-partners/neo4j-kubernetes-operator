@@ -93,6 +93,9 @@ The `Neo4jEnterpriseClusterSpec` defines the desired state of a Neo4j Enterprise
 | `propertySharding` | [`PropertyShardingSpec`](#propertyshardingspec) | Property sharding configuration (Neo4j 2025.12+) |
 | `monitoring` | [`MonitoringSpec`](#monitoringspec) | Query monitoring configuration |
 | `auraFleetManagement` | [`AuraFleetManagementSpec`](#aurafleetmanagementspec) | Aura Fleet Management integration (optional) |
+| `trustedCASecrets` | `[]`[`TrustedCASecret`](#trustedcasecret) | CA bundles to add to Neo4j's JVM truststore (OIDC, LDAPS, plugin downloads, peer-cluster replication) |
+| `extraVolumes` | `[]corev1.Volume` | Arbitrary pod volumes mounted into the Neo4j pod; reference them via `extraVolumeMounts` |
+| `extraVolumeMounts` | `[]corev1.VolumeMount` | Mount points for `extraVolumes` (or, rarely, operator-managed volumes); operator-managed paths are rejected by the validator |
 
 ## Type Definitions
 
@@ -234,10 +237,55 @@ Specifies role constraints for individual servers.
 
 ### SecretKeyRef (TrustStore)
 
+Used by the legacy singular `spec.auth.trustStore` field. New configurations
+should prefer the plural [`TrustedCASecret`](#trustedcasecret) list at
+`spec.trustedCASecrets`; both fields are merged at reconcile time so
+backward compatibility is preserved.
+
 | Field | Type | Description |
 |---|---|---|
 | `name` | `string` | **Required.** Name of Secret containing CA certificate (PEM format) |
 | `key` | `string` | Key in the Secret containing the CA cert (default: `"ca.crt"`) |
+
+### TrustedCASecret
+
+References a Secret containing a PEM-encoded CA certificate to add to Neo4j's
+JVM truststore. Used by `spec.trustedCASecrets`.
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | `string` | **Required.** Name of the Secret. Doubles as the keytool alias inside the JKS, so names must be unique across the list. |
+| `key` | `string` | Key within the Secret. Defaults to `"ca.crt"` — the layout cert-manager-issued Secrets use. |
+
+The operator merges every entry into a JKS truststore at
+`/truststore/truststore.jks` (password `changeit`) using a `truststore-init`
+init container, then sets `-Djavax.net.ssl.trustStore` on the JVM. The JDK's
+default `cacerts` is used as the seed, so adding internal CAs does not
+remove trust in public CAs.
+
+Example with cert-manager:
+
+```yaml
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata: { name: oidc-tls }
+spec:
+  secretName: oidc-tls    # ← name to reference below
+  issuerRef: { name: corp-ca, kind: ClusterIssuer }
+  commonName: idp.corp.example.com
+  dnsNames: [idp.corp.example.com]
+---
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jEnterpriseCluster
+spec:
+  trustedCASecrets:
+    - name: oidc-tls      # default key "ca.crt" matches cert-manager
+```
+
+For the *less common* case where a Neo4j SSL policy needs a CA at a specific
+filesystem path (e.g. `dbms.ssl.policy.<name>.truststore_path`), use
+`spec.extraVolumes` + `spec.extraVolumeMounts` instead — the operator does
+not parse policy config to wire up filesystem mounts automatically.
 
 ### JWTAuthSpec
 

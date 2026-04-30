@@ -348,32 +348,114 @@ If your IdP does not support OIDC Discovery, specify endpoints manually:
 
 ### JVM TrustStore for Internal CAs
 
-When connecting to LDAPS servers or OIDC providers that use certificates signed by an internal CA (not publicly trusted), configure a custom JVM truststore:
+When Neo4j needs to make outgoing TLS connections to systems whose certificates
+are signed by an internal CA — LDAPS servers, OIDC providers behind a corporate
+CA, Aura Fleet Management endpoints, plugin download mirrors, cross-cluster
+replication peers — you need to add those CAs to Neo4j's JVM truststore.
+
+The operator supports this via two fields, in increasing order of flexibility:
+
+#### `spec.trustedCASecrets` — declarative multi-CA list (recommended)
+
+Reference one or more Secrets that contain a PEM-encoded CA. The default key
+is `ca.crt`, which matches the layout cert-manager produces for every
+Certificate it issues.
+
+```yaml
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jEnterpriseCluster
+spec:
+  # ... image, topology, etc.
+  trustedCASecrets:
+    - name: oidc-corporate-ca       # Secret with ca.crt (default key)
+    - name: ldap-internal-ca
+      key:  ldap.pem                # override the default key
+    - name: replica-cluster-ca      # CA of another Neo4j cluster we replicate to
+```
+
+For each entry, the operator:
+
+1. Mounts the Secret into the pod at `/trusted-ca/<secret-name>/`.
+2. Runs the `truststore-init` init container, which:
+   - Copies the JDK's default `cacerts` into a writable JKS at
+     `/truststore/truststore.jks`. This preserves trust in public CAs (Let's
+     Encrypt, DigiCert, etc.) — you don't lose access to the public web by
+     adding internal CAs.
+   - Runs `keytool -import` for each supplied CA, using the **Secret name as
+     the keytool alias**. Names must therefore be unique across the list.
+3. Sets `NEO4J_server_jvm_additional` (cluster) /
+   `server.jvm.additional=...` (standalone) with
+   `-Djavax.net.ssl.trustStore=/truststore/truststore.jks
+    -Djavax.net.ssl.trustStorePassword=changeit`.
+
+Cert-manager pattern (the most common case):
+
+```yaml
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: oidc-tls
+  namespace: neo4j-prod
+spec:
+  secretName: oidc-tls            # ← name to reference below
+  duration: 8760h
+  issuerRef:
+    name: corp-internal-ca
+    kind: ClusterIssuer
+  commonName: idp.corp.example.com
+  dnsNames: [idp.corp.example.com]
+---
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: prod-cluster
+  namespace: neo4j-prod
+spec:
+  # ...
+  trustedCASecrets:
+    - name: oidc-tls              # default key "ca.crt" matches cert-manager
+```
+
+#### `spec.auth.trustStore` — single-CA legacy form (deprecated)
+
+The pre-existing singular field still works for backward compatibility. The
+operator folds it into the same truststore alongside `trustedCASecrets` at
+reconcile time. New configurations should use `trustedCASecrets`.
 
 ```yaml
 spec:
   auth:
-    authenticationProviders: [ldap, native]
-    ldap:
-      host: "ldaps://ldap.internal.corp:636"
-      # ... other LDAP config
     trustStore:
-      name: corp-ca-cert             # Secret containing the CA certificate
-      key: ca.crt                   # Key in the Secret (default: ca.crt)
+      name: corp-ca-cert            # equivalent to trustedCASecrets:[{name: corp-ca-cert}]
+      key:  ca.crt
 ```
 
-Create the Secret with your CA certificate in PEM format:
+#### `spec.extraVolumes` / `spec.extraVolumeMounts` — escape hatch
 
-```bash
-kubectl create secret generic corp-ca-cert --from-file=ca.crt=/path/to/corporate-ca.pem
+For the rare case where Neo4j needs a CA at a *specific filesystem path* —
+typically because a Neo4j SSL policy references a per-policy `truststore_path`
+(e.g. cross-cluster replication policies) — use `extraVolumes` and
+`extraVolumeMounts` to wire arbitrary mounts into the Neo4j pod:
+
+```yaml
+spec:
+  extraVolumes:
+    - name: replica-truststore
+      secret:
+        secretName: replica-cluster-ca
+  extraVolumeMounts:
+    - name: replica-truststore
+      mountPath: /var/lib/neo4j/policies/replica
+      readOnly: true
+  config:
+    dbms.ssl.policy.replica.truststore_path: /var/lib/neo4j/policies/replica/ca.crt
+    dbms.ssl.policy.replica.truststore_password: ""
 ```
 
-The operator automatically:
-1. Mounts the CA certificate into the pod
-2. Runs an init container that converts the PEM to a JKS truststore using `keytool`
-3. Adds JVM flags (`-Djavax.net.ssl.trustStore=...`) so Neo4j trusts the internal CA
-
-This works for both LDAPS connections and OIDC providers behind internal CAs.
+Mount paths that collide with operator-managed paths (`/data`, `/logs`, `/conf`,
+`/ssl`, `/plugins`, `/truststore`, `/truststore-ca`, `/var/lib/neo4j/{data,logs,
+conf,plugins,certificates}`) are rejected by the validator at admission time.
 
 ### Group-to-Role Mapping
 

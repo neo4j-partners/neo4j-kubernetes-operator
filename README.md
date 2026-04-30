@@ -670,6 +670,43 @@ Note: "Compliance-ready logging and auditing" means the operator exposes Neo4j l
 
 ## 🎯 Recent Improvements
 
+### Multi-CA Trust + Extra Volumes (April 2026)
+
+Two new fields on the `Neo4jEnterpriseCluster` and `Neo4jEnterpriseStandalone`
+specs make Neo4j's outbound TLS path declarative for the cases the operator
+previously couldn't reach:
+
+- **`spec.trustedCASecrets`** — a list of `Secret` references whose `ca.crt`
+  entry is added to Neo4j's JVM truststore via an init container. The operator
+  now seeds the truststore from the JDK's default `cacerts` first, so
+  *adding* an internal CA no longer *removes* trust in public CAs (Let's
+  Encrypt, DigiCert, etc.). Cert-manager-issued Secrets work directly: the
+  default key `ca.crt` matches what cert-manager writes. This is the
+  ergonomic path for OIDC providers behind a corporate CA, LDAPS to internal
+  servers, and Aura Fleet Management endpoints with private trust.
+
+  ```yaml
+  spec:
+    trustedCASecrets:
+      - name: corp-oidc-ca           # ca.crt is the default key
+      - name: ldap-internal-ca
+        key:  ldap.pem
+  ```
+
+- **`spec.extraVolumes` / `spec.extraVolumeMounts`** — escape hatch for
+  arbitrary mounts when a Neo4j SSL policy needs a CA at a specific filesystem
+  path (e.g. cross-cluster replication policies that reference
+  `dbms.ssl.policy.<name>.truststore_path`), or when other custom files
+  (plugin JARs, custom configs) must land somewhere specific. Mount paths
+  that collide with operator-managed paths (`/data`, `/logs`, `/conf`,
+  `/ssl`, `/plugins`, `/truststore`, `/var/lib/neo4j/...`) are rejected by
+  the validator.
+
+The legacy singular `spec.auth.trustStore` field continues to work and is
+folded into the new list at reconcile time. Worked example:
+[`examples/clusters/cluster-with-trusted-cas.yaml`](examples/clusters/cluster-with-trusted-cas.yaml).
+Detailed prose: [Security Best Practices Guide § JVM TrustStore for Internal CAs](docs/user_guide/security.md#jvm-truststore-for-internal-cas).
+
 ### Property-Based and Attribute-Based Access Control (April 2026)
 
 Two complementary additions to the operator's RBAC story, covering the two pieces Neo4j ships under that umbrella.
