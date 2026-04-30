@@ -247,6 +247,55 @@ condition: |
   AND any(c IN abac.oidc.user_attribute('countries') WHERE c = 'US')
 ```
 
+**4. `42I06: Invalid input 'AUTH'` running queries by hand**
+
+Neo4j 2026.x parses AUTH RULE syntax only under Cypher 25, but the system
+database defaults to Cypher 5. The operator prefixes its own AUTH RULE
+statements with `CYPHER 25` automatically; ad-hoc diagnostics via
+`cypher-shell` need the same prefix:
+
+```bash
+# Wrong — fails with 42I06
+kubectl exec mycluster-server-0 -- cypher-shell -u neo4j -p $PASS \
+  "SHOW AUTH RULES"
+
+# Right
+kubectl exec mycluster-server-0 -- cypher-shell --format plain -u neo4j -p $PASS \
+  "CYPHER 25 SHOW AUTH RULES YIELD name, condition, enabled, roles
+   RETURN name, condition, enabled, roles"
+```
+
+Alternatively, set the system database's default language permanently:
+`ALTER DATABASE system SET DEFAULT LANGUAGE CYPHER 25`. This makes the
+prefix unnecessary for both manual queries and the operator.
+
+**5. `entries must be a valid OIDC authorization provider` / `entries must exist in dbms.security.authorization_providers`**
+
+The cluster has not finished wiring the OIDC provider into the right config
+maps. ABAC requires *four* coordinated touchpoints — see the
+[OIDC + ABAC setup checklist](../user_guide/security.md#oidc--abac-setup-checklist)
+in the security guide. Each missing step surfaces as a different error:
+
+| Missing step | Error |
+|---|---|
+| `dbms.security.oidc.<name>.*` block | `entries must be a valid OIDC authorization provider. Invalid values: <name>` |
+| `oidc-<name>` not in `authorizationProviders` | `entries must exist in dbms.security.authorization_providers. Invalid values: oidc-<name>` |
+| `dbms.security.abac.authorization_providers` value missing the `oidc-` prefix | Boot-time validation rejects the bare provider name |
+
+In all cases the cluster's pods CrashLoopBackOff at startup with the error in
+`kubectl logs <pod> --previous`; the rule itself never reaches `Ready`
+because the controller cannot connect to a cluster that won't boot.
+
+**6. `does not have required scheme 'https'`**
+
+Neo4j 2026.x rejects `http://` for every `dbms.security.oidc.<name>.*` URI
+at config-parse time. There is no insecure-mode override. Self-hosted IDPs
+without TLS need a TLS-terminating proxy plus the proxy's CA in
+[`spec.trustedCASecrets`](../user_guide/security.md#jvm-truststore-for-internal-cas)
+so Neo4j trusts the issued certificate. The integration test in
+[`test/integration/neo4jauthrule_test.go`](../../test/integration/neo4jauthrule_test.go)
+shows this end-to-end with cert-manager + nginx + mock-oauth2-server.
+
 ## See also
 
 - [User & Role Management Guide](../user_guide/user_role_management.md) — end-to-end walkthrough for `Neo4jUser`, `Neo4jRole`, `Neo4jRoleBinding`, and `Neo4jAuthRule`.

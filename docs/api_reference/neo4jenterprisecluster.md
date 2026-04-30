@@ -210,15 +210,17 @@ Specifies role constraints for individual servers.
 
 ### Neo4jOIDCProviderSpec
 
+> **⚠️ All URI fields require `https://`** — Neo4j 2026.x rejects `http://` for `wellKnownDiscoveryURI`, `authEndpoint`, `tokenEndpoint`, `jwksURI`, `userInfoURI`, and `issuer` at config-parse time, and the cluster fails to start. There is no insecure-mode override. Self-hosted IDPs without TLS need a TLS-terminating proxy plus the proxy's CA in [`spec.trustedCASecrets`](#trustedcasecret).
+
 | Field | Type | Description |
 |---|---|---|
 | `displayName` | `string` | Display name on login screen |
-| `wellKnownDiscoveryURI` | `string` | OIDC discovery endpoint (auto-configures other endpoints) |
-| `authEndpoint` | `string` | Authorization endpoint (manual override) |
-| `tokenEndpoint` | `string` | Token endpoint (manual override) |
-| `jwksURI` | `string` | JWKS endpoint (manual override) |
-| `userInfoURI` | `string` | UserInfo endpoint (manual override) |
-| `issuer` | `string` | Issuer identifier (manual override) |
+| `wellKnownDiscoveryURI` | `string` | OIDC discovery endpoint (auto-configures other endpoints). **HTTPS only.** |
+| `authEndpoint` | `string` | Authorization endpoint (manual override). **HTTPS only.** |
+| `tokenEndpoint` | `string` | Token endpoint (manual override). **HTTPS only.** |
+| `jwksURI` | `string` | JWKS endpoint (manual override). **HTTPS only.** |
+| `userInfoURI` | `string` | UserInfo endpoint (manual override). **HTTPS only.** |
+| `issuer` | `string` | Issuer identifier (manual override). **HTTPS only.** |
 | `audience` | `string` | **Required.** Expected JWT `aud` claim |
 | `authFlow` | `string` | `"pkce"` (default) or `"implicit"` |
 | `claims` | [`*OIDCClaimsSpec`](#oidcclaimsspec) | JWT claim mapping |

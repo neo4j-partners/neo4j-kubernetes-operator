@@ -275,6 +275,15 @@ spec:
 
 **Drift reconciliation**: the controller reads `SHOW AUTH RULES` and converges. Editing the condition out-of-band, disabling the rule, or attaching extra role grants are all reverted on the next reconcile (set `enforceRoles: false` on the spec to stop revoking out-of-band grants).
 
+> **Manual queries need a `CYPHER 25` prefix.** AUTH RULE syntax is only parsed under Cypher 25. Neo4j 2026.x defaults the system database to Cypher 5, so a hand-typed `kubectl exec … cypher-shell -- "SHOW AUTH RULES"` returns `42I06: Invalid input 'AUTH'` even when the cluster is fully configured. The operator prefixes its own AUTH RULE statements automatically; for ad-hoc diagnostics, prepend `CYPHER 25` yourself:
+>
+> ```bash
+> kubectl exec mycluster-server-0 -- cypher-shell --format plain -u neo4j -p ... \
+>   "CYPHER 25 SHOW AUTH RULES YIELD name, condition, enabled, roles RETURN name, condition, enabled, roles"
+> ```
+>
+> Alternatively, set the system DB's default language permanently with `ALTER DATABASE system SET DEFAULT LANGUAGE CYPHER 25`.
+
 See the [`Neo4jAuthRule` API reference](../api_reference/neo4jauthrule.md) for the full spec, condition syntax, and limitations.
 
 ### Property-based access control (PBAC)
