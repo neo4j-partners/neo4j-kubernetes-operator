@@ -169,7 +169,7 @@ var _ = Describe("Neo4jUser end-to-end", func() {
 		Eventually(func() string {
 			cmd := exec.CommandContext(ctx, "kubectl", "exec",
 				podName, "-n", namespace.Name, "--",
-				"cypher-shell", "-u", "neo4j", "-p", adminPass,
+				"cypher-shell", "--format", "plain", "-u", "neo4j", "-p", adminPass,
 				"SHOW USERS YIELD user, roles WHERE user = 'appuser' RETURN user, roles",
 			)
 			out, _ := cmd.CombinedOutput()
@@ -183,7 +183,7 @@ var _ = Describe("Neo4jUser end-to-end", func() {
 		Eventually(func() error {
 			cmd := exec.CommandContext(ctx, "kubectl", "exec",
 				podName, "-n", namespace.Name, "--",
-				"cypher-shell", "-u", "appuser", "-p", userPass,
+				"cypher-shell", "--format", "plain", "-u", "appuser", "-p", userPass,
 				"RETURN 1",
 			)
 			out, err := cmd.CombinedOutput()
@@ -218,7 +218,7 @@ var _ = Describe("Neo4jUser end-to-end", func() {
 		Eventually(func() error {
 			cmd := exec.CommandContext(ctx, "kubectl", "exec",
 				podName, "-n", namespace.Name, "--",
-				"cypher-shell", "-u", "appuser", "-p", newUserPass,
+				"cypher-shell", "--format", "plain", "-u", "appuser", "-p", newUserPass,
 				"RETURN 1",
 			)
 			out, err := cmd.CombinedOutput()

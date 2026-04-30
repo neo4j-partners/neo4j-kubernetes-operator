@@ -173,7 +173,7 @@ var _ = Describe("Neo4jDatabase Neo4j-Level Verification", func() {
 			Eventually(func() bool {
 				cmd := exec.CommandContext(ctx, "kubectl", "exec",
 					podName, "-n", namespace.Name, "--",
-					"cypher-shell", "-u", "neo4j", "-p", adminPass,
+					"cypher-shell", "--format", "plain", "-u", "neo4j", "-p", adminPass,
 					"SHOW DATABASES YIELD name WHERE name = 'verifydb' RETURN count(*) AS n",
 				)
 				out, err := cmd.CombinedOutput()
