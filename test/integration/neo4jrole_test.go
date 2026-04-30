@@ -43,7 +43,6 @@ import (
 var _ = Describe("Neo4jRole end-to-end", func() {
 	const (
 		testTimeout = time.Second * 600
-		adminPass   = "password123"
 	)
 
 	var (
@@ -52,6 +51,7 @@ var _ = Describe("Neo4jRole end-to-end", func() {
 		cluster     *neo4jv1beta1.Neo4jEnterpriseCluster
 		role        *neo4jv1beta1.Neo4jRole
 		clusterName string
+		adminPass   string
 	)
 
 	BeforeEach(func() {
@@ -61,6 +61,7 @@ var _ = Describe("Neo4jRole end-to-end", func() {
 			Skip("Operator must be running in the cluster for integration tests")
 		}
 
+		adminPass = randomPassword(18)
 		namespaceName := createTestNamespace("role-e2e")
 		namespace = &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespaceName}}
 		clusterName = fmt.Sprintf("role-%d", time.Now().Unix())

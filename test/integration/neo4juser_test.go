@@ -43,9 +43,6 @@ import (
 var _ = Describe("Neo4jUser end-to-end", func() {
 	const (
 		testTimeout = time.Second * 600
-		adminPass   = "password123"
-		userPass    = "userpass456"
-		newUserPass = "rotatedpass789"
 	)
 
 	var (
@@ -55,6 +52,9 @@ var _ = Describe("Neo4jUser end-to-end", func() {
 		user        *neo4jv1beta1.Neo4jUser
 		creds       *corev1.Secret
 		clusterName string
+		adminPass   string
+		userPass    string
+		newUserPass string
 	)
 
 	BeforeEach(func() {
@@ -63,6 +63,10 @@ var _ = Describe("Neo4jUser end-to-end", func() {
 		if !isOperatorRunning() {
 			Skip("Operator must be running in the cluster for integration tests")
 		}
+
+		adminPass = randomPassword(18)
+		userPass = randomPassword(18)
+		newUserPass = randomPassword(18)
 
 		namespaceName := createTestNamespace("user-e2e")
 		namespace = &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespaceName}}

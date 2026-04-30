@@ -40,8 +40,6 @@ import (
 var _ = Describe("Neo4jRoleBinding end-to-end", func() {
 	const (
 		testTimeout = time.Second * 600
-		adminPass   = "password123"
-		extUserPass = "externuserpass"
 	)
 
 	var (
@@ -50,6 +48,8 @@ var _ = Describe("Neo4jRoleBinding end-to-end", func() {
 		cluster     *neo4jv1beta1.Neo4jEnterpriseCluster
 		binding     *neo4jv1beta1.Neo4jRoleBinding
 		clusterName string
+		adminPass   string
+		extUserPass string
 	)
 
 	BeforeEach(func() {
@@ -59,6 +59,8 @@ var _ = Describe("Neo4jRoleBinding end-to-end", func() {
 			Skip("Operator must be running in the cluster for integration tests")
 		}
 
+		adminPass = randomPassword(18)
+		extUserPass = randomPassword(18)
 		namespaceName := createTestNamespace("rb-e2e")
 		namespace = &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespaceName}}
 		clusterName = fmt.Sprintf("rb-%d", time.Now().Unix())

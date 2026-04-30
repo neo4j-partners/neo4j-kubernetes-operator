@@ -18,6 +18,8 @@ package integration_test
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"os"
 	"os/exec"
@@ -197,6 +199,19 @@ var _ = AfterSuite(func() {
 
 	By("Test environment cleanup completed")
 })
+
+// randomPassword returns a URL-safe base64-encoded random string of `entropyBytes`
+// raw bytes (so the encoded length is roughly entropyBytes * 4 / 3). Used to keep
+// integration-test credentials out of the source tree — reproducing or replaying
+// a leaked test password against a fresh cluster fails because the password is
+// generated per BeforeEach. Neo4j requires passwords ≥ 8 characters; pass
+// entropyBytes ≥ 8 to stay comfortably above that.
+func randomPassword(entropyBytes int) string {
+	buf := make([]byte, entropyBytes)
+	_, err := rand.Read(buf)
+	Expect(err).NotTo(HaveOccurred(), "crypto/rand.Read should not fail")
+	return base64.RawURLEncoding.EncodeToString(buf)
+}
 
 // createTestNamespace creates a unique namespace for each test
 func createTestNamespace(name string) string {
