@@ -230,7 +230,7 @@ stringData:
 | Field | Neo4j Config Key | Description |
 |-------|-----------------|-------------|
 | `ldap.host` | `dbms.security.ldap.host` | LDAP server URL (`ldap://` or `ldaps://`) |
-| `ldap.useStartTLS` | `dbms.security.ldap.use_starttls` | Upgrade a plain `ldap://` connection to TLS via STARTTLS after the initial connect. Do not use with `ldaps://`, which negotiates TLS at connect time. |
+| `ldap.useStartTLS` | `dbms.security.ldap.use_starttls` | Use STARTTLS with `ldap://` (typically port 389) to upgrade the connection to TLS after connect. Use `ldaps://` (typically port 636) for immediate TLS negotiation at connect time. These approaches are mutually exclusive; do not enable STARTTLS when using `ldaps://`. |
 | `ldap.authentication.userDNTemplate` | `dbms.security.ldap.authentication.user_dn_template` | DN template, `{0}` = username |
 | `ldap.authentication.searchForAttribute` | `dbms.security.ldap.authentication.search_for_attribute` | Use attribute search instead of DN template |
 | `ldap.authentication.attribute` | `dbms.security.ldap.authentication.attribute` | Attribute to search (e.g., `samaccountname`) |
@@ -247,6 +247,8 @@ stringData:
 | `ldap.debugGroupLogging` | `dbms.security.logs.ldap.groups_at_debug_level_enabled` | Debug logging (disable in production) |
 
 ### OIDC / SSO Integration
+
+> **Prerequisite (Neo4j 2026.x): OIDC endpoints must use HTTPS.** Configure TLS for your identity provider (or place it behind a TLS-terminating proxy) before enabling OIDC, or Neo4j will fail to start. Full details on the requirement are in the warning further down this section.
 
 The operator supports one or more OIDC providers via the `spec.auth.oidc` map. Each key becomes the provider name in Neo4j's config (`dbms.security.oidc.<name>.*`).
 
@@ -394,8 +396,9 @@ For each entry, the operator:
 2. Runs the `truststore-init` init container, which:
    - Copies the JDK's default `cacerts` into a writable JKS at
      `/truststore/truststore.jks`. This preserves trust in public CAs (Let's
-     Encrypt, DigiCert, etc.) — you don't lose access to the public web by
-     adding internal CAs.
+     Encrypt, DigiCert, etc.) — Neo4j can still connect to publicly trusted
+     endpoints (for example, cloud services and public HTTPS APIs) while also
+     trusting your internal CAs.
    - Runs `keytool -import` for each supplied CA, using the **Secret name as
      the keytool alias**. Names must therefore be unique across the list.
 3. Sets `NEO4J_server_jvm_additional` (cluster) /
@@ -468,9 +471,7 @@ spec:
     dbms.ssl.policy.replica.truststore_password: ""
 ```
 
-Mount paths that collide with operator-managed paths (`/data`, `/logs`, `/conf`,
-`/ssl`, `/plugins`, `/truststore`, `/truststore-ca`, `/var/lib/neo4j/{data,logs,
-conf,plugins,certificates}`) are rejected by the validator at admission time.
+Mount paths that collide with operator-managed paths are rejected by the validator at admission time. Reserved paths include `/data`, `/logs`, `/conf`, `/ssl`, `/plugins`, `/truststore`, `/truststore-ca`, and subdirectories under `/var/lib/neo4j/` such as `data`, `logs`, `conf`, `plugins`, and `certificates`.
 
 ### Group-to-Role Mapping
 
@@ -684,7 +685,7 @@ spec:
           app.kubernetes.io/name: neo4j
     ports:
     - protocol: TCP
-      port: 6000  # Neo4j Discovery Protocol v2 (cluster member discovery)
+      port: 6000  # Cluster discovery (member discovery)
     - protocol: TCP
       port: 7000  # RAFT
 
