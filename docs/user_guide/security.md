@@ -252,7 +252,7 @@ The operator supports one or more OIDC providers via the `spec.auth.oidc` map. E
 
 > **⚠️ Neo4j 2026.x requires HTTPS for every OIDC URI.** `wellKnownDiscoveryURI`, `authEndpoint`, `tokenEndpoint`, `jwksURI`, `userInfoURI`, and `issuer` are all validated at config-parse time; an `http://` value causes Neo4j to refuse to start with `Error evaluating value for setting … does not have required scheme 'https'`. There is no insecure-mode override. Self-hosted IDPs that default to HTTP in dev need a TLS-terminating proxy (and the proxy's CA in [`spec.trustedCASecrets`](#jvm-truststore-for-internal-cas)) before the cluster can boot.
 
-#### OIDC + ABAC setup checklist
+#### OIDC and ABAC setup checklist
 
 Wiring up an OIDC provider — especially when used as an ABAC authorization provider — requires *four* coordinated config touchpoints. Missing any one surfaces as a different error from Neo4j:
 
@@ -263,7 +263,7 @@ Wiring up an OIDC provider — especially when used as an ABAC authorization pro
 | 3. Authorization providers | `spec.auth.authorizationProviders` | include `oidc-<name>` | `entries must exist in dbms.security.authorization_providers. Invalid values: oidc-<name>` |
 | 4. ABAC provider list (only for `Neo4jAuthRule`) | `spec.config["dbms.security.abac.authorization_providers"]` | the prefixed name `oidc-<name>` (NOT bare `<name>`) | `entries must be a valid OIDC authorization provider` *or* `entries must exist in dbms.security.authorization_providers` |
 
-A complete worked example for ABAC is in [`examples/users-roles/07-authrule-abac.yaml`](../../examples/users-roles/07-authrule-abac.yaml); the integration test fixtures show the same pattern with a self-signed CA: [`test/integration/neo4jauthrule_test.go`](../../test/integration/neo4jauthrule_test.go).
+A complete worked example for ABAC is at [`examples/users-roles/07-authrule-abac.yaml`](https://github.com/priyolahiri/neo4j-kubernetes-operator/blob/main/examples/users-roles/07-authrule-abac.yaml); the integration test fixtures show the same pattern with a self-signed CA at [`test/integration/neo4jauthrule_test.go`](https://github.com/priyolahiri/neo4j-kubernetes-operator/blob/main/test/integration/neo4jauthrule_test.go).
 
 #### Single Provider (Okta)
 

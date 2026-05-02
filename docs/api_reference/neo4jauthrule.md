@@ -273,7 +273,7 @@ prefix unnecessary for both manual queries and the operator.
 
 The cluster has not finished wiring the OIDC provider into the right config
 maps. ABAC requires *four* coordinated touchpoints — see the
-[OIDC + ABAC setup checklist](../user_guide/security.md#oidc--abac-setup-checklist)
+[OIDC and ABAC setup checklist](../user_guide/security.md#oidc-and-abac-setup-checklist)
 in the security guide. Each missing step surfaces as a different error:
 
 | Missing step | Error |
@@ -293,7 +293,7 @@ at config-parse time. There is no insecure-mode override. Self-hosted IDPs
 without TLS need a TLS-terminating proxy plus the proxy's CA in
 [`spec.trustedCASecrets`](../user_guide/security.md#jvm-truststore-for-internal-cas)
 so Neo4j trusts the issued certificate. The integration test in
-[`test/integration/neo4jauthrule_test.go`](../../test/integration/neo4jauthrule_test.go)
+[`test/integration/neo4jauthrule_test.go`](https://github.com/priyolahiri/neo4j-kubernetes-operator/blob/main/test/integration/neo4jauthrule_test.go)
 shows this end-to-end with cert-manager + nginx + mock-oauth2-server.
 
 ## See also
