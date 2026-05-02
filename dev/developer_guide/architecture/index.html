@@ -1737,6 +1737,8 @@
       
         
       
+        
+      
     
     
     
@@ -1965,6 +1967,34 @@
     
   
     Neo4jRoleBinding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api_reference/neo4jauthrule/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Neo4jAuthRule
   
 
     
@@ -2893,10 +2923,104 @@
   <a href="#tlsssl-support" class="md-nav__link">
     <span class="md-ellipsis">
       
-        TLS/SSL Support:
+        TLS/SSL Support
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="TLS/SSL Support">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-activation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Activation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-certificate-creation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Certificate creation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-mounting-into-neo4j-pods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Mounting into Neo4j pods
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-operator-side-bolt-connection-outgoing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Operator-side Bolt connection (outgoing)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-standalone-differences" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Standalone differences
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-outbound-trust-spectrustedcasecrets-specextravolumes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Outbound trust — spec.trustedCASecrets &amp; spec.extraVolumes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#7-adjacent-integrations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Adjacent integrations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tlsssl-quick-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TLS/SSL quick reference
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
         
@@ -3900,10 +4024,104 @@
   <a href="#tlsssl-support" class="md-nav__link">
     <span class="md-ellipsis">
       
-        TLS/SSL Support:
+        TLS/SSL Support
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="TLS/SSL Support">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-activation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Activation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-certificate-creation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Certificate creation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-mounting-into-neo4j-pods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Mounting into Neo4j pods
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-operator-side-bolt-connection-outgoing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Operator-side Bolt connection (outgoing)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-standalone-differences" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Standalone differences
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-outbound-trust-spectrustedcasecrets-specextravolumes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Outbound trust — spec.trustedCASecrets &amp; spec.extraVolumes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#7-adjacent-integrations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Adjacent integrations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tlsssl-quick-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TLS/SSL quick reference
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
         
@@ -4201,8 +4419,13 @@
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">    </span><span class="nx">Image</span><span class="w">    </span><span class="nx">ImageSpec</span><span class="w">              </span><span class="s">`json:&quot;image&quot;`</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">    </span><span class="nx">Topology</span><span class="w"> </span><span class="nx">TopologyConfiguration</span><span class="w">  </span><span class="s">`json:&quot;topology&quot;`</span><span class="w">  </span><span class="c1">// servers: N</span>
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">    </span><span class="nx">Storage</span><span class="w">  </span><span class="nx">StorageSpec</span><span class="w">           </span><span class="s">`json:&quot;storage&quot;`</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">    </span><span class="c1">// ... additional fields</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="p">}</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">    </span><span class="c1">// Outbound TLS trust + escape hatches (see &quot;Security Architecture</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">    </span><span class="c1">// &gt; 6. Outbound trust&quot; further down for the full lifecycle):</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">    </span><span class="nx">TrustedCASecrets</span><span class="w">  </span><span class="p">[]</span><span class="nx">TrustedCASecret</span><span class="w">    </span><span class="s">`json:&quot;trustedCASecrets,omitempty&quot;`</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">    </span><span class="nx">ExtraVolumes</span><span class="w">      </span><span class="p">[]</span><span class="nx">corev1</span><span class="p">.</span><span class="nx">Volume</span><span class="w">      </span><span class="s">`json:&quot;extraVolumes,omitempty&quot;`</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">    </span><span class="nx">ExtraVolumeMounts</span><span class="w"> </span><span class="p">[]</span><span class="nx">corev1</span><span class="p">.</span><span class="nx">VolumeMount</span><span class="w"> </span><span class="s">`json:&quot;extraVolumeMounts,omitempty&quot;`</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">    </span><span class="c1">// ... additional fields</span>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="p">}</span>
 </span></code></pre></div></p>
 <h4 id="neo4jenterprisestandalone-neo4jenterprisestandalone_typesgo">Neo4jEnterpriseStandalone (<code>neo4jenterprisestandalone_types.go</code>)<a class="headerlink" href="#neo4jenterprisestandalone-neo4jenterprisestandalone_typesgo" title="Anchor link to this section">&para;</a></h4>
 <ul>
@@ -4212,6 +4435,11 @@
 <li><strong>StatefulSet</strong>: <code>{standalone-name}</code> (no "-server" suffix)</li>
 <li><strong>Configuration</strong>: Modern clustering approach with single member (Neo4j 5.26+)</li>
 <li><strong>Restrictions</strong>: Cannot scale beyond 1 replica</li>
+<li><strong>Shared API surface</strong>: Mirrors the cluster spec for <code>TrustedCASecrets</code> /
+  <code>ExtraVolumes</code> / <code>ExtraVolumeMounts</code>. The wire-up differs slightly: cluster
+  pods receive <code>-Djavax.net.ssl.trustStore=…</code> via the <code>NEO4J_server_jvm_additional</code>
+  env var, while standalone pods receive the same flags as <code>server.jvm.additional=…</code>
+  lines emitted into the ConfigMap-backed neo4j.conf.</li>
 </ul>
 <h3 id="database-management-crds">Database Management CRDs<a class="headerlink" href="#database-management-crds" title="Anchor link to this section">&para;</a></h3>
 <h4 id="neo4jdatabase-neo4jdatabase_typesgo">Neo4jDatabase (<code>neo4jdatabase_types.go</code>)<a class="headerlink" href="#neo4jdatabase-neo4jdatabase_typesgo" title="Anchor link to this section">&para;</a></h4>
@@ -4310,7 +4538,10 @@
 <li><strong>MemoryValidator</strong> (<code>memory_validator.go</code>): Neo4j memory settings vs container limits</li>
 <li><strong>ResourceValidator</strong> (<code>resource_validator.go</code>): CPU, memory, and storage validation</li>
 <li><strong>TLSValidator</strong> (<code>tls_validator.go</code>): TLS/SSL configuration validation</li>
+<li><strong>TruststoreValidator</strong> (<code>truststore_validator.go</code>): unique Secret names in <code>spec.trustedCASecrets</code> (the name doubles as the keytool alias) plus reserved-mount-path collision check for <code>spec.extraVolumeMounts</code> (<code>/data</code>, <code>/logs</code>, <code>/conf</code>, <code>/ssl</code>, <code>/plugins</code>, <code>/truststore</code>, <code>/truststore-ca</code>, <code>/var/lib/neo4j/...</code>)</li>
 <li><strong>DatabaseValidator</strong> (<code>database_validator.go</code>): Database creation and topology validation</li>
+<li><strong>AuthRuleValidator</strong> (<code>authrule_validator.go</code>): Neo4jAuthRule name pattern + DDL-keyword guard on the condition expression (rejects CREATE / DROP / ALTER / GRANT / DENY / REVOKE / SHOW / RENAME and <code>;</code> injection)</li>
+<li><strong>RoleValidator / UserValidator / RoleBindingValidator</strong> (<code>role_validator.go</code>, <code>user_validator.go</code>, <code>rolebinding_validator.go</code>): privilege list, identifier rules, cross-CR overlap with <code>Neo4jUser</code></li>
 </ul>
 <h4 id="enhanced-validation-features">Enhanced Validation Features:<a class="headerlink" href="#enhanced-validation-features" title="Anchor link to this section">&para;</a></h4>
 <ul>
@@ -4402,6 +4633,7 @@ CalVer detection: <code>ParseVersion()</code> → <code>IsCalver</code> (<code>m
 <li><strong>ConfigMapBuilder</strong>: Unified configuration for both deployment types</li>
 <li><strong>ServiceBuilder</strong>: Client and discovery services</li>
 <li><strong>BackupBuilder</strong>: Centralized backup StatefulSet</li>
+<li><strong>TruststoreBuilder</strong> (<code>cluster.go:BuildTrustStoreInitContainer / BuildTrustStoreVolumes / CollectTrustedCASecrets</code>): emits the per-Secret volume mounts, the writable <code>/truststore</code> EmptyDir, and the <code>truststore-init</code> init container (seeds <code>/truststore/truststore.jks</code> from <code>$JAVA_HOME/lib/security/cacerts</code>, then <code>keytool -import</code> for each <code>spec.trustedCASecrets</code> entry using the Secret name as alias). Reused by both cluster (env var) and standalone (ConfigMap) wire-up paths via <code>CollectTrustedCASecrets</code>, which folds the legacy singular <code>spec.auth.trustStore</code> into the new plural list.</li>
 </ul>
 <h4 id="server-based-resource-patterns">Server-Based Resource Patterns:<a class="headerlink" href="#server-based-resource-patterns" title="Anchor link to this section">&para;</a></h4>
 <ul>
@@ -4409,6 +4641,8 @@ CalVer detection: <code>ParseVersion()</code> → <code>IsCalver</code> (<code>m
 <li><strong>Pod Naming</strong>: <code>{cluster-name}-server-0</code>, <code>{cluster-name}-server-1</code>, etc.</li>
 <li><strong>Service Names</strong>: <code>{cluster-name}-client</code>, <code>{cluster-name}-discovery</code></li>
 <li><strong>Backup Resources</strong>: <code>{cluster-name}-backup-0</code> (centralized)</li>
+<li><strong>Truststore mount</strong>: <code>/truststore/truststore.jks</code> (read-only, populated by the <code>truststore-init</code> init container; password is the JVM default <code>changeit</code>)</li>
+<li><strong>User-supplied volumes</strong>: <code>spec.extraVolumes</code> are appended to the pod spec verbatim; <code>spec.extraVolumeMounts</code> are appended to the Neo4j container's mounts after operator-managed mounts but before any backup-sidecar mounts. Operator-managed paths (<code>/data</code>, <code>/logs</code>, <code>/conf</code>, <code>/ssl</code>, <code>/plugins</code>, <code>/truststore</code>, <code>/truststore-ca</code>, <code>/var/lib/neo4j/...</code>) are off-limits and rejected by the validator.</li>
 </ul>
 <h3 id="performance-optimizations">Performance Optimizations<a class="headerlink" href="#performance-optimizations" title="Anchor link to this section">&para;</a></h3>
 <h4 id="reconciliation-efficiency">Reconciliation Efficiency:<a class="headerlink" href="#reconciliation-efficiency" title="Anchor link to this section">&para;</a></h4>
@@ -4439,13 +4673,254 @@ CalVer detection: <code>ParseVersion()</code> → <code>IsCalver</code> (<code>m
 - <strong>Role</strong>: Services and endpoints permissions
 - <strong>RoleBinding</strong>: Links account to role
 - <strong>Endpoints Permission</strong>: <strong>CRITICAL</strong> for cluster formation</p>
-<h3 id="tlsssl-support">TLS/SSL Support:<a class="headerlink" href="#tlsssl-support" title="Anchor link to this section">&para;</a></h3>
+<h3 id="tlsssl-support">TLS/SSL Support<a class="headerlink" href="#tlsssl-support" title="Anchor link to this section">&para;</a></h3>
+<p>The operator integrates with <a href="https://cert-manager.io/">cert-manager</a> for the
+full certificate lifecycle. The flow is the same for clusters and standalones,
+with one structural difference noted at the end.</p>
+<h4 id="1-activation">1. Activation<a class="headerlink" href="#1-activation" title="Anchor link to this section">&para;</a></h4>
+<p>TLS is opt-in via <code>spec.tls</code>:</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">spec</span><span class="p">:</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span><span class="nt">tls</span><span class="p">:</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">    </span><span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cert-manager</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">    </span><span class="nt">issuerRef</span><span class="p">:</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ca-cluster-issuer</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">      </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ClusterIssuer</span>
+</span></code></pre></div>
+<p>Validation (<code>internal/validation/tls_validator.go</code>) runs inline during
+reconciliation — no admission webhooks are used (CLAUDE.md rule #26). When
+<code>mode: disabled</code>, the entire TLS path is skipped and the deployment uses plain
+<code>bolt://</code> and <code>http://</code>.</p>
+<h4 id="2-certificate-creation">2. Certificate creation<a class="headerlink" href="#2-certificate-creation" title="Anchor link to this section">&para;</a></h4>
+<p><code>BuildCertificateForEnterprise</code> (<code>internal/resources/cluster.go</code>) emits a
+<code>cert-manager.io/v1</code> <code>Certificate</code> whose <code>dnsNames</code> cover every endpoint clients
+or peers may connect to:</p>
 <ul>
-<li><strong>Cert-Manager Integration</strong>: Automatic certificate provisioning</li>
-<li><strong>SSL Policy Configuration</strong>: Separate policies for <code>https</code>, <code>bolt</code>, and <code>cluster</code> scopes</li>
-<li><strong>Trust All for Cluster</strong>: <code>dbms.ssl.policy.cluster.trust_all=true</code> for formation</li>
-<li><strong>Certificate DNS Names</strong>: Includes all server pod names</li>
+<li>The headless discovery service (<code>{cluster}-discovery</code>)</li>
+<li>The client service (<code>{cluster}-client</code>)</li>
+<li>Each individual server pod FQDN (<code>{cluster}-server-0.{cluster}-discovery.{ns}.svc.cluster.local</code>, …)</li>
+<li>LoadBalancer hostnames where applicable</li>
 </ul>
+<p>The <code>Certificate</code> references the user-supplied <code>issuerRef</code> and writes its
+material into a Secret named <code>{resource-name}-tls-secret</code> (<code>tls.crt</code>, <code>tls.key</code>,
+<code>ca.crt</code>). cert-manager owns rotation; the operator never touches expiry.</p>
+<h4 id="3-mounting-into-neo4j-pods">3. Mounting into Neo4j pods<a class="headerlink" href="#3-mounting-into-neo4j-pods" title="Anchor link to this section">&para;</a></h4>
+<p>The StatefulSet builder mounts the Secret read-only at <code>/ssl/</code>
+(<code>internal/resources/cluster.go:~1349</code>). Neo4j is then pointed at this directory
+via <code>server.directories.certificates=/ssl</code> along with three SSL policies that
+share the same key/cert/CA bundle:</p>
+<ul>
+<li><code>dbms.ssl.policy.bolt.*</code> — client traffic (<code>bolt+s://</code>)</li>
+<li><code>dbms.ssl.policy.https.*</code> — Browser/HTTP API</li>
+<li><code>dbms.ssl.policy.cluster.*</code> — RAFT and discovery between server pods</li>
+</ul>
+<p><code>dbms.ssl.policy.cluster.trust_all=true</code> is set to allow servers to trust each
+other during cluster formation without per-pod CA pinning.</p>
+<p>When TLS is enabled, <code>server.bolt.tls_level=REQUIRED</code> is also set — plain
+<code>bolt://</code> connections are rejected (regression checklist item #16).</p>
+<h4 id="4-operator-side-bolt-connection-outgoing">4. Operator-side Bolt connection (outgoing)<a class="headerlink" href="#4-operator-side-bolt-connection-outgoing" title="Anchor link to this section">&para;</a></h4>
+<p>The operator reconciles the cluster by issuing Cypher commands over Bolt.
+Two separate concerns layer here: which scheme the URI uses (routing vs
+direct) and which CA the client trusts.</p>
+<p><strong>URI scheme — routing vs direct.</strong> <code>buildConnectionURIForEnterprise</code>
+(<code>internal/neo4j/client.go</code>) uses the <strong>routing scheme</strong>:</p>
+<table>
+<thead>
+<tr>
+<th>Spec</th>
+<th>Scheme</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>spec.tls.mode: disabled</code> (or unset)</td>
+<td><code>neo4j://</code></td>
+</tr>
+<tr>
+<td><code>spec.tls.mode: cert-manager</code></td>
+<td><code>neo4j+s://</code></td>
+</tr>
+</tbody>
+</table>
+<p>The routing scheme is mandatory. Cluster admin commands (CREATE/DROP USER,
+GRANT/REVOKE, CREATE/ALTER/DROP DATABASE, AUTH RULE management, etc.) must
+execute on the cluster leader; the Go driver routes write transactions to
+the leader <strong>only under <code>neo4j://</code></strong>. Under the direct <code>bolt://</code> scheme,
+<code>AccessMode: AccessModeWrite</code> is silently ignored and connections land
+wherever K8s steered them via the <code>{cluster}-client</code> ClusterIP. The
+operator's Bolt clients used to use <code>bolt://</code>, which produced
+<code>Neo.ClientError.Cluster.NotALeader</code> on N-1 of every N reconciles and
+visible Ready ↔ Failed status flicker on the role/user/auth-rule
+controllers. See checklist item #62.</p>
+<p>The <strong>single legitimate <code>bolt://</code> consumer</strong> is
+<code>internal/controller/splitbrain_detector.go:createPodSpecificNeo4jClient</code>,
+which intentionally bypasses the routing layer to query each pod's RAFT
+view individually — the whole point of split-brain detection is to compare
+per-pod state, not to talk to the leader. Standalone deployments use the
+routing scheme too, for symmetry; on a single-member topology
+<code>getRoutingTable</code> reports the lone member as both reader and writer, so
+behavior is equivalent to direct connection.</p>
+<p><strong>Driver timeouts.</strong> <code>NewClientForEnterprise</code> /
+<code>NewClientForEnterpriseStandalone</code> configure:
+- <code>ConnectionAcquisitionTimeout = 10s</code> — full budget for getting a
+  connection (includes routing-table fetch retries under <code>neo4j://</code>)
+- <code>SocketConnectTimeout = 5s</code> — TCP connect to a router member
+- <code>MaxTransactionRetryTime = 15s</code> — retry budget for transient errors</p>
+<p>These values are deliberately tight: an unreachable cluster fails fast
+instead of stalling the controller's reconcile queue behind hung Bolt
+calls. Healthy clusters complete the routing handshake in well under one
+second. See checklist item #63.</p>
+<p><strong>TLS.</strong> <code>buildTLSConfig</code> (<code>internal/neo4j/client.go</code>) governs which CA the
+client trusts:</p>
+<ol>
+<li><strong>Auto-discovery</strong>: load <code>ca.crt</code> from the <code>{resource-name}-tls-secret</code>
+   Secret and pin it as the trusted CA for outgoing connections. This is
+   the default path — no user configuration required.</li>
+<li><strong>Override</strong>: <code>spec.tls.trustedCASecret</code> lets users point at a different
+   Secret (e.g. when bringing their own CA outside cert-manager).</li>
+<li><strong>Fallback</strong>: <code>InsecureSkipVerify</code> is used only during the brief window
+   before the Secret has been populated by cert-manager (regression
+   checklist item #27).</li>
+</ol>
+<p>All three Bolt entry points — <code>NewClientForEnterprise</code>,
+<code>NewClientForEnterpriseStandalone</code>, and <code>NewClientForPod</code> (split-brain
+detector) — go through <code>buildTLSConfig</code>, so the scheme switches
+dynamically between TLS-enabled and plain variants based on <code>spec.tls.mode</code>
+(checklist item #28).</p>
+<h4 id="5-standalone-differences">5. Standalone differences<a class="headerlink" href="#5-standalone-differences" title="Anchor link to this section">&para;</a></h4>
+<p><code>Neo4jEnterpriseStandalone</code> follows the same flow with two structural
+differences:</p>
+<ul>
+<li>A single pod, so <code>dnsNames</code> is shorter (one server FQDN + the client service).</li>
+<li>Neo4j configuration is delivered via a ConfigMap rather than StatefulSet env
+  vars; the <code>health.sh</code> probe (mounted alongside <code>neo4j.conf</code> with mode <code>0755</code>)
+  also lives in this ConfigMap (checklist item #34).</li>
+</ul>
+<h4 id="6-outbound-trust-spectrustedcasecrets-specextravolumes">6. Outbound trust — <code>spec.trustedCASecrets</code> &amp; <code>spec.extraVolumes</code><a class="headerlink" href="#6-outbound-trust-spectrustedcasecrets-specextravolumes" title="Anchor link to this section">&para;</a></h4>
+<p>The cert-manager flow above governs Neo4j-the-server's <em>inbound</em> TLS (Bolt,
+HTTPS, intra-cluster RAFT). Neo4j also makes <em>outbound</em> TLS calls — to OIDC
+providers, LDAPS servers, Aura Fleet Management, plugin download mirrors, and
+in some cluster topologies to peer clusters for replication. When those
+endpoints use a CA the JDK doesn't trust by default, the operator wires a
+custom JVM truststore.</p>
+<p><strong>Sources of truth in code:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Concern</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>API types</td>
+<td><code>api/v1beta1/neo4jenterprisecluster_types.go:TrustedCASecret</code>, plus <code>Neo4jEnterpriseClusterSpec.TrustedCASecrets / ExtraVolumes / ExtraVolumeMounts</code> (mirrored on standalone)</td>
+</tr>
+<tr>
+<td>Validation</td>
+<td><code>internal/validation/truststore_validator.go</code> (unique Secret names, reserved-mount-path collision check)</td>
+</tr>
+<tr>
+<td>Init container + volumes</td>
+<td><code>internal/resources/cluster.go:BuildTrustStoreInitContainer / BuildTrustStoreVolumes / CollectTrustedCASecrets</code></td>
+</tr>
+<tr>
+<td>JVM-additional wire-up (cluster)</td>
+<td><code>internal/resources/cluster.go</code> — env var <code>NEO4J_server_jvm_additional</code></td>
+</tr>
+<tr>
+<td>JVM-additional wire-up (standalone)</td>
+<td><code>internal/controller/neo4jenterprisestandalone_controller.go:createConfigMap</code> — written as <code>server.jvm.additional=...</code> lines in the ConfigMap-backed neo4j.conf</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Init container flow</strong> (one container, runs before Neo4j, image is the same
+Neo4j image so <code>keytool</code> is guaranteed to be present):</p>
+<ol>
+<li><code>cp $JAVA_HOME/lib/security/cacerts /truststore/truststore.jks</code> — seeds
+   the writable JKS with the JDK's default trust roots so public CAs (Let's
+   Encrypt, DigiCert, etc.) keep working. Without this seed step Neo4j would
+   <em>lose</em> trust in public infrastructure when any custom CA was added.</li>
+<li>For each <code>TrustedCASecret</code>: <code>keytool -import -trustcacerts -alias &lt;secret-name&gt;
+   -file /trusted-ca/&lt;secret-name&gt;/&lt;key&gt;</code> (default key <code>ca.crt</code> matches the
+   layout of cert-manager-issued Secrets).</li>
+<li>The resulting JKS is mounted read-only at <code>/truststore/truststore.jks</code>
+   into the main Neo4j container.</li>
+</ol>
+<p><strong>JVM args</strong>: <code>-Djavax.net.ssl.trustStore=/truststore/truststore.jks
+-Djavax.net.ssl.trustStorePassword=changeit</code> — appended to whatever the user
+supplied via <code>spec.config["server.jvm.additional"]</code>. Cluster pods receive
+these via the <code>NEO4J_server_jvm_additional</code> env var; standalone pods receive
+them as <code>server.jvm.additional=...</code> lines written into the ConfigMap-backed
+neo4j.conf.</p>
+<p><strong>Backward compatibility</strong>: the older singular <code>spec.auth.trustStore</code>
+(<code>*SecretKeyRef</code>) is folded into the new list at reconcile time via
+<code>CollectTrustedCASecrets</code>. Both paths produce the same volumes, init
+container, and JVM flags. Names from the explicit <code>trustedCASecrets</code> list
+win on duplication.</p>
+<p><strong>Reserved paths for <code>ExtraVolumeMounts</code></strong>: <code>/data</code>, <code>/logs</code>, <code>/conf</code>,
+<code>/ssl</code>, <code>/plugins</code>, <code>/truststore</code>, <code>/truststore-ca</code>, <code>/var/lib/neo4j</code> (and
+its <code>data/</code>, <code>logs/</code>, <code>conf/</code>, <code>plugins/</code>, <code>certificates/</code> subdirectories)
+are all rejected by the validator — silently overlaying them would either
+destroy operator-managed content or fight the truststore-init flow.</p>
+<p><strong>Why this is needed for ABAC</strong>: Neo4j 2026.04 hard-requires <code>https://</code> for
+every <code>dbms.security.oidc.&lt;name&gt;.*</code> URI and rejects <code>http://</code> at config-parse
+time, before boot. Test environments and self-hosted OIDC providers therefore
+need a TLS-fronted stub plus a trusted CA — <code>trustedCASecrets</code> is the
+ergonomic path; <code>extraVolumes</code> is the escape hatch when a Neo4j SSL policy
+references a per-policy <code>truststore_path</code>.</p>
+<h4 id="7-adjacent-integrations">7. Adjacent integrations<a class="headerlink" href="#7-adjacent-integrations" title="Anchor link to this section">&para;</a></h4>
+<ul>
+<li><strong>ExternalSecrets</strong>: when <code>spec.auth.adminSecret</code> references a Secret managed
+  by ExternalSecrets, the operator resolves it identically — TLS material
+  remains under cert-manager's control regardless.</li>
+<li><strong><code>Neo4jAuthRule</code> (ABAC) and OIDC trust</strong>: the auth-rule reconciler talks to
+  Neo4j via Bolt and does not directly interact with the JVM truststore.
+  However, the cluster <em>itself</em> needs trust to fetch the OIDC well-known
+  document — that's what <code>trustedCASecrets</code> configures.</li>
+</ul>
+<h4 id="tlsssl-quick-reference">TLS/SSL quick reference<a class="headerlink" href="#tlsssl-quick-reference" title="Anchor link to this section">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Concern</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Validation</td>
+<td><code>internal/validation/tls_validator.go</code>, <code>internal/validation/truststore_validator.go</code></td>
+</tr>
+<tr>
+<td>Certificate CR shape</td>
+<td><code>internal/resources/cluster.go:BuildCertificateForEnterprise</code></td>
+</tr>
+<tr>
+<td><code>/ssl/</code> mount + SSL policies</td>
+<td><code>internal/resources/cluster.go</code> (~line 1349, ~line 1672)</td>
+</tr>
+<tr>
+<td>Operator outgoing Bolt TLS</td>
+<td><code>internal/neo4j/client.go:buildTLSConfig</code></td>
+</tr>
+<tr>
+<td>Neo4j-server outgoing TLS truststore</td>
+<td><code>internal/resources/cluster.go:BuildTrustStoreInitContainer</code> (init container) + <code>NEO4J_server_jvm_additional</code> env var</td>
+</tr>
+<tr>
+<td><code>spec.trustedCASecrets</code> API</td>
+<td><code>api/v1beta1/neo4jenterprisecluster_types.go:TrustedCASecret</code></td>
+</tr>
+<tr>
+<td><code>spec.extraVolumes</code> / <code>spec.extraVolumeMounts</code> API</td>
+<td>same file, on the cluster + standalone specs</td>
+</tr>
+<tr>
+<td>Regression invariants</td>
+<td>CLAUDE.md checklist items #16, #27, #28, #34</td>
+</tr>
+</tbody>
+</table>
 <h2 id="monitoring-observability">Monitoring &amp; Observability<a class="headerlink" href="#monitoring-observability" title="Anchor link to this section">&para;</a></h2>
 <h3 id="resource-monitoring-internalmonitoring">Resource Monitoring (<code>internal/monitoring/</code>):<a class="headerlink" href="#resource-monitoring-internalmonitoring" title="Anchor link to this section">&para;</a></h3>
 <ul>

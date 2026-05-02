@@ -1739,6 +1739,8 @@
       
         
       
+        
+      
     
     
     
@@ -2157,6 +2159,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#property-based-access-control-pbac" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Property-Based Access Control (PBAC)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#troubleshooting" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2202,6 +2215,34 @@
     
   
     Neo4jRoleBinding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../neo4jauthrule/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Neo4jAuthRule
   
 
     
@@ -2767,6 +2808,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#property-based-access-control-pbac" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Property-Based Access Control (PBAC)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#troubleshooting" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3072,6 +3124,31 @@
 </span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">  </span><span class="nt">privileges</span><span class="p">:</span>
 </span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;GRANT</span><span class="nv"> </span><span class="s">ACCESS</span><span class="nv"> </span><span class="s">ON</span><span class="nv"> </span><span class="s">DATABASE</span><span class="nv"> </span><span class="s">legacy</span><span class="nv"> </span><span class="s">TO</span><span class="nv"> </span><span class="s">legacy_role&quot;</span>
 </span></code></pre></div>
+<h2 id="property-based-access-control-pbac">Property-Based Access Control (PBAC)<a class="headerlink" href="#property-based-access-control-pbac" title="Anchor link to this section">&para;</a></h2>
+<p><code>Neo4jRole.spec.privileges</code> accepts the full Cypher privilege grammar, including the <code>FOR pattern WHERE …</code> clause used by <a href="https://neo4j.com/docs/operations-manual/current/authentication-authorization/property-based-access-control/">property-based access control</a>. PBAC refines the existing <code>MATCH</code>, <code>READ</code>, and <code>TRAVERSE</code> privileges with per-row conditions on node or relationship properties.</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1beta1</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Neo4jRole</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="nt">metadata</span><span class="p">:</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">redacted-reader</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="nt">spec</span><span class="p">:</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">  </span><span class="nt">clusterRef</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">production</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">redacted_reader</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">  </span><span class="nt">privileges</span><span class="p">:</span>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="w">    </span><span class="c1"># Only allow traversal of Email nodes whose classification has been set</span>
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;GRANT</span><span class="nv"> </span><span class="s">TRAVERSE</span><span class="nv"> </span><span class="s">ON</span><span class="nv"> </span><span class="s">GRAPH</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">FOR</span><span class="nv"> </span><span class="s">(n:Email)</span><span class="nv"> </span><span class="s">WHERE</span><span class="nv"> </span><span class="s">n.classification</span><span class="nv"> </span><span class="s">IS</span><span class="nv"> </span><span class="s">NOT</span><span class="nv"> </span><span class="s">NULL</span><span class="nv"> </span><span class="s">TO</span><span class="nv"> </span><span class="s">redacted_reader&quot;</span>
+</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="w">    </span><span class="c1"># Hide anything not classified UNCLASSIFIED or PUBLIC</span>
+</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;DENY</span><span class="nv"> </span><span class="s">READ</span><span class="nv"> </span><span class="s">{*}</span><span class="nv"> </span><span class="s">ON</span><span class="nv"> </span><span class="s">GRAPH</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">FOR</span><span class="nv"> </span><span class="s">(n)</span><span class="nv"> </span><span class="s">WHERE</span><span class="nv"> </span><span class="s">NOT</span><span class="nv"> </span><span class="s">n.classification</span><span class="nv"> </span><span class="s">IN</span><span class="nv"> </span><span class="s">[&#39;UNCLASSIFIED&#39;,</span><span class="nv"> </span><span class="s">&#39;PUBLIC&#39;]</span><span class="nv"> </span><span class="s">TO</span><span class="nv"> </span><span class="s">redacted_reader&quot;</span>
+</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="w">    </span><span class="c1"># Filter relationships by property</span>
+</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;GRANT</span><span class="nv"> </span><span class="s">READ</span><span class="nv"> </span><span class="s">{since}</span><span class="nv"> </span><span class="s">ON</span><span class="nv"> </span><span class="s">GRAPH</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">FOR</span><span class="nv"> </span><span class="s">()-[o:OWNS]-()</span><span class="nv"> </span><span class="s">WHERE</span><span class="nv"> </span><span class="s">o.classification</span><span class="nv"> </span><span class="s">=</span><span class="nv"> </span><span class="s">&#39;UNCLASSIFIED&#39;</span><span class="nv"> </span><span class="s">TO</span><span class="nv"> </span><span class="s">redacted_reader&quot;</span>
+</span></code></pre></div>
+<p>PBAC privileges flow through the same diff-and-reconcile loop as standard privileges. The canonicaliser upper-cases <code>WHERE</code>, <code>IS</code>, <code>NULL</code>, <code>IN</code>, <code>NOT</code>, <code>AND</code>, <code>OR</code>, and <code>FOR</code> so spec strings round-trip equal against <code>SHOW ROLE PRIVILEGES AS COMMANDS</code> regardless of input casing.</p>
+<p><strong>Limitations</strong> (per upstream Neo4j docs):</p>
+<ul>
+<li><strong>Single property per rule.</strong> Each <code>WHERE</code> clause references one property only; chained comparisons across properties require multiple privileges.</li>
+<li><strong>Sharded property databases are unsupported.</strong> The role validator rejects PBAC privileges naming a <code>Neo4jShardedDatabase</code> and warns when <code>ON GRAPH *</code> is used in combination with <code>FOR pattern WHERE …</code> (silent ineffectiveness on any sharded DBs in scope).</li>
+<li><strong>Performance overhead.</strong> PBAC adds per-row evaluation, especially significant on <code>TRAVERSE</code> rules and on disk-backed storage. Profile before deploying widely; consider <code>block</code> storage format and label-based privileges where the row count is high.</li>
+<li><strong>Property immutability.</strong> If a user can write the property used in a PBAC rule, they can bypass the rule. Pair PBAC with a corresponding <code>DENY SET PROPERTY</code> privilege.</li>
+</ul>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Anchor link to this section">&para;</a></h2>
 <p><strong><code>validation failed: ... privilege statement must end with TO &lt;role&gt;</code></strong>: every privilege must name the role being defined. Update the statement to end with <code>TO &lt;spec.name&gt;</code>.</p>
 <p><strong><code>cannot revoke immutable privilege ...</code></strong>: the controller cannot revoke <code>GRANT IMMUTABLE</code> privileges while auth is enabled. Either include them in <code>spec.privileges</code> (so they're no longer drift) or set <code>enforcePrivileges: false</code>.</p>

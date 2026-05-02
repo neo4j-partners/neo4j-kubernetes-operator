@@ -1027,6 +1027,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#outbound-tls-trusting-external-cas-from-inside-neo4j" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Outbound TLS — trusting external CAs from inside Neo4j
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#related-documentation" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2147,6 +2158,8 @@
       
         
       
+        
+      
     
     
     
@@ -2375,6 +2388,34 @@
     
   
     Neo4jRoleBinding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api_reference/neo4jauthrule/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Neo4jAuthRule
   
 
     
@@ -3124,6 +3165,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#outbound-tls-trusting-external-cas-from-inside-neo4j" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Outbound TLS — trusting external CAs from inside Neo4j
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#related-documentation" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3485,6 +3537,38 @@
 </span><span id="__span-18-10"><a id="__codelineno-18-10" name="__codelineno-18-10" href="#__codelineno-18-10"></a><span class="c1"># Verify certificate</span>
 </span><span id="__span-18-11"><a id="__codelineno-18-11" name="__codelineno-18-11" href="#__codelineno-18-11"></a>openssl<span class="w"> </span>verify<span class="w"> </span>-CAfile<span class="w"> </span>ca.crt<span class="w"> </span>server.crt
 </span></code></pre></div>
+<h2 id="outbound-tls-trusting-external-cas-from-inside-neo4j">Outbound TLS — trusting external CAs from inside Neo4j<a class="headerlink" href="#outbound-tls-trusting-external-cas-from-inside-neo4j" title="Anchor link to this section">&para;</a></h2>
+<p>The sections above cover <strong>inbound</strong> TLS — clients connecting <em>to</em> Neo4j over
+Bolt/HTTPS. Neo4j also makes <strong>outbound</strong> TLS calls (OIDC providers, LDAPS,
+plugin downloads, cross-cluster replication peers, Aura Fleet Management).
+For those, Neo4j needs to <em>trust</em> the remote endpoint's CA.</p>
+<p>The operator exposes two fields for this:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>When to use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>spec.trustedCASecrets</code> (list of <code>{name, key}</code>)</td>
+<td>Most cases. Adds each Secret's CA to Neo4j's JVM-default truststore. Works for OIDC, LDAPS, generic outbound HTTPS. Cert-manager-issued Secrets reference directly — default key <code>ca.crt</code> matches.</td>
+</tr>
+<tr>
+<td><code>spec.extraVolumes</code> + <code>spec.extraVolumeMounts</code></td>
+<td>When a Neo4j SSL policy (e.g. cross-cluster replication) needs a CA at a specific filesystem path via <code>dbms.ssl.policy.&lt;name&gt;.truststore_path</code>.</td>
+</tr>
+</tbody>
+</table>
+<p>The legacy singular <code>spec.auth.trustStore</code> continues to work and is folded
+into the same JKS at reconcile time.</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># cert-manager Certificate produces a Secret with ca.crt; reference it directly</span>
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="nt">trustedCASecrets</span><span class="p">:</span>
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">corp-oidc-ca</span>
+</span></code></pre></div>
+<p>Full prose in
+<a href="../security/#jvm-truststore-for-internal-cas">Security Best Practices Guide § JVM TrustStore for Internal CAs</a>.</p>
 <h2 id="related-documentation">Related Documentation<a class="headerlink" href="#related-documentation" title="Anchor link to this section">&para;</a></h2>
 <ul>
 <li><a href="../external_access/">External Access Guide</a></li>
