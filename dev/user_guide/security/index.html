@@ -3968,7 +3968,7 @@
 <tr>
 <td><code>ldap.useStartTLS</code></td>
 <td><code>dbms.security.ldap.use_starttls</code></td>
-<td>Upgrade a plain <code>ldap://</code> connection to TLS via STARTTLS after the initial connect. Do not use with <code>ldaps://</code>, which negotiates TLS at connect time.</td>
+<td>Use STARTTLS with <code>ldap://</code> (typically port 389) to upgrade the connection to TLS after connect. Use <code>ldaps://</code> (typically port 636) for immediate TLS negotiation at connect time. These approaches are mutually exclusive; do not enable STARTTLS when using <code>ldaps://</code>.</td>
 </tr>
 <tr>
 <td><code>ldap.authentication.userDNTemplate</code></td>
@@ -4043,6 +4043,9 @@
 </tbody>
 </table>
 <h3 id="oidc-sso-integration">OIDC / SSO Integration<a class="headerlink" href="#oidc-sso-integration" title="Anchor link to this section">&para;</a></h3>
+<blockquote>
+<p><strong>Prerequisite (Neo4j 2026.x): OIDC endpoints must use HTTPS.</strong> Configure TLS for your identity provider (or place it behind a TLS-terminating proxy) before enabling OIDC, or Neo4j will fail to start. Full details on the requirement are in the warning further down this section.</p>
+</blockquote>
 <p>The operator supports one or more OIDC providers via the <code>spec.auth.oidc</code> map. Each key becomes the provider name in Neo4j's config (<code>dbms.security.oidc.&lt;name&gt;.*</code>).</p>
 <blockquote>
 <p><strong>⚠️ Neo4j 2026.x requires HTTPS for every OIDC URI.</strong> <code>wellKnownDiscoveryURI</code>, <code>authEndpoint</code>, <code>tokenEndpoint</code>, <code>jwksURI</code>, <code>userInfoURI</code>, and <code>issuer</code> are all validated at config-parse time; an <code>http://</code> value causes Neo4j to refuse to start with <code>Error evaluating value for setting … does not have required scheme 'https'</code>. There is no insecure-mode override. Self-hosted IDPs that default to HTTP in dev need a TLS-terminating proxy (and the proxy's CA in <a href="#jvm-truststore-for-internal-cas"><code>spec.trustedCASecrets</code></a>) before the cluster can boot.</p>
@@ -4266,8 +4269,9 @@ Certificate it issues.</p>
 <li>Runs the <code>truststore-init</code> init container, which:</li>
 <li>Copies the JDK's default <code>cacerts</code> into a writable JKS at
      <code>/truststore/truststore.jks</code>. This preserves trust in public CAs (Let's
-     Encrypt, DigiCert, etc.) — you don't lose access to the public web by
-     adding internal CAs.</li>
+     Encrypt, DigiCert, etc.) — Neo4j can still connect to publicly trusted
+     endpoints (for example, cloud services and public HTTPS APIs) while also
+     trusting your internal CAs.</li>
 <li>Runs <code>keytool -import</code> for each supplied CA, using the <strong>Secret name as
      the keytool alias</strong>. Names must therefore be unique across the list.</li>
 <li>Sets <code>NEO4J_server_jvm_additional</code> (cluster) /
@@ -4329,9 +4333,7 @@ typically because a Neo4j SSL policy references a per-policy <code>truststore_pa
 </span><span id="__span-17-11"><a id="__codelineno-17-11" name="__codelineno-17-11" href="#__codelineno-17-11"></a><span class="w">    </span><span class="nt">dbms.ssl.policy.replica.truststore_path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/var/lib/neo4j/policies/replica/ca.crt</span>
 </span><span id="__span-17-12"><a id="__codelineno-17-12" name="__codelineno-17-12" href="#__codelineno-17-12"></a><span class="w">    </span><span class="nt">dbms.ssl.policy.replica.truststore_password</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&quot;</span>
 </span></code></pre></div>
-<p>Mount paths that collide with operator-managed paths (<code>/data</code>, <code>/logs</code>, <code>/conf</code>,
-<code>/ssl</code>, <code>/plugins</code>, <code>/truststore</code>, <code>/truststore-ca</code>, <code>/var/lib/neo4j/{data,logs,
-conf,plugins,certificates}</code>) are rejected by the validator at admission time.</p>
+<p>Mount paths that collide with operator-managed paths are rejected by the validator at admission time. Reserved paths include <code>/data</code>, <code>/logs</code>, <code>/conf</code>, <code>/ssl</code>, <code>/plugins</code>, <code>/truststore</code>, <code>/truststore-ca</code>, and subdirectories under <code>/var/lib/neo4j/</code> such as <code>data</code>, <code>logs</code>, <code>conf</code>, <code>plugins</code>, and <code>certificates</code>.</p>
 <h3 id="group-to-role-mapping">Group-to-Role Mapping<a class="headerlink" href="#group-to-role-mapping" title="Anchor link to this section">&para;</a></h3>
 <p>Both LDAP and OIDC support mapping external groups to Neo4j built-in roles:</p>
 <table>
@@ -4558,7 +4560,7 @@ conf,plugins,certificates}</code>) are rejected by the validator at admission ti
 </span><span id="__span-25-34"><a id="__codelineno-25-34" name="__codelineno-25-34" href="#__codelineno-25-34"></a><span class="w">          </span><span class="nt">app.kubernetes.io/name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j</span>
 </span><span id="__span-25-35"><a id="__codelineno-25-35" name="__codelineno-25-35" href="#__codelineno-25-35"></a><span class="w">    </span><span class="nt">ports</span><span class="p">:</span>
 </span><span id="__span-25-36"><a id="__codelineno-25-36" name="__codelineno-25-36" href="#__codelineno-25-36"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">protocol</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">TCP</span>
-</span><span id="__span-25-37"><a id="__codelineno-25-37" name="__codelineno-25-37" href="#__codelineno-25-37"></a><span class="w">      </span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">6000</span><span class="w">  </span><span class="c1"># Neo4j Discovery Protocol v2 (cluster member discovery)</span>
+</span><span id="__span-25-37"><a id="__codelineno-25-37" name="__codelineno-25-37" href="#__codelineno-25-37"></a><span class="w">      </span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">6000</span><span class="w">  </span><span class="c1"># Cluster discovery (member discovery)</span>
 </span><span id="__span-25-38"><a id="__codelineno-25-38" name="__codelineno-25-38" href="#__codelineno-25-38"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">protocol</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">TCP</span>
 </span><span id="__span-25-39"><a id="__codelineno-25-39" name="__codelineno-25-39" href="#__codelineno-25-39"></a><span class="w">      </span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">7000</span><span class="w">  </span><span class="c1"># RAFT</span>
 </span><span id="__span-25-40"><a id="__codelineno-25-40" name="__codelineno-25-40" href="#__codelineno-25-40"></a>
