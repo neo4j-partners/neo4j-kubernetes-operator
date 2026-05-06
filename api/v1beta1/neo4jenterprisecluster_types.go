@@ -64,11 +64,6 @@ type Neo4jEnterpriseClusterSpec struct {
 
 	Backups *BackupsSpec `json:"backups,omitempty"`
 
-	UI *UISpec `json:"ui,omitempty"`
-
-	// RestoreFrom specifies backup to restore from during cluster creation
-	RestoreFrom *RestoreSpec `json:"restoreFrom,omitempty"`
-
 	// UpgradeStrategy specifies how to handle rolling upgrades
 	UpgradeStrategy *UpgradeStrategySpec `json:"upgradeStrategy,omitempty"`
 
@@ -305,17 +300,17 @@ type IssuerRef struct {
 
 // AuthSpec defines authentication and authorization configuration.
 // Supports multi-provider setups (e.g., ldap+native) and typed configuration
-// for LDAP, OIDC/SSO, JWT, and Kerberos that generates correct neo4j.conf entries.
+// for LDAP, OIDC/SSO, and Kerberos that generates correct neo4j.conf entries.
 type AuthSpec struct {
 	// AuthenticationProviders is an ordered list of authentication providers.
-	// Neo4j evaluates them in order during login. Valid values: native, ldap, oidc-<name>, jwt, kerberos.
+	// Neo4j evaluates them in order during login. Valid values: native, ldap, oidc-<name>, kerberos.
 	// For OIDC providers, use the format "oidc-<name>" where <name> matches a key in the OIDC map.
 	// Defaults to ["native"] if empty.
 	// +optional
 	AuthenticationProviders []string `json:"authenticationProviders,omitempty"`
 
 	// AuthorizationProviders is an ordered list of authorization providers.
-	// Valid values: native, ldap, oidc-<name>, jwt, kerberos.
+	// Valid values: native, ldap, oidc-<name>, kerberos.
 	// Defaults to ["native"] if empty.
 	// +optional
 	AuthorizationProviders []string `json:"authorizationProviders,omitempty"`
@@ -340,10 +335,6 @@ type AuthSpec struct {
 	// in Neo4j config (dbms.security.oidc.<name>.*) and in the authentication_providers list (oidc-<name>).
 	// +optional
 	OIDC map[string]Neo4jOIDCProviderSpec `json:"oidc,omitempty"`
-
-	// JWT configuration for JWT auth provider
-	// +optional
-	JWT *JWTAuthSpec `json:"jwt,omitempty"`
 
 	// Kerberos configuration for Kerberos auth provider
 	// +optional
@@ -383,27 +374,6 @@ type PasswordPolicySpec struct {
 	// Require special characters
 	// +kubebuilder:default=false
 	RequireSpecialChars bool `json:"requireSpecialChars,omitempty"`
-}
-
-// JWTAuthSpec defines JWT authentication configuration
-type JWTAuthSpec struct {
-	// JWT validation settings
-	Validation *JWTValidationSpec `json:"validation,omitempty"`
-
-	// Claims mapping
-	ClaimsMapping map[string]string `json:"claimsMapping,omitempty"`
-}
-
-// JWTValidationSpec defines JWT validation settings
-type JWTValidationSpec struct {
-	// JWKS endpoint URL
-	JWKSURL string `json:"jwksUrl,omitempty"`
-
-	// JWT issuer
-	Issuer string `json:"issuer,omitempty"`
-
-	// JWT audience
-	Audience []string `json:"audience,omitempty"`
 }
 
 // Neo4jLDAPSpec configures LDAP authentication and authorization.
@@ -709,29 +679,6 @@ type BackupsSpec struct {
 	DefaultStorage *StorageLocation `json:"defaultStorage,omitempty"`
 
 	Cloud *CloudBlock `json:"cloud,omitempty"`
-}
-
-// UISpec defines Web UI configuration
-type UISpec struct {
-	// +kubebuilder:default=false
-	Enabled bool `json:"enabled,omitempty"`
-
-	Ingress *IngressSpec `json:"ingress,omitempty"`
-
-	// Resource limits for UI pods
-	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
-}
-
-// RestoreSpec defines restore configuration
-type RestoreSpec struct {
-	// Backup reference to restore from
-	BackupRef string `json:"backupRef,omitempty"`
-
-	// Direct storage location
-	Storage *StorageLocation `json:"storage,omitempty"`
-
-	// Point in time for restore
-	PointInTime *metav1.Time `json:"pointInTime,omitempty"`
 }
 
 // StorageLocation defines storage location for backups

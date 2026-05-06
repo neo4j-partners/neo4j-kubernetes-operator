@@ -47,9 +47,6 @@ type Neo4jPluginSpec struct {
 	// Dependencies
 	Dependencies []PluginDependency `json:"dependencies,omitempty"`
 
-	// License configuration
-	License *PluginLicense `json:"license,omitempty"`
-
 	// Security configuration
 	Security *PluginSecurity `json:"security,omitempty"`
 
@@ -108,18 +105,6 @@ type PluginDependency struct {
 
 	// Whether dependency is optional
 	Optional bool `json:"optional,omitempty"`
-}
-
-// PluginLicense defines plugin licensing
-type PluginLicense struct {
-	// License key secret
-	KeySecret string `json:"keySecret,omitempty"`
-
-	// License server URL
-	ServerURL string `json:"serverUrl,omitempty"`
-
-	// Offline license file
-	LicenseFile string `json:"licenseFile,omitempty"`
 }
 
 // PluginSecurity defines security settings for plugins

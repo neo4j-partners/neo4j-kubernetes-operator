@@ -58,11 +58,6 @@ type Neo4jEnterpriseStandaloneSpec struct {
 
 	Backups *BackupsSpec `json:"backups,omitempty"`
 
-	UI *UISpec `json:"ui,omitempty"`
-
-	// RestoreFrom specifies backup to restore from during standalone creation
-	RestoreFrom *RestoreSpec `json:"restoreFrom,omitempty"`
-
 	// Plugin management configuration - DEPRECATED: Use Neo4jPlugin CRD instead
 
 	// Monitoring configuration (Prometheus metrics, query logging, diagnostics)

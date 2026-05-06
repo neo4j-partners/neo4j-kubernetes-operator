@@ -85,19 +85,6 @@ spec:
                 default: true
                 description: Enable the plugin
                 type: boolean
-              license:
-                description: License configuration
-                properties:
-                  keySecret:
-                    description: License key secret
-                    type: string
-                  licenseFile:
-                    description: Offline license file
-                    type: string
-                  serverUrl:
-                    description: License server URL
-                    type: string
-                type: object
               name:
                 description: Plugin name
                 type: string

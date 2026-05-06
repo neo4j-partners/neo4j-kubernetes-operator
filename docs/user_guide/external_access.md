@@ -132,12 +132,11 @@ spec:
 ```yaml
 spec:
   auth:
-    adminSecretName: neo4j-admin-secret
-    passwordPolicy:
-      minLength: 12
-      requireUppercase: true
-      requireNumbers: true
-      requireSpecialChars: true
+    adminSecret: neo4j-admin-secret
+  config:
+    # spec.auth.passwordPolicy is schema-only and ignored. Set the Neo4j
+    # password-policy keys directly until typed-field support lands.
+    dbms.security.auth_minimum_password_length: "12"
 ```
 
 ## Cloud-Specific Examples

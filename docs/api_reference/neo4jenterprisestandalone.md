@@ -149,10 +149,8 @@ Authentication configuration.
 auth:
   authenticationProviders: ["native"]
   adminSecret: neo4j-admin-secret
-  passwordPolicy:
-    minLength: 8
-    requireUppercase: true
-    requireNumbers: true
+  # NOTE: spec.auth.passwordPolicy is schema-only and currently ignored.
+  # Set Neo4j password-policy keys via spec.config until implemented.
 ```
 
 #### `service` (ServiceSpec)
@@ -238,27 +236,6 @@ backups:
     identity:
       provider: aws
       serviceAccount: neo4j-backup-sa
-```
-
-#### `ui` (UISpec)
-Neo4j Browser configuration.
-
-```yaml
-ui:
-  enabled: true
-  resources:
-    requests:
-      memory: "100Mi"
-      cpu: "100m"
-```
-
-#### `restoreFrom` (RestoreSpec)
-Restore from backup during creation.
-
-```yaml
-restoreFrom:
-  backupRef: my-backup-name
-  pointInTime: "2023-12-01T10:00:00Z"
 ```
 
 #### `plugins` ([]PluginSpec) - DEPRECATED
@@ -535,9 +512,8 @@ spec:
 
   auth:
     adminSecret: neo4j-admin-secret
-    passwordPolicy:
-      minLength: 12
-      requireSpecialChars: true
+    # spec.auth.passwordPolicy is schema-only and ignored; set the Neo4j
+    # password-policy keys directly in spec.config below until implemented.
 
   env:
     - name: NEO4J_ACCEPT_LICENSE_AGREEMENT
@@ -550,6 +526,8 @@ spec:
     server.memory.pagecache.size: "2G"
     db.logs.query.enabled: "true"
     dbms.logs.query.threshold: "1s"
+    # Password policy via Neo4j config keys
+    dbms.security.auth_minimum_password_length: "12"
 ```
 
 ### Standalone with Ingress
@@ -631,9 +609,8 @@ spec:
 
   auth:
     adminSecret: neo4j-admin-secret
-    passwordPolicy:
-      minLength: 12
-      requireSpecialChars: true
+    # spec.auth.passwordPolicy is schema-only and ignored; set the Neo4j
+    # password-policy keys directly in spec.config below until implemented.
 
   service:
     type: LoadBalancer
@@ -652,6 +629,7 @@ spec:
     server.memory.pagecache.size: "2G"
     db.logs.query.enabled: "true"
     dbms.logs.query.threshold: "500ms"
+    dbms.security.auth_minimum_password_length: "12"
 
   env:
     - name: NEO4J_ACCEPT_LICENSE_AGREEMENT
@@ -1021,15 +999,32 @@ EOF
 # 2. Wait for backup completion
 kubectl wait --for=condition=Ready neo4jbackup/cluster-migration-backup --timeout=600s
 
-# 3. Create standalone with restore
+# 3. Create the standalone, wait for Ready, then restore via Neo4jRestore
+kubectl apply -f - <<EOF
 apiVersion: neo4j.neo4j.com/v1beta1
 kind: Neo4jEnterpriseStandalone
 metadata:
   name: migrated-standalone
 spec:
   # ... standalone configuration ...
-  restoreFrom:
-    backupRef: cluster-migration-backup
+EOF
+
+kubectl wait --for=condition=Ready neo4jenterprisestandalone/migrated-standalone --timeout=600s
+
+# 4. Restore the backup into the new standalone
+kubectl apply -f - <<EOF
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jRestore
+metadata:
+  name: migrated-standalone-restore
+spec:
+  target:
+    kind: Neo4jEnterpriseStandalone
+    name: migrated-standalone
+  source:
+    backupRef:
+      name: cluster-migration-backup
+EOF
 ```
 
 ## Best Practices

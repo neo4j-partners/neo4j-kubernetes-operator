@@ -571,12 +571,12 @@ kubectl logs <pod-name> | grep -i auth
    ```
 
 2. **Check Password Policy:**
+   `spec.auth.passwordPolicy` is schema-only and currently ignored — set the
+   Neo4j keys directly in `spec.config` instead:
    ```yaml
    spec:
-     auth:
-       passwordPolicy:
-         minLength: 8
-         requireUppercase: true
+     config:
+       dbms.security.auth_minimum_password_length: "8"
    ```
 
 #### Problem: TLS Certificate Issues

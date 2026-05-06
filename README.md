@@ -605,7 +605,7 @@ See the [User & Role Management Guide](docs/user_guide/user_role_management.md) 
 
 ### 🔐 Security & Authentication
 - **TLS/SSL**: Configurable TLS encryption for client and cluster communications
-- **Authentication**: Support for native, LDAP, Kerberos, and JWT authentication
+- **Authentication**: Native, LDAP, and OIDC/SSO via typed `spec.auth` fields (operator generates Neo4j config); JWT and Kerberos by setting `dbms.security.{jwt,kerberos}.*` keys in `spec.config` directly
 - **Automatic RBAC**: Operator automatically creates all necessary RBAC resources for backups
 - **Network Policies**: Pod-to-pod communication security
 
