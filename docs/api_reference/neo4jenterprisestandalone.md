@@ -368,20 +368,37 @@ Indicates if the standalone deployment is ready for connections.
 Detailed conditions about the deployment state.
 
 #### `endpoints` (EndpointStatus)
-Connection endpoints for the Neo4j instance. The bolt scheme reflects the TLS configuration: `bolt+s://` when TLS is enabled, `bolt://` when disabled.
+Connection endpoints for the Neo4j instance. The bolt scheme reflects the TLS configuration: `bolt+s://` when TLS is enabled, `bolt://` when disabled. `connectionExamples` is populated from `spec.service.type` and the LoadBalancer-assigned external IP (when applicable).
 
 ```yaml
-# TLS disabled
+# TLS disabled, ClusterIP
 endpoints:
   bolt: "bolt://standalone-neo4j-service.default.svc.cluster.local:7687"
   http: "http://standalone-neo4j-service.default.svc.cluster.local:7474"
   https: "https://standalone-neo4j-service.default.svc.cluster.local:7473"
+  connectionExamples:
+    portForward: "kubectl port-forward -n default svc/standalone-neo4j-service 7474:7474 7687:7687"
+    browserURL: "http://localhost:7474"
+    boltURI: "bolt://localhost:7687"
+    neo4jURI: "neo4j://localhost:7687"
+    pythonExample: |
+      from neo4j import GraphDatabase
+      driver = GraphDatabase.driver("bolt://localhost:7687", auth=("neo4j", "<password>"))
+    javaExample: |
+      import org.neo4j.driver.*;
+      Driver driver = GraphDatabase.driver("bolt://localhost:7687", AuthTokens.basic("neo4j", "<password>"));
 
-# TLS enabled (cert-manager)
+# TLS enabled (cert-manager) — connection examples use bolt+ssc:// since
+# cert-manager-issued certs are typically not trusted by external clients.
 endpoints:
   bolt: "bolt+s://standalone-neo4j-service.default.svc.cluster.local:7687"
   http: "http://standalone-neo4j-service.default.svc.cluster.local:7474"
   https: "https://standalone-neo4j-service.default.svc.cluster.local:7473"
+  connectionExamples:
+    portForward: "kubectl port-forward -n default svc/standalone-neo4j-service 7473:7473 7687:7687"
+    browserURL: "https://localhost:7473"
+    boltURI: "bolt+ssc://localhost:7687"
+    neo4jURI: "neo4j+ssc://localhost:7687"
 ```
 
 #### `version` (string)

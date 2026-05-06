@@ -976,6 +976,14 @@ func (r *Neo4jEnterpriseClusterReconciler) updateClusterStatus(ctx context.Conte
 		latest.Status.Ready = readyBool
 		latest.Status.ObservedGeneration = latest.Generation
 
+		// Populate connection endpoints + connection examples. Cluster
+		// previously left status.endpoints unset; surfacing these lets users
+		// `kubectl get neo4jenterprisecluster -o jsonpath='{.status.endpoints.connectionExamples.boltURI}'`
+		// to copy a working connection string. Service-type and external-IP
+		// resolution mirrors what the connection_helper helpers already do
+		// for the standalone path.
+		latest.Status.Endpoints = r.buildClusterEndpoints(ctx, cluster)
+
 		// Update Ready condition using standard helper
 		SetReadyCondition(&latest.Status.Conditions, latest.Generation, condStatus, condReason, message)
 
@@ -1001,6 +1009,37 @@ func (r *Neo4jEnterpriseClusterReconciler) updateClusterStatus(ctx context.Conte
 		return false
 	}
 	return statusChanged
+}
+
+// buildClusterEndpoints assembles the EndpointStatus surfaced via
+// status.endpoints. Returns the in-cluster {cluster}-client Service URLs
+// scheme-adjusted for TLS, plus the connection-example helper output keyed
+// off the configured Service type. External-IP resolution looks at the live
+// Service status and substitutes a `<external-ip>` placeholder when no IP
+// has been assigned yet.
+func (r *Neo4jEnterpriseClusterReconciler) buildClusterEndpoints(ctx context.Context, cluster *neo4jv1beta1.Neo4jEnterpriseCluster) *neo4jv1beta1.EndpointStatus {
+	hasTLS := cluster.Spec.TLS != nil && cluster.Spec.TLS.Mode == "cert-manager"
+	boltScheme := "bolt"
+	if hasTLS {
+		boltScheme = "bolt+s"
+	}
+
+	serviceType := corev1.ServiceTypeClusterIP
+	if cluster.Spec.Service != nil && cluster.Spec.Service.Type != "" {
+		serviceType = corev1.ServiceType(cluster.Spec.Service.Type)
+	}
+	externalIP := clusterServiceExternalIP(ctx, r.Client, cluster)
+
+	return &neo4jv1beta1.EndpointStatus{
+		Bolt:  fmt.Sprintf("%s://%s-client.%s.svc.cluster.local:7687", boltScheme, cluster.Name, cluster.Namespace),
+		HTTP:  fmt.Sprintf("http://%s-client.%s.svc.cluster.local:7474", cluster.Name, cluster.Namespace),
+		HTTPS: fmt.Sprintf("https://%s-client.%s.svc.cluster.local:7473", cluster.Name, cluster.Namespace),
+		Internal: &neo4jv1beta1.InternalEndpoints{
+			Headless: fmt.Sprintf("%s-headless.%s.svc.cluster.local", cluster.Name, cluster.Namespace),
+			Client:   fmt.Sprintf("%s-client.%s.svc.cluster.local", cluster.Name, cluster.Namespace),
+		},
+		ConnectionExamples: GenerateConnectionExamples(cluster.Name, cluster.Namespace, serviceType, externalIP, hasTLS),
+	}
 }
 
 // createExternalSecretForTLS creates an ExternalSecret resource for TLS certificates

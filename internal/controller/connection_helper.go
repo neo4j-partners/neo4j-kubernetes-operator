@@ -1,11 +1,47 @@
 package controller
 
 import (
+	"context"
 	"fmt"
 
 	neo4jv1beta1 "github.com/priyolahiri/neo4j-kubernetes-operator/api/v1beta1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+// clusterServiceExternalIP returns the LoadBalancer-assigned external IP/host
+// for the cluster's `{name}-client` Service if one has been provisioned, or "".
+// Used by the connection-example generator so users get a concrete URL once
+// the cloud's LB controller has filled in `Status.LoadBalancer.Ingress`.
+func clusterServiceExternalIP(ctx context.Context, c client.Client, cluster *neo4jv1beta1.Neo4jEnterpriseCluster) string {
+	return serviceExternalIP(ctx, c, cluster.Namespace, fmt.Sprintf("%s-client", cluster.Name))
+}
+
+// standaloneServiceExternalIP is the standalone counterpart — resolves the
+// `{name}-service` Service.
+func standaloneServiceExternalIP(ctx context.Context, c client.Client, standalone *neo4jv1beta1.Neo4jEnterpriseStandalone) string {
+	return serviceExternalIP(ctx, c, standalone.Namespace, fmt.Sprintf("%s-service", standalone.Name))
+}
+
+// serviceExternalIP returns the first ingress entry's IP (or hostname) from
+// the named Service's LoadBalancer status. Empty string if the Service does
+// not exist, isn't a LoadBalancer, or hasn't been assigned an external IP yet.
+func serviceExternalIP(ctx context.Context, c client.Client, namespace, serviceName string) string {
+	svc := &corev1.Service{}
+	if err := c.Get(ctx, types.NamespacedName{Namespace: namespace, Name: serviceName}, svc); err != nil {
+		return ""
+	}
+	for _, ing := range svc.Status.LoadBalancer.Ingress {
+		if ing.IP != "" {
+			return ing.IP
+		}
+		if ing.Hostname != "" {
+			return ing.Hostname
+		}
+	}
+	return ""
+}
 
 // GenerateConnectionExamples creates connection string examples based on service configuration
 func GenerateConnectionExamples(name, namespace string, serviceType corev1.ServiceType, externalIP string, hasTLS bool) *neo4jv1beta1.ConnectionExamples {

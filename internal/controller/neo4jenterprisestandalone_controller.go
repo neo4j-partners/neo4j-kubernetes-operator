@@ -1063,10 +1063,23 @@ func (r *Neo4jEnterpriseStandaloneReconciler) updateStatus(ctx context.Context, 
 	if standalone.Spec.TLS != nil && standalone.Spec.TLS.Mode == "cert-manager" {
 		boltScheme = "bolt+s"
 	}
+	hasTLS := standalone.Spec.TLS != nil && standalone.Spec.TLS.Mode == "cert-manager"
+
+	// Resolve service type + external IP for the connection-example helper.
+	// Defaults to ClusterIP when spec.service is unset; LoadBalancer external
+	// IP comes from the live Service status if the cloud assigner has filled
+	// it in, otherwise the helper substitutes a `<external-ip>` placeholder.
+	serviceType := corev1.ServiceTypeClusterIP
+	if standalone.Spec.Service != nil && standalone.Spec.Service.Type != "" {
+		serviceType = corev1.ServiceType(standalone.Spec.Service.Type)
+	}
+	externalIP := standaloneServiceExternalIP(ctx, r.Client, standalone)
+
 	latestStandalone.Status.Endpoints = &neo4jv1beta1.EndpointStatus{
-		Bolt:  fmt.Sprintf("%s://%s-service.%s.svc.cluster.local:7687", boltScheme, standalone.Name, standalone.Namespace),
-		HTTP:  fmt.Sprintf("http://%s-service.%s.svc.cluster.local:7474", standalone.Name, standalone.Namespace),
-		HTTPS: fmt.Sprintf("https://%s-service.%s.svc.cluster.local:7473", standalone.Name, standalone.Namespace),
+		Bolt:               fmt.Sprintf("%s://%s-service.%s.svc.cluster.local:7687", boltScheme, standalone.Name, standalone.Namespace),
+		HTTP:               fmt.Sprintf("http://%s-service.%s.svc.cluster.local:7474", standalone.Name, standalone.Namespace),
+		HTTPS:              fmt.Sprintf("https://%s-service.%s.svc.cluster.local:7473", standalone.Name, standalone.Namespace),
+		ConnectionExamples: GenerateStandaloneConnectionExamples(standalone.Name, standalone.Namespace, serviceType, externalIP, hasTLS),
 	}
 
 	// Update the status

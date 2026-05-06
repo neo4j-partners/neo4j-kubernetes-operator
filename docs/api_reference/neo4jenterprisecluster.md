@@ -825,21 +825,19 @@ The `Neo4jEnterpriseClusterStatus` represents the observed state of the cluster.
 
 ### EndpointStatus
 
-Service endpoints and connection information. The schema is shared between
-`Neo4jEnterpriseCluster` and `Neo4jEnterpriseStandalone`.
-
-> **Note**: only the standalone controller currently populates this field.
-> Cluster reconciliation does not emit `status.endpoints` today; consult
-> the in-cluster `{cluster}-client` Service directly for connection
-> endpoints.
+Service endpoints and connection information populated by the controller on
+every status update. Schema is shared between `Neo4jEnterpriseCluster` and
+`Neo4jEnterpriseStandalone`; the cluster controller resolves URLs against
+the `{cluster}-client` ClusterIP, the standalone controller against the
+`{name}-service` ClusterIP.
 
 | Field | Type | Description |
 |---|---|---|
 | `bolt` | `string` | Bolt protocol endpoint (e.g. `bolt+s://<service>:7687` when TLS is enabled, `bolt://...` when disabled) |
 | `http` | `string` | HTTP endpoint for Neo4j Browser |
 | `https` | `string` | HTTPS endpoint for Neo4j Browser |
-| `internal` | [`InternalEndpoints`](#internalendpoints) | In-cluster service endpoints (headless + client) |
-| `connectionExamples` | [`ConnectionExamples`](#connectionexamples) | Example connection strings (struct exists in the API but is not currently populated by either controller) |
+| `internal` | [`InternalEndpoints`](#internalendpoints) | In-cluster service FQDNs (headless + client; cluster only) |
+| `connectionExamples` | [`ConnectionExamples`](#connectionexamples) | Ready-to-paste connection strings driven by `spec.service.type` (ClusterIP / NodePort / LoadBalancer) |
 
 ### InternalEndpoints
 
@@ -850,18 +848,22 @@ Service endpoints and connection information. The schema is shared between
 
 ### ConnectionExamples
 
-Example connection strings for various scenarios. The struct is defined in
-the API but is not currently populated by either controller — `status.endpoints.connectionExamples`
-is `nil` on every cluster the operator manages today.
+Connection-string snippets generated from `spec.service.type` and the
+LoadBalancer-assigned external IP (when applicable). On a `LoadBalancer`
+service the external IP is filled in once the cloud provider's controller
+has assigned one; until then a `<external-ip>` placeholder is substituted.
+For `NodePort` the bolt port and HTTPS port appear as `<bolt-node-port>` /
+`<http-node-port>` placeholders since those are dynamically assigned and
+visible via `kubectl get svc`.
 
 | Field | Type | Description |
 |---|---|---|
-| `portForward` | `string` | kubectl port-forward command |
+| `portForward` | `string` | kubectl port-forward command (always available) |
 | `browserURL` | `string` | Neo4j Browser URL |
-| `boltURI` | `string` | Bolt connection URI |
-| `neo4jURI` | `string` | Neo4j driver URI |
-| `pythonExample` | `string` | Python driver connection example |
-| `javaExample` | `string` | Java driver connection example |
+| `boltURI` | `string` | Bolt connection URI (uses `bolt+ssc://` when TLS is enabled, since cert-manager-issued certs typically aren't trusted by external clients) |
+| `neo4jURI` | `string` | Neo4j routing-driver URI |
+| `pythonExample` | `string` | Python driver connection snippet |
+| `javaExample` | `string` | Java driver connection snippet |
 
 ### UpgradeStatus
 
