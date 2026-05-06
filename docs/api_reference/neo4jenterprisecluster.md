@@ -825,19 +825,34 @@ The `Neo4jEnterpriseClusterStatus` represents the observed state of the cluster.
 
 ### EndpointStatus
 
-Service endpoints and connection information.
+Service endpoints and connection information. The schema is shared between
+`Neo4jEnterpriseCluster` and `Neo4jEnterpriseStandalone`.
+
+> **Note**: only the standalone controller currently populates this field.
+> Cluster reconciliation does not emit `status.endpoints` today; consult
+> the in-cluster `{cluster}-client` Service directly for connection
+> endpoints.
 
 | Field | Type | Description |
 |---|---|---|
-| `boltURL` | `string` | Bolt protocol endpoint |
-| `httpURL` | `string` | HTTP endpoint for Neo4j Browser |
-| `httpsURL` | `string` | HTTPS endpoint for Neo4j Browser |
-| `internalURL` | `string` | Internal cluster communication endpoint |
-| `connectionExamples` | [`ConnectionExamples`](#connectionexamples) | Example connection strings |
+| `bolt` | `string` | Bolt protocol endpoint (e.g. `bolt+s://<service>:7687` when TLS is enabled, `bolt://...` when disabled) |
+| `http` | `string` | HTTP endpoint for Neo4j Browser |
+| `https` | `string` | HTTPS endpoint for Neo4j Browser |
+| `internal` | [`InternalEndpoints`](#internalendpoints) | In-cluster service endpoints (headless + client) |
+| `connectionExamples` | [`ConnectionExamples`](#connectionexamples) | Example connection strings (struct exists in the API but is not currently populated by either controller) |
+
+### InternalEndpoints
+
+| Field | Type | Description |
+|---|---|---|
+| `headless` | `string` | Headless service FQDN used for pod-level discovery |
+| `client` | `string` | Client service FQDN used for client connections |
 
 ### ConnectionExamples
 
-Example connection strings for various scenarios.
+Example connection strings for various scenarios. The struct is defined in
+the API but is not currently populated by either controller — `status.endpoints.connectionExamples`
+is `nil` on every cluster the operator manages today.
 
 | Field | Type | Description |
 |---|---|---|
