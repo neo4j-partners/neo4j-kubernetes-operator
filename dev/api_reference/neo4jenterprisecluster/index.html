@@ -2581,6 +2581,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#internalendpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        InternalEndpoints
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#connectionexamples" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4174,6 +4185,17 @@
     <span class="md-ellipsis">
       
         EndpointStatus
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#internalendpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        InternalEndpoints
       
     </span>
   </a>
@@ -6769,7 +6791,14 @@ not parse policy config to wire up filesystem mounts automatically.</p>
 </tbody>
 </table>
 <h3 id="endpointstatus">EndpointStatus<a class="headerlink" href="#endpointstatus" title="Anchor link to this section">&para;</a></h3>
-<p>Service endpoints and connection information.</p>
+<p>Service endpoints and connection information. The schema is shared between
+<code>Neo4jEnterpriseCluster</code> and <code>Neo4jEnterpriseStandalone</code>.</p>
+<blockquote>
+<p><strong>Note</strong>: only the standalone controller currently populates this field.
+Cluster reconciliation does not emit <code>status.endpoints</code> today; consult
+the in-cluster <code>{cluster}-client</code> Service directly for connection
+endpoints.</p>
+</blockquote>
 <table>
 <thead>
 <tr>
@@ -6780,34 +6809,58 @@ not parse policy config to wire up filesystem mounts automatically.</p>
 </thead>
 <tbody>
 <tr>
-<td><code>boltURL</code></td>
+<td><code>bolt</code></td>
 <td><code>string</code></td>
-<td>Bolt protocol endpoint</td>
+<td>Bolt protocol endpoint (e.g. <code>bolt+s://&lt;service&gt;:7687</code> when TLS is enabled, <code>bolt://...</code> when disabled)</td>
 </tr>
 <tr>
-<td><code>httpURL</code></td>
+<td><code>http</code></td>
 <td><code>string</code></td>
 <td>HTTP endpoint for Neo4j Browser</td>
 </tr>
 <tr>
-<td><code>httpsURL</code></td>
+<td><code>https</code></td>
 <td><code>string</code></td>
 <td>HTTPS endpoint for Neo4j Browser</td>
 </tr>
 <tr>
-<td><code>internalURL</code></td>
-<td><code>string</code></td>
-<td>Internal cluster communication endpoint</td>
+<td><code>internal</code></td>
+<td><a href="#internalendpoints"><code>InternalEndpoints</code></a></td>
+<td>In-cluster service endpoints (headless + client)</td>
 </tr>
 <tr>
 <td><code>connectionExamples</code></td>
 <td><a href="#connectionexamples"><code>ConnectionExamples</code></a></td>
-<td>Example connection strings</td>
+<td>Example connection strings (struct exists in the API but is not currently populated by either controller)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="internalendpoints">InternalEndpoints<a class="headerlink" href="#internalendpoints" title="Anchor link to this section">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>headless</code></td>
+<td><code>string</code></td>
+<td>Headless service FQDN used for pod-level discovery</td>
+</tr>
+<tr>
+<td><code>client</code></td>
+<td><code>string</code></td>
+<td>Client service FQDN used for client connections</td>
 </tr>
 </tbody>
 </table>
 <h3 id="connectionexamples">ConnectionExamples<a class="headerlink" href="#connectionexamples" title="Anchor link to this section">&para;</a></h3>
-<p>Example connection strings for various scenarios.</p>
+<p>Example connection strings for various scenarios. The struct is defined in
+the API but is not currently populated by either controller — <code>status.endpoints.connectionExamples</code>
+is <code>nil</code> on every cluster the operator manages today.</p>
 <table>
 <thead>
 <tr>
