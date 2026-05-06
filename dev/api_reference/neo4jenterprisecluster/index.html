@@ -6791,14 +6791,11 @@ not parse policy config to wire up filesystem mounts automatically.</p>
 </tbody>
 </table>
 <h3 id="endpointstatus">EndpointStatus<a class="headerlink" href="#endpointstatus" title="Anchor link to this section">&para;</a></h3>
-<p>Service endpoints and connection information. The schema is shared between
-<code>Neo4jEnterpriseCluster</code> and <code>Neo4jEnterpriseStandalone</code>.</p>
-<blockquote>
-<p><strong>Note</strong>: only the standalone controller currently populates this field.
-Cluster reconciliation does not emit <code>status.endpoints</code> today; consult
-the in-cluster <code>{cluster}-client</code> Service directly for connection
-endpoints.</p>
-</blockquote>
+<p>Service endpoints and connection information populated by the controller on
+every status update. Schema is shared between <code>Neo4jEnterpriseCluster</code> and
+<code>Neo4jEnterpriseStandalone</code>; the cluster controller resolves URLs against
+the <code>{cluster}-client</code> ClusterIP, the standalone controller against the
+<code>{name}-service</code> ClusterIP.</p>
 <table>
 <thead>
 <tr>
@@ -6826,12 +6823,12 @@ endpoints.</p>
 <tr>
 <td><code>internal</code></td>
 <td><a href="#internalendpoints"><code>InternalEndpoints</code></a></td>
-<td>In-cluster service endpoints (headless + client)</td>
+<td>In-cluster service FQDNs (headless + client; cluster only)</td>
 </tr>
 <tr>
 <td><code>connectionExamples</code></td>
 <td><a href="#connectionexamples"><code>ConnectionExamples</code></a></td>
-<td>Example connection strings (struct exists in the API but is not currently populated by either controller)</td>
+<td>Ready-to-paste connection strings driven by <code>spec.service.type</code> (ClusterIP / NodePort / LoadBalancer)</td>
 </tr>
 </tbody>
 </table>
@@ -6858,9 +6855,13 @@ endpoints.</p>
 </tbody>
 </table>
 <h3 id="connectionexamples">ConnectionExamples<a class="headerlink" href="#connectionexamples" title="Anchor link to this section">&para;</a></h3>
-<p>Example connection strings for various scenarios. The struct is defined in
-the API but is not currently populated by either controller — <code>status.endpoints.connectionExamples</code>
-is <code>nil</code> on every cluster the operator manages today.</p>
+<p>Connection-string snippets generated from <code>spec.service.type</code> and the
+LoadBalancer-assigned external IP (when applicable). On a <code>LoadBalancer</code>
+service the external IP is filled in once the cloud provider's controller
+has assigned one; until then a <code>&lt;external-ip&gt;</code> placeholder is substituted.
+For <code>NodePort</code> the bolt port and HTTPS port appear as <code>&lt;bolt-node-port&gt;</code> /
+<code>&lt;http-node-port&gt;</code> placeholders since those are dynamically assigned and
+visible via <code>kubectl get svc</code>.</p>
 <table>
 <thead>
 <tr>
@@ -6873,7 +6874,7 @@ is <code>nil</code> on every cluster the operator manages today.</p>
 <tr>
 <td><code>portForward</code></td>
 <td><code>string</code></td>
-<td>kubectl port-forward command</td>
+<td>kubectl port-forward command (always available)</td>
 </tr>
 <tr>
 <td><code>browserURL</code></td>
@@ -6883,22 +6884,22 @@ is <code>nil</code> on every cluster the operator manages today.</p>
 <tr>
 <td><code>boltURI</code></td>
 <td><code>string</code></td>
-<td>Bolt connection URI</td>
+<td>Bolt connection URI (uses <code>bolt+ssc://</code> when TLS is enabled, since cert-manager-issued certs typically aren't trusted by external clients)</td>
 </tr>
 <tr>
 <td><code>neo4jURI</code></td>
 <td><code>string</code></td>
-<td>Neo4j driver URI</td>
+<td>Neo4j routing-driver URI</td>
 </tr>
 <tr>
 <td><code>pythonExample</code></td>
 <td><code>string</code></td>
-<td>Python driver connection example</td>
+<td>Python driver connection snippet</td>
 </tr>
 <tr>
 <td><code>javaExample</code></td>
 <td><code>string</code></td>
-<td>Java driver connection example</td>
+<td>Java driver connection snippet</td>
 </tr>
 </tbody>
 </table>
