@@ -88,7 +88,6 @@ kind: Neo4jPlugin
 | `source` | [`PluginSource`](#pluginsource) | ❌ | Plugin source configuration (default: official repository) |
 | `dependencies` | [`[]PluginDependency`](#plugindependency) | ❌ | Plugin dependencies (automatically resolved) |
 | `config` | `map[string]string` | ❌ | Plugin-specific configuration (becomes `NEO4J_*` env vars) |
-| `license` | `PluginLicense` | ❌ | License configuration for commercial plugins |
 | `security` | [`PluginSecurity`](#pluginsecurity) | ❌ | Security settings and procedure restrictions |
 | `resources` | `PluginResourceRequirements` | ❌ | Resource requirements for plugin operations (CPU/memory limits, thread pool size) |
 
@@ -238,16 +237,14 @@ spec:
       versionConstraint: ">=5.26.0"
       optional: false
 
-  # GDS-specific configuration
+  # GDS-specific configuration. Mount the license file at /licenses/gds.license
+  # via the cluster/standalone spec.extraVolumes + spec.extraVolumeMounts
+  # (e.g. from a Secret named gds-license-secret) — Neo4jPlugin no longer has a
+  # typed license block.
   config:
     "gds.enterprise.license_file": "/licenses/gds.license"
     "gds.procedure.allowlist": "gds.*"
     "gds.graph.store.max_size": "2GB"
-
-  # License configuration for enterprise features
-  license:
-    keySecret: gds-license-secret
-    licenseFile: "/licenses/gds.license"
 
   # Security configuration
   security:
@@ -432,12 +429,12 @@ security:
 
 **Bloom (Automatic Security Configuration)**:
 ```yaml
-# Minimal configuration - security settings applied automatically
+# Minimal configuration - security settings applied automatically.
+# Mount the license file at /licenses/bloom.license via the cluster/standalone
+# spec.extraVolumes + spec.extraVolumeMounts (e.g. from a Secret named
+# bloom-license-secret).
 config:
   "dbms.bloom.license_file": "/licenses/bloom.license"
-license:
-  keySecret: bloom-license-secret
-  licenseFile: "/licenses/bloom.license"
 # Automatically applied by operator:
 # - NEO4J_DBMS_SECURITY_PROCEDURES_UNRESTRICTED=bloom.*
 # - NEO4J_DBMS_SECURITY_HTTP_AUTH_ALLOWLIST=/,/browser.*,/bloom.*
@@ -488,7 +485,6 @@ The `Neo4jPlugin` controller follows this comprehensive workflow:
 1. **Plugin Collection**: Assembles main plugin and dependencies into unified list
 2. **Environment Variable Mapping**: Converts plugin config to `NEO4J_*` environment variables
 3. **Security Configuration**: Applies plugin-specific security settings
-4. **License Verification**: Validates commercial plugin licenses (if required)
 
 ### Phase 3: Deployment
 
@@ -712,12 +708,12 @@ spec:
       versionConstraint: "5.26.0"
       optional: false
   config:
+    # Mount the license file at /licenses/gds.license via the cluster/standalone
+    # spec.extraVolumes + spec.extraVolumeMounts (e.g. from a Secret named
+    # gds-enterprise-license).
     "gds.enterprise.license_file": "/licenses/gds.license"
     "gds.graph.store.max_size": "16GB"
     "gds.procedure.allowlist": "gds.*"
-  license:
-    keySecret: gds-enterprise-license
-    licenseFile: "/licenses/gds.license"
   resources:
     memoryLimit: "8Gi"
     cpuLimit: "4"

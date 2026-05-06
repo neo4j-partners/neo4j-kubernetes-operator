@@ -73,9 +73,11 @@ The `Neo4jEnterpriseClusterSpec` defines the desired state of a Neo4j Enterprise
 
 | Field | Type | Description |
 |---|---|---|
-| `restoreFrom` | [`RestoreSpec`](#restorespec) | Restore from backup configuration |
 | `backups` | [`BackupsSpec`](#backupsspec) | Backup configuration |
 | `upgradeStrategy` | [`UpgradeStrategySpec`](#upgradestrategyspec) | Upgrade strategy configuration |
+
+To restore a cluster from a backup, create a separate `Neo4jRestore` CR after
+the cluster reaches `Ready` — see [`Neo4jRestore`](neo4jrestore.md).
 
 ### Networking
 
@@ -88,7 +90,6 @@ The `Neo4jEnterpriseClusterSpec` defines the desired state of a Neo4j Enterprise
 | Field | Type | Description |
 |---|---|---|
 | `tls` | [`TLSSpec`](#tlsspec) | TLS configuration |
-| `ui` | [`UISpec`](#uispec) | Neo4j UI configuration |
 | `mcp` | [`MCPServerSpec`](#mcpserverspec) | MCP server deployment and exposure settings |
 | `propertySharding` | [`PropertyShardingSpec`](#propertyshardingspec) | Property sharding configuration (Neo4j 2025.12+) |
 | `monitoring` | [`MonitoringSpec`](#monitoringspec) | Query monitoring configuration |
@@ -167,11 +168,10 @@ Specifies role constraints for individual servers.
 | `authorizationProviders` | `[]string` | Ordered list of authorization providers. Default: `["native"]` |
 | `adminSecret` | `string` | Secret containing admin username and password (keys: `username`, `password`) |
 | `externalSecrets` | [`*ExternalSecretsConfig`](#externalsecretsconfig) | External secrets configuration |
-| `passwordPolicy` | `*PasswordPolicySpec` | Password policy configuration (minimum length, character class requirements) |
+| `passwordPolicy` | `*PasswordPolicySpec` | **Schema-only.** Defined on the API but the operator does not currently generate `dbms.security.auth_minimum_password_length` (and friends) from this. Set those keys via `spec.config` directly until implemented. |
 | `ldap` | [`*Neo4jLDAPSpec`](#neo4jldapspec) | LDAP authentication and authorization configuration |
-| `oidc` | `map[string]`[`Neo4jOIDCProviderSpec`](#neo4joidcproviderspec) | OIDC/SSO providers. Map key = provider name (used in `authenticationProviders` as `oidc-<key>`) |
-| `jwt` | [`*JWTAuthSpec`](#jwtauthspec) | JWT authentication configuration |
-| `kerberos` | [`*KerberosAuthSpec`](#kerberosauthspec) | Kerberos authentication configuration |
+| `oidc` | `map[string]`[`Neo4jOIDCProviderSpec`](#neo4joidcproviderspec) | OIDC/SSO providers. Map key = provider name (used in `authenticationProviders` as `oidc-<key>`). For JWT-based auth, use OIDC — Neo4j ID tokens are JWTs. |
+| `kerberos` | [`*KerberosAuthSpec`](#kerberosauthspec) | **Schema-only.** Defined on the API but the operator does not wire it to Neo4j config or mount the keytab. Use `spec.config["dbms.security.kerberos.*"]` plus `spec.extraVolumes` for the keytab Secret until full Kerberos support lands. |
 | `authCacheTTL` | `string` | Auth cache TTL (e.g., `"10m"`, `"600s"`). Maps to `dbms.security.auth_cache_ttl` |
 | `trustStore` | [`*SecretKeyRef`](#secretkeyref-truststore) | Custom JVM truststore for LDAPS or OIDC with internal CAs |
 
@@ -289,22 +289,12 @@ filesystem path (e.g. `dbms.ssl.policy.<name>.truststore_path`), use
 `spec.extraVolumes` + `spec.extraVolumeMounts` instead — the operator does
 not parse policy config to wire up filesystem mounts automatically.
 
-### JWTAuthSpec
-
-| Field | Type | Description |
-|---|---|---|
-| `validation` | [`*JWTValidationSpec`](#jwtvalidationspec) | JWT validation settings |
-| `claimsMapping` | `map[string]string` | Claims mapping |
-
-### JWTValidationSpec
-
-| Field | Type | Description |
-|---|---|---|
-| `jwksUrl` | `string` | JWKS endpoint URL |
-| `issuer` | `string` | JWT issuer |
-| `audience` | `[]string` | JWT audience |
-
 ### KerberosAuthSpec
+
+> **Schema-only — not wired by the operator yet.** See the
+> [`auth.kerberos` row in AuthSpec](#authspec) for the recommended workaround
+> (`spec.config["dbms.security.kerberos.*"]` + `spec.extraVolumes` for the
+> keytab) until full support lands.
 
 | Field | Type | Description |
 |---|---|---|
@@ -768,18 +758,6 @@ Overrides the Neo4j credentials injected into the MCP pod. **Only effective for 
 | `usernameKey` | `string` | Username key name (default: `username`) |
 | `passwordKey` | `string` | Password key name (default: `password`) |
 
-### UISpec
-
-| Field | Type | Description |
-|---|---|---|
-| `enabled` | `bool` | Enable Neo4j UI deployment |
-| `ingress` | [`*IngressSpec`](#ingressspec) | UI ingress configuration |
-| `resources` | `*corev1.ResourceRequirements` | Resource requirements for UI pods |
-| `pathType` | `string` | Path type: `"Prefix"`, `"Exact"`, `"ImplementationSpecific"` |
-| `tlsEnabled` | `bool` | Enable TLS on the Ingress |
-| `tlsSecretName` | `string` | TLS certificate secret name |
-| `annotations` | `map[string]string` | Ingress annotations |
-
 ### UpgradeStrategySpec
 
 Configures how the operator handles Neo4j version upgrades.
@@ -794,15 +772,6 @@ Configures how the operator handles Neo4j version upgrades.
 | `healthCheckTimeout` | `string` | Timeout for health checks (default: `"5m"`) |
 | `stabilizationTimeout` | `string` | Wait time for cluster stabilization (default: `"3m"`) |
 | `autoPauseOnFailure` | `bool` | Pause upgrade on failure for manual intervention (default: `true`) |
-
-### RestoreSpec
-
-Configures restoration from a backup during cluster creation.
-
-| Field | Type | Description |
-|---|---|---|
-| `backupName` | `string` | Name of the `Neo4jBackup` resource to restore from |
-| `databaseName` | `string` | Target database name for the restore |
 
 ## Status
 
@@ -1337,9 +1306,11 @@ spec:
       name: ca-cluster-issuer
       kind: ClusterIssuer
   auth:
-    passwordPolicy:
-      minLength: 12
-      requireSpecialChars: true
+    # NOTE: spec.auth.passwordPolicy is schema-only and currently ignored
+    # by the operator. Set the equivalent Neo4j config keys via spec.config
+    # (e.g. dbms.security.auth_minimum_password_length=12) until typed-field
+    # support lands.
+    adminSecret: neo4j-admin-secret
 ```
 
 ## Best Practices

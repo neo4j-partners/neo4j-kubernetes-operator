@@ -564,19 +564,24 @@ Short TTL = changes propagate faster. Long TTL = better performance. Setting to 
 
 ### Kerberos Authentication
 
-```yaml
-spec:
-  auth:
-    authenticationProviders: [kerberos, native]
-    authorizationProviders: [kerberos, native]
-    adminSecret: neo4j-admin-secret
-    kerberos:
-      realm: "CORP.EXAMPLE.COM"
-      servicePrincipal: "neo4j/neo4j-server.corp.example.com@CORP.EXAMPLE.COM"
-      keytab:
-        name: neo4j-keytab-secret
-        key: keytab
-```
+> **⚠️ Not yet implemented as a typed field.** `spec.auth.kerberos` was previously documented as a typed configuration block; the operator does not currently wire it through to Neo4j config and the typed-spec block has been removed. Use `spec.auth.authenticationProviders: [kerberos, native]` plus `spec.config["dbms.security.kerberos.*"]` keys directly until this is implemented.
+>
+> A working configuration looks roughly like:
+>
+> ```yaml
+> spec:
+>   auth:
+>     authenticationProviders: [kerberos, native]
+>     authorizationProviders:  [kerberos, native]
+>     adminSecret: neo4j-admin-secret
+>   config:
+>     dbms.security.kerberos.realm: "CORP.EXAMPLE.COM"
+>     dbms.security.kerberos.service_principal: "neo4j/neo4j-server.corp.example.com@CORP.EXAMPLE.COM"
+>     # Mount the keytab via spec.extraVolumes / spec.extraVolumeMounts and point
+>     # dbms.security.kerberos.keytab at the mounted path.
+> ```
+>
+> Full Kerberos support (with operator-managed keytab Secret mount + generated config) is on the roadmap but not currently scheduled.
 
 ## Authorization and RBAC
 

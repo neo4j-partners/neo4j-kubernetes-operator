@@ -1008,7 +1008,7 @@ spec:
                 description: |-
                   AuthSpec defines authentication and authorization configuration.
                   Supports multi-provider setups (e.g., ldap+native) and typed configuration
-                  for LDAP, OIDC/SSO, JWT, and Kerberos that generates correct neo4j.conf entries.
+                  for LDAP, OIDC/SSO, and Kerberos that generates correct neo4j.conf entries.
                 properties:
                   adminSecret:
                     description: 'AdminSecret is the name of the Secret containing
@@ -1022,7 +1022,7 @@ spec:
                   authenticationProviders:
                     description: |-
                       AuthenticationProviders is an ordered list of authentication providers.
-                      Neo4j evaluates them in order during login. Valid values: native, ldap, oidc-<name>, jwt, kerberos.
+                      Neo4j evaluates them in order during login. Valid values: native, ldap, oidc-<name>, kerberos.
                       For OIDC providers, use the format "oidc-<name>" where <name> matches a key in the OIDC map.
                       Defaults to ["native"] if empty.
                     items:
@@ -1031,7 +1031,7 @@ spec:
                   authorizationProviders:
                     description: |-
                       AuthorizationProviders is an ordered list of authorization providers.
-                      Valid values: native, ldap, oidc-<name>, jwt, kerberos.
+                      Valid values: native, ldap, oidc-<name>, kerberos.
                       Defaults to ["native"] if empty.
                     items:
                       type: string
@@ -1088,30 +1088,6 @@ spec:
                             type: string
                         required:
                         - name
-                        type: object
-                    type: object
-                  jwt:
-                    description: JWT configuration for JWT auth provider
-                    properties:
-                      claimsMapping:
-                        additionalProperties:
-                          type: string
-                        description: Claims mapping
-                        type: object
-                      validation:
-                        description: JWT validation settings
-                        properties:
-                          audience:
-                            description: JWT audience
-                            items:
-                              type: string
-                            type: array
-                          issuer:
-                            description: JWT issuer
-                            type: string
-                          jwksUrl:
-                            description: JWKS endpoint URL
-                            type: string
                         type: object
                     type: object
                   kerberos:
@@ -4764,107 +4740,6 @@ spec:
                       More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
                     type: object
                 type: object
-              restoreFrom:
-                description: RestoreFrom specifies backup to restore from during cluster
-                  creation
-                properties:
-                  backupRef:
-                    description: Backup reference to restore from
-                    type: string
-                  pointInTime:
-                    description: Point in time for restore
-                    format: date-time
-                    type: string
-                  storage:
-                    description: Direct storage location
-                    properties:
-                      bucket:
-                        type: string
-                      cloud:
-                        description: Cloud provider configuration
-                        properties:
-                          credentialsSecretRef:
-                            description: |-
-                              CredentialsSecretRef is the name of a Kubernetes Secret containing
-                              cloud provider credentials as environment variables. Optional when
-                              using workload identity / IAM instance profiles.
-                              For S3:    keys AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION
-                              For GCS:   key  GOOGLE_APPLICATION_CREDENTIALS_JSON (base64 service-account JSON)
-                              For Azure: keys AZURE_STORAGE_ACCOUNT, AZURE_STORAGE_KEY
-                            type: string
-                          endpointURL:
-                            description: |-
-                              EndpointURL overrides the S3 API endpoint URL. Use this to target
-                              S3-compatible stores such as MinIO, Ceph RGW, or Cloudflare R2.
-                              Example: "http://minio.minio-ns.svc:9000"
-                              Only applies to the "aws" provider; ignored for gcp and azure.
-                            type: string
-                          forcePathStyle:
-                            description: |-
-                              ForcePathStyle forces S3 path-style addressing, where the bucket name
-                              appears in the URL path (e.g. http://endpoint/bucket/key) rather than
-                              the subdomain (e.g. http://bucket.endpoint/key).
-                              Required for MinIO and most self-hosted S3-compatible stores.
-                              Only effective when EndpointURL is set.
-                            type: boolean
-                          identity:
-                            description: CloudIdentity defines cloud identity configuration
-                            properties:
-                              autoCreate:
-                                description: AutoCreateSpec defines auto-creation
-                                  of service accounts
-                                properties:
-                                  annotations:
-                                    additionalProperties:
-                                      type: string
-                                    type: object
-                                  enabled:
-                                    default: true
-                                    type: boolean
-                                type: object
-                              provider:
-                                enum:
-                                - aws
-                                - gcp
-                                - azure
-                                type: string
-                              serviceAccount:
-                                type: string
-                            required:
-                            - provider
-                            type: object
-                          provider:
-                            enum:
-                            - aws
-                            - gcp
-                            - azure
-                            type: string
-                        type: object
-                      path:
-                        type: string
-                      pvc:
-                        description: PVC configuration
-                        properties:
-                          name:
-                            description: Name of the PVC to use (for referencing existing
-                              PVCs)
-                            type: string
-                          size:
-                            type: string
-                          storageClassName:
-                            type: string
-                        type: object
-                      type:
-                        enum:
-                        - s3
-                        - gcs
-                        - azure
-                        - pvc
-                        type: string
-                    required:
-                    - type
-                    type: object
-                type: object
               securityContext:
                 description: SecurityContext allows overriding pod/container security
                   settings (e.g., for OpenShift SCC compatibility)
@@ -5746,88 +5621,6 @@ spec:
                   - name
                   type: object
                 type: array
-              ui:
-                description: UISpec defines Web UI configuration
-                properties:
-                  enabled:
-                    default: false
-                    type: boolean
-                  ingress:
-                    description: IngressSpec defines ingress configuration
-                    properties:
-                      annotations:
-                        additionalProperties:
-                          type: string
-                        type: object
-                      className:
-                        type: string
-                      enabled:
-                        type: boolean
-                      host:
-                        type: string
-                      tlsSecretName:
-                        type: string
-                    type: object
-                  resources:
-                    description: Resource limits for UI pods
-                    properties:
-                      claims:
-                        description: |-
-                          Claims lists the names of resources, defined in spec.resourceClaims,
-                          that are used by this container.
-
-                          This field depends on the
-                          DynamicResourceAllocation feature gate.
-
-                          This field is immutable. It can only be set for containers.
-                        items:
-                          description: ResourceClaim references one entry in PodSpec.ResourceClaims.
-                          properties:
-                            name:
-                              description: |-
-                                Name must match the name of one entry in pod.spec.resourceClaims of
-                                the Pod where this field is used. It makes that resource available
-                                inside a container.
-                              type: string
-                            request:
-                              description: |-
-                                Request is the name chosen for a request in the referenced claim.
-                                If empty, everything from the claim is made available, otherwise
-                                only the result of this request.
-                              type: string
-                          required:
-                          - name
-                          type: object
-                        type: array
-                        x-kubernetes-list-map-keys:
-                        - name
-                        x-kubernetes-list-type: map
-                      limits:
-                        additionalProperties:
-                          anyOf:
-                          - type: integer
-                          - type: string
-                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
-                          x-kubernetes-int-or-string: true
-                        description: |-
-                          Limits describes the maximum amount of compute resources allowed.
-                          More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
-                        type: object
-                      requests:
-                        additionalProperties:
-                          anyOf:
-                          - type: integer
-                          - type: string
-                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
-                          x-kubernetes-int-or-string: true
-                        description: |-
-                          Requests describes the minimum amount of compute resources required.
-                          If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
-                          otherwise to an implementation-defined value. Requests cannot exceed Limits.
-                          More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
-                        type: object
-                    type: object
-                type: object
               upgradeStrategy:
                 description: UpgradeStrategy specifies how to handle rolling upgrades
                 properties:
