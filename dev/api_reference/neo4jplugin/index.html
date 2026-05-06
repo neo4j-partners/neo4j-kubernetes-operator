@@ -3807,12 +3807,6 @@
 <td>Plugin-specific configuration (becomes <code>NEO4J_*</code> env vars)</td>
 </tr>
 <tr>
-<td><code>license</code></td>
-<td><code>PluginLicense</code></td>
-<td>❌</td>
-<td>License configuration for commercial plugins</td>
-</tr>
-<tr>
 <td><code>security</code></td>
 <td><a href="#pluginsecurity"><code>PluginSecurity</code></a></td>
 <td>❌</td>
@@ -4133,30 +4127,28 @@
 </span><span id="__span-4-22"><a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a><span class="w">      </span><span class="nt">versionConstraint</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&gt;=5.26.0&quot;</span>
 </span><span id="__span-4-23"><a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a><span class="w">      </span><span class="nt">optional</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
 </span><span id="__span-4-24"><a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a>
-</span><span id="__span-4-25"><a id="__codelineno-4-25" name="__codelineno-4-25" href="#__codelineno-4-25"></a><span class="w">  </span><span class="c1"># GDS-specific configuration</span>
-</span><span id="__span-4-26"><a id="__codelineno-4-26" name="__codelineno-4-26" href="#__codelineno-4-26"></a><span class="w">  </span><span class="nt">config</span><span class="p">:</span>
-</span><span id="__span-4-27"><a id="__codelineno-4-27" name="__codelineno-4-27" href="#__codelineno-4-27"></a><span class="w">    </span><span class="s">&quot;gds.enterprise.license_file&quot;</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="s">&quot;/licenses/gds.license&quot;</span>
-</span><span id="__span-4-28"><a id="__codelineno-4-28" name="__codelineno-4-28" href="#__codelineno-4-28"></a><span class="w">    </span><span class="s">&quot;gds.procedure.allowlist&quot;</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="s">&quot;gds.*&quot;</span>
-</span><span id="__span-4-29"><a id="__codelineno-4-29" name="__codelineno-4-29" href="#__codelineno-4-29"></a><span class="w">    </span><span class="s">&quot;gds.graph.store.max_size&quot;</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="s">&quot;2GB&quot;</span>
-</span><span id="__span-4-30"><a id="__codelineno-4-30" name="__codelineno-4-30" href="#__codelineno-4-30"></a>
-</span><span id="__span-4-31"><a id="__codelineno-4-31" name="__codelineno-4-31" href="#__codelineno-4-31"></a><span class="w">  </span><span class="c1"># License configuration for enterprise features</span>
-</span><span id="__span-4-32"><a id="__codelineno-4-32" name="__codelineno-4-32" href="#__codelineno-4-32"></a><span class="w">  </span><span class="nt">license</span><span class="p">:</span>
-</span><span id="__span-4-33"><a id="__codelineno-4-33" name="__codelineno-4-33" href="#__codelineno-4-33"></a><span class="w">    </span><span class="nt">keySecret</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gds-license-secret</span>
-</span><span id="__span-4-34"><a id="__codelineno-4-34" name="__codelineno-4-34" href="#__codelineno-4-34"></a><span class="w">    </span><span class="nt">licenseFile</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;/licenses/gds.license&quot;</span>
-</span><span id="__span-4-35"><a id="__codelineno-4-35" name="__codelineno-4-35" href="#__codelineno-4-35"></a>
-</span><span id="__span-4-36"><a id="__codelineno-4-36" name="__codelineno-4-36" href="#__codelineno-4-36"></a><span class="w">  </span><span class="c1"># Security configuration</span>
-</span><span id="__span-4-37"><a id="__codelineno-4-37" name="__codelineno-4-37" href="#__codelineno-4-37"></a><span class="w">  </span><span class="nt">security</span><span class="p">:</span>
-</span><span id="__span-4-38"><a id="__codelineno-4-38" name="__codelineno-4-38" href="#__codelineno-4-38"></a><span class="w">    </span><span class="nt">allowedProcedures</span><span class="p">:</span>
-</span><span id="__span-4-39"><a id="__codelineno-4-39" name="__codelineno-4-39" href="#__codelineno-4-39"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;gds.*&quot;</span>
-</span><span id="__span-4-40"><a id="__codelineno-4-40" name="__codelineno-4-40" href="#__codelineno-4-40"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;apoc.load.*&quot;</span><span class="w">  </span><span class="c1"># APOC dependency procedures</span>
-</span><span id="__span-4-41"><a id="__codelineno-4-41" name="__codelineno-4-41" href="#__codelineno-4-41"></a><span class="w">    </span><span class="nt">securityPolicy</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;restricted&quot;</span>
-</span><span id="__span-4-42"><a id="__codelineno-4-42" name="__codelineno-4-42" href="#__codelineno-4-42"></a><span class="w">    </span><span class="nt">sandbox</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w">  </span><span class="c1"># GDS requires full access</span>
-</span><span id="__span-4-43"><a id="__codelineno-4-43" name="__codelineno-4-43" href="#__codelineno-4-43"></a>
-</span><span id="__span-4-44"><a id="__codelineno-4-44" name="__codelineno-4-44" href="#__codelineno-4-44"></a><span class="w">  </span><span class="c1"># Resource requirements for GDS operations</span>
-</span><span id="__span-4-45"><a id="__codelineno-4-45" name="__codelineno-4-45" href="#__codelineno-4-45"></a><span class="w">  </span><span class="nt">resources</span><span class="p">:</span>
-</span><span id="__span-4-46"><a id="__codelineno-4-46" name="__codelineno-4-46" href="#__codelineno-4-46"></a><span class="w">    </span><span class="nt">memoryLimit</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;2Gi&quot;</span><span class="w">    </span><span class="c1"># GDS needs substantial memory</span>
-</span><span id="__span-4-47"><a id="__codelineno-4-47" name="__codelineno-4-47" href="#__codelineno-4-47"></a><span class="w">    </span><span class="nt">cpuLimit</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;1&quot;</span><span class="w">         </span><span class="c1"># CPU for graph algorithms</span>
-</span><span id="__span-4-48"><a id="__codelineno-4-48" name="__codelineno-4-48" href="#__codelineno-4-48"></a><span class="w">    </span><span class="nt">threadPoolSize</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">8</span><span class="w">     </span><span class="c1"># Parallel processing</span>
+</span><span id="__span-4-25"><a id="__codelineno-4-25" name="__codelineno-4-25" href="#__codelineno-4-25"></a><span class="w">  </span><span class="c1"># GDS-specific configuration. Mount the license file at /licenses/gds.license</span>
+</span><span id="__span-4-26"><a id="__codelineno-4-26" name="__codelineno-4-26" href="#__codelineno-4-26"></a><span class="w">  </span><span class="c1"># via the cluster/standalone spec.extraVolumes + spec.extraVolumeMounts</span>
+</span><span id="__span-4-27"><a id="__codelineno-4-27" name="__codelineno-4-27" href="#__codelineno-4-27"></a><span class="w">  </span><span class="c1"># (e.g. from a Secret named gds-license-secret) — Neo4jPlugin no longer has a</span>
+</span><span id="__span-4-28"><a id="__codelineno-4-28" name="__codelineno-4-28" href="#__codelineno-4-28"></a><span class="w">  </span><span class="c1"># typed license block.</span>
+</span><span id="__span-4-29"><a id="__codelineno-4-29" name="__codelineno-4-29" href="#__codelineno-4-29"></a><span class="w">  </span><span class="nt">config</span><span class="p">:</span>
+</span><span id="__span-4-30"><a id="__codelineno-4-30" name="__codelineno-4-30" href="#__codelineno-4-30"></a><span class="w">    </span><span class="s">&quot;gds.enterprise.license_file&quot;</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="s">&quot;/licenses/gds.license&quot;</span>
+</span><span id="__span-4-31"><a id="__codelineno-4-31" name="__codelineno-4-31" href="#__codelineno-4-31"></a><span class="w">    </span><span class="s">&quot;gds.procedure.allowlist&quot;</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="s">&quot;gds.*&quot;</span>
+</span><span id="__span-4-32"><a id="__codelineno-4-32" name="__codelineno-4-32" href="#__codelineno-4-32"></a><span class="w">    </span><span class="s">&quot;gds.graph.store.max_size&quot;</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="s">&quot;2GB&quot;</span>
+</span><span id="__span-4-33"><a id="__codelineno-4-33" name="__codelineno-4-33" href="#__codelineno-4-33"></a>
+</span><span id="__span-4-34"><a id="__codelineno-4-34" name="__codelineno-4-34" href="#__codelineno-4-34"></a><span class="w">  </span><span class="c1"># Security configuration</span>
+</span><span id="__span-4-35"><a id="__codelineno-4-35" name="__codelineno-4-35" href="#__codelineno-4-35"></a><span class="w">  </span><span class="nt">security</span><span class="p">:</span>
+</span><span id="__span-4-36"><a id="__codelineno-4-36" name="__codelineno-4-36" href="#__codelineno-4-36"></a><span class="w">    </span><span class="nt">allowedProcedures</span><span class="p">:</span>
+</span><span id="__span-4-37"><a id="__codelineno-4-37" name="__codelineno-4-37" href="#__codelineno-4-37"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;gds.*&quot;</span>
+</span><span id="__span-4-38"><a id="__codelineno-4-38" name="__codelineno-4-38" href="#__codelineno-4-38"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;apoc.load.*&quot;</span><span class="w">  </span><span class="c1"># APOC dependency procedures</span>
+</span><span id="__span-4-39"><a id="__codelineno-4-39" name="__codelineno-4-39" href="#__codelineno-4-39"></a><span class="w">    </span><span class="nt">securityPolicy</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;restricted&quot;</span>
+</span><span id="__span-4-40"><a id="__codelineno-4-40" name="__codelineno-4-40" href="#__codelineno-4-40"></a><span class="w">    </span><span class="nt">sandbox</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w">  </span><span class="c1"># GDS requires full access</span>
+</span><span id="__span-4-41"><a id="__codelineno-4-41" name="__codelineno-4-41" href="#__codelineno-4-41"></a>
+</span><span id="__span-4-42"><a id="__codelineno-4-42" name="__codelineno-4-42" href="#__codelineno-4-42"></a><span class="w">  </span><span class="c1"># Resource requirements for GDS operations</span>
+</span><span id="__span-4-43"><a id="__codelineno-4-43" name="__codelineno-4-43" href="#__codelineno-4-43"></a><span class="w">  </span><span class="nt">resources</span><span class="p">:</span>
+</span><span id="__span-4-44"><a id="__codelineno-4-44" name="__codelineno-4-44" href="#__codelineno-4-44"></a><span class="w">    </span><span class="nt">memoryLimit</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;2Gi&quot;</span><span class="w">    </span><span class="c1"># GDS needs substantial memory</span>
+</span><span id="__span-4-45"><a id="__codelineno-4-45" name="__codelineno-4-45" href="#__codelineno-4-45"></a><span class="w">    </span><span class="nt">cpuLimit</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;1&quot;</span><span class="w">         </span><span class="c1"># CPU for graph algorithms</span>
+</span><span id="__span-4-46"><a id="__codelineno-4-46" name="__codelineno-4-46" href="#__codelineno-4-46"></a><span class="w">    </span><span class="nt">threadPoolSize</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">8</span><span class="w">     </span><span class="c1"># Parallel processing</span>
 </span></code></pre></div>
 <p><strong>Result</strong>: Updates <code>my-standalone</code> StatefulSet with:
 - <code>NEO4J_PLUGINS=["apoc", "graph-data-science"]</code> (dependencies included)
@@ -4401,12 +4393,12 @@
 </span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;apoc.load.*&quot;</span>
 </span></code></pre></div></p>
 <p><strong>Bloom (Automatic Security Configuration)</strong>:
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Minimal configuration - security settings applied automatically</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="nt">config</span><span class="p">:</span>
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">  </span><span class="s">&quot;dbms.bloom.license_file&quot;</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="s">&quot;/licenses/bloom.license&quot;</span>
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="nt">license</span><span class="p">:</span>
-</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="w">  </span><span class="nt">keySecret</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">bloom-license-secret</span>
-</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="w">  </span><span class="nt">licenseFile</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;/licenses/bloom.license&quot;</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Minimal configuration - security settings applied automatically.</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="c1"># Mount the license file at /licenses/bloom.license via the cluster/standalone</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="c1"># spec.extraVolumes + spec.extraVolumeMounts (e.g. from a Secret named</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="c1"># bloom-license-secret).</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="nt">config</span><span class="p">:</span>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="w">  </span><span class="s">&quot;dbms.bloom.license_file&quot;</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="s">&quot;/licenses/bloom.license&quot;</span>
 </span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="c1"># Automatically applied by operator:</span>
 </span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="c1"># - NEO4J_DBMS_SECURITY_PROCEDURES_UNRESTRICTED=bloom.*</span>
 </span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="c1"># - NEO4J_DBMS_SECURITY_HTTP_AUTH_ALLOWLIST=/,/browser.*,/bloom.*</span>
@@ -4449,7 +4441,6 @@
 <li><strong>Plugin Collection</strong>: Assembles main plugin and dependencies into unified list</li>
 <li><strong>Environment Variable Mapping</strong>: Converts plugin config to <code>NEO4J_*</code> environment variables</li>
 <li><strong>Security Configuration</strong>: Applies plugin-specific security settings</li>
-<li><strong>License Verification</strong>: Validates commercial plugin licenses (if required)</li>
 </ol>
 <h3 id="phase-3-deployment">Phase 3: Deployment<a class="headerlink" href="#phase-3-deployment" title="Anchor link to this section">&para;</a></h3>
 <ol>
@@ -4651,12 +4642,12 @@
 </span><span id="__span-19-27"><a id="__codelineno-19-27" name="__codelineno-19-27" href="#__codelineno-19-27"></a><span class="w">      </span><span class="nt">versionConstraint</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;5.26.0&quot;</span>
 </span><span id="__span-19-28"><a id="__codelineno-19-28" name="__codelineno-19-28" href="#__codelineno-19-28"></a><span class="w">      </span><span class="nt">optional</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
 </span><span id="__span-19-29"><a id="__codelineno-19-29" name="__codelineno-19-29" href="#__codelineno-19-29"></a><span class="w">  </span><span class="nt">config</span><span class="p">:</span>
-</span><span id="__span-19-30"><a id="__codelineno-19-30" name="__codelineno-19-30" href="#__codelineno-19-30"></a><span class="w">    </span><span class="s">&quot;gds.enterprise.license_file&quot;</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="s">&quot;/licenses/gds.license&quot;</span>
-</span><span id="__span-19-31"><a id="__codelineno-19-31" name="__codelineno-19-31" href="#__codelineno-19-31"></a><span class="w">    </span><span class="s">&quot;gds.graph.store.max_size&quot;</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="s">&quot;16GB&quot;</span>
-</span><span id="__span-19-32"><a id="__codelineno-19-32" name="__codelineno-19-32" href="#__codelineno-19-32"></a><span class="w">    </span><span class="s">&quot;gds.procedure.allowlist&quot;</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="s">&quot;gds.*&quot;</span>
-</span><span id="__span-19-33"><a id="__codelineno-19-33" name="__codelineno-19-33" href="#__codelineno-19-33"></a><span class="w">  </span><span class="nt">license</span><span class="p">:</span>
-</span><span id="__span-19-34"><a id="__codelineno-19-34" name="__codelineno-19-34" href="#__codelineno-19-34"></a><span class="w">    </span><span class="nt">keySecret</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gds-enterprise-license</span>
-</span><span id="__span-19-35"><a id="__codelineno-19-35" name="__codelineno-19-35" href="#__codelineno-19-35"></a><span class="w">    </span><span class="nt">licenseFile</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;/licenses/gds.license&quot;</span>
+</span><span id="__span-19-30"><a id="__codelineno-19-30" name="__codelineno-19-30" href="#__codelineno-19-30"></a><span class="w">    </span><span class="c1"># Mount the license file at /licenses/gds.license via the cluster/standalone</span>
+</span><span id="__span-19-31"><a id="__codelineno-19-31" name="__codelineno-19-31" href="#__codelineno-19-31"></a><span class="w">    </span><span class="c1"># spec.extraVolumes + spec.extraVolumeMounts (e.g. from a Secret named</span>
+</span><span id="__span-19-32"><a id="__codelineno-19-32" name="__codelineno-19-32" href="#__codelineno-19-32"></a><span class="w">    </span><span class="c1"># gds-enterprise-license).</span>
+</span><span id="__span-19-33"><a id="__codelineno-19-33" name="__codelineno-19-33" href="#__codelineno-19-33"></a><span class="w">    </span><span class="s">&quot;gds.enterprise.license_file&quot;</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="s">&quot;/licenses/gds.license&quot;</span>
+</span><span id="__span-19-34"><a id="__codelineno-19-34" name="__codelineno-19-34" href="#__codelineno-19-34"></a><span class="w">    </span><span class="s">&quot;gds.graph.store.max_size&quot;</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="s">&quot;16GB&quot;</span>
+</span><span id="__span-19-35"><a id="__codelineno-19-35" name="__codelineno-19-35" href="#__codelineno-19-35"></a><span class="w">    </span><span class="s">&quot;gds.procedure.allowlist&quot;</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="s">&quot;gds.*&quot;</span>
 </span><span id="__span-19-36"><a id="__codelineno-19-36" name="__codelineno-19-36" href="#__codelineno-19-36"></a><span class="w">  </span><span class="nt">resources</span><span class="p">:</span>
 </span><span id="__span-19-37"><a id="__codelineno-19-37" name="__codelineno-19-37" href="#__codelineno-19-37"></a><span class="w">    </span><span class="nt">memoryLimit</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;8Gi&quot;</span>
 </span><span id="__span-19-38"><a id="__codelineno-19-38" name="__codelineno-19-38" href="#__codelineno-19-38"></a><span class="w">    </span><span class="nt">cpuLimit</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;4&quot;</span>

@@ -2124,28 +2124,6 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#jwtauthspec" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        JWTAuthSpec
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#jwtvalidationspec" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        JWTValidationSpec
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#kerberosauthspec" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2520,32 +2498,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#uispec" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        UISpec
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#upgradestrategyspec" class="md-nav__link">
     <span class="md-ellipsis">
       
         UpgradeStrategySpec
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#restorespec" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        RestoreSpec
       
     </span>
   </a>
@@ -3735,28 +3691,6 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#jwtauthspec" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        JWTAuthSpec
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#jwtvalidationspec" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        JWTValidationSpec
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#kerberosauthspec" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4131,32 +4065,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#uispec" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        UISpec
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#upgradestrategyspec" class="md-nav__link">
     <span class="md-ellipsis">
       
         UpgradeStrategySpec
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#restorespec" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        RestoreSpec
       
     </span>
   </a>
@@ -4650,11 +4562,6 @@
 </thead>
 <tbody>
 <tr>
-<td><code>restoreFrom</code></td>
-<td><a href="#restorespec"><code>RestoreSpec</code></a></td>
-<td>Restore from backup configuration</td>
-</tr>
-<tr>
 <td><code>backups</code></td>
 <td><a href="#backupsspec"><code>BackupsSpec</code></a></td>
 <td>Backup configuration</td>
@@ -4666,6 +4573,8 @@
 </tr>
 </tbody>
 </table>
+<p>To restore a cluster from a backup, create a separate <code>Neo4jRestore</code> CR after
+the cluster reaches <code>Ready</code> — see <a href="../neo4jrestore/"><code>Neo4jRestore</code></a>.</p>
 <h3 id="networking">Networking<a class="headerlink" href="#networking" title="Anchor link to this section">&para;</a></h3>
 <table>
 <thead>
@@ -4697,11 +4606,6 @@
 <td><code>tls</code></td>
 <td><a href="#tlsspec"><code>TLSSpec</code></a></td>
 <td>TLS configuration</td>
-</tr>
-<tr>
-<td><code>ui</code></td>
-<td><a href="#uispec"><code>UISpec</code></a></td>
-<td>Neo4j UI configuration</td>
 </tr>
 <tr>
 <td><code>mcp</code></td>
@@ -4937,7 +4841,7 @@
 <tr>
 <td><code>passwordPolicy</code></td>
 <td><code>*PasswordPolicySpec</code></td>
-<td>Password policy configuration (minimum length, character class requirements)</td>
+<td><strong>Schema-only.</strong> Defined on the API but the operator does not currently generate <code>dbms.security.auth_minimum_password_length</code> (and friends) from this. Set those keys via <code>spec.config</code> directly until implemented.</td>
 </tr>
 <tr>
 <td><code>ldap</code></td>
@@ -4947,17 +4851,12 @@
 <tr>
 <td><code>oidc</code></td>
 <td><code>map[string]</code><a href="#neo4joidcproviderspec"><code>Neo4jOIDCProviderSpec</code></a></td>
-<td>OIDC/SSO providers. Map key = provider name (used in <code>authenticationProviders</code> as <code>oidc-&lt;key&gt;</code>)</td>
-</tr>
-<tr>
-<td><code>jwt</code></td>
-<td><a href="#jwtauthspec"><code>*JWTAuthSpec</code></a></td>
-<td>JWT authentication configuration</td>
+<td>OIDC/SSO providers. Map key = provider name (used in <code>authenticationProviders</code> as <code>oidc-&lt;key&gt;</code>). For JWT-based auth, use OIDC — Neo4j ID tokens are JWTs.</td>
 </tr>
 <tr>
 <td><code>kerberos</code></td>
 <td><a href="#kerberosauthspec"><code>*KerberosAuthSpec</code></a></td>
-<td>Kerberos authentication configuration</td>
+<td><strong>Schema-only.</strong> Defined on the API but the operator does not wire it to Neo4j config or mount the keytab. Use <code>spec.config["dbms.security.kerberos.*"]</code> plus <code>spec.extraVolumes</code> for the keytab Secret until full Kerberos support lands.</td>
 </tr>
 <tr>
 <td><code>authCacheTTL</code></td>
@@ -5284,56 +5183,13 @@ remove trust in public CAs.</p>
 filesystem path (e.g. <code>dbms.ssl.policy.&lt;name&gt;.truststore_path</code>), use
 <code>spec.extraVolumes</code> + <code>spec.extraVolumeMounts</code> instead — the operator does
 not parse policy config to wire up filesystem mounts automatically.</p>
-<h3 id="jwtauthspec">JWTAuthSpec<a class="headerlink" href="#jwtauthspec" title="Anchor link to this section">&para;</a></h3>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Type</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>validation</code></td>
-<td><a href="#jwtvalidationspec"><code>*JWTValidationSpec</code></a></td>
-<td>JWT validation settings</td>
-</tr>
-<tr>
-<td><code>claimsMapping</code></td>
-<td><code>map[string]string</code></td>
-<td>Claims mapping</td>
-</tr>
-</tbody>
-</table>
-<h3 id="jwtvalidationspec">JWTValidationSpec<a class="headerlink" href="#jwtvalidationspec" title="Anchor link to this section">&para;</a></h3>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Type</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>jwksUrl</code></td>
-<td><code>string</code></td>
-<td>JWKS endpoint URL</td>
-</tr>
-<tr>
-<td><code>issuer</code></td>
-<td><code>string</code></td>
-<td>JWT issuer</td>
-</tr>
-<tr>
-<td><code>audience</code></td>
-<td><code>[]string</code></td>
-<td>JWT audience</td>
-</tr>
-</tbody>
-</table>
 <h3 id="kerberosauthspec">KerberosAuthSpec<a class="headerlink" href="#kerberosauthspec" title="Anchor link to this section">&para;</a></h3>
+<blockquote>
+<p><strong>Schema-only — not wired by the operator yet.</strong> See the
+<a href="#authspec"><code>auth.kerberos</code> row in AuthSpec</a> for the recommended workaround
+(<code>spec.config["dbms.security.kerberos.*"]</code> + <code>spec.extraVolumes</code> for the
+keytab) until full support lands.</p>
+</blockquote>
 <table>
 <thead>
 <tr>
@@ -6594,53 +6450,6 @@ not parse policy config to wire up filesystem mounts automatically.</p>
 </tr>
 </tbody>
 </table>
-<h3 id="uispec">UISpec<a class="headerlink" href="#uispec" title="Anchor link to this section">&para;</a></h3>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Type</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>enabled</code></td>
-<td><code>bool</code></td>
-<td>Enable Neo4j UI deployment</td>
-</tr>
-<tr>
-<td><code>ingress</code></td>
-<td><a href="#ingressspec"><code>*IngressSpec</code></a></td>
-<td>UI ingress configuration</td>
-</tr>
-<tr>
-<td><code>resources</code></td>
-<td><code>*corev1.ResourceRequirements</code></td>
-<td>Resource requirements for UI pods</td>
-</tr>
-<tr>
-<td><code>pathType</code></td>
-<td><code>string</code></td>
-<td>Path type: <code>"Prefix"</code>, <code>"Exact"</code>, <code>"ImplementationSpecific"</code></td>
-</tr>
-<tr>
-<td><code>tlsEnabled</code></td>
-<td><code>bool</code></td>
-<td>Enable TLS on the Ingress</td>
-</tr>
-<tr>
-<td><code>tlsSecretName</code></td>
-<td><code>string</code></td>
-<td>TLS certificate secret name</td>
-</tr>
-<tr>
-<td><code>annotations</code></td>
-<td><code>map[string]string</code></td>
-<td>Ingress annotations</td>
-</tr>
-</tbody>
-</table>
 <h3 id="upgradestrategyspec">UpgradeStrategySpec<a class="headerlink" href="#upgradestrategyspec" title="Anchor link to this section">&para;</a></h3>
 <p>Configures how the operator handles Neo4j version upgrades.</p>
 <table>
@@ -6691,29 +6500,6 @@ not parse policy config to wire up filesystem mounts automatically.</p>
 <td><code>autoPauseOnFailure</code></td>
 <td><code>bool</code></td>
 <td>Pause upgrade on failure for manual intervention (default: <code>true</code>)</td>
-</tr>
-</tbody>
-</table>
-<h3 id="restorespec">RestoreSpec<a class="headerlink" href="#restorespec" title="Anchor link to this section">&para;</a></h3>
-<p>Configures restoration from a backup during cluster creation.</p>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Type</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>backupName</code></td>
-<td><code>string</code></td>
-<td>Name of the <code>Neo4jBackup</code> resource to restore from</td>
-</tr>
-<tr>
-<td><code>databaseName</code></td>
-<td><code>string</code></td>
-<td>Target database name for the restore</td>
 </tr>
 </tbody>
 </table>
@@ -7517,9 +7303,11 @@ visible via <code>kubectl get svc</code>.</p>
 </span><span id="__span-15-89"><a id="__codelineno-15-89" name="__codelineno-15-89" href="#__codelineno-15-89"></a><span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ca-cluster-issuer</span>
 </span><span id="__span-15-90"><a id="__codelineno-15-90" name="__codelineno-15-90" href="#__codelineno-15-90"></a><span class="w">      </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ClusterIssuer</span>
 </span><span id="__span-15-91"><a id="__codelineno-15-91" name="__codelineno-15-91" href="#__codelineno-15-91"></a><span class="w">  </span><span class="nt">auth</span><span class="p">:</span>
-</span><span id="__span-15-92"><a id="__codelineno-15-92" name="__codelineno-15-92" href="#__codelineno-15-92"></a><span class="w">    </span><span class="nt">passwordPolicy</span><span class="p">:</span>
-</span><span id="__span-15-93"><a id="__codelineno-15-93" name="__codelineno-15-93" href="#__codelineno-15-93"></a><span class="w">      </span><span class="nt">minLength</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">12</span>
-</span><span id="__span-15-94"><a id="__codelineno-15-94" name="__codelineno-15-94" href="#__codelineno-15-94"></a><span class="w">      </span><span class="nt">requireSpecialChars</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-15-92"><a id="__codelineno-15-92" name="__codelineno-15-92" href="#__codelineno-15-92"></a><span class="w">    </span><span class="c1"># NOTE: spec.auth.passwordPolicy is schema-only and currently ignored</span>
+</span><span id="__span-15-93"><a id="__codelineno-15-93" name="__codelineno-15-93" href="#__codelineno-15-93"></a><span class="w">    </span><span class="c1"># by the operator. Set the equivalent Neo4j config keys via spec.config</span>
+</span><span id="__span-15-94"><a id="__codelineno-15-94" name="__codelineno-15-94" href="#__codelineno-15-94"></a><span class="w">    </span><span class="c1"># (e.g. dbms.security.auth_minimum_password_length=12) until typed-field</span>
+</span><span id="__span-15-95"><a id="__codelineno-15-95" name="__codelineno-15-95" href="#__codelineno-15-95"></a><span class="w">    </span><span class="c1"># support lands.</span>
+</span><span id="__span-15-96"><a id="__codelineno-15-96" name="__codelineno-15-96" href="#__codelineno-15-96"></a><span class="w">    </span><span class="nt">adminSecret</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j-admin-secret</span>
 </span></code></pre></div>
 <h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Anchor link to this section">&para;</a></h2>
 <ol>
