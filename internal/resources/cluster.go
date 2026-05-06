@@ -814,35 +814,6 @@ func BuildDiscoveryRoleBindingForEnterprise(cluster *neo4jv1beta1.Neo4jEnterpris
 	}
 }
 
-// BuildServiceAccountForEnterprise creates a ServiceAccount for cloud identity
-func BuildServiceAccountForEnterprise(cluster *neo4jv1beta1.Neo4jEnterpriseCluster) *corev1.ServiceAccount {
-	if cluster.Spec.Backups == nil || cluster.Spec.Backups.Cloud == nil ||
-		cluster.Spec.Backups.Cloud.Identity.AutoCreate == nil ||
-		!cluster.Spec.Backups.Cloud.Identity.AutoCreate.Enabled {
-		return nil
-	}
-
-	annotations := make(map[string]string)
-	// Add cloud-specific annotations based on provider
-	switch cluster.Spec.Backups.Cloud.Provider {
-	case "gcp":
-		annotations["iam.gke.io/gcp-service-account"] = fmt.Sprintf("%s-backup@PROJECT.iam.gserviceaccount.com", cluster.Name)
-	case "aws":
-		annotations["eks.amazonaws.com/role-arn"] = fmt.Sprintf("arn:aws:iam::ACCOUNT:role/%s-backup-role", cluster.Name)
-	case "azure":
-		annotations["azure.workload.identity/client-id"] = fmt.Sprintf("%s-backup-identity", cluster.Name)
-	}
-
-	return &corev1.ServiceAccount{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        getServiceAccountNameForEnterprise(cluster),
-			Namespace:   cluster.Namespace,
-			Labels:      getLabelsForEnterprise(cluster, "service-account"),
-			Annotations: annotations,
-		},
-	}
-}
-
 // BuildIngressForEnterprise creates an Ingress for external access
 func BuildIngressForEnterprise(cluster *neo4jv1beta1.Neo4jEnterpriseCluster) *networkingv1.Ingress {
 	if cluster.Spec.Service == nil || cluster.Spec.Service.Ingress == nil || !cluster.Spec.Service.Ingress.Enabled {
@@ -1874,14 +1845,6 @@ func IsNeo4jVersion202512OrHigher(imageTag string) bool {
 	}
 
 	return version.Major == 2025 && version.Minor >= 12
-}
-
-// IsNeo4jVersion202510OrHigher is a backwards-compat alias kept for callers that have not
-// been updated yet. Use IsNeo4jVersion202512OrHigher for property sharding checks.
-//
-// Deprecated: property sharding requires 2025.12+, not 2025.10+.
-func IsNeo4jVersion202510OrHigher(imageTag string) bool {
-	return IsNeo4jVersion202512OrHigher(imageTag)
 }
 
 // buildPropertyShardingConfig merges required property sharding settings with user overrides
