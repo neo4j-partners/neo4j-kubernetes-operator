@@ -52,7 +52,7 @@ jobs:
           echo "Packaging chart at tag ${tag} → version ${clean}"
 
       - name: Checkout source at tag
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ steps.target.outputs.tag }}
 
