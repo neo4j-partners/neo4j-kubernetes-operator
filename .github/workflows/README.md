@@ -88,7 +88,7 @@ The workflows use centralized environment variables for consistency:
 
 ```yaml
 env:
-  GO_VERSION: '1.25'          # Go version for all jobs
+  GO_VERSION: '1.26'          # Go version for all jobs
   KIND_VERSION: 'v0.27.0'     # Kind version (integration-tests.yml only)
   REGISTRY: ghcr.io           # Container registry (release.yml only)
 ```

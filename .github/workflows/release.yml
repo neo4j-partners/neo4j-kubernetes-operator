@@ -15,7 +15,7 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: neo4j-partners/neo4j-kubernetes-operator
   CHART_REGISTRY: ghcr.io/neo4j-partners/charts
-  GO_VERSION: '1.25'
+  GO_VERSION: '1.26'
 
 jobs:
   # Compute the release tag once and share it across all dependent jobs.
