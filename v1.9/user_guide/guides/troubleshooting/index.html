@@ -4229,11 +4229,11 @@ kubectl get svc -l neo4j.com/cluster=&lt;cluster-name&gt; -o yaml | grep -A 3 -B
 </li>
 <li>
 <p><strong>Check Password Policy:</strong>
+   <code>spec.auth.passwordPolicy</code> is schema-only and currently ignored — set the
+   Neo4j keys directly in <code>spec.config</code> instead:
    <div class="language-yaml highlight"><pre><span></span><code><span id="__span-52-1"><a id="__codelineno-52-1" name="__codelineno-52-1" href="#__codelineno-52-1"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-52-2"><a id="__codelineno-52-2" name="__codelineno-52-2" href="#__codelineno-52-2"></a><span class="w">  </span><span class="nt">auth</span><span class="p">:</span>
-</span><span id="__span-52-3"><a id="__codelineno-52-3" name="__codelineno-52-3" href="#__codelineno-52-3"></a><span class="w">    </span><span class="nt">passwordPolicy</span><span class="p">:</span>
-</span><span id="__span-52-4"><a id="__codelineno-52-4" name="__codelineno-52-4" href="#__codelineno-52-4"></a><span class="w">      </span><span class="nt">minLength</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">8</span>
-</span><span id="__span-52-5"><a id="__codelineno-52-5" name="__codelineno-52-5" href="#__codelineno-52-5"></a><span class="w">      </span><span class="nt">requireUppercase</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-52-2"><a id="__codelineno-52-2" name="__codelineno-52-2" href="#__codelineno-52-2"></a><span class="w">  </span><span class="nt">config</span><span class="p">:</span>
+</span><span id="__span-52-3"><a id="__codelineno-52-3" name="__codelineno-52-3" href="#__codelineno-52-3"></a><span class="w">    </span><span class="nt">dbms.security.auth_minimum_password_length</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;8&quot;</span>
 </span></code></pre></div></p>
 </li>
 </ol>
