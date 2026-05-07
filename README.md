@@ -96,7 +96,7 @@ The Operator deploys Neo4j EE v5.26+.  It supports both clustered and standalone
      --from-literal=password=your-secure-password
    ```
 
-   **Important**: The operator manages authentication through Kubernetes secrets. Do not set NEO4J_AUTH directly in environment variables.
+   **Important**: The operator builds the `NEO4J_AUTH` env var on the pod from the Secret's `username` and `password` keys. Don't override `NEO4J_AUTH` via `spec.env` on the cluster/standalone CR — that bypasses the Secret-managed flow and the two paths can desync.
 
 3. **Deploy your first Neo4j instance**:
 
