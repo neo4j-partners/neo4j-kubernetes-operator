@@ -152,7 +152,7 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 
 				// Emit warnings as events
 				for _, warning := range result.Warnings {
-					r.Recorder.Eventf(cluster, corev1.EventTypeWarning, EventReasonTopologyWarning, warning)
+					r.Recorder.Event(cluster, corev1.EventTypeWarning, EventReasonTopologyWarning, warning)
 				}
 
 				// Check for validation errors
@@ -172,7 +172,7 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 
 			// Emit warnings as events
 			for _, warning := range result.Warnings {
-				r.Recorder.Eventf(cluster, corev1.EventTypeWarning, EventReasonTopologyWarning, warning)
+				r.Recorder.Event(cluster, corev1.EventTypeWarning, EventReasonTopologyWarning, warning)
 			}
 
 			// Check for validation errors

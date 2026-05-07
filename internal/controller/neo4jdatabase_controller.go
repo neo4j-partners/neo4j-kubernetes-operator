@@ -107,7 +107,7 @@ func (r *Neo4jDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		// Log and record warnings
 		for _, warning := range validationResult.Warnings {
 			logger.Info("Database validation warning", "warning", warning)
-			r.Recorder.Eventf(database, corev1.EventTypeWarning, EventReasonValidationWarning, warning)
+			r.Recorder.Event(database, corev1.EventTypeWarning, EventReasonValidationWarning, warning)
 		}
 
 		// Handle validation errors
@@ -119,7 +119,7 @@ func (r *Neo4jDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			message := fmt.Sprintf("Database validation failed: %v", errMessages)
 			logger.Error(nil, message)
 			r.updateDatabaseStatus(ctx, database, metav1.ConditionFalse, EventReasonValidationFailed, message)
-			r.Recorder.Eventf(database, corev1.EventTypeWarning, EventReasonValidationFailed, message)
+			r.Recorder.Event(database, corev1.EventTypeWarning, EventReasonValidationFailed, message)
 			return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
 		}
 	}
