@@ -6,4 +6,4 @@ kubectl 1.36.0
 kustomize 5.4.3
 helm 3.16.0
 golangci-lint 1.64.8
-ginkgo 2.25.2
+ginkgo 2.28.3

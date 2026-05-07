@@ -15,7 +15,7 @@ on:
         type: string
 
 env:
-  GO_VERSION: '1.25'
+  GO_VERSION: '1.26'
   KIND_VERSION: 'v0.27.0'
 
 jobs:
