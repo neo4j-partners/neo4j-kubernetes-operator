@@ -3,6 +3,7 @@ package controller_test
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -15,6 +16,33 @@ import (
 
 	neo4jv1beta1 "github.com/priyolahiri/neo4j-kubernetes-operator/api/v1beta1"
 )
+
+// hasFailedConditionMatching returns true when the restore reports
+// status.phase=Failed AND at least one condition's message contains every
+// substring in `needles` (case-insensitive). The cluster controller emits
+// a single Ready=False condition with a free-form message rather than a
+// typed ClusterNotFound/BackupNotFound condition, so we assert on message
+// content to verify the failure reason without coupling the test to a
+// specific condition Type that the controller does not actually set.
+func hasFailedConditionMatching(restore *neo4jv1beta1.Neo4jRestore, needles ...string) bool {
+	if restore.Status.Phase != "Failed" {
+		return false
+	}
+	for _, cond := range restore.Status.Conditions {
+		msg := strings.ToLower(cond.Message)
+		ok := true
+		for _, n := range needles {
+			if !strings.Contains(msg, strings.ToLower(n)) {
+				ok = false
+				break
+			}
+		}
+		if ok {
+			return true
+		}
+	}
+	return false
+}
 
 var _ = Describe("Neo4jRestore Controller", func() {
 	const (
@@ -56,7 +84,7 @@ var _ = Describe("Neo4jRestore Controller", func() {
 					Tag:  "5.26-enterprise",
 				},
 				Topology: neo4jv1beta1.TopologyConfiguration{
-					Servers: 5, // 3 + 2 total servers
+					Servers: 5,
 				},
 				Storage: neo4jv1beta1.StorageSpec{
 					ClassName: "standard",
@@ -239,14 +267,15 @@ var _ = Describe("Neo4jRestore Controller", func() {
 			}, timeout, interval).Should(BeTrue())
 
 			// The controller should reject this restore due to non-existent cluster
-			// It should not add finalizers and should not process the restore
+			// — Phase=Failed plus a condition whose message references the missing
+			// cluster (the controller emits a Ready=False condition with the
+			// formatted "Failed to get target cluster: ..." message, not a typed
+			// ClusterNotFound condition).
 			Eventually(func() bool {
-				err := k8sClient.Get(ctx, restoreLookupKey, createdRestore)
-				if err != nil {
+				if err := k8sClient.Get(ctx, restoreLookupKey, createdRestore); err != nil {
 					return false
 				}
-				// Check if the restore has been marked as failed or has error conditions
-				return len(createdRestore.Status.Conditions) > 0 || createdRestore.Status.Phase == "Failed"
+				return hasFailedConditionMatching(createdRestore, "cluster", "not found")
 			}, timeout, interval).Should(BeTrue())
 
 			// Clean up
@@ -283,14 +312,15 @@ var _ = Describe("Neo4jRestore Controller", func() {
 			}, timeout, interval).Should(BeTrue())
 
 			// The controller should reject this restore due to non-existent backup
-			// It should not add finalizers and should not process the restore
+			// — Phase=Failed plus a condition whose message references the missing
+			// backup. The controller emits a Ready=False condition with the
+			// "Validation failed: backup ... not found: ..." message, not a typed
+			// BackupNotFound condition.
 			Eventually(func() bool {
-				err := k8sClient.Get(ctx, restoreLookupKey, createdRestore)
-				if err != nil {
+				if err := k8sClient.Get(ctx, restoreLookupKey, createdRestore); err != nil {
 					return false
 				}
-				// Check if the restore has been marked as failed or has error conditions
-				return len(createdRestore.Status.Conditions) > 0 || createdRestore.Status.Phase == "Failed"
+				return hasFailedConditionMatching(createdRestore, "backup", "non-existent-backup")
 			}, timeout, interval).Should(BeTrue())
 
 			// Clean up
@@ -336,13 +366,31 @@ var _ = Describe("Neo4jRestore Controller", func() {
 				return err == nil
 			}, timeout, interval).Should(BeTrue())
 
+			// Verify the controller observed the resource and started reconciling
+			// it (first-pass adds the finalizer). Asserting deeper restore Job
+			// semantics here would couple this unit-style test to the full backup
+			// retrieval / Job creation pipeline that the controller-suite envtest
+			// is not set up to exercise meaningfully — that surface belongs in
+			// the integration-test suite.
+			Eventually(func() bool {
+				if err := k8sClient.Get(ctx, restoreLookupKey, createdRestore); err != nil {
+					return false
+				}
+				for _, f := range createdRestore.Finalizers {
+					if f == "neo4j.com/restore-finalizer" {
+						return true
+					}
+				}
+				return false
+			}, timeout, interval).Should(BeTrue())
+
 			// Clean up
 			Expect(k8sClient.Delete(ctx, restoreWithStorage)).Should(Succeed())
 		})
 	})
 
 	Context("When updating a Neo4jRestore", func() {
-		It("Should handle status updates correctly", func() {
+		It("Should accept a custom databaseName in spec", func() {
 			By("Creating a Neo4jRestore with different database name")
 
 			// Create restore with a different database name from the start
