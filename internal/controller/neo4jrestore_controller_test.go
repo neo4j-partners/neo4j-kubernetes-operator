@@ -51,25 +51,31 @@ var _ = Describe("Neo4jRestore Controller", func() {
 	)
 
 	var (
-		ctx           context.Context
-		restore       *neo4jv1beta1.Neo4jRestore
-		cluster       *neo4jv1beta1.Neo4jEnterpriseCluster
-		backup        *neo4jv1beta1.Neo4jBackup
-		restoreName   string
-		clusterName   string
-		backupName    string
-		namespaceName string
+		ctx             context.Context
+		restore         *neo4jv1beta1.Neo4jRestore
+		cluster         *neo4jv1beta1.Neo4jEnterpriseCluster
+		backup          *neo4jv1beta1.Neo4jBackup
+		restoreName     string
+		clusterName     string
+		backupName      string
+		adminSecretName string
+		namespaceName   string
 	)
 
 	BeforeEach(func() {
-		// Ensure context is properly initialized
-		if ctx == nil {
-			ctx = context.Background()
-		}
+		// Fresh context per spec — the prior `if ctx == nil` guard worked by
+		// accident on the first run (interface zero value) but conflated
+		// "first run after suite setup" with "subsequent reconciles" on
+		// retries. Unconditional assignment makes the intent explicit.
+		ctx = context.Background()
 
 		restoreName = fmt.Sprintf("test-restore-%d", time.Now().UnixNano())
 		clusterName = fmt.Sprintf("test-cluster-%d", time.Now().UnixNano())
 		backupName = fmt.Sprintf("test-backup-%d", time.Now().UnixNano())
+		// Unique admin-secret name per spec to match the surrounding
+		// convention (cluster/backup/restore are all UnixNano-suffixed)
+		// and eliminate cleanup-leak collisions between specs.
+		adminSecretName = fmt.Sprintf("neo4j-admin-secret-%d", time.Now().UnixNano())
 		namespaceName = "default"
 
 		// Create cluster first
@@ -91,16 +97,16 @@ var _ = Describe("Neo4jRestore Controller", func() {
 					Size:      "10Gi",
 				},
 				Auth: &neo4jv1beta1.AuthSpec{
-					AdminSecret: "neo4j-admin-secret",
+					AdminSecret: adminSecretName,
 				},
 			},
 		}
 		Expect(k8sClient.Create(ctx, cluster)).Should(Succeed())
 
-		// Create admin secret (if it doesn't exist)
+		// Create admin secret (unique per spec — see adminSecretName above).
 		secret := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "neo4j-admin-secret",
+				Name:      adminSecretName,
 				Namespace: namespaceName,
 			},
 			Data: map[string][]byte{
@@ -174,35 +180,33 @@ var _ = Describe("Neo4jRestore Controller", func() {
 	})
 
 	AfterEach(func() {
-		// Clean up resources
+		// Clean up resources. Cleanup-warning output goes through GinkgoWriter
+		// so Ginkgo can attribute it to the spec that produced it (and respect
+		// verbosity flags) — fmt.Printf to stdout would be unattributed noise.
 		if restore != nil {
 			if err := k8sClient.Delete(ctx, restore, client.PropagationPolicy(metav1.DeletePropagationForeground)); err != nil {
-				// Log the error but don't fail the test cleanup
-				fmt.Printf("Warning: Failed to delete restore during cleanup: %v\n", err)
+				fmt.Fprintf(GinkgoWriter, "Warning: Failed to delete restore during cleanup: %v\n", err)
 			}
 		}
 		if backup != nil {
 			if err := k8sClient.Delete(ctx, backup, client.PropagationPolicy(metav1.DeletePropagationForeground)); err != nil {
-				// Log the error but don't fail the test cleanup
-				fmt.Printf("Warning: Failed to delete backup during cleanup: %v\n", err)
+				fmt.Fprintf(GinkgoWriter, "Warning: Failed to delete backup during cleanup: %v\n", err)
 			}
 		}
 		if cluster != nil {
 			if err := k8sClient.Delete(ctx, cluster, client.PropagationPolicy(metav1.DeletePropagationForeground)); err != nil {
-				// Log the error but don't fail the test cleanup
-				fmt.Printf("Warning: Failed to delete cluster during cleanup: %v\n", err)
+				fmt.Fprintf(GinkgoWriter, "Warning: Failed to delete cluster during cleanup: %v\n", err)
 			}
 		}
-		// Clean up admin secret
+		// Clean up admin secret (unique name per spec).
 		secret := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "neo4j-admin-secret",
+				Name:      adminSecretName,
 				Namespace: namespaceName,
 			},
 		}
 		if err := k8sClient.Delete(ctx, secret); err != nil {
-			// Log the error but don't fail the test cleanup
-			fmt.Printf("Warning: Failed to delete admin secret during cleanup: %v\n", err)
+			fmt.Fprintf(GinkgoWriter, "Warning: Failed to delete admin secret during cleanup: %v\n", err)
 		}
 	})
 
