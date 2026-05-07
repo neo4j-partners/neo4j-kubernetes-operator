@@ -23,14 +23,12 @@ spec:
       versionConstraint: ">=5.26.0"
       optional: false
 
-  # Plugin configuration
+  # Plugin configuration. Mount the license file at /licenses/gds.license
+  # via the standalone CR's spec.extraVolumes + spec.extraVolumeMounts
+  # (e.g. from a Secret named gds-license-secret) — Neo4jPlugin no longer
+  # has a typed license block.
   config:
     "gds.enterprise.license_file": "/licenses/gds.license"
-
-  # License configuration
-  license:
-    keySecret: gds-license-secret
-    licenseFile: "/licenses/gds.license"
 
   # Security configuration
   security:
