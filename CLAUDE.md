@@ -229,7 +229,7 @@ TLS-enabled → `server.bolt.tls_level=REQUIRED`, `bolt+s://` scheme; TLS-disabl
 
 **`NEO4J_PLUGINS` live-patching**: Never bake into static StatefulSet template in `internal/resources/cluster.go`. Use `MergeNeo4jPluginList` helper so multiple controllers (plugin controller, fleet management) don't overwrite each other.
 
-**`envVarsEqual` is an intentional subset check**: verifies desired vars present in current but tolerates extras. Never revert to strict length+value equality or controllers will oscillate.
+**`envVarsEqual` is an intentional subset check + ownership-tracked removal**: verifies desired vars present in current with the correct value, and tolerates extras (so plugin/fleet/Aura controllers can live-patch their own env vars without triggering a wholesale-replace oscillation). On top of the subset, the cluster controller writes the set of names it owns to the `neo4j.com/cluster-controller-env-vars` annotation each reconcile; the next reconcile uses that annotation plus the new desired set to enforce removals (`previously-owned ∖ desired`) without disturbing foreign vars (`current ∖ previously-owned ∖ desired`). Never revert to strict length+value equality, never drop the annotation tracking, never wholesale-replace the env array on the apply path — use `mergeEnvVars`.
 
 ## Aura Fleet Management
 
@@ -381,7 +381,7 @@ kubectl logs -n neo4j-operator-system deployment/neo4j-operator-controller-manag
 15. **Status Phase**: Check `status.phase="Ready"` before database ops
 16. **TLS Scheme**: `bolt+s://` (TLS on) / `bolt://` (TLS off)
 17. **Backup Path**: `--to-path` syntax for Neo4j 5.26+
-18. **`envVarsEqual` Subset**: Never revert to strict equality check
+18. **`envVarsEqual` Subset + Ownership-Tracked Removal**: subset check on desired side (tolerates foreign extras) + removal check via the `neo4j.com/cluster-controller-env-vars` annotation (`previously-owned ∖ desired` is enforced). Apply path uses `mergeEnvVars`, never wholesale-replace the env array. Never revert to strict equality, never drop the annotation
 19. **`NEO4J_PLUGINS` Live-Patch**: Via `MergeNeo4jPluginList`, never in static StatefulSet template
 20. **Fleet Two-Phase**: Plugin install phase ≠ token registration phase — never collapse
 21. **Diagnostics Non-Fatal**: Never `return err` from `CollectDiagnostics`

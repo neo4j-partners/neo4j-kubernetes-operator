@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -686,17 +687,46 @@ func (r *Neo4jEnterpriseClusterReconciler) createOrUpdateResourceInternal(ctx co
 						logger.Info("Applying significant StatefulSet template changes",
 							"statefulSet", sts.Name,
 							"namespace", sts.Namespace)
+
+						// Smart env-var merge: preserve foreign vars (added by
+						// plugin / fleet controllers), drop previously-owned-but-
+						// no-longer-desired (e.g. user removed a spec.config key),
+						// apply desired. The wholesale `Template = updatedTemplate`
+						// without this would clobber plugin / fleet env vars and
+						// trigger cross-controller oscillation. See envVarsEqual
+						// docs and mergeEnvVars for the design.
+						previousOwned := readOwnedEnvVarNames(sts)
+						currentEnv := []corev1.EnvVar{}
+						if len(sts.Spec.Template.Spec.Containers) > 0 {
+							currentEnv = sts.Spec.Template.Spec.Containers[0].Env
+						}
+						desiredEnv := []corev1.EnvVar{}
+						if len(updatedTemplate.Spec.Containers) > 0 {
+							desiredEnv = updatedTemplate.Spec.Containers[0].Env
+						}
+						merged := mergeEnvVars(currentEnv, desiredEnv, previousOwned)
+
 						sts.Spec.Template = *updatedTemplate
+						if len(sts.Spec.Template.Spec.Containers) > 0 {
+							sts.Spec.Template.Spec.Containers[0].Env = merged
+						}
+						writeOwnedEnvVarNames(sts, desiredEnv)
 					} else {
 						logger := log.FromContext(ctx)
 						logger.V(1).Info("Skipping StatefulSet template update - no significant changes detected",
 							"statefulSet", sts.Name,
 							"namespace", sts.Namespace)
-						// Keep existing template to prevent unnecessary pod restarts
+						// Keep existing template to prevent unnecessary pod restarts.
+						// The owned-env-vars annotation does NOT need updating here:
+						// if no template change was applied, the previously-recorded
+						// owned set is still accurate by definition.
 					}
 				} else {
 					// If no selector exists, just use the desired template
 					sts.Spec.Template = desiredSpec.Template
+					if len(desiredSpec.Template.Spec.Containers) > 0 {
+						writeOwnedEnvVarNames(sts, desiredSpec.Template.Spec.Containers[0].Env)
+					}
 				}
 			} else {
 				// This is a new StatefulSet, use the desired spec as-is
@@ -705,6 +735,9 @@ func (r *Neo4jEnterpriseClusterReconciler) createOrUpdateResourceInternal(ctx co
 					"statefulSet", sts.Name,
 					"namespace", sts.Namespace)
 				sts.Spec = desiredSpec
+				if len(desiredSpec.Template.Spec.Containers) > 0 {
+					writeOwnedEnvVarNames(sts, desiredSpec.Template.Spec.Containers[0].Env)
+				}
 			}
 		}
 		return nil
@@ -730,7 +763,7 @@ func (r *Neo4jEnterpriseClusterReconciler) isTemplateChangeSignificant(ctx conte
 	}
 
 	// For stable clusters, allow more template changes
-	return r.hasSignificantTemplateChanges(currentTemplate, desiredTemplate)
+	return r.hasSignificantTemplateChanges(currentTemplate, desiredTemplate, readOwnedEnvVarNames(sts))
 }
 
 // hasCriticalTemplateChanges checks for changes that are essential during cluster formation
@@ -776,8 +809,11 @@ func (r *Neo4jEnterpriseClusterReconciler) hasCriticalTemplateChanges(current, d
 	return false
 }
 
-// hasSignificantTemplateChanges checks for any meaningful changes in stable clusters
-func (r *Neo4jEnterpriseClusterReconciler) hasSignificantTemplateChanges(current, desired corev1.PodTemplateSpec) bool {
+// hasSignificantTemplateChanges checks for any meaningful changes in stable clusters.
+// previousOwned is the env-var name set this controller recorded as owned on the
+// previous reconcile (read from the StatefulSet annotation by the caller). It is
+// used by envVarsEqual to detect removals from the controller's own desired set.
+func (r *Neo4jEnterpriseClusterReconciler) hasSignificantTemplateChanges(current, desired corev1.PodTemplateSpec, previousOwned map[string]struct{}) bool {
 	// For stable clusters, allow more changes including:
 	// - Environment variable updates
 	// - Volume mount changes
@@ -791,7 +827,7 @@ func (r *Neo4jEnterpriseClusterReconciler) hasSignificantTemplateChanges(current
 
 	// Check for environment variable changes
 	if len(current.Spec.Containers) > 0 && len(desired.Spec.Containers) > 0 {
-		if !r.envVarsEqual(current.Spec.Containers[0].Env, desired.Spec.Containers[0].Env) {
+		if !r.envVarsEqual(current.Spec.Containers[0].Env, desired.Spec.Containers[0].Env, previousOwned) {
 			return true
 		}
 	}
@@ -835,37 +871,108 @@ func (r *Neo4jEnterpriseClusterReconciler) containerSecurityContextEqual(current
 	return equality.Semantic.DeepEqual(current, desired)
 }
 
-// envVarsEqual performs a subset check: every env var in desired must be present
-// in current with the correct value, but extra env vars in current are tolerated.
+// ownedEnvVarsAnnotation is written to the StatefulSet by the cluster
+// controller and lists the env-var names that this controller considered
+// "owned" on the most recent reconcile. The list lets a subsequent reconcile
+// distinguish a removal-from-desired (name in previous-owned, absent from
+// desired) from a foreign env var added by another controller (name not in
+// previous-owned and not in desired) so that removals can be applied without
+// disturbing plugin / fleet additions. Names are stored sorted, comma-
+// separated. Same shape as kubectl's last-applied-configuration tracking.
+const ownedEnvVarsAnnotation = "neo4j.com/cluster-controller-env-vars"
+
+// readOwnedEnvVarNames returns the set of env-var names this controller
+// recorded as owned on the StatefulSet's previous reconcile. An empty set is
+// returned when the annotation is absent (first reconcile after upgrade or
+// brand-new StatefulSet) — the caller must treat that as "no removals to
+// reconcile this round" so the upgrade path is non-disruptive.
+func readOwnedEnvVarNames(sts *appsv1.StatefulSet) map[string]struct{} {
+	out := map[string]struct{}{}
+	raw := sts.Annotations[ownedEnvVarsAnnotation]
+	if raw == "" {
+		return out
+	}
+	for _, name := range strings.Split(raw, ",") {
+		if name = strings.TrimSpace(name); name != "" {
+			out[name] = struct{}{}
+		}
+	}
+	return out
+}
+
+// writeOwnedEnvVarNames records the controller-owned env-var names on the
+// StatefulSet annotation. Names are extracted from desired and stored sorted
+// for stable diffs.
+func writeOwnedEnvVarNames(sts *appsv1.StatefulSet, desired []corev1.EnvVar) {
+	names := make([]string, 0, len(desired))
+	for _, e := range desired {
+		names = append(names, e.Name)
+	}
+	sort.Strings(names)
+	if sts.Annotations == nil {
+		sts.Annotations = map[string]string{}
+	}
+	sts.Annotations[ownedEnvVarsAnnotation] = strings.Join(names, ",")
+}
+
+// mergeEnvVars produces the env-var slice the cluster controller should write
+// to the StatefulSet container after deciding to apply a template change:
 //
-// This is intentionally NOT a strict length+value equality check. The Neo4jPlugin
-// controller (and reconcileAuraFleetManagement) live-patches the StatefulSet to add
-// env vars (e.g. NEO4J_PLUGINS, NEO4J_APOC_*) that are not part of the cluster
-// controller's desired template. A strict count check would make those additions
-// look like a "significant change", causing the cluster controller to overwrite the
-// StatefulSet on every reconcile and creating an infinite oscillation between the
-// two controllers.
+//   - desired: applied (added or value-overwritten by name).
+//   - previousOwned ∖ desired: removed from current (a key the controller
+//     used to own and no longer wants — the case the old subset check missed).
+//   - current ∖ previousOwned ∖ desired: preserved (foreign env vars added by
+//     the plugin / fleet / Aura controllers, which the cluster controller
+//     must not clobber to avoid cross-controller oscillation).
 //
-// Known limitation — env-var REMOVALS are not enforced today. Because the
-// comparison is one-directional (desired ⊆ current), removing a key from the
-// cluster controller's desired template (e.g. the user deletes a `spec.config`
-// entry) leaves the corresponding NEO4J_* env var stuck on the live StatefulSet:
-// `desired` no longer carries it, the loop has nothing to compare, and the
-// "no change" decision skips the update. Adds and value-changes still work.
+// Output order: foreign vars first (in their original relative order), then
+// desired. Stable across reconciles for unchanged input.
+func mergeEnvVars(current, desired []corev1.EnvVar, previousOwned map[string]struct{}) []corev1.EnvVar {
+	desiredNames := make(map[string]struct{}, len(desired))
+	for _, e := range desired {
+		desiredNames[e.Name] = struct{}{}
+	}
+	final := make([]corev1.EnvVar, 0, len(current)+len(desired))
+	for _, e := range current {
+		if _, owned := previousOwned[e.Name]; owned {
+			continue // owned-by-us — desired is the source of truth below.
+		}
+		if _, inDesired := desiredNames[e.Name]; inDesired {
+			continue // in desired — desired wins below.
+		}
+		final = append(final, e)
+	}
+	final = append(final, desired...)
+	return final
+}
+
+// envVarsEqual returns true when no env-var change is needed. It performs a
+// subset check (every env var in desired must be present in current with the
+// correct value) plus a removal check against previousOwned: a name in
+// previousOwned that is no longer in desired but is still in current means
+// the controller needs to apply a removal.
 //
-// The proper fix is ownership tracking: record the set of env-var names this
-// controller most recently considered owned in a StatefulSet annotation
-// (e.g. `neo4j.com/cluster-controller-env-vars`), then on each reconcile
-// remove names in `previously-owned ∖ desired` and leave foreign names
-// (in `current ∖ previously-owned ∖ desired`) untouched. Same pattern kubectl
-// uses for `last-applied-configuration`. Tracked separately from this comment.
-func (r *Neo4jEnterpriseClusterReconciler) envVarsEqual(current, desired []corev1.EnvVar) bool {
+// The subset (rather than strict equality) on the desired side is intentional.
+// The Neo4jPlugin controller (and reconcileAuraFleetManagement) live-patches
+// the StatefulSet to add env vars (NEO4J_PLUGINS, NEO4J_APOC_*, fleet token
+// vars) that are not part of the cluster controller's desired template. A
+// strict count check would make those additions look like a "significant
+// change", causing the cluster controller to overwrite the StatefulSet on
+// every reconcile and creating an infinite oscillation between the
+// controllers. The previousOwned-driven removal check closes the corollary
+// gap that was tracked as a known limitation prior to this fix: removals
+// from the cluster controller's own desired set are now detected and applied,
+// but only for names this controller previously claimed. Names it never
+// owned (foreign vars added by plugin/fleet) are still left alone.
+func (r *Neo4jEnterpriseClusterReconciler) envVarsEqual(current, desired []corev1.EnvVar, previousOwned map[string]struct{}) bool {
 	currentMap := make(map[string]corev1.EnvVar)
 	for _, env := range current {
 		currentMap[env.Name] = env
 	}
 
+	desiredNames := make(map[string]struct{}, len(desired))
 	for _, env := range desired {
+		desiredNames[env.Name] = struct{}{}
 		currentEnv, exists := currentMap[env.Name]
 		if !exists {
 			// A desired env var is absent from current — needs update.
@@ -877,6 +984,19 @@ func (r *Neo4jEnterpriseClusterReconciler) envVarsEqual(current, desired []corev
 		}
 		if !r.envVarSourceEqual(currentEnv.ValueFrom, env.ValueFrom) {
 			// SecretKeyRef / ConfigMapKeyRef / FieldRef mismatch — needs update.
+			return false
+		}
+	}
+
+	// Removal check: a name in previousOwned that is no longer in desired
+	// but is still in current means the controller used to manage it,
+	// has dropped it from desired (e.g. user removed a spec.config key),
+	// and needs to apply the removal.
+	for name := range previousOwned {
+		if _, inDesired := desiredNames[name]; inDesired {
+			continue
+		}
+		if _, stillPresent := currentMap[name]; stillPresent {
 			return false
 		}
 	}
