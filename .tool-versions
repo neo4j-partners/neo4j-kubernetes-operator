@@ -1,8 +1,8 @@
 # Tool versions for mise (https://mise.jdx.dev/) or asdf
 # Install all tools: mise install (or asdf install)
 golang 1.26.1
-kind 0.20.0
-kubectl 1.31.0
+kind 0.27.0
+kubectl 1.36.0
 kustomize 5.4.3
 helm 3.16.0
 golangci-lint 1.64.8
