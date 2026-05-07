@@ -807,7 +807,7 @@ We welcome contributions from both Kubernetes beginners and experts!
 ### Prerequisites for Contributors
 
 **Required Tools:**
-- **Go 1.25+**
+- **Go 1.26+**
 - **Docker**
 - **kubectl**
 - **Kind** (Kubernetes in Docker) - **MANDATORY**

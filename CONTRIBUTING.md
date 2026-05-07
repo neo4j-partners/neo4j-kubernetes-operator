@@ -42,7 +42,7 @@ The project includes a `.tool-versions` file that pins the exact tool versions u
 # Install mise (one-time)
 curl https://mise.jdx.dev/install.sh | sh
 
-# Install all pinned versions (Go 1.25, Kind 0.27.0, kubectl 1.31.0, etc.)
+# Install all pinned versions (Go 1.26, Kind 0.27.0, kubectl 1.31.0, etc.)
 mise install
 ```
 
