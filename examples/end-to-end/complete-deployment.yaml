@@ -68,10 +68,9 @@ spec:
   auth:
     adminSecret: neo4j-admin-secret
     authenticationProviders: ["native"]
-    passwordPolicy:
-      minLength: 12
-      requireDigit: true
-      requireSymbol: true
+    # spec.auth.passwordPolicy is schema-only and currently ignored.
+    # Set the equivalent Neo4j keys directly via spec.config below until
+    # typed-field support lands.
 
   # Storage configuration
   storage:
@@ -99,6 +98,8 @@ spec:
     # Clustering settings
     dbms.cluster.minimum_initial_system_primaries_count: "2"
     dbms.cluster.discovery.log_level: "INFO"
+    # Password policy (replaces the schema-only spec.auth.passwordPolicy block above)
+    dbms.security.auth_minimum_password_length: "12"
 
   # Monitoring
   monitoring:
