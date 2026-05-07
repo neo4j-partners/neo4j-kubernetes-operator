@@ -45,7 +45,24 @@ import (
 const (
 	// DefaultAdminSecretNamePlugin is the default name for admin credentials secret
 	DefaultAdminSecretNamePlugin = "neo4j-admin-secret"
+
+	// PluginInstallModeManaged is the default — operator adds the plugin to
+	// NEO4J_PLUGINS so the Neo4j Docker entrypoint resolves and installs the
+	// JAR at pod startup.
+	PluginInstallModeManaged = "Managed"
+
+	// PluginInstallModePreBaked — operator does not touch NEO4J_PLUGINS. The
+	// JAR must already be in /plugins (baked into a custom Neo4j image).
+	// Operator still applies plugin configuration (security allowlists,
+	// unrestricted procedures, ConfigMap entries).
+	PluginInstallModePreBaked = "PreBaked"
 )
+
+// isPreBakedInstallMode reports whether the operator should skip the
+// NEO4J_PLUGINS env mutation for this plugin and only apply configuration.
+func isPreBakedInstallMode(plugin *neo4jv1beta1.Neo4jPlugin) bool {
+	return plugin.Spec.InstallMode == PluginInstallModePreBaked
+}
 
 // getAdminSecretName safely extracts the admin secret name from cluster spec with fallback to default
 func getClusterAdminSecretName(cluster *neo4jv1beta1.Neo4jEnterpriseCluster) string {
@@ -493,6 +510,17 @@ func (r *Neo4jPluginReconciler) uninstallPlugin(ctx context.Context, plugin *neo
 		return nil
 	}
 
+	// PreBaked installs are JARs the operator did not deliver — never run the
+	// jar-removal Job against them. The user-supplied custom image owns
+	// /plugins/*; touching it could orphan files the operator did not put
+	// there. Only configuration (env vars, ConfigMap entries) was operator-
+	// owned, and that is removed when the StatefulSet/ConfigMap is reconciled
+	// after the CR is deleted.
+	if isPreBakedInstallMode(plugin) {
+		logger.Info("Skipping JAR removal for PreBaked plugin", "plugin", plugin.Spec.Name)
+		return nil
+	}
+
 	// Remove plugin from deployment
 	if err := r.removePluginFromDeployment(ctx, plugin, deployment); err != nil {
 		return fmt.Errorf("failed to remove plugin from deployment: %w", err)
@@ -594,7 +622,12 @@ func (r *Neo4jPluginReconciler) updatePluginStatus(ctx context.Context, plugin *
 // This is the recommended approach by Neo4j for Docker plugin installation
 func (r *Neo4jPluginReconciler) installPluginViaEnvironment(ctx context.Context, plugin *neo4jv1beta1.Neo4jPlugin, deployment *DeploymentInfo) error {
 	logger := log.FromContext(ctx)
-	logger.Info("Installing plugin via NEO4J_PLUGINS environment variable", "plugin", plugin.Spec.Name)
+	preBaked := isPreBakedInstallMode(plugin)
+	if preBaked {
+		logger.Info("Configuring plugin in PreBaked mode — skipping NEO4J_PLUGINS mutation", "plugin", plugin.Spec.Name)
+	} else {
+		logger.Info("Installing plugin via NEO4J_PLUGINS environment variable", "plugin", plugin.Spec.Name)
+	}
 
 	// Get the StatefulSet for the deployment
 	sts := &appsv1.StatefulSet{}
@@ -630,36 +663,38 @@ func (r *Neo4jPluginReconciler) installPluginViaEnvironment(ctx context.Context,
 		pluginsToInstall = append(pluginsToInstall, depName)
 	}
 
-	// Find existing NEO4J_PLUGINS environment variable or create new one
-	var pluginsEnvVar *corev1.EnvVar
-	for i := range neo4jContainer.Env {
-		if neo4jContainer.Env[i].Name == "NEO4J_PLUGINS" {
-			pluginsEnvVar = &neo4jContainer.Env[i]
-			break
-		}
-	}
-
-	if pluginsEnvVar == nil {
-		// Add new NEO4J_PLUGINS environment variable with all plugins
-		var quotedPlugins []string
-		for _, plugin := range pluginsToInstall {
-			quotedPlugins = append(quotedPlugins, fmt.Sprintf("\"%s\"", plugin))
-		}
-		neo4jContainer.Env = append(neo4jContainer.Env, corev1.EnvVar{
-			Name:  "NEO4J_PLUGINS",
-			Value: fmt.Sprintf("[%s]", strings.Join(quotedPlugins, ",")),
-		})
-	} else {
-		// Update existing NEO4J_PLUGINS - parse and add all new plugins
-		currentValue := pluginsEnvVar.Value
-		for _, plugin := range pluginsToInstall {
-			updatedPlugins, err := r.addPluginToList(currentValue, plugin)
-			if err != nil {
-				return fmt.Errorf("failed to update plugin list: %w", err)
+	if !preBaked {
+		// Find existing NEO4J_PLUGINS environment variable or create new one
+		var pluginsEnvVar *corev1.EnvVar
+		for i := range neo4jContainer.Env {
+			if neo4jContainer.Env[i].Name == "NEO4J_PLUGINS" {
+				pluginsEnvVar = &neo4jContainer.Env[i]
+				break
 			}
-			currentValue = updatedPlugins
 		}
-		pluginsEnvVar.Value = currentValue
+
+		if pluginsEnvVar == nil {
+			// Add new NEO4J_PLUGINS environment variable with all plugins
+			var quotedPlugins []string
+			for _, plugin := range pluginsToInstall {
+				quotedPlugins = append(quotedPlugins, fmt.Sprintf("\"%s\"", plugin))
+			}
+			neo4jContainer.Env = append(neo4jContainer.Env, corev1.EnvVar{
+				Name:  "NEO4J_PLUGINS",
+				Value: fmt.Sprintf("[%s]", strings.Join(quotedPlugins, ",")),
+			})
+		} else {
+			// Update existing NEO4J_PLUGINS - parse and add all new plugins
+			currentValue := pluginsEnvVar.Value
+			for _, plugin := range pluginsToInstall {
+				updatedPlugins, err := r.addPluginToList(currentValue, plugin)
+				if err != nil {
+					return fmt.Errorf("failed to update plugin list: %w", err)
+				}
+				currentValue = updatedPlugins
+			}
+			pluginsEnvVar.Value = currentValue
+		}
 	}
 
 	// Add plugin configuration as environment variables
@@ -733,41 +768,43 @@ func (r *Neo4jPluginReconciler) installPluginViaEnvironment(ctx context.Context,
 			pluginsToInstall = append(pluginsToInstall, depName)
 		}
 
-		// Find existing NEO4J_PLUGINS environment variable or create new one
-		var pluginsEnvVar *corev1.EnvVar
-		for i := range currentNeo4jContainer.Env {
-			if currentNeo4jContainer.Env[i].Name == "NEO4J_PLUGINS" {
-				pluginsEnvVar = &currentNeo4jContainer.Env[i]
-				break
-			}
-		}
-		if pluginsEnvVar == nil {
-			// Add new NEO4J_PLUGINS environment variable with all plugins
-			var quotedPlugins []string
-			for _, plugin := range pluginsToInstall {
-				quotedPlugins = append(quotedPlugins, fmt.Sprintf("\"%s\"", plugin))
-			}
-			currentNeo4jContainer.Env = append(currentNeo4jContainer.Env, corev1.EnvVar{
-				Name:  "NEO4J_PLUGINS",
-				Value: fmt.Sprintf("[%s]", strings.Join(quotedPlugins, ",")),
-			})
-		} else {
-			// Update existing NEO4J_PLUGINS — delegate to the same helper used
-			// in the outer block (above) so the merge is JSON-aware,
-			// idempotent, and bug-free. The previous inline implementation
-			// here read `currentValue` once but then mutated only
-			// `pluginsEnvVar.Value`, leaving `currentValue` stale across
-			// loop iterations — only the first plugin in pluginsToInstall
-			// would actually land in the env var.
-			currentValue := pluginsEnvVar.Value
-			for _, plugin := range pluginsToInstall {
-				updated, err := r.addPluginToList(currentValue, plugin)
-				if err != nil {
-					return fmt.Errorf("failed to update plugin list: %w", err)
+		if !preBaked {
+			// Find existing NEO4J_PLUGINS environment variable or create new one
+			var pluginsEnvVar *corev1.EnvVar
+			for i := range currentNeo4jContainer.Env {
+				if currentNeo4jContainer.Env[i].Name == "NEO4J_PLUGINS" {
+					pluginsEnvVar = &currentNeo4jContainer.Env[i]
+					break
 				}
-				currentValue = updated
 			}
-			pluginsEnvVar.Value = currentValue
+			if pluginsEnvVar == nil {
+				// Add new NEO4J_PLUGINS environment variable with all plugins
+				var quotedPlugins []string
+				for _, plugin := range pluginsToInstall {
+					quotedPlugins = append(quotedPlugins, fmt.Sprintf("\"%s\"", plugin))
+				}
+				currentNeo4jContainer.Env = append(currentNeo4jContainer.Env, corev1.EnvVar{
+					Name:  "NEO4J_PLUGINS",
+					Value: fmt.Sprintf("[%s]", strings.Join(quotedPlugins, ",")),
+				})
+			} else {
+				// Update existing NEO4J_PLUGINS — delegate to the same helper used
+				// in the outer block (above) so the merge is JSON-aware,
+				// idempotent, and bug-free. The previous inline implementation
+				// here read `currentValue` once but then mutated only
+				// `pluginsEnvVar.Value`, leaving `currentValue` stale across
+				// loop iterations — only the first plugin in pluginsToInstall
+				// would actually land in the env var.
+				currentValue := pluginsEnvVar.Value
+				for _, plugin := range pluginsToInstall {
+					updated, err := r.addPluginToList(currentValue, plugin)
+					if err != nil {
+						return fmt.Errorf("failed to update plugin list: %w", err)
+					}
+					currentValue = updated
+				}
+				pluginsEnvVar.Value = currentValue
+			}
 		}
 
 		// Add plugin-specific configuration as environment variables

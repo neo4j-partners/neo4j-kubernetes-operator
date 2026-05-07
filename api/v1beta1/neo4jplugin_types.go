@@ -38,7 +38,27 @@ type Neo4jPluginSpec struct {
 	// Enable the plugin
 	Enabled bool `json:"enabled,omitempty"`
 
-	// Plugin source configuration
+	// InstallMode selects how the plugin's JAR reaches /plugins.
+	//
+	// "Managed" (default) — operator adds the plugin to NEO4J_PLUGINS so the
+	// upstream Neo4j Docker entrypoint resolves and installs the JAR at pod
+	// startup. For non-bundled plugins (everything except APOC core) this
+	// fetches from the internet on every pod start, which is a poor fit for
+	// air-gapped or regulated environments.
+	//
+	// "PreBaked" — operator does NOT touch NEO4J_PLUGINS. The user is
+	// responsible for delivering the JAR via a custom Neo4j image referenced
+	// from spec.image on the cluster/standalone CR. The operator still
+	// applies the plugin's configuration (security allowlists, unrestricted
+	// procedures, ConfigMap entries) so Neo4j accepts the procedures the
+	// pre-baked JAR exposes.
+	//
+	// +kubebuilder:validation:Enum=Managed;PreBaked
+	// +kubebuilder:default=Managed
+	// +optional
+	InstallMode string `json:"installMode,omitempty"`
+
+	// Plugin source configuration. Ignored when installMode is "PreBaked".
 	Source *PluginSource `json:"source,omitempty"`
 
 	// Plugin configuration

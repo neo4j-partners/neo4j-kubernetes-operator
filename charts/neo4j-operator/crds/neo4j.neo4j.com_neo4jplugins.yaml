@@ -93,6 +93,27 @@ spec:
                 default: true
                 description: Enable the plugin
                 type: boolean
+              installMode:
+                default: Managed
+                description: |-
+                  InstallMode selects how the plugin's JAR reaches /plugins.
+
+                  "Managed" (default) — operator adds the plugin to NEO4J_PLUGINS so the
+                  upstream Neo4j Docker entrypoint resolves and installs the JAR at pod
+                  startup. For non-bundled plugins (everything except APOC core) this
+                  fetches from the internet on every pod start, which is a poor fit for
+                  air-gapped or regulated environments.
+
+                  "PreBaked" — operator does NOT touch NEO4J_PLUGINS. The user is
+                  responsible for delivering the JAR via a custom Neo4j image referenced
+                  from spec.image on the cluster/standalone CR. The operator still
+                  applies the plugin's configuration (security allowlists, unrestricted
+                  procedures, ConfigMap entries) so Neo4j accepts the procedures the
+                  pre-baked JAR exposes.
+                enum:
+                - Managed
+                - PreBaked
+                type: string
               name:
                 description: Plugin name
                 type: string
@@ -131,7 +152,8 @@ spec:
                     type: string
                 type: object
               source:
-                description: Plugin source configuration
+                description: Plugin source configuration. Ignored when installMode
+                  is "PreBaked".
                 properties:
                   authSecret:
                     description: Secret containing authentication for private repositories
