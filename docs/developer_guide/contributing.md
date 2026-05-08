@@ -378,7 +378,7 @@ When adding new Custom Resource Definitions:
     - Integration tests in `test/integration/` (one Ginkgo file per CRD; mirror `test/integration/neo4juser_test.go`).
     - Add cleanup logic to `cleanupCustomResourcesInNamespace` in `test/integration/integration_suite_test.go`.
 
-CI's `check-drift` job runs `make sync-all bundle` and fails the PR if anything is out of date — this enforces step 8.
+CI's `check-drift` job runs `make sync-all bundle` and fails the PR if anything is out of date — this enforces step 8. To catch drift locally before pushing, run `make install-hooks` once; the pre-commit `check-drift` hook fires whenever you stage files under `api/`, `internal/controller/`, `scripts/`, `config/`, `charts/`, or `bundle/`, runs the same gate, and leaves regenerated artifacts in your working tree if anything was stale.
 
 ### Performance Considerations
 

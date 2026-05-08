@@ -91,6 +91,31 @@ repos:
         files: \.go$
         pass_filenames: false
 
+      # Drift gate — fires when anything that feeds a generator changes.
+      # Mirrors the CI 'Generated Artifacts In Sync' check so it cannot
+      # surprise you in CI. On failure, regenerated files are left in the
+      # working tree; review, `git add -u`, and recommit.
+      - id: check-drift
+        name: generated artifacts in sync
+        entry: bash
+        args:
+          - -c
+          - |
+            echo "Running make check-drift (regenerates CRDs/RBAC/helm/bundle and diffs)..."
+            if ! make check-drift; then
+              echo ""
+              echo "Generated artifacts were stale. They have been regenerated in your"
+              echo "working tree — review the diff, 'git add -u' the changes, and recommit."
+              exit 1
+            fi
+        language: system
+        pass_filenames: false
+        # Trigger on anything that feeds a generator: kubebuilder type/marker
+        # sources, RBAC markers in controllers, generator scripts, the CSV
+        # source-of-truth, and the generated trees themselves (in case
+        # someone hand-edits a generated file).
+        files: ^(api/v1beta1/.*\.go|internal/controller/.*_controller\.go|scripts/(helm-sync-.*|check-csv-coverage|update-alm-examples).*|config/manifests/bases/.*\.csv\.yaml|config/(crd|rbac|samples|manifests)/.*|charts/neo4j-operator/(crds|templates|Chart\.yaml).*|bundle/.*)$
+
   # Security checks (fast)
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.21.2

@@ -392,6 +392,19 @@ check-drift: sync-all bundle ## CI gate: regenerate everything and fail if anyth
 helm-lint: ## Lint the Helm chart
 	helm lint charts/neo4j-operator
 
+.PHONY: install-hooks
+install-hooks: ## Install git pre-commit hooks (drift gate, fmt, lint, gitleaks).
+	@command -v pre-commit >/dev/null 2>&1 || { \
+	    echo "ERROR: pre-commit is not installed. Install with: pip install pre-commit  (or  brew install pre-commit)" >&2; \
+	    exit 1; \
+	}
+	pre-commit install
+	pre-commit install --hook-type commit-msg
+	@echo ""
+	@echo "Pre-commit hooks installed. The drift gate will run 'make check-drift'"
+	@echo "whenever you stage files under api/, internal/controller/, scripts/,"
+	@echo "config/, charts/, or bundle/ — same gate CI runs."
+
 .PHONY: helm-template
 helm-template: ## Generate Kubernetes manifests from Helm chart
 	helm template neo4j-operator charts/neo4j-operator \

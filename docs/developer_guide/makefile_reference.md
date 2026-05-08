@@ -43,6 +43,7 @@ make deploy-dev           # Deploy to development namespace
 make sync-all             # Regenerate all artifacts (CRDs, RBAC, helm chart, kustomize lists)
 make ship-prep            # sync-all + bundle + helm lint + CSV coverage check
 make check-drift          # CI gate: fails if any generated file is stale
+make install-hooks        # One-time: install pre-commit hooks (runs check-drift before commit)
 ```
 
 ## Target Categories
@@ -134,7 +135,13 @@ Chains: `manifests` → `generate` → `sync-kustomize` → `sync-editor-viewer-
 ### `make check-drift`
 **Description**: Regenerate every artifact and `git diff --exit-code` to fail if anything is stale. Used as a CI gate (`.github/workflows/ci.yml`).
 **Usage**: `make check-drift`
-**Notes**: ignores the `createdAt:` timestamp the operator-sdk stamps on every bundle build. If this target fails locally, run `make sync-all bundle` and commit the result.
+**Notes**: ignores the `createdAt:` timestamp the operator-sdk stamps on every bundle build. If this target fails locally, run `make sync-all bundle` and commit the result. The same check runs as a `pre-commit` hook locally once you've run `make install-hooks` — see below.
+
+### `make install-hooks`
+**Description**: Install git pre-commit hooks (drift gate, fmt, lint, gitleaks, commitizen). Wraps `pre-commit install` and `pre-commit install --hook-type commit-msg`.
+**Usage**: `make install-hooks` (one-time per clone)
+**Prerequisite**: `pre-commit` on your `PATH` (`pip install pre-commit` or `brew install pre-commit`).
+**What the drift hook does**: when staged files match `api/v1beta1/*.go`, `internal/controller/*_controller.go`, `scripts/{helm-sync-*,check-csv-coverage,update-alm-examples}*`, `config/manifests/bases/*.csv.yaml`, `config/{crd,rbac,samples,manifests}/`, `charts/neo4j-operator/`, or `bundle/`, the hook runs `make check-drift`. On stale artifacts the regenerated files are left in your working tree; `git add -u` and recommit.
 
 ### `make helm-sync-crds`
 **Description**: Copy the kubebuilder-generated CRDs from `config/crd/bases/` into `charts/neo4j-operator/crds/` so the Helm install picks them up.
