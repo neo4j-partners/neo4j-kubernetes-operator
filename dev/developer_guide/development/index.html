@@ -3838,7 +3838,11 @@ This project <strong>exclusively uses Kind</strong> for all development and test
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
 </span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="c1"># Add upstream remote for pulling updates</span>
 </span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>git<span class="w"> </span>remote<span class="w"> </span>add<span class="w"> </span>upstream<span class="w"> </span>https://github.com/neo4j-partners/neo4j-kubernetes-operator.git
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="c1"># One-time: install pre-commit hooks (drift gate, fmt, lint, gitleaks)</span>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>make<span class="w"> </span>install-hooks
 </span></code></pre></div>
+<p>The drift hook runs <code>make check-drift</code> whenever you stage files under <code>api/</code>, <code>internal/controller/</code>, <code>scripts/</code>, <code>config/</code>, <code>charts/</code>, or <code>bundle/</code> — the same gate CI's "Generated Artifacts In Sync" job runs. It fires before the commit lands, so you can't ship a CRD or RBAC change that forgot to regenerate the helm chart or OperatorHub bundle. Requires <code>pre-commit</code> (<code>pip install pre-commit</code> or <code>brew install pre-commit</code>).</p>
 <h3 id="2-generate-code-and-manifests">2. Generate Code and Manifests<a class="headerlink" href="#2-generate-code-and-manifests" title="Anchor link to this section">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Generate CRDs, RBAC manifests, and Go DeepCopy methods</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>make<span class="w"> </span>manifests<span class="w"> </span>generate
