@@ -16,7 +16,22 @@ runs:
     - name: Install Kind
       shell: bash
       run: |
-        curl -Lo ./kind https://kind.sigs.k8s.io/dl/${{ inputs.kind-version }}/kind-linux-amd64
+        # --fail makes curl exit non-zero on HTTP errors. Without it, a
+        # transient redirect/asset failure silently writes a tiny error
+        # body to ./kind which then gets "executed" later as a shell
+        # command (line 1: Error: command not found). --retry-all-errors
+        # rides over flaky GitHub release-assets responses. file(1) is a
+        # final sanity check in case --fail still misses (e.g. an HTML
+        # 200 from a misconfigured proxy).
+        curl --fail --location --retry 5 --retry-delay 5 --retry-all-errors \
+            -o ./kind \
+            "https://kind.sigs.k8s.io/dl/${{ inputs.kind-version }}/kind-linux-amd64"
+        file ./kind | grep -q 'ELF.*executable' || {
+            echo "ERROR: downloaded kind is not an ELF binary:" >&2
+            file ./kind >&2
+            head -c 512 ./kind >&2
+            exit 1
+        }
         chmod +x ./kind
         sudo mv ./kind /usr/local/bin/kind
         kind version
@@ -24,7 +39,16 @@ runs:
     - name: Install kubectl
       shell: bash
       run: |
-        curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+        STABLE=$(curl --fail --location --retry 5 --retry-delay 5 --retry-all-errors -sS https://dl.k8s.io/release/stable.txt)
+        curl --fail --location --retry 5 --retry-delay 5 --retry-all-errors \
+            -o kubectl \
+            "https://dl.k8s.io/release/${STABLE}/bin/linux/amd64/kubectl"
+        file kubectl | grep -q 'ELF.*executable' || {
+            echo "ERROR: downloaded kubectl is not an ELF binary:" >&2
+            file kubectl >&2
+            head -c 512 kubectl >&2
+            exit 1
+        }
         chmod +x kubectl
         sudo mv kubectl /usr/local/bin/
         kubectl version --client
