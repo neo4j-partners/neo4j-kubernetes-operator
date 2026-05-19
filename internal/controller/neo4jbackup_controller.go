@@ -465,7 +465,14 @@ func (r *Neo4jBackupReconciler) buildBackupCommand(backup *neo4jv1beta1.Neo4jBac
 	}
 
 	toPath := r.buildToPath(backup)
+	// The --from FQDN differs between cluster and standalone targets;
+	// resolve the type from the live API so the FQDN matches reality.
+	// Falls back to the cluster shape on any lookup error so the
+	// existing cluster-backup path remains the no-op default.
 	fromAddresses := resources.BuildBackupFromAddresses(cluster)
+	if isStandalone, standalone, lookupErr := r.isStandaloneTarget(context.Background(), backup); lookupErr == nil && isStandalone && standalone != nil {
+		fromAddresses = resources.BuildStandaloneBackupFromAddress(standalone)
+	}
 	allDatabases := backup.Spec.Target.Kind == "Cluster"
 	dbName := ""
 	if !allDatabases {
@@ -713,6 +720,32 @@ func (r *Neo4jBackupReconciler) getTargetCluster(ctx context.Context, backup *ne
 		return nil, fmt.Errorf("target %q not found as Neo4jEnterpriseCluster or Neo4jEnterpriseStandalone in namespace %q", clusterName, targetNamespace)
 	}
 	return standaloneAsCluster(standalone), nil
+}
+
+// isStandaloneTarget reports whether the backup target points at a
+// Neo4jEnterpriseStandalone rather than a Neo4jEnterpriseCluster. The
+// address builders differ — cluster pods are named {name}-server-N,
+// standalone pods are {name}-0 — so this branch happens before
+// constructing the --from FQDN.
+func (r *Neo4jBackupReconciler) isStandaloneTarget(ctx context.Context, backup *neo4jv1beta1.Neo4jBackup) (bool, *neo4jv1beta1.Neo4jEnterpriseStandalone, error) {
+	targetNamespace := backup.Spec.Target.Namespace
+	if targetNamespace == "" {
+		targetNamespace = backup.Namespace
+	}
+	name := backup.Spec.Target.Name
+	if backup.Spec.Target.Kind == "Database" {
+		name = backup.Spec.Target.ClusterRef
+	}
+	// Cluster CR wins if both exist (defensive; name collisions are rare).
+	cluster := &neo4jv1beta1.Neo4jEnterpriseCluster{}
+	if err := r.Get(ctx, types.NamespacedName{Name: name, Namespace: targetNamespace}, cluster); err == nil {
+		return false, nil, nil
+	}
+	standalone := &neo4jv1beta1.Neo4jEnterpriseStandalone{}
+	if err := r.Get(ctx, types.NamespacedName{Name: name, Namespace: targetNamespace}, standalone); err == nil {
+		return true, standalone, nil
+	}
+	return false, nil, fmt.Errorf("target %q not found in namespace %q", name, targetNamespace)
 }
 
 func (r *Neo4jBackupReconciler) isClusterReady(cluster *neo4jv1beta1.Neo4jEnterpriseCluster) bool {

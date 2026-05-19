@@ -354,11 +354,31 @@ func (r *Neo4jEnterpriseStandaloneReconciler) reconcileConfigMap(ctx context.Con
 	return nil
 }
 
-// reconcileService reconciles the Service for the standalone deployment
+// reconcileService reconciles the client-facing Service and the headless
+// Service for the standalone deployment.
+//
+// The headless Service ({name}-headless) is what gives the standalone pod
+// a stable DNS name — {name}-0.{name}-headless.<ns>.svc.cluster.local —
+// which the backup Job uses to reach port 6362. Without it the Job's
+// neo4j-admin --from=<fqdn> argument resolves to nothing and the backup
+// fails. The standalone STS's spec.serviceName references this service.
 func (r *Neo4jEnterpriseStandaloneReconciler) reconcileService(ctx context.Context, standalone *neo4jv1beta1.Neo4jEnterpriseStandalone) error {
 	logger := log.FromContext(ctx)
 
-	// Create Service using the standalone configuration
+	// Headless Service first — the StatefulSet's spec.serviceName depends on it.
+	headless := r.createHeadlessService(standalone)
+	if err := controllerutil.SetControllerReference(standalone, headless, r.Scheme); err != nil {
+		return fmt.Errorf("failed to set owner reference on headless Service: %w", err)
+	}
+	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		_, err := controllerutil.CreateOrUpdate(ctx, r.Client, headless, func() error { return nil })
+		return err
+	}); err != nil {
+		return fmt.Errorf("failed to create or update headless Service: %w", err)
+	}
+	logger.Info("Successfully created or updated headless Service", "name", headless.Name)
+
+	// Create client-facing Service using the standalone configuration
 	service := r.createService(standalone)
 
 	// Set owner reference
@@ -385,6 +405,47 @@ func (r *Neo4jEnterpriseStandaloneReconciler) reconcileService(ctx context.Conte
 	}
 
 	return nil
+}
+
+// createHeadlessService builds the headless Service ({name}-headless) that
+// gives the standalone pod a stable DNS identity for backup, peer Bolt
+// connections, and any other pod-direct addressing. ClusterIP=None makes
+// it headless; the same `app: <name>` selector matches the pod created by
+// the StatefulSet. Only the backup port (6362) is exposed since the
+// client-facing Service ({name}-service) handles Bolt/HTTP.
+func (r *Neo4jEnterpriseStandaloneReconciler) createHeadlessService(standalone *neo4jv1beta1.Neo4jEnterpriseStandalone) *corev1.Service {
+	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-headless", standalone.Name),
+			Namespace: standalone.Namespace,
+			Labels: map[string]string{
+				"app.kubernetes.io/name":       "neo4j",
+				"app.kubernetes.io/instance":   standalone.Name,
+				"app.kubernetes.io/component":  "standalone-headless",
+				"app.kubernetes.io/managed-by": "neo4j-operator",
+			},
+		},
+		Spec: corev1.ServiceSpec{
+			ClusterIP: corev1.ClusterIPNone,
+			// PublishNotReadyAddresses lets the backup Job resolve the FQDN
+			// even during a brief readiness blip. The pod is the same
+			// pod whether or not its readiness probe is green at this
+			// instant — losing DNS for it during reconciliation noise
+			// would otherwise make the backup transiently fail.
+			PublishNotReadyAddresses: true,
+			Selector: map[string]string{
+				"app": standalone.Name,
+			},
+			Ports: []corev1.ServicePort{
+				{
+					Name:       "backup",
+					Port:       6362,
+					TargetPort: intstr.FromInt(6362),
+					Protocol:   corev1.ProtocolTCP,
+				},
+			},
+		},
+	}
 }
 
 // reconcileStatefulSet reconciles the StatefulSet for the standalone deployment
@@ -643,6 +704,16 @@ func (r *Neo4jEnterpriseStandaloneReconciler) createConfigMap(standalone *neo4jv
 		configLines = append(configLines, "server.bolt.listen_address=:7687")
 		configLines = append(configLines, "")
 	}
+
+	// Backup listener — required for Neo4jBackup CRs targeting this
+	// standalone to reach port 6362. Mirrors the cluster path's settings
+	// in internal/resources/cluster.go (server.backup.{enabled,listen_address}).
+	// Without these the standalone pod doesn't bind 6362 and the backup
+	// Job's neo4j-admin --from=...:6362 connection is refused.
+	configLines = append(configLines, "# Backup listener (port 6362)")
+	configLines = append(configLines, "server.backup.enabled=true")
+	configLines = append(configLines, "server.backup.listen_address=0.0.0.0:6362")
+	configLines = append(configLines, "")
 
 	if standalone.Spec.Monitoring != nil && standalone.Spec.Monitoring.Enabled {
 		configLines = append(configLines, strings.Split(resources.BuildMonitoringConfig(standalone.Spec.Monitoring), "\n")...)
@@ -927,7 +998,13 @@ func (r *Neo4jEnterpriseStandaloneReconciler) createStatefulSet(standalone *neo4
 			Namespace: standalone.Namespace,
 		},
 		Spec: appsv1.StatefulSetSpec{
-			Replicas:       &replicas,
+			Replicas: &replicas,
+			// ServiceName must reference a headless Service so each pod
+			// gets a stable DNS name (<name>-0.<service>.<ns>.svc.cluster.local).
+			// The backup Job path uses this FQDN on port 6362 — without a
+			// ServiceName + matching headless service, neo4j-admin database
+			// backup --from=... can't reach the standalone.
+			ServiceName:    fmt.Sprintf("%s-headless", standalone.Name),
 			UpdateStrategy: updateStrategy,
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{
