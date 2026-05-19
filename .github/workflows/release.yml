@@ -196,13 +196,25 @@ jobs:
         TAG_NAME: ${{ needs.determine-tag.outputs.tag_name }}
         CLEAN_TAG: ${{ needs.determine-tag.outputs.clean_tag }}
       run: |
-        # Generate OperatorHub bundle/CSV using pre-generated CRDs (SKIP_MANIFESTS=true)
-        make bundle \
+        # Generate OperatorHub bundle/CSV using pre-generated CRDs (SKIP_MANIFESTS=true).
+        # Use `bundle-release` (not `bundle`) so the CSV's createdAt: annotation
+        # gets stamped with the real UTC timestamp before publishing. Plain
+        # `make bundle` writes a stable placeholder so dev/CI PRs don't conflict
+        # on the timestamp — that placeholder must NOT reach OperatorHub.
+        make bundle-release \
           SKIP_MANIFESTS=true \
           VERSION="${CLEAN_TAG}" \
           CHANNELS=alpha \
           DEFAULT_CHANNEL=alpha \
           IMG="${REGISTRY}/${IMAGE_NAME}:${TAG_NAME}"
+
+        # Safety net: fail loudly if the placeholder timestamp survived. The only
+        # way this fires is a future refactor of bundle-release that drops the
+        # restamp step — better to fail the release than ship 2020 to users.
+        if grep -q 'createdAt: "2020-01-01T00:00:00Z"' bundle/manifests/neo4j-kubernetes-operator.clusterserviceversion.yaml; then
+          echo "::error::CSV createdAt: is still the dev placeholder. Refusing to publish bundle to OperatorHub." >&2
+          exit 1
+        fi
 
         mkdir -p release-artifacts
 
