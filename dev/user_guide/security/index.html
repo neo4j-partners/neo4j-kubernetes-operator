@@ -1412,6 +1412,89 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#credential-rotation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Credential Rotation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Credential Rotation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#admin-credentials-the-neo4j-root-account" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Admin credentials (the Neo4j root account)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aura-fleet-management-token" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Aura Fleet Management token
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tls-certificate-rotation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TLS certificate rotation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#neo4jplugin-sourceauthsecret-verifieddownload-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Neo4jPlugin source.authSecret (VerifiedDownload mode)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#quick-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick reference
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#operator-labelled-secrets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Operator-labelled Secrets
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#security-monitoring-and-auditing" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3576,6 +3659,89 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#credential-rotation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Credential Rotation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Credential Rotation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#admin-credentials-the-neo4j-root-account" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Admin credentials (the Neo4j root account)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aura-fleet-management-token" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Aura Fleet Management token
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tls-certificate-rotation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TLS certificate rotation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#neo4jplugin-sourceauthsecret-verifieddownload-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Neo4jPlugin source.authSecret (VerifiedDownload mode)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#quick-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick reference
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#operator-labelled-secrets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Operator-labelled Secrets
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#security-monitoring-and-auditing" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4733,80 +4899,207 @@ deployments that don't actually use the integration.</p>
 </span><span id="__span-30-29"><a id="__codelineno-30-29" name="__codelineno-30-29" href="#__codelineno-30-29"></a><span class="w">  </span><span class="nt">refreshAfter</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;1h&quot;</span>
 </span><span id="__span-30-30"><a id="__codelineno-30-30" name="__codelineno-30-30" href="#__codelineno-30-30"></a><span class="w">  </span><span class="nt">vaultAuthRef</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j-vault-auth</span>
 </span></code></pre></div>
+<h2 id="credential-rotation">Credential Rotation<a class="headerlink" href="#credential-rotation" title="Anchor link to this section">&para;</a></h2>
+<p>The operator does not have a one-click "rotate" button — credential rotation involves both a Kubernetes Secret update and a Neo4j-side state change, and the right sequence depends on what's being rotated. This section walks through each rotation path, what the operator does for you, and what you have to coordinate manually.</p>
+<h3 id="admin-credentials-the-neo4j-root-account">Admin credentials (the Neo4j root account)<a class="headerlink" href="#admin-credentials-the-neo4j-root-account" title="Anchor link to this section">&para;</a></h3>
+<p><strong>What it is</strong>: the <code>username</code>/<code>password</code> pair the operator uses to connect to Neo4j for <code>CREATE DATABASE</code>, <code>GRANT</code>, <code>SHOW SERVERS</code>, fleet registration, etc. Lives in a Secret referenced from <code>spec.auth.adminSecret</code> on the cluster / standalone CR. Default name: <code>neo4j-admin-secret</code>.</p>
+<p><strong>Why rotation is non-trivial</strong>: Neo4j reads <code>NEO4J_AUTH</code> <strong>only on first boot</strong> to initialise the root account. Subsequent restarts ignore it; the password is stored in Neo4j's own auth file. So updating the Secret alone does <strong>not</strong> change the password — you'd just produce a mismatch between what's in Kubernetes and what's in Neo4j.</p>
+<p>The correct flow is two-step, in this order:</p>
+<ol>
+<li><strong>Change the password inside Neo4j</strong> via <code>ALTER USER</code>:</li>
+</ol>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="c1"># Read the CURRENT password from the Secret</span>
+</span><span id="__span-31-2"><a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a><span class="nv">OLD_PASSWORD</span><span class="o">=</span><span class="k">$(</span>kubectl<span class="w"> </span>get<span class="w"> </span>secret<span class="w"> </span>neo4j-admin-secret<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-31-3"><a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a><span class="w">    </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.data.password}&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>base64<span class="w"> </span>-d<span class="k">)</span>
+</span><span id="__span-31-4"><a id="__codelineno-31-4" name="__codelineno-31-4" href="#__codelineno-31-4"></a>
+</span><span id="__span-31-5"><a id="__codelineno-31-5" name="__codelineno-31-5" href="#__codelineno-31-5"></a><span class="c1"># Connect with the old password and rotate</span>
+</span><span id="__span-31-6"><a id="__codelineno-31-6" name="__codelineno-31-6" href="#__codelineno-31-6"></a><span class="nv">NEW_PASSWORD</span><span class="o">=</span><span class="s1">&#39;&lt;choose a strong value&gt;&#39;</span>
+</span><span id="__span-31-7"><a id="__codelineno-31-7" name="__codelineno-31-7" href="#__codelineno-31-7"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;cluster&gt;-server-0<span class="w"> </span>-c<span class="w"> </span>neo4j<span class="w"> </span>--<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-31-8"><a id="__codelineno-31-8" name="__codelineno-31-8" href="#__codelineno-31-8"></a><span class="w">    </span>cypher-shell<span class="w"> </span>-u<span class="w"> </span>neo4j<span class="w"> </span>-p<span class="w"> </span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">OLD_PASSWORD</span><span class="si">}</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-31-9"><a id="__codelineno-31-9" name="__codelineno-31-9" href="#__codelineno-31-9"></a><span class="w">    </span><span class="s2">&quot;ALTER USER neo4j SET PASSWORD &#39;</span><span class="si">${</span><span class="nv">NEW_PASSWORD</span><span class="si">}</span><span class="s2">&#39;&quot;</span>
+</span></code></pre></div>
+<p>For clusters, run this against any one server pod — <code>ALTER USER</code> propagates to the <code>system</code> database which replicates across the topology.</p>
+<ol>
+<li><strong>Update the Kubernetes Secret</strong> so the operator's next reconcile (and any future pod restart) uses the new password:</li>
+</ol>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-32-1"><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a>kubectl<span class="w"> </span>create<span class="w"> </span>secret<span class="w"> </span>generic<span class="w"> </span>neo4j-admin-secret<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-32-2"><a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a><span class="w">    </span>--from-literal<span class="o">=</span><span class="nv">username</span><span class="o">=</span>neo4j<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-32-3"><a id="__codelineno-32-3" name="__codelineno-32-3" href="#__codelineno-32-3"></a><span class="w">    </span>--from-literal<span class="o">=</span><span class="nv">password</span><span class="o">=</span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">NEW_PASSWORD</span><span class="si">}</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-32-4"><a id="__codelineno-32-4" name="__codelineno-32-4" href="#__codelineno-32-4"></a><span class="w">    </span>--namespace<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-32-5"><a id="__codelineno-32-5" name="__codelineno-32-5" href="#__codelineno-32-5"></a><span class="w">    </span>--dry-run<span class="o">=</span>client<span class="w"> </span>-o<span class="w"> </span>yaml<span class="w"> </span><span class="p">|</span><span class="w"> </span>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>-
+</span></code></pre></div>
+<ol>
+<li><strong>Verify</strong> by checking the operator's logs — the next reconcile should succeed against the new password:</li>
+</ol>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-33-1"><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>neo4j-operator-system<span class="w"> </span>deployment/neo4j-operator-controller-manager<span class="w"> </span>--tail<span class="o">=</span><span class="m">20</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span>auth
+</span></code></pre></div>
+<p>If the operator logs <code>Neo.ClientError.Security.Unauthorized</code> after the rotation, the Secret was updated but <code>ALTER USER</code> didn't take — repeat step 1.</p>
+<p><strong>Rolling new pods first won't help</strong>. Bringing up a new pod with the new Secret value does NOT re-initialise the password — the data PVC carries the existing auth file forward. <code>NEO4J_AUTH</code> is only honoured on a <strong>fresh</strong> data volume.</p>
+<p><strong>External Secrets Operator / Vault integration</strong>: when the Secret is reconciled by an external store (ESO/Vault), step 2 happens automatically once you rotate the source. Step 1 still has to be done manually unless you build a downstream automation that watches the Secret and runs <code>ALTER USER</code>.</p>
+<h3 id="aura-fleet-management-token">Aura Fleet Management token<a class="headerlink" href="#aura-fleet-management-token" title="Anchor link to this section">&para;</a></h3>
+<p><strong>What it is</strong>: the API token in the Secret named by <code>spec.auraFleetManagement.tokenSecretRef.name</code> (default key <code>token</code>). Used once to call <code>fleetManagement.registerToken()</code> against the cluster.</p>
+<p><strong>Rotation flow</strong>:</p>
+<ol>
+<li>Update the Secret with the new token.</li>
+<li>The operator's next reconcile detects the change via the SHA-256 fingerprint in <code>status.auraFleetManagement.tokenSecretHash</code> (analogous to <code>status.passwordSecretHash</code> on <code>Neo4jUser</code>).</li>
+<li>It calls <code>fleetManagement.registerToken($newToken)</code> against the cluster, replacing the old token.</li>
+<li>The fingerprint in <code>status</code> is updated; subsequent reconciles see no change and stay quiet.</li>
+</ol>
+<p>No <code>ALTER USER</code>-equivalent is needed — the registration is a single procedure call.</p>
+<h3 id="tls-certificate-rotation">TLS certificate rotation<a class="headerlink" href="#tls-certificate-rotation" title="Anchor link to this section">&para;</a></h3>
+<p><strong>What it is</strong>: the Secret named <code>{cluster}-tls-secret</code> (or the configured <code>spec.tls.certificateSecret</code>) that holds <code>tls.crt</code>, <code>tls.key</code>, and optionally <code>ca.crt</code>.</p>
+<p><strong>When using <code>spec.tls.mode: cert-manager</code></strong> (recommended): rotation is fully automatic. cert-manager issues a new Certificate when the existing one approaches expiry (<code>spec.duration</code> and <code>spec.renewBefore</code> on the <code>Certificate</code> resource). The new Secret content is picked up on the next pod restart — schedule a rolling restart yourself if your certificate renewal cadence is shorter than your pod lifetime:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-34-1"><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>restart<span class="w"> </span>statefulset<span class="w"> </span>&lt;cluster&gt;-server<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
+</span></code></pre></div>
+<p><strong>When using a manually-provisioned Secret</strong>: replace the Secret contents and trigger a rolling restart. The operator does not watch arbitrary TLS Secrets for change.</p>
+<h3 id="neo4jplugin-sourceauthsecret-verifieddownload-mode">Neo4jPlugin <code>source.authSecret</code> (VerifiedDownload mode)<a class="headerlink" href="#neo4jplugin-sourceauthsecret-verifieddownload-mode" title="Anchor link to this section">&para;</a></h3>
+<p><strong>What it is</strong>: the bearer-token or header Secret named by <code>spec.source.authSecret</code> on a <code>Neo4jPlugin</code> CR with <code>installMode: VerifiedDownload</code>. Mounted into the init container at <code>/etc/plugin-auth</code>.</p>
+<p><strong>Rotation flow</strong>: update the Secret. Init container reads the file at pod start, so the new value takes effect on the next pod restart (e.g. when you trigger a rolling restart by editing <code>spec.config</code> on the cluster CR). No coordination with Neo4j-side state needed — the token is consumed by curl, not by Neo4j.</p>
+<h3 id="quick-reference">Quick reference<a class="headerlink" href="#quick-reference" title="Anchor link to this section">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Secret</th>
+<th>Trigger pod restart?</th>
+<th>Run Cypher?</th>
+<th>Operator auto-detects?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>spec.auth.adminSecret</code> (cluster + standalone)</td>
+<td>not required if you've run <code>ALTER USER</code>, but recommended for hygiene</td>
+<td><strong>Yes</strong> (<code>ALTER USER neo4j SET PASSWORD ...</code>)</td>
+<td>No — needs explicit <code>ALTER USER</code></td>
+</tr>
+<tr>
+<td><code>spec.auraFleetManagement.tokenSecretRef</code></td>
+<td>No</td>
+<td>No</td>
+<td><strong>Yes</strong> (token hash in status)</td>
+</tr>
+<tr>
+<td><code>Neo4jUser.spec.passwordSecret</code></td>
+<td>No</td>
+<td>No</td>
+<td><strong>Yes</strong> (<code>status.passwordSecretHash</code>)</td>
+</tr>
+<tr>
+<td>TLS Secret (cert-manager)</td>
+<td>Yes (rolling restart on renewal)</td>
+<td>No</td>
+<td>cert-manager auto-renews</td>
+</tr>
+<tr>
+<td><code>Neo4jPlugin.spec.source.authSecret</code></td>
+<td>Yes</td>
+<td>No</td>
+<td>No — picked up on next pod start</td>
+</tr>
+</tbody>
+</table>
+<h2 id="operator-labelled-secrets">Operator-labelled Secrets<a class="headerlink" href="#operator-labelled-secrets" title="Anchor link to this section">&para;</a></h2>
+<p>User-supplied Secrets (the admin Secret, Aura token Secret, plugin <code>authSecret</code>, manually-provisioned TLS Secrets) are <strong>not</strong> modified by the operator. The operator reads from them; it does not mutate their labels or annotations. If you want consistent inventory metadata across user-supplied Secrets, apply your own labels at creation time.</p>
+<p>The operator does propagate ownership metadata onto the Secrets it produces indirectly:</p>
+<table>
+<thead>
+<tr>
+<th>Secret</th>
+<th>Where the labels come from</th>
+<th>Labels stamped</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>{cluster}-tls-secret</code> / <code>{standalone}-tls-secret</code> (cert-manager issued)</td>
+<td><code>CertificateSpec.SecretTemplate</code> on the operator-created <code>Certificate</code> CR</td>
+<td><code>app.kubernetes.io/managed-by=neo4j-operator</code>, <code>app.kubernetes.io/component=tls</code>, <code>neo4j.com/owner-kind=Neo4jEnterpriseCluster\|Standalone</code>, <code>neo4j.com/owner-name=&lt;cr-name&gt;</code></td>
+</tr>
+<tr>
+<td>ExternalSecret-managed Secrets (when <code>spec.tls.externalSecrets.enabled=true</code> or <code>spec.auth.externalSecrets.enabled=true</code>)</td>
+<td>The operator-created <code>ExternalSecret</code> resource itself carries <code>app.kubernetes.io/managed-by=neo4j-operator</code>; the issued target Secret inherits per the ExternalSecret's <code>target.template</code> (configure as needed via the external-secrets.io spec)</td>
+<td><code>app.kubernetes.io/managed-by=neo4j-operator</code> on the <code>ExternalSecret</code>, plus whatever your <code>target.template</code> adds to the issued Secret</td>
+</tr>
+</tbody>
+</table>
+<p>Audit query example — list every TLS Secret the operator owns across the cluster:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-35-1"><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>secrets<span class="w"> </span>-A<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/managed-by<span class="o">=</span>neo4j-operator,app.kubernetes.io/component<span class="o">=</span>tls<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-35-2"><a id="__codelineno-35-2" name="__codelineno-35-2" href="#__codelineno-35-2"></a><span class="w">    </span>-o<span class="w"> </span>custom-columns<span class="o">=</span><span class="s1">&#39;NAMESPACE:.metadata.namespace,NAME:.metadata.name,OWNER:.metadata.labels.neo4j\.com/owner-kind,OWNER-NAME:.metadata.labels.neo4j\.com/owner-name&#39;</span>
+</span></code></pre></div>
 <h2 id="security-monitoring-and-auditing">Security Monitoring and Auditing<a class="headerlink" href="#security-monitoring-and-auditing" title="Anchor link to this section">&para;</a></h2>
 <h3 id="audit-logging-configuration">Audit Logging Configuration<a class="headerlink" href="#audit-logging-configuration" title="Anchor link to this section">&para;</a></h3>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-31-2"><a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a><span class="w">  </span><span class="nt">config</span><span class="p">:</span>
-</span><span id="__span-31-3"><a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a><span class="w">    </span><span class="c1"># Enable security event logging</span>
-</span><span id="__span-31-4"><a id="__codelineno-31-4" name="__codelineno-31-4" href="#__codelineno-31-4"></a><span class="w">    </span><span class="nt">dbms.security.log.successful_authentication</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
-</span><span id="__span-31-5"><a id="__codelineno-31-5" name="__codelineno-31-5" href="#__codelineno-31-5"></a><span class="w">    </span><span class="nt">dbms.logs.security.level</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;INFO&quot;</span>
-</span><span id="__span-31-6"><a id="__codelineno-31-6" name="__codelineno-31-6" href="#__codelineno-31-6"></a><span class="w">    </span><span class="nt">dbms.logs.security.rotation.keep_number</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;10&quot;</span>
-</span><span id="__span-31-7"><a id="__codelineno-31-7" name="__codelineno-31-7" href="#__codelineno-31-7"></a><span class="w">    </span><span class="nt">dbms.logs.security.rotation.size</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;20m&quot;</span>
-</span><span id="__span-31-8"><a id="__codelineno-31-8" name="__codelineno-31-8" href="#__codelineno-31-8"></a>
-</span><span id="__span-31-9"><a id="__codelineno-31-9" name="__codelineno-31-9" href="#__codelineno-31-9"></a><span class="w">    </span><span class="c1"># Query logging for security analysis</span>
-</span><span id="__span-31-10"><a id="__codelineno-31-10" name="__codelineno-31-10" href="#__codelineno-31-10"></a><span class="w">    </span><span class="nt">db.logs.query.enabled</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;INFO&quot;</span>
-</span><span id="__span-31-11"><a id="__codelineno-31-11" name="__codelineno-31-11" href="#__codelineno-31-11"></a><span class="w">    </span><span class="nt">db.logs.query.allocation_logging_enabled</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
-</span><span id="__span-31-12"><a id="__codelineno-31-12" name="__codelineno-31-12" href="#__codelineno-31-12"></a><span class="w">    </span><span class="nt">db.logs.query.parameter_logging_enabled</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;false&quot;</span><span class="w">  </span><span class="c1"># Avoid logging sensitive data</span>
-</span><span id="__span-31-13"><a id="__codelineno-31-13" name="__codelineno-31-13" href="#__codelineno-31-13"></a>
-</span><span id="__span-31-14"><a id="__codelineno-31-14" name="__codelineno-31-14" href="#__codelineno-31-14"></a><span class="w">    </span><span class="c1"># Transaction logging</span>
-</span><span id="__span-31-15"><a id="__codelineno-31-15" name="__codelineno-31-15" href="#__codelineno-31-15"></a><span class="w">    </span><span class="nt">db.logs.query.transaction_logging_enabled</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-36-1"><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a><span class="nt">spec</span><span class="p">:</span>
+</span><span id="__span-36-2"><a id="__codelineno-36-2" name="__codelineno-36-2" href="#__codelineno-36-2"></a><span class="w">  </span><span class="nt">config</span><span class="p">:</span>
+</span><span id="__span-36-3"><a id="__codelineno-36-3" name="__codelineno-36-3" href="#__codelineno-36-3"></a><span class="w">    </span><span class="c1"># Enable security event logging</span>
+</span><span id="__span-36-4"><a id="__codelineno-36-4" name="__codelineno-36-4" href="#__codelineno-36-4"></a><span class="w">    </span><span class="nt">dbms.security.log.successful_authentication</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
+</span><span id="__span-36-5"><a id="__codelineno-36-5" name="__codelineno-36-5" href="#__codelineno-36-5"></a><span class="w">    </span><span class="nt">dbms.logs.security.level</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;INFO&quot;</span>
+</span><span id="__span-36-6"><a id="__codelineno-36-6" name="__codelineno-36-6" href="#__codelineno-36-6"></a><span class="w">    </span><span class="nt">dbms.logs.security.rotation.keep_number</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;10&quot;</span>
+</span><span id="__span-36-7"><a id="__codelineno-36-7" name="__codelineno-36-7" href="#__codelineno-36-7"></a><span class="w">    </span><span class="nt">dbms.logs.security.rotation.size</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;20m&quot;</span>
+</span><span id="__span-36-8"><a id="__codelineno-36-8" name="__codelineno-36-8" href="#__codelineno-36-8"></a>
+</span><span id="__span-36-9"><a id="__codelineno-36-9" name="__codelineno-36-9" href="#__codelineno-36-9"></a><span class="w">    </span><span class="c1"># Query logging for security analysis</span>
+</span><span id="__span-36-10"><a id="__codelineno-36-10" name="__codelineno-36-10" href="#__codelineno-36-10"></a><span class="w">    </span><span class="nt">db.logs.query.enabled</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;INFO&quot;</span>
+</span><span id="__span-36-11"><a id="__codelineno-36-11" name="__codelineno-36-11" href="#__codelineno-36-11"></a><span class="w">    </span><span class="nt">db.logs.query.allocation_logging_enabled</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
+</span><span id="__span-36-12"><a id="__codelineno-36-12" name="__codelineno-36-12" href="#__codelineno-36-12"></a><span class="w">    </span><span class="nt">db.logs.query.parameter_logging_enabled</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;false&quot;</span><span class="w">  </span><span class="c1"># Avoid logging sensitive data</span>
+</span><span id="__span-36-13"><a id="__codelineno-36-13" name="__codelineno-36-13" href="#__codelineno-36-13"></a>
+</span><span id="__span-36-14"><a id="__codelineno-36-14" name="__codelineno-36-14" href="#__codelineno-36-14"></a><span class="w">    </span><span class="c1"># Transaction logging</span>
+</span><span id="__span-36-15"><a id="__codelineno-36-15" name="__codelineno-36-15" href="#__codelineno-36-15"></a><span class="w">    </span><span class="nt">db.logs.query.transaction_logging_enabled</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
 </span></code></pre></div>
 <h3 id="security-monitoring-with-prometheus">Security Monitoring with Prometheus<a class="headerlink" href="#security-monitoring-with-prometheus" title="Anchor link to this section">&para;</a></h3>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-32-1"><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-32-2"><a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a><span class="w">  </span><span class="nt">monitoring</span><span class="p">:</span>
-</span><span id="__span-32-3"><a id="__codelineno-32-3" name="__codelineno-32-3" href="#__codelineno-32-3"></a><span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-32-4"><a id="__codelineno-32-4" name="__codelineno-32-4" href="#__codelineno-32-4"></a><span class="w">  </span><span class="nt">config</span><span class="p">:</span>
-</span><span id="__span-32-5"><a id="__codelineno-32-5" name="__codelineno-32-5" href="#__codelineno-32-5"></a><span class="w">    </span><span class="c1"># Security metrics configuration</span>
-</span><span id="__span-32-6"><a id="__codelineno-32-6" name="__codelineno-32-6" href="#__codelineno-32-6"></a><span class="w">    </span><span class="nt">metrics.security.authentication.enabled</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
-</span><span id="__span-32-7"><a id="__codelineno-32-7" name="__codelineno-32-7" href="#__codelineno-32-7"></a><span class="w">    </span><span class="nt">metrics.security.authorization.enabled</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
-</span><span id="__span-32-8"><a id="__codelineno-32-8" name="__codelineno-32-8" href="#__codelineno-32-8"></a><span class="w">    </span><span class="nt">metrics.security.log.enabled</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-37-1"><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a><span class="nt">spec</span><span class="p">:</span>
+</span><span id="__span-37-2"><a id="__codelineno-37-2" name="__codelineno-37-2" href="#__codelineno-37-2"></a><span class="w">  </span><span class="nt">monitoring</span><span class="p">:</span>
+</span><span id="__span-37-3"><a id="__codelineno-37-3" name="__codelineno-37-3" href="#__codelineno-37-3"></a><span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-37-4"><a id="__codelineno-37-4" name="__codelineno-37-4" href="#__codelineno-37-4"></a><span class="w">  </span><span class="nt">config</span><span class="p">:</span>
+</span><span id="__span-37-5"><a id="__codelineno-37-5" name="__codelineno-37-5" href="#__codelineno-37-5"></a><span class="w">    </span><span class="c1"># Security metrics configuration</span>
+</span><span id="__span-37-6"><a id="__codelineno-37-6" name="__codelineno-37-6" href="#__codelineno-37-6"></a><span class="w">    </span><span class="nt">metrics.security.authentication.enabled</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
+</span><span id="__span-37-7"><a id="__codelineno-37-7" name="__codelineno-37-7" href="#__codelineno-37-7"></a><span class="w">    </span><span class="nt">metrics.security.authorization.enabled</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
+</span><span id="__span-37-8"><a id="__codelineno-37-8" name="__codelineno-37-8" href="#__codelineno-37-8"></a><span class="w">    </span><span class="nt">metrics.security.log.enabled</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
 </span></code></pre></div>
 <h2 id="compliance-and-governance">Compliance and Governance<a class="headerlink" href="#compliance-and-governance" title="Anchor link to this section">&para;</a></h2>
 <h3 id="gdpr-compliance-configuration">GDPR Compliance Configuration<a class="headerlink" href="#gdpr-compliance-configuration" title="Anchor link to this section">&para;</a></h3>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-33-1"><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-33-2"><a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a><span class="w">  </span><span class="nt">config</span><span class="p">:</span>
-</span><span id="__span-33-3"><a id="__codelineno-33-3" name="__codelineno-33-3" href="#__codelineno-33-3"></a><span class="w">    </span><span class="c1"># Data retention policies</span>
-</span><span id="__span-33-4"><a id="__codelineno-33-4" name="__codelineno-33-4" href="#__codelineno-33-4"></a><span class="w">    </span><span class="nt">db.transaction.logs.rotation.retention_policy</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;7</span><span class="nv"> </span><span class="s">days&quot;</span>
-</span><span id="__span-33-5"><a id="__codelineno-33-5" name="__codelineno-33-5" href="#__codelineno-33-5"></a><span class="w">    </span><span class="nt">db.transaction.logs.rotation.size</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;250M&quot;</span>
-</span><span id="__span-33-6"><a id="__codelineno-33-6" name="__codelineno-33-6" href="#__codelineno-33-6"></a>
-</span><span id="__span-33-7"><a id="__codelineno-33-7" name="__codelineno-33-7" href="#__codelineno-33-7"></a><span class="w">    </span><span class="c1"># Query logging for data access tracking</span>
-</span><span id="__span-33-8"><a id="__codelineno-33-8" name="__codelineno-33-8" href="#__codelineno-33-8"></a><span class="w">    </span><span class="nt">db.logs.query.enabled</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;INFO&quot;</span>
-</span><span id="__span-33-9"><a id="__codelineno-33-9" name="__codelineno-33-9" href="#__codelineno-33-9"></a><span class="w">    </span><span class="nt">db.logs.query.threshold</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;0ms&quot;</span><span class="w">  </span><span class="c1"># Log all queries for audit</span>
-</span><span id="__span-33-10"><a id="__codelineno-33-10" name="__codelineno-33-10" href="#__codelineno-33-10"></a><span class="w">    </span><span class="nt">db.logs.query.allocation_logging_enabled</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
-</span><span id="__span-33-11"><a id="__codelineno-33-11" name="__codelineno-33-11" href="#__codelineno-33-11"></a>
-</span><span id="__span-33-12"><a id="__codelineno-33-12" name="__codelineno-33-12" href="#__codelineno-33-12"></a><span class="w">    </span><span class="c1"># Security logging</span>
-</span><span id="__span-33-13"><a id="__codelineno-33-13" name="__codelineno-33-13" href="#__codelineno-33-13"></a><span class="w">    </span><span class="nt">dbms.logs.security.level</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;INFO&quot;</span>
-</span><span id="__span-33-14"><a id="__codelineno-33-14" name="__codelineno-33-14" href="#__codelineno-33-14"></a><span class="w">    </span><span class="nt">dbms.security.log.successful_authentication</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
-</span><span id="__span-33-15"><a id="__codelineno-33-15" name="__codelineno-33-15" href="#__codelineno-33-15"></a><span class="w">    </span><span class="nt">dbms.security.log.failed_authentication</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-38-1"><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a><span class="nt">spec</span><span class="p">:</span>
+</span><span id="__span-38-2"><a id="__codelineno-38-2" name="__codelineno-38-2" href="#__codelineno-38-2"></a><span class="w">  </span><span class="nt">config</span><span class="p">:</span>
+</span><span id="__span-38-3"><a id="__codelineno-38-3" name="__codelineno-38-3" href="#__codelineno-38-3"></a><span class="w">    </span><span class="c1"># Data retention policies</span>
+</span><span id="__span-38-4"><a id="__codelineno-38-4" name="__codelineno-38-4" href="#__codelineno-38-4"></a><span class="w">    </span><span class="nt">db.transaction.logs.rotation.retention_policy</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;7</span><span class="nv"> </span><span class="s">days&quot;</span>
+</span><span id="__span-38-5"><a id="__codelineno-38-5" name="__codelineno-38-5" href="#__codelineno-38-5"></a><span class="w">    </span><span class="nt">db.transaction.logs.rotation.size</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;250M&quot;</span>
+</span><span id="__span-38-6"><a id="__codelineno-38-6" name="__codelineno-38-6" href="#__codelineno-38-6"></a>
+</span><span id="__span-38-7"><a id="__codelineno-38-7" name="__codelineno-38-7" href="#__codelineno-38-7"></a><span class="w">    </span><span class="c1"># Query logging for data access tracking</span>
+</span><span id="__span-38-8"><a id="__codelineno-38-8" name="__codelineno-38-8" href="#__codelineno-38-8"></a><span class="w">    </span><span class="nt">db.logs.query.enabled</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;INFO&quot;</span>
+</span><span id="__span-38-9"><a id="__codelineno-38-9" name="__codelineno-38-9" href="#__codelineno-38-9"></a><span class="w">    </span><span class="nt">db.logs.query.threshold</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;0ms&quot;</span><span class="w">  </span><span class="c1"># Log all queries for audit</span>
+</span><span id="__span-38-10"><a id="__codelineno-38-10" name="__codelineno-38-10" href="#__codelineno-38-10"></a><span class="w">    </span><span class="nt">db.logs.query.allocation_logging_enabled</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
+</span><span id="__span-38-11"><a id="__codelineno-38-11" name="__codelineno-38-11" href="#__codelineno-38-11"></a>
+</span><span id="__span-38-12"><a id="__codelineno-38-12" name="__codelineno-38-12" href="#__codelineno-38-12"></a><span class="w">    </span><span class="c1"># Security logging</span>
+</span><span id="__span-38-13"><a id="__codelineno-38-13" name="__codelineno-38-13" href="#__codelineno-38-13"></a><span class="w">    </span><span class="nt">dbms.logs.security.level</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;INFO&quot;</span>
+</span><span id="__span-38-14"><a id="__codelineno-38-14" name="__codelineno-38-14" href="#__codelineno-38-14"></a><span class="w">    </span><span class="nt">dbms.security.log.successful_authentication</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
+</span><span id="__span-38-15"><a id="__codelineno-38-15" name="__codelineno-38-15" href="#__codelineno-38-15"></a><span class="w">    </span><span class="nt">dbms.security.log.failed_authentication</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
 </span></code></pre></div>
 <h3 id="pci-dss-compliance">PCI DSS Compliance<a class="headerlink" href="#pci-dss-compliance" title="Anchor link to this section">&para;</a></h3>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-34-1"><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-34-2"><a id="__codelineno-34-2" name="__codelineno-34-2" href="#__codelineno-34-2"></a><span class="w">  </span><span class="c1"># Strong TLS configuration</span>
-</span><span id="__span-34-3"><a id="__codelineno-34-3" name="__codelineno-34-3" href="#__codelineno-34-3"></a><span class="w">  </span><span class="nt">tls</span><span class="p">:</span>
-</span><span id="__span-34-4"><a id="__codelineno-34-4" name="__codelineno-34-4" href="#__codelineno-34-4"></a><span class="w">    </span><span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cert-manager</span>
-</span><span id="__span-34-5"><a id="__codelineno-34-5" name="__codelineno-34-5" href="#__codelineno-34-5"></a><span class="w">    </span><span class="nt">issuerRef</span><span class="p">:</span>
-</span><span id="__span-34-6"><a id="__codelineno-34-6" name="__codelineno-34-6" href="#__codelineno-34-6"></a><span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pci-compliant-issuer</span>
-</span><span id="__span-34-7"><a id="__codelineno-34-7" name="__codelineno-34-7" href="#__codelineno-34-7"></a><span class="w">      </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ClusterIssuer</span>
-</span><span id="__span-34-8"><a id="__codelineno-34-8" name="__codelineno-34-8" href="#__codelineno-34-8"></a>
-</span><span id="__span-34-9"><a id="__codelineno-34-9" name="__codelineno-34-9" href="#__codelineno-34-9"></a><span class="w">  </span><span class="nt">config</span><span class="p">:</span>
-</span><span id="__span-34-10"><a id="__codelineno-34-10" name="__codelineno-34-10" href="#__codelineno-34-10"></a><span class="w">    </span><span class="c1"># TLS 1.2 included for legacy-client compatibility during migration.</span>
-</span><span id="__span-34-11"><a id="__codelineno-34-11" name="__codelineno-34-11" href="#__codelineno-34-11"></a><span class="w">    </span><span class="c1"># See the regulatory-context note below the example for guidance on</span>
-</span><span id="__span-34-12"><a id="__codelineno-34-12" name="__codelineno-34-12" href="#__codelineno-34-12"></a><span class="w">    </span><span class="c1"># moving to the TLS 1.3-only target state.</span>
-</span><span id="__span-34-13"><a id="__codelineno-34-13" name="__codelineno-34-13" href="#__codelineno-34-13"></a><span class="w">    </span><span class="nt">dbms.ssl.policy.bolt.tls_versions</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;TLSv1.2,TLSv1.3&quot;</span>
-</span><span id="__span-34-14"><a id="__codelineno-34-14" name="__codelineno-34-14" href="#__codelineno-34-14"></a><span class="w">    </span><span class="nt">dbms.ssl.policy.https.tls_versions</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;TLSv1.2,TLSv1.3&quot;</span>
-</span><span id="__span-34-15"><a id="__codelineno-34-15" name="__codelineno-34-15" href="#__codelineno-34-15"></a><span class="w">    </span><span class="c1"># TLS 1.3-only hardening (target state — recommended once clients migrate):</span>
-</span><span id="__span-34-16"><a id="__codelineno-34-16" name="__codelineno-34-16" href="#__codelineno-34-16"></a><span class="w">    </span><span class="c1"># dbms.ssl.policy.bolt.tls_versions: &quot;TLSv1.3&quot;</span>
-</span><span id="__span-34-17"><a id="__codelineno-34-17" name="__codelineno-34-17" href="#__codelineno-34-17"></a><span class="w">    </span><span class="c1"># dbms.ssl.policy.https.tls_versions: &quot;TLSv1.3&quot;</span>
-</span><span id="__span-34-18"><a id="__codelineno-34-18" name="__codelineno-34-18" href="#__codelineno-34-18"></a><span class="w">    </span><span class="nt">dbms.ssl.policy.bolt.ciphers</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256&quot;</span>
-</span><span id="__span-34-19"><a id="__codelineno-34-19" name="__codelineno-34-19" href="#__codelineno-34-19"></a><span class="w">    </span><span class="nt">dbms.ssl.policy.https.ciphers</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256&quot;</span>
-</span><span id="__span-34-20"><a id="__codelineno-34-20" name="__codelineno-34-20" href="#__codelineno-34-20"></a>
-</span><span id="__span-34-21"><a id="__codelineno-34-21" name="__codelineno-34-21" href="#__codelineno-34-21"></a><span class="w">    </span><span class="c1"># Authentication and session management</span>
-</span><span id="__span-34-22"><a id="__codelineno-34-22" name="__codelineno-34-22" href="#__codelineno-34-22"></a><span class="w">    </span><span class="nt">dbms.security.auth_minimum_password_length</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;12&quot;</span>
-</span><span id="__span-34-23"><a id="__codelineno-34-23" name="__codelineno-34-23" href="#__codelineno-34-23"></a><span class="w">    </span><span class="nt">dbms.security.auth_cache_ttl</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;15m&quot;</span>
-</span><span id="__span-34-24"><a id="__codelineno-34-24" name="__codelineno-34-24" href="#__codelineno-34-24"></a>
-</span><span id="__span-34-25"><a id="__codelineno-34-25" name="__codelineno-34-25" href="#__codelineno-34-25"></a><span class="w">    </span><span class="c1"># Access logging</span>
-</span><span id="__span-34-26"><a id="__codelineno-34-26" name="__codelineno-34-26" href="#__codelineno-34-26"></a><span class="w">    </span><span class="nt">db.logs.query.enabled</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;INFO&quot;</span>
-</span><span id="__span-34-27"><a id="__codelineno-34-27" name="__codelineno-34-27" href="#__codelineno-34-27"></a><span class="w">    </span><span class="nt">dbms.logs.security.level</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;INFO&quot;</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-39-1"><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a><span class="nt">spec</span><span class="p">:</span>
+</span><span id="__span-39-2"><a id="__codelineno-39-2" name="__codelineno-39-2" href="#__codelineno-39-2"></a><span class="w">  </span><span class="c1"># Strong TLS configuration</span>
+</span><span id="__span-39-3"><a id="__codelineno-39-3" name="__codelineno-39-3" href="#__codelineno-39-3"></a><span class="w">  </span><span class="nt">tls</span><span class="p">:</span>
+</span><span id="__span-39-4"><a id="__codelineno-39-4" name="__codelineno-39-4" href="#__codelineno-39-4"></a><span class="w">    </span><span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cert-manager</span>
+</span><span id="__span-39-5"><a id="__codelineno-39-5" name="__codelineno-39-5" href="#__codelineno-39-5"></a><span class="w">    </span><span class="nt">issuerRef</span><span class="p">:</span>
+</span><span id="__span-39-6"><a id="__codelineno-39-6" name="__codelineno-39-6" href="#__codelineno-39-6"></a><span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pci-compliant-issuer</span>
+</span><span id="__span-39-7"><a id="__codelineno-39-7" name="__codelineno-39-7" href="#__codelineno-39-7"></a><span class="w">      </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ClusterIssuer</span>
+</span><span id="__span-39-8"><a id="__codelineno-39-8" name="__codelineno-39-8" href="#__codelineno-39-8"></a>
+</span><span id="__span-39-9"><a id="__codelineno-39-9" name="__codelineno-39-9" href="#__codelineno-39-9"></a><span class="w">  </span><span class="nt">config</span><span class="p">:</span>
+</span><span id="__span-39-10"><a id="__codelineno-39-10" name="__codelineno-39-10" href="#__codelineno-39-10"></a><span class="w">    </span><span class="c1"># TLS 1.2 included for legacy-client compatibility during migration.</span>
+</span><span id="__span-39-11"><a id="__codelineno-39-11" name="__codelineno-39-11" href="#__codelineno-39-11"></a><span class="w">    </span><span class="c1"># See the regulatory-context note below the example for guidance on</span>
+</span><span id="__span-39-12"><a id="__codelineno-39-12" name="__codelineno-39-12" href="#__codelineno-39-12"></a><span class="w">    </span><span class="c1"># moving to the TLS 1.3-only target state.</span>
+</span><span id="__span-39-13"><a id="__codelineno-39-13" name="__codelineno-39-13" href="#__codelineno-39-13"></a><span class="w">    </span><span class="nt">dbms.ssl.policy.bolt.tls_versions</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;TLSv1.2,TLSv1.3&quot;</span>
+</span><span id="__span-39-14"><a id="__codelineno-39-14" name="__codelineno-39-14" href="#__codelineno-39-14"></a><span class="w">    </span><span class="nt">dbms.ssl.policy.https.tls_versions</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;TLSv1.2,TLSv1.3&quot;</span>
+</span><span id="__span-39-15"><a id="__codelineno-39-15" name="__codelineno-39-15" href="#__codelineno-39-15"></a><span class="w">    </span><span class="c1"># TLS 1.3-only hardening (target state — recommended once clients migrate):</span>
+</span><span id="__span-39-16"><a id="__codelineno-39-16" name="__codelineno-39-16" href="#__codelineno-39-16"></a><span class="w">    </span><span class="c1"># dbms.ssl.policy.bolt.tls_versions: &quot;TLSv1.3&quot;</span>
+</span><span id="__span-39-17"><a id="__codelineno-39-17" name="__codelineno-39-17" href="#__codelineno-39-17"></a><span class="w">    </span><span class="c1"># dbms.ssl.policy.https.tls_versions: &quot;TLSv1.3&quot;</span>
+</span><span id="__span-39-18"><a id="__codelineno-39-18" name="__codelineno-39-18" href="#__codelineno-39-18"></a><span class="w">    </span><span class="nt">dbms.ssl.policy.bolt.ciphers</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256&quot;</span>
+</span><span id="__span-39-19"><a id="__codelineno-39-19" name="__codelineno-39-19" href="#__codelineno-39-19"></a><span class="w">    </span><span class="nt">dbms.ssl.policy.https.ciphers</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256&quot;</span>
+</span><span id="__span-39-20"><a id="__codelineno-39-20" name="__codelineno-39-20" href="#__codelineno-39-20"></a>
+</span><span id="__span-39-21"><a id="__codelineno-39-21" name="__codelineno-39-21" href="#__codelineno-39-21"></a><span class="w">    </span><span class="c1"># Authentication and session management</span>
+</span><span id="__span-39-22"><a id="__codelineno-39-22" name="__codelineno-39-22" href="#__codelineno-39-22"></a><span class="w">    </span><span class="nt">dbms.security.auth_minimum_password_length</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;12&quot;</span>
+</span><span id="__span-39-23"><a id="__codelineno-39-23" name="__codelineno-39-23" href="#__codelineno-39-23"></a><span class="w">    </span><span class="nt">dbms.security.auth_cache_ttl</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;15m&quot;</span>
+</span><span id="__span-39-24"><a id="__codelineno-39-24" name="__codelineno-39-24" href="#__codelineno-39-24"></a>
+</span><span id="__span-39-25"><a id="__codelineno-39-25" name="__codelineno-39-25" href="#__codelineno-39-25"></a><span class="w">    </span><span class="c1"># Access logging</span>
+</span><span id="__span-39-26"><a id="__codelineno-39-26" name="__codelineno-39-26" href="#__codelineno-39-26"></a><span class="w">    </span><span class="nt">db.logs.query.enabled</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;INFO&quot;</span>
+</span><span id="__span-39-27"><a id="__codelineno-39-27" name="__codelineno-39-27" href="#__codelineno-39-27"></a><span class="w">    </span><span class="nt">dbms.logs.security.level</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;INFO&quot;</span>
 </span></code></pre></div>
 <blockquote>
 <p><strong>Why TLS 1.3 over TLS 1.2.</strong> PCI DSS v4.0 mandates a TLS 1.2 minimum but expects active migration toward TLS 1.3. Several adjacent regimes also discourage TLS 1.2 for new builds — FIPS-140-3 module validations and NIST SP 800-52r2 guidance both recommend TLS 1.3 as the baseline (the latter as guidance, not a strict prohibition). If every client in your environment supports TLS 1.3, drop <code>TLSv1.2</code> from the <code>tls_versions</code> list — the commented-out TLS 1.3-only target-state lines in the example above show the resulting hardened form.</p>
@@ -4851,31 +5144,31 @@ deployments that don't actually use the integration.</p>
 <ol>
 <li>
 <p><strong>Certificate Issues</strong>:
-   <div class="language-bash highlight"><pre><span></span><code><span id="__span-35-1"><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a><span class="c1"># Check certificate status</span>
-</span><span id="__span-35-2"><a id="__codelineno-35-2" name="__codelineno-35-2" href="#__codelineno-35-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>certificates
-</span><span id="__span-35-3"><a id="__codelineno-35-3" name="__codelineno-35-3" href="#__codelineno-35-3"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>certificate<span class="w"> </span>neo4j-tls-secret
-</span><span id="__span-35-4"><a id="__codelineno-35-4" name="__codelineno-35-4" href="#__codelineno-35-4"></a>
-</span><span id="__span-35-5"><a id="__codelineno-35-5" name="__codelineno-35-5" href="#__codelineno-35-5"></a><span class="c1"># Verify certificate content</span>
-</span><span id="__span-35-6"><a id="__codelineno-35-6" name="__codelineno-35-6" href="#__codelineno-35-6"></a>kubectl<span class="w"> </span>get<span class="w"> </span>secret<span class="w"> </span>neo4j-tls-secret<span class="w"> </span>-o<span class="w"> </span>yaml<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>tls.crt<span class="w"> </span><span class="p">|</span><span class="w"> </span>base64<span class="w"> </span>-d<span class="w"> </span><span class="p">|</span><span class="w"> </span>openssl<span class="w"> </span>x509<span class="w"> </span>-text<span class="w"> </span>-noout
+   <div class="language-bash highlight"><pre><span></span><code><span id="__span-40-1"><a id="__codelineno-40-1" name="__codelineno-40-1" href="#__codelineno-40-1"></a><span class="c1"># Check certificate status</span>
+</span><span id="__span-40-2"><a id="__codelineno-40-2" name="__codelineno-40-2" href="#__codelineno-40-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>certificates
+</span><span id="__span-40-3"><a id="__codelineno-40-3" name="__codelineno-40-3" href="#__codelineno-40-3"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>certificate<span class="w"> </span>neo4j-tls-secret
+</span><span id="__span-40-4"><a id="__codelineno-40-4" name="__codelineno-40-4" href="#__codelineno-40-4"></a>
+</span><span id="__span-40-5"><a id="__codelineno-40-5" name="__codelineno-40-5" href="#__codelineno-40-5"></a><span class="c1"># Verify certificate content</span>
+</span><span id="__span-40-6"><a id="__codelineno-40-6" name="__codelineno-40-6" href="#__codelineno-40-6"></a>kubectl<span class="w"> </span>get<span class="w"> </span>secret<span class="w"> </span>neo4j-tls-secret<span class="w"> </span>-o<span class="w"> </span>yaml<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>tls.crt<span class="w"> </span><span class="p">|</span><span class="w"> </span>base64<span class="w"> </span>-d<span class="w"> </span><span class="p">|</span><span class="w"> </span>openssl<span class="w"> </span>x509<span class="w"> </span>-text<span class="w"> </span>-noout
 </span></code></pre></div></p>
 </li>
 <li>
 <p><strong>Authentication Failures</strong>:
-   <div class="language-bash highlight"><pre><span></span><code><span id="__span-36-1"><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a><span class="c1"># Check authentication logs</span>
-</span><span id="__span-36-2"><a id="__codelineno-36-2" name="__codelineno-36-2" href="#__codelineno-36-2"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>cluster-server-0<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span>auth
-</span><span id="__span-36-3"><a id="__codelineno-36-3" name="__codelineno-36-3" href="#__codelineno-36-3"></a>
-</span><span id="__span-36-4"><a id="__codelineno-36-4" name="__codelineno-36-4" href="#__codelineno-36-4"></a><span class="c1"># Test authentication</span>
-</span><span id="__span-36-5"><a id="__codelineno-36-5" name="__codelineno-36-5" href="#__codelineno-36-5"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>cluster-server-0<span class="w"> </span>--<span class="w"> </span>cypher-shell<span class="w"> </span>-u<span class="w"> </span>testuser<span class="w"> </span>-p<span class="w"> </span>testpass<span class="w"> </span><span class="s2">&quot;RETURN &#39;auth test&#39;&quot;</span>
+   <div class="language-bash highlight"><pre><span></span><code><span id="__span-41-1"><a id="__codelineno-41-1" name="__codelineno-41-1" href="#__codelineno-41-1"></a><span class="c1"># Check authentication logs</span>
+</span><span id="__span-41-2"><a id="__codelineno-41-2" name="__codelineno-41-2" href="#__codelineno-41-2"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>cluster-server-0<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span>auth
+</span><span id="__span-41-3"><a id="__codelineno-41-3" name="__codelineno-41-3" href="#__codelineno-41-3"></a>
+</span><span id="__span-41-4"><a id="__codelineno-41-4" name="__codelineno-41-4" href="#__codelineno-41-4"></a><span class="c1"># Test authentication</span>
+</span><span id="__span-41-5"><a id="__codelineno-41-5" name="__codelineno-41-5" href="#__codelineno-41-5"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>cluster-server-0<span class="w"> </span>--<span class="w"> </span>cypher-shell<span class="w"> </span>-u<span class="w"> </span>testuser<span class="w"> </span>-p<span class="w"> </span>testpass<span class="w"> </span><span class="s2">&quot;RETURN &#39;auth test&#39;&quot;</span>
 </span></code></pre></div></p>
 </li>
 <li>
 <p><strong>Network Access Issues</strong>:
-   <div class="language-bash highlight"><pre><span></span><code><span id="__span-37-1"><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a><span class="c1"># Check NetworkPolicy</span>
-</span><span id="__span-37-2"><a id="__codelineno-37-2" name="__codelineno-37-2" href="#__codelineno-37-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>networkpolicy
-</span><span id="__span-37-3"><a id="__codelineno-37-3" name="__codelineno-37-3" href="#__codelineno-37-3"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>networkpolicy<span class="w"> </span>neo4j-network-policy
-</span><span id="__span-37-4"><a id="__codelineno-37-4" name="__codelineno-37-4" href="#__codelineno-37-4"></a>
-</span><span id="__span-37-5"><a id="__codelineno-37-5" name="__codelineno-37-5" href="#__codelineno-37-5"></a><span class="c1"># Test network connectivity</span>
-</span><span id="__span-37-6"><a id="__codelineno-37-6" name="__codelineno-37-6" href="#__codelineno-37-6"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-it<span class="w"> </span>test-pod<span class="w"> </span>--<span class="w"> </span>nc<span class="w"> </span>-zv<span class="w"> </span>cluster-server-0<span class="w"> </span><span class="m">7687</span>
+   <div class="language-bash highlight"><pre><span></span><code><span id="__span-42-1"><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a><span class="c1"># Check NetworkPolicy</span>
+</span><span id="__span-42-2"><a id="__codelineno-42-2" name="__codelineno-42-2" href="#__codelineno-42-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>networkpolicy
+</span><span id="__span-42-3"><a id="__codelineno-42-3" name="__codelineno-42-3" href="#__codelineno-42-3"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>networkpolicy<span class="w"> </span>neo4j-network-policy
+</span><span id="__span-42-4"><a id="__codelineno-42-4" name="__codelineno-42-4" href="#__codelineno-42-4"></a>
+</span><span id="__span-42-5"><a id="__codelineno-42-5" name="__codelineno-42-5" href="#__codelineno-42-5"></a><span class="c1"># Test network connectivity</span>
+</span><span id="__span-42-6"><a id="__codelineno-42-6" name="__codelineno-42-6" href="#__codelineno-42-6"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-it<span class="w"> </span>test-pod<span class="w"> </span>--<span class="w"> </span>nc<span class="w"> </span>-zv<span class="w"> </span>cluster-server-0<span class="w"> </span><span class="m">7687</span>
 </span></code></pre></div></p>
 </li>
 </ol>
