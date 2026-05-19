@@ -39,9 +39,21 @@ if [[ "$NAME" != "manager-role" ]]; then
     exit 1
 fi
 
-# Render just the rules array.  yq writes it at zero indent which is the
-# correct YAML form under a `rules:` parent key.
-RULES=$("$YQ" '.rules' "$SRC")
+# Partition the rules into two groups:
+#   1. "core" — rules the operator always needs.
+#   2. "external-secrets" — rules for the optional external-secrets.io
+#      integration. Only emitted when .Values.rbac.externalSecretsIntegration
+#      is true on the helm side, since the integration is opt-in (the
+#      operator only creates ExternalSecret resources when a Neo4j CR sets
+#      spec.{tls,auth}.externalSecrets.enabled=true). Without this split,
+#      the chart's ClusterRole granted external-secrets CRUD verbs
+#      cluster-wide on every install — wide blast radius for a feature
+#      most users don't use. Per the November 2025 security review #1.
+#
+# yq writes each at zero indent which is the correct YAML form under a
+# `rules:` parent key.
+CORE_RULES=$("$YQ" '[.rules[] | select(.apiGroups | contains(["external-secrets.io"]) | not)]' "$SRC")
+EXT_SECRETS_RULES=$("$YQ" '[.rules[] | select(.apiGroups | contains(["external-secrets.io"]))]' "$SRC")
 
 # Helm template wrapper: gated by .Values.rbac.create AND the chart's helper
 # that decides whether to emit ClusterRole vs Role (cluster-wide vs single-
@@ -65,7 +77,10 @@ metadata:
   labels:
     {{- include "neo4j-operator.labels" . | nindent 4 }}
 rules:
-${RULES}
+${CORE_RULES}
+{{- if .Values.rbac.externalSecretsIntegration }}
+${EXT_SECRETS_RULES}
+{{- end }}
 {{- end }}
 EOF
 

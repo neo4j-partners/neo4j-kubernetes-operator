@@ -786,6 +786,17 @@ spec:
 
 ### External Secrets Integration
 
+> **Helm**: the chart does **not** grant the operator RBAC for the
+> `external-secrets.io` API group by default. To enable the integration,
+> install with `--set rbac.externalSecretsIntegration=true` (or set it in
+> your values file). Without this, any `Neo4jEnterpriseCluster` /
+> `Neo4jEnterpriseStandalone` that sets `spec.tls.externalSecrets.enabled=true`
+> or `spec.auth.externalSecrets.enabled=true` will fail with a clear
+> RBAC-denied error when the operator tries to create the `ExternalSecret`.
+> The default-off posture follows the November 2025 security review's
+> recommendation to keep the operator's RBAC blast radius narrow for
+> deployments that don't actually use the integration.
+
 ```yaml
 # SecretStore for AWS Secrets Manager
 apiVersion: external-secrets.io/v1beta1

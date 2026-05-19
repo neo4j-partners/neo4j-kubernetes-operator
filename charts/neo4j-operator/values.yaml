@@ -44,6 +44,20 @@ serviceAccount:
 rbac:
   # Specifies whether RBAC resources should be created
   create: true
+  # Grant the operator RBAC for the external-secrets.io integration
+  # (clustersecretstores, secretstores, externalsecrets). Default: off.
+  #
+  # The integration is opt-in per-CR via
+  # spec.tls.externalSecrets.enabled / spec.auth.externalSecrets.enabled on
+  # Neo4jEnterpriseCluster (and standalone). Setting this to true grants
+  # cluster-wide CRUD on ExternalSecret resources — only enable if you
+  # actually use that integration. Per the November 2025 security review
+  # recommendation #1 (reduce RBAC blast radius).
+  #
+  # If left false but a Neo4j CR sets externalSecrets.enabled=true, the
+  # operator will get RBAC-denied when trying to create the ExternalSecret
+  # — clear failure mode, easy to debug.
+  externalSecretsIntegration: false
 
 podAnnotations: {}
 
