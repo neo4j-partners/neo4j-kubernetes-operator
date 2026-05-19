@@ -573,12 +573,45 @@ The fix tracks the cluster controller's owned env-var names in a `neo4j.com/clus
 
 **Behind the scenes**: the annotation is bootstrapped on the next reconcile after the upgrade — `previousOwned` is empty on first read, so no spurious removals happen. From that reconcile onward the set is tracked.
 
+### 5. `Neo4jEnterpriseStandalone` now requires a headless Service (delete + recreate for in-place upgrades)
+
+A backup against a `Neo4jEnterpriseStandalone` used to fail end-to-end because three things were broken: the backup Job built a cluster-shaped FQDN (`{name}-server-0...`) the standalone never had, the standalone's StatefulSet had no `spec.serviceName` so no DNS name resolved to the pod, and the standalone's `neo4j.conf` didn't enable `server.backup.listen_address` so port 6362 wasn't bound. The fix lands all three pieces:
+
+- A new `{name}-headless` Service (`ClusterIP=None`, port 6362).
+- `StatefulSet.spec.serviceName = {name}-headless`.
+- `server.backup.enabled=true` + `server.backup.listen_address=0.0.0.0:6362` in the standalone ConfigMap.
+- Backup controller branches on standalone vs cluster targets when picking the `--from` FQDN.
+
+**Caveat**: `StatefulSet.spec.serviceName` is **immutable after creation**. Existing standalones upgraded in place will keep their old (empty) `serviceName` and will NOT get the headless service routing the backup Job depends on — backups against them will continue to fail with `Connection refused` on `:6362`.
+
+**Action for existing standalones**: delete and recreate the `Neo4jEnterpriseStandalone` CR (PVC retention applies — `spec.storage.retentionPolicy=Retain` preserves the data PVC across the delete/recreate cycle, so the new StatefulSet picks up the same data volume). New deployments get the headless routing automatically with no extra steps.
+
+```bash
+# 1. (Optional but recommended) take a manual backup using the legacy
+#    sidecar pattern if your cluster supports it, OR cordon/quiesce
+#    application traffic.
+# 2. Set retentionPolicy=Retain so the data volume survives the delete.
+kubectl patch neo4jenterprisestandalone <name> --type=merge \
+    -p '{"spec":{"storage":{"retentionPolicy":"Retain"}}}'
+
+# 3. Delete the CR. The PVC stays because of Retain.
+kubectl delete neo4jenterprisestandalone <name>
+
+# 4. Re-apply the same manifest. The operator creates the new STS with
+#    spec.serviceName=<name>-headless + the headless Service; the pod
+#    attaches to the existing PVC.
+kubectl apply -f <name>.yaml
+```
+
+Backups against the recreated standalone work end-to-end after step 4.
+
 ### Quick upgrade checklist
 
 1. Grep manifests for the removed fields (step 1) and migrate them.
 2. If you set `spec.auth.passwordPolicy` or `spec.auth.kerberos` and were depending on it doing something, move the equivalent keys into `spec.config` (step 2).
 3. Update PromQL / Grafana queries on `cluster_replicas_total` (step 3).
 4. Audit `spec.config` if you have long-edit-history clusters that may have relied on the env-var-removal bug (step 4).
+5. If you have existing `Neo4jEnterpriseStandalone` CRs AND want backups against them, delete + recreate with `retentionPolicy=Retain` per step 5 above. Standalones that never need backups can be left as-is.
 
 ---
 
