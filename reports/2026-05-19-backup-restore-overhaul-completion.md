@@ -1,6 +1,37 @@
-# Backup & Restore Overhaul Implementation Plan
+# Backup & Restore Overhaul — Completion Report
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+**Date completed**: 2026-05-19
+**Original plan**: this file (formerly `docs/plans/2026-02-20-backup-restore-overhaul.md`).
+
+## Status
+
+**Done.** All 15 tasks (24 listed bugs) implemented and committed. Audit performed against `main` at commit `40531ba` plus PR #95 (which retired the obsolete `pods/exec` RBAC marker the old sidecar-exec pattern needed).
+
+| Task | Where it landed |
+|---|---|
+| 1. Version helper — `GetBackupCommand`, `Supports{ParallelDownload,PreferDiffAsParent,RemoteAddressResolution}` | `internal/neo4j/version.go:169` |
+| 2. API types — `ClusterRef`, `PreferDiffAsParent`, `TempPath`, `CredentialsSecretRef` | `api/v1beta1/neo4jbackup_types.go`, `api/v1beta1/neo4jenterprisecluster_types.go:717` |
+| 3. Cluster config — `server.backup.listen_address=0.0.0.0:6362` | `internal/resources/cluster.go:1631` |
+| 4. `BuildBackupFromAddresses` helper | `internal/resources/cluster.go:176` |
+| 5. `isClusterReady` + `getClusterRef` | `internal/controller/neo4jbackup_controller.go:718` |
+| 6. Replace sidecar-exec → direct `neo4j-admin` Job | `createBackupJob` (one-shot) + `createBackupCronJob` (scheduled). `pods/exec` RBAC removed in PR #95. |
+| 7. CronJob + `--prefer-diff-as-parent` | `neo4jbackup_controller.go:462` (version-gated) + command builder |
+| 8. `stopCluster`/`startCluster` STS name | `resolveStatefulSetName` handles cluster + standalone |
+| 9. `validateRestore` source types — backup/s3/gcs/azure/pitr | `neo4jrestore_controller.go:358` |
+| 10. PITR command builder | `buildPITRRestoreCommand` at `:682` |
+| 11. `CREATE DATABASE` post-restore + restore volumes | `createOrStartDatabase` at `:325`, called from `handleRestoreSuccess` |
+| 12. Standalone restore support | `resolveStatefulSetName` PVC + STS fallback to `{name}` |
+| 13. Retention policy artifact cleanup | `cleanupOldBackups` Job + `buildRetentionScript`; cloud delegated to bucket lifecycle rules |
+| 14. Backup stats from Job completion | `updateBackupStats` reads `job.Status.{StartTime,CompletionTime}` |
+| 15. Tests + lint | `make test-unit` green; `make check-drift` green |
+
+## Why this archive
+
+The plan was a working document while implementation was active. Now that all tasks have shipped, it lives in `reports/` as a completion record rather than `docs/plans/` (which is reserved for unfinished work). The detailed task-by-task instructions below are preserved verbatim for historical reference and to document the design decisions that informed each fix.
+
+---
+
+## Original plan content
 
 **Goal:** Fix 24 identified correctness bugs and API design problems in the Neo4j backup/restore system so that backup and restore operations actually work end-to-end for both cluster and standalone deployments.
 
