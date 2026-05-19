@@ -85,7 +85,8 @@ kind: Neo4jPlugin
 | `name` | `string` | ✅ | Plugin name (e.g., "apoc", "graph-data-science") |
 | `version` | `string` | ✅ | Plugin version to install (must match Neo4j version compatibility) |
 | `enabled` | `boolean` | ❌ | Enable the plugin (default: `true`) |
-| `source` | [`PluginSource`](#pluginsource) | ❌ | Plugin source configuration (default: official repository) |
+| `installMode` | `string` | ❌ | `Managed` (default) — operator adds plugin to `NEO4J_PLUGINS`. `PreBaked` — operator only writes config; JAR must be in a custom image. See [Supply-chain](#supply-chain). |
+| `source` | [`PluginSource`](#pluginsource) | ❌ | Plugin source configuration (default: official repository). Ignored when `installMode: PreBaked`. |
 | `dependencies` | [`[]PluginDependency`](#plugindependency) | ❌ | Plugin dependencies (automatically resolved) |
 | `config` | `map[string]string` | ❌ | Plugin-specific configuration (becomes `NEO4J_*` env vars) |
 | `security` | [`PluginSecurity`](#pluginsecurity) | ❌ | Security settings and procedure restrictions |
@@ -98,7 +99,7 @@ kind: Neo4jPlugin
 | `type` | `string` | Source type: "official", "community", "custom", "url" |
 | `registry` | `PluginRegistry` | Registry configuration for custom sources |
 | `url` | `string` | Direct URL for "url" source type |
-| `checksum` | `string` | Checksum for URL sources (format: "sha256:hash") |
+| `checksum` | `string` | **Required** for `type: url` and `type: custom`. Must match `^(sha256:[a-f0-9]{64}\|sha512:[a-f0-9]{128})$`. SHA1 and MD5 are rejected. See [Supply-chain](#supply-chain). |
 | `authSecret` | `string` | Secret containing auth for private registries/URLs |
 
 ### PluginDependency
@@ -162,6 +163,60 @@ Plugin usage analytics.
 | `proceduresCalled` | `map[string]int64` | Count of procedure calls by name |
 | `lastUsed` | `*metav1.Time` | Last time plugin was used |
 | `usageFrequency` | `string` | Usage frequency classification |
+
+## Supply-chain
+
+The Neo4j Enterprise Docker entrypoint resolves `NEO4J_PLUGINS` at pod
+startup. For **APOC core** that's deterministic — the JAR is bundled in
+the image and just gets copied to `/plugins/`. For **every other plugin**
+(`graph-data-science`, `bloom`, `genai`, `n10s`, `graphql`, `apoc-extended`)
+the entrypoint **downloads from the internet on every pod start**, which
+has three production consequences:
+
+- **Non-reproducibility** — a restart can pull a different artifact than
+  the one originally validated.
+- **Egress requirement** — air-gapped clusters cannot permit the
+  outbound HTTP.
+- **Supply-chain exposure** — every pod start is an unauthenticated fetch.
+
+The operator offers two postures.
+
+### `installMode: PreBaked` (recommended for production)
+
+Build a custom Neo4j image with the plugin JAR copied into `/plugins/`
+(or `/var/lib/neo4j/plugins/`), reference that image from
+`spec.image.repo`/`tag` on the cluster or standalone CR, and set
+`installMode: PreBaked` on the `Neo4jPlugin`. The operator does **not**
+touch `NEO4J_PLUGINS` — no runtime fetch happens — but still writes the
+plugin's required configuration (security allowlists, unrestricted
+procedures, ConfigMap entries for standalone). You get the declarative
+CRD UX and a pinned, signed, scannable artifact.
+
+```dockerfile
+FROM neo4j:2025.01.0-enterprise
+COPY graph-data-science-2.13.0.jar /var/lib/neo4j/plugins/
+```
+
+### `installMode: Managed` with a checksum (when you must download)
+
+When the JAR must be fetched at runtime, the validator requires a
+`source.checksum` for any `source.type: url` or `source.type: custom`.
+The checksum format is enforced:
+
+- `sha256:` followed by exactly 64 lowercase hex characters, **or**
+- `sha512:` followed by exactly 128 lowercase hex characters.
+
+SHA1, MD5, and unprefixed hex are rejected. SHA1/MD5 because they are
+not collision-resistant; unprefixed hex because verification tooling
+should never have to guess the algorithm.
+
+**Honest limitation**: the upstream Neo4j Docker entrypoint does **not**
+consume `source.checksum` at download time. The operator records the
+field for audit and exposes it on the StatefulSet, but enforcement at
+the moment of download requires either (a) pinning to PreBaked or (b)
+a future init-container verifier that re-hashes the JAR after the
+entrypoint has finished. Until that lands, treat `source.checksum` as
+attestation, not enforcement, and prefer PreBaked for production.
 
 ## Examples
 
