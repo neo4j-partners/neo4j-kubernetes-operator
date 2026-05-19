@@ -1,6 +1,30 @@
-# Observability & GitOps Improvements Implementation Plan
+# Observability & GitOps Improvements — Completion Report
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+**Date completed**: 2026-05-19
+**Original plan**: this file (formerly `docs/plans/2026-02-21-observability-gitops-improvements.md`).
+
+## Status
+
+**Done.** All five tasks implemented and on `main`. The accompanying PR also closes one remaining gap (image pull secrets on backup + restore Job pods) that this audit surfaced and that the plan's Task 5 did not explicitly cover.
+
+| Task | Where it landed |
+|---|---|
+| 1. Event reason constants (typed enum, replaces string literals) | `internal/controller/events.go` |
+| 2. Wire Prometheus metrics into controllers | `internal/controller/neo4jenterprisecluster_controller.go` (RecordReconcile, RecordClusterPhase, RecordClusterHealth, RecordClusterReplicas), `internal/controller/neo4jbackup_controller.go` (RecordBackup) |
+| 2 (continued). Split-brain counter metric | `internal/metrics/metrics.go:104` (`splitBrainDetectedTotal`) + call site in `neo4jenterprisecluster_controller.go:1438` |
+| 3. ArgoCD & Flux health checks | `docs/gitops/argocd-health-checks.yaml` + `docs/gitops/README.md` |
+| 4. Status condition constants (Ready type for Flux auto-detection) | `internal/controller/conditions.go` (`ConditionTypeReady`, `ConditionReasonReady`, `SetReadyCondition`) |
+| 5. imagePullSecrets on Neo4j StatefulSet | `internal/resources/cluster.go:1517` (cluster), `internal/controller/neo4jenterprisestandalone_controller.go:1037` (standalone) |
+| Bonus. Helm chart appVersion bump at release | `.github/workflows/release.yml:152-153` |
+| Bonus. imagePullSecrets on backup + restore Jobs | NEW — extracted `ImagePullSecretsFromNames` helper in `internal/resources/cluster.go`; backup Job, backup CronJob, restore Job now propagate `cluster.Spec.Image.PullSecrets`. Without this, private-registry clusters fail their backups/restores with `ImagePullBackOff` because the auxiliary Job pods can't pull the same Neo4j Enterprise image as the StatefulSet. |
+
+## Why this archive
+
+The plan was a working document while implementation was active. With every task landed, it lives in `reports/` as a completion record rather than `docs/plans/` (which is reserved for unfinished work). The detailed task-by-task content is preserved verbatim below for historical reference and to document the per-task design decisions.
+
+---
+
+## Original plan content
 
 **Goal:** Wire up structured Kubernetes Events, activate existing Prometheus metrics, add ArgoCD/Flux health checks, standardize status conditions, and fix image pull secret and Helm chart versioning gaps.
 

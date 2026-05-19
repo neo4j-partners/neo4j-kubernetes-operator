@@ -366,6 +366,13 @@ func (r *Neo4jBackupReconciler) createBackupJob(ctx context.Context, backup *neo
 					RestartPolicy:      corev1.RestartPolicyNever,
 					ServiceAccountName: backupServiceAccountName,
 					SecurityContext:    resources.DefaultNeo4jPodSecurityContext(),
+					// Propagate the cluster's image pull secrets so backup
+					// pods can pull the SAME Neo4j Enterprise image from
+					// private registries — without this, a cluster running
+					// fine on a private image fails its backups with
+					// ImagePullBackOff because the backup namespace's default
+					// SA has no creds.
+					ImagePullSecrets: resources.ImagePullSecretsFromNames(cluster.Spec.Image.PullSecrets),
 					Containers: []corev1.Container{
 						{
 							Name:            "backup",
@@ -425,6 +432,10 @@ func (r *Neo4jBackupReconciler) createBackupCronJob(ctx context.Context, backup 
 						RestartPolicy:      corev1.RestartPolicyNever,
 						ServiceAccountName: backupServiceAccountName,
 						SecurityContext:    resources.DefaultNeo4jPodSecurityContext(),
+						// Same rationale as createBackupJob — scheduled
+						// backups need the same pull secrets as the cluster
+						// they're backing up.
+						ImagePullSecrets: resources.ImagePullSecretsFromNames(cluster.Spec.Image.PullSecrets),
 						Containers: []corev1.Container{
 							{
 								Name:            "backup",

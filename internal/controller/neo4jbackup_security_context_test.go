@@ -141,3 +141,69 @@ func TestBackupCronJobHasHardenedSecurityContext(t *testing.T) {
 	require.NoError(t, r.Client.Get(context.Background(), types.NamespacedName{Name: cron.Name, Namespace: ns}, got))
 	assertHardenedPodSecurityContext(t, &got.Spec.JobTemplate.Spec.Template.Spec)
 }
+
+// TestBackupJobPropagatesImagePullSecrets locks in the contract that a
+// backup Job inherits the cluster's image pull secrets. Without this,
+// private-registry clusters fail their backups with ImagePullBackOff
+// because the backup pod can't pull the same Neo4j Enterprise image
+// the cluster uses.
+func TestBackupJobPropagatesImagePullSecrets(t *testing.T) {
+	const ns = "default"
+	const clusterName = "test-cluster"
+	cluster := minimalClusterForBackup(clusterName, ns)
+	cluster.Spec.Image.PullSecrets = []string{"ghcr-creds", "internal-mirror"}
+
+	backup := &neo4jv1beta1.Neo4jBackup{
+		ObjectMeta: metav1.ObjectMeta{Name: "b1", Namespace: ns},
+		Spec: neo4jv1beta1.Neo4jBackupSpec{
+			Target: neo4jv1beta1.BackupTarget{Kind: "Cluster", Name: clusterName},
+		},
+	}
+	r := newBackupTestReconciler(t, cluster, backup)
+	require.NoError(t, r.Client.Create(context.Background(), &corev1.ServiceAccount{
+		ObjectMeta: metav1.ObjectMeta{Name: backupServiceAccountName, Namespace: ns},
+	}))
+
+	job, err := r.createBackupJob(context.Background(), backup, cluster)
+	require.NoError(t, err)
+	got := &batchv1.Job{}
+	require.NoError(t, r.Client.Get(context.Background(), types.NamespacedName{Name: job.Name, Namespace: ns}, got))
+
+	want := []corev1.LocalObjectReference{
+		{Name: "ghcr-creds"},
+		{Name: "internal-mirror"},
+	}
+	assert.Equal(t, want, got.Spec.Template.Spec.ImagePullSecrets,
+		"backup Job must carry the cluster's image pull secrets")
+}
+
+// TestBackupCronJobPropagatesImagePullSecrets — same contract on the
+// scheduled-backup path.
+func TestBackupCronJobPropagatesImagePullSecrets(t *testing.T) {
+	const ns = "default"
+	const clusterName = "test-cluster"
+	cluster := minimalClusterForBackup(clusterName, ns)
+	cluster.Spec.Image.PullSecrets = []string{"ghcr-creds"}
+
+	backup := &neo4jv1beta1.Neo4jBackup{
+		ObjectMeta: metav1.ObjectMeta{Name: "b1", Namespace: ns},
+		Spec: neo4jv1beta1.Neo4jBackupSpec{
+			Target:   neo4jv1beta1.BackupTarget{Kind: "Cluster", Name: clusterName},
+			Schedule: "0 2 * * *",
+		},
+	}
+	r := newBackupTestReconciler(t, cluster, backup)
+	require.NoError(t, r.Client.Create(context.Background(), &corev1.ServiceAccount{
+		ObjectMeta: metav1.ObjectMeta{Name: backupServiceAccountName, Namespace: ns},
+	}))
+
+	cron, err := r.createBackupCronJob(context.Background(), backup, cluster)
+	require.NoError(t, err)
+	got := &batchv1.CronJob{}
+	require.NoError(t, r.Client.Get(context.Background(), types.NamespacedName{Name: cron.Name, Namespace: ns}, got))
+
+	assert.Equal(t,
+		[]corev1.LocalObjectReference{{Name: "ghcr-creds"}},
+		got.Spec.JobTemplate.Spec.Template.Spec.ImagePullSecrets,
+		"backup CronJob must carry the cluster's image pull secrets")
+}
