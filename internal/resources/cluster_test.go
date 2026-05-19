@@ -979,18 +979,19 @@ func TestBuildBackupFromAddresses(t *testing.T) {
 	assert.Equal(t, expected, addrs)
 }
 
-func TestBuildBackupFromAddressesStandaloneEquivalent(t *testing.T) {
-	cluster := &neo4jv1beta1.Neo4jEnterpriseCluster{
-		ObjectMeta: metav1.ObjectMeta{Name: "my-cluster", Namespace: "ops"},
-		Spec: neo4jv1beta1.Neo4jEnterpriseClusterSpec{
-			Image:    neo4jv1beta1.ImageSpec{Repo: "neo4j", Tag: "5.26-enterprise"},
-			Topology: neo4jv1beta1.TopologyConfiguration{Servers: 1},
-			Storage:  neo4jv1beta1.StorageSpec{ClassName: "standard", Size: "10Gi"},
-		},
+// TestBuildStandaloneBackupFromAddress locks in the standalone-specific
+// FQDN: {name}-0.{name}-headless.<ns>.svc.cluster.local:6362. The
+// previous version of this test asserted the cluster-shape FQDN against
+// a single-replica cluster and labelled it "standalone equivalent" —
+// that was the bug. Standalone pod naming is {name}-0 (not
+// {name}-server-0); the resolution depends on the {name}-headless
+// Service created by reconcileService on the standalone controller.
+func TestBuildStandaloneBackupFromAddress(t *testing.T) {
+	standalone := &neo4jv1beta1.Neo4jEnterpriseStandalone{
+		ObjectMeta: metav1.ObjectMeta{Name: "my-standalone", Namespace: "ops"},
 	}
-
-	addrs := resources.BuildBackupFromAddresses(cluster)
-	assert.Equal(t, "my-cluster-server-0.my-cluster-headless.ops.svc.cluster.local:6362", addrs)
+	addr := resources.BuildStandaloneBackupFromAddress(standalone)
+	assert.Equal(t, "my-standalone-0.my-standalone-headless.ops.svc.cluster.local:6362", addr)
 }
 
 func TestBuildBackupStatefulSet_Structure(t *testing.T) {

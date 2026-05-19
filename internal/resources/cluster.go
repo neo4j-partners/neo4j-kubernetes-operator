@@ -173,6 +173,10 @@ func BuildServerStatefulSetsForEnterprise(cluster *neo4jv1beta1.Neo4jEnterpriseC
 // BuildBackupFromAddresses returns a comma-separated list of
 // "pod-fqdn:6362" addresses for all server pods in the cluster.
 // These are used as the --from flag of neo4j-admin database backup.
+//
+// Cluster pods are named {cluster}-server-N (the cluster StatefulSet is
+// named {cluster}-server). Use BuildStandaloneBackupFromAddress for
+// standalone targets — their pod naming is different.
 func BuildBackupFromAddresses(cluster *neo4jv1beta1.Neo4jEnterpriseCluster) string {
 	servers := int(cluster.Spec.Topology.Servers)
 	addrs := make([]string, servers)
@@ -181,6 +185,19 @@ func BuildBackupFromAddresses(cluster *neo4jv1beta1.Neo4jEnterpriseCluster) stri
 			cluster.Name, i, cluster.Name, cluster.Namespace, BackupPort)
 	}
 	return strings.Join(addrs, ",")
+}
+
+// BuildStandaloneBackupFromAddress returns the single "pod-fqdn:6362"
+// address for a standalone's pod, used as the --from flag of
+// neo4j-admin database backup.
+//
+// Standalone pods are named {standalone}-0 (the standalone StatefulSet
+// is named {standalone}, single replica). Resolution requires the
+// headless Service {standalone}-headless to exist — that's what
+// reconcileService creates on the standalone controller side.
+func BuildStandaloneBackupFromAddress(standalone *neo4jv1beta1.Neo4jEnterpriseStandalone) string {
+	return fmt.Sprintf("%s-0.%s-headless.%s.svc.cluster.local:%d",
+		standalone.Name, standalone.Name, standalone.Namespace, BackupPort)
 }
 
 // BuildBackupStatefulSet creates a single, centralized backup StatefulSet for the cluster
