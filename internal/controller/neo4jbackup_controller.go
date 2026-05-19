@@ -341,7 +341,7 @@ func (r *Neo4jBackupReconciler) createBackupJob(ctx context.Context, backup *neo
 	jobName := backup.Name + "-backup"
 	logger := log.FromContext(ctx)
 
-	backupCmd, err := r.buildBackupCommand(backup, cluster)
+	backupCmd, err := r.buildBackupCommand(ctx, backup, cluster)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build backup command: %w", err)
 	}
@@ -395,7 +395,7 @@ func (r *Neo4jBackupReconciler) createBackupJob(ctx context.Context, backup *neo
 func (r *Neo4jBackupReconciler) createBackupCronJob(ctx context.Context, backup *neo4jv1beta1.Neo4jBackup, cluster *neo4jv1beta1.Neo4jEnterpriseCluster) (*batchv1.CronJob, error) {
 	cronJobName := backup.Name + "-backup-cron"
 
-	backupCmd, err := r.buildBackupCommand(backup, cluster)
+	backupCmd, err := r.buildBackupCommand(ctx, backup, cluster)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build backup command: %w", err)
 	}
@@ -449,10 +449,19 @@ func (r *Neo4jBackupReconciler) createBackupCronJob(ctx context.Context, backup 
 	return cronJob, nil
 }
 
-func (r *Neo4jBackupReconciler) buildBackupCommand(backup *neo4jv1beta1.Neo4jBackup, cluster *neo4jv1beta1.Neo4jEnterpriseCluster) (string, error) {
+func (r *Neo4jBackupReconciler) buildBackupCommand(ctx context.Context, backup *neo4jv1beta1.Neo4jBackup, cluster *neo4jv1beta1.Neo4jEnterpriseCluster) (string, error) {
 	imageTag := fmt.Sprintf("%s:%s", cluster.Spec.Image.Repo, cluster.Spec.Image.Tag)
 	version, err := neo4j.GetImageVersion(imageTag)
 	if err != nil {
+		// Silent fallback used to mask exotic / misconfigured image tags —
+		// version-gated flags (--parallel-download, --prefer-diff-as-parent,
+		// --remote-address-resolution) would then silently degrade to the
+		// 5.26 defaults with no signal to the operator. Log the fallback so
+		// the diagnostic is visible without forcing the backup to fail.
+		log.FromContext(ctx).Info("Failed to parse Neo4j image version, falling back to 5.26.0 defaults",
+			"imageTag", imageTag,
+			"error", err.Error(),
+			"clusterName", cluster.Name)
 		version = &neo4j.Version{Major: 5, Minor: 26, Patch: 0}
 	}
 
@@ -873,9 +882,16 @@ echo "Found $FILE_COUNT backup directories"
 if [ "$FILE_COUNT" -gt "$MAX_COUNT" ]; then
     TO_DELETE=$((FILE_COUNT - MAX_COUNT))
     echo "Deleting $TO_DELETE oldest backups (keeping $MAX_COUNT)"
-    find "$BACKUP_DIR" -maxdepth 1 -mindepth 1 -type d | \
-        sort | \
+    # Sort by filesystem mtime, not by directory name. The directory name
+    # happens to encode a YYYYMMDD-HHMMSS timestamp today, but coupling
+    # retention's "oldest first" semantics to that naming convention is
+    # fragile — anyone who renames the timestamp format silently breaks
+    # retention. GNU find's -printf is available because the backup
+    # container is Linux-only.
+    find "$BACKUP_DIR" -maxdepth 1 -mindepth 1 -type d -printf '%%T@ %%p\n' | \
+        sort -n | \
         head -n "$TO_DELETE" | \
+        cut -d' ' -f2- | \
         xargs -r rm -rf
     echo "Deleted $TO_DELETE old backup directories"
 fi

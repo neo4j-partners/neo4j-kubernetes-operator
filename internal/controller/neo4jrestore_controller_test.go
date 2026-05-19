@@ -113,10 +113,7 @@ var _ = Describe("Neo4jRestore Controller", func() {
 				"NEO4J_AUTH": []byte("neo4j/testpassword123"),
 			},
 		}
-		err := k8sClient.Create(ctx, secret)
-		if err != nil && !errors.IsAlreadyExists(err) {
-			Expect(err).NotTo(HaveOccurred())
-		}
+		Expect(k8sClient.Create(ctx, secret)).Should(Succeed())
 
 		// Patch cluster status to Ready so restore controller proceeds
 		patch := client.MergeFrom(cluster.DeepCopy())
@@ -183,18 +180,22 @@ var _ = Describe("Neo4jRestore Controller", func() {
 		// Clean up resources. Cleanup-warning output goes through GinkgoWriter
 		// so Ginkgo can attribute it to the spec that produced it (and respect
 		// verbosity flags) — fmt.Printf to stdout would be unattributed noise.
+		//
+		// NotFound is filtered out so finalizer cascades and tests that
+		// delete-as-they-go don't produce noise on already-gone resources.
+		// Matches the sibling pattern in neo4jbackup_controller_test.go.
 		if restore != nil {
-			if err := k8sClient.Delete(ctx, restore, client.PropagationPolicy(metav1.DeletePropagationForeground)); err != nil {
+			if err := k8sClient.Delete(ctx, restore, client.PropagationPolicy(metav1.DeletePropagationForeground)); err != nil && !errors.IsNotFound(err) {
 				fmt.Fprintf(GinkgoWriter, "Warning: Failed to delete restore during cleanup: %v\n", err)
 			}
 		}
 		if backup != nil {
-			if err := k8sClient.Delete(ctx, backup, client.PropagationPolicy(metav1.DeletePropagationForeground)); err != nil {
+			if err := k8sClient.Delete(ctx, backup, client.PropagationPolicy(metav1.DeletePropagationForeground)); err != nil && !errors.IsNotFound(err) {
 				fmt.Fprintf(GinkgoWriter, "Warning: Failed to delete backup during cleanup: %v\n", err)
 			}
 		}
 		if cluster != nil {
-			if err := k8sClient.Delete(ctx, cluster, client.PropagationPolicy(metav1.DeletePropagationForeground)); err != nil {
+			if err := k8sClient.Delete(ctx, cluster, client.PropagationPolicy(metav1.DeletePropagationForeground)); err != nil && !errors.IsNotFound(err) {
 				fmt.Fprintf(GinkgoWriter, "Warning: Failed to delete cluster during cleanup: %v\n", err)
 			}
 		}
@@ -205,7 +206,7 @@ var _ = Describe("Neo4jRestore Controller", func() {
 				Namespace: namespaceName,
 			},
 		}
-		if err := k8sClient.Delete(ctx, secret); err != nil {
+		if err := k8sClient.Delete(ctx, secret); err != nil && !errors.IsNotFound(err) {
 			fmt.Fprintf(GinkgoWriter, "Warning: Failed to delete admin secret during cleanup: %v\n", err)
 		}
 	})

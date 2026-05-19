@@ -75,9 +75,13 @@ func TestReconcileMetrics_StartReconcileSpan(t *testing.T) {
 
 	require.NotNil(t, newCtx)
 	require.NotNil(t, span)
-
-	// Verify span exists (may not be recording in test environment without tracer setup)
-	assert.NotNil(t, span)
+	// Verify the returned context actually carries the same span — this is
+	// the contract callers rely on (downstream code reads the active span
+	// from ctx, not from the explicit span return). Works against the
+	// global noop tracer too because tracer.Start always puts the
+	// returned span into the returned context via WithValue.
+	require.Equal(t, span, trace.SpanFromContext(newCtx),
+		"newCtx must carry the returned span")
 
 	// Clean up
 	span.End()
@@ -619,9 +623,10 @@ func TestSpanTracing(t *testing.T) {
 
 			require.NotNil(t, newCtx)
 			require.NotNil(t, span)
-
-			// Verify span exists (may not be recording in test environment without tracer setup)
-			assert.NotNil(t, span)
+			// Same rationale as TestReconcileMetrics_StartReconcileSpan:
+			// verify the returned context actually carries the same span.
+			require.Equal(t, span, trace.SpanFromContext(newCtx),
+				"newCtx must carry the returned span")
 
 			// Clean up
 			span.End()
