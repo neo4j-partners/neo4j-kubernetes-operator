@@ -1573,6 +1573,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#conformance-policies-kyverno" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conformance Policies (Kyverno)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#security-best-practices-checklist" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3820,6 +3831,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#conformance-policies-kyverno" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conformance Policies (Kyverno)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#security-best-practices-checklist" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5104,6 +5126,16 @@ deployments that don't actually use the integration.</p>
 <blockquote>
 <p><strong>Why TLS 1.3 over TLS 1.2.</strong> PCI DSS v4.0 mandates a TLS 1.2 minimum but expects active migration toward TLS 1.3. Several adjacent regimes also discourage TLS 1.2 for new builds — FIPS-140-3 module validations and NIST SP 800-52r2 guidance both recommend TLS 1.3 as the baseline (the latter as guidance, not a strict prohibition). If every client in your environment supports TLS 1.3, drop <code>TLSv1.2</code> from the <code>tls_versions</code> list — the commented-out TLS 1.3-only target-state lines in the example above show the resulting hardened form.</p>
 </blockquote>
+<h2 id="conformance-policies-kyverno">Conformance Policies (Kyverno)<a class="headerlink" href="#conformance-policies-kyverno" title="Anchor link to this section">&para;</a></h2>
+<p>A starter pack of <a href="https://kyverno.io/">Kyverno</a> ClusterPolicies that
+audit Neo4j CRs against this operator's recommended production posture
+(enterprise image, TLS enabled, monitoring on, no <code>runAsNonRoot=false</code>
+override, explicit resource limits) is included at
+<a href="../../examples/security/policies/"><code>examples/security/policies/</code></a>.
+All policies ship in <code>Audit</code> mode and match only user-facing CRs, so
+they never block operator reconciliation. See the directory's README
+for install, the Audit → Enforce migration path, and the list of
+bundled example CRs that intentionally trip Audit warnings.</p>
 <h2 id="security-best-practices-checklist">Security Best Practices Checklist<a class="headerlink" href="#security-best-practices-checklist" title="Anchor link to this section">&para;</a></h2>
 <h3 id="deployment-security">Deployment Security<a class="headerlink" href="#deployment-security" title="Anchor link to this section">&para;</a></h3>
 <ul class="task-list">
