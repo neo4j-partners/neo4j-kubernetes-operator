@@ -57,9 +57,10 @@ esac
 
 # ── Display functions ──────────────────────────────────────────────────────
 
-# Full-width separator
+# Full-width separator. Bash brace expansion avoids the per-call subshell
+# + seq fork — the script is #!/bin/bash so {1..N} is portable here.
 separator() {
-    echo -e "${DIM}$(printf '━%.0s' $(seq 1 78))${NC}"
+    echo -e "${DIM}$(printf '━%.0s' {1..78})${NC}"
 }
 
 # Part header with step counter and emoji
@@ -79,11 +80,17 @@ log_header() {
     SECTION_START_TIME=$(date +%s)
 }
 
-# Section header within a part
+# Section header within a part. Brace expansion can't be used here
+# ({1..${#1}} doesn't work — Bash expands braces before variables), so
+# build an N-space pad with `%*s` and substitute spaces for the dash
+# character. Still subshell-free, unlike the prior $(seq ...) call.
 log_section() {
+    local underline
+    printf -v underline '%*s' "${#1}" ''
+    underline=${underline// /─}
     echo
     echo -e "  ${YELLOW}${BOLD}▸ $1${NC}"
-    echo -e "  ${DIM}$(printf '─%.0s' $(seq 1 ${#1}))${NC}"
+    echo -e "  ${DIM}${underline}${NC}"
 }
 
 log_info() {
@@ -1090,7 +1097,7 @@ EOF
     local timeout=120
     local elapsed=0
 
-    while [ $elapsed -lt $timeout ]; do
+    while [[ $elapsed -lt $timeout ]]; do
         if kubectl get neo4jdatabase orders-database -n "${DEMO_NAMESPACE}" -o jsonpath='{.status.phase}' 2>/dev/null | grep -q "Ready"; then
             break
         fi
