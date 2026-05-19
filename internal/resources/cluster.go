@@ -1527,11 +1527,26 @@ func BuildPodSpecForEnterprise(cluster *neo4jv1beta1.Neo4jEnterpriseCluster, ser
 
 // clusterImagePullSecrets converts the cluster's image pull secret names to []corev1.LocalObjectReference.
 func clusterImagePullSecrets(cluster *neo4jv1beta1.Neo4jEnterpriseCluster) []corev1.LocalObjectReference {
-	if len(cluster.Spec.Image.PullSecrets) == 0 {
+	return ImagePullSecretsFromNames(cluster.Spec.Image.PullSecrets)
+}
+
+// ImagePullSecretsFromNames is the exported variant of the cluster/standalone
+// pull-secret accessor: given a slice of Secret names, return the
+// LocalObjectReference list that goes into a PodSpec's
+// ImagePullSecrets field. Returns nil for empty/all-blank input so the
+// caller can drop the field entirely on PodSpec.
+//
+// Lives at the resources/ layer so the backup, restore, plugin, and
+// other Job-spawning controllers can all pull the same shape without
+// reaching into typed cluster/standalone helpers. Empty strings are
+// skipped — they'd be invalid Secret names anyway and silently break
+// kubelet's image-pull resolution.
+func ImagePullSecretsFromNames(names []string) []corev1.LocalObjectReference {
+	if len(names) == 0 {
 		return nil
 	}
-	refs := make([]corev1.LocalObjectReference, 0, len(cluster.Spec.Image.PullSecrets))
-	for _, name := range cluster.Spec.Image.PullSecrets {
+	refs := make([]corev1.LocalObjectReference, 0, len(names))
+	for _, name := range names {
 		if name == "" {
 			continue
 		}

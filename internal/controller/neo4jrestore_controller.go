@@ -469,6 +469,11 @@ func (r *Neo4jRestoreReconciler) createRestoreJob(ctx context.Context, restore *
 				Spec: corev1.PodSpec{
 					RestartPolicy:   corev1.RestartPolicyNever,
 					SecurityContext: hardenedRestorePodSecurityContext(),
+					// Restore pod uses the cluster's Neo4j image; propagate
+					// pull secrets so private-registry clusters can restore.
+					// Without this, a private-image cluster restore fails
+					// with ImagePullBackOff before any neo4j-admin runs.
+					ImagePullSecrets: resources.ImagePullSecretsFromNames(cluster.Spec.Image.PullSecrets),
 					Containers: []corev1.Container{
 						{
 							Name:            "neo4j-restore",
