@@ -248,11 +248,9 @@ stringData:
 
 ### OIDC / SSO Integration
 
-> **Prerequisite (Neo4j 2026.x): OIDC endpoints must use HTTPS.** Configure TLS for your identity provider (or place it behind a TLS-terminating proxy) before enabling OIDC. Neo4j validates every OIDC URI at config-parse time; any `http://` value causes startup to fail with `Error evaluating value for setting … does not have required scheme 'https'`. There is no insecure-mode override.
+> **⚠️ Prerequisite (Neo4j 2026.x): OIDC endpoints must use HTTPS.** `wellKnownDiscoveryURI`, `authEndpoint`, `tokenEndpoint`, `jwksURI`, `userInfoURI`, and `issuer` are all validated at config-parse time; any `http://` value causes Neo4j to refuse to start with `Error evaluating value for setting … does not have required scheme 'https'`. There is no insecure-mode override. Configure TLS for your identity provider — or place it behind a TLS-terminating proxy — before enabling OIDC. Self-hosted IDPs that default to HTTP in dev need a TLS-terminating proxy (and the proxy's CA in [`spec.trustedCASecrets`](#jvm-truststore-for-internal-cas)) before the cluster can boot.
 
 The operator supports one or more OIDC providers via the `spec.auth.oidc` map. Each key becomes the provider name in Neo4j's config (`dbms.security.oidc.<name>.*`).
-
-> **⚠️ Neo4j 2026.x requires HTTPS for every OIDC URI.** `wellKnownDiscoveryURI`, `authEndpoint`, `tokenEndpoint`, `jwksURI`, `userInfoURI`, and `issuer` are all validated at config-parse time; an `http://` value causes Neo4j to refuse to start with `Error evaluating value for setting … does not have required scheme 'https'`. There is no insecure-mode override. Self-hosted IDPs that default to HTTP in dev need a TLS-terminating proxy (and the proxy's CA in [`spec.trustedCASecrets`](#jvm-truststore-for-internal-cas)) before the cluster can boot.
 
 #### OIDC and ABAC setup checklist
 

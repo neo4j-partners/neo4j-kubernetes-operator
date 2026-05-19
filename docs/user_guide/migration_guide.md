@@ -704,7 +704,7 @@ v1.6.0-alpha included breaking changes to the `v1alpha1` API to stabilize fields
 
 Example — before:
 ```yaml
-apiVersion: neo4j.neo4j.com/v1beta1
+apiVersion: neo4j.neo4j.com/v1alpha1
 kind: Neo4jRestore
 spec:
   targetCluster: my-cluster
@@ -716,7 +716,7 @@ spec:
 
 After:
 ```yaml
-apiVersion: neo4j.neo4j.com/v1beta1
+apiVersion: neo4j.neo4j.com/v1alpha1
 kind: Neo4jRestore
 spec:
   clusterRef: my-cluster
