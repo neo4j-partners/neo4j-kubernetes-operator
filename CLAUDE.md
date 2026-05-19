@@ -100,6 +100,7 @@ make install / make uninstall
 # Generators / packaging sync (see ## Generated artifacts below)
 make sync-all                # regenerate every artifact from sources
 make ship-prep               # sync-all + bundle + lint + CSV coverage; pre-release one-shot
+make bundle-release          # bundle + stamp real createdAt: timestamp (run from release workflow)
 make check-drift             # CI gate: fails if any generated file is out of sync
 
 # Operator logs/status
@@ -448,7 +449,7 @@ Two umbrella targets:
 - **`make ship-prep`** — `sync-all` + `bundle` + `helm-lint` + `check-csv-coverage`. Run before tagging a release.
 
 CI gate:
-- **`make check-drift`** — runs `sync-all` + `bundle`, then `git diff --exit-code` (ignoring the `createdAt:` timestamp the operator-sdk stamps). Fails if any committed file is stale. Use this in CI to enforce that whoever changes a source also commits the regenerated output.
+- **`make check-drift`** — runs `sync-all` + `bundle`, then `git diff --exit-code`. Fails if any committed file is stale. Use this in CI to enforce that whoever changes a source also commits the regenerated output. `make bundle` pins the CSV's `createdAt:` annotation to a stable placeholder so concurrent PRs don't conflict on the timestamp; the release flow stamps the real value via `make bundle-release` before publishing to OperatorHub.
 
 53. **Never hand-edit generated files**: edit the source listed above instead. Each generated file carries a `# This file is GENERATED. DO NOT EDIT.` header; check-drift will revert tampering.
 54. **`scripts/helm-sync-artifacthub-crds.sh` requires a description per CRD**: when adding a CRD, also add a `case "$kind" in ... esac` row to the script. The script exits non-zero if a CRD has no mapped description, so you can't forget.

@@ -6,7 +6,7 @@ metadata:
     capabilities: Full Lifecycle
     categories: Database
     containerImage: ghcr.io/priyolahiri/neo4j-kubernetes-operator:latest
-    createdAt: "2026-05-19T11:37:01Z"
+    createdAt: "2020-01-01T00:00:00Z"
     description: Automates Neo4j Enterprise graph database clusters and standalone
       instances on Kubernetes.
     operators.operatorframework.io/builder: operator-sdk-v1.39.1

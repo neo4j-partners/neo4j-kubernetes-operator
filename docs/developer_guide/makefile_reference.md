@@ -43,6 +43,7 @@ make deploy-dev           # Deploy to development namespace
 make sync-all             # Regenerate all artifacts (CRDs, RBAC, helm chart, kustomize lists)
 make ship-prep            # sync-all + bundle + helm lint + CSV coverage check
 make check-drift          # CI gate: fails if any generated file is stale
+make bundle-release       # Bundle + real createdAt: timestamp (release workflow only)
 make install-hooks        # One-time: install pre-commit hooks (runs check-drift before commit)
 ```
 
@@ -135,7 +136,12 @@ Chains: `manifests` → `generate` → `sync-kustomize` → `sync-editor-viewer-
 ### `make check-drift`
 **Description**: Regenerate every artifact and `git diff --exit-code` to fail if anything is stale. Used as a CI gate (`.github/workflows/ci.yml`).
 **Usage**: `make check-drift`
-**Notes**: ignores the `createdAt:` timestamp the operator-sdk stamps on every bundle build. If this target fails locally, run `make sync-all bundle` and commit the result. The same check runs as a `pre-commit` hook locally once you've run `make install-hooks` — see below.
+**Notes**: `make bundle` pins the CSV's `createdAt:` to a stable placeholder (see `PINNED_CREATED_AT` in the Makefile), so two consecutive runs produce byte-identical output and concurrent PRs no longer conflict on the timestamp. The `-I '^    createdAt:'` filter is kept as belt-and-braces in case someone bypasses `make bundle` and calls `operator-sdk generate bundle` directly. If `check-drift` fails locally, run `make sync-all bundle` and commit the result. The same check runs as a `pre-commit` hook locally once you've run `make install-hooks` — see below.
+
+### `make bundle-release`
+**Description**: Same as `make bundle`, but stamps the real current UTC timestamp into the CSV's `createdAt:` annotation (overriding the pinned placeholder). Run this from the release workflow before publishing to OperatorHub so the bundle ships with a meaningful `createdAt:` for end-user tooling.
+**Usage**: `make bundle-release`
+**Notes**: only run from release CI — local invocations leave a real timestamp in `bundle/` that will conflict with every other concurrent PR. If you run it by accident, `make bundle` resets it to the placeholder.
 
 ### `make install-hooks`
 **Description**: Install git pre-commit hooks (drift gate, fmt, lint, gitleaks, commitizen). Wraps `pre-commit install` and `pre-commit install --hook-type commit-msg`.

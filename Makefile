@@ -373,8 +373,11 @@ ship-prep: sync-all bundle helm-lint check-csv-coverage ## One-stop pre-release:
 .PHONY: check-drift
 check-drift: sync-all bundle ## CI gate: regenerate everything and fail if anything is out of date.
 	@echo "Verifying generated files are committed..."
-	@# operator-sdk stamps createdAt: on every bundle build, so ignore that
-	@# specific line (it's not real drift). Everything else must match HEAD.
+	@# createdAt: is pinned via PINNED_CREATED_AT in the bundle target, so it
+	@# no longer drifts on every regen. The -I filter below is kept as
+	@# belt-and-braces — if someone bypasses `make bundle` and calls
+	@# operator-sdk directly (which restamps with time.Now()), we still
+	@# tolerate the resulting createdAt: diff rather than failing CI.
 	@if ! git diff --exit-code --quiet -I'^    createdAt:' -- \
 	    config/crd config/rbac config/samples config/manifests \
 	    charts/neo4j-operator bundle; then \
@@ -625,6 +628,23 @@ endif
 # identical to what was validated.
 SKIP_MANIFESTS ?= false
 
+# PINNED_CREATED_AT is the placeholder value the dev/CI bundle target
+# writes into the CSV's createdAt: annotation. The real release timestamp
+# is stamped by `make bundle-release` (called from the release workflow,
+# not from local dev or check-drift).
+#
+# Rationale: operator-sdk re-stamps createdAt: with time.Now() on every
+# `generate bundle` invocation. Without pinning, every PR that touches a
+# generated artifact (CRD, RBAC, sample) gets a unique timestamp value,
+# producing spurious merge conflicts across concurrent PRs. Pinning kills
+# the conflict class entirely. See chore/pin-csv-created-at PR for the
+# full rationale and the failure modes considered.
+#
+# 2020-01-01 is old enough to be obviously a placeholder, recent enough
+# that operator-sdk bundle validate accepts it. Don't change the value
+# casually — anything stricter (1970, etc.) risks tripping validators.
+PINNED_CREATED_AT ?= 2020-01-01T00:00:00Z
+
 ifeq ($(SKIP_MANIFESTS),true)
 .PHONY: bundle
 bundle: kustomize operator-sdk ## Generate bundle manifests and metadata, then validate generated files.
@@ -640,9 +660,25 @@ endif
 	# named "<file>-e"). Use the portable form: pass the in-place flag without the
 	# backup extension and clean up any straggler from older runs.
 	sed -i.bak 's|containerImage: .*|containerImage: $(IMG)|' bundle/manifests/neo4j-kubernetes-operator.clusterserviceversion.yaml
+	# Pin createdAt: to a stable value so concurrent PRs don't conflict on the
+	# timestamp. Release stamps the real time via `make bundle-release`. We use
+	# sed (not yq) because `yq -i` reformats the entire YAML — collapsing
+	# folded scalars, reordering keys — and turns a 1-line timestamp diff into
+	# a thousand-line whole-file rewrite.
+	sed -i.bak 's|createdAt: ".*"|createdAt: "$(PINNED_CREATED_AT)"|' bundle/manifests/neo4j-kubernetes-operator.clusterserviceversion.yaml
 	rm -f bundle/manifests/neo4j-kubernetes-operator.clusterserviceversion.yaml.bak bundle/manifests/neo4j-kubernetes-operator.clusterserviceversion.yaml-e
 	go run ./scripts/update-alm-examples bundle/manifests/neo4j-kubernetes-operator.clusterserviceversion.yaml
 	$(OPERATOR_SDK) bundle validate ./bundle
+
+.PHONY: bundle-release
+bundle-release: bundle ## Pre-release: regenerate the bundle and stamp createdAt: with the real current timestamp. Use this in the release workflow before publishing to OperatorHub.
+	@now=$$(date -u +%Y-%m-%dT%H:%M:%SZ); \
+	echo "Stamping createdAt: $$now"; \
+	sed -i.bak "s|createdAt: \".*\"|createdAt: \"$$now\"|" bundle/manifests/neo4j-kubernetes-operator.clusterserviceversion.yaml; \
+	rm -f bundle/manifests/neo4j-kubernetes-operator.clusterserviceversion.yaml.bak bundle/manifests/neo4j-kubernetes-operator.clusterserviceversion.yaml-e; \
+	$(OPERATOR_SDK) bundle validate ./bundle
+	@echo ""
+	@echo "Release bundle ready. Commit the bundle/ change as part of the release tag."
 
 .PHONY: bundle-build
 bundle-build: ## Build the bundle image.
