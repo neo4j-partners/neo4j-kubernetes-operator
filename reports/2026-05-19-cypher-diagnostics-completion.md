@@ -1,6 +1,33 @@
-# Cypher Query Diagnostics (Operator-Side) Implementation Plan
+# Cypher Query Diagnostics (Operator-Side) — Completion Report
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+**Date completed**: 2026-05-19
+**Original plan**: this file (formerly `docs/plans/2026-02-21-cypher-query-diagnostics.md`).
+
+## Status
+
+**Done.** All eight tasks landed on `main`. The standalone deployment also gained a parallel `collectStandaloneDiagnostics` flow that the plan didn't anticipate but the operator naturally needed.
+
+| Task | Where it landed |
+|---|---|
+| 1. Diagnostic status types (`ClusterDiagnosticsStatus`, `ServerDiagnostic`, `DatabaseDiagnostic`) | `api/v1beta1/neo4jenterprisecluster_types.go:812,834,837` |
+| 2. Condition constants (`ConditionTypeServersHealthy`, `ConditionTypeDatabasesHealthy`, `ConditionReasonAllServersHealthy`) | `internal/controller/conditions.go:18,21,41` |
+| 3. `QueryMonitor.CollectDiagnostics(ctx, cluster, neo4jClient)` | `internal/controller/neo4jenterprisecluster_controller.go:1738` |
+| 4. Wired into cluster reconciler | `internal/controller/neo4jenterprisecluster_controller.go:443` (called when monitoring enabled + phase=Ready) |
+| 5. Unit tests | `internal/controller/diagnostics_test.go` — 10+ tests on `UpdateServersCondition` / `UpdateDatabasesCondition` (the helpers `CollectDiagnostics` delegates to) |
+| 6. Prometheus metrics | `internal/metrics/metrics.go:657` (`server_health` gauge), `:768` (`RecordServerHealth`) |
+| 7. Docs | `docs/user_guide/guides/monitoring.md`, `configuration.md`, `migration_guide.md`, `developer_guide/architecture.md` all reference `status.diagnostics` + the new conditions |
+| 8. Final verification | `make test-unit` green |
+| Bonus | Standalone equivalent `collectStandaloneDiagnostics` at `internal/controller/neo4jenterprisestandalone_controller.go:1152` — parallel SHOW DATABASES flow + DatabasesHealthy condition. Same non-fatal semantics as the cluster path. |
+
+CLAUDE.md rules #21 (CollectDiagnostics is non-fatal) and #22 (use SetNamedCondition for ServersHealthy/DatabasesHealthy; system DB excluded) lock in the invariants the implementation relies on.
+
+## Why this archive
+
+The plan was a working document while implementation was active. With every task landed, it lives in `reports/` as a completion record rather than `docs/plans/` (which is reserved for unfinished work). The detailed task-by-task content is preserved verbatim below for historical reference and to document the per-task design decisions.
+
+---
+
+## Original plan content
 
 **Goal:** Enhance the QueryMonitor to periodically run `SHOW SERVERS` and `SHOW DATABASES` against a Ready cluster and surface the results in `status.diagnostics`, `status.conditions`, and matching Prometheus metrics — eliminating the need for users to `exec` into pods to inspect cluster state.
 
