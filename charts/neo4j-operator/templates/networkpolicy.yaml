@@ -13,12 +13,55 @@ spec:
   policyTypes:
     - Ingress
     - Egress
-  {{- with .Values.networkPolicy.ingress }}
   ingress:
-    {{- toYaml . | nindent 4 }}
-  {{- end }}
-  {{- with .Values.networkPolicy.egress }}
+    {{- if .Values.networkPolicy.ingress }}
+    {{- toYaml .Values.networkPolicy.ingress | nindent 4 }}
+    {{- else }}
+    # Default ingress: allow Prometheus to scrape the metrics endpoint
+    # and the health endpoint from anywhere in-cluster. Without these,
+    # the metrics ServiceMonitor and the Kubernetes probe controller
+    # both break. Restrict by setting networkPolicy.ingress explicitly.
+    - from:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 8081     # /healthz, /readyz
+        {{- if .Values.metrics.enabled }}
+        - protocol: TCP
+          port: {{ .Values.metrics.service.port }}
+        {{- end }}
+        {{- if .Values.webhook.enabled }}
+        - protocol: TCP
+          port: {{ .Values.webhook.port }}
+        {{- end }}
+    {{- end }}
   egress:
-    {{- toYaml . | nindent 4 }}
-  {{- end }}
+    {{- if .Values.networkPolicy.egress }}
+    {{- toYaml .Values.networkPolicy.egress | nindent 4 }}
+    {{- else }}
+    # Default egress: allow DNS + reach to the K8s API server +
+    # reach to Neo4j workload pods on Bolt for reconciliation
+    # (CREATE DATABASE, GRANT, etc.). Without DNS, every controller
+    # client connection fails. Without Bolt egress, the operator
+    # can't talk to the clusters it manages.
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53     # DNS
+        - protocol: TCP
+          port: 53
+        - protocol: TCP
+          port: 443    # K8s API server
+        - protocol: TCP
+          port: 6443
+        - protocol: TCP
+          port: 7687   # Bolt (plaintext)
+        - protocol: TCP
+          port: 7473   # HTTPS (cert-manager hooks, etc.)
+        - protocol: TCP
+          port: 7474   # HTTP
+        - protocol: TCP
+          port: 6000   # Neo4j cluster discovery V2 (operator probes)
+    {{- end }}
 {{- end }}

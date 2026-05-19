@@ -127,7 +127,22 @@ webhook:
       name: ""
       kind: ""
 
-# Network Policy
+# NetworkPolicy for the operator pod itself.
+#
+# When networkPolicy.enabled=true and ingress/egress are left empty, the
+# chart ships sensible defaults:
+#   * Ingress: allow Prometheus scrape on the metrics + health ports
+#     from any pod in any namespace.
+#   * Egress: DNS (53), K8s API (443/6443), and Bolt (7687/7473/7474) +
+#     discovery (6000) to workload namespaces — required for the
+#     operator to reconcile clusters it manages.
+# Set ingress and/or egress explicitly to override the defaults.
+#
+# This policy covers the *operator* pod only. Neo4j workload pods live
+# in user namespaces; apply the per-cluster manifests in
+# examples/security/networkpolicy-{cluster,standalone}.yaml to protect
+# them. Operator-managed per-cluster NetworkPolicies are a planned
+# follow-up — see examples/security/README.md.
 networkPolicy:
   enabled: false
   ingress: []

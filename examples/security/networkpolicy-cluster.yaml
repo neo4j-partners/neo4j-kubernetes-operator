@@ -1,0 +1,122 @@
+# Example NetworkPolicy for a Neo4jEnterpriseCluster workload namespace.
+#
+# This is *not* deployed by the operator — apply it manually in any
+# namespace that hosts Neo4j cluster pods after you've created the
+# Neo4jEnterpriseCluster CR. It enforces:
+#
+#   * Clients in the same namespace may reach Bolt (7687/7473) and
+#     HTTP/HTTPS (7474/7473).
+#   * Server pods within the cluster may reach each other on the
+#     discovery (6000) and RAFT (7000) ports.
+#   * The operator namespace may scrape Neo4j metrics (2004).
+#   * cert-manager (if used) may reach the cluster on Bolt for
+#     ACME-style proofs.
+#   * Egress is allowed to DNS, the K8s API, and pod-to-pod within the
+#     cluster's StatefulSet — everything else is denied.
+#
+# Replace MY-CLUSTER with the value of spec.metadata.name on your
+# Neo4jEnterpriseCluster, and MY-NAMESPACE with the namespace it lives
+# in. The {cluster}-server StatefulSet labels its pods with
+# app.kubernetes.io/instance=<cluster-name> and
+# app.kubernetes.io/name=neo4j; that's what we select on.
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: neo4j-cluster-MY-CLUSTER
+  namespace: MY-NAMESPACE
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: neo4j
+      app.kubernetes.io/instance: MY-CLUSTER
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Bolt + HTTP + HTTPS from anywhere in the same namespace.
+    # Tighten this to a specific app's pod-selector if you can.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: MY-NAMESPACE
+      ports:
+        - protocol: TCP
+          port: 7687
+        - protocol: TCP
+          port: 7473
+        - protocol: TCP
+          port: 7474
+
+    # Intra-cluster discovery + RAFT. Both peers must be Neo4j server
+    # pods in the SAME cluster; the operator labels them identically.
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: neo4j
+              app.kubernetes.io/instance: MY-CLUSTER
+      ports:
+        - protocol: TCP
+          port: 6000   # discovery V2
+        - protocol: TCP
+          port: 7000   # RAFT
+
+    # Prometheus scrape from the operator namespace. Replace the
+    # selector with whatever namespace your Prometheus runs in.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: neo4j-operator
+      ports:
+        - protocol: TCP
+          port: 2004   # Neo4j metrics (when spec.monitoring.enabled=true)
+
+  egress:
+    # DNS — required for any K8s networking to function.
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+
+    # K8s API — used by Neo4j's discovery client.
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 6443
+
+    # Intra-cluster peer traffic (mirror of the ingress rule above).
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: neo4j
+              app.kubernetes.io/instance: MY-CLUSTER
+      ports:
+        - protocol: TCP
+          port: 6000
+        - protocol: TCP
+          port: 7000
+        - protocol: TCP
+          port: 7687
+        - protocol: TCP
+          port: 7473
+        - protocol: TCP
+          port: 7474
+
+    # Backup egress to cloud storage. Uncomment exactly one block.
+    # AWS S3:
+    # - to:
+    #     - ipBlock:
+    #         cidr: 0.0.0.0/0
+    #         except:
+    #           - 10.0.0.0/8
+    #           - 192.168.0.0/16
+    #           - 172.16.0.0/12
+    #   ports:
+    #     - protocol: TCP
+    #       port: 443
