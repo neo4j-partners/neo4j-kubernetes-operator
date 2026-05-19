@@ -967,6 +967,18 @@ spec:
 
 > **Why TLS 1.3 over TLS 1.2.** PCI DSS v4.0 mandates a TLS 1.2 minimum but expects active migration toward TLS 1.3. Several adjacent regimes also discourage TLS 1.2 for new builds — FIPS-140-3 module validations and NIST SP 800-52r2 guidance both recommend TLS 1.3 as the baseline (the latter as guidance, not a strict prohibition). If every client in your environment supports TLS 1.3, drop `TLSv1.2` from the `tls_versions` list — the commented-out TLS 1.3-only target-state lines in the example above show the resulting hardened form.
 
+## Conformance Policies (Kyverno)
+
+A starter pack of [Kyverno](https://kyverno.io/) ClusterPolicies that
+audit Neo4j CRs against this operator's recommended production posture
+(enterprise image, TLS enabled, monitoring on, no `runAsNonRoot=false`
+override, explicit resource limits) is included at
+[`examples/security/policies/`](../../examples/security/policies/).
+All policies ship in `Audit` mode and match only user-facing CRs, so
+they never block operator reconciliation. See the directory's README
+for install, the Audit → Enforce migration path, and the list of
+bundled example CRs that intentionally trip Audit warnings.
+
 ## Security Best Practices Checklist
 
 ### Deployment Security

@@ -1,0 +1,35 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: neo4j-enterprise-image-required
+  annotations:
+    policies.kyverno.io/title: Neo4j Enterprise image required
+    policies.kyverno.io/category: Neo4j Operator Conformance
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/subject: Neo4jEnterpriseCluster, Neo4jEnterpriseStandalone
+    policies.kyverno.io/description: >-
+      The Neo4j Operator only supports Neo4j Enterprise images. Community
+      images lack clustering, RBAC, and the procedures the operator depends on.
+      The operator's inline validator already rejects non-enterprise tags;
+      this policy is a defence-in-depth check that surfaces the issue at
+      admission time instead of inside a controller reconcile.
+spec:
+  validationFailureAction: Audit
+  background: true
+  rules:
+    - name: image-tag-must-be-enterprise
+      match:
+        any:
+          - resources:
+              kinds:
+                - neo4j.neo4j.com/v1beta1/Neo4jEnterpriseCluster
+                - neo4j.neo4j.com/v1beta1/Neo4jEnterpriseStandalone
+      validate:
+        message: >-
+          spec.image.tag must end with "-enterprise" (e.g. "5.26.0-enterprise"
+          or "2025.01.0-enterprise"). The Neo4j Operator does not support
+          Community Edition images.
+        pattern:
+          spec:
+            image:
+              tag: "*-enterprise"
