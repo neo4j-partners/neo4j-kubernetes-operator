@@ -57,7 +57,7 @@ cat > "$DST" <<EOF
 #   3. Run 'make helm-sync-rbac' (regenerates this file)
 #
 # CI's 'make check-drift' fails if these are out of sync.
-{{- if and .Values.rbac.create (eq (include "neo4j-operator.createClusterRole" .) "true") -}}
+{{ if and .Values.rbac.create (eq (include "neo4j-operator.createClusterRole" .) "true") -}}
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
