@@ -4232,12 +4232,9 @@
 </table>
 <h3 id="oidc-sso-integration">OIDC / SSO Integration<a class="headerlink" href="#oidc-sso-integration" title="Anchor link to this section">&para;</a></h3>
 <blockquote>
-<p><strong>Prerequisite (Neo4j 2026.x): OIDC endpoints must use HTTPS.</strong> Configure TLS for your identity provider (or place it behind a TLS-terminating proxy) before enabling OIDC. Neo4j validates every OIDC URI at config-parse time; any <code>http://</code> value causes startup to fail with <code>Error evaluating value for setting … does not have required scheme 'https'</code>. There is no insecure-mode override.</p>
+<p><strong>⚠️ Prerequisite (Neo4j 2026.x): OIDC endpoints must use HTTPS.</strong> <code>wellKnownDiscoveryURI</code>, <code>authEndpoint</code>, <code>tokenEndpoint</code>, <code>jwksURI</code>, <code>userInfoURI</code>, and <code>issuer</code> are all validated at config-parse time; any <code>http://</code> value causes Neo4j to refuse to start with <code>Error evaluating value for setting … does not have required scheme 'https'</code>. There is no insecure-mode override. Configure TLS for your identity provider — or place it behind a TLS-terminating proxy — before enabling OIDC. Self-hosted IDPs that default to HTTP in dev need a TLS-terminating proxy (and the proxy's CA in <a href="#jvm-truststore-for-internal-cas"><code>spec.trustedCASecrets</code></a>) before the cluster can boot.</p>
 </blockquote>
 <p>The operator supports one or more OIDC providers via the <code>spec.auth.oidc</code> map. Each key becomes the provider name in Neo4j's config (<code>dbms.security.oidc.&lt;name&gt;.*</code>).</p>
-<blockquote>
-<p><strong>⚠️ Neo4j 2026.x requires HTTPS for every OIDC URI.</strong> <code>wellKnownDiscoveryURI</code>, <code>authEndpoint</code>, <code>tokenEndpoint</code>, <code>jwksURI</code>, <code>userInfoURI</code>, and <code>issuer</code> are all validated at config-parse time; an <code>http://</code> value causes Neo4j to refuse to start with <code>Error evaluating value for setting … does not have required scheme 'https'</code>. There is no insecure-mode override. Self-hosted IDPs that default to HTTP in dev need a TLS-terminating proxy (and the proxy's CA in <a href="#jvm-truststore-for-internal-cas"><code>spec.trustedCASecrets</code></a>) before the cluster can boot.</p>
-</blockquote>
 <h4 id="oidc-and-abac-setup-checklist">OIDC and ABAC setup checklist<a class="headerlink" href="#oidc-and-abac-setup-checklist" title="Anchor link to this section">&para;</a></h4>
 <p>Wiring up an OIDC provider — especially when used as an ABAC authorization provider — requires <em>four</em> coordinated config touchpoints. Missing any one surfaces as a different error from Neo4j:</p>
 <table>
