@@ -128,6 +128,9 @@ Get container args based on configuration
 - --zap-log-level={{ .Values.logLevel }}
 {{- if .Values.metrics.enabled }}
 - --metrics-bind-address=:{{ .Values.metrics.service.port }}
+{{- if .Values.metrics.secure }}
+- --metrics-secure=true
+{{- end }}
 {{- else }}
 - --metrics-bind-address=0
 {{- end }}
