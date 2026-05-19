@@ -69,6 +69,33 @@ scrape_configs:
 
 Note: for standalone deployments, scrape `<standalone>-service.<namespace>.svc.cluster.local:2004` (the metrics port is added to the same Service that serves Bolt/HTTP).
 
+### Operator's own metrics (TokenReview-authenticated)
+
+The Neo4j *operator* exposes its own Prometheus metrics on port 8080 of the operator pod. As of v1.10 the operator's metrics endpoint defaults to **HTTPS with TokenReview-based authentication** (`metrics.secure=true` in the helm chart) — anonymous scrapes are rejected with 401/403. To scrape the operator's own metrics:
+
+1. Bind a ServiceAccount to the `metrics-reader` ClusterRole the operator ships:
+   ```bash
+   kubectl create clusterrolebinding prom-metrics-reader \
+       --clusterrole=metrics-reader \
+       --serviceaccount=monitoring:prometheus
+   ```
+2. On Kubernetes 1.24+, manually create a long-lived token Secret for that SA:
+   ```yaml
+   apiVersion: v1
+   kind: Secret
+   type: kubernetes.io/service-account-token
+   metadata:
+     name: prometheus-metrics-token
+     namespace: monitoring
+     annotations:
+       kubernetes.io/service-account.name: prometheus
+   ```
+3. Tell the operator's `ServiceMonitor` to use that token by setting `--set metrics.serviceMonitor.bearerTokenSecret.name=prometheus-metrics-token` at install time.
+
+The `ServiceMonitor` template wires `scheme: https`, `tlsConfig.insecureSkipVerify: true` (controller-runtime serves a self-signed cert by default; swap for a cert-manager bundle in production), and the bearer token reference automatically when `metrics.secure=true`.
+
+Set `metrics.secure=false` in helm values to revert to plain HTTP without authn — closes the door on the November 2025 security review #5 remediation, but is sometimes required for legacy scrapers that can't carry bearer tokens.
+
 ## Customizing metrics settings
 
 ### Metrics filter

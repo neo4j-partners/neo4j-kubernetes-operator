@@ -109,11 +109,27 @@ affinity: {}
 # Metrics configuration
 metrics:
   enabled: true
+  # When secure=true (default), the operator serves /metrics over HTTPS
+  # with controller-runtime's TokenReview-based authn + SubjectAccessReview
+  # authz against the `metrics-reader` ClusterRole. Scrapers (Prometheus,
+  # kubectl) must present a Bearer token whose ServiceAccount has the
+  # `metrics-reader` ClusterRole bound — without it the request is 401/403.
+  # Closes the November 2025 security review's #5 recommendation (front
+  # metrics with authn instead of plain HTTP).
+  #
+  # Set secure=false ONLY for legacy scrapers that can't do bearer auth.
+  # In that mode metrics are reachable to any pod with NetworkPolicy
+  # allowance and the operator's authz check is bypassed.
+  secure: true
   service:
     type: ClusterIP
     port: 8080
     annotations: {}
-  # ServiceMonitor for Prometheus Operator
+  # ServiceMonitor for Prometheus Operator. When metrics.secure=true the
+  # ServiceMonitor needs bearerTokenSecret + tlsConfig.insecureSkipVerify=true
+  # (or a properly-issued CA bundle); the template wires the bearer-token
+  # SA path automatically and exposes scheme/tls/bearerTokenSecret as
+  # values you can override.
   serviceMonitor:
     enabled: false
     namespace: ""
@@ -123,6 +139,15 @@ metrics:
     honorLabels: false
     relabelings: []
     metricRelabelings: []
+    # Bearer token Prometheus uses to authenticate to the operator's
+    # metrics endpoint. Defaults to the operator's own ServiceAccount
+    # token Secret — but Kubernetes 1.24+ doesn't auto-create those, so
+    # for newer clusters you need a manually-created Secret of type
+    # kubernetes.io/service-account-token referencing a SA bound to the
+    # `metrics-reader` ClusterRole. Set this to that Secret's name.
+    bearerTokenSecret:
+      name: ""
+      key: "token"
 
 # Leader election configuration
 leaderElection:

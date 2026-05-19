@@ -16,6 +16,21 @@ spec:
     interval: {{ .Values.metrics.serviceMonitor.interval }}
     scrapeTimeout: {{ .Values.metrics.serviceMonitor.scrapeTimeout }}
     honorLabels: {{ .Values.metrics.serviceMonitor.honorLabels }}
+    {{- if .Values.metrics.secure }}
+    # Secure metrics: controller-runtime serves /metrics over HTTPS with a
+    # self-signed cert by default, requiring a Bearer token whose SA has
+    # the `metrics-reader` ClusterRole bound. insecureSkipVerify=true
+    # accepts the self-signed cert; production setups should swap this
+    # for a cert-manager-issued CA bundle.
+    scheme: https
+    tlsConfig:
+      insecureSkipVerify: true
+    {{- with .Values.metrics.serviceMonitor.bearerTokenSecret.name }}
+    bearerTokenSecret:
+      name: {{ . }}
+      key: {{ $.Values.metrics.serviceMonitor.bearerTokenSecret.key | default "token" }}
+    {{- end }}
+    {{- end }}
     {{- with .Values.metrics.serviceMonitor.relabelings }}
     relabelings:
       {{- toYaml . | nindent 6 }}
