@@ -876,6 +876,115 @@ spec:
   vaultAuthRef: neo4j-vault-auth
 ```
 
+## Credential Rotation
+
+The operator does not have a one-click "rotate" button — credential rotation involves both a Kubernetes Secret update and a Neo4j-side state change, and the right sequence depends on what's being rotated. This section walks through each rotation path, what the operator does for you, and what you have to coordinate manually.
+
+### Admin credentials (the Neo4j root account)
+
+**What it is**: the `username`/`password` pair the operator uses to connect to Neo4j for `CREATE DATABASE`, `GRANT`, `SHOW SERVERS`, fleet registration, etc. Lives in a Secret referenced from `spec.auth.adminSecret` on the cluster / standalone CR. Default name: `neo4j-admin-secret`.
+
+**Why rotation is non-trivial**: Neo4j reads `NEO4J_AUTH` **only on first boot** to initialise the root account. Subsequent restarts ignore it; the password is stored in Neo4j's own auth file. So updating the Secret alone does **not** change the password — you'd just produce a mismatch between what's in Kubernetes and what's in Neo4j.
+
+The correct flow is two-step, in this order:
+
+1. **Change the password inside Neo4j** via `ALTER USER`:
+
+   ```bash
+   # Read the CURRENT password from the Secret
+   OLD_PASSWORD=$(kubectl get secret neo4j-admin-secret -n <namespace> \
+       -o jsonpath='{.data.password}' | base64 -d)
+
+   # Connect with the old password and rotate
+   NEW_PASSWORD='<choose a strong value>'
+   kubectl exec -n <namespace> <cluster>-server-0 -c neo4j -- \
+       cypher-shell -u neo4j -p "${OLD_PASSWORD}" \
+       "ALTER USER neo4j SET PASSWORD '${NEW_PASSWORD}'"
+   ```
+
+   For clusters, run this against any one server pod — `ALTER USER` propagates to the `system` database which replicates across the topology.
+
+2. **Update the Kubernetes Secret** so the operator's next reconcile (and any future pod restart) uses the new password:
+
+   ```bash
+   kubectl create secret generic neo4j-admin-secret \
+       --from-literal=username=neo4j \
+       --from-literal=password="${NEW_PASSWORD}" \
+       --namespace <namespace> \
+       --dry-run=client -o yaml | kubectl apply -f -
+   ```
+
+3. **Verify** by checking the operator's logs — the next reconcile should succeed against the new password:
+
+   ```bash
+   kubectl logs -n neo4j-operator-system deployment/neo4j-operator-controller-manager --tail=20 | grep -i auth
+   ```
+
+   If the operator logs `Neo.ClientError.Security.Unauthorized` after the rotation, the Secret was updated but `ALTER USER` didn't take — repeat step 1.
+
+**Rolling new pods first won't help**. Bringing up a new pod with the new Secret value does NOT re-initialise the password — the data PVC carries the existing auth file forward. `NEO4J_AUTH` is only honoured on a **fresh** data volume.
+
+**External Secrets Operator / Vault integration**: when the Secret is reconciled by an external store (ESO/Vault), step 2 happens automatically once you rotate the source. Step 1 still has to be done manually unless you build a downstream automation that watches the Secret and runs `ALTER USER`.
+
+### Aura Fleet Management token
+
+**What it is**: the API token in the Secret named by `spec.auraFleetManagement.tokenSecretRef.name` (default key `token`). Used once to call `fleetManagement.registerToken()` against the cluster.
+
+**Rotation flow**:
+
+1. Update the Secret with the new token.
+2. The operator's next reconcile detects the change via the SHA-256 fingerprint in `status.auraFleetManagement.tokenSecretHash` (analogous to `status.passwordSecretHash` on `Neo4jUser`).
+3. It calls `fleetManagement.registerToken($newToken)` against the cluster, replacing the old token.
+4. The fingerprint in `status` is updated; subsequent reconciles see no change and stay quiet.
+
+No `ALTER USER`-equivalent is needed — the registration is a single procedure call.
+
+### TLS certificate rotation
+
+**What it is**: the Secret named `{cluster}-tls-secret` (or the configured `spec.tls.certificateSecret`) that holds `tls.crt`, `tls.key`, and optionally `ca.crt`.
+
+**When using `spec.tls.mode: cert-manager`** (recommended): rotation is fully automatic. cert-manager issues a new Certificate when the existing one approaches expiry (`spec.duration` and `spec.renewBefore` on the `Certificate` resource). The new Secret content is picked up on the next pod restart — schedule a rolling restart yourself if your certificate renewal cadence is shorter than your pod lifetime:
+
+```bash
+kubectl rollout restart statefulset <cluster>-server -n <namespace>
+```
+
+**When using a manually-provisioned Secret**: replace the Secret contents and trigger a rolling restart. The operator does not watch arbitrary TLS Secrets for change.
+
+### Neo4jPlugin `source.authSecret` (VerifiedDownload mode)
+
+**What it is**: the bearer-token or header Secret named by `spec.source.authSecret` on a `Neo4jPlugin` CR with `installMode: VerifiedDownload`. Mounted into the init container at `/etc/plugin-auth`.
+
+**Rotation flow**: update the Secret. Init container reads the file at pod start, so the new value takes effect on the next pod restart (e.g. when you trigger a rolling restart by editing `spec.config` on the cluster CR). No coordination with Neo4j-side state needed — the token is consumed by curl, not by Neo4j.
+
+### Quick reference
+
+| Secret | Trigger pod restart? | Run Cypher? | Operator auto-detects? |
+|---|---|---|---|
+| `spec.auth.adminSecret` (cluster + standalone) | not required if you've run `ALTER USER`, but recommended for hygiene | **Yes** (`ALTER USER neo4j SET PASSWORD ...`) | No — needs explicit `ALTER USER` |
+| `spec.auraFleetManagement.tokenSecretRef` | No | No | **Yes** (token hash in status) |
+| `Neo4jUser.spec.passwordSecret` | No | No | **Yes** (`status.passwordSecretHash`) |
+| TLS Secret (cert-manager) | Yes (rolling restart on renewal) | No | cert-manager auto-renews |
+| `Neo4jPlugin.spec.source.authSecret` | Yes | No | No — picked up on next pod start |
+
+## Operator-labelled Secrets
+
+User-supplied Secrets (the admin Secret, Aura token Secret, plugin `authSecret`, manually-provisioned TLS Secrets) are **not** modified by the operator. The operator reads from them; it does not mutate their labels or annotations. If you want consistent inventory metadata across user-supplied Secrets, apply your own labels at creation time.
+
+The operator does propagate ownership metadata onto the Secrets it produces indirectly:
+
+| Secret | Where the labels come from | Labels stamped |
+|---|---|---|
+| `{cluster}-tls-secret` / `{standalone}-tls-secret` (cert-manager issued) | `CertificateSpec.SecretTemplate` on the operator-created `Certificate` CR | `app.kubernetes.io/managed-by=neo4j-operator`, `app.kubernetes.io/component=tls`, `neo4j.com/owner-kind=Neo4jEnterpriseCluster\|Standalone`, `neo4j.com/owner-name=<cr-name>` |
+| ExternalSecret-managed Secrets (when `spec.tls.externalSecrets.enabled=true` or `spec.auth.externalSecrets.enabled=true`) | The operator-created `ExternalSecret` resource itself carries `app.kubernetes.io/managed-by=neo4j-operator`; the issued target Secret inherits per the ExternalSecret's `target.template` (configure as needed via the external-secrets.io spec) | `app.kubernetes.io/managed-by=neo4j-operator` on the `ExternalSecret`, plus whatever your `target.template` adds to the issued Secret |
+
+Audit query example — list every TLS Secret the operator owns across the cluster:
+
+```bash
+kubectl get secrets -A -l app.kubernetes.io/managed-by=neo4j-operator,app.kubernetes.io/component=tls \
+    -o custom-columns='NAMESPACE:.metadata.namespace,NAME:.metadata.name,OWNER:.metadata.labels.neo4j\.com/owner-kind,OWNER-NAME:.metadata.labels.neo4j\.com/owner-name'
+```
+
 ## Security Monitoring and Auditing
 
 ### Audit Logging Configuration
