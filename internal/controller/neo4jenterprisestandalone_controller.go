@@ -1495,6 +1495,17 @@ func (r *Neo4jEnterpriseStandaloneReconciler) createTLSCertificate(standalone *n
 				Kind:  standalone.Spec.TLS.IssuerRef.Kind,
 				Group: standalone.Spec.TLS.IssuerRef.Group,
 			},
+			// SecretTemplate propagates ownership labels onto the TLS
+			// Secret cert-manager issues. Mirrors the cluster path's
+			// labelling — see internal/resources/cluster.go.
+			SecretTemplate: &certmanagerv1.CertificateSecretTemplate{
+				Labels: map[string]string{
+					"app.kubernetes.io/managed-by": "neo4j-operator",
+					"app.kubernetes.io/component":  "tls",
+					"neo4j.com/owner-kind":         "Neo4jEnterpriseStandalone",
+					"neo4j.com/owner-name":         standalone.Name,
+				},
+			},
 			DNSNames: []string{
 				fmt.Sprintf("%s-service", standalone.Name),
 				fmt.Sprintf("%s-service.%s", standalone.Name, standalone.Namespace),

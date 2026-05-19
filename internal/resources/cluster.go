@@ -625,6 +625,19 @@ func BuildCertificateForEnterprise(cluster *neo4jv1beta1.Neo4jEnterpriseCluster)
 		},
 		CommonName: fmt.Sprintf("%s-client.%s.svc.cluster.local", cluster.Name, cluster.Namespace),
 		DNSNames:   dnsNames,
+		// SecretTemplate propagates ownership labels onto the TLS Secret
+		// cert-manager issues. Without it the Secret has no operator-
+		// owned metadata and audit tooling can't tell which CR produced
+		// it. Per the November 2025 security review #6 recommendation
+		// to annotate Secrets for ownership + reconciliation scope.
+		SecretTemplate: &certv1.CertificateSecretTemplate{
+			Labels: map[string]string{
+				"app.kubernetes.io/managed-by": "neo4j-operator",
+				"app.kubernetes.io/component":  "tls",
+				"neo4j.com/owner-kind":         "Neo4jEnterpriseCluster",
+				"neo4j.com/owner-name":         cluster.Name,
+			},
+		},
 	}
 
 	// Add issuer group if specified
