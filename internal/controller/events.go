@@ -56,6 +56,13 @@ const (
 const (
 	EventReasonPluginInstalled     = "PluginInstalled"
 	EventReasonPluginInstallFailed = "PluginInstallFailed"
+	// EventReasonPluginDuplicate is emitted on a Neo4jPlugin when another
+	// CR in the same namespace targets the same clusterRef with the same
+	// spec.name. The reconciler refuses to install when this would cause
+	// two reconcilers to race on the same /plugins directory + the same
+	// NEO4J_PLUGINS env value; the older CR (by creationTimestamp) wins
+	// and the newer one is marked Failed.
+	EventReasonPluginDuplicate = "PluginDuplicate"
 )
 
 // Split-brain events

@@ -133,6 +133,68 @@ type Neo4jPluginReconciler struct {
 // PluginFinalizer is the finalizer for Neo4j plugin resources
 const PluginFinalizer = "neo4j.neo4j.com/plugin-finalizer"
 
+// checkForDuplicatePlugin lists every Neo4jPlugin in the same namespace
+// and returns the metadata.name of the CR that should "own" the
+// (clusterRef, plugin name) tuple — i.e. the one this controller will
+// actually reconcile. The newer duplicate is expected to drop itself
+// into Failed state and stop reconciling.
+//
+// Selection rules:
+//   - Candidates with a different clusterRef or a different plugin name
+//     are ignored.
+//   - Candidates currently being deleted (DeletionTimestamp != nil)
+//     are ignored — they're on their way out, no point handing them
+//     ownership.
+//   - Among the remaining candidates (including the plugin under
+//     reconciliation), the oldest CreationTimestamp wins; UID is the
+//     tiebreaker when timestamps collide (which is rare but possible
+//     in fast test loops).
+//
+// Returns the empty string if no other live CR contests the tuple —
+// the caller treats that the same as "this CR is the winner".
+func (r *Neo4jPluginReconciler) checkForDuplicatePlugin(
+	ctx context.Context,
+	plugin *neo4jv1beta1.Neo4jPlugin,
+) (string, error) {
+	list := &neo4jv1beta1.Neo4jPluginList{}
+	if err := r.List(ctx, list, client.InNamespace(plugin.Namespace)); err != nil {
+		return "", fmt.Errorf("failed to list Neo4jPlugin in namespace %q: %w", plugin.Namespace, err)
+	}
+
+	winner := plugin
+	contested := false
+	for i := range list.Items {
+		candidate := &list.Items[i]
+		if candidate.UID == plugin.UID {
+			continue
+		}
+		if candidate.Spec.ClusterRef != plugin.Spec.ClusterRef {
+			continue
+		}
+		if candidate.Spec.Name != plugin.Spec.Name {
+			continue
+		}
+		if candidate.DeletionTimestamp != nil {
+			continue
+		}
+		contested = true
+		// Older CreationTimestamp wins. If timestamps tie, lower UID
+		// wins — gives a deterministic ordering across replicas of
+		// the operator.
+		if candidate.CreationTimestamp.Before(&winner.CreationTimestamp) {
+			winner = candidate
+		} else if candidate.CreationTimestamp.Equal(&winner.CreationTimestamp) &&
+			string(candidate.UID) < string(winner.UID) {
+			winner = candidate
+		}
+	}
+
+	if !contested {
+		return "", nil
+	}
+	return winner.Name, nil
+}
+
 //+kubebuilder:rbac:groups=neo4j.neo4j.com,resources=neo4jplugins,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=neo4j.neo4j.com,resources=neo4jplugins/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=neo4j.neo4j.com,resources=neo4jplugins/finalizers,verbs=update
@@ -165,6 +227,32 @@ func (r *Neo4jPluginReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{Requeue: true}, nil
+	}
+
+	// Refuse to reconcile if another Neo4jPlugin CR already owns this
+	// (clusterRef, plugin name) tuple. Two reconcilers racing on the
+	// same /plugins directory + NEO4J_PLUGINS env var produces flapping
+	// state (one CR adds, the other removes, restart cycle). Validator
+	// can't catch this — it's structural-only, no cross-CR visibility.
+	// Resolved here at reconcile time with a deterministic "oldest
+	// wins" tiebreaker; newer duplicates surface the conflict via
+	// status + Event and stop reconciling. When the winner is deleted,
+	// the watch on Neo4jPlugin fires for the survivor — at which point
+	// the previously-failed duplicate becomes the new winner on its
+	// own next reconcile.
+	winner, dupErr := r.checkForDuplicatePlugin(ctx, plugin)
+	if dupErr != nil {
+		logger.Error(dupErr, "Failed to check for duplicate Neo4jPlugin CRs")
+		return ctrl.Result{}, dupErr
+	}
+	if winner != "" && winner != plugin.Name {
+		msg := fmt.Sprintf(
+			"duplicate Neo4jPlugin: %q (older) already targets cluster %q with plugin name %q; delete one CR before this one can reconcile",
+			winner, plugin.Spec.ClusterRef, plugin.Spec.Name,
+		)
+		r.updatePluginStatus(ctx, plugin, "Failed", msg)
+		r.Recorder.Event(plugin, corev1.EventTypeWarning, EventReasonPluginDuplicate, msg)
+		return ctrl.Result{}, nil
 	}
 
 	// Get target deployment (cluster or standalone)

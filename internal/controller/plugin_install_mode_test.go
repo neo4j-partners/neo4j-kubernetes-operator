@@ -13,6 +13,7 @@ package controller
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -182,4 +183,160 @@ func TestInstallPluginViaEnvironment_PreBaked_PreservesExistingPluginsEnv(t *tes
 
 	pluginsVal, _ := findEnv(&got.Spec.Template.Spec.Containers[0], "NEO4J_PLUGINS")
 	assert.Equal(t, `["apoc"]`, pluginsVal, "PreBaked must not append GDS to a pre-existing NEO4J_PLUGINS")
+}
+
+// TestCheckForDuplicatePlugin_NoConflict — single CR, no other plugins
+// in the namespace. Returns "" (no contention).
+func TestCheckForDuplicatePlugin_NoConflict(t *testing.T) {
+	const ns = "default"
+	plugin := &neo4jv1beta1.Neo4jPlugin{
+		ObjectMeta: metav1.ObjectMeta{Name: "p1", Namespace: ns, UID: "uid-1"},
+		Spec: neo4jv1beta1.Neo4jPluginSpec{
+			ClusterRef: "c1",
+			Name:       "apoc",
+			Version:    "5.26.0",
+		},
+	}
+	r := newPluginTestReconciler(t, plugin)
+
+	winner, err := r.checkForDuplicatePlugin(context.Background(), plugin)
+	require.NoError(t, err)
+	assert.Equal(t, "", winner, "no other CRs contesting -> empty winner string")
+}
+
+// TestCheckForDuplicatePlugin_OlderWins — two CRs for same
+// (clusterRef, name). The older one wins; the younger sees the older's
+// metadata.name returned and is expected to mark itself Failed.
+func TestCheckForDuplicatePlugin_OlderWins(t *testing.T) {
+	const ns = "default"
+	older := &neo4jv1beta1.Neo4jPlugin{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "older",
+			Namespace:         ns,
+			UID:               "uid-older",
+			CreationTimestamp: metav1.NewTime(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)),
+		},
+		Spec: neo4jv1beta1.Neo4jPluginSpec{ClusterRef: "c1", Name: "apoc", Version: "5.26.0"},
+	}
+	newer := &neo4jv1beta1.Neo4jPlugin{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "newer",
+			Namespace:         ns,
+			UID:               "uid-newer",
+			CreationTimestamp: metav1.NewTime(time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)),
+		},
+		Spec: neo4jv1beta1.Neo4jPluginSpec{ClusterRef: "c1", Name: "apoc", Version: "5.26.0"},
+	}
+	r := newPluginTestReconciler(t, older, newer)
+
+	// From the newer's perspective: older wins.
+	winner, err := r.checkForDuplicatePlugin(context.Background(), newer)
+	require.NoError(t, err)
+	assert.Equal(t, "older", winner)
+
+	// From the older's perspective: it wins itself.
+	winner, err = r.checkForDuplicatePlugin(context.Background(), older)
+	require.NoError(t, err)
+	assert.Equal(t, "older", winner)
+}
+
+// TestCheckForDuplicatePlugin_IgnoresDifferentCluster — same plugin
+// name but different clusterRef is fine. Two clusters in the same
+// namespace can both install APOC; their CRs are independent.
+func TestCheckForDuplicatePlugin_IgnoresDifferentCluster(t *testing.T) {
+	const ns = "default"
+	a := &neo4jv1beta1.Neo4jPlugin{
+		ObjectMeta: metav1.ObjectMeta{Name: "apoc-on-a", Namespace: ns, UID: "uid-a"},
+		Spec:       neo4jv1beta1.Neo4jPluginSpec{ClusterRef: "cluster-a", Name: "apoc", Version: "5.26.0"},
+	}
+	b := &neo4jv1beta1.Neo4jPlugin{
+		ObjectMeta: metav1.ObjectMeta{Name: "apoc-on-b", Namespace: ns, UID: "uid-b"},
+		Spec:       neo4jv1beta1.Neo4jPluginSpec{ClusterRef: "cluster-b", Name: "apoc", Version: "5.26.0"},
+	}
+	r := newPluginTestReconciler(t, a, b)
+
+	winner, err := r.checkForDuplicatePlugin(context.Background(), a)
+	require.NoError(t, err)
+	assert.Equal(t, "", winner, "different clusterRef -> no contention")
+}
+
+// TestCheckForDuplicatePlugin_IgnoresDifferentPluginName — same
+// cluster but different plugin name is fine. A cluster can install
+// both APOC and GDS via two separate Neo4jPlugin CRs.
+func TestCheckForDuplicatePlugin_IgnoresDifferentPluginName(t *testing.T) {
+	const ns = "default"
+	apoc := &neo4jv1beta1.Neo4jPlugin{
+		ObjectMeta: metav1.ObjectMeta{Name: "apoc-cr", Namespace: ns, UID: "uid-apoc"},
+		Spec:       neo4jv1beta1.Neo4jPluginSpec{ClusterRef: "c1", Name: "apoc", Version: "5.26.0"},
+	}
+	gds := &neo4jv1beta1.Neo4jPlugin{
+		ObjectMeta: metav1.ObjectMeta{Name: "gds-cr", Namespace: ns, UID: "uid-gds"},
+		Spec:       neo4jv1beta1.Neo4jPluginSpec{ClusterRef: "c1", Name: "graph-data-science", Version: "2.13.0"},
+	}
+	r := newPluginTestReconciler(t, apoc, gds)
+
+	winner, err := r.checkForDuplicatePlugin(context.Background(), apoc)
+	require.NoError(t, err)
+	assert.Equal(t, "", winner, "different plugin name -> no contention")
+}
+
+// TestCheckForDuplicatePlugin_IgnoresDeletingCR — a duplicate that's
+// already mid-delete (DeletionTimestamp set) should not block the
+// surviving CR from taking ownership. Otherwise a stuck finalizer on
+// the older CR would lock out its replacement indefinitely.
+func TestCheckForDuplicatePlugin_IgnoresDeletingCR(t *testing.T) {
+	const ns = "default"
+	now := metav1.Now()
+	older := &neo4jv1beta1.Neo4jPlugin{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "older-deleting",
+			Namespace:         ns,
+			UID:               "uid-old",
+			CreationTimestamp: metav1.NewTime(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)),
+			DeletionTimestamp: &now,
+			Finalizers:        []string{"neo4j.neo4j.com/plugin-finalizer"},
+		},
+		Spec: neo4jv1beta1.Neo4jPluginSpec{ClusterRef: "c1", Name: "apoc", Version: "5.26.0"},
+	}
+	newer := &neo4jv1beta1.Neo4jPlugin{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "newer-live",
+			Namespace:         ns,
+			UID:               "uid-new",
+			CreationTimestamp: metav1.NewTime(time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)),
+		},
+		Spec: neo4jv1beta1.Neo4jPluginSpec{ClusterRef: "c1", Name: "apoc", Version: "5.26.0"},
+	}
+	r := newPluginTestReconciler(t, older, newer)
+
+	winner, err := r.checkForDuplicatePlugin(context.Background(), newer)
+	require.NoError(t, err)
+	assert.Equal(t, "", winner, "older being deleted -> newer takes over with no contention")
+}
+
+// TestCheckForDuplicatePlugin_UIDTiebreaker — when two CRs share the
+// exact same CreationTimestamp (fast test loops, kubectl apply
+// races), the lower UID wins. Deterministic across operator replicas.
+func TestCheckForDuplicatePlugin_UIDTiebreaker(t *testing.T) {
+	const ns = "default"
+	ts := metav1.NewTime(time.Date(2026, 5, 19, 12, 0, 0, 0, time.UTC))
+	a := &neo4jv1beta1.Neo4jPlugin{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "a", Namespace: ns, UID: "uid-aaaa",
+			CreationTimestamp: ts,
+		},
+		Spec: neo4jv1beta1.Neo4jPluginSpec{ClusterRef: "c1", Name: "apoc", Version: "5.26.0"},
+	}
+	b := &neo4jv1beta1.Neo4jPlugin{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "b", Namespace: ns, UID: "uid-bbbb",
+			CreationTimestamp: ts,
+		},
+		Spec: neo4jv1beta1.Neo4jPluginSpec{ClusterRef: "c1", Name: "apoc", Version: "5.26.0"},
+	}
+	r := newPluginTestReconciler(t, a, b)
+
+	winner, err := r.checkForDuplicatePlugin(context.Background(), b)
+	require.NoError(t, err)
+	assert.Equal(t, "a", winner, "lower UID wins the tiebreaker")
 }

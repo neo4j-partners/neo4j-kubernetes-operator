@@ -274,6 +274,27 @@ into air-gapped clusters that need a mirrored image.
   JAR. For large JARs (GDS ≈ 30 MB) this is bandwidth-wasteful; a
   caching PVC is a planned follow-up.
 
+### Duplicate-CR protection (all install modes)
+
+Two `Neo4jPlugin` CRs in the same namespace that target the **same
+`spec.clusterRef`** with the **same `spec.name`** would race on the
+same `/plugins` directory and the same `NEO4J_PLUGINS` env value — one
+controller adds, the other removes, restart cycle. The reconciler
+detects this and refuses to install the duplicate:
+
+- The **oldest CR (by `creationTimestamp`)** keeps reconciling
+  normally. UID is the tiebreaker on identical timestamps.
+- The **newer duplicate** is marked `status.phase=Failed` with a
+  message naming the older CR, and a `PluginDuplicate` Warning Event
+  is emitted. It stops reconciling until the older CR is deleted.
+- A duplicate that's mid-delete (DeletionTimestamp set) doesn't block
+  its replacement — a stuck finalizer on the older CR can't lock out
+  the survivor.
+
+Action when you see `phase=Failed` with a duplicate message: delete
+the unwanted CR. The surviving CR reconciles on its next watch event
+(triggered by the deletion) and takes ownership.
+
 ## Examples
 
 ### APOC Plugin for Cluster
