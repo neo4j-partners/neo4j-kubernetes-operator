@@ -85,7 +85,11 @@ func GetTestRequeueAfter() time.Duration {
 //+kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=rolebindings,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups="",resources=pods/exec,verbs=create;get
+// Note: pods/exec RBAC was historically declared here for the old
+// sidecar-exec backup architecture. That architecture was replaced by
+// Job-based backups (see docs/plans/2026-02-20-backup-restore-overhaul.md)
+// and no code path uses pods/exec anymore. Removed to reduce blast
+// radius per the November 2025 security review.
 //+kubebuilder:rbac:groups="",resources=pods/log,verbs=get
 
 // Reconcile handles the reconciliation of Neo4jBackup resources
@@ -361,14 +365,16 @@ func (r *Neo4jBackupReconciler) createBackupJob(ctx context.Context, backup *neo
 				Spec: corev1.PodSpec{
 					RestartPolicy:      corev1.RestartPolicyNever,
 					ServiceAccountName: backupServiceAccountName,
+					SecurityContext:    resources.DefaultNeo4jPodSecurityContext(),
 					Containers: []corev1.Container{
 						{
-							Name:         "backup",
-							Image:        image,
-							Command:      []string{"/bin/sh"},
-							Args:         []string{"-c", backupCmd},
-							Env:          r.buildCloudEnvVars(backup),
-							VolumeMounts: r.buildVolumeMounts(backup),
+							Name:            "backup",
+							Image:           image,
+							Command:         []string{"/bin/sh"},
+							Args:            []string{"-c", backupCmd},
+							Env:             r.buildCloudEnvVars(backup),
+							VolumeMounts:    r.buildVolumeMounts(backup),
+							SecurityContext: resources.DefaultNeo4jContainerSecurityContext(),
 						},
 					},
 					Volumes: r.buildVolumes(backup),
@@ -418,14 +424,16 @@ func (r *Neo4jBackupReconciler) createBackupCronJob(ctx context.Context, backup 
 					Spec: corev1.PodSpec{
 						RestartPolicy:      corev1.RestartPolicyNever,
 						ServiceAccountName: backupServiceAccountName,
+						SecurityContext:    resources.DefaultNeo4jPodSecurityContext(),
 						Containers: []corev1.Container{
 							{
-								Name:         "backup",
-								Image:        image,
-								Command:      []string{"/bin/sh"},
-								Args:         []string{"-c", backupCmd},
-								Env:          r.buildCloudEnvVars(backup),
-								VolumeMounts: r.buildVolumeMounts(backup),
+								Name:            "backup",
+								Image:           image,
+								Command:         []string{"/bin/sh"},
+								Args:            []string{"-c", backupCmd},
+								Env:             r.buildCloudEnvVars(backup),
+								VolumeMounts:    r.buildVolumeMounts(backup),
+								SecurityContext: resources.DefaultNeo4jContainerSecurityContext(),
 							},
 						},
 						Volumes: r.buildVolumes(backup),

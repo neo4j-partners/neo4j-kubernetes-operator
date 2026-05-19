@@ -36,7 +36,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
-	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -66,35 +65,14 @@ func podSecurityContextForStandalone(standalone *neo4jv1beta1.Neo4jEnterpriseSta
 	if standalone.Spec.SecurityContext != nil && standalone.Spec.SecurityContext.PodSecurityContext != nil {
 		return standalone.Spec.SecurityContext.PodSecurityContext
 	}
-
-	uid := int64(7474)
-	return &corev1.PodSecurityContext{
-		RunAsUser:    ptr.To(uid),
-		RunAsGroup:   ptr.To(uid),
-		FSGroup:      ptr.To(uid),
-		RunAsNonRoot: ptr.To(true),
-		SeccompProfile: &corev1.SeccompProfile{
-			Type: corev1.SeccompProfileTypeRuntimeDefault,
-		},
-	}
+	return resources.DefaultNeo4jPodSecurityContext()
 }
 
 func containerSecurityContextForStandalone(standalone *neo4jv1beta1.Neo4jEnterpriseStandalone) *corev1.SecurityContext {
 	if standalone.Spec.SecurityContext != nil && standalone.Spec.SecurityContext.ContainerSecurityContext != nil {
 		return standalone.Spec.SecurityContext.ContainerSecurityContext
 	}
-
-	uid := int64(7474)
-	return &corev1.SecurityContext{
-		RunAsUser:                ptr.To(uid),
-		RunAsGroup:               ptr.To(uid),
-		RunAsNonRoot:             ptr.To(true),
-		AllowPrivilegeEscalation: ptr.To(false),
-		ReadOnlyRootFilesystem:   ptr.To(false),
-		Capabilities: &corev1.Capabilities{
-			Drop: []corev1.Capability{"ALL"},
-		},
-	}
+	return resources.DefaultNeo4jContainerSecurityContext()
 }
 
 // standaloneImagePullSecrets converts the standalone's image pull secret names to []corev1.LocalObjectReference.

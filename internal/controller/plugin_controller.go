@@ -36,10 +36,10 @@ import (
 
 	neo4jv1beta1 "github.com/priyolahiri/neo4j-kubernetes-operator/api/v1beta1"
 	neo4jclient "github.com/priyolahiri/neo4j-kubernetes-operator/internal/neo4j"
+	"github.com/priyolahiri/neo4j-kubernetes-operator/internal/resources"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/utils/ptr"
 )
 
 const (
@@ -472,31 +472,15 @@ func (r *Neo4jPluginReconciler) applySecurityConfiguration(ctx context.Context, 
 	return nil
 }
 
+// Pod hardening for plugin install/remove Jobs delegates to the single
+// source of truth in internal/resources/security_context.go so it can't
+// drift from the cluster/standalone/backup/restore pods.
 func hardenedPluginPodSecurityContext() *corev1.PodSecurityContext {
-	uid := int64(7474)
-	return &corev1.PodSecurityContext{
-		RunAsUser:    ptr.To(uid),
-		RunAsGroup:   ptr.To(uid),
-		FSGroup:      ptr.To(uid),
-		RunAsNonRoot: ptr.To(true),
-		SeccompProfile: &corev1.SeccompProfile{
-			Type: corev1.SeccompProfileTypeRuntimeDefault,
-		},
-	}
+	return resources.DefaultNeo4jPodSecurityContext()
 }
 
 func hardenedPluginContainerSecurityContext() *corev1.SecurityContext {
-	uid := int64(7474)
-	return &corev1.SecurityContext{
-		RunAsUser:                ptr.To(uid),
-		RunAsGroup:               ptr.To(uid),
-		RunAsNonRoot:             ptr.To(true),
-		AllowPrivilegeEscalation: ptr.To(false),
-		ReadOnlyRootFilesystem:   ptr.To(false),
-		Capabilities: &corev1.Capabilities{
-			Drop: []corev1.Capability{"ALL"},
-		},
-	}
+	return resources.DefaultNeo4jContainerSecurityContext()
 }
 
 func (r *Neo4jPluginReconciler) uninstallPlugin(ctx context.Context, plugin *neo4jv1beta1.Neo4jPlugin) error {

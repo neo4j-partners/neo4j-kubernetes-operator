@@ -70,31 +70,14 @@ type Neo4jRestoreReconciler struct {
 	RequeueAfter            time.Duration
 }
 
+// Pod hardening for restore Jobs delegates to the single source of truth
+// in internal/resources/security_context.go.
 func hardenedRestorePodSecurityContext() *corev1.PodSecurityContext {
-	uid := int64(7474)
-	return &corev1.PodSecurityContext{
-		RunAsUser:    ptr.To(uid),
-		RunAsGroup:   ptr.To(uid),
-		FSGroup:      ptr.To(uid),
-		RunAsNonRoot: ptr.To(true),
-		SeccompProfile: &corev1.SeccompProfile{
-			Type: corev1.SeccompProfileTypeRuntimeDefault,
-		},
-	}
+	return resources.DefaultNeo4jPodSecurityContext()
 }
 
 func hardenedRestoreContainerSecurityContext() *corev1.SecurityContext {
-	uid := int64(7474)
-	return &corev1.SecurityContext{
-		RunAsUser:                ptr.To(uid),
-		RunAsGroup:               ptr.To(uid),
-		RunAsNonRoot:             ptr.To(true),
-		AllowPrivilegeEscalation: ptr.To(false),
-		ReadOnlyRootFilesystem:   ptr.To(false),
-		Capabilities: &corev1.Capabilities{
-			Drop: []corev1.Capability{"ALL"},
-		},
-	}
+	return resources.DefaultNeo4jContainerSecurityContext()
 }
 
 const (

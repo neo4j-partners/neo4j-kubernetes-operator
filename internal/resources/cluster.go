@@ -32,7 +32,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/utils/ptr"
 
 	certv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	cmmeta "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
@@ -92,35 +91,13 @@ const (
 	CertManagerMode = "cert-manager"
 
 	// Default non-root UID/GID for Neo4j containers
-	defaultNeo4jUID int64 = 7474
-
 	// operatorVersionEnv is the environment variable that holds the operator version
 	operatorVersionEnv = "OPERATOR_VERSION"
 )
 
-var (
-	defaultPodSecurityContext = &corev1.PodSecurityContext{
-		RunAsUser:    ptr.To(defaultNeo4jUID),
-		RunAsGroup:   ptr.To(defaultNeo4jUID),
-		FSGroup:      ptr.To(defaultNeo4jUID),
-		RunAsNonRoot: ptr.To(true),
-		SeccompProfile: &corev1.SeccompProfile{
-			Type: corev1.SeccompProfileTypeRuntimeDefault,
-		},
-	}
-
-	defaultContainerSecurityContext = &corev1.SecurityContext{
-		RunAsUser:                ptr.To(defaultNeo4jUID),
-		RunAsGroup:               ptr.To(defaultNeo4jUID),
-		RunAsNonRoot:             ptr.To(true),
-		AllowPrivilegeEscalation: ptr.To(false),
-		// Neo4j requires writable root for scripts/tmp; keep root FS writable but drop capabilities.
-		ReadOnlyRootFilesystem: ptr.To(false),
-		Capabilities: &corev1.Capabilities{
-			Drop: []corev1.Capability{"ALL"},
-		},
-	}
-)
+// Pod hardening defaults live in security_context.go as the single source
+// of truth. The two wrappers below keep the CR-override semantics that
+// only the cluster CR exposes.
 
 // OperatorUDCPackagingValue returns the value for the NEO4J_UDC_PACKAGING environment variable.
 // It reads the OPERATOR_VERSION env var and returns "k8s-<version>", or "k8s-development" if unset.
@@ -135,14 +112,14 @@ func podSecurityContextForCluster(cluster *neo4jv1beta1.Neo4jEnterpriseCluster) 
 	if cluster.Spec.SecurityContext != nil && cluster.Spec.SecurityContext.PodSecurityContext != nil {
 		return cluster.Spec.SecurityContext.PodSecurityContext
 	}
-	return defaultPodSecurityContext
+	return DefaultNeo4jPodSecurityContext()
 }
 
 func containerSecurityContextForCluster(cluster *neo4jv1beta1.Neo4jEnterpriseCluster) *corev1.SecurityContext {
 	if cluster.Spec.SecurityContext != nil && cluster.Spec.SecurityContext.ContainerSecurityContext != nil {
 		return cluster.Spec.SecurityContext.ContainerSecurityContext
 	}
-	return defaultContainerSecurityContext
+	return DefaultNeo4jContainerSecurityContext()
 }
 
 // BuildServerStatefulSetForEnterprise creates a single StatefulSet for all Neo4j servers
