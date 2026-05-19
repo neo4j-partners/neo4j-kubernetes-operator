@@ -416,7 +416,7 @@ func TestBuildClientServiceForEnterprise_WithEnhancedFeatures(t *testing.T) {
 			checkFunc: func(t *testing.T, service *corev1.Service) {
 				assert.Equal(t, corev1.ServiceTypeLoadBalancer, service.Spec.Type)
 				assert.Equal(t, "10.0.0.100", service.Spec.LoadBalancerIP)
-				assert.Equal(t, corev1.ServiceExternalTrafficPolicyTypeLocal, service.Spec.ExternalTrafficPolicy)
+				assert.Equal(t, corev1.ServiceExternalTrafficPolicyLocal, service.Spec.ExternalTrafficPolicy)
 				assert.Equal(t, []string{"10.0.0.0/8", "192.168.0.0/16"}, service.Spec.LoadBalancerSourceRanges)
 			},
 		},
@@ -491,7 +491,7 @@ func TestBuildClientServiceForEnterprise_WithEnhancedFeatures(t *testing.T) {
 			},
 			checkFunc: func(t *testing.T, service *corev1.Service) {
 				assert.Equal(t, corev1.ServiceTypeLoadBalancer, service.Spec.Type)
-				assert.Equal(t, corev1.ServiceExternalTrafficPolicyTypeCluster, service.Spec.ExternalTrafficPolicy)
+				assert.Equal(t, corev1.ServiceExternalTrafficPolicyCluster, service.Spec.ExternalTrafficPolicy)
 			},
 		},
 	}

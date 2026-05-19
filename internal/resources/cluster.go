@@ -516,7 +516,7 @@ func BuildClientServiceForEnterprise(cluster *neo4jv1beta1.Neo4jEnterpriseCluste
 
 		// External traffic policy
 		if cluster.Spec.Service.ExternalTrafficPolicy != "" {
-			svc.Spec.ExternalTrafficPolicy = corev1.ServiceExternalTrafficPolicyType(cluster.Spec.Service.ExternalTrafficPolicy)
+			svc.Spec.ExternalTrafficPolicy = corev1.ServiceExternalTrafficPolicy(cluster.Spec.Service.ExternalTrafficPolicy)
 		}
 	}
 
@@ -619,7 +619,7 @@ func BuildCertificateForEnterprise(cluster *neo4jv1beta1.Neo4jEnterpriseCluster)
 	// Build certificate spec
 	certSpec := certv1.CertificateSpec{
 		SecretName: fmt.Sprintf("%s-tls-secret", cluster.Name),
-		IssuerRef: cmmeta.ObjectReference{
+		IssuerRef: cmmeta.IssuerReference{
 			Name: cluster.Spec.TLS.IssuerRef.Name,
 			Kind: cluster.Spec.TLS.IssuerRef.Kind,
 		},

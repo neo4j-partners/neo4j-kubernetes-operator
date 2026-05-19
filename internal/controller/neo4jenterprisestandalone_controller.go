@@ -914,7 +914,7 @@ func (r *Neo4jEnterpriseStandaloneReconciler) createService(standalone *neo4jv1b
 
 		// External traffic policy
 		if standalone.Spec.Service.ExternalTrafficPolicy != "" {
-			svc.Spec.ExternalTrafficPolicy = corev1.ServiceExternalTrafficPolicyType(standalone.Spec.Service.ExternalTrafficPolicy)
+			svc.Spec.ExternalTrafficPolicy = corev1.ServiceExternalTrafficPolicy(standalone.Spec.Service.ExternalTrafficPolicy)
 		}
 	}
 
@@ -1490,7 +1490,7 @@ func (r *Neo4jEnterpriseStandaloneReconciler) createTLSCertificate(standalone *n
 		},
 		Spec: certmanagerv1.CertificateSpec{
 			SecretName: fmt.Sprintf("%s-tls-secret", standalone.Name),
-			IssuerRef: cmmeta.ObjectReference{
+			IssuerRef: cmmeta.IssuerReference{
 				Name:  standalone.Spec.TLS.IssuerRef.Name,
 				Kind:  standalone.Spec.TLS.IssuerRef.Kind,
 				Group: standalone.Spec.TLS.IssuerRef.Group,

@@ -502,7 +502,7 @@ var _ = Describe("Neo4jEnterpriseStandalone Controller", func() {
 				// Verify LoadBalancer configuration
 				return service.Spec.Type == corev1.ServiceTypeLoadBalancer &&
 					service.Spec.LoadBalancerIP == "10.0.0.100" &&
-					service.Spec.ExternalTrafficPolicy == corev1.ServiceExternalTrafficPolicyTypeLocal &&
+					service.Spec.ExternalTrafficPolicy == corev1.ServiceExternalTrafficPolicyLocal &&
 					len(service.Spec.LoadBalancerSourceRanges) == 2 &&
 					service.Spec.LoadBalancerSourceRanges[0] == "10.0.0.0/8" &&
 					service.Spec.LoadBalancerSourceRanges[1] == "192.168.0.0/16"
