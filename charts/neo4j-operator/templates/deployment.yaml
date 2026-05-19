@@ -61,6 +61,13 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
+        {{- with .Values.pluginInitContainer.image }}
+        # Override for Neo4jPlugin spec.installMode=VerifiedDownload init
+        # container image. Empty falls back to the operator's baked-in
+        # default (curlimages/curl:8.5.0) — see internal/resources/plugin_init_container.go.
+        - name: PLUGIN_INIT_CONTAINER_IMAGE
+          value: {{ . | quote }}
+        {{- end }}
         {{- with .Values.envFrom }}
         envFrom:
           {{- toYaml . | nindent 10 }}

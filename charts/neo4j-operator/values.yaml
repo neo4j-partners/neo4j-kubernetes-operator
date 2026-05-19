@@ -59,6 +59,17 @@ rbac:
   # — clear failure mode, easy to debug.
   externalSecretsIntegration: false
 
+# Init container image used by Neo4jPlugin spec.installMode=VerifiedDownload.
+# When a Neo4jPlugin opts into VerifiedDownload, the operator injects this
+# image as an init container on the target StatefulSet's pod template; the
+# container downloads spec.source.url, verifies the sha256/sha512 against
+# spec.source.checksum, and drops the JAR into the shared /plugins
+# emptyDir before Neo4j starts. Empty value falls back to the operator's
+# baked-in default (curlimages/curl:8.5.0). Air-gapped clusters should
+# point this at an internal mirror.
+pluginInitContainer:
+  image: ""
+
 podAnnotations: {}
 
 # Disable to let platform defaults (e.g., OpenShift SCC) control pod security settings

@@ -356,10 +356,11 @@ func setupProductionControllers(mgr ctrl.Manager) error {
 		{
 			name: "Neo4jPlugin",
 			controller: &controller.Neo4jPluginReconciler{
-				Client:       mgr.GetClient(),
-				Scheme:       mgr.GetScheme(),
-				Recorder:     mgr.GetEventRecorderFor("neo4j-plugin-controller"),
-				RequeueAfter: controller.GetTestRequeueAfter(),
+				Client:          mgr.GetClient(),
+				Scheme:          mgr.GetScheme(),
+				Recorder:        mgr.GetEventRecorderFor("neo4j-plugin-controller"),
+				RequeueAfter:    controller.GetTestRequeueAfter(),
+				PluginInitImage: os.Getenv("PLUGIN_INIT_CONTAINER_IMAGE"),
 			},
 		},
 		{
@@ -477,10 +478,11 @@ func setupDevelopmentControllers(mgr ctrl.Manager, controllers []string) error {
 		},
 		"plugin": func() (interface{ SetupWithManager(ctrl.Manager) error }, string) {
 			return &controller.Neo4jPluginReconciler{
-				Client:       mgr.GetClient(),
-				Scheme:       mgr.GetScheme(),
-				Recorder:     mgr.GetEventRecorderFor("neo4j-plugin-controller"),
-				RequeueAfter: controller.GetTestRequeueAfter(),
+				Client:          mgr.GetClient(),
+				Scheme:          mgr.GetScheme(),
+				Recorder:        mgr.GetEventRecorderFor("neo4j-plugin-controller"),
+				RequeueAfter:    controller.GetTestRequeueAfter(),
+				PluginInitImage: os.Getenv("PLUGIN_INIT_CONTAINER_IMAGE"),
 			}, "Neo4jPlugin"
 		},
 		"shardeddatabase": func() (interface{ SetupWithManager(ctrl.Manager) error }, string) {

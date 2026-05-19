@@ -91,6 +91,65 @@ func (v *PluginValidator) Validate(plugin *neo4jv1beta1.Neo4jPlugin) field.Error
 		allErrs = append(allErrs, v.validatePluginResources(plugin.Spec.Resources)...)
 	}
 
+	// Cross-field gates for installMode: VerifiedDownload.
+	allErrs = append(allErrs, v.validateVerifiedDownloadMode(plugin)...)
+
+	return allErrs
+}
+
+// validateVerifiedDownloadMode enforces the gates the VerifiedDownload
+// install mode requires for the init container's verified-download
+// flow to be coherent:
+//
+//   - source.url + source.checksum are mandatory (init container has
+//     nothing to download / verify without them).
+//   - source.type must be "url" or "custom" — the entrypoint's
+//     "official"/"community" types resolve via an internal manifest the
+//     user can't point at a verifiable URL.
+//   - dependencies are rejected. Mixed install paths in one CR
+//     (main plugin via init container, dependencies via NEO4J_PLUGINS
+//     entrypoint download) confuse the supply-chain story — each
+//     dependency should be its own Neo4jPlugin CR with its own
+//     verifiable URL.
+//
+// Same-name CR duplicate detection is enforced controller-side via
+// the plugin controller's reconcile (needs K8s client access).
+func (v *PluginValidator) validateVerifiedDownloadMode(plugin *neo4jv1beta1.Neo4jPlugin) field.ErrorList {
+	if plugin.Spec.InstallMode != "VerifiedDownload" {
+		return nil
+	}
+	var allErrs field.ErrorList
+
+	if plugin.Spec.Source == nil || plugin.Spec.Source.URL == "" {
+		allErrs = append(allErrs, field.Required(
+			field.NewPath("spec", "source", "url"),
+			"installMode: VerifiedDownload requires spec.source.url so the init container has somewhere to download from",
+		))
+	}
+	if plugin.Spec.Source == nil || plugin.Spec.Source.Checksum == "" {
+		allErrs = append(allErrs, field.Required(
+			field.NewPath("spec", "source", "checksum"),
+			"installMode: VerifiedDownload requires spec.source.checksum (sha256:<64 hex> or sha512:<128 hex>) for the init container to verify against",
+		))
+	}
+	if plugin.Spec.Source != nil {
+		switch plugin.Spec.Source.Type {
+		case "official", "community":
+			allErrs = append(allErrs, field.Invalid(
+				field.NewPath("spec", "source", "type"),
+				plugin.Spec.Source.Type,
+				"installMode: VerifiedDownload requires source.type=url or source.type=custom — official/community resolve via the Neo4j entrypoint's internal manifest and cannot be pointed at a verifiable URL",
+			))
+		}
+	}
+
+	if len(plugin.Spec.Dependencies) > 0 {
+		allErrs = append(allErrs, field.Forbidden(
+			field.NewPath("spec", "dependencies"),
+			"installMode: VerifiedDownload does not support spec.dependencies — each dependency must be its own Neo4jPlugin CR with its own spec.source.url + checksum so the entire chain is verified",
+		))
+	}
+
 	return allErrs
 }
 

@@ -85,8 +85,8 @@ kind: Neo4jPlugin
 | `name` | `string` | ✅ | Plugin name (e.g., "apoc", "graph-data-science") |
 | `version` | `string` | ✅ | Plugin version to install (must match Neo4j version compatibility) |
 | `enabled` | `boolean` | ❌ | Enable the plugin (default: `true`) |
-| `installMode` | `string` | ❌ | `Managed` (default) — operator adds plugin to `NEO4J_PLUGINS`. `PreBaked` — operator only writes config; JAR must be in a custom image. See [Supply-chain](#supply-chain). |
-| `source` | [`PluginSource`](#pluginsource) | ❌ | Plugin source configuration (default: official repository). Ignored when `installMode: PreBaked`. |
+| `installMode` | `string` | ❌ | `Managed` (default) — operator adds plugin to `NEO4J_PLUGINS`. `PreBaked` — operator only writes config; JAR must be in a custom image. `VerifiedDownload` — operator injects an init container that downloads `source.url` and verifies it against `source.checksum` before Neo4j starts. See [Supply-chain](#supply-chain). |
+| `source` | [`PluginSource`](#pluginsource) | ❌ | Plugin source configuration (default: official repository). **Required** when `installMode: VerifiedDownload`. Ignored when `installMode: PreBaked`. |
 | `dependencies` | [`[]PluginDependency`](#plugindependency) | ❌ | Plugin dependencies (automatically resolved) |
 | `config` | `map[string]string` | ❌ | Plugin-specific configuration (becomes `NEO4J_*` env vars) |
 | `security` | [`PluginSecurity`](#pluginsecurity) | ❌ | Security settings and procedure restrictions |
@@ -214,9 +214,65 @@ should never have to guess the algorithm.
 consume `source.checksum` at download time. The operator records the
 field for audit and exposes it on the StatefulSet, but enforcement at
 the moment of download requires either (a) pinning to PreBaked or (b)
-a future init-container verifier that re-hashes the JAR after the
-entrypoint has finished. Until that lands, treat `source.checksum` as
-attestation, not enforcement, and prefer PreBaked for production.
+the VerifiedDownload mode described next.
+
+### `installMode: VerifiedDownload` (verified download via init container)
+
+When `installMode: VerifiedDownload` is set, the operator injects an init
+container into the target StatefulSet's pod template. The init container
+downloads `spec.source.url`, computes the SHA256/SHA512 of the downloaded
+file, compares it against `spec.source.checksum`, and writes the JAR to
+the shared `/plugins` emptyDir **before** Neo4j starts. `NEO4J_PLUGINS`
+is **not** mutated for this plugin (same skip semantics as PreBaked) —
+the upstream entrypoint's own download path is bypassed entirely, so it
+can't race the verified JAR.
+
+```yaml
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jPlugin
+spec:
+  clusterRef: my-cluster
+  name: graph-data-science
+  version: "2.13.0"
+  installMode: VerifiedDownload
+  source:
+    type: url
+    url: https://github.com/neo4j/graph-data-science/releases/download/2.13.0/neo4j-graph-data-science-2.13.0.jar
+    checksum: sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+```
+
+**Failure mode**: on checksum mismatch the init container exits non-zero,
+the pod stays Pending, and `kubectl describe pod` shows the failure on
+the init container's `state.terminated.message`. Fix the URL or checksum
+and reconcile — the next pod spawn re-runs the init container.
+
+**Authenticated mirrors** are supported via `spec.source.authSecret`.
+The named Secret should carry either a `token` key (used as
+`Authorization: Bearer <token>`) or a `header` key (used verbatim as the
+full `Authorization:` header value). Mounted at `/etc/plugin-auth` and
+consumed by the init script.
+
+**Internal CAs** are supported via the owning cluster's (or standalone's)
+`spec.trustedCASecrets` list. Each Secret's `ca.crt` (or the per-Secret
+`Key` override) is mounted under `/etc/plugin-ca`; the init script
+concatenates the certificates into a single CA bundle and points curl at
+it via `--cacert`.
+
+**Init container image** defaults to `curlimages/curl:8.5.0`. Override
+via the Helm chart's `pluginInitContainer.image` value when installing
+into air-gapped clusters that need a mirrored image.
+
+**Limitations**:
+- `spec.source.type` must be `url` or `custom` — the entrypoint's
+  `official`/`community` types resolve via an internal manifest the
+  user can't point at a verifiable URL, so they're rejected at admission.
+- `spec.dependencies` are rejected on a VerifiedDownload plugin —
+  mixed install paths in a single CR confuse the supply-chain story.
+  Create each dependency as its own `Neo4jPlugin` CR with its own
+  `source.url` + `checksum`.
+- Every pod restart re-runs the init container, which re-downloads the
+  JAR. For large JARs (GDS ≈ 30 MB) this is bandwidth-wasteful; a
+  caching PVC is a planned follow-up.
 
 ## Examples
 

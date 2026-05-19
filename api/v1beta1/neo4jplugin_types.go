@@ -44,7 +44,8 @@ type Neo4jPluginSpec struct {
 	// upstream Neo4j Docker entrypoint resolves and installs the JAR at pod
 	// startup. For non-bundled plugins (everything except APOC core) this
 	// fetches from the internet on every pod start, which is a poor fit for
-	// air-gapped or regulated environments.
+	// air-gapped or regulated environments. source.checksum is recorded for
+	// attestation but the upstream entrypoint does not verify it.
 	//
 	// "PreBaked" — operator does NOT touch NEO4J_PLUGINS. The user is
 	// responsible for delivering the JAR via a custom Neo4j image referenced
@@ -53,12 +54,24 @@ type Neo4jPluginSpec struct {
 	// procedures, ConfigMap entries) so Neo4j accepts the procedures the
 	// pre-baked JAR exposes.
 	//
-	// +kubebuilder:validation:Enum=Managed;PreBaked
+	// "VerifiedDownload" — the operator injects an init container into the
+	// target StatefulSet's pod template. The init container downloads
+	// source.url, verifies the SHA256/SHA512 against source.checksum,
+	// and drops the JAR into the shared /plugins emptyDir BEFORE the
+	// Neo4j entrypoint runs. NEO4J_PLUGINS is NOT mutated (preventing
+	// the entrypoint's own download from racing the verified JAR).
+	// Authenticated mirrors are supported via source.authSecret;
+	// internal CAs are supported via the cluster's spec.trustedCASecrets.
+	// On checksum mismatch the init container exits non-zero, the pod
+	// stays Pending, and Neo4jPlugin.status surfaces the failure.
+	//
+	// +kubebuilder:validation:Enum=Managed;PreBaked;VerifiedDownload
 	// +kubebuilder:default=Managed
 	// +optional
 	InstallMode string `json:"installMode,omitempty"`
 
-	// Plugin source configuration. Ignored when installMode is "PreBaked".
+	// Plugin source configuration. Required when installMode is
+	// "VerifiedDownload". Ignored when installMode is "PreBaked".
 	Source *PluginSource `json:"source,omitempty"`
 
 	// Plugin configuration

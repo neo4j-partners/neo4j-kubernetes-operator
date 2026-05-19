@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -56,12 +57,45 @@ const (
 	// Operator still applies plugin configuration (security allowlists,
 	// unrestricted procedures, ConfigMap entries).
 	PluginInstallModePreBaked = "PreBaked"
+
+	// PluginInstallModeVerifiedDownload — operator injects an init
+	// container into the target StatefulSet that downloads spec.source.url,
+	// verifies the SHA256/SHA512 against spec.source.checksum, and drops
+	// the JAR into the shared /plugins emptyDir before Neo4j starts. As
+	// with PreBaked, NEO4J_PLUGINS is NOT mutated — the entrypoint's own
+	// download path is bypassed entirely so it can't race the verified
+	// JAR. Configuration env vars / ConfigMap entries still flow.
+	PluginInstallModeVerifiedDownload = "VerifiedDownload"
+
+	// PluginInitContainersAnnotation tracks the names of init containers
+	// the plugin controller owns on a given StatefulSet, so the controller
+	// can remove only its own containers on plugin uninstall without
+	// disturbing init containers added by other controllers / users.
+	// Value format: comma-separated list of container names.
+	PluginInitContainersAnnotation = "neo4j.com/plugin-init-containers"
 )
 
 // isPreBakedInstallMode reports whether the operator should skip the
 // NEO4J_PLUGINS env mutation for this plugin and only apply configuration.
 func isPreBakedInstallMode(plugin *neo4jv1beta1.Neo4jPlugin) bool {
 	return plugin.Spec.InstallMode == PluginInstallModePreBaked
+}
+
+// isVerifiedDownloadInstallMode reports whether the operator should
+// inject an init container for this plugin AND skip the NEO4J_PLUGINS
+// env mutation (same env-skip semantics as PreBaked, but with a new
+// JAR-delivery path).
+func isVerifiedDownloadInstallMode(plugin *neo4jv1beta1.Neo4jPlugin) bool {
+	return plugin.Spec.InstallMode == PluginInstallModeVerifiedDownload
+}
+
+// shouldSkipNeo4jPluginsEnv reports whether either of the
+// JAR-already-in-/plugins install modes is active. Both PreBaked and
+// VerifiedDownload share the "operator must NOT add this plugin to
+// NEO4J_PLUGINS" semantics — wrapping both into one predicate keeps
+// the callsite in installPluginViaEnvironment readable.
+func shouldSkipNeo4jPluginsEnv(plugin *neo4jv1beta1.Neo4jPlugin) bool {
+	return isPreBakedInstallMode(plugin) || isVerifiedDownloadInstallMode(plugin)
 }
 
 // getAdminSecretName safely extracts the admin secret name from cluster spec with fallback to default
@@ -86,6 +120,14 @@ type Neo4jPluginReconciler struct {
 	Scheme       *runtime.Scheme
 	Recorder     record.EventRecorder
 	RequeueAfter time.Duration
+
+	// PluginInitImage overrides the default init container image
+	// (resources.DefaultPluginInitContainerImage) used for
+	// VerifiedDownload mode. Wired from the operator's
+	// PLUGIN_INIT_CONTAINER_IMAGE env var which the helm chart sets
+	// from .Values.pluginInitContainer.image. Empty = use the default
+	// hardcoded in the resource builder.
+	PluginInitImage string
 }
 
 // PluginFinalizer is the finalizer for Neo4j plugin resources
@@ -494,6 +536,24 @@ func (r *Neo4jPluginReconciler) uninstallPlugin(ctx context.Context, plugin *neo
 		return nil
 	}
 
+	// VerifiedDownload installs need the init container + auth/CA
+	// volumes removed from the StatefulSet on uninstall — otherwise
+	// the next reconcile would still try to download and the pod
+	// would re-add the JAR to the emptyDir each restart. Done first
+	// so the PreBaked-style "skip JAR removal" guard below doesn't
+	// short-circuit the cleanup.
+	if isVerifiedDownloadInstallMode(plugin) {
+		if err := r.removeVerifiedDownloadInitContainer(ctx, plugin, deployment); err != nil {
+			// Non-fatal — the finalizer release shouldn't block on a
+			// reconcile race against the cluster controller. Next
+			// reconcile of the cluster will eventually drop the stale
+			// init container.
+			logger.Error(err, "Failed to remove VerifiedDownload init container; releasing finalizer anyway", "plugin", plugin.Spec.Name)
+		}
+		logger.Info("Removed VerifiedDownload init container", "plugin", plugin.Spec.Name)
+		return nil
+	}
+
 	// PreBaked installs are JARs the operator did not deliver — never run the
 	// jar-removal Job against them. The user-supplied custom image owns
 	// /plugins/*; touching it could orphan files the operator did not put
@@ -606,10 +666,17 @@ func (r *Neo4jPluginReconciler) updatePluginStatus(ctx context.Context, plugin *
 // This is the recommended approach by Neo4j for Docker plugin installation
 func (r *Neo4jPluginReconciler) installPluginViaEnvironment(ctx context.Context, plugin *neo4jv1beta1.Neo4jPlugin, deployment *DeploymentInfo) error {
 	logger := log.FromContext(ctx)
-	preBaked := isPreBakedInstallMode(plugin)
-	if preBaked {
+	// preBaked retained as the local variable name for diff stability —
+	// it gates the same code paths whether the user is bringing the JAR
+	// via a custom image (PreBaked) or via the operator-injected init
+	// container (VerifiedDownload).
+	preBaked := shouldSkipNeo4jPluginsEnv(plugin)
+	switch {
+	case isVerifiedDownloadInstallMode(plugin):
+		logger.Info("Configuring plugin in VerifiedDownload mode — injecting checksum-verifying init container, skipping NEO4J_PLUGINS mutation", "plugin", plugin.Spec.Name)
+	case isPreBakedInstallMode(plugin):
 		logger.Info("Configuring plugin in PreBaked mode — skipping NEO4J_PLUGINS mutation", "plugin", plugin.Spec.Name)
-	} else {
+	default:
 		logger.Info("Installing plugin via NEO4J_PLUGINS environment variable", "plugin", plugin.Spec.Name)
 	}
 
@@ -870,10 +937,226 @@ func (r *Neo4jPluginReconciler) installPluginViaEnvironment(ctx context.Context,
 
 	logger.Info("Successfully updated StatefulSet with plugin configuration", "plugin", pluginName)
 
+	// VerifiedDownload mode: after the regular config/env-var write,
+	// inject the checksum-verifying init container so the JAR lands in
+	// /plugins before Neo4j starts. This is the only code path that
+	// emits init containers; PreBaked relies on the user's custom
+	// image carrying the JAR, and Managed delegates to the entrypoint.
+	if isVerifiedDownloadInstallMode(plugin) {
+		if err := r.injectVerifiedDownloadInitContainer(ctx, plugin, deployment); err != nil {
+			return fmt.Errorf("failed to inject verified-download init container: %w", err)
+		}
+	}
+
 	// Note: ConfigMap updates for standalone deployments are now handled earlier in reconcile flow
 	// before connectivity checks to ensure security settings are applied before Neo4j starts
 
 	return nil
+}
+
+// injectVerifiedDownloadInitContainer adds (or updates) the plugin's
+// init container on the target StatefulSet's pod template, plus the
+// matching auth/CA volumes. Ownership-tracked via the
+// PluginInitContainersAnnotation so the controller can remove its
+// own containers on uninstall without disturbing foreign ones.
+//
+// Same retry-on-conflict mechanics as the env-var path — the
+// StatefulSet's ResourceVersion races with the cluster controller's
+// own reconciles.
+func (r *Neo4jPluginReconciler) injectVerifiedDownloadInitContainer(
+	ctx context.Context,
+	plugin *neo4jv1beta1.Neo4jPlugin,
+	deployment *DeploymentInfo,
+) error {
+	stsKey := types.NamespacedName{
+		Name:      r.getStatefulSetName(deployment),
+		Namespace: deployment.Namespace,
+	}
+	containerName := resources.PluginInitContainerName(plugin.Spec.Name)
+
+	// CA bundle is sourced from the OWNING cluster/standalone's
+	// trustedCASecrets field — the JAR fetch typically goes to an
+	// internal Artifactory using the same corporate CA the rest of
+	// the deployment already trusts.
+	var caSecrets []neo4jv1beta1.TrustedCASecret
+	switch deployment.Type {
+	case "cluster":
+		if c, ok := deployment.Object.(*neo4jv1beta1.Neo4jEnterpriseCluster); ok {
+			caSecrets = c.Spec.TrustedCASecrets
+		}
+	case "standalone":
+		if s, ok := deployment.Object.(*neo4jv1beta1.Neo4jEnterpriseStandalone); ok {
+			caSecrets = s.Spec.TrustedCASecrets
+		}
+	}
+
+	desired := resources.BuildPluginVerifiedDownloadInitContainer(plugin, r.PluginInitImage, caSecrets)
+	authVol := resources.BuildPluginAuthVolume(plugin)
+	caVol := resources.BuildPluginCAVolume(caSecrets)
+
+	return retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+		sts := &appsv1.StatefulSet{}
+		if err := r.Get(ctx, stsKey, sts); err != nil {
+			return err
+		}
+
+		podSpec := &sts.Spec.Template.Spec
+
+		// Replace existing init container of the same name; otherwise append.
+		// Same name is the source of truth — Kubernetes itself enforces
+		// uniqueness, and our annotation tracks ownership for cleanup.
+		found := false
+		for i, ic := range podSpec.InitContainers {
+			if ic.Name == containerName {
+				podSpec.InitContainers[i] = desired
+				found = true
+				break
+			}
+		}
+		if !found {
+			podSpec.InitContainers = append(podSpec.InitContainers, desired)
+		}
+
+		// Add volumes if not already present (multiple VerifiedDownload
+		// plugins on the same cluster share the CA volume; each plugin
+		// has its own auth volume).
+		if authVol != nil && !podSpecHasVolume(podSpec, authVol.Name) {
+			podSpec.Volumes = append(podSpec.Volumes, *authVol)
+		}
+		if caVol != nil && !podSpecHasVolume(podSpec, caVol.Name) {
+			podSpec.Volumes = append(podSpec.Volumes, *caVol)
+		}
+
+		// Record ownership in the annotation so the uninstall path can
+		// remove only our init containers. The annotation lives on the
+		// PodTemplate annotation map so it travels with the spec
+		// fingerprint and triggers a rolling restart on change.
+		if sts.Spec.Template.Annotations == nil {
+			sts.Spec.Template.Annotations = map[string]string{}
+		}
+		owned := parsePluginInitOwned(sts.Spec.Template.Annotations[PluginInitContainersAnnotation])
+		if _, exists := owned[containerName]; !exists {
+			owned[containerName] = struct{}{}
+			sts.Spec.Template.Annotations[PluginInitContainersAnnotation] = formatPluginInitOwned(owned)
+		}
+
+		return r.Update(ctx, sts)
+	})
+}
+
+// removeVerifiedDownloadInitContainer is the inverse of
+// injectVerifiedDownloadInitContainer: drops the plugin's init
+// container from the StatefulSet PodSpec, removes the plugin-specific
+// auth volume if present, and updates the ownership annotation. The
+// shared CA volume is left alone — other VerifiedDownload plugins on
+// the same StatefulSet may still be using it; deleting it
+// unilaterally would break them.
+//
+// Idempotent: a second call (or a call after a delete-already-happened
+// scenario) is a no-op via the "not found" early returns.
+func (r *Neo4jPluginReconciler) removeVerifiedDownloadInitContainer(
+	ctx context.Context,
+	plugin *neo4jv1beta1.Neo4jPlugin,
+	deployment *DeploymentInfo,
+) error {
+	stsKey := types.NamespacedName{
+		Name:      r.getStatefulSetName(deployment),
+		Namespace: deployment.Namespace,
+	}
+	containerName := resources.PluginInitContainerName(plugin.Spec.Name)
+	authVolName := "plugin-auth-" + plugin.Spec.Name
+
+	return retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+		sts := &appsv1.StatefulSet{}
+		if err := r.Get(ctx, stsKey, sts); err != nil {
+			if errors.IsNotFound(err) {
+				return nil // StatefulSet already gone — nothing to clean up.
+			}
+			return err
+		}
+
+		podSpec := &sts.Spec.Template.Spec
+		changed := false
+
+		// Strip the init container.
+		filtered := podSpec.InitContainers[:0]
+		for _, ic := range podSpec.InitContainers {
+			if ic.Name == containerName {
+				changed = true
+				continue
+			}
+			filtered = append(filtered, ic)
+		}
+		podSpec.InitContainers = filtered
+
+		// Strip the per-plugin auth volume (CA volume is shared — leave it).
+		filteredVols := podSpec.Volumes[:0]
+		for _, v := range podSpec.Volumes {
+			if v.Name == authVolName {
+				changed = true
+				continue
+			}
+			filteredVols = append(filteredVols, v)
+		}
+		podSpec.Volumes = filteredVols
+
+		// Drop ourselves from the ownership annotation.
+		if sts.Spec.Template.Annotations != nil {
+			owned := parsePluginInitOwned(sts.Spec.Template.Annotations[PluginInitContainersAnnotation])
+			if _, ok := owned[containerName]; ok {
+				delete(owned, containerName)
+				if len(owned) == 0 {
+					delete(sts.Spec.Template.Annotations, PluginInitContainersAnnotation)
+				} else {
+					sts.Spec.Template.Annotations[PluginInitContainersAnnotation] = formatPluginInitOwned(owned)
+				}
+				changed = true
+			}
+		}
+
+		if !changed {
+			return nil // Nothing to update — return without bumping ResourceVersion.
+		}
+		return r.Update(ctx, sts)
+	})
+}
+
+// podSpecHasVolume reports whether a volume of the given name is
+// already declared on the PodSpec. Used to avoid duplicate Volume
+// entries when multiple VerifiedDownload plugins land on the same
+// StatefulSet over successive reconciles.
+func podSpecHasVolume(podSpec *corev1.PodSpec, name string) bool {
+	for _, v := range podSpec.Volumes {
+		if v.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+// parsePluginInitOwned + formatPluginInitOwned shuttle the comma-separated
+// annotation value through a set so add/remove operations are
+// order-independent and idempotent. Empty/whitespace tokens are
+// skipped.
+func parsePluginInitOwned(raw string) map[string]struct{} {
+	out := map[string]struct{}{}
+	for _, name := range strings.Split(raw, ",") {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		out[name] = struct{}{}
+	}
+	return out
+}
+
+func formatPluginInitOwned(set map[string]struct{}) string {
+	names := make([]string, 0, len(set))
+	for n := range set {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	return strings.Join(names, ",")
 }
 
 // updateStandaloneConfigMapForPlugin updates the ConfigMap for standalone deployments with plugin security settings

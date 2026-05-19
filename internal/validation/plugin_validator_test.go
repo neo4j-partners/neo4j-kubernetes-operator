@@ -552,3 +552,93 @@ func TestPluginValidator_compareVersions(t *testing.T) {
 		})
 	}
 }
+
+// TestPluginValidator_VerifiedDownloadGates locks in the three
+// cross-field gates the VerifiedDownload install mode imposes. Each
+// gate exists for a specific reason in the supply-chain story —
+// breaking them silently makes the verified-download flow look
+// healthy while actually shipping unverified or partially-verified
+// JARs.
+func TestPluginValidator_VerifiedDownloadGates(t *testing.T) {
+	validator := NewPluginValidator()
+
+	const validSHA256 = "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+
+	base := func(src *neo4jv1beta1.PluginSource, deps []neo4jv1beta1.PluginDependency) *neo4jv1beta1.Neo4jPlugin {
+		return &neo4jv1beta1.Neo4jPlugin{
+			ObjectMeta: metav1.ObjectMeta{Name: "p"},
+			Spec: neo4jv1beta1.Neo4jPluginSpec{
+				ClusterRef:   "c",
+				Name:         "apoc",
+				Version:      "5.26.0",
+				Enabled:      true,
+				InstallMode:  "VerifiedDownload",
+				Source:       src,
+				Dependencies: deps,
+			},
+		}
+	}
+
+	tests := []struct {
+		name    string
+		source  *neo4jv1beta1.PluginSource
+		deps    []neo4jv1beta1.PluginDependency
+		wantErr bool
+		errSubs string
+	}{
+		{
+			name:   "valid url+checksum passes",
+			source: &neo4jv1beta1.PluginSource{Type: "url", URL: "https://x/p.jar", Checksum: validSHA256},
+		},
+		{
+			name:    "missing url is rejected",
+			source:  &neo4jv1beta1.PluginSource{Type: "url", Checksum: validSHA256},
+			wantErr: true, errSubs: "spec.source.url",
+		},
+		{
+			name:    "missing checksum is rejected",
+			source:  &neo4jv1beta1.PluginSource{Type: "url", URL: "https://x/p.jar"},
+			wantErr: true, errSubs: "spec.source.checksum",
+		},
+		{
+			name:    "type=official is rejected — no verifiable URL",
+			source:  &neo4jv1beta1.PluginSource{Type: "official", URL: "https://x/p.jar", Checksum: validSHA256},
+			wantErr: true, errSubs: "url or source.type=custom",
+		},
+		{
+			name:    "type=community is rejected — no verifiable URL",
+			source:  &neo4jv1beta1.PluginSource{Type: "community", URL: "https://x/p.jar", Checksum: validSHA256},
+			wantErr: true, errSubs: "url or source.type=custom",
+		},
+		{
+			name:   "type=custom passes with url+checksum",
+			source: &neo4jv1beta1.PluginSource{Type: "custom", URL: "https://x/p.jar", Checksum: validSHA256},
+		},
+		{
+			name:   "dependencies are rejected — each must be its own CR",
+			source: &neo4jv1beta1.PluginSource{Type: "url", URL: "https://x/p.jar", Checksum: validSHA256},
+			deps: []neo4jv1beta1.PluginDependency{
+				{Name: "apoc-core", VersionConstraint: ">=5.0.0"},
+			},
+			wantErr: true, errSubs: "spec.dependencies",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			errs := validator.Validate(base(tt.source, tt.deps))
+			if tt.wantErr {
+				if len(errs) == 0 {
+					t.Fatalf("expected an error, got none")
+				}
+				if tt.errSubs != "" && !strings.Contains(errs.ToAggregate().Error(), tt.errSubs) {
+					t.Errorf("expected error to contain %q, got %v", tt.errSubs, errs)
+				}
+				return
+			}
+			if len(errs) > 0 {
+				t.Fatalf("expected no errors, got %v", errs)
+			}
+		})
+	}
+}
