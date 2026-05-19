@@ -346,7 +346,7 @@ func buildMCPService(namespace, name string, labels map[string]string, mcp *neo4
 			svc.Spec.LoadBalancerSourceRanges = mcp.HTTP.Service.LoadBalancerSourceRanges
 		}
 		if mcp.HTTP.Service.ExternalTrafficPolicy != "" {
-			svc.Spec.ExternalTrafficPolicy = corev1.ServiceExternalTrafficPolicyType(mcp.HTTP.Service.ExternalTrafficPolicy)
+			svc.Spec.ExternalTrafficPolicy = corev1.ServiceExternalTrafficPolicy(mcp.HTTP.Service.ExternalTrafficPolicy)
 		}
 	}
 
