@@ -4647,6 +4647,18 @@ typically because a Neo4j SSL policy references a per-policy <code>truststore_pa
 </span></code></pre></div>
 <h2 id="secrets-management">Secrets Management<a class="headerlink" href="#secrets-management" title="Anchor link to this section">&para;</a></h2>
 <h3 id="external-secrets-integration">External Secrets Integration<a class="headerlink" href="#external-secrets-integration" title="Anchor link to this section">&para;</a></h3>
+<blockquote>
+<p><strong>Helm</strong>: the chart does <strong>not</strong> grant the operator RBAC for the
+<code>external-secrets.io</code> API group by default. To enable the integration,
+install with <code>--set rbac.externalSecretsIntegration=true</code> (or set it in
+your values file). Without this, any <code>Neo4jEnterpriseCluster</code> /
+<code>Neo4jEnterpriseStandalone</code> that sets <code>spec.tls.externalSecrets.enabled=true</code>
+or <code>spec.auth.externalSecrets.enabled=true</code> will fail with a clear
+RBAC-denied error when the operator tries to create the <code>ExternalSecret</code>.
+The default-off posture follows the November 2025 security review's
+recommendation to keep the operator's RBAC blast radius narrow for
+deployments that don't actually use the integration.</p>
+</blockquote>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="c1"># SecretStore for AWS Secrets Manager</span>
 </span><span id="__span-29-2"><a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">external-secrets.io/v1beta1</span>
 </span><span id="__span-29-3"><a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SecretStore</span>
