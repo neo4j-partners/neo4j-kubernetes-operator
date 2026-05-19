@@ -18,12 +18,19 @@ package validation
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/util/validation/field"
 
 	neo4jv1beta1 "github.com/priyolahiri/neo4j-kubernetes-operator/api/v1beta1"
 )
+
+// checksumPattern matches "sha256:<64-hex>" or "sha512:<128-hex>".
+// The algorithm prefix is required so verification tooling never has to
+// guess. SHA1 and MD5 are deliberately excluded — supply-chain protection
+// against a malicious upstream demands a collision-resistant hash.
+var checksumPattern = regexp.MustCompile(`^(sha256:[a-fA-F0-9]{64}|sha512:[a-fA-F0-9]{128})$`)
 
 // PluginValidator validates Neo4j plugin configuration for Neo4j 5.26+ compatibility
 type PluginValidator struct{}
@@ -159,11 +166,30 @@ func (v *PluginValidator) validatePluginSource(source *neo4jv1beta1.PluginSource
 		))
 	}
 
-	// Validate checksum for security
-	if source.Type == "url" && source.Checksum == "" {
+	// Supply-chain: any source that fetches a JAR from an arbitrary URL
+	// MUST commit to a checksum. Both "url" and "custom" reach an outside
+	// endpoint; "official" and "community" resolve via the Neo4j Docker
+	// entrypoint's curated manifest and don't accept a user-supplied URL.
+	// Note: today the Neo4j entrypoint does not verify this checksum at
+	// download time — it is recorded by the operator and surfaced as a
+	// StatefulSet annotation so users (and audit tooling) can verify
+	// out-of-band, or so a future init-container verifier can enforce.
+	// See docs/user_guide/plugin_supply_chain.md for the model.
+	if (source.Type == "url" || source.Type == "custom") && source.Checksum == "" {
 		allErrs = append(allErrs, field.Required(
 			sourcePath.Child("checksum"),
-			"checksum must be specified for url source type for security",
+			"checksum is required for url and custom source types — supply-chain protection",
+		))
+	}
+
+	// Validate checksum format when present. Accept only sha256/sha512
+	// with the correct hex digit count; reject SHA1/MD5 (collision-prone)
+	// and unprefixed hex (verification tools shouldn't have to guess).
+	if source.Checksum != "" && !checksumPattern.MatchString(source.Checksum) {
+		allErrs = append(allErrs, field.Invalid(
+			sourcePath.Child("checksum"),
+			source.Checksum,
+			"checksum must be of the form sha256:<64 hex chars> or sha512:<128 hex chars>",
 		))
 	}
 

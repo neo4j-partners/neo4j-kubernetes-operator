@@ -17,6 +17,7 @@ limitations under the License.
 package validation
 
 import (
+	"strings"
 	"testing"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -155,9 +156,10 @@ func TestPluginValidator_Validate(t *testing.T) {
 					Version:    "5.26.0",
 					Enabled:    true,
 					Source: &neo4jv1beta1.PluginSource{
-						Type:     "url",
-						URL:      "https://example.com/plugin.jar",
-						Checksum: "sha256:abc123",
+						Type: "url",
+						URL:  "https://example.com/plugin.jar",
+						// 64-char sha256 hex for a representative plugin JAR.
+						Checksum: "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
 					},
 				},
 			},
@@ -327,6 +329,102 @@ func TestPluginValidator_Validate(t *testing.T) {
 				}
 			} else if len(errors) > 0 {
 				t.Errorf("expected no validation errors but got %d: %v", len(errors), errors)
+			}
+		})
+	}
+}
+
+// TestPluginValidator_ChecksumRules locks in the supply-chain validation
+// contract: arbitrary-URL source types must commit to a sha256/sha512
+// checksum in the canonical algo-prefixed form. Weaker algorithms (sha1,
+// md5) and unprefixed hex are rejected so verification tooling never has
+// to guess.
+func TestPluginValidator_ChecksumRules(t *testing.T) {
+	validator := NewPluginValidator()
+
+	const validSHA256 = "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+	const validSHA512 = "sha512:cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e"
+
+	base := func(src *neo4jv1beta1.PluginSource) *neo4jv1beta1.Neo4jPlugin {
+		return &neo4jv1beta1.Neo4jPlugin{
+			ObjectMeta: metav1.ObjectMeta{Name: "p"},
+			Spec: neo4jv1beta1.Neo4jPluginSpec{
+				ClusterRef: "c",
+				Name:       "apoc",
+				Version:    "5.26.0",
+				Enabled:    true,
+				Source:     src,
+			},
+		}
+	}
+
+	tests := []struct {
+		name    string
+		source  *neo4jv1beta1.PluginSource
+		wantErr bool
+		errSubs string // expected substring in the joined error, if wantErr
+	}{
+		{
+			name:   "url with valid sha256 passes",
+			source: &neo4jv1beta1.PluginSource{Type: "url", URL: "https://x/p.jar", Checksum: validSHA256},
+		},
+		{
+			name:   "url with valid sha512 passes",
+			source: &neo4jv1beta1.PluginSource{Type: "url", URL: "https://x/p.jar", Checksum: validSHA512},
+		},
+		{
+			name:    "custom requires checksum (previously only url did)",
+			source:  &neo4jv1beta1.PluginSource{Type: "custom", URL: "https://x/p.jar"},
+			wantErr: true, errSubs: "checksum is required",
+		},
+		{
+			name:   "custom with valid sha256 passes",
+			source: &neo4jv1beta1.PluginSource{Type: "custom", URL: "https://x/p.jar", Checksum: validSHA256},
+		},
+		{
+			name:   "official does not require checksum",
+			source: &neo4jv1beta1.PluginSource{Type: "official"},
+		},
+		{
+			name:   "community does not require checksum",
+			source: &neo4jv1beta1.PluginSource{Type: "community"},
+		},
+		{
+			name:    "url with sha1 rejected (collision-prone)",
+			source:  &neo4jv1beta1.PluginSource{Type: "url", URL: "https://x/p.jar", Checksum: "sha1:a94a8fef8c17b933bce8fc1f3e3f6a3b6df8f4dd"},
+			wantErr: true, errSubs: "sha256:",
+		},
+		{
+			name:    "url with md5 rejected",
+			source:  &neo4jv1beta1.PluginSource{Type: "url", URL: "https://x/p.jar", Checksum: "md5:d41d8cd98f00b204e9800998ecf8427e"},
+			wantErr: true, errSubs: "sha256:",
+		},
+		{
+			name:    "url with unprefixed hex rejected",
+			source:  &neo4jv1beta1.PluginSource{Type: "url", URL: "https://x/p.jar", Checksum: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+			wantErr: true, errSubs: "sha256:",
+		},
+		{
+			name:    "url with sha256 prefix but wrong length rejected",
+			source:  &neo4jv1beta1.PluginSource{Type: "url", URL: "https://x/p.jar", Checksum: "sha256:abc123"},
+			wantErr: true, errSubs: "sha256:",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			errs := validator.Validate(base(tt.source))
+			if tt.wantErr {
+				if len(errs) == 0 {
+					t.Fatalf("expected an error, got none")
+				}
+				if tt.errSubs != "" && !strings.Contains(errs.ToAggregate().Error(), tt.errSubs) {
+					t.Errorf("expected error to contain %q, got %v", tt.errSubs, errs)
+				}
+				return
+			}
+			if len(errs) > 0 {
+				t.Fatalf("expected no errors, got %v", errs)
 			}
 		})
 	}
