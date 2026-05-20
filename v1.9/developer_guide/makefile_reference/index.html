@@ -2529,6 +2529,28 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#make-bundle-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        make bundle-release
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#make-install-hooks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        make install-hooks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#make-helm-sync-crds" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4052,6 +4074,28 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#make-bundle-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        make bundle-release
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#make-install-hooks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        make install-hooks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#make-helm-sync-crds" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5413,6 +5457,8 @@
 </span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>make<span class="w"> </span>sync-all<span class="w">             </span><span class="c1"># Regenerate all artifacts (CRDs, RBAC, helm chart, kustomize lists)</span>
 </span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>make<span class="w"> </span>ship-prep<span class="w">            </span><span class="c1"># sync-all + bundle + helm lint + CSV coverage check</span>
 </span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>make<span class="w"> </span>check-drift<span class="w">          </span><span class="c1"># CI gate: fails if any generated file is stale</span>
+</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>make<span class="w"> </span>bundle-release<span class="w">       </span><span class="c1"># Bundle + real createdAt: timestamp (release workflow only)</span>
+</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>make<span class="w"> </span>install-hooks<span class="w">        </span><span class="c1"># One-time: install pre-commit hooks (runs check-drift before commit)</span>
 </span></code></pre></div>
 <h2 id="target-categories">Target Categories<a class="headerlink" href="#target-categories" title="Anchor link to this section">&para;</a></h2>
 <p>The Makefile is organized into logical categories:</p>
@@ -5528,7 +5574,16 @@ Chains: <code>manifests</code> → <code>generate</code> → <code>sync-kustomiz
 <h3 id="make-check-drift"><code>make check-drift</code><a class="headerlink" href="#make-check-drift" title="Anchor link to this section">&para;</a></h3>
 <p><strong>Description</strong>: Regenerate every artifact and <code>git diff --exit-code</code> to fail if anything is stale. Used as a CI gate (<code>.github/workflows/ci.yml</code>).
 <strong>Usage</strong>: <code>make check-drift</code>
-<strong>Notes</strong>: ignores the <code>createdAt:</code> timestamp the operator-sdk stamps on every bundle build. If this target fails locally, run <code>make sync-all bundle</code> and commit the result.</p>
+<strong>Notes</strong>: <code>make bundle</code> pins the CSV's <code>createdAt:</code> to a stable placeholder (see <code>PINNED_CREATED_AT</code> in the Makefile), so two consecutive runs produce byte-identical output and concurrent PRs no longer conflict on the timestamp. The <code>-I '^    createdAt:'</code> filter is kept as belt-and-braces in case someone bypasses <code>make bundle</code> and calls <code>operator-sdk generate bundle</code> directly. If <code>check-drift</code> fails locally, run <code>make sync-all bundle</code> and commit the result. The same check runs as a <code>pre-commit</code> hook locally once you've run <code>make install-hooks</code> — see below.</p>
+<h3 id="make-bundle-release"><code>make bundle-release</code><a class="headerlink" href="#make-bundle-release" title="Anchor link to this section">&para;</a></h3>
+<p><strong>Description</strong>: Same as <code>make bundle</code>, but stamps the real current UTC timestamp into the CSV's <code>createdAt:</code> annotation (overriding the pinned placeholder). Run this from the release workflow before publishing to OperatorHub so the bundle ships with a meaningful <code>createdAt:</code> for end-user tooling.
+<strong>Usage</strong>: <code>make bundle-release</code>
+<strong>Notes</strong>: only run from release CI — local invocations leave a real timestamp in <code>bundle/</code> that will conflict with every other concurrent PR. If you run it by accident, <code>make bundle</code> resets it to the placeholder.</p>
+<h3 id="make-install-hooks"><code>make install-hooks</code><a class="headerlink" href="#make-install-hooks" title="Anchor link to this section">&para;</a></h3>
+<p><strong>Description</strong>: Install git pre-commit hooks (drift gate, fmt, lint, gitleaks, commitizen). Wraps <code>pre-commit install</code> and <code>pre-commit install --hook-type commit-msg</code>.
+<strong>Usage</strong>: <code>make install-hooks</code> (one-time per clone)
+<strong>Prerequisite</strong>: <code>pre-commit</code> on your <code>PATH</code> (<code>pip install pre-commit</code> or <code>brew install pre-commit</code>).
+<strong>What the drift hook does</strong>: when staged files match <code>api/v1beta1/*.go</code>, <code>internal/controller/*_controller.go</code>, <code>scripts/{helm-sync-*,check-csv-coverage,update-alm-examples}*</code>, <code>config/manifests/bases/*.csv.yaml</code>, <code>config/{crd,rbac,samples,manifests}/</code>, <code>charts/neo4j-operator/</code>, or <code>bundle/</code>, the hook runs <code>make check-drift</code>. On stale artifacts the regenerated files are left in your working tree; <code>git add -u</code> and recommit.</p>
 <h3 id="make-helm-sync-crds"><code>make helm-sync-crds</code><a class="headerlink" href="#make-helm-sync-crds" title="Anchor link to this section">&para;</a></h3>
 <p><strong>Description</strong>: Copy the kubebuilder-generated CRDs from <code>config/crd/bases/</code> into <code>charts/neo4j-operator/crds/</code> so the Helm install picks them up.
 <strong>Usage</strong>: <code>make helm-sync-crds</code>

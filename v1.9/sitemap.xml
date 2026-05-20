@@ -2,226 +2,226 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/api_reference/neo4jauthrule/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/api_reference/neo4jbackup/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/api_reference/neo4jdatabase/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/api_reference/neo4jenterprisecluster/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/api_reference/neo4jenterprisestandalone/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/api_reference/neo4jplugin/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/api_reference/neo4jrestore/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/api_reference/neo4jrole/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/api_reference/neo4jrolebinding/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/api_reference/neo4jshardeddatabase/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/api_reference/neo4juser/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/developer_guide/architecture/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/developer_guide/contributing/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/developer_guide/development/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/developer_guide/makefile_reference/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/developer_guide/openshift_olm/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/developer_guide/testing/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/gitops/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/quick-reference/operator-modes-cheat-sheet/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/user_guide/aura_fleet_management/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/user_guide/clustering/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/user_guide/configuration/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/user_guide/deployment/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/user_guide/external_access/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/user_guide/getting_started/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/user_guide/installation/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/user_guide/migration_guide/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/user_guide/operator-modes/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/user_guide/performance/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/user_guide/property_sharding/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/user_guide/security/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/user_guide/tls_certificates/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/user_guide/topology_placement/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/user_guide/user_role_management/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/user_guide/configuration/tls/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/user_guide/guides/backup-disk-management/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/user_guide/guides/backup-sidecar-requirements/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/user_guide/guides/backup_restore/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/user_guide/guides/configuration_best_practices/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/user_guide/guides/demo/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/user_guide/guides/fault_tolerance/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/user_guide/guides/kubernetes-events/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/user_guide/guides/mcp_client_setup/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/user_guide/guides/monitoring/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/user_guide/guides/performance/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/user_guide/guides/prometheus-grafana-setup/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/user_guide/guides/resource_sizing/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/user_guide/guides/security/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/user_guide/guides/seed-uri/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/user_guide/guides/storage_expansion/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/user_guide/guides/troubleshooting/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/user_guide/guides/upgrades/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/user_guide/quick-reference/split-brain-recovery-quick-ref/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/user_guide/troubleshooting/backup_restore/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.9/user_guide/troubleshooting/split-brain-recovery/</loc>
-         <lastmod>2026-05-07</lastmod>
+         <lastmod>2026-05-20</lastmod>
     </url>
 </urlset>

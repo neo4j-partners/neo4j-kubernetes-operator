@@ -3947,7 +3947,7 @@
 </ul>
 </li>
 </ol>
-<p>CI's <code>check-drift</code> job runs <code>make sync-all bundle</code> and fails the PR if anything is out of date — this enforces step 8.</p>
+<p>CI's <code>check-drift</code> job runs <code>make sync-all bundle</code> and fails the PR if anything is out of date — this enforces step 8. To catch drift locally before pushing, run <code>make install-hooks</code> once; the pre-commit <code>check-drift</code> hook fires whenever you stage files under <code>api/</code>, <code>internal/controller/</code>, <code>scripts/</code>, <code>config/</code>, <code>charts/</code>, or <code>bundle/</code>, runs the same gate, and leaves regenerated artifacts in your working tree if anything was stale.</p>
 <h3 id="performance-considerations">Performance Considerations<a class="headerlink" href="#performance-considerations" title="Anchor link to this section">&para;</a></h3>
 <p><strong>Controller Optimization</strong>:
 - Use <code>client.Reader</code> for read-only operations
