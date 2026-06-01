@@ -223,6 +223,12 @@ type BackupStats struct {
 
 // BackupRun represents a single backup execution
 type BackupRun struct {
+	// RunID uniquely identifies this backup execution. Populated from the
+	// backing Job's metadata.uid so a history entry can be correlated with
+	// the actual Job artifact (or audit log) that produced it. Stable for
+	// the lifetime of the Job; new for every retry.
+	RunID string `json:"runID,omitempty"`
+
 	// Start time of the backup run
 	StartTime metav1.Time `json:"startTime"`
 

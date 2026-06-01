@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sort"
 	"strconv"
 	"time"
 
@@ -143,6 +144,15 @@ func (r *Neo4jBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
 	}
 
+	// suspend applies to BOTH scheduled and one-time backups. Checking here
+	// (above the schedule branch) keeps the semantics consistent — historically
+	// the check lived inside handleScheduledBackup, so suspend=true was a no-op
+	// for one-time backups (issue #116).
+	if backup.Spec.Suspend {
+		r.updateBackupStatus(ctx, backup, "Suspended", "Backup is suspended")
+		return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
+	}
+
 	// Handle scheduled backups
 	if backup.Spec.Schedule != "" {
 		return r.handleScheduledBackup(ctx, backup, targetCluster)
@@ -185,12 +195,6 @@ func (r *Neo4jBackupReconciler) handleScheduledBackup(ctx context.Context, backu
 		return ctrl.Result{}, err
 	}
 
-	// Check if backup is suspended
-	if backup.Spec.Suspend {
-		r.updateBackupStatus(ctx, backup, "Suspended", "Backup schedule is suspended")
-		return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
-	}
-
 	// Create or update CronJob for scheduled backups
 	cronJob, err := r.createBackupCronJob(ctx, backup, cluster)
 	if err != nil {
@@ -203,11 +207,123 @@ func (r *Neo4jBackupReconciler) handleScheduledBackup(ctx context.Context, backu
 	r.updateBackupStatus(ctx, backup, "Scheduled", "Backup scheduled with CronJob "+cronJob.Name)
 	r.Recorder.Event(backup, corev1.EventTypeNormal, EventReasonBackupScheduled, "Backup scheduled with CronJob "+cronJob.Name)
 
+	// Record any completed CronJob child Jobs in status.history. Non-fatal —
+	// a failure to update history must not block scheduled backup
+	// reconciliation. Issue #118.
+	if err := r.reconcileScheduledHistory(ctx, backup); err != nil {
+		logger.Error(err, "Failed to update scheduled backup history")
+	}
+
 	return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
+}
+
+// reconcileScheduledHistory scans Jobs spawned by this backup's CronJob and
+// appends a BackupRun entry for any completed Job not yet present in
+// status.history. Required because the CronJob's child Jobs are owned by the
+// CronJob (not the Neo4jBackup CR), so the controller's `Owns(&batchv1.Job{})`
+// wiring does not fire on them and updateBackupStats — which is called from
+// handleExistingBackupJob — is unreachable for the scheduled path. Issue #118.
+func (r *Neo4jBackupReconciler) reconcileScheduledHistory(ctx context.Context, backup *neo4jv1beta1.Neo4jBackup) error {
+	var jobs batchv1.JobList
+	if err := r.List(ctx, &jobs,
+		client.InNamespace(backup.Namespace),
+		client.MatchingLabels{"app.kubernetes.io/instance": backup.Name}); err != nil {
+		return err
+	}
+
+	update := func() error {
+		latest := &neo4jv1beta1.Neo4jBackup{}
+		if err := r.Get(ctx, client.ObjectKeyFromObject(backup), latest); err != nil {
+			return err
+		}
+
+		changed := false
+		for i := range jobs.Items {
+			job := &jobs.Items[i]
+			run, ok := jobToBackupRun(job)
+			if !ok {
+				continue // still running
+			}
+			if backupRunAlreadyRecorded(latest.Status.History, run) {
+				continue
+			}
+			latest.Status.History = append(latest.Status.History, run)
+			changed = true
+		}
+		if !changed {
+			return nil
+		}
+
+		// Sort newest-first by StartTime to match the one-time-backup path's
+		// ordering (which prepends), then cap at 10 entries.
+		sort.SliceStable(latest.Status.History, func(i, j int) bool {
+			return latest.Status.History[i].StartTime.After(latest.Status.History[j].StartTime.Time)
+		})
+		if len(latest.Status.History) > 10 {
+			latest.Status.History = latest.Status.History[:10]
+		}
+
+		return r.Status().Update(ctx, latest)
+	}
+	return retry.RetryOnConflict(retry.DefaultBackoff, update)
+}
+
+// jobToBackupRun builds a BackupRun for a completed Job. Returns ok=false if
+// the Job has not finished (neither Succeeded nor Failed > 0).
+func jobToBackupRun(job *batchv1.Job) (neo4jv1beta1.BackupRun, bool) {
+	run := neo4jv1beta1.BackupRun{
+		RunID: string(job.UID),
+	}
+	if job.Status.StartTime != nil {
+		run.StartTime = *job.Status.StartTime
+	}
+	run.CompletionTime = job.Status.CompletionTime
+
+	switch {
+	case job.Status.Succeeded > 0:
+		run.Status = "Succeeded"
+		if job.Status.StartTime != nil && job.Status.CompletionTime != nil {
+			run.Stats = &neo4jv1beta1.BackupStats{
+				Duration: job.Status.CompletionTime.Sub(job.Status.StartTime.Time).Round(time.Second).String(),
+			}
+		}
+		return run, true
+	case job.Status.Failed > 0:
+		run.Status = "Failed"
+		return run, true
+	default:
+		return run, false
+	}
+}
+
+// backupRunAlreadyRecorded reports whether a BackupRun with the same RunID is
+// already in history. RunID comes from the Job's metadata.uid which is unique
+// and stable per Job, so this is a reliable dedup key.
+func backupRunAlreadyRecorded(history []neo4jv1beta1.BackupRun, run neo4jv1beta1.BackupRun) bool {
+	if run.RunID == "" {
+		return false
+	}
+	for _, existing := range history {
+		if existing.RunID == run.RunID {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *Neo4jBackupReconciler) handleOneTimeBackup(ctx context.Context, backup *neo4jv1beta1.Neo4jBackup, cluster *neo4jv1beta1.Neo4jEnterpriseCluster) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
+
+	// One-time backups are terminal once Completed or Failed. Without this
+	// guard the controller would re-create a fresh Job every time the
+	// successful Job's TTLSecondsAfterFinished expires and the Job is GC'd
+	// (the OwnerReference watch fires a reconcile, the existing-Job lookup
+	// below returns NotFound, and the controller assumes "no Job yet, create
+	// one"). To retry a Failed one-time backup, delete and recreate the CR.
+	// Issue #116.
+	if backup.Status.Phase == "Completed" || backup.Status.Phase == "Failed" {
+		return ctrl.Result{}, nil
+	}
 
 	// Ensure backup ServiceAccount exists (and carries workload-identity annotations).
 	if err := r.ensureBackupServiceAccount(ctx, backup); err != nil {
@@ -988,6 +1104,7 @@ func (r *Neo4jBackupReconciler) updateBackupStats(ctx context.Context, backup *n
 		latest.Status.Stats = stats
 
 		run := neo4jv1beta1.BackupRun{
+			RunID:  string(job.UID),
 			Status: "Succeeded",
 			Stats:  stats,
 		}
@@ -995,6 +1112,15 @@ func (r *Neo4jBackupReconciler) updateBackupStats(ctx context.Context, backup *n
 			run.StartTime = *job.Status.StartTime
 		}
 		run.CompletionTime = job.Status.CompletionTime
+
+		// Dedup: the terminal-phase guard in handleOneTimeBackup (issue #116)
+		// already prevents repeat calls for the same Job, but record the
+		// invariant explicitly here so future callers can't reintroduce
+		// duplicates. The Job UID is the cheapest stable key — every retry
+		// produces a new Job with a new UID.
+		if backupRunAlreadyRecorded(latest.Status.History, run) {
+			return r.Status().Update(ctx, latest)
+		}
 
 		latest.Status.History = append([]neo4jv1beta1.BackupRun{run}, latest.Status.History...)
 		if len(latest.Status.History) > 10 {

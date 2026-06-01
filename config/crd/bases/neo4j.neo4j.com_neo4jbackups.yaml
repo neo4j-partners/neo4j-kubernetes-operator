@@ -446,6 +446,13 @@ spec:
                     error:
                       description: Error message if the backup failed
                       type: string
+                    runID:
+                      description: |-
+                        RunID uniquely identifies this backup execution. Populated from the
+                        backing Job's metadata.uid so a history entry can be correlated with
+                        the actual Job artifact (or audit log) that produced it. Stable for
+                        the lifetime of the Job; new for every retry.
+                      type: string
                     startTime:
                       description: Start time of the backup run
                       format: date-time
