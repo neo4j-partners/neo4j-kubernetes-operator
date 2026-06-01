@@ -279,13 +279,10 @@ func TestReplicasReconciliationPaused(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			var owner interface{ GetAnnotations() map[string]string }
 			if tc.owner == nil {
 				assert.Equal(t, tc.expected, replicasReconciliationPaused(nil))
 				return
 			}
-			owner = tc.owner
-			_ = owner
 			assert.Equal(t, tc.expected, replicasReconciliationPaused(tc.owner))
 		})
 	}
