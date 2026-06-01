@@ -614,7 +614,7 @@ func (r *Neo4jBackupReconciler) buildBackupCommand(ctx context.Context, backup *
 	// Falls back to the cluster shape on any lookup error so the
 	// existing cluster-backup path remains the no-op default.
 	fromAddresses := resources.BuildBackupFromAddresses(cluster)
-	if isStandalone, standalone, lookupErr := r.isStandaloneTarget(context.Background(), backup); lookupErr == nil && isStandalone && standalone != nil {
+	if isStandalone, standalone, lookupErr := r.isStandaloneTarget(ctx, backup); lookupErr == nil && isStandalone && standalone != nil {
 		fromAddresses = resources.BuildStandaloneBackupFromAddress(standalone)
 	}
 	allDatabases := backup.Spec.Target.Kind == "Cluster"
