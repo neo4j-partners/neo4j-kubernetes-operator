@@ -1929,19 +1929,7 @@ echo "Server index: ${SERVER_INDEX}"
 # Minimum: 2 servers (servers self-organize for database hosting)
 echo "Multi-server cluster: using LIST discovery with static pod FQDNs"
 
-# ME/OTHER bootstrap strategy: server-0 bootstraps, all others join.
-# With Parallel pod management all pods start simultaneously. Using LIST discovery
-# with static pod FQDNs (via the headless service DNS) and minimum_initial_system_primaries_count
-# set to TOTAL_SERVERS ensures all servers discover each other before RAFT election.
-# Server-0 (me) is preferred bootstrapper; all others (other) join when ready.
-if [ "$SERVER_INDEX" = "0" ]; then
-    echo "Server 0: Using bootstrapping strategy 'me' (preferred cluster bootstrapper)"
-    BOOTSTRAP_STRATEGY="me"
-else
-    echo "Server ${SERVER_INDEX}: Using bootstrapping strategy 'other' (joining cluster)"
-    BOOTSTRAP_STRATEGY="other"
-fi
-echo "Configuring cluster with bootstrap strategy: ${BOOTSTRAP_STRATEGY}"
+` + buildBootstrapStrategyShellBlock(cluster) + `
 
 cat >> /tmp/neo4j-config/neo4j.conf << EOF
 
@@ -2097,6 +2085,38 @@ internal.dbms.cluster.discovery.resolution_timeout=1d`
 // in both Neo4j 5.26.x and 2025.x CalVer.
 func getMinInitialPrimariesSetting(_ *neo4jv1beta1.Neo4jEnterpriseCluster) string {
 	return "dbms.cluster.minimum_initial_system_primaries_count"
+}
+
+// buildBootstrapStrategyShellBlock returns the shell snippet that assigns
+// BOOTSTRAP_STRATEGY (me on server-0, other elsewhere) before
+// buildVersionSpecificDiscoveryConfig inserts ${BOOTSTRAP_STRATEGY} into
+// the SemVer-only internal.dbms.cluster.discovery.system_bootstrapping_strategy
+// directive.
+//
+// CalVer (2025.x+) does not honour system_bootstrapping_strategy at all — the
+// V2 discovery protocol elects a bootstrapper from the LIST endpoints
+// without an explicit hint — so on CalVer the variable would be assigned
+// and never consumed. Return an empty string so the dead assignment isn't
+// even emitted into the startup script.
+func buildBootstrapStrategyShellBlock(cluster *neo4jv1beta1.Neo4jEnterpriseCluster) string {
+	if isCalverImage(cluster.Spec.Image.Tag) {
+		return `# CalVer (2025.x+): V2 discovery elects a bootstrapper from the LIST endpoints;
+# internal.dbms.cluster.discovery.system_bootstrapping_strategy is SemVer-only,
+# so no BOOTSTRAP_STRATEGY assignment is emitted here.`
+	}
+	return `# ME/OTHER bootstrap strategy: server-0 bootstraps, all others join.
+# With Parallel pod management all pods start simultaneously. Using LIST discovery
+# with static pod FQDNs (via the headless service DNS) and minimum_initial_system_primaries_count
+# set to TOTAL_SERVERS ensures all servers discover each other before RAFT election.
+# Server-0 (me) is preferred bootstrapper; all others (other) join when ready.
+if [ "$SERVER_INDEX" = "0" ]; then
+    echo "Server 0: Using bootstrapping strategy 'me' (preferred cluster bootstrapper)"
+    BOOTSTRAP_STRATEGY="me"
+else
+    echo "Server ${SERVER_INDEX}: Using bootstrapping strategy 'other' (joining cluster)"
+    BOOTSTRAP_STRATEGY="other"
+fi
+echo "Configuring cluster with bootstrap strategy: ${BOOTSTRAP_STRATEGY}"`
 }
 
 // ValidateServerRoleHints validates server role hints configuration
