@@ -143,6 +143,15 @@ func (r *Neo4jBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
 	}
 
+	// suspend applies to BOTH scheduled and one-time backups. Checking here
+	// (above the schedule branch) keeps the semantics consistent — historically
+	// the check lived inside handleScheduledBackup, so suspend=true was a no-op
+	// for one-time backups (issue #116).
+	if backup.Spec.Suspend {
+		r.updateBackupStatus(ctx, backup, "Suspended", "Backup is suspended")
+		return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
+	}
+
 	// Handle scheduled backups
 	if backup.Spec.Schedule != "" {
 		return r.handleScheduledBackup(ctx, backup, targetCluster)
@@ -185,12 +194,6 @@ func (r *Neo4jBackupReconciler) handleScheduledBackup(ctx context.Context, backu
 		return ctrl.Result{}, err
 	}
 
-	// Check if backup is suspended
-	if backup.Spec.Suspend {
-		r.updateBackupStatus(ctx, backup, "Suspended", "Backup schedule is suspended")
-		return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
-	}
-
 	// Create or update CronJob for scheduled backups
 	cronJob, err := r.createBackupCronJob(ctx, backup, cluster)
 	if err != nil {
@@ -208,6 +211,17 @@ func (r *Neo4jBackupReconciler) handleScheduledBackup(ctx context.Context, backu
 
 func (r *Neo4jBackupReconciler) handleOneTimeBackup(ctx context.Context, backup *neo4jv1beta1.Neo4jBackup, cluster *neo4jv1beta1.Neo4jEnterpriseCluster) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
+
+	// One-time backups are terminal once Completed or Failed. Without this
+	// guard the controller would re-create a fresh Job every time the
+	// successful Job's TTLSecondsAfterFinished expires and the Job is GC'd
+	// (the OwnerReference watch fires a reconcile, the existing-Job lookup
+	// below returns NotFound, and the controller assumes "no Job yet, create
+	// one"). To retry a Failed one-time backup, delete and recreate the CR.
+	// Issue #116.
+	if backup.Status.Phase == "Completed" || backup.Status.Phase == "Failed" {
+		return ctrl.Result{}, nil
+	}
 
 	// Ensure backup ServiceAccount exists (and carries workload-identity annotations).
 	if err := r.ensureBackupServiceAccount(ctx, backup); err != nil {

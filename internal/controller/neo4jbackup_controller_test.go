@@ -225,6 +225,91 @@ var _ = Describe("Neo4jBackup Controller", func() {
 			Expect(containers[0].Args).To(HaveLen(2))
 			Expect(containers[0].Args[1]).To(ContainSubstring("neo4j-admin database backup"))
 		})
+
+		// Regression for #116: a one-time backup with status.phase=Completed must
+		// not re-create the backup Job after the original Job's
+		// TTLSecondsAfterFinished expires and the Job is GC'd. Same for Failed.
+		It("Should not recreate Job for a Completed one-time backup", func() {
+			By("Creating the one-time backup resource")
+			Expect(k8sClient.Create(ctx, backup)).Should(Succeed())
+
+			By("Waiting for the initial backup Job to be created")
+			jobKey := types.NamespacedName{Name: backupName + "-backup", Namespace: namespaceName}
+			job := &batchv1.Job{}
+			Eventually(func() error { return k8sClient.Get(ctx, jobKey, job) }, timeout, interval).Should(Succeed())
+
+			By("Patching CR status to Completed (simulating successful Job)")
+			Eventually(func() error {
+				if err := k8sClient.Get(ctx, types.NamespacedName{Name: backupName, Namespace: namespaceName}, backup); err != nil {
+					return err
+				}
+				patch := client.MergeFrom(backup.DeepCopy())
+				backup.Status.Phase = "Completed"
+				return k8sClient.Status().Patch(ctx, backup, patch)
+			}, timeout, interval).Should(Succeed())
+
+			By("Deleting the Job (simulating TTL-driven GC)")
+			Expect(k8sClient.Delete(ctx, job, client.PropagationPolicy(metav1.DeletePropagationBackground))).To(Succeed())
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, jobKey, &batchv1.Job{})
+				return errors.IsNotFound(err)
+			}, timeout, interval).Should(BeTrue())
+
+			By("Verifying the controller does NOT recreate the Job")
+			Consistently(func() bool {
+				err := k8sClient.Get(ctx, jobKey, &batchv1.Job{})
+				return errors.IsNotFound(err)
+			}, 5*time.Second, interval).Should(BeTrue())
+		})
+
+		It("Should not recreate Job for a Failed one-time backup", func() {
+			By("Creating the one-time backup resource")
+			Expect(k8sClient.Create(ctx, backup)).Should(Succeed())
+
+			By("Waiting for the initial backup Job to be created")
+			jobKey := types.NamespacedName{Name: backupName + "-backup", Namespace: namespaceName}
+			job := &batchv1.Job{}
+			Eventually(func() error { return k8sClient.Get(ctx, jobKey, job) }, timeout, interval).Should(Succeed())
+
+			By("Patching CR status to Failed")
+			Eventually(func() error {
+				if err := k8sClient.Get(ctx, types.NamespacedName{Name: backupName, Namespace: namespaceName}, backup); err != nil {
+					return err
+				}
+				patch := client.MergeFrom(backup.DeepCopy())
+				backup.Status.Phase = "Failed"
+				return k8sClient.Status().Patch(ctx, backup, patch)
+			}, timeout, interval).Should(Succeed())
+
+			By("Deleting the Job and verifying no recreation")
+			Expect(k8sClient.Delete(ctx, job, client.PropagationPolicy(metav1.DeletePropagationBackground))).To(Succeed())
+			Consistently(func() bool {
+				err := k8sClient.Get(ctx, jobKey, &batchv1.Job{})
+				return errors.IsNotFound(err)
+			}, 5*time.Second, interval).Should(BeTrue())
+		})
+
+		// Regression for #116: suspend=true on a one-time backup must short-circuit
+		// before Job creation. Previously the suspend check lived inside
+		// handleScheduledBackup only, so one-time backups ignored it.
+		It("Should not create a Job when suspend=true on a one-time backup", func() {
+			By("Creating a suspended one-time backup")
+			backup.Spec.Suspend = true
+			Expect(k8sClient.Create(ctx, backup)).Should(Succeed())
+
+			By("Verifying status moves to Suspended")
+			Eventually(func() string {
+				_ = k8sClient.Get(ctx, types.NamespacedName{Name: backupName, Namespace: namespaceName}, backup)
+				return backup.Status.Phase
+			}, timeout, interval).Should(Equal("Suspended"))
+
+			By("Verifying no backup Job is created")
+			jobKey := types.NamespacedName{Name: backupName + "-backup", Namespace: namespaceName}
+			Consistently(func() bool {
+				err := k8sClient.Get(ctx, jobKey, &batchv1.Job{})
+				return errors.IsNotFound(err)
+			}, 5*time.Second, interval).Should(BeTrue())
+		})
 	})
 
 	Context("When creating S3 backup", func() {
