@@ -310,12 +310,30 @@ func TestListDiscoveryConfiguration(t *testing.T) {
 					"2025.x should NOT set V2_ONLY (V2 is the only protocol)")
 				assert.NotContains(t, startupScript, "dbms.cluster.discovery.v2.endpoints=",
 					"2025.x should NOT use the old v2.endpoints setting name")
+				// CalVer doesn't honour system_bootstrapping_strategy, so the
+				// BOOTSTRAP_STRATEGY shell assignment must not be emitted —
+				// otherwise it's dead work in every pod startup.
+				assert.NotContains(t, startupScript, "BOOTSTRAP_STRATEGY=\"me\"",
+					"CalVer startup script must NOT emit the SemVer-only BOOTSTRAP_STRATEGY assignment")
+				assert.NotContains(t, startupScript, "BOOTSTRAP_STRATEGY=\"other\"",
+					"CalVer startup script must NOT emit the SemVer-only BOOTSTRAP_STRATEGY assignment")
+				assert.NotContains(t, startupScript, "internal.dbms.cluster.discovery.system_bootstrapping_strategy=",
+					"CalVer does not honour internal.dbms.cluster.discovery.system_bootstrapping_strategy as a config directive")
 			} else {
 				// SemVer 5.26.x: explicit V2_ONLY and v2.endpoints required
 				assert.Contains(t, startupScript, "dbms.cluster.discovery.version=V2_ONLY",
 					"5.x startup script must explicitly set V2_ONLY discovery mode")
 				assert.Contains(t, startupScript, "dbms.cluster.discovery.v2.endpoints=",
 					"5.x startup script should use dbms.cluster.discovery.v2.endpoints")
+				// SemVer must still emit the BOOTSTRAP_STRATEGY assignment so
+				// the ${BOOTSTRAP_STRATEGY} substitution inside the discovery
+				// config resolves to "me" / "other".
+				assert.Contains(t, startupScript, "BOOTSTRAP_STRATEGY=\"me\"",
+					"SemVer startup script must emit BOOTSTRAP_STRATEGY=me for server-0")
+				assert.Contains(t, startupScript, "BOOTSTRAP_STRATEGY=\"other\"",
+					"SemVer startup script must emit BOOTSTRAP_STRATEGY=other for non-zero indices")
+				assert.Contains(t, startupScript, "system_bootstrapping_strategy=${BOOTSTRAP_STRATEGY}",
+					"SemVer startup script must reference ${BOOTSTRAP_STRATEGY} in the discovery config")
 			}
 		})
 	}
