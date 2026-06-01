@@ -61,6 +61,23 @@ const (
 	SourceTypeGCS    = "gcs"
 )
 
+// RestoreInProgressAnnotation is set on the target Neo4jEnterpriseCluster /
+// Neo4jEnterpriseStandalone CR while a Neo4jRestore is actively coordinating
+// a scale-down → restore → scale-up cycle. Its value is the name of the
+// owning Neo4jRestore CR.
+//
+// The Neo4jEnterpriseClusterReconciler reads this annotation and, when set,
+// stops forcing sts.Spec.Replicas back to spec.topology.servers — so the
+// restore controller's scale-to-0 actually sticks. Without this coordination
+// the two controllers race on every reconcile (issue #117) and the cluster
+// never goes offline, leaving neo4j-admin restore unable to acquire the
+// database file lock.
+//
+// The annotation is set immediately before stopCluster() and cleared in
+// every restore exit path: startCluster() on success, the finalizer on CR
+// delete, and the failure path when stopCluster itself fails.
+const RestoreInProgressAnnotation = "neo4j.com/restore-in-progress"
+
 // Neo4jRestoreReconciler reconciles a Neo4jRestore object
 type Neo4jRestoreReconciler struct {
 	client.Client
@@ -177,6 +194,17 @@ func (r *Neo4jRestoreReconciler) handleDeletion(ctx context.Context, restore *ne
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 	}
 
+	// Release the cluster controller's hold on STS replicas if this restore
+	// died mid-cycle (e.g. user deleted the CR while stopCluster was in
+	// progress). Without this the target cluster is permanently un-scalable.
+	// Idempotent — only clears the annotation if THIS restore set it. Issue #117.
+	if restore.Spec.ClusterRef != "" {
+		if err := r.clearRestoreInProgressAnnotation(ctx, restore, restore.Spec.ClusterRef, restore.Namespace); err != nil {
+			logger.Error(err, "Failed to clear restore-in-progress annotation during finalizer cleanup")
+			return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
+		}
+	}
+
 	// Remove finalizer
 	controllerutil.RemoveFinalizer(restore, RestoreFinalizer)
 	return ctrl.Result{}, r.Update(ctx, restore)
@@ -208,10 +236,34 @@ func (r *Neo4jRestoreReconciler) startRestore(ctx context.Context, restore *neo4
 
 	// Stop cluster if required
 	if restore.Spec.StopCluster {
+		// Mark the cluster as having a restore in progress BEFORE scaling
+		// the STS to 0 — otherwise the cluster controller scales it right
+		// back up on its next reconcile (issue #117).
+		if err := r.setRestoreInProgressAnnotation(ctx, restore, cluster); err != nil {
+			logger.Error(err, "Failed to set restore-in-progress annotation")
+			r.updateRestoreStatus(ctx, restore, StatusFailed, fmt.Sprintf("Failed to coordinate cluster scale-down: %v", err))
+			return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
+		}
 		if err := r.stopCluster(ctx, cluster); err != nil {
 			logger.Error(err, "Failed to stop cluster")
+			// Clear the annotation so the cluster controller resumes
+			// reconciling replicas — otherwise a failed stopCluster
+			// leaves the cluster permanently un-scalable.
+			if cleanupErr := r.clearRestoreInProgressAnnotation(ctx, restore, cluster.Name, cluster.Namespace); cleanupErr != nil {
+				logger.Error(cleanupErr, "Failed to clear restore-in-progress annotation after stopCluster failure")
+			}
 			r.updateRestoreStatus(ctx, restore, StatusFailed, fmt.Sprintf("Failed to stop cluster: %v", err))
 			return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
+		}
+	} else {
+		// stopCluster=false means "the cluster is already quiesced — don't
+		// touch the STS." Refuse if any server pods are still running:
+		// silently writing the restore into a fresh PVC mount (or, worse
+		// pre-fix, into an EmptyDir) is invisible data loss (issue #117).
+		if err := r.refuseRestoreIfPodsRunning(ctx, restore, cluster); err != nil {
+			logger.Error(err, "Refusing restore against running cluster")
+			r.updateRestoreStatus(ctx, restore, StatusFailed, err.Error())
+			return ctrl.Result{}, err
 		}
 	}
 
@@ -285,6 +337,16 @@ func (r *Neo4jRestoreReconciler) handleRestoreSuccess(ctx context.Context, resto
 			logger.Error(err, "Failed to start cluster after restore")
 			r.updateRestoreStatus(ctx, restore, StatusFailed, fmt.Sprintf("Failed to start cluster after restore: %v", err))
 			return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
+		}
+
+		// Release the cluster controller's hold on Replicas now that we've
+		// scaled the STS back to the original count. Subsequent cluster
+		// reconciles re-assert sts.Spec.Replicas = spec.topology.servers,
+		// which equals the value startCluster just wrote — so this is
+		// safe with no flap. Issue #117.
+		if err := r.clearRestoreInProgressAnnotation(ctx, restore, cluster.Name, cluster.Namespace); err != nil {
+			logger.Error(err, "Failed to clear restore-in-progress annotation")
+			// Non-fatal — the finalizer path will clean it up if needed.
 		}
 
 		// Wait for cluster to be ready
@@ -781,31 +843,30 @@ func (r *Neo4jRestoreReconciler) buildRestoreVolumeMounts(restore *neo4jv1beta1.
 }
 
 func (r *Neo4jRestoreReconciler) buildRestoreVolumes(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore) []corev1.Volume {
-	var dataVolume corev1.Volume
-	if restore.Spec.StopCluster {
-		// For offline restore, write directly to the first pod's data PVC.
-		// Clusters use "data-{name}-server-0", standalones use "neo4j-data-{name}-0".
-		dataPVCName := fmt.Sprintf("data-%s-server-0", restore.Spec.ClusterRef)
-		pvc := &corev1.PersistentVolumeClaim{}
-		if err := r.Get(ctx, types.NamespacedName{Name: dataPVCName, Namespace: restore.Namespace}, pvc); err != nil {
-			// Cluster PVC not found — try standalone naming
-			dataPVCName = fmt.Sprintf("neo4j-data-%s-0", restore.Spec.ClusterRef)
-		}
-		dataVolume = corev1.Volume{
-			Name: "neo4j-data",
-			VolumeSource: corev1.VolumeSource{
-				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-					ClaimName: dataPVCName,
-				},
+	// Always mount the cluster's data PVC for /data — never an EmptyDir.
+	// Writing the restored database into an EmptyDir succeeded silently and
+	// then evaporated when the Pod exited, so users running stopCluster=false
+	// observed "restore complete" with the cluster's actual data unchanged
+	// (issue #117). The stopCluster flag now only controls whether the
+	// operator coordinates the scale-down; the data volume is always the
+	// real PVC. The startRestore preflight blocks running restores against
+	// a live cluster when stopCluster=false, so the multi-attach scenario
+	// is caught earlier with a clear error.
+	//
+	// Clusters use "data-{name}-server-0", standalones use "neo4j-data-{name}-0".
+	dataPVCName := fmt.Sprintf("data-%s-server-0", restore.Spec.ClusterRef)
+	pvc := &corev1.PersistentVolumeClaim{}
+	if err := r.Get(ctx, types.NamespacedName{Name: dataPVCName, Namespace: restore.Namespace}, pvc); err != nil {
+		// Cluster PVC not found — try standalone naming
+		dataPVCName = fmt.Sprintf("neo4j-data-%s-0", restore.Spec.ClusterRef)
+	}
+	dataVolume := corev1.Volume{
+		Name: "neo4j-data",
+		VolumeSource: corev1.VolumeSource{
+			PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+				ClaimName: dataPVCName,
 			},
-		}
-	} else {
-		dataVolume = corev1.Volume{
-			Name: "neo4j-data",
-			VolumeSource: corev1.VolumeSource{
-				EmptyDir: &corev1.EmptyDirVolumeSource{},
-			},
-		}
+		},
 	}
 
 	volumes := []corev1.Volume{dataVolume}
@@ -936,6 +997,72 @@ func (r *Neo4jRestoreReconciler) resolveStatefulSetName(ctx context.Context, clu
 		return cluster.Name, nil
 	}
 	return "", fmt.Errorf("StatefulSet not found for %s (tried %s-server and %s)", cluster.Name, cluster.Name, cluster.Name)
+}
+
+// refuseRestoreIfPodsRunning returns an error if the target cluster has any
+// server pods. Used when restore.spec.stopCluster=false to prevent silently
+// running a restore against a live cluster (which holds the database file
+// lock and would either fail neo4j-admin restore or, worse, write the result
+// into a non-PVC volume that's discarded when the pod exits — issue #117).
+func (r *Neo4jRestoreReconciler) refuseRestoreIfPodsRunning(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore, cluster *neo4jv1beta1.Neo4jEnterpriseCluster) error {
+	pods := &corev1.PodList{}
+	if err := r.List(ctx, pods,
+		client.InNamespace(cluster.Namespace),
+		client.MatchingLabels(resources.ServerPodSelector(cluster.Name))); err != nil {
+		return fmt.Errorf("failed to list server pods for restore preflight: %w", err)
+	}
+	if len(pods.Items) > 0 {
+		return fmt.Errorf("restore %q cannot run against a live cluster: %d server pod(s) of %q are still present. Set spec.stopCluster=true to let the operator coordinate the scale-down, or scale the cluster to 0 manually before applying this restore",
+			restore.Name, len(pods.Items), cluster.Name)
+	}
+	return nil
+}
+
+// setRestoreInProgressAnnotation marks the target cluster CR with the
+// restore-in-progress annotation so the cluster controller stops re-asserting
+// sts.Spec.Replicas (issue #117). If the annotation is already set to a
+// different restore, returns an error — two restores against the same cluster
+// cannot run concurrently.
+func (r *Neo4jRestoreReconciler) setRestoreInProgressAnnotation(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore, cluster *neo4jv1beta1.Neo4jEnterpriseCluster) error {
+	return retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+		latest := &neo4jv1beta1.Neo4jEnterpriseCluster{}
+		if err := r.Get(ctx, client.ObjectKeyFromObject(cluster), latest); err != nil {
+			return err
+		}
+		if existing, ok := latest.Annotations[RestoreInProgressAnnotation]; ok && existing != restore.Name {
+			return fmt.Errorf("cluster %q already has a restore in progress by Neo4jRestore %q; cannot start %q", cluster.Name, existing, restore.Name)
+		}
+		if latest.Annotations == nil {
+			latest.Annotations = map[string]string{}
+		}
+		if latest.Annotations[RestoreInProgressAnnotation] == restore.Name {
+			return nil
+		}
+		latest.Annotations[RestoreInProgressAnnotation] = restore.Name
+		return r.Update(ctx, latest)
+	})
+}
+
+// clearRestoreInProgressAnnotation removes the restore-in-progress annotation
+// from the target cluster CR, but only if it was set by THIS restore CR.
+// Idempotent — safe to call from cleanup paths even if the annotation was
+// never set or was already cleared.
+func (r *Neo4jRestoreReconciler) clearRestoreInProgressAnnotation(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore, clusterName, clusterNamespace string) error {
+	return retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+		latest := &neo4jv1beta1.Neo4jEnterpriseCluster{}
+		if err := r.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: clusterNamespace}, latest); err != nil {
+			if errors.IsNotFound(err) {
+				return nil // cluster gone — nothing to clean
+			}
+			return err
+		}
+		owner, ok := latest.Annotations[RestoreInProgressAnnotation]
+		if !ok || owner != restore.Name {
+			return nil // not our annotation to clear
+		}
+		delete(latest.Annotations, RestoreInProgressAnnotation)
+		return r.Update(ctx, latest)
+	})
 }
 
 func (r *Neo4jRestoreReconciler) stopCluster(ctx context.Context, cluster *neo4jv1beta1.Neo4jEnterpriseCluster) error {

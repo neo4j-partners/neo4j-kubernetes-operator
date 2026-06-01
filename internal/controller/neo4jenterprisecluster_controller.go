@@ -570,6 +570,20 @@ func (r *Neo4jEnterpriseClusterReconciler) CreateOrUpdateResource(ctx context.Co
 	return r.createOrUpdateResource(ctx, obj, owner)
 }
 
+// replicasReconciliationPaused reports whether the cluster controller should
+// leave sts.Spec.Replicas alone for this owner. Today the only pause signal
+// is the restore-in-progress annotation set by Neo4jRestoreReconciler (issue
+// #117), but extracting the check makes the gate testable in isolation and
+// gives a single place to add new pause signals (e.g. operator-wide
+// maintenance mode) without touching the resource builder.
+func replicasReconciliationPaused(owner client.Object) bool {
+	if owner == nil {
+		return false
+	}
+	_, paused := owner.GetAnnotations()[RestoreInProgressAnnotation]
+	return paused
+}
+
 func (r *Neo4jEnterpriseClusterReconciler) createOrUpdateResource(ctx context.Context, obj client.Object, owner client.Object) error {
 	logger := log.FromContext(ctx)
 
@@ -656,8 +670,17 @@ func (r *Neo4jEnterpriseClusterReconciler) createOrUpdateResourceInternal(ctx co
 				originalMeta := sts.ObjectMeta.DeepCopy()
 				originalStatus := sts.Status.DeepCopy()
 
-				// Apply desired spec
-				sts.Spec.Replicas = desiredSpec.Replicas
+				// Apply desired spec — but yield on replicas while a
+				// Neo4jRestore is coordinating a scale-down → restore →
+				// scale-up cycle on this cluster (issue #117). Without
+				// this gate the cluster controller races the restore
+				// controller every reconcile and the scale-to-0 never
+				// sticks. Only the replicas line is skipped; everything
+				// else (services, ConfigMap, certs, template updates)
+				// continues to reconcile normally.
+				if !replicasReconciliationPaused(owner) {
+					sts.Spec.Replicas = desiredSpec.Replicas
+				}
 				sts.Spec.UpdateStrategy = desiredSpec.UpdateStrategy
 				sts.Spec.PersistentVolumeClaimRetentionPolicy = desiredSpec.PersistentVolumeClaimRetentionPolicy
 				sts.Spec.MinReadySeconds = desiredSpec.MinReadySeconds
