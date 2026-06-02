@@ -8,8 +8,21 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	neo4jv1beta1 "github.com/neo4j-partners/neo4j-kubernetes-operator/api/v1beta1"
+	"github.com/neo4j-partners/neo4j-kubernetes-operator/internal/neo4j"
 	"github.com/neo4j-partners/neo4j-kubernetes-operator/internal/resources"
 )
+
+// isCalverTag mirrors the production isCalverImage helper in
+// internal/resources/cluster.go: parse via neo4j.ParseVersion and read the
+// IsCalver flag (which sets when major >= 2025). Production-parity matters
+// here because the discovery-config branches in buildVersionSpecificDiscovery
+// Config diverge on this exact predicate — a test-local "tag[:4]==2025"
+// check would silently miss the 2026.x and future CalVer years that
+// production correctly classifies as CalVer.
+func isCalverTag(tag string) bool {
+	v, err := neo4j.ParseVersion(tag)
+	return err == nil && v.IsCalver
+}
 
 func TestBuildConfigMapForEnterprise_NoSingleRaftEnabled(t *testing.T) {
 	cluster := &neo4jv1beta1.Neo4jEnterpriseCluster{
@@ -125,27 +138,12 @@ func TestBuildConfigMapForEnterprise_ClusterFormation(t *testing.T) {
 			expectedBootstrap: "dbms.cluster.discovery.resolver_type=LIST",
 			expectedJoining:   "test-2025-server-0.test-2025-headless.default.svc.cluster.local:6000",
 		},
-		{
-			name: "list_discovery_no_k8s_clusterip",
-			cluster: &neo4jv1beta1.Neo4jEnterpriseCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "v2-only-test",
-					Namespace: "default",
-				},
-				Spec: neo4jv1beta1.Neo4jEnterpriseClusterSpec{
-					Image: neo4jv1beta1.ImageSpec{
-						Repo: "neo4j",
-						Tag:  "5.26-enterprise",
-					},
-					Topology: neo4jv1beta1.TopologyConfiguration{
-						Servers: 2,
-					},
-				},
-			},
-			// LIST discovery is used; K8S ClusterIP discovery is NOT used
-			expectedBootstrap: "dbms.cluster.discovery.resolver_type=LIST",
-			expectedJoining:   "dbms.cluster.discovery.v2.endpoints=",
-		},
+		// Note: a `list_discovery_no_k8s_clusterip` case used to live here
+		// asserting LIST resolver and v2.endpoints= for SemVer 5.26 with 2
+		// servers, but it duplicated `list_discovery_5x` (same image, same
+		// topology) and its "no K8S ClusterIP" claim is fully covered by the
+		// loop body's `assert.NotContains(..., "resolver_type=K8S", ...)`.
+		// Removed.
 	}
 
 	for _, tt := range tests {
@@ -178,8 +176,7 @@ func TestBuildConfigMapForEnterprise_ClusterFormation(t *testing.T) {
 
 			// For multi-server clusters, verify version-specific discovery configuration
 			if tt.cluster.Spec.Topology.Servers > 1 {
-				tag := tt.cluster.Spec.Image.Tag
-				isCalver := len(tag) >= 4 && tag[:4] == "2025"
+				isCalver := isCalverTag(tt.cluster.Spec.Image.Tag)
 
 				// All versions: pod FQDNs must appear in the endpoints list
 				for i := int32(0); i < tt.cluster.Spec.Topology.Servers; i++ {
@@ -280,7 +277,7 @@ func TestListDiscoveryConfiguration(t *testing.T) {
 			configMap := resources.BuildConfigMapForEnterprise(cluster)
 			startupScript := configMap.Data["startup.sh"]
 
-			isCalver := len(tt.imageTag) >= 4 && tt.imageTag[:4] == "2025"
+			isCalver := isCalverTag(tt.imageTag)
 
 			// All versions: each pod FQDN must appear in the endpoints list
 			for i := int32(0); i < tt.servers; i++ {
