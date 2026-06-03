@@ -153,12 +153,13 @@ spec:
   storage:
     className: standard
     size: 10Gi
-  # Kubernetes discovery is automatically configured by the operator
-  # No manual discovery configuration needed!
+  # LIST discovery with static pod FQDNs is configured automatically.
+  # The operator never uses the K8S service-list resolver; do not set
+  # dbms.kubernetes.discovery.* in spec.config (the validator rejects it).
 ```
 
 **Note**: The operator automatically handles all clustering configuration including:
-- Kubernetes discovery setup
+- LIST discovery setup with pod FQDNs on port 6000 (`tcp-tx`)
 - RBAC resource creation
 - Service creation for cluster communication
 - Neo4j configuration for optimal clustering

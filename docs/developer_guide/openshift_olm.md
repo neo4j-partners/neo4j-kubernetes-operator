@@ -5,13 +5,23 @@ This project includes make targets for building an Operator Lifecycle Manager (O
 ## Build the bundle
 
 ```bash
-# Generate bundle manifests from the current workspace
+# Generate bundle manifests from the current workspace.
+# `make bundle` pins the CSV's createdAt: annotation to a stable placeholder
+# (2020-01-01T00:00:00Z) so concurrent PRs don't conflict on the timestamp
+# and `make check-drift` stays deterministic. Use this target for local
+# development, drift checks, and CI.
 make bundle VERSION=0.0.1 IMG=ghcr.io/neo4j-partners/neo4j-kubernetes-operator:latest
 
 # Build and push bundle image
 make bundle-build BUNDLE_IMG=quay.io/your-org/neo4j-operator-bundle:0.0.1
 make bundle-push BUNDLE_IMG=quay.io/your-org/neo4j-operator-bundle:0.0.1
 ```
+
+> **Release flow:** when publishing to OperatorHub, run `make bundle-release`
+> instead of `make bundle`. That target stamps the real `createdAt:`
+> timestamp before image build; it's invoked by the release workflow in
+> `.github/workflows/release.yml` and should not be run on PR branches
+> (it would dirty the working tree and fail the drift gate).
 
 ## Build/push catalog index
 

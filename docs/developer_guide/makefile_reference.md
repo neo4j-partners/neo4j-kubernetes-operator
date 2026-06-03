@@ -877,7 +877,7 @@ make catalog-push CATALOG_IMG=ghcr.io/my-org/catalog:v1.0
 
 #### `make controller-gen`
 **Description**: Download controller-gen for code generation
-**Version**: v0.16.1
+**Version**: v0.19.0
 **Location**: `bin/controller-gen`
 
 #### `make envtest`
@@ -892,7 +892,7 @@ make catalog-push CATALOG_IMG=ghcr.io/my-org/catalog:v1.0
 
 #### `make ginkgo`
 **Description**: Download Ginkgo BDD testing framework
-**Version**: v2.23.4
+**Version**: v2.29.0
 **Location**: `bin/ginkgo`
 
 #### `make operator-sdk`

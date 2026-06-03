@@ -469,7 +469,7 @@ spec:
     dbms.ssl.policy.replica.truststore_password: ""
 ```
 
-Mount paths that collide with operator-managed paths are rejected by the validator at admission time. Reserved paths include `/data`, `/logs`, `/conf`, `/ssl`, `/plugins`, `/truststore`, `/truststore-ca`, and subdirectories under `/var/lib/neo4j/` such as `data`, `logs`, `conf`, `plugins`, and `certificates`.
+Mount paths that collide with operator-managed paths are rejected by the controller during reconciliation (the project does not use admission webhooks — see CLAUDE.md rule 26). Reserved paths include `/data`, `/logs`, `/conf`, `/ssl`, `/plugins`, `/truststore`, `/truststore-ca`, and subdirectories under `/var/lib/neo4j/` such as `data`, `logs`, `conf`, `plugins`, and `certificates`. A CR with a colliding mount is accepted into the API but its `status.phase` moves to `Failed` with a message naming the offending path.
 
 ### Group-to-Role Mapping
 
