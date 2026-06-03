@@ -3169,8 +3169,35 @@
 <li><strong>Port Forward</strong>: bolt://localhost:7687</li>
 <li><strong>LoadBalancer</strong>: bolt://<external-ip>:7687</li>
 <li><strong>NodePort</strong>: bolt://<node-ip>:<node-port></li>
-<li><strong>With TLS</strong>: bolt+ssc://<host>:7687</li>
 </ul>
+<p><strong>With TLS</strong> — pick the scheme that matches your trust chain:</p>
+<table>
+<thead>
+<tr>
+<th>Scheme</th>
+<th>When to use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>bolt+s://&lt;host&gt;:7687</code></td>
+<td>Production. CA-signed certificate; the client validates the server cert against the system trust store.</td>
+</tr>
+<tr>
+<td><code>bolt+ssc://&lt;host&gt;:7687</code></td>
+<td>Development. Self-signed certificate; the client trusts any presented cert. <strong>Never use in production</strong> — vulnerable to MITM.</td>
+</tr>
+<tr>
+<td><code>neo4j+s://&lt;host&gt;:7687</code></td>
+<td>Routing scheme for clusters with CA-signed certificates. The driver discovers cluster members via <code>dbms.routing.getRoutingTable</code> and routes writes to the leader. The operator itself uses this scheme internally for admin calls (CLAUDE.md rule 62).</td>
+</tr>
+<tr>
+<td><code>neo4j+ssc://&lt;host&gt;:7687</code></td>
+<td>Routing scheme with self-signed certs. Dev only.</td>
+</tr>
+</tbody>
+</table>
+<p>Plain <code>bolt://</code> (no TLS) is <strong>rejected</strong> by Neo4j when the operator has TLS enabled — the connector is configured with <code>server.bolt.tls_level=REQUIRED</code>.</p>
 <h2 id="security-considerations">Security Considerations<a class="headerlink" href="#security-considerations" title="Anchor link to this section">&para;</a></h2>
 <h3 id="1-always-use-tls-in-production">1. Always Use TLS in Production<a class="headerlink" href="#1-always-use-tls-in-production" title="Anchor link to this section">&para;</a></h3>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">spec</span><span class="p">:</span>
