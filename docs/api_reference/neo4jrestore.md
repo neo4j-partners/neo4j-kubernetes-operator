@@ -46,9 +46,9 @@ Defines the source of the backup to restore from.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `type` | `string` | ✅ | Type of restore source. Valid values: `"backup"`, `"storage"`, `"pitr"`, `"s3"`, `"gcs"`, `"azure"` |
+| `type` | `string` | ✅ | Type of restore source. Valid values: `"backup"`, `"storage"`, `"pitr"`. |
 | `backupRef` | `string` | ❌ | Name of a `Neo4jBackup` resource to restore from (used when `type="backup"`) |
-| `storage` | [`StorageLocation`](#storagelocation) | ❌ | Direct storage location (used when `type="storage"`, `"s3"`, `"gcs"`, or `"azure"`) |
+| `storage` | [`StorageLocation`](#storagelocation) | ❌ | Direct storage location (used when `type="storage"`). The cloud backend — `s3`, `gcs`, `azure`, or `pvc` — is selected on `storage.type` inside this struct, *not* on the outer `source.type`. |
 | `backupPath` | `string` | ❌ | Specific backup path within the storage location |
 | `pointInTime` | `*metav1.Time` | ❌ | Recovery point in RFC3339 format; maps to `--restore-until` |
 | `pitr` | [`PITRConfig`](#pitrconfig) | ❌ | Full PITR configuration (used when `type="pitr"`) |
@@ -58,11 +58,8 @@ Defines the source of the backup to restore from.
 | Value | Description |
 |-------|-------------|
 | `"backup"` | Restore from a `Neo4jBackup` CR referenced by `backupRef` |
-| `"storage"` | Restore from an explicit storage location in `storage` |
+| `"storage"` | Restore from an explicit storage location in `storage`. The cloud backend is set via `storage.type` (`s3` / `gcs` / `azure` / `pvc`). |
 | `"pitr"` | Point-in-time recovery using transaction log replay |
-| `"s3"` | Shorthand for `storage` with AWS S3 backend |
-| `"gcs"` | Shorthand for `storage` with Google Cloud Storage backend |
-| `"azure"` | Shorthand for `storage` with Azure Blob Storage backend |
 
 **Examples:**
 
@@ -75,18 +72,6 @@ source:
 # Restore from an explicit S3 path
 source:
   type: storage
-  storage:
-    type: s3
-    bucket: neo4j-backups
-    path: production/
-    cloud:
-      provider: aws
-      credentialsSecretRef: aws-restore-credentials
-  backupPath: /backups/production/backup-20250120-020000
-
-# Shorthand S3 restore
-source:
-  type: s3
   storage:
     type: s3
     bucket: neo4j-backups
@@ -394,7 +379,7 @@ spec:
   clusterRef: analytics-cluster
   databaseName: analytics-db
   source:
-    type: gcs
+    type: storage
     storage:
       type: gcs
       bucket: neo4j-analytics-backups
@@ -426,7 +411,7 @@ spec:
   clusterRef: enterprise-cluster
   databaseName: customer-data
   source:
-    type: azure
+    type: storage
     storage:
       type: azure
       bucket: enterprise-backups   # Azure container name
@@ -579,7 +564,7 @@ spec:
   clusterRef: dr-cluster
   databaseName: critical-app
   source:
-    type: gcs
+    type: storage
     storage:
       type: gcs
       bucket: primary-site-backups
