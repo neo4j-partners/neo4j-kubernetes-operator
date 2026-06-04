@@ -88,7 +88,7 @@ The operator uses a **ME/OTHER bootstrap strategy** with `Parallel` pod manageme
 
 TLS-enabled clusters use the same parallel formation approach with additional optimizations:
 
-- **Automatic trust configuration**: The operator sets `dbms.ssl.policy.cluster.trust_all=true` for intra-cluster communication
+- **Automatic strict peer validation** (default): The operator emits `dbms.ssl.policy.cluster.trust_all=false`, `client_auth=REQUIRE` (mutual TLS), and `verify_hostname=true`, projecting the cert-manager Secret's `ca.crt` to `/ssl/trusted/ca.crt` as the trust anchor. This matches Neo4j's canonical production guidance. Set `spec.tls.strictPeerValidation: false` to opt out into the legacy `trust_all=true` posture (only useful if your external issuer doesn't populate `ca.crt`).
 - **Parallel startup maintained**: TLS doesn't change the pod startup behavior
 - **Reliable formation**: With proper configuration, TLS clusters form as reliably as non-TLS clusters
 

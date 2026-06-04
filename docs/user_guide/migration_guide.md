@@ -11,6 +11,32 @@ The Neo4j Kubernetes Operator now separates single-node and clustered deployment
 
 ## ⚠️ Breaking Changes
 
+### Cluster intra-node TLS now defaults to strict peer validation
+
+**What changed.** The operator used to emit `dbms.ssl.policy.cluster.trust_all=true` and `client_auth=NONE` for TLS-enabled clusters. Neo4j's own documentation flags `trust_all=true` as *"debugging only, since it does not offer security."* The default now matches the canonical production posture: `trust_all=false` + `client_auth=REQUIRE` (mutual TLS) + `verify_hostname=true`, with the cert-manager Secret's `ca.crt` projected to `/ssl/trusted/ca.crt` as the trust anchor.
+
+**Who is affected.** Existing `Neo4jEnterpriseCluster` resources with `spec.tls.mode=cert-manager`. On the next reconcile after the operator upgrade:
+1. The StatefulSet template changes (new Secret projection + new config keys), triggering a rolling restart of the server pods.
+2. Restarted pods run with the strict configuration. The rolling restart is safe because old pods (loose) still accept any cert presented by new pods, and new pods validate old pods' certs against the same CA — RAFT quorum survives the mixed-state window.
+
+**Action required.** None for clusters whose cert-manager issuer populates `ca.crt` in the Secret it issues (CA, ACME, Vault, and most external issuers all do). The operator detects a missing `ca.crt` at reconcile time and refuses to apply the strict config — `status.phase` flips to `Failed` with a message naming the offending issuer.
+
+**Opt-out.** Set `spec.tls.strictPeerValidation: false` on the cluster CR to keep the old behavior. The escape hatch is intended for installations whose external issuer doesn't populate `ca.crt`. Reverting to the legacy posture means accepting Neo4j's "debugging only, no security" warning.
+
+```yaml
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jEnterpriseCluster
+spec:
+  tls:
+    mode: cert-manager
+    issuerRef:
+      name: ca-cluster-issuer
+      kind: ClusterIssuer
+    strictPeerValidation: false   # legacy trust_all=true + client_auth=NONE
+```
+
+No effect on `Neo4jEnterpriseStandalone` (single-server, no intra-cluster TLS).
+
 ### 1. Single-Node Clusters No Longer Supported
 
 **Previous behavior** (no longer supported):

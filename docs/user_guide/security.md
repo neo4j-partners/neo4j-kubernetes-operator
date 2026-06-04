@@ -81,7 +81,22 @@ spec:
     # Cluster SSL (for server-to-server communication)
     dbms.ssl.policy.cluster.enabled: "true"
     dbms.ssl.policy.cluster.base_directory: "/ssl"
-    dbms.ssl.policy.cluster.trust_all: "true"    # Required for reliable TLS cluster formation. The operator sets this automatically when `tls.mode: cert-manager` — every server presents a cert from the same cert-manager issuer, so peers trust each other during the initial RAFT handshake. Do NOT override to "false": the operator's own assertion at `internal/resources/cluster_tls_test.go:62` enforces "true" with a CRITICAL note. See `docs/user_guide/clustering.md` and `docs/user_guide/configuration/tls.md` for the full rationale.
+    # The cluster SSL policy lines below are managed by the operator — do
+    # NOT set dbms.ssl.policy.cluster.* in spec.config. The operator emits
+    # the canonical Neo4j production configuration:
+    #
+    #   dbms.ssl.policy.cluster.trust_all       = false
+    #   dbms.ssl.policy.cluster.client_auth     = REQUIRE     (mutual TLS)
+    #   dbms.ssl.policy.cluster.verify_hostname = true
+    #
+    # All three are controlled by the boolean spec.tls.strictPeerValidation
+    # (default true). The operator projects the cert-manager Secret's
+    # ca.crt to /ssl/trusted/ca.crt as the trust anchor.
+    #
+    # To opt OUT into the legacy debugging-only posture (trust_all=true,
+    # client_auth=NONE — what the operator emitted before this field was
+    # added), set spec.tls.strictPeerValidation=false. Only needed if your
+    # external issuer does not populate ca.crt in the Secret it issues.
 ```
 
 ## Authentication Configuration

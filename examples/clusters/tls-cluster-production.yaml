@@ -61,7 +61,9 @@ spec:
     # IMPORTANT: Do NOT override these settings - the operator sets optimal values:
     # - dbms.cluster.raft.membership.join_timeout (kept at 10m)
     # - dbms.cluster.raft.binding_timeout (kept at 1d)
-    # - dbms.ssl.policy.cluster.trust_all (automatically set to true)
+    # - dbms.ssl.policy.cluster.* (managed by spec.tls.strictPeerValidation;
+    #   default true → trust_all=false + client_auth=REQUIRE + verify_hostname=true,
+    #   matching Neo4j's canonical production posture)
     # - Pod management policy (ParallelPodManagement for reliable formation)
 
 ---
@@ -86,7 +88,12 @@ spec:
     secretName: production-ca-key-pair
 
 # Notes:
-# 1. The operator automatically configures cluster SSL with trust_all=true for reliable TLS cluster formation
+# 1. The operator emits Neo4j's canonical cluster SSL configuration by default
+#    (spec.tls.strictPeerValidation defaults to true): trust_all=false, mutual
+#    TLS via client_auth=REQUIRE, and verify_hostname=true. The cert-manager
+#    Secret's ca.crt is projected to /ssl/trusted/ca.crt as the trust anchor.
+#    Set spec.tls.strictPeerValidation: false to revert to the legacy
+#    trust_all=true posture (only needed if your issuer doesn't populate ca.crt).
 # 2. All pods start in parallel (ParallelPodManagement) for fastest cluster formation
 # 3. MIN_PRIMARIES is set to 1, allowing flexible cluster formation
 # 4. The first pod forms the cluster, others join it

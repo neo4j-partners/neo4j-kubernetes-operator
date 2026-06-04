@@ -5387,6 +5387,41 @@ spec:
                   renewBefore:
                     description: Certificate renewal before expiry
                     type: string
+                  strictPeerValidation:
+                    default: true
+                    description: |-
+                      StrictPeerValidation controls intra-cluster TLS posture for
+                      Neo4jEnterpriseCluster. Default true.
+
+                      When true (the default and Neo4j's documented production posture):
+                        - dbms.ssl.policy.cluster.trust_all = false: peers are validated
+                          against the issuer's CA cert at /ssl/trusted/ca.crt (projected
+                          from the cert-manager Secret's ca.crt key).
+                        - dbms.ssl.policy.cluster.client_auth = REQUIRE: mutual TLS;
+                          both ends authenticate.
+                        - dbms.ssl.policy.cluster.verify_hostname = true: peer cert must
+                          match the SAN of the FQDN being connected to. The Certificate
+                          the operator emits already includes every server pod FQDN as
+                          a SAN, so this is a no-op for spec correctness — but the Neo4j
+                          default differs between 5.26 (false) and 2025.01+ (true), so
+                          we set it explicitly for version-portable behavior.
+
+                      When false (opt-out, equivalent to operator behavior prior to
+                      adding this field): the cluster SSL policy emits trust_all=true,
+                      client_auth=NONE — Neo4j's own docs call this "debugging only,
+                      since it does not offer security." Use only if your cert-manager
+                      issuer does not populate the Secret's ca.crt key (some external
+                      issuers like custom AWSPCAClusterIssuer setups) or you have a
+                      specific upgrade-path reason.
+
+                      Strict validation requires the cert-manager-issued Secret to
+                      contain a ca.crt key. The controller refuses to apply strict
+                      config if it is missing — your status will report
+                      `TLSStrictValidationUnready` with a message naming the issuer.
+
+                      No effect on Neo4jEnterpriseStandalone (single-server deployments
+                      have no intra-cluster traffic).
+                    type: boolean
                   subject:
                     description: Additional certificate subject fields
                     properties:

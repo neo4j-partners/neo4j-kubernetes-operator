@@ -208,7 +208,7 @@ spec:
       name: ca-cluster-issuer
       kind: ClusterIssuer
 ```
-Auto-generates SSL policies for `https`/`bolt`, certs at `/ssl/`, sets `dbms.ssl.policy.cluster.trust_all=true`.
+Auto-generates SSL policies for `https`/`bolt`, certs at `/ssl/`. Cluster SSL defaults to strict (`spec.tls.strictPeerValidation: true`): `trust_all=false`, `client_auth=REQUIRE`, `verify_hostname=true`, with the cert-manager Secret's `ca.crt` projected to `/ssl/trusted/ca.crt`. Set `strictPeerValidation: false` to revert to legacy `trust_all=true` (Neo4j's docs flag legacy as debugging-only). Validator refuses strict if the issuer doesn't populate `ca.crt`.
 TLS-enabled → `server.bolt.tls_level=REQUIRED`, `bolt+s://` scheme; TLS-disabled → `bolt://`. Plain `bolt://` connections are rejected when TLS is enabled.
 
 ## Neo4j Plugin Support

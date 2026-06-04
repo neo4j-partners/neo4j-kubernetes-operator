@@ -106,6 +106,56 @@ const (
 
 // OperatorUDCPackagingValue returns the value for the NEO4J_UDC_PACKAGING environment variable.
 // It reads the OPERATOR_VERSION env var and returns "k8s-<version>", or "k8s-development" if unset.
+// buildClusterSSLPolicyTrustConfig emits the trust-anchor and client-auth
+// lines of dbms.ssl.policy.cluster.*, gated on
+// cluster.Spec.TLS.StrictPeerValidation. Default-true; explicit false opts
+// the cluster into the legacy "trust_all + no client auth" posture.
+//
+// Strict (default):
+//   - trust_all=false: peers validated against /ssl/trusted/ca.crt (the
+//     projected Secret ca.crt — see buildVolumes).
+//   - client_auth=REQUIRE: mutual TLS, matching Neo4j's canonical cluster
+//     SSL guidance (operations-manual/current/security/ssl-framework/).
+//   - verify_hostname=true: explicit because the Neo4j default differs
+//     between 5.26 (false) and 2025.01+ (true). The operator's emitted
+//     Certificate already includes every server-pod FQDN as a SAN.
+//
+// Legacy (StrictPeerValidation=false):
+//   - trust_all=true, client_auth=NONE. Neo4j's docs call this "debugging
+//     only, since it does not offer security." Kept as an opt-out for
+//     installations whose external issuer does not populate ca.crt in
+//     the cert-manager Secret.
+//
+// clusterStrictPeerValidationEnabled mirrors controller-side
+// isStrictPeerValidationEnabled but for the resources package, where we
+// cannot import the controller package (would be a circular dependency).
+// Both must stay in sync — they read the same field with the same default.
+func clusterStrictPeerValidationEnabled(cluster *neo4jv1beta1.Neo4jEnterpriseCluster) bool {
+	if cluster == nil || cluster.Spec.TLS == nil || cluster.Spec.TLS.Mode != CertManagerMode {
+		return false
+	}
+	if cluster.Spec.TLS.StrictPeerValidation == nil {
+		return true
+	}
+	return *cluster.Spec.TLS.StrictPeerValidation
+}
+
+func buildClusterSSLPolicyTrustConfig(cluster *neo4jv1beta1.Neo4jEnterpriseCluster) string {
+	strict := clusterStrictPeerValidationEnabled(cluster)
+	if strict {
+		return `dbms.ssl.policy.cluster.trust_all=false
+dbms.ssl.policy.cluster.client_auth=REQUIRE
+dbms.ssl.policy.cluster.verify_hostname=true
+`
+	}
+	return `# strictPeerValidation=false: legacy posture. trust_all=true accepts
+# any peer cert without validation; client_auth=NONE skips mutual TLS.
+# Neo4j's own documentation flags trust_all=true as debugging only.
+dbms.ssl.policy.cluster.trust_all=true
+dbms.ssl.policy.cluster.client_auth=NONE
+`
+}
+
 func OperatorUDCPackagingValue() string {
 	if v := os.Getenv(operatorVersionEnv); v != "" {
 		return "k8s-" + v
@@ -667,11 +717,32 @@ func BuildCertificateForEnterprise(cluster *neo4jv1beta1.Neo4jEnterpriseCluster)
 		}
 	}
 
-	// Set certificate usages if specified
+	// Set certificate usages. When the user supplies an explicit list we
+	// honour their custom usages, but ALWAYS ensure server-auth and
+	// client-auth are present — Neo4j needs server-auth for incoming
+	// Bolt/HTTPS/cluster TLS and client-auth for the mutual TLS the
+	// operator emits on cluster links under strict peer validation
+	// (client_auth=REQUIRE). The TLS validator already rejects a
+	// missing required EKU at apply time; this is the defence-in-depth
+	// layer that catches any CR slipping past validation (older CR
+	// applied before this check shipped, custom admission controller,
+	// etc.) and silently augments the usages list rather than producing
+	// a cert that can't satisfy Neo4j's runtime requirements.
 	if len(cluster.Spec.TLS.Usages) > 0 {
-		certSpec.Usages = make([]certv1.KeyUsage, len(cluster.Spec.TLS.Usages))
-		for i, usage := range cluster.Spec.TLS.Usages {
-			certSpec.Usages[i] = certv1.KeyUsage(usage)
+		present := make(map[certv1.KeyUsage]bool, len(cluster.Spec.TLS.Usages))
+		certSpec.Usages = make([]certv1.KeyUsage, 0, len(cluster.Spec.TLS.Usages)+2)
+		for _, usage := range cluster.Spec.TLS.Usages {
+			u := certv1.KeyUsage(usage)
+			if present[u] {
+				continue
+			}
+			present[u] = true
+			certSpec.Usages = append(certSpec.Usages, u)
+		}
+		for _, required := range []certv1.KeyUsage{certv1.UsageServerAuth, certv1.UsageClientAuth} {
+			if !present[required] {
+				certSpec.Usages = append(certSpec.Usages, required)
+			}
 		}
 	} else {
 		// Default usages for Neo4j TLS
@@ -1463,15 +1534,41 @@ func BuildPodSpecForEnterprise(cluster *neo4jv1beta1.Neo4jEnterpriseCluster, ser
 		},
 	}
 
-	// Add TLS volume
+	// Add TLS volume.
+	//
+	// When strict peer validation is on (the default), we project the
+	// Secret with an explicit Items list that places ca.crt at both
+	// /ssl/ca.crt and /ssl/trusted/ca.crt — the second path is where
+	// Neo4j's cluster SSL policy reads the trust anchor when
+	// trust_all=false (operations-manual/current/security/ssl-framework/).
+	// Items[] is REQUIRED here: KeyToPath has no per-item `optional` flag,
+	// so listing ca.crt makes the kubelet refuse to mount the volume if
+	// the issuer didn't populate it — which is the desired loud failure
+	// (the reconcile-time preflight verifyTLSSecretHasCA catches this
+	// earlier and surfaces a clear status before the Pod ever attempts
+	// to start).
+	//
+	// When strict peer validation is OFF (opt-out), we MUST NOT require
+	// ca.crt — the whole point of the opt-out is to support issuers that
+	// don't populate it. Emit a flat Secret mount (no Items projection)
+	// so whatever keys the issuer DOES populate land at /ssl/<key> and
+	// missing keys are simply absent. trust_all=true ignores
+	// /ssl/trusted/ entirely under this posture.
 	if cluster.Spec.TLS != nil && cluster.Spec.TLS.Mode == CertManagerMode {
+		source := &corev1.SecretVolumeSource{
+			SecretName: fmt.Sprintf("%s-tls-secret", cluster.Name),
+		}
+		if clusterStrictPeerValidationEnabled(cluster) {
+			source.Items = []corev1.KeyToPath{
+				{Key: "tls.crt", Path: "tls.crt"},
+				{Key: "tls.key", Path: "tls.key"},
+				{Key: "ca.crt", Path: "ca.crt"},
+				{Key: "ca.crt", Path: "trusted/ca.crt"},
+			}
+		}
 		volumes = append(volumes, corev1.Volume{
-			Name: CertsVolume,
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{
-					SecretName: fmt.Sprintf("%s-tls-secret", cluster.Name),
-				},
-			},
+			Name:         CertsVolume,
+			VolumeSource: corev1.VolumeSource{Secret: source},
 		})
 	}
 
@@ -1700,15 +1797,11 @@ dbms.ssl.policy.https.client_auth=NONE
 dbms.ssl.policy.https.tls_versions=TLSv1.3,TLSv1.2
 
 # Cluster SSL Policy (for intra-cluster communication)
-# CRITICAL: trust_all=true is required for reliable TLS cluster formation
-# This allows nodes to trust each other's certificates during initial handshake
 dbms.ssl.policy.cluster.enabled=true
 dbms.ssl.policy.cluster.base_directory=/ssl
 dbms.ssl.policy.cluster.private_key=tls.key
 dbms.ssl.policy.cluster.public_certificate=tls.crt
-dbms.ssl.policy.cluster.trust_all=true
-dbms.ssl.policy.cluster.client_auth=NONE
-dbms.ssl.policy.cluster.tls_versions=TLSv1.3,TLSv1.2
+` + buildClusterSSLPolicyTrustConfig(cluster) + `dbms.ssl.policy.cluster.tls_versions=TLSv1.3,TLSv1.2
 
 # Enable TLS for connectors
 server.bolt.tls_level=REQUIRED
@@ -1739,6 +1832,8 @@ server.bolt.tls_level=REQUIRED
 			"server.memory.heap.initial_size": true,
 			"server.memory.heap.max_size":     true,
 			"server.memory.pagecache.size":    true,
+			"server.bolt.tls_level":           true,
+			"server.directories.certificates": true,
 		}
 		for _, key := range authGeneratedKeys {
 			excludeKeys[key] = true
@@ -1747,9 +1842,24 @@ server.bolt.tls_level=REQUIRED
 		// Sort keys to ensure deterministic order and prevent hash oscillation
 		var keys []string
 		for key := range cluster.Spec.Config {
-			if !excludeKeys[key] {
-				keys = append(keys, key)
+			if excludeKeys[key] {
+				continue
 			}
+			// Belt-and-suspenders: SSL policy keys are rejected by the
+			// validator at apply time, but if a CR was applied before the
+			// validator was in place (or with a future custom admission
+			// controller that bypasses our reconcile-time validation), we
+			// still must not let user values for these keys override the
+			// operator-managed TLS posture. Skip every dbms.ssl.policy.*
+			// key. Note that server.config.strict_validation.enabled=false
+			// is set elsewhere in this file, so without this filter Neo4j
+			// would silently let a later spec.config line shadow our
+			// strict-mode emission (issue: spec.config could override
+			// strict TLS defaults).
+			if strings.HasPrefix(key, "dbms.ssl.policy.") {
+				continue
+			}
+			keys = append(keys, key)
 		}
 		// Sort keys alphabetically for consistent ordering
 		sort.Strings(keys)

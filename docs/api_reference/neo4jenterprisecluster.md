@@ -329,6 +329,7 @@ not parse policy config to wire up filesystem mounts automatically.
 | `renewBefore` | `*string` | Renewal window before expiry (e.g., `"360h"`) |
 | `subject` | [`*CertificateSubject`](#certificatesubject) | Certificate subject fields |
 | `usages` | `[]string` | Certificate usages |
+| `strictPeerValidation` | `*bool` | Intra-cluster TLS posture. **Default: `true`** (Neo4j's canonical production posture). When `true`, the operator emits `dbms.ssl.policy.cluster.trust_all=false`, `client_auth=REQUIRE` (mutual TLS), and `verify_hostname=true`, and projects the cert-manager Secret's `ca.crt` to `/ssl/trusted/ca.crt` as the trust anchor. When `false`, reverts to the legacy `trust_all=true` + `client_auth=NONE` posture — Neo4j's own docs flag this as *"debugging only, since it does not offer security."* The opt-out exists for external issuers that do not populate `ca.crt` in their Secret output. See the [TLS Configuration Guide](../user_guide/configuration/tls.md) for details. |
 
 ### IssuerRef
 
