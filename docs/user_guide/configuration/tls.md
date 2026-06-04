@@ -58,15 +58,29 @@ TLS-enabled clusters require special consideration for reliable cluster formatio
 
 ### Key Configuration
 
-The operator automatically configures cluster SSL policy with `trust_all=true`:
+The operator emits Neo4j's canonical production cluster SSL policy by default:
 
 ```properties
-# Automatically set by the operator
+# Automatically set by the operator when spec.tls.mode=cert-manager
+# and spec.tls.strictPeerValidation (default true) is enabled:
 dbms.ssl.policy.cluster.enabled=true
-dbms.ssl.policy.cluster.trust_all=true
+dbms.ssl.policy.cluster.base_directory=/ssl
+dbms.ssl.policy.cluster.private_key=tls.key
+dbms.ssl.policy.cluster.public_certificate=tls.crt
+dbms.ssl.policy.cluster.trust_all=false           # validate peers against ca.crt
+dbms.ssl.policy.cluster.client_auth=REQUIRE       # mutual TLS
+dbms.ssl.policy.cluster.verify_hostname=true      # peer's cert must match the FQDN
+dbms.ssl.policy.cluster.tls_versions=TLSv1.3,TLSv1.2
 ```
 
-This is **critical** for cluster formation as it allows nodes to trust each other's certificates during the initial handshake.
+The trust anchor is the cert-manager-issued Secret's `ca.crt`, projected to `/ssl/trusted/ca.crt` (Neo4j's expected `trusted_dir` location). All cluster servers present a cert signed by the same CA, so peer validation just works.
+
+#### Opting out: `strictPeerValidation: false`
+
+The opt-out exists for installations whose external issuer (e.g. some custom `AWSPCAClusterIssuer` setups) does not populate `ca.crt` in the Secret it issues. Without `ca.crt` the trust anchor is missing and strict validation rejects every peer. The operator detects this at reconcile time and refuses to apply the strict config — `status.phase` flips to `Failed` with a message naming the issuer. Two paths forward:
+
+- **Recommended**: fix the issuer to include the CA in its Secret output.
+- **Escape hatch**: set `spec.tls.strictPeerValidation: false`. The operator reverts to `trust_all=true` + `client_auth=NONE` — the legacy posture, which Neo4j's own docs flag as *"debugging only, since it does not offer security."*
 
 ### Parallel Pod Startup
 
@@ -103,7 +117,8 @@ spec:
 
     # DO NOT override these - operator sets optimal values:
     # dbms.cluster.raft.membership.join_timeout: "10m"
-    # dbms.ssl.policy.cluster.trust_all: "true"
+    # dbms.ssl.policy.cluster.trust_all: "false"     (managed by strictPeerValidation)
+    # dbms.ssl.policy.cluster.client_auth: "REQUIRE" (managed by strictPeerValidation)
 ```
 
 ## Certificate Details
@@ -164,9 +179,9 @@ cypher-shell -a bolt+ssc://localhost:7687 -u neo4j -p <password>
 
 TLS clusters may experience split-brain during initial formation if not properly configured. The operator includes fixes to minimize this:
 
-1. **Automatic trust_all**: Cluster SSL policy includes `trust_all=true`
-2. **Parallel startup**: All pods start together for faster formation
-3. **Proper RBAC**: Endpoints permission for discovery
+1. **Strict peer validation** (default): the operator validates peers against the issuer's CA at `/ssl/trusted/ca.crt` with mutual TLS. Mismatched certs fail closed instead of silently joining the wrong cluster.
+2. **Parallel startup**: All pods start together for faster formation.
+3. **Proper RBAC**: Endpoints permission for discovery.
 
 If split-brain occurs, see the [Split-Brain Recovery Guide](../troubleshooting/split-brain-recovery.md).
 
@@ -297,7 +312,7 @@ spec:
 ## Best Practices
 
 1. **Always use cert-manager** for automatic certificate lifecycle management
-2. **Don't override cluster trust settings** - Let the operator manage `trust_all`
+2. **Don't override cluster trust settings** in `spec.config` — let the operator manage `trust_all`, `client_auth`, and `verify_hostname` via the `spec.tls.strictPeerValidation` toggle
 3. **Monitor certificate expiry** - Set up alerts for certificate renewal
 4. **Test in staging** - Always test TLS configuration in non-production first
 5. **Use parallel pod management** - Already configured by the operator

@@ -132,7 +132,8 @@ config:
 **Critical for Standalone**: The operator automatically configures clustering infrastructure but ensures single-node operation.
 
 #### `tls` (TLSSpec)
-TLS/SSL configuration for secure connections.
+TLS/SSL configuration for secure connections. Same shape as
+[`Neo4jEnterpriseCluster.spec.tls`](neo4jenterprisecluster.md#tlsspec).
 
 ```yaml
 tls:
@@ -141,6 +142,11 @@ tls:
     name: ca-cluster-issuer
     kind: ClusterIssuer
 ```
+
+> **Note on `strictPeerValidation`:** the field is present on the shared
+> `TLSSpec` but has no effect on `Neo4jEnterpriseStandalone` — single-server
+> deployments have no intra-cluster traffic, so there's no cluster SSL
+> policy to govern. Setting it on a standalone is silently ignored.
 
 #### `auth` (AuthSpec)
 Authentication configuration.

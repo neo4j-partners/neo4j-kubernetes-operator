@@ -17,6 +17,7 @@ limitations under the License.
 package validation
 
 import (
+	"fmt"
 	"time"
 
 	"k8s.io/apimachinery/pkg/util/validation/field"
@@ -109,6 +110,7 @@ func (v *TLSValidator) Validate(cluster *neo4jv1beta1.Neo4jEnterpriseCluster) fi
 				"s/mime", "ipsec end system", "ipsec tunnel", "ipsec user",
 				"timestamping", "ocsp signing", "microsoft sgc", "netscape sgc",
 			}
+			provided := make(map[string]bool, len(cluster.Spec.TLS.Usages))
 			for i, usage := range cluster.Spec.TLS.Usages {
 				valid := false
 				for _, validUsage := range validUsages {
@@ -122,6 +124,33 @@ func (v *TLSValidator) Validate(cluster *neo4jv1beta1.Neo4jEnterpriseCluster) fi
 						tlsPath.Child("usages").Index(i),
 						usage,
 						validUsages,
+					))
+				}
+				provided[usage] = true
+			}
+
+			// Neo4j's TLS posture needs both EKUs:
+			//   - server auth: every Neo4j server presents its cert to
+			//     incoming clients (Bolt, HTTPS, intra-cluster).
+			//   - client auth: under strict peer validation (the default)
+			//     the cluster SSL policy emits client_auth=REQUIRE, which
+			//     means each server also acts as a TLS client when
+			//     connecting to peers and must present a cert with the
+			//     clientAuth EKU.
+			//
+			// When the user supplies an explicit usages list, it REPLACES
+			// the operator's defaults (server auth + client auth +
+			// digital signature + key encipherment) — see
+			// internal/resources/cluster.go:BuildCertificateForEnterprise.
+			// If either required EKU is missing, the issued cert won't
+			// satisfy Neo4j's runtime requirements and the cluster's
+			// mutual TLS handshakes will fail silently at the network
+			// layer. Reject loudly here.
+			for _, required := range []string{"server auth", "client auth"} {
+				if !provided[required] {
+					allErrs = append(allErrs, field.Required(
+						tlsPath.Child("usages"),
+						fmt.Sprintf("%q is required: Neo4j needs both server-auth and client-auth EKUs (server-auth for incoming Bolt/HTTPS/cluster TLS, client-auth for the mutual TLS the operator emits on cluster links under strict peer validation). Add %q to spec.tls.usages, or omit the field entirely to use the operator's defaults", required, required),
 					))
 				}
 			}

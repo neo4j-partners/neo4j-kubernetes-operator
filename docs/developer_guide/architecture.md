@@ -364,8 +364,23 @@ share the same key/cert/CA bundle:
 - `dbms.ssl.policy.https.*` — Browser/HTTP API
 - `dbms.ssl.policy.cluster.*` — RAFT and discovery between server pods
 
-`dbms.ssl.policy.cluster.trust_all=true` is set to allow servers to trust each
-other during cluster formation without per-pod CA pinning.
+The cluster SSL policy posture is governed by `spec.tls.strictPeerValidation`
+(default `true`):
+
+- **Strict (default)** — emits `trust_all=false`, `client_auth=REQUIRE`
+  (mutual TLS), and `verify_hostname=true`. The cert-manager Secret is
+  projected via `Secret.items[]` so its `ca.crt` lands at
+  `/ssl/trusted/ca.crt`, which is the directory Neo4j's cluster SSL policy
+  reads when `trust_all=false`. Matches Neo4j's canonical SSL framework
+  guidance.
+- **Legacy (`strictPeerValidation: false`)** — reverts to `trust_all=true`
+  + `client_auth=NONE`. Provided as an opt-out for installations whose
+  external issuer does not populate `ca.crt`. Neo4j's own docs call this
+  posture "debugging only, since it does not offer security." The
+  controller-side preflight `verifyTLSSecretHasCA` refuses the strict
+  config when `ca.crt` is missing and surfaces a clear status message
+  rather than silently rolling the STS into a no-trust-anchor strict
+  configuration.
 
 When TLS is enabled, `server.bolt.tls_level=REQUIRED` is also set — plain
 `bolt://` connections are rejected (regression checklist item #16).

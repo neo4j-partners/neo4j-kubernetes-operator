@@ -1,10 +1,13 @@
 package validation
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 
 	neo4jv1beta1 "github.com/neo4j-partners/neo4j-kubernetes-operator/api/v1beta1"
 )
@@ -47,7 +50,7 @@ func TestTLSValidator_Validate(t *testing.T) {
 						},
 						Duration:    stringPtr("2160h"), // 90 days
 						RenewBefore: stringPtr("360h"),  // 15 days
-						Usages:      []string{"digital signature", "key encipherment", "server auth"},
+						Usages:      []string{"digital signature", "key encipherment", "server auth", "client auth"},
 					},
 				},
 			},
@@ -420,6 +423,15 @@ func TestTLSValidator_ValidUsages(t *testing.T) {
 
 	for _, usage := range validUsages {
 		t.Run("valid usage: "+usage, func(t *testing.T) {
+			// Always include server auth + client auth (required by Neo4j
+			// for incoming TLS + the operator's strict cluster mutual TLS).
+			// This test exercises usage-name validity, not the EKU
+			// completeness check covered in
+			// TestTLSValidator_RequiresServerAndClientAuthEKUs below.
+			usages := []string{"server auth", "client auth"}
+			if usage != "server auth" && usage != "client auth" {
+				usages = append(usages, usage)
+			}
 			cluster := &neo4jv1beta1.Neo4jEnterpriseCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-cluster",
@@ -432,7 +444,7 @@ func TestTLSValidator_ValidUsages(t *testing.T) {
 							Name: "ca-cluster-issuer",
 							Kind: "ClusterIssuer",
 						},
-						Usages: []string{usage},
+						Usages: usages,
 					},
 				},
 			}
@@ -441,6 +453,79 @@ func TestTLSValidator_ValidUsages(t *testing.T) {
 			assert.Empty(t, errors, "Expected no validation errors for valid usage %q but got: %v", usage, errors)
 		})
 	}
+}
+
+// TestTLSValidator_RequiresServerAndClientAuthEKUs covers the requirement
+// that a user-supplied spec.tls.usages must include both server-auth and
+// client-auth. Neo4j needs server-auth for incoming Bolt/HTTPS/cluster
+// TLS and client-auth for the mutual TLS the operator emits on cluster
+// links under strict peer validation (client_auth=REQUIRE). Without
+// either EKU the issued cert would fail the runtime handshake.
+func TestTLSValidator_RequiresServerAndClientAuthEKUs(t *testing.T) {
+	validator := NewTLSValidator()
+
+	mk := func(usages []string) *neo4jv1beta1.Neo4jEnterpriseCluster {
+		return &neo4jv1beta1.Neo4jEnterpriseCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: "c", Namespace: "default"},
+			Spec: neo4jv1beta1.Neo4jEnterpriseClusterSpec{
+				TLS: &neo4jv1beta1.TLSSpec{
+					Mode:      "cert-manager",
+					IssuerRef: &neo4jv1beta1.IssuerRef{Name: "ca-cluster-issuer", Kind: "ClusterIssuer"},
+					Usages:    usages,
+				},
+			},
+		}
+	}
+
+	hasRequiredError := func(errs []*field.Error, missingUsage string) bool {
+		for _, e := range errs {
+			if e.Type == field.ErrorTypeRequired && strings.Contains(e.Detail, "\""+missingUsage+"\"") {
+				return true
+			}
+		}
+		return false
+	}
+
+	t.Run("missing client auth → rejected", func(t *testing.T) {
+		errs := validator.Validate(mk([]string{"digital signature", "key encipherment", "server auth"}))
+		require.NotEmpty(t, errs)
+		assert.True(t, hasRequiredError(errs, "client auth"),
+			"expected Required error naming client auth; got %v", errs)
+	})
+
+	t.Run("missing server auth → rejected", func(t *testing.T) {
+		errs := validator.Validate(mk([]string{"digital signature", "client auth"}))
+		require.NotEmpty(t, errs)
+		assert.True(t, hasRequiredError(errs, "server auth"),
+			"expected Required error naming server auth; got %v", errs)
+	})
+
+	t.Run("missing both → both errors", func(t *testing.T) {
+		errs := validator.Validate(mk([]string{"digital signature", "key encipherment"}))
+		require.NotEmpty(t, errs)
+		assert.True(t, hasRequiredError(errs, "server auth"))
+		assert.True(t, hasRequiredError(errs, "client auth"))
+	})
+
+	t.Run("both present → accepted", func(t *testing.T) {
+		errs := validator.Validate(mk([]string{"digital signature", "key encipherment", "server auth", "client auth"}))
+		assert.Empty(t, errs)
+	})
+
+	t.Run("empty usages → no requirement (operator defaults apply)", func(t *testing.T) {
+		// Empty list means the operator's defaults take effect (which
+		// include both EKUs). Validator should not complain.
+		cluster := &neo4jv1beta1.Neo4jEnterpriseCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: "c", Namespace: "default"},
+			Spec: neo4jv1beta1.Neo4jEnterpriseClusterSpec{
+				TLS: &neo4jv1beta1.TLSSpec{
+					Mode:      "cert-manager",
+					IssuerRef: &neo4jv1beta1.IssuerRef{Name: "ca-cluster-issuer", Kind: "ClusterIssuer"},
+				},
+			},
+		}
+		assert.Empty(t, validator.Validate(cluster))
+	})
 }
 
 func TestTLSValidator_ValidIssuerKinds(t *testing.T) {

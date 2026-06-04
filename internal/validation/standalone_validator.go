@@ -18,6 +18,7 @@ package validation
 
 import (
 	"fmt"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/util/validation/field"
 
@@ -275,6 +276,23 @@ func (v *StandaloneValidator) validateConfig(standalone *neo4jv1beta1.Neo4jEnter
 			mode,
 			"dbms.mode is deprecated in Neo4j 5.x+ and should not be used. Remove this setting for Neo4j 5.26+ deployments",
 		))
+	}
+
+	// SSL policies are managed end-to-end by the operator via spec.tls.
+	// Reject user-set dbms.ssl.policy.* / server.bolt.tls_level /
+	// server.directories.certificates. Same rationale as the cluster
+	// ConfigValidator — server.config.strict_validation.enabled=false
+	// means Neo4j silently honours later duplicates, so without this
+	// rejection a user could silently downgrade TLS posture via spec.config.
+	for key := range standalone.Spec.Config {
+		if strings.HasPrefix(key, "dbms.ssl.policy.") ||
+			key == "server.bolt.tls_level" ||
+			key == "server.directories.certificates" {
+			allErrs = append(allErrs, field.Forbidden(
+				configPath.Key(key),
+				"TLS / SSL policy is managed by the operator via spec.tls; do not set dbms.ssl.policy.*, server.bolt.tls_level, or server.directories.certificates in spec.config",
+			))
+		}
 	}
 
 	return allErrs

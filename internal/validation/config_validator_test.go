@@ -20,6 +20,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 
 	neo4jv1beta1 "github.com/neo4j-partners/neo4j-kubernetes-operator/api/v1beta1"
 )
@@ -126,6 +128,89 @@ func TestConfigValidator_ValidateDiscoveryRestrictions(t *testing.T) {
 				}
 				assert.True(t, found, "Expected error type %s not found. Available types: %v. Errors: %v", tt.errorType, errorTypes, errors)
 			}
+		})
+	}
+}
+
+// TestConfigValidator_RejectsManagedSSLKeys covers the rejection of any
+// user-supplied dbms.ssl.policy.* / server.bolt.tls_level /
+// server.directories.certificates in spec.config. The operator owns the
+// SSL surface end-to-end via spec.tls.* and the new
+// spec.tls.strictPeerValidation toggle. Without this rejection, a user
+// could put e.g. dbms.ssl.policy.cluster.trust_all=true in spec.config
+// and — because server.config.strict_validation.enabled=false elsewhere
+// lets Neo4j silently honour duplicate-key overrides — silently downgrade
+// the strict-by-default cluster TLS posture.
+func TestConfigValidator_RejectsManagedSSLKeys(t *testing.T) {
+	validator := NewConfigValidator()
+
+	cases := []struct {
+		name   string
+		key    string
+		value  string
+		reason string
+	}{
+		{
+			name:   "cluster SSL trust_all override is rejected",
+			key:    "dbms.ssl.policy.cluster.trust_all",
+			value:  "true",
+			reason: "would silently revert strict peer validation to legacy posture",
+		},
+		{
+			name:   "cluster SSL client_auth override is rejected",
+			key:    "dbms.ssl.policy.cluster.client_auth",
+			value:  "NONE",
+			reason: "would disable mutual TLS",
+		},
+		{
+			name:   "cluster SSL verify_hostname override is rejected",
+			key:    "dbms.ssl.policy.cluster.verify_hostname",
+			value:  "false",
+			reason: "would disable hostname verification",
+		},
+		{
+			name:   "bolt SSL policy override is rejected",
+			key:    "dbms.ssl.policy.bolt.client_auth",
+			value:  "REQUIRE",
+			reason: "would force every Bolt driver to present a client cert",
+		},
+		{
+			name:   "https SSL policy override is rejected",
+			key:    "dbms.ssl.policy.https.enabled",
+			value:  "false",
+			reason: "would silently disable HTTPS even with TLS enabled",
+		},
+		{
+			name:   "bolt TLS level override is rejected",
+			key:    "server.bolt.tls_level",
+			value:  "OPTIONAL",
+			reason: "would downgrade Bolt TLS enforcement away from REQUIRED",
+		},
+		{
+			name:   "certificates directory override is rejected",
+			key:    "server.directories.certificates",
+			value:  "/etc/neo4j/certs",
+			reason: "would point Neo4j away from the operator-managed /ssl/ mount",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cluster := &neo4jv1beta1.Neo4jEnterpriseCluster{
+				Spec: neo4jv1beta1.Neo4jEnterpriseClusterSpec{
+					Config: map[string]string{tc.key: tc.value},
+				},
+			}
+			errors := validator.Validate(cluster)
+			require.NotEmpty(t, errors, "expected rejection (%s)", tc.reason)
+			found := false
+			for _, err := range errors {
+				if err.Type == field.ErrorTypeForbidden {
+					found = true
+					break
+				}
+			}
+			assert.True(t, found, "expected a Forbidden error type — got %v", errors)
 		})
 	}
 }

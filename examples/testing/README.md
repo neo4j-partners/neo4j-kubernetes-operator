@@ -52,7 +52,12 @@ For production deployments, use the examples in:
 
 ### TLS Configuration
 - TLS clusters require cert-manager to be installed
-- Uses `trust_all=true` for cluster SSL policy to ensure proper handshake
+- Default cluster SSL posture is strict (`spec.tls.strictPeerValidation: true`):
+  `trust_all=false` + `client_auth=REQUIRE` + `verify_hostname=true`, with the
+  cert-manager Secret's `ca.crt` projected to `/ssl/trusted/ca.crt` as the
+  trust anchor. Set `strictPeerValidation: false` to revert to the legacy
+  `trust_all=true` posture (only needed for issuers that don't populate
+  `ca.crt`).
 - Parallel pod startup is essential for TLS cluster formation
 
 ## Running Tests

@@ -101,6 +101,31 @@ func (v *ConfigValidator) Validate(cluster *neo4jv1beta1.Neo4jEnterpriseCluster)
 			))
 		}
 
+		// SSL policies are managed end-to-end by the operator via spec.tls.
+		// The operator emits dbms.ssl.policy.{bolt,https,cluster}.* and
+		// server.bolt.tls_level / server.directories.certificates with
+		// values driven by spec.tls.mode and spec.tls.strictPeerValidation.
+		//
+		// Because server.config.strict_validation.enabled is set to false
+		// (to allow experimental settings elsewhere), Neo4j silently lets
+		// duplicate keys later in neo4j.conf override earlier ones. Without
+		// this rejection a user could put e.g.
+		// `dbms.ssl.policy.cluster.trust_all: "true"` in spec.config and
+		// silently downgrade the strict-by-default cluster SSL posture to
+		// Neo4j's documented debugging-only configuration. Reject loudly
+		// at apply time instead.
+		//
+		// Set spec.tls.strictPeerValidation: false if you need the legacy
+		// trust_all=true posture for an issuer that doesn't populate ca.crt.
+		if strings.HasPrefix(configKey, "dbms.ssl.policy.") ||
+			configKey == "server.bolt.tls_level" ||
+			configKey == "server.directories.certificates" {
+			allErrs = append(allErrs, field.Forbidden(
+				configPath.Child(configKey),
+				"unsupported configuration: TLS / SSL policy is managed by the operator via spec.tls; do not set dbms.ssl.policy.*, server.bolt.tls_level, or server.directories.certificates in spec.config. Use spec.tls.strictPeerValidation: false if you need the legacy trust_all=true posture",
+			))
+		}
+
 		// Validate database format settings
 		if configKey == "db.format" {
 			if configValue == "standard" || configValue == "high_limit" {
