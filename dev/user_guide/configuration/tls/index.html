@@ -786,6 +786,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Key Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#opting-out-strictpeervalidation-false" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Opting out: strictPeerValidation: false
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
           <li class="md-nav__item">
@@ -2857,6 +2874,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Key Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#opting-out-strictpeervalidation-false" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Opting out: strictPeerValidation: false
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
           <li class="md-nav__item">
@@ -3181,12 +3215,25 @@
 <h2 id="important-tls-and-cluster-formation">Important: TLS and Cluster Formation<a class="headerlink" href="#important-tls-and-cluster-formation" title="Anchor link to this section">&para;</a></h2>
 <p>TLS-enabled clusters require special consideration for reliable cluster formation:</p>
 <h3 id="key-configuration">Key Configuration<a class="headerlink" href="#key-configuration" title="Anchor link to this section">&para;</a></h3>
-<p>The operator automatically configures cluster SSL policy with <code>trust_all=true</code>:</p>
-<div class="language-properties highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Automatically set by the operator</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="na">dbms.ssl.policy.cluster.enabled</span><span class="o">=</span><span class="s">true</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="na">dbms.ssl.policy.cluster.trust_all</span><span class="o">=</span><span class="s">true</span>
+<p>The operator emits Neo4j's canonical production cluster SSL policy by default:</p>
+<div class="language-properties highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Automatically set by the operator when spec.tls.mode=cert-manager</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1"># and spec.tls.strictPeerValidation (default true) is enabled:</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="na">dbms.ssl.policy.cluster.enabled</span><span class="o">=</span><span class="s">true</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="na">dbms.ssl.policy.cluster.base_directory</span><span class="o">=</span><span class="s">/ssl</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="na">dbms.ssl.policy.cluster.private_key</span><span class="o">=</span><span class="s">tls.key</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="na">dbms.ssl.policy.cluster.public_certificate</span><span class="o">=</span><span class="s">tls.crt</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="na">dbms.ssl.policy.cluster.trust_all</span><span class="o">=</span><span class="s">false           # validate peers against ca.crt</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="na">dbms.ssl.policy.cluster.client_auth</span><span class="o">=</span><span class="s">REQUIRE       # mutual TLS</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="na">dbms.ssl.policy.cluster.verify_hostname</span><span class="o">=</span><span class="s">true      # peer&#39;s cert must match the FQDN</span>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="na">dbms.ssl.policy.cluster.tls_versions</span><span class="o">=</span><span class="s">TLSv1.3,TLSv1.2</span>
 </span></code></pre></div>
-<p>This is <strong>critical</strong> for cluster formation as it allows nodes to trust each other's certificates during the initial handshake.</p>
+<p>The trust anchor is the cert-manager-issued Secret's <code>ca.crt</code>, projected to <code>/ssl/trusted/ca.crt</code> (Neo4j's expected <code>trusted_dir</code> location). All cluster servers present a cert signed by the same CA, so peer validation just works.</p>
+<h4 id="opting-out-strictpeervalidation-false">Opting out: <code>strictPeerValidation: false</code><a class="headerlink" href="#opting-out-strictpeervalidation-false" title="Anchor link to this section">&para;</a></h4>
+<p>The opt-out exists for installations whose external issuer (e.g. some custom <code>AWSPCAClusterIssuer</code> setups) does not populate <code>ca.crt</code> in the Secret it issues. Without <code>ca.crt</code> the trust anchor is missing and strict validation rejects every peer. The operator detects this at reconcile time and refuses to apply the strict config — <code>status.phase</code> flips to <code>Failed</code> with a message naming the issuer. Two paths forward:</p>
+<ul>
+<li><strong>Recommended</strong>: fix the issuer to include the CA in its Secret output.</li>
+<li><strong>Escape hatch</strong>: set <code>spec.tls.strictPeerValidation: false</code>. The operator reverts to <code>trust_all=true</code> + <code>client_auth=NONE</code> — the legacy posture, which Neo4j's own docs flag as <em>"debugging only, since it does not offer security."</em></li>
+</ul>
 <h3 id="parallel-pod-startup">Parallel Pod Startup<a class="headerlink" href="#parallel-pod-startup" title="Anchor link to this section">&para;</a></h3>
 <p>The operator uses parallel pod management for faster cluster formation:
 - All pods start simultaneously
@@ -3217,7 +3264,8 @@
 </span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a>
 </span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="w">    </span><span class="c1"># DO NOT override these - operator sets optimal values:</span>
 </span><span id="__span-2-22"><a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a><span class="w">    </span><span class="c1"># dbms.cluster.raft.membership.join_timeout: &quot;10m&quot;</span>
-</span><span id="__span-2-23"><a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a><span class="w">    </span><span class="c1"># dbms.ssl.policy.cluster.trust_all: &quot;true&quot;</span>
+</span><span id="__span-2-23"><a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a><span class="w">    </span><span class="c1"># dbms.ssl.policy.cluster.trust_all: &quot;false&quot;     (managed by strictPeerValidation)</span>
+</span><span id="__span-2-24"><a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a><span class="w">    </span><span class="c1"># dbms.ssl.policy.cluster.client_auth: &quot;REQUIRE&quot; (managed by strictPeerValidation)</span>
 </span></code></pre></div>
 <h2 id="certificate-details">Certificate Details<a class="headerlink" href="#certificate-details" title="Anchor link to this section">&para;</a></h2>
 <h3 id="dns-names">DNS Names<a class="headerlink" href="#dns-names" title="Anchor link to this section">&para;</a></h3>
@@ -3260,9 +3308,9 @@
 <h3 id="split-brain-in-tls-clusters">Split-Brain in TLS Clusters<a class="headerlink" href="#split-brain-in-tls-clusters" title="Anchor link to this section">&para;</a></h3>
 <p>TLS clusters may experience split-brain during initial formation if not properly configured. The operator includes fixes to minimize this:</p>
 <ol>
-<li><strong>Automatic trust_all</strong>: Cluster SSL policy includes <code>trust_all=true</code></li>
-<li><strong>Parallel startup</strong>: All pods start together for faster formation</li>
-<li><strong>Proper RBAC</strong>: Endpoints permission for discovery</li>
+<li><strong>Strict peer validation</strong> (default): the operator validates peers against the issuer's CA at <code>/ssl/trusted/ca.crt</code> with mutual TLS. Mismatched certs fail closed instead of silently joining the wrong cluster.</li>
+<li><strong>Parallel startup</strong>: All pods start together for faster formation.</li>
+<li><strong>Proper RBAC</strong>: Endpoints permission for discovery.</li>
 </ol>
 <p>If split-brain occurs, see the <a href="../../troubleshooting/split-brain-recovery/">Split-Brain Recovery Guide</a>.</p>
 <h3 id="certificate-issues">Certificate Issues<a class="headerlink" href="#certificate-issues" title="Anchor link to this section">&para;</a></h3>
@@ -3357,7 +3405,7 @@ Set <code>kind</code> to the issuer's resource kind and <code>group</code> to it
 <h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Anchor link to this section">&para;</a></h2>
 <ol>
 <li><strong>Always use cert-manager</strong> for automatic certificate lifecycle management</li>
-<li><strong>Don't override cluster trust settings</strong> - Let the operator manage <code>trust_all</code></li>
+<li><strong>Don't override cluster trust settings</strong> in <code>spec.config</code> — let the operator manage <code>trust_all</code>, <code>client_auth</code>, and <code>verify_hostname</code> via the <code>spec.tls.strictPeerValidation</code> toggle</li>
 <li><strong>Monitor certificate expiry</strong> - Set up alerts for certificate renewal</li>
 <li><strong>Test in staging</strong> - Always test TLS configuration in non-production first</li>
 <li><strong>Use parallel pod management</strong> - Already configured by the operator</li>

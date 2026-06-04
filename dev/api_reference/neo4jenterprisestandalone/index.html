@@ -4133,13 +4133,20 @@
 - <code>NEO4J_AUTH</code> - Authentication setup (when using adminSecret)</p>
 <p><strong>Critical for Standalone</strong>: The operator automatically configures clustering infrastructure but ensures single-node operation.</p>
 <h4 id="tls-tlsspec"><code>tls</code> (TLSSpec)<a class="headerlink" href="#tls-tlsspec" title="Anchor link to this section">&para;</a></h4>
-<p>TLS/SSL configuration for secure connections.</p>
+<p>TLS/SSL configuration for secure connections. Same shape as
+<a href="../neo4jenterprisecluster/#tlsspec"><code>Neo4jEnterpriseCluster.spec.tls</code></a>.</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">tls</span><span class="p">:</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cert-manager</span><span class="w">            </span><span class="c1"># cert-manager or disabled</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span><span class="nt">issuerRef</span><span class="p">:</span>
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ca-cluster-issuer</span>
 </span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">    </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ClusterIssuer</span>
 </span></code></pre></div>
+<blockquote>
+<p><strong>Note on <code>strictPeerValidation</code>:</strong> the field is present on the shared
+<code>TLSSpec</code> but has no effect on <code>Neo4jEnterpriseStandalone</code> — single-server
+deployments have no intra-cluster traffic, so there's no cluster SSL
+policy to govern. Setting it on a standalone is silently ignored.</p>
+</blockquote>
 <h4 id="auth-authspec"><code>auth</code> (AuthSpec)<a class="headerlink" href="#auth-authspec" title="Anchor link to this section">&para;</a></h4>
 <p>Authentication configuration.</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">auth</span><span class="p">:</span>

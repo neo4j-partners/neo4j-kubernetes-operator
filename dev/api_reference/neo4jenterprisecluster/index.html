@@ -5315,6 +5315,11 @@ keytab) until full support lands.</p>
 <td><code>[]string</code></td>
 <td>Certificate usages</td>
 </tr>
+<tr>
+<td><code>strictPeerValidation</code></td>
+<td><code>*bool</code></td>
+<td>Intra-cluster TLS posture. <strong>Default: <code>true</code></strong> (Neo4j's canonical production posture). When <code>true</code>, the operator emits <code>dbms.ssl.policy.cluster.trust_all=false</code>, <code>client_auth=REQUIRE</code> (mutual TLS), and <code>verify_hostname=true</code>, and projects the cert-manager Secret's <code>ca.crt</code> to <code>/ssl/trusted/ca.crt</code> as the trust anchor. When <code>false</code>, reverts to the legacy <code>trust_all=true</code> + <code>client_auth=NONE</code> posture — Neo4j's own docs flag this as <em>"debugging only, since it does not offer security."</em> The opt-out exists for external issuers that do not populate <code>ca.crt</code> in their Secret output. See the <a href="../../user_guide/configuration/tls/">TLS Configuration Guide</a> for details.</td>
+</tr>
 </tbody>
 </table>
 <h3 id="issuerref">IssuerRef<a class="headerlink" href="#issuerref" title="Anchor link to this section">&para;</a></h3>

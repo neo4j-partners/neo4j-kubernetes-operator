@@ -3467,7 +3467,7 @@
 <h3 id="tls-enabled-clusters">TLS-Enabled Clusters<a class="headerlink" href="#tls-enabled-clusters" title="Anchor link to this section">&para;</a></h3>
 <p>TLS-enabled clusters use the same parallel formation approach with additional optimizations:</p>
 <ul>
-<li><strong>Automatic trust configuration</strong>: The operator sets <code>dbms.ssl.policy.cluster.trust_all=true</code> for intra-cluster communication</li>
+<li><strong>Automatic strict peer validation</strong> (default): The operator emits <code>dbms.ssl.policy.cluster.trust_all=false</code>, <code>client_auth=REQUIRE</code> (mutual TLS), and <code>verify_hostname=true</code>, projecting the cert-manager Secret's <code>ca.crt</code> to <code>/ssl/trusted/ca.crt</code> as the trust anchor. This matches Neo4j's canonical production guidance. Set <code>spec.tls.strictPeerValidation: false</code> to opt out into the legacy <code>trust_all=true</code> posture (only useful if your external issuer doesn't populate <code>ca.crt</code>).</li>
 <li><strong>Parallel startup maintained</strong>: TLS doesn't change the pod startup behavior</li>
 <li><strong>Reliable formation</strong>: With proper configuration, TLS clusters form as reliably as non-TLS clusters</li>
 </ul>

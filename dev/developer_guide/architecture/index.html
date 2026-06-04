@@ -4713,8 +4713,24 @@ share the same key/cert/CA bundle:</p>
 <li><code>dbms.ssl.policy.https.*</code> — Browser/HTTP API</li>
 <li><code>dbms.ssl.policy.cluster.*</code> — RAFT and discovery between server pods</li>
 </ul>
-<p><code>dbms.ssl.policy.cluster.trust_all=true</code> is set to allow servers to trust each
-other during cluster formation without per-pod CA pinning.</p>
+<p>The cluster SSL policy posture is governed by <code>spec.tls.strictPeerValidation</code>
+(default <code>true</code>):</p>
+<ul>
+<li><strong>Strict (default)</strong> — emits <code>trust_all=false</code>, <code>client_auth=REQUIRE</code>
+  (mutual TLS), and <code>verify_hostname=true</code>. The cert-manager Secret is
+  projected via <code>Secret.items[]</code> so its <code>ca.crt</code> lands at
+  <code>/ssl/trusted/ca.crt</code>, which is the directory Neo4j's cluster SSL policy
+  reads when <code>trust_all=false</code>. Matches Neo4j's canonical SSL framework
+  guidance.</li>
+<li><strong>Legacy (<code>strictPeerValidation: false</code>)</strong> — reverts to <code>trust_all=true</code></li>
+<li><code>client_auth=NONE</code>. Provided as an opt-out for installations whose
+  external issuer does not populate <code>ca.crt</code>. Neo4j's own docs call this
+  posture "debugging only, since it does not offer security." The
+  controller-side preflight <code>verifyTLSSecretHasCA</code> refuses the strict
+  config when <code>ca.crt</code> is missing and surfaces a clear status message
+  rather than silently rolling the STS into a no-trust-anchor strict
+  configuration.</li>
+</ul>
 <p>When TLS is enabled, <code>server.bolt.tls_level=REQUIRED</code> is also set — plain
 <code>bolt://</code> connections are rejected (regression checklist item #16).</p>
 <h4 id="4-operator-side-bolt-connection-outgoing">4. Operator-side Bolt connection (outgoing)<a class="headerlink" href="#4-operator-side-bolt-connection-outgoing" title="Anchor link to this section">&para;</a></h4>
