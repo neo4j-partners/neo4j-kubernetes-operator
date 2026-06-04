@@ -81,7 +81,7 @@ spec:
     # Cluster SSL (for server-to-server communication)
     dbms.ssl.policy.cluster.enabled: "true"
     dbms.ssl.policy.cluster.base_directory: "/ssl"
-    dbms.ssl.policy.cluster.trust_all: "false"   # Validate peer certificates against the cluster truststore at /ssl/cluster/trusted/. When `tls.mode: cert-manager` is set on the cluster spec, the operator issues the cert via cert-manager, mounts the resulting Secret under /ssl/, and writes the CA bundle into /ssl/cluster/trusted/. Set to "true" only for development.
+    dbms.ssl.policy.cluster.trust_all: "true"    # Required for reliable TLS cluster formation. The operator sets this automatically when `tls.mode: cert-manager` — every server presents a cert from the same cert-manager issuer, so peers trust each other during the initial RAFT handshake. Do NOT override to "false": the operator's own assertion at `internal/resources/cluster_tls_test.go:62` enforces "true" with a CRITICAL note. See `docs/user_guide/clustering.md` and `docs/user_guide/configuration/tls.md` for the full rationale.
 ```
 
 ## Authentication Configuration
@@ -586,22 +586,22 @@ Short TTL = changes propagate faster. Long TTL = better performance. Setting to 
 ### Neo4j Role-Based Access Control
 
 ```cypher
--- Create custom roles for different access levels
+// Create custom roles for different access levels
 CREATE ROLE data_analyst;
 CREATE ROLE data_engineer;
 CREATE ROLE database_admin;
 
--- Grant database permissions
+// Grant database permissions
 GRANT ACCESS ON DATABASE production TO data_analyst;
 GRANT START ON DATABASE production TO data_engineer;
 GRANT ALL ON DATABASE production TO database_admin;
 
--- Grant graph permissions
+// Grant graph permissions
 GRANT MATCH {*} ON GRAPH production TO data_analyst;
 GRANT WRITE ON GRAPH production TO data_engineer;
 GRANT ALL GRAPH PRIVILEGES ON GRAPH production TO database_admin;
 
--- Create users and assign roles
+// Create users and assign roles
 CREATE USER analyst_user SET PASSWORD 'SecurePassword123!' CHANGE NOT REQUIRED;
 GRANT ROLE data_analyst TO analyst_user;
 ```
@@ -1124,12 +1124,20 @@ bundled example CRs that intentionally trip Audit warnings.
 
 1. **Certificate Issues**:
    ```bash
+   # Substitute <cluster-name> with the name of your Neo4jEnterpriseCluster
+   # (or Neo4jEnterpriseStandalone) — the operator emits the Secret as
+   # `<cluster-name>-tls-secret`.
+
    # Check certificate status
    kubectl get certificates
-   kubectl describe certificate neo4j-tls-secret
+   kubectl describe certificate <cluster-name>-tls-secret
 
-   # Verify certificate content
-   kubectl get secret neo4j-tls-secret -o yaml | grep tls.crt | base64 -d | openssl x509 -text -noout
+   # Verify certificate content. Note: `grep tls.crt | base64 -d` is
+   # broken because grep returns the field name + colon + value, not the
+   # value alone, so base64 refuses to decode. Use jsonpath to extract
+   # the base64 value directly.
+   kubectl get secret <cluster-name>-tls-secret \
+     -o jsonpath='{.data.tls\.crt}' | base64 -d | openssl x509 -text -noout
    ```
 
 2. **Authentication Failures**:
