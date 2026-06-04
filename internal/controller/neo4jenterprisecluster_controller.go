@@ -313,12 +313,26 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 			if err := r.verifyTLSSecretHasCA(ctx, cluster); err != nil {
 				if goerrors.Is(err, errTLSSecretPending) {
 					// Bootstrap path: cert-manager hasn't issued the Secret
-					// yet. Surface a clear waiting-for-cert-manager status
-					// and requeue. Returning here also blocks downstream
-					// resource emission so the strict STS template never
-					// lands before the Secret is verified.
-					_ = r.updateClusterStatus(ctx, cluster, "Initializing",
-						fmt.Sprintf("Waiting for cert-manager to issue Secret %s-tls-secret (strict peer validation)", cluster.Name))
+					// yet. Block downstream ConfigMap + STS emission so the
+					// strict-mode template (which requires ca.crt in its
+					// Secret items projection) never lands before the
+					// Secret is verified.
+					//
+					// Phase handling honours the "never regress an
+					// established phase to Initializing" policy documented
+					// just above. Only surface Initializing on the
+					// first-reconcile path (empty phase); for established
+					// clusters in Forming/Ready/etc., requeue silently and
+					// leave the phase intact. A subsequent reconcile will
+					// proceed normally once cert-manager finishes.
+					if cluster.Status.Phase == "" || cluster.Status.Phase == "Initializing" {
+						_ = r.updateClusterStatus(ctx, cluster, "Initializing",
+							fmt.Sprintf("Waiting for cert-manager to issue Secret %s-tls-secret (strict peer validation)", cluster.Name))
+					} else {
+						logger.Info("Strict peer validation preflight: cert-manager Secret not yet available; requeueing",
+							"secret", fmt.Sprintf("%s-tls-secret", cluster.Name),
+							"phase", cluster.Status.Phase)
+					}
 					return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
 				}
 				logger.Error(err, "Strict peer validation preflight failed")
