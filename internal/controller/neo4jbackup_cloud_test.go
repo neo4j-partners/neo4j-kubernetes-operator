@@ -238,3 +238,81 @@ func TestBuildCloudEnvVars_NilCredentialsSecretRef(t *testing.T) {
 	envs := r.buildCloudEnvVars(backup)
 	assert.Nil(t, envs)
 }
+
+// ─── Per-run subfolder (issue #129) ─────────────────────────────────────────
+
+// TestBuildToPath_NoTrailingRunSubfolder verifies that buildToPath returns
+// the storage BASE — no trailing slash, no per-run component. The per-run
+// "${BACKUP_RUN_ID}" subfolder is appended by buildBackupCommand at
+// command-construction time and expanded by the shell at runtime via the
+// downward-API env var.
+func TestBuildToPath_NoTrailingRunSubfolder(t *testing.T) {
+	r := newReconcilerForCloudTest()
+
+	tests := []struct {
+		name     string
+		storage  neo4jv1beta1.StorageLocation
+		expected string
+	}{
+		{
+			name:     "s3 with explicit path",
+			storage:  neo4jv1beta1.StorageLocation{Type: "s3", Bucket: "my-bucket", Path: "neo4j/prod"},
+			expected: "s3://my-bucket/neo4j/prod",
+		},
+		{
+			name:     "gcs with explicit path",
+			storage:  neo4jv1beta1.StorageLocation{Type: "gcs", Bucket: "my-bucket", Path: "neo4j/prod"},
+			expected: "gs://my-bucket/neo4j/prod",
+		},
+		{
+			name:     "azure with explicit path",
+			storage:  neo4jv1beta1.StorageLocation{Type: "azure", Bucket: "my-container", Path: "neo4j/prod"},
+			expected: "azb://my-container/neo4j/prod",
+		},
+		{
+			name:     "s3 empty path falls back to 'backups'",
+			storage:  neo4jv1beta1.StorageLocation{Type: "s3", Bucket: "my-bucket"},
+			expected: "s3://my-bucket/backups",
+		},
+		{
+			name:     "pvc returns mount root only",
+			storage:  neo4jv1beta1.StorageLocation{Type: "pvc"},
+			expected: "/backup",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			backup := &neo4jv1beta1.Neo4jBackup{Spec: neo4jv1beta1.Neo4jBackupSpec{Storage: tt.storage}}
+			got := r.buildToPath(backup)
+			assert.Equal(t, tt.expected, got,
+				"buildToPath must return the BASE storage path; the per-run subfolder is appended at command-build time")
+			// Critical: no trailing slash. Previously buildToPath returned
+			// "s3://bucket/path/" with a trailing slash and every run dumped
+			// directly into this directory. The per-run subfolder is appended
+			// with an explicit slash separator at command-build time.
+			assert.NotEqual(t, "/", string(got[len(got)-1]),
+				"buildToPath must not return a trailing slash; the subfolder separator is added by the caller")
+		})
+	}
+}
+
+// TestBackupRunIDEnvVar verifies the downward-API env var that exposes the
+// backing Job's name to the backup Pod. This is the source of truth for the
+// per-run subfolder in --to-path (see buildBackupCommand). The operator
+// records the same Job name in BackupRun.BackupsPath, so the Pod and the
+// status history agree on the artifact directory without any out-of-band
+// coordination (no log parsing, no separate Job patch, no race window).
+func TestBackupRunIDEnvVar(t *testing.T) {
+	env := backupRunIDEnvVar()
+	assert.Equal(t, "BACKUP_RUN_ID", env.Name)
+	require.NotNil(t, env.ValueFrom)
+	require.NotNil(t, env.ValueFrom.FieldRef)
+	// `batch.kubernetes.io/job-name` is the canonical Kubernetes 1.27+ label
+	// the Job controller stamps onto every Pod it spawns. Don't fall back to
+	// the legacy bare `job-name` key — the project requires K8s 1.30+ and
+	// the canonical key is what's documented.
+	assert.Equal(t,
+		"metadata.labels['batch.kubernetes.io/job-name']",
+		env.ValueFrom.FieldRef.FieldPath)
+}

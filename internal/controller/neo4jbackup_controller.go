@@ -294,7 +294,8 @@ func sortBackupRunsNewestFirst(runs []neo4jv1beta1.BackupRun) {
 // the Job has not finished (neither Succeeded nor Failed > 0).
 func jobToBackupRun(job *batchv1.Job) (neo4jv1beta1.BackupRun, bool) {
 	run := neo4jv1beta1.BackupRun{
-		RunID: string(job.UID),
+		RunID:       string(job.UID),
+		BackupsPath: job.Name,
 	}
 	if job.Status.StartTime != nil {
 		run.StartTime = *job.Status.StartTime
@@ -558,7 +559,7 @@ func (r *Neo4jBackupReconciler) createBackupJob(ctx context.Context, backup *neo
 							Image:           image,
 							Command:         []string{"/bin/sh"},
 							Args:            []string{"-c", backupCmd},
-							Env:             r.buildCloudEnvVars(backup),
+							Env:             append([]corev1.EnvVar{backupRunIDEnvVar()}, r.buildCloudEnvVars(backup)...),
 							VolumeMounts:    r.buildVolumeMounts(backup),
 							SecurityContext: resources.DefaultNeo4jContainerSecurityContext(),
 						},
@@ -621,7 +622,7 @@ func (r *Neo4jBackupReconciler) createBackupCronJob(ctx context.Context, backup 
 								Image:           image,
 								Command:         []string{"/bin/sh"},
 								Args:            []string{"-c", backupCmd},
-								Env:             r.buildCloudEnvVars(backup),
+								Env:             append([]corev1.EnvVar{backupRunIDEnvVar()}, r.buildCloudEnvVars(backup)...),
 								VolumeMounts:    r.buildVolumeMounts(backup),
 								SecurityContext: resources.DefaultNeo4jContainerSecurityContext(),
 							},
@@ -671,7 +672,12 @@ func (r *Neo4jBackupReconciler) buildBackupCommand(ctx context.Context, backup *
 		}
 	}
 
-	toPath := r.buildToPath(backup)
+	// Append the per-run subfolder so every backup execution writes into
+	// its own directory (see backupRunIDEnvVar). The env var is set on the
+	// Pod via the downward API; the shell expands it at command-execution
+	// time. status.history.BackupsPath records the same Job name so each
+	// history entry deterministically points at its artifact directory.
+	toPath := r.buildToPath(backup) + "/${BACKUP_RUN_ID}"
 	// The --from FQDN differs between cluster and standalone targets;
 	// resolve the type from the live API so the FQDN matches reality.
 	// Falls back to the cluster shape on any lookup error so the
@@ -736,8 +742,14 @@ func (r *Neo4jBackupReconciler) buildBackupCommand(ctx context.Context, backup *
 	return cmd, nil
 }
 
-// buildToPath returns the --to-path value: a cloud URI for cloud storage or a
-// timestamped local directory for PVC storage.
+// buildToPath returns the BASE --to-path value (storage root). The actual
+// --to-path passed to neo4j-admin appends a per-run subfolder
+// ("${BACKUP_RUN_ID}") at command-execution time, see buildBackupCommand and
+// backupRunIDEnvVar. Keeping each run in its own subfolder is what lets
+// status.history.BackupsPath unambiguously identify the artifacts a given
+// BackupRun produced — the previous flat layout had every scheduled run
+// dumping into the same directory with no way to map run-to-artifact (see
+// issue #129).
 func (r *Neo4jBackupReconciler) buildToPath(backup *neo4jv1beta1.Neo4jBackup) string {
 	st := backup.Spec.Storage
 	p := st.Path
@@ -746,14 +758,37 @@ func (r *Neo4jBackupReconciler) buildToPath(backup *neo4jv1beta1.Neo4jBackup) st
 	}
 	switch st.Type {
 	case "s3":
-		return fmt.Sprintf("s3://%s/%s/", st.Bucket, p)
+		return fmt.Sprintf("s3://%s/%s", st.Bucket, p)
 	case "gcs":
-		return fmt.Sprintf("gs://%s/%s/", st.Bucket, p)
+		return fmt.Sprintf("gs://%s/%s", st.Bucket, p)
 	case "azure":
-		return fmt.Sprintf("azb://%s/%s/", st.Bucket, p)
+		return fmt.Sprintf("azb://%s/%s", st.Bucket, p)
 	default: // pvc
-		backupName := fmt.Sprintf("%s-%s", backup.Name, time.Now().Format("20060102-150405"))
-		return fmt.Sprintf("/backup/%s", backupName)
+		return "/backup"
+	}
+}
+
+// backupRunIDEnvVar exposes the backing Job's name to the backup Pod as
+// BACKUP_RUN_ID via the downward API. The shell command in buildBackupCommand
+// appends "/${BACKUP_RUN_ID}/" to --to-path so every run isolates its
+// artifacts in its own subfolder. The operator records the same value in
+// BackupRun.BackupsPath when populating status.history, so each history
+// entry deterministically identifies its artifact directory without log
+// parsing or out-of-band coordination.
+//
+// For one-shot Neo4jBackup CRs the value is "<backup>-backup". For
+// CronJob-spawned scheduled runs Kubernetes names each child Job
+// "<cronjob>-<unix-seconds>", which is sortable and unique per scheduled
+// time. The label key `batch.kubernetes.io/job-name` is the canonical
+// Kubernetes 1.27+ form and is always populated on Pods spawned by Jobs.
+func backupRunIDEnvVar() corev1.EnvVar {
+	return corev1.EnvVar{
+		Name: "BACKUP_RUN_ID",
+		ValueFrom: &corev1.EnvVarSource{
+			FieldRef: &corev1.ObjectFieldSelector{
+				FieldPath: "metadata.labels['batch.kubernetes.io/job-name']",
+			},
+		},
 	}
 }
 
@@ -1170,9 +1205,10 @@ func (r *Neo4jBackupReconciler) updateBackupStats(ctx context.Context, backup *n
 		}
 
 		run := neo4jv1beta1.BackupRun{
-			RunID:  string(job.UID),
-			Status: "Succeeded",
-			Stats:  stats,
+			RunID:       string(job.UID),
+			Status:      "Succeeded",
+			Stats:       stats,
+			BackupsPath: job.Name,
 		}
 		if job.Status.StartTime != nil {
 			run.StartTime = *job.Status.StartTime

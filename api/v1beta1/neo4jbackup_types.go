@@ -243,6 +243,23 @@ type BackupRun struct {
 
 	// Statistics for this backup run
 	Stats *BackupStats `json:"stats,omitempty"`
+
+	// BackupsPath is the run-specific subfolder under spec.storage.path
+	// where this run's `.backup` artifact(s) were written. To restore from
+	// this run, set Neo4jRestore.spec.source.backupPath to
+	// "<spec.storage.path>/<BackupsPath>" — neo4j-admin's --from-path
+	// accepts directories and auto-discovers .backup files inside.
+	//
+	// The subfolder name is the backing Job's name: for one-shot
+	// Neo4jBackup CRs it is "<backup-name>-backup"; for scheduled
+	// (CronJob) backups Kubernetes auto-suffixes it with the run's
+	// scheduled Unix timestamp ("<cronjob-name>-<unix-seconds>"), so
+	// every run lands in its own directory.
+	//
+	// Older runs predating the per-run-subfolder change have an empty
+	// BackupsPath — those artifacts live flat in spec.storage.path.
+	// +optional
+	BackupsPath string `json:"backupsPath,omitempty"`
 }
 
 // +kubebuilder:object:root=true

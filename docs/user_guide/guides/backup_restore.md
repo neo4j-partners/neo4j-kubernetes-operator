@@ -805,7 +805,17 @@ spec:
       cloud:
         provider: aws
         credentialsSecretRef: aws-backup-creds
-    backupPath: backup-20250104-120000.backup
+    # backupPath is the per-run subfolder recorded in
+    # Neo4jBackup.status.history[*].backupsPath. Get the value for
+    # the run you want to restore:
+    #
+    #   kubectl get neo4jbackup daily-backup \
+    #     -o jsonpath='{.status.history[?(@.runID=="<run-id>")].backupsPath}'
+    #
+    # neo4j-admin's --from-path auto-discovers .backup files inside the
+    # subfolder, so pointing at the folder (not a specific file) restores
+    # from that historical run.
+    backupPath: daily-backup-cron-1737028800
   options:
     verifyBackup: true
     replaceExisting: true
@@ -815,7 +825,9 @@ spec:
   stopCluster: true
 ```
 
-**Best for:** Cross-cluster recovery, disaster recovery from a known backup path.
+**Best for:** Cross-cluster recovery, disaster recovery from a specific historical backup run.
+
+> **Restoring from a specific historical run** (issue #129): every scheduled or one-shot backup run writes its `.backup` artifacts into a run-specific subfolder under `spec.storage.path`, named after the backing Job. The subfolder name is recorded on each history entry as `status.history[i].backupsPath`. To restore from any run in history, set `Neo4jRestore.spec.source.backupPath` to that subfolder name. Older runs predating this change (operator < v1.10) wrote artifacts flat into `spec.storage.path` and have an empty `backupsPath` — point `Neo4jRestore.spec.source.backupPath` directly at the `.backup` file for those.
 
 #### Restore to a Standalone Instance
 

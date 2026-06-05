@@ -64,7 +64,13 @@ func TestJobToBackupRun(t *testing.T) {
 
 	t.Run("succeeded Job → BackupRun with Duration", func(t *testing.T) {
 		job := &batchv1.Job{
-			ObjectMeta: metav1.ObjectMeta{UID: types.UID("uid-a")},
+			// Job.Name is the per-run artifact subfolder name (issue #129).
+			// For CronJob children Kubernetes formats it as
+			// "<cronjob>-<unix-seconds>", deterministic and unique per run.
+			ObjectMeta: metav1.ObjectMeta{
+				UID:  types.UID("uid-a"),
+				Name: "my-backup-backup-cron-28832400",
+			},
 			Status: batchv1.JobStatus{
 				Succeeded:      1,
 				StartTime:      &start,
@@ -83,6 +89,10 @@ func TestJobToBackupRun(t *testing.T) {
 		}
 		if run.Stats == nil || run.Stats.Duration != "45s" {
 			t.Errorf("Stats.Duration: got %+v, want 45s", run.Stats)
+		}
+		if run.BackupsPath != "my-backup-backup-cron-28832400" {
+			t.Errorf("BackupsPath: got %q, want %q (the Job name — issue #129)",
+				run.BackupsPath, "my-backup-backup-cron-28832400")
 		}
 	})
 
