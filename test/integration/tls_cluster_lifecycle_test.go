@@ -47,6 +47,96 @@ import (
 //     (trust_all=false + client_auth=REQUIRE + verify_hostname=true)
 //     against each other and the cluster reaches Ready.
 //   - No legacy trust_all=true leakage in the rendered config.
+//
+// dumpTLSDiagnostics writes everything you'd want to see when the TLS
+// cluster fails to reach Ready. Called from DeferCleanup on test failure;
+// no-op on success. The previous CI run had no diagnostics at all and
+// "status=Failed" was unactionable.
+func dumpTLSDiagnostics(ctx SpecContext, clientset *kubernetes.Clientset, namespaceName, clusterName string) {
+	w := GinkgoWriter
+
+	// 1. The cluster CR — phase + message + recent conditions.
+	fresh := &neo4jv1beta1.Neo4jEnterpriseCluster{}
+	if err := k8sClient.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: namespaceName}, fresh); err == nil {
+		fmt.Fprintf(w, "\n========== Neo4jEnterpriseCluster %s/%s ==========\n", namespaceName, clusterName)
+		fmt.Fprintf(w, "Phase:   %s\n", fresh.Status.Phase)
+		fmt.Fprintf(w, "Message: %s\n", fresh.Status.Message)
+		for _, c := range fresh.Status.Conditions {
+			fmt.Fprintf(w, "Condition: type=%s status=%s reason=%s message=%s\n", c.Type, c.Status, c.Reason, c.Message)
+		}
+	} else {
+		fmt.Fprintf(w, "\nFailed to fetch cluster CR: %v\n", err)
+	}
+
+	// 2. The cert-manager Secret — does it exist? does it have ca.crt?
+	secretName := clusterName + "-tls-secret"
+	secret := &corev1.Secret{}
+	if err := k8sClient.Get(ctx, types.NamespacedName{Name: secretName, Namespace: namespaceName}, secret); err == nil {
+		fmt.Fprintf(w, "\n========== Secret %s/%s ==========\n", namespaceName, secretName)
+		for k, v := range secret.Data {
+			fmt.Fprintf(w, "key=%s len=%d\n", k, len(v))
+		}
+	} else {
+		fmt.Fprintf(w, "\nSecret %s/%s lookup: %v\n", namespaceName, secretName, err)
+	}
+
+	// 3. Events in the namespace.
+	events, err := clientset.CoreV1().Events(namespaceName).List(ctx, metav1.ListOptions{})
+	if err == nil {
+		fmt.Fprintf(w, "\n========== Events in %s (last 30) ==========\n", namespaceName)
+		start := 0
+		if len(events.Items) > 30 {
+			start = len(events.Items) - 30
+		}
+		for _, e := range events.Items[start:] {
+			fmt.Fprintf(w, "%s %s %s: %s\n", e.LastTimestamp.Format("15:04:05"), e.Type, e.Reason, e.Message)
+		}
+	}
+
+	// 4. Operator controller logs (last 200 lines).
+	var tail int64 = 200
+	opPods, err := clientset.CoreV1().Pods("neo4j-operator-system").List(ctx, metav1.ListOptions{
+		LabelSelector: "control-plane=controller-manager",
+	})
+	if err == nil {
+		for _, p := range opPods.Items {
+			fmt.Fprintf(w, "\n========== Operator pod %s logs (last %d lines) ==========\n", p.Name, tail)
+			data, err := clientset.CoreV1().Pods("neo4j-operator-system").GetLogs(p.Name, &corev1.PodLogOptions{
+				Container: "manager",
+				TailLines: &tail,
+			}).Do(ctx).Raw()
+			if err != nil {
+				fmt.Fprintf(w, "(failed: %v)\n", err)
+				continue
+			}
+			fmt.Fprint(w, string(data))
+		}
+	}
+
+	// 5. Neo4j server pod descriptions + logs.
+	pods, err := clientset.CoreV1().Pods(namespaceName).List(ctx, metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("app.kubernetes.io/instance=%s", clusterName),
+	})
+	if err == nil {
+		for _, p := range pods.Items {
+			fmt.Fprintf(w, "\n========== Pod %s status ==========\n", p.Name)
+			fmt.Fprintf(w, "Phase: %s\n", p.Status.Phase)
+			for _, cs := range p.Status.ContainerStatuses {
+				fmt.Fprintf(w, "Container %s: ready=%v restarts=%d state=%+v\n", cs.Name, cs.Ready, cs.RestartCount, cs.State)
+			}
+			data, err := clientset.CoreV1().Pods(namespaceName).GetLogs(p.Name, &corev1.PodLogOptions{
+				Container: "neo4j",
+				TailLines: &tail,
+			}).Do(ctx).Raw()
+			if err == nil && len(data) > 0 {
+				fmt.Fprintf(w, "\n========== Pod %s neo4j logs (last %d lines) ==========\n%s\n", p.Name, tail, string(data))
+			}
+		}
+	}
+
+	fmt.Fprintln(w, "\n========== End TLS diagnostics ==========")
+}
+
 var _ = Describe("TLS Cluster Lifecycle (strict peer validation, default)", func() {
 	var (
 		namespaceName string
@@ -104,6 +194,20 @@ var _ = Describe("TLS Cluster Lifecycle (strict peer validation, default)", func
 		applyCIOptimizations(cluster)
 		Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
 
+		// Diagnostics dump runs on any failure in this It block. Captures
+		// the data the previous CI run was missing: status.message,
+		// conditions, the cert-manager Secret's keys, recent Events,
+		// operator controller logs, and Neo4j pod logs. Without these
+		// the next failure is again "status=Failed" with no reason.
+		clientset, err := kubernetes.NewForConfig(cfg)
+		Expect(err).NotTo(HaveOccurred())
+		DeferCleanup(func(ctx SpecContext) {
+			if !CurrentSpecReport().Failed() {
+				return
+			}
+			dumpTLSDiagnostics(ctx, clientset, namespaceName, clusterName)
+		})
+
 		By("Waiting for status.phase=Ready (cert-manager Secret + strict cluster SSL must both work)")
 		Eventually(func() string {
 			fresh := &neo4jv1beta1.Neo4jEnterpriseCluster{}
@@ -124,8 +228,6 @@ var _ = Describe("TLS Cluster Lifecycle (strict peer validation, default)", func
 		Expect(conf).NotTo(ContainSubstring("dbms.ssl.policy.cluster.trust_all=true"))
 
 		By("Verifying server pod logs contain no legacy trust_all marker and no TLS handshake failures")
-		clientset, err := kubernetes.NewForConfig(cfg)
-		Expect(err).NotTo(HaveOccurred())
 		podList := &corev1.PodList{}
 		Expect(k8sClient.List(ctx, podList,
 			client.InNamespace(namespaceName),
