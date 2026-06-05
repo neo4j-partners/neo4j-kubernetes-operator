@@ -149,8 +149,17 @@ func (r *Neo4jEnterpriseClusterReconciler) verifyTLSSecretHasCA(ctx context.Cont
 		if cluster.Spec.TLS != nil && cluster.Spec.TLS.IssuerRef != nil {
 			issuerName = cluster.Spec.TLS.IssuerRef.Name
 		}
-		return fmt.Errorf("strict peer validation requires Secret %s/%s to expose a non-empty ca.crt key, but the cert-manager-issued Secret has none. The issuer %q likely does not populate ca.crt (some external issuers don't). Either fix the issuer to include the CA in its Secret output, or set spec.tls.strictPeerValidation=false on this cluster to opt into the legacy trust_all=true posture",
-			cluster.Namespace, secretName, issuerName)
+		// Enumerate the keys that ARE present so debug output makes it
+		// obvious whether the Secret is genuinely missing ca.crt (issuer
+		// bug) or is in some other partial state we hadn't considered.
+		// Previously the failure was opaque: "Failed != Ready" with no
+		// hint as to which keys cert-manager populated.
+		presentKeys := make([]string, 0, len(secret.Data))
+		for k, v := range secret.Data {
+			presentKeys = append(presentKeys, fmt.Sprintf("%s(%dB)", k, len(v))) //nolint:perfsprint
+		}
+		return fmt.Errorf("strict peer validation requires Secret %s/%s to expose a non-empty ca.crt key, but the cert-manager-issued Secret has keys=[%s]. The issuer %q likely does not populate ca.crt (some external issuers don't), or cert-manager has not finished issuing. Either fix the issuer to include the CA in its Secret output, or set spec.tls.strictPeerValidation=false on this cluster to opt into the legacy trust_all=true posture",
+			cluster.Namespace, secretName, strings.Join(presentKeys, ","), issuerName)
 	}
 	return nil
 }
