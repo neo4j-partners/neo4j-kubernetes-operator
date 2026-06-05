@@ -3394,14 +3394,16 @@ Set <code>kind</code> to the issuer's resource kind and <code>group</code> to it
 </span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="w">    </span><span class="nt">renewBefore</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1440h</span><span class="w">  </span><span class="c1"># 60 days</span>
 </span></code></pre></div>
 <h3 id="mutual-tls-mtls">Mutual TLS (mTLS)<a class="headerlink" href="#mutual-tls-mtls" title="Anchor link to this section">&para;</a></h3>
-<p>For client certificate authentication, configure after deployment:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="w">  </span><span class="nt">config</span><span class="p">:</span>
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="w">    </span><span class="c1"># Enable client auth for Bolt</span>
-</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="w">    </span><span class="nt">dbms.ssl.policy.bolt.client_auth</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;REQUIRE&quot;</span>
-</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="w">    </span><span class="c1"># Keep cluster communication simple</span>
-</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="w">    </span><span class="nt">dbms.ssl.policy.cluster.client_auth</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;NONE&quot;</span>
+<p><strong>Intra-cluster mTLS is enabled by default.</strong> When <code>spec.tls.mode: cert-manager</code> and <code>spec.tls.strictPeerValidation: true</code> (the default), the operator emits:</p>
+<div class="language-properties highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="na">dbms.ssl.policy.cluster.trust_all</span><span class="o">=</span><span class="s">false</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="na">dbms.ssl.policy.cluster.client_auth</span><span class="o">=</span><span class="s">REQUIRE       # mutual TLS between server pods</span>
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="na">dbms.ssl.policy.cluster.verify_hostname</span><span class="o">=</span><span class="s">true</span>
 </span></code></pre></div>
+<p>No user configuration required. See the <em>Important: TLS and Cluster Formation</em> section above for the full rationale and the <code>strictPeerValidation: false</code> opt-out.</p>
+<blockquote>
+<p><strong>Do not set <code>dbms.ssl.policy.*</code> keys in <code>spec.config</code>.</strong> The operator owns the SSL policy surface end-to-end. The cluster validator rejects any <code>dbms.ssl.policy.*</code> / <code>server.bolt.tls_level</code> / <code>server.directories.certificates</code> key in <code>spec.config</code> with a <code>Forbidden</code> error at apply time, because user values would silently override the operator-managed configuration (<code>server.config.strict_validation.enabled=false</code> makes Neo4j accept duplicates without a warning).</p>
+</blockquote>
+<p><strong>Bolt mTLS (client-certificate authentication for external drivers) is not configurable via the operator today.</strong> Bolt and HTTPS SSL policies are managed by the operator with <code>client_auth=NONE</code> so standard Neo4j drivers — none of which ship with operator-issued client certs — can connect. A future enhancement could expose a typed field for this; track via <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/issues/128">issue #128</a> (security checklist gaps).</p>
 <h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Anchor link to this section">&para;</a></h2>
 <ol>
 <li><strong>Always use cert-manager</strong> for automatic certificate lifecycle management</li>
