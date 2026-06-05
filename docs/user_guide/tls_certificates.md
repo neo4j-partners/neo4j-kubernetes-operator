@@ -256,7 +256,7 @@ The operator handles certificate renewal automatically through cert-manager. To 
 
 ```bash
 # Delete the certificate to force regeneration
-kubectl delete certificate <deployment-name>-tls-cert
+kubectl delete certificate <deployment-name>-tls
 
 # The operator will recreate it automatically
 ```
@@ -281,7 +281,7 @@ spec:
 
 ```bash
 # Check certificate expiration
-kubectl get certificate <deployment-name>-tls-cert -o jsonpath='{.status.notAfter}'
+kubectl get certificate <deployment-name>-tls -o jsonpath='{.status.notAfter}'
 
 # Set up alerts for certificates expiring within 30 days
 ```
@@ -327,12 +327,12 @@ kubectl logs -n cert-manager deployment/cert-manager
 
 | Scheme | Description | Use Case |
 |--------|-------------|----------|
-| `bolt://` | Unencrypted | Development only |
+| `bolt://` | Unencrypted, direct | Dev only, TLS-disabled deployments. **Rejected by the server when TLS is enabled** (`server.bolt.tls_level=REQUIRED`). |
 | `bolt+s://` | Encrypted with CA validation | Production with trusted certs |
 | `bolt+ssc://` | Encrypted, self-signed cert | Development with TLS |
-| `neo4j://` | Auto-negotiation, unencrypted | Not recommended |
-| `neo4j+s://` | Auto-negotiation with TLS | Production |
-| `neo4j+ssc://` | Auto-negotiation, self-signed | Development |
+| `neo4j://` | Auto-negotiation, unencrypted | Cluster routing, TLS-disabled deployments only |
+| `neo4j+s://` | Auto-negotiation with TLS | Production cluster routing |
+| `neo4j+ssc://` | Auto-negotiation, self-signed | Development cluster routing with TLS |
 
 ### Common Commands
 

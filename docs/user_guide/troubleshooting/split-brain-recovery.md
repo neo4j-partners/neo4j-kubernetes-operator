@@ -331,8 +331,9 @@ If the operator incorrectly identifies split-brain:
 
 2. **Verify Network Connectivity**:
    ```bash
-   # Test inter-pod communication
-   kubectl exec production-cluster-server-0 -- nc -zv production-cluster-server-1 5000
+   # Test inter-pod communication on the V2 discovery/transaction port (6000).
+   # Port 5000 was the V1 discovery port — never used by this operator.
+   kubectl exec production-cluster-server-0 -- nc -zv production-cluster-server-1 6000
    ```
 
 3. **Review Configuration**:

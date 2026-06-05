@@ -354,9 +354,10 @@ kubectl logs <cluster-name>-server-1
    # Test DNS resolution to headless service
    kubectl exec -it <pod-name> -- nslookup <cluster-name>-headless
 
-   # Test cluster port connectivity (5000 = discovery, 6000 = V2 tcp-tx)
-   kubectl exec -it <pod-name> -- nc -zv localhost 5000
+   # Test V2 cluster port connectivity (port 6000 carries both V2 discovery
+   # and tcp-tx; port 5000 was V1-only and is never used by this operator).
    kubectl exec -it <pod-name> -- nc -zv localhost 6000
+   kubectl exec -it <pod-name> -- nc -zv localhost 7000  # RAFT
    ```
 
 4. **Verify Discovery Labels:**

@@ -463,25 +463,21 @@ spec:
 
 #### `spec.extraVolumes` / `spec.extraVolumeMounts` — escape hatch
 
-For the rare case where Neo4j needs a CA at a *specific filesystem path* —
-typically because a Neo4j SSL policy references a per-policy `truststore_path`
-(e.g. cross-cluster replication policies) — use `extraVolumes` and
-`extraVolumeMounts` to wire arbitrary mounts into the Neo4j pod:
+For the rare case where Neo4j needs an extra file at a *specific filesystem path* — typically a non-SSL artifact like a custom procedure JAR, a JVM `cacerts` overlay loaded by user code, or a configuration fragment consumed by an `apoc-extended` plugin — use `extraVolumes` and `extraVolumeMounts` to wire arbitrary mounts into the Neo4j pod:
 
 ```yaml
 spec:
   extraVolumes:
-    - name: replica-truststore
+    - name: corp-jvm-cacerts
       secret:
-        secretName: replica-cluster-ca
+        secretName: corp-jvm-cacerts
   extraVolumeMounts:
-    - name: replica-truststore
-      mountPath: /var/lib/neo4j/policies/replica
+    - name: corp-jvm-cacerts
+      mountPath: /var/lib/neo4j/plugins/cacerts
       readOnly: true
-  config:
-    dbms.ssl.policy.replica.truststore_path: /var/lib/neo4j/policies/replica/ca.crt
-    dbms.ssl.policy.replica.truststore_password: ""
 ```
+
+**Do not use `extraVolumes` to override Neo4j's SSL policy paths.** The operator owns `dbms.ssl.policy.*`, `server.bolt.tls_level`, and `server.directories.certificates` end-to-end; the cluster validator rejects any of those keys in `spec.config` with `Forbidden`. Per-policy `truststore_path` overrides are not configurable via the operator today — for an additive trust anchor, use `spec.trustedCASecrets` (above), which feeds the operator-managed JKS truststore at `/truststore/truststore.jks`.
 
 Mount paths that collide with operator-managed paths are rejected by the controller during reconciliation (the project does not use admission webhooks — see CLAUDE.md rule 26). Reserved paths include `/data`, `/logs`, `/conf`, `/ssl`, `/plugins`, `/truststore`, `/truststore-ca`, and subdirectories under `/var/lib/neo4j/` such as `data`, `logs`, `conf`, `plugins`, and `certificates`. A CR with a colliding mount is accepted into the API but its `status.phase` moves to `Failed` with a message naming the offending path.
 
@@ -1058,25 +1054,17 @@ spec:
 
 ```yaml
 spec:
-  # Strong TLS configuration
+  # Strong TLS configuration — operator-managed via spec.tls
   tls:
     mode: cert-manager
     issuerRef:
       name: pci-compliant-issuer
       kind: ClusterIssuer
+    # strictPeerValidation: true (default) emits the canonical strict
+    # cluster SSL policy: trust_all=false, client_auth=REQUIRE,
+    # verify_hostname=true, tls_versions=TLSv1.3,TLSv1.2.
 
   config:
-    # TLS 1.2 included for legacy-client compatibility during migration.
-    # See the regulatory-context note below the example for guidance on
-    # moving to the TLS 1.3-only target state.
-    dbms.ssl.policy.bolt.tls_versions: "TLSv1.2,TLSv1.3"
-    dbms.ssl.policy.https.tls_versions: "TLSv1.2,TLSv1.3"
-    # TLS 1.3-only hardening (target state — recommended once clients migrate):
-    # dbms.ssl.policy.bolt.tls_versions: "TLSv1.3"
-    # dbms.ssl.policy.https.tls_versions: "TLSv1.3"
-    dbms.ssl.policy.bolt.ciphers: "TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256"
-    dbms.ssl.policy.https.ciphers: "TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256"
-
     # Authentication and session management
     dbms.security.auth_minimum_password_length: "12"
     dbms.security.auth_cache_ttl: "15m"
@@ -1086,7 +1074,9 @@ spec:
     dbms.logs.security.level: "INFO"
 ```
 
-> **Why TLS 1.3 over TLS 1.2.** PCI DSS v4.0 mandates a TLS 1.2 minimum but expects active migration toward TLS 1.3. Several adjacent regimes also discourage TLS 1.2 for new builds — FIPS-140-3 module validations and NIST SP 800-52r2 guidance both recommend TLS 1.3 as the baseline (the latter as guidance, not a strict prohibition). If every client in your environment supports TLS 1.3, drop `TLSv1.2` from the `tls_versions` list — the commented-out TLS 1.3-only target-state lines in the example above show the resulting hardened form.
+> **TLS version and cipher pinning is not user-configurable today.** The operator owns the `dbms.ssl.policy.*` surface end-to-end (the cluster validator rejects any `dbms.ssl.policy.*` key in `spec.config` with `Forbidden`). The cluster SSL policy is emitted with `tls_versions=TLSv1.3,TLSv1.2`; bolt/https policies inherit Neo4j defaults. If your PCI assessment requires TLS 1.3-only or a custom cipher allowlist, track this as a gap — there is no in-operator override today. See [issue #128](https://github.com/priyolahiri/neo4j-kubernetes-operator/issues/128) for the broader security-checklist gaps.
+
+> **Why TLS 1.3 over TLS 1.2.** PCI DSS v4.0 mandates a TLS 1.2 minimum but expects active migration toward TLS 1.3. Several adjacent regimes also discourage TLS 1.2 for new builds — FIPS-140-3 module validations and NIST SP 800-52r2 guidance both recommend TLS 1.3 as the baseline (the latter as guidance, not a strict prohibition). Tracking the TLS 1.3-only enhancement is the path to closing this PCI gap inside the operator.
 
 ## Conformance Policies (Kyverno)
 
@@ -1144,7 +1134,9 @@ bundled example CRs that intentionally trip Audit warnings.
 
    # Check certificate status
    kubectl get certificates
-   kubectl describe certificate <cluster-name>-tls-secret
+   # The Certificate resource is named `<cluster-name>-tls` and produces
+   # the Secret `<cluster-name>-tls-secret`. Don't conflate the two.
+   kubectl describe certificate <cluster-name>-tls
 
    # Verify certificate content. Note: `grep tls.crt | base64 -d` is
    # broken because grep returns the field name + colon + value, not the

@@ -28,27 +28,41 @@ config:
 
 ## TLS/SSL Configuration
 
-### ✅ Correct (Neo4j 5.26+)
+TLS is **operator-managed via `spec.tls`** — do not configure SSL via `spec.config`.
+
+### ✅ Correct: enable TLS via `spec.tls`
 ```yaml
-config:
-  # HTTPS configuration
-  server.https.enabled: "true"
-  server.https.listen_address: "0.0.0.0:7473"
-
-  # Bolt TLS configuration
-  server.bolt.enabled: "true"
-  server.bolt.tls_level: "REQUIRED"
-
-  # SSL Policies
-  dbms.ssl.policy.https.enabled: "true"
-  dbms.ssl.policy.bolt.enabled: "true"
+spec:
+  tls:
+    mode: cert-manager
+    issuerRef:
+      name: ca-cluster-issuer
+      kind: ClusterIssuer
+    # strictPeerValidation defaults to true (mutual TLS on cluster links)
 ```
 
-### ❌ Deprecated
+When `spec.tls.mode: cert-manager` is set, the operator automatically emits:
+- `server.bolt.tls_level=REQUIRED` (plain `bolt://` connections are rejected)
+- `dbms.ssl.policy.{bolt,https,cluster}.*` (full SSL policy block)
+- HTTPS connector on 7473 and Bolt+TLS on 7687
+
+### ❌ Forbidden in `spec.config` (validator will reject)
 ```yaml
 config:
-  dbms.connector.https.enabled: "true"        # Deprecated
-  dbms.connector.bolt.tls_level: "REQUIRED"   # Deprecated
+  server.bolt.tls_level: "REQUIRED"      # Forbidden — operator owns this
+  dbms.ssl.policy.https.enabled: "true"  # Forbidden
+  dbms.ssl.policy.bolt.enabled: "true"   # Forbidden
+  dbms.ssl.policy.cluster.trust_all: "false"  # Forbidden — use spec.tls.strictPeerValidation
+  server.directories.certificates: "/ssl" # Forbidden
+```
+
+Reason: `server.config.strict_validation.enabled=false` means Neo4j silently accepts duplicate keys, so user-supplied values would override operator-managed values without warning. The validator rejects them at apply time with a `Forbidden` error. See [`docs/user_guide/configuration/tls.md`](../configuration/tls.md) for the full TLS configuration surface.
+
+### ❌ Deprecated 4.x connector keys (also rejected)
+```yaml
+config:
+  dbms.connector.https.enabled: "true"        # Deprecated, use spec.tls instead
+  dbms.connector.bolt.tls_level: "REQUIRED"   # Deprecated, use spec.tls instead
 ```
 
 ## Clustering Configuration

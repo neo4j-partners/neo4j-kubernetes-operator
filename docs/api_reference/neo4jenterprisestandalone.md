@@ -137,8 +137,8 @@ TLS/SSL configuration for secure connections. Same shape as
 
 ```yaml
 tls:
-  mode: cert-manager            # cert-manager or disabled
-  issuerRef:
+  mode: cert-manager            # cert-manager or disabled (only valid values)
+  issuerRef:                    # REQUIRED when mode=cert-manager
     name: ca-cluster-issuer
     kind: ClusterIssuer
 ```

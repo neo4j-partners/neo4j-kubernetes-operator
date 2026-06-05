@@ -6,25 +6,35 @@ This guide explains how to secure your Neo4j Enterprise clusters using the featu
 
 The operator provides first-class, typed configuration for external identity providers. You define providers via `spec.auth` and the operator generates the correct `neo4j.conf` entries automatically — no manual `dbms.security.*` keys required.
 
-**Supported providers:**
+**Supported providers (first-class typed configuration):**
 
 *   **Native Neo4j authentication**: The default, managed via Kubernetes secrets.
 *   **LDAP / Active Directory**: Full typed support — host, DN templates, group-to-role mapping, system account credentials (injected securely via env vars, never in ConfigMap).
 *   **OIDC / SSO**: Multiple named providers (e.g., Okta + Azure AD simultaneously) with discovery URI, claims mapping, and group-to-role mapping.
-*   **Kerberos**: For enterprise environments with Kerberos infrastructure.
-*   **JWT**: Use JSON Web Tokens for authentication.
+
+Kerberos and JWT authentication are configurable via raw `spec.config` keys (`dbms.security.authentication_providers`, `dbms.security.authorization_providers`, and provider-specific `dbms.security.*` settings) but do not currently have first-class typed CRD fields — `spec.auth.kerberos` and `spec.auth.jwt` are not wired through to Neo4j config. Track [issue #128](https://github.com/priyolahiri/neo4j-kubernetes-operator/issues/128) for the typed enhancement.
 
 **Multi-provider support**: Neo4j evaluates providers in order, so you can configure `authenticationProviders: [ldap, native]` to try LDAP first with native as fallback.
 
-**JVM TrustStore**: For LDAPS or OIDC with internal CAs, configure `spec.auth.trustStore` and the operator automatically creates an init container that builds a JKS truststore from your CA certificate.
+**JVM TrustStore**: For LDAPS or OIDC with internal CAs, use the top-level `spec.trustedCASecrets` field to add extra trust anchors to the operator-managed JKS truststore (seeded from the JDK `cacerts`). The legacy `spec.auth.trustStore` field still works for back-compat but is folded into the same path — prefer `spec.trustedCASecrets` for new deployments. See the [Security Best Practices](../security.md#custom-ca-truststore) guide for the full configuration.
 
 For full configuration details and examples, see the [Security Best Practices](../security.md#authentication-configuration) guide and the [auth examples](https://github.com/priyolahiri/neo4j-kubernetes-operator/blob/main/examples/clusters/auth-example.yaml).
 
 ## TLS
 
-The operator makes it easy to enable TLS encryption for all communication to and from your Neo4j cluster. You can enable TLS by setting the `spec.tls.enabled` field to `true`.
+The operator makes it easy to enable TLS encryption for all communication to and from your Neo4j cluster. Enable TLS by setting `spec.tls.mode: cert-manager` and pointing `spec.tls.issuerRef` at a cert-manager `Issuer` or `ClusterIssuer`:
 
-The operator integrates with `cert-manager` to automatically provision and manage TLS certificates. This is the recommended approach for production environments. You can specify a `cert-manager` issuer to use for signing certificates.
+```yaml
+spec:
+  tls:
+    mode: cert-manager
+    issuerRef:
+      name: ca-cluster-issuer
+      kind: ClusterIssuer
+    # strictPeerValidation defaults to true (mutual TLS on cluster links).
+```
+
+The operator integrates with `cert-manager` to automatically provision and manage TLS certificates. This is the recommended approach for production environments. Intra-cluster mutual TLS is enabled by default via `spec.tls.strictPeerValidation: true`. See the dedicated [TLS Configuration](../configuration/tls.md) guide for the full configuration surface, including third-party issuers (AWS PCA, Vault) and the `strictPeerValidation: false` opt-out.
 
 ## Network Policies
 

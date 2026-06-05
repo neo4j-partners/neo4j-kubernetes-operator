@@ -412,8 +412,12 @@ open http://localhost:7474
 ### 3. Verify Data Integrity
 
 ```bash
-# Connect to Neo4j and run basic queries
-cypher-shell -u neo4j -p <password> -a bolt://localhost:7687
+# Connect to Neo4j and run basic queries.
+# - TLS disabled: use bolt://
+# - TLS enabled (spec.tls.mode: cert-manager): the server enforces
+#   server.bolt.tls_level=REQUIRED and rejects plain bolt://.
+#   Use bolt+s:// (verified CA) or bolt+ssc:// (self-signed, skip hostname).
+cypher-shell -u neo4j -p <password> -a bolt+ssc://localhost:7687
 
 # Run test queries
 MATCH (n) RETURN count(n) as nodeCount;

@@ -320,8 +320,8 @@ not parse policy config to wire up filesystem mounts automatically.
 
 | Field | Type | Description |
 |---|---|---|
-| `mode` | `string` | TLS mode: `"cert-manager"` (default) or `"disabled"` |
-| `issuerRef` | [`*IssuerRef`](#issuerref) | cert-manager issuer reference |
+| `mode` | `string` | TLS mode: `"cert-manager"` (default) or `"disabled"`. The validator rejects any other value. |
+| `issuerRef` | [`*IssuerRef`](#issuerref) | cert-manager issuer reference. **Required when `mode: cert-manager`.** Validator rejects a `cert-manager` mode with no `issuerRef`. |
 | `certificateSecret` | `string` | TLS secret name (manual certificates) |
 | `trustedCASecret` | `string` | Secret containing a trusted CA certificate (key: `ca.crt`) for verifying Neo4j TLS connections. When omitted, the operator auto-discovers the CA from the cert-manager-generated Secret. |
 | `externalSecrets` | [`*ExternalSecretsConfig`](#externalsecretsconfig) | External Secrets configuration |
