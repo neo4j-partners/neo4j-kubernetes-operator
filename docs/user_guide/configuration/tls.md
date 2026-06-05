@@ -298,16 +298,19 @@ spec:
 
 ### Mutual TLS (mTLS)
 
-For client certificate authentication, configure after deployment:
+**Intra-cluster mTLS is enabled by default.** When `spec.tls.mode: cert-manager` and `spec.tls.strictPeerValidation: true` (the default), the operator emits:
 
-```yaml
-spec:
-  config:
-    # Enable client auth for Bolt
-    dbms.ssl.policy.bolt.client_auth: "REQUIRE"
-    # Keep cluster communication simple
-    dbms.ssl.policy.cluster.client_auth: "NONE"
+```properties
+dbms.ssl.policy.cluster.trust_all=false
+dbms.ssl.policy.cluster.client_auth=REQUIRE       # mutual TLS between server pods
+dbms.ssl.policy.cluster.verify_hostname=true
 ```
+
+No user configuration required. See the *Important: TLS and Cluster Formation* section above for the full rationale and the `strictPeerValidation: false` opt-out.
+
+> **Do not set `dbms.ssl.policy.*` keys in `spec.config`.** The operator owns the SSL policy surface end-to-end. The cluster validator rejects any `dbms.ssl.policy.*` / `server.bolt.tls_level` / `server.directories.certificates` key in `spec.config` with a `Forbidden` error at apply time, because user values would silently override the operator-managed configuration (`server.config.strict_validation.enabled=false` makes Neo4j accept duplicates without a warning).
+
+**Bolt mTLS (client-certificate authentication for external drivers) is not configurable via the operator today.** Bolt and HTTPS SSL policies are managed by the operator with `client_auth=NONE` so standard Neo4j drivers — none of which ship with operator-issued client certs — can connect. A future enhancement could expose a typed field for this; track via [issue #128](https://github.com/neo4j-partners/neo4j-kubernetes-operator/issues/128) (security checklist gaps).
 
 ## Best Practices
 
