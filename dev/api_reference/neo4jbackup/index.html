@@ -3848,6 +3848,11 @@
 <td><a href="#backupstats"><code>*BackupStats</code></a></td>
 <td>Backup statistics for this run</td>
 </tr>
+<tr>
+<td><code>backupsPath</code></td>
+<td><code>string</code></td>
+<td>Run-specific subfolder under <code>spec.storage.path</code> where this run's <code>.backup</code> artifact(s) were written. The subfolder name is the backing Job's name (for one-shot backups: <code>&lt;backup-name&gt;-backup</code>; for CronJob children: <code>&lt;cronjob-name&gt;-&lt;unix-seconds&gt;</code>). To restore from this run set <code>Neo4jRestore.spec.source.backupPath</code> to <code>&lt;spec.storage.path&gt;/&lt;backupsPath&gt;</code> — neo4j-admin auto-discovers <code>.backup</code> files inside directories. Older runs predating the per-run-subfolder change (issue #129) have an empty <code>backupsPath</code> and live flat in <code>spec.storage.path</code>.</td>
+</tr>
 </tbody>
 </table>
 <h2 id="examples">Examples<a class="headerlink" href="#examples" title="Anchor link to this section">&para;</a></h2>
