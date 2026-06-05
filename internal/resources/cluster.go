@@ -663,14 +663,27 @@ func BuildCertificateForEnterprise(cluster *neo4jv1beta1.Neo4jEnterpriseCluster)
 		)
 	}
 
-	// Build certificate spec
+	// Build certificate spec.
+	//
+	// CommonName: use the bare cluster name. The x509 subject CN is
+	// limited to 64 bytes per RFC 5280 and cert-manager's admission
+	// webhook enforces this hard cap. The previous form
+	// `<cluster>-client.<namespace>.svc.cluster.local` blew past 64 bytes
+	// for moderately-sized cluster/namespace pairs (e.g. a 20-char cluster
+	// in a 27-char namespace produces 74 bytes, which the webhook
+	// rejected — see CI run 27005373519). The bare cluster name is bounded
+	// by maxClusterNameLength=56 in the validator, so this form is always
+	// safe. The CN is informational only; modern TLS clients (Neo4j Bolt
+	// driver, JVM SSL stack used for intra-cluster handshakes, browsers)
+	// validate hostnames against SANs (RFC 6125), and every FQDN the
+	// cluster speaks on is enumerated in `dnsNames` above.
 	certSpec := certv1.CertificateSpec{
 		SecretName: fmt.Sprintf("%s-tls-secret", cluster.Name),
 		IssuerRef: cmmeta.IssuerReference{
 			Name: cluster.Spec.TLS.IssuerRef.Name,
 			Kind: cluster.Spec.TLS.IssuerRef.Kind,
 		},
-		CommonName: fmt.Sprintf("%s-client.%s.svc.cluster.local", cluster.Name, cluster.Namespace),
+		CommonName: cluster.Name,
 		DNSNames:   dnsNames,
 		// SecretTemplate propagates ownership labels onto the TLS Secret
 		// cert-manager issues. Without it the Secret has no operator-

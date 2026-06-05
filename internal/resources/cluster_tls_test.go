@@ -1,6 +1,7 @@
 package resources_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -257,6 +258,45 @@ func TestBuildCertificate_UsagesAlwaysIncludeServerAndClientAuth(t *testing.T) {
 	}
 	assert.Equal(t, 1, seen["server auth"], "no duplicate server auth: %v", cert.Spec.Usages)
 	assert.Equal(t, 1, seen["client auth"], "no duplicate client auth: %v", cert.Spec.Usages)
+}
+
+// TestBuildCertificate_CommonNameUnder64Bytes pins the x509 commonName
+// length contract. RFC 5280 caps subject CN at 64 bytes and cert-manager's
+// admission webhook enforces it. An earlier version of the builder used
+// `<cluster>-client.<namespace>.svc.cluster.local`, which blew past 64 bytes
+// for the integration suite's 20-char cluster name in a 27-char generated
+// namespace (74 bytes total). The CN is informational — modern TLS clients
+// verify hostnames against SANs (RFC 6125) — so we use the bare cluster
+// name, which is bounded by maxClusterNameLength=56 in the validator.
+func TestBuildCertificate_CommonNameUnder64Bytes(t *testing.T) {
+	// Worst case the validator allows: 56-char cluster name in a
+	// 63-char namespace (Kubernetes namespace cap).
+	longName := strings.Repeat("a", 56) // matches maxClusterNameLength
+	longNS := strings.Repeat("n", 63)   // K8s namespace cap
+	require.Len(t, longName, 56)
+	require.Len(t, longNS, 63)
+
+	cluster := &neo4jv1beta1.Neo4jEnterpriseCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: longName, Namespace: longNS},
+		Spec: neo4jv1beta1.Neo4jEnterpriseClusterSpec{
+			Topology: neo4jv1beta1.TopologyConfiguration{Servers: 3},
+			TLS: &neo4jv1beta1.TLSSpec{
+				Mode:      "cert-manager",
+				IssuerRef: &neo4jv1beta1.IssuerRef{Name: "ca-cluster-issuer", Kind: "ClusterIssuer"},
+			},
+		},
+	}
+
+	cert := resources.BuildCertificateForEnterprise(cluster)
+	require.NotNil(t, cert)
+	assert.LessOrEqual(t, len(cert.Spec.CommonName), 64,
+		"x509 CN must be ≤64 bytes (RFC 5280, enforced by cert-manager webhook); got %d bytes: %q",
+		len(cert.Spec.CommonName), cert.Spec.CommonName)
+	// Sanity: the long client FQDN must still be in SANs so hostname
+	// verification still works against the client service.
+	clientFQDN := longName + "-client." + longNS + ".svc.cluster.local"
+	assert.Contains(t, cert.Spec.DNSNames, clientFQDN,
+		"client service FQDN must remain in DNSNames for SAN-based hostname verification")
 }
 
 // TestBuildStatefulSet_TLSVolume_OptOutFlatMount covers the opt-out path:
