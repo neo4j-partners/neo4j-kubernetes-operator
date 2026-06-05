@@ -314,7 +314,7 @@ var _ = Describe("Neo4jBackup Controller", func() {
 		// History/RunID logic for #118 is covered by pure unit tests of
 		// jobToBackupRun and backupRunAlreadyRecorded in
 		// neo4jbackup_history_test.go. End-to-end Job-status →
-		// updateBackupStats integration is hard to assert in envtest:
+		// recordOneShotBackupRun integration is hard to assert in envtest:
 		// the cluster controller running in the same manager flips
 		// status.phase off Ready before the backup CR's periodic
 		// requeue fires, leaving the backup controller stuck in the

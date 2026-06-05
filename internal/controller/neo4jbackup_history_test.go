@@ -308,12 +308,12 @@ func TestJobDuration(t *testing.T) {
 }
 
 // Regression for the issue #117-adjacent dedup-path fix: a duplicate call to
-// updateBackupStats must NOT bump resourceVersion (return early) and a
+// recordOneShotBackupRun must NOT bump resourceVersion (return early) and a
 // first-time call must still update Stats and prepend the History entry.
 // Previously the diff that introduced dedup left Stats unconditionally
 // written before the dedup check; a draft fix would have inverted that and
 // silently dropped Stats updates for legitimate first-time calls.
-func TestUpdateBackupStatsDedup(t *testing.T) {
+func TestRecordOneShotBackupRunDedup(t *testing.T) {
 	ctx := context.Background()
 	ns := "default"
 
@@ -343,7 +343,7 @@ func TestUpdateBackupStatsDedup(t *testing.T) {
 	}
 
 	t.Run("first call writes Stats and prepends history", func(t *testing.T) {
-		r.updateBackupStats(ctx, backup, jobA)
+		r.recordOneShotBackupRun(ctx, backup, jobA)
 
 		got := get()
 		require.NotNil(t, got.Status.Stats, "Stats must be set after first call")
@@ -356,15 +356,15 @@ func TestUpdateBackupStatsDedup(t *testing.T) {
 		before := get()
 		rvBefore := before.ResourceVersion
 
-		r.updateBackupStats(ctx, backup, jobA) // same Job UID
+		r.recordOneShotBackupRun(ctx, backup, jobA) // same Job UID
 
 		after := get()
-		assert.Equal(t, rvBefore, after.ResourceVersion, "duplicate updateBackupStats must not write")
+		assert.Equal(t, rvBefore, after.ResourceVersion, "duplicate recordOneShotBackupRun must not write")
 		require.Len(t, after.Status.History, 1, "history must stay at length 1")
 	})
 
 	t.Run("new Job UID appends a second history entry", func(t *testing.T) {
-		r.updateBackupStats(ctx, backup, jobB)
+		r.recordOneShotBackupRun(ctx, backup, jobB)
 
 		got := get()
 		require.Len(t, got.Status.History, 2)
@@ -372,4 +372,43 @@ func TestUpdateBackupStatsDedup(t *testing.T) {
 		assert.Equal(t, "uid-B", got.Status.History[0].RunID)
 		assert.Equal(t, "uid-A", got.Status.History[1].RunID)
 	})
+}
+
+// TestRecordOneShotBackupRun_FailedJobAppendsToHistory is the
+// regression test for recheck gap 2: failed one-shot Jobs used to
+// flip status.phase=Failed without appending to status.history, so a
+// failure left no durable trace once the Job's TTL elapsed. This test
+// pins the new symmetric behavior — the scheduled (CronJob) path was
+// already symmetric via reconcileScheduledHistory.
+func TestRecordOneShotBackupRun_FailedJobAppendsToHistory(t *testing.T) {
+	ctx := context.Background()
+	ns := "default"
+
+	start := metav1.NewTime(time.Date(2026, 6, 4, 8, 0, 0, 0, time.UTC))
+	failedJob := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			UID:  types.UID("uid-fail"),
+			Name: "my-backup-backup",
+		},
+		Status: batchv1.JobStatus{Failed: 3, StartTime: &start},
+	}
+	backup := &neo4jv1beta1.Neo4jBackup{
+		ObjectMeta: metav1.ObjectMeta{Name: "b", Namespace: ns},
+	}
+	r := newBackupTestReconcilerWithStatus(t, backup)
+
+	r.recordOneShotBackupRun(ctx, backup, failedJob)
+
+	got := &neo4jv1beta1.Neo4jBackup{}
+	require.NoError(t, r.Get(ctx, client.ObjectKey{Name: "b", Namespace: ns}, got))
+	require.Len(t, got.Status.History, 1,
+		"failed one-shot Jobs must be appended to status.history (recheck gap 2)")
+	assert.Equal(t, "Failed", got.Status.History[0].Status)
+	assert.Equal(t, "uid-fail", got.Status.History[0].RunID)
+	assert.Equal(t, "my-backup-backup", got.Status.History[0].BackupsPath,
+		"BackupsPath must be populated for failed runs too — partial artifacts may exist")
+	// status.stats is the "latest succeeded run" summary; a failure must
+	// NOT overwrite it. If no prior success exists, it stays nil.
+	assert.Nil(t, got.Status.Stats,
+		"a failed run must not write to status.stats (Stats is the latest-succeeded summary)")
 }

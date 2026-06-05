@@ -506,8 +506,20 @@ func (r *Neo4jRestoreReconciler) createRestoreJob(ctx context.Context, restore *
 
 	jobName := restore.Name + "-restore"
 
+	// Resolve source.type=backup into a concrete StorageLocation + per-run
+	// subfolder once, then swap it onto a shallow restore copy so every
+	// downstream builder (command, env vars, volumes, volume mounts) sees
+	// the same concrete view. Without this dereference, type=backup
+	// restores silently pointed at an empty volume (recheck gap 1).
+	resolvedSource, err := r.resolveRestoreSource(ctx, restore)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve restore source: %w", err)
+	}
+	resolvedRestore := *restore
+	resolvedRestore.Spec.Source = resolvedSource
+
 	// Build restore command
-	restoreCmd, err := r.buildRestoreCommand(ctx, restore, cluster)
+	restoreCmd, err := r.buildRestoreCommand(ctx, &resolvedRestore, cluster)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build restore command: %w", err)
 	}
@@ -558,15 +570,15 @@ func (r *Neo4jRestoreReconciler) createRestoreJob(ctx context.Context, restore *
 									},
 								}
 								// Inject cloud provider credentials for S3/GCS/Azure restores
-								if cloudEnvs := r.buildRestoreCloudEnvVars(restore); cloudEnvs != nil {
+								if cloudEnvs := r.buildRestoreCloudEnvVars(&resolvedRestore); cloudEnvs != nil {
 									envs = append(envs, cloudEnvs...)
 								}
 								return envs
 							}(),
-							VolumeMounts: r.buildRestoreVolumeMounts(restore),
+							VolumeMounts: r.buildRestoreVolumeMounts(&resolvedRestore),
 						},
 					},
-					Volumes: r.buildRestoreVolumes(ctx, restore),
+					Volumes: r.buildRestoreVolumes(ctx, &resolvedRestore),
 				},
 			},
 		},
@@ -591,6 +603,92 @@ func cloudBlockForRestore(restore *neo4jv1beta1.Neo4jRestore) *neo4jv1beta1.Clou
 		return restore.Spec.Source.Storage.Cloud
 	}
 	return nil
+}
+
+// resolveBackupRef dereferences a Neo4jBackup CR name into a concrete
+// StorageLocation (with cloud creds folded in) and the per-run subfolder
+// (BackupsPath) of its most-recent Succeeded run. Used by both the main
+// restore path (source.type=backup) and the PITR base-backup branch
+// (pitr.baseBackup.type=backup).
+//
+// Returns an error if backupRef is empty, the Neo4jBackup is missing, or
+// its status.history contains no Succeeded run — restoring against a
+// failed/missing backup would silently produce garbage.
+func (r *Neo4jRestoreReconciler) resolveBackupRef(ctx context.Context, backupRef, namespace string) (storage neo4jv1beta1.StorageLocation, backupPath string, err error) {
+	if backupRef == "" {
+		return neo4jv1beta1.StorageLocation{}, "", fmt.Errorf("backupRef is required")
+	}
+
+	backup := &neo4jv1beta1.Neo4jBackup{}
+	if err := r.Get(ctx, types.NamespacedName{Name: backupRef, Namespace: namespace}, backup); err != nil {
+		return neo4jv1beta1.StorageLocation{}, "", fmt.Errorf("failed to get Neo4jBackup %q: %w", backupRef, err)
+	}
+
+	// status.history is sorted newest-first by sortBackupRunsNewestFirst
+	// (see neo4jbackup_controller.go). Walk forward until we find the
+	// first Succeeded run — "the most recent successful backup" is the
+	// only reasonable default for a backupRef-based restore.
+	var succeeded *neo4jv1beta1.BackupRun
+	for i := range backup.Status.History {
+		if backup.Status.History[i].Status == "Succeeded" {
+			succeeded = &backup.Status.History[i]
+			break
+		}
+	}
+	if succeeded == nil {
+		return neo4jv1beta1.StorageLocation{}, "", fmt.Errorf(
+			"Neo4jBackup %q has no Succeeded run in status.history — cannot restore from it",
+			backupRef,
+		)
+	}
+
+	// Materialize a StorageLocation copy with the backup's cloud creds
+	// folded in. Neo4jBackup historically allowed `spec.cloud` as an
+	// alternative to `spec.storage.cloud`; cloudBlockForBackup picks
+	// whichever is populated, and we project it onto the synthesized
+	// Storage so downstream cloudBlockForRestore finds it via the
+	// canonical path.
+	resolved := backup.Spec.Storage
+	if resolved.Cloud == nil {
+		if cb := cloudBlockForBackup(backup); cb != nil {
+			resolved.Cloud = cb
+		}
+	}
+	return resolved, succeeded.BackupsPath, nil
+}
+
+// resolveRestoreSource dereferences source.type=backup into a concrete
+// RestoreSource (storage type, bucket/path, cloud creds, per-run subfolder).
+//
+// For source.type=storage|pitr|s3|gcs|azure the input is already concrete
+// and returned unchanged.
+//
+// Gap-1 fix from the recheck pass: the previous source.type=backup
+// implementation hardcoded `/backup/<backup-name>` over an EmptyDir volume,
+// which ignored spec.storage.type, spec.storage.path, and the per-run
+// subfolder layout — every type=backup restore pointed at an empty mount.
+// The resolved view feeds the existing build* helpers unchanged: callers
+// get s3:// / gs:// / azb:// / PVC paths and matching cloud creds for free.
+func (r *Neo4jRestoreReconciler) resolveRestoreSource(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore) (neo4jv1beta1.RestoreSource, error) {
+	if restore.Spec.Source.Type != SourceTypeBackup {
+		return restore.Spec.Source, nil
+	}
+
+	storage, backupPath, err := r.resolveBackupRef(ctx, restore.Spec.Source.BackupRef, restore.Namespace)
+	if err != nil {
+		return neo4jv1beta1.RestoreSource{}, err
+	}
+
+	return neo4jv1beta1.RestoreSource{
+		// Normalize Type to "storage" so the existing buildRestoreCommand
+		// switch matches the cloud / pvc branch unconditionally. The
+		// underlying storage.type (s3 / gcs / azure / pvc) still drives
+		// URI construction inside buildRestoreFromPath.
+		Type:        "storage",
+		Storage:     &storage,
+		BackupPath:  backupPath,
+		PointInTime: restore.Spec.Source.PointInTime,
+	}, nil
 }
 
 // buildRestoreCloudEnvVars injects cloud provider credentials into the restore Job,
@@ -676,20 +774,21 @@ func (r *Neo4jRestoreReconciler) buildRestoreFromPath(restore *neo4jv1beta1.Neo4
 func (r *Neo4jRestoreReconciler) buildRestoreCommand(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore, cluster *neo4jv1beta1.Neo4jEnterpriseCluster) (string, error) {
 	var backupPath string
 
-	// Determine backup path based on source type
+	// Determine backup path based on source type. source.type=backup is
+	// dereferenced upstream by resolveRestoreSource — by the time we get
+	// here Source.Type is "storage"/"s3"/"gcs"/"azure"/"pitr". The legacy
+	// case "backup" branch that hardcoded `/backup/<backup-name>` over an
+	// EmptyDir was always broken; do not reintroduce it (recheck gap 1).
 	switch restore.Spec.Source.Type {
-	case "backup":
-		// Get backup resource to determine path
-		backup := &neo4jv1beta1.Neo4jBackup{}
-		backupKey := types.NamespacedName{Name: restore.Spec.Source.BackupRef, Namespace: restore.Namespace}
-		if err := r.Get(ctx, backupKey, backup); err != nil {
-			return "", fmt.Errorf("failed to get backup %s: %w", restore.Spec.Source.BackupRef, err)
-		}
-		backupPath = fmt.Sprintf("/backup/%s", restore.Spec.Source.BackupRef)
 	case "storage", SourceTypeS3, SourceTypeGCS, "azure":
 		backupPath = r.buildRestoreFromPath(restore)
 	case "pitr":
 		return r.buildPITRRestoreCommand(ctx, restore, cluster)
+	case SourceTypeBackup:
+		// Should be unreachable: resolveRestoreSource swaps Type away
+		// from "backup" before this function runs. Surface loudly if a
+		// future caller bypasses resolution.
+		return "", fmt.Errorf("internal: source.type=backup reached buildRestoreCommand without being resolved")
 	}
 
 	// Extract Neo4j version from cluster image
@@ -732,7 +831,7 @@ func (r *Neo4jRestoreReconciler) buildRestoreCommand(ctx context.Context, restor
 // buildPITRRestoreCommand builds a Point-in-Time Recovery restore command.
 // PITR in Neo4j is implemented via the --restore-until flag on neo4j-admin database restore;
 // there is no separate log-replay step.
-func (r *Neo4jRestoreReconciler) buildPITRRestoreCommand(_ context.Context, restore *neo4jv1beta1.Neo4jRestore, cluster *neo4jv1beta1.Neo4jEnterpriseCluster) (string, error) {
+func (r *Neo4jRestoreReconciler) buildPITRRestoreCommand(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore, cluster *neo4jv1beta1.Neo4jEnterpriseCluster) (string, error) {
 	pitrConfig := restore.Spec.Source.PITR
 	if pitrConfig == nil {
 		return "", fmt.Errorf("PITR configuration is required for PITR restore")
@@ -744,12 +843,28 @@ func (r *Neo4jRestoreReconciler) buildPITRRestoreCommand(_ context.Context, rest
 		version = &neo4j.Version{Major: 5, Minor: 26, Patch: 0}
 	}
 
-	// Determine backup source path from base backup
+	// Determine backup source path from base backup.
+	//
+	// type=backup is dereferenced via resolveBackupRef — same path as the
+	// main restore flow uses, so a PITR base backup pointing at a
+	// Neo4jBackup CR picks up that CR's storage.{type,bucket,path,cloud}
+	// and the per-run subfolder from history. The legacy
+	// `/backup/<backup-ref>` PVC hardcode (recheck gap 1) is gone.
 	var backupPath string
 	if pitrConfig.BaseBackup != nil {
 		switch pitrConfig.BaseBackup.Type {
 		case "backup":
-			backupPath = fmt.Sprintf("/backup/%s", pitrConfig.BaseBackup.BackupRef)
+			storage, runPath, err := r.resolveBackupRef(ctx, pitrConfig.BaseBackup.BackupRef, restore.Namespace)
+			if err != nil {
+				return "", fmt.Errorf("pitr base backup: %w", err)
+			}
+			// Reuse buildRestoreFromPath by stuffing the resolved storage
+			// + per-run subfolder into a synthetic restore view. Keeps URI
+			// construction identical to the type=storage path.
+			tmp := &neo4jv1beta1.Neo4jRestore{Spec: neo4jv1beta1.Neo4jRestoreSpec{
+				Source: neo4jv1beta1.RestoreSource{Storage: &storage, BackupPath: runPath},
+			}}
+			backupPath = r.buildRestoreFromPath(tmp)
 		case "storage":
 			// Construct cloud URI if storage has cloud type, otherwise use local path
 			if pitrConfig.BaseBackup.Storage != nil {
@@ -871,16 +986,13 @@ func (r *Neo4jRestoreReconciler) buildRestoreVolumes(ctx context.Context, restor
 
 	volumes := []corev1.Volume{dataVolume}
 
-	// Add storage volume based on source type
-	if restore.Spec.Source.Type == "backup" {
-		// For backup references, we'd need to determine the storage from the backup
-		volumes = append(volumes, corev1.Volume{
-			Name: "backup-storage",
-			VolumeSource: corev1.VolumeSource{
-				EmptyDir: &corev1.EmptyDirVolumeSource{},
-			},
-		})
-	} else if restore.Spec.Source.Storage != nil {
+	// Add storage volume based on source type. source.type=backup is
+	// resolved upstream by resolveRestoreSource into the backup's
+	// Spec.Storage, so by the time we get here Source.Storage is the
+	// concrete StorageLocation (PVC or cloud) and the switch below routes
+	// correctly. The legacy EmptyDir-for-backup branch is removed —
+	// it dropped the backup's real storage, which broke restore (gap 1).
+	if restore.Spec.Source.Storage != nil {
 		switch restore.Spec.Source.Storage.Type {
 		case "pvc":
 			if restore.Spec.Source.Storage.PVC.Name != "" {

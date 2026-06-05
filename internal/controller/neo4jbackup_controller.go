@@ -222,7 +222,7 @@ func (r *Neo4jBackupReconciler) handleScheduledBackup(ctx context.Context, backu
 // appends a BackupRun entry for any completed Job not yet present in
 // status.history. Required because the CronJob's child Jobs are owned by the
 // CronJob (not the Neo4jBackup CR), so the controller's `Owns(&batchv1.Job{})`
-// wiring does not fire on them and updateBackupStats — which is called from
+// wiring does not fire on them and recordOneShotBackupRun — which is called from
 // handleExistingBackupJob — is unreachable for the scheduled path. Issue #118.
 func (r *Neo4jBackupReconciler) reconcileScheduledHistory(ctx context.Context, backup *neo4jv1beta1.Neo4jBackup) error {
 	var jobs batchv1.JobList
@@ -394,17 +394,22 @@ func (r *Neo4jBackupReconciler) handleExistingBackupJob(ctx context.Context, bac
 		r.Recorder.Event(backup, corev1.EventTypeNormal, EventReasonBackupCompleted, "Backup completed successfully")
 		backupM.RecordBackup(ctx, true, jobDuration(job), 0)
 
-		// Update backup statistics
-		r.updateBackupStats(ctx, backup, job)
+		// Append the run to status.history + refresh status.stats summary
+		r.recordOneShotBackupRun(ctx, backup, job)
 
 		return ctrl.Result{}, nil
 	}
 
 	if job.Status.Failed > 0 {
-		// Backup failed
+		// Backup failed — flip phase AND record the failed run in
+		// status.history (recheck gap 2). Before this, failed one-shot
+		// Jobs flipped phase=Failed but never appeared in history, so the
+		// only signal of past failures was the metrics counter and the
+		// transient Job object (which TTL'd out after 5 minutes).
 		r.updateBackupStatus(ctx, backup, "Failed", "Backup job failed")
 		r.Recorder.Event(backup, corev1.EventTypeWarning, EventReasonBackupFailed, "Backup job failed")
 		backupM.RecordBackup(ctx, false, jobDuration(job), 0)
+		r.recordOneShotBackupRun(ctx, backup, job)
 		return ctrl.Result{}, nil
 	}
 
@@ -1187,33 +1192,34 @@ func (r *Neo4jBackupReconciler) updateBackupStatus(ctx context.Context, backup *
 	}
 }
 
-func (r *Neo4jBackupReconciler) updateBackupStats(ctx context.Context, backup *neo4jv1beta1.Neo4jBackup, job *batchv1.Job) {
+// recordOneShotBackupRun appends a BackupRun entry for a completed one-shot
+// Job to status.history (with dedup), and — on success — also refreshes
+// the top-level status.stats summary. Called from BOTH the success and
+// failure branches of handleExistingBackupJob: the scheduled (CronJob)
+// path already records both outcomes via reconcileScheduledHistory, so
+// without this the one-shot path was missing failure entries (recheck gap
+// 2). The shared underlying builder jobToBackupRun handles the status
+// string and BackupsPath consistently across both code paths.
+func (r *Neo4jBackupReconciler) recordOneShotBackupRun(ctx context.Context, backup *neo4jv1beta1.Neo4jBackup, job *batchv1.Job) {
 	logger := log.FromContext(ctx)
 
-	stats := &neo4jv1beta1.BackupStats{}
-	if job.Status.StartTime != nil && job.Status.CompletionTime != nil {
-		duration := job.Status.CompletionTime.Sub(job.Status.StartTime.Time)
-		stats.Duration = duration.Round(time.Second).String()
+	run, ok := jobToBackupRun(job)
+	if !ok {
+		// Job is neither Succeeded nor Failed — nothing terminal to record.
+		// handleExistingBackupJob only calls us once one branch is true, so
+		// reaching this is a programming error elsewhere, not user data.
+		return
 	}
-	// Size, Throughput, FileCount are intentionally omitted:
-	// they require parsing neo4j-admin stdout from Job pod logs (future enhancement).
+	// Size, Throughput, FileCount are intentionally omitted from run.Stats:
+	// they require parsing neo4j-admin stdout from Job pod logs (future
+	// enhancement). jobToBackupRun populates Duration when both StartTime
+	// and CompletionTime are present, which is the success case.
 
 	update := func() error {
 		latest := &neo4jv1beta1.Neo4jBackup{}
 		if err := r.Get(ctx, client.ObjectKeyFromObject(backup), latest); err != nil {
 			return err
 		}
-
-		run := neo4jv1beta1.BackupRun{
-			RunID:       string(job.UID),
-			Status:      "Succeeded",
-			Stats:       stats,
-			BackupsPath: job.Name,
-		}
-		if job.Status.StartTime != nil {
-			run.StartTime = *job.Status.StartTime
-		}
-		run.CompletionTime = job.Status.CompletionTime
 
 		// Dedup: the terminal-phase guard in handleOneTimeBackup (issue #116)
 		// already prevents repeat calls for the same Job, but record the
@@ -1226,10 +1232,13 @@ func (r *Neo4jBackupReconciler) updateBackupStats(ctx context.Context, backup *n
 			return nil
 		}
 
-		// Update Stats and append History together — only writing Stats when
-		// we're also appending the run keeps the two in sync (Stats reflects
-		// the most recent recorded run).
-		latest.Status.Stats = stats
+		// Mirror status.stats to the latest *successful* run only — Stats
+		// is a "headline number" summary for dashboards; a failed run has
+		// no meaningful Duration/Size to surface there. Failed runs still
+		// land in history with Status=Failed.
+		if run.Status == "Succeeded" && run.Stats != nil {
+			latest.Status.Stats = run.Stats
+		}
 		latest.Status.History = append([]neo4jv1beta1.BackupRun{run}, latest.Status.History...)
 		if len(latest.Status.History) > 10 {
 			latest.Status.History = latest.Status.History[:10]
@@ -1238,7 +1247,7 @@ func (r *Neo4jBackupReconciler) updateBackupStats(ctx context.Context, backup *n
 		return r.Status().Update(ctx, latest)
 	}
 	if err := retry.RetryOnConflict(retry.DefaultBackoff, update); err != nil {
-		logger.Error(err, "Failed to update backup stats")
+		logger.Error(err, "Failed to record one-shot backup run in history")
 	}
 }
 
