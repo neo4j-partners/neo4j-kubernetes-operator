@@ -3427,7 +3427,7 @@
 <h3 id="2-certificate-rotation">2. Certificate Rotation<a class="headerlink" href="#2-certificate-rotation" title="Anchor link to this section">&para;</a></h3>
 <p>The operator handles certificate renewal automatically through cert-manager. To manually trigger renewal:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Delete the certificate to force regeneration</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>certificate<span class="w"> </span>&lt;deployment-name&gt;-tls-cert
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>certificate<span class="w"> </span>&lt;deployment-name&gt;-tls
 </span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>
 </span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="c1"># The operator will recreate it automatically</span>
 </span></code></pre></div>
@@ -3445,7 +3445,7 @@
 </span></code></pre></div>
 <h3 id="4-monitor-certificate-expiry">4. Monitor Certificate Expiry<a class="headerlink" href="#4-monitor-certificate-expiry" title="Anchor link to this section">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Check certificate expiration</span>
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>certificate<span class="w"> </span>&lt;deployment-name&gt;-tls-cert<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.notAfter}&#39;</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>certificate<span class="w"> </span>&lt;deployment-name&gt;-tls<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.notAfter}&#39;</span>
 </span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>
 </span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="c1"># Set up alerts for certificates expiring within 30 days</span>
 </span></code></pre></div>
@@ -3494,8 +3494,8 @@
 <tbody>
 <tr>
 <td><code>bolt://</code></td>
-<td>Unencrypted</td>
-<td>Development only</td>
+<td>Unencrypted, direct</td>
+<td>Dev only, TLS-disabled deployments. <strong>Rejected by the server when TLS is enabled</strong> (<code>server.bolt.tls_level=REQUIRED</code>).</td>
 </tr>
 <tr>
 <td><code>bolt+s://</code></td>
@@ -3510,17 +3510,17 @@
 <tr>
 <td><code>neo4j://</code></td>
 <td>Auto-negotiation, unencrypted</td>
-<td>Not recommended</td>
+<td>Cluster routing, TLS-disabled deployments only</td>
 </tr>
 <tr>
 <td><code>neo4j+s://</code></td>
 <td>Auto-negotiation with TLS</td>
-<td>Production</td>
+<td>Production cluster routing</td>
 </tr>
 <tr>
 <td><code>neo4j+ssc://</code></td>
 <td>Auto-negotiation, self-signed</td>
-<td>Development</td>
+<td>Development cluster routing with TLS</td>
 </tr>
 </tbody>
 </table>

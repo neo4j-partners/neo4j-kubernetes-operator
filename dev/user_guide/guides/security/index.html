@@ -2581,20 +2581,27 @@
 <p>This guide explains how to secure your Neo4j Enterprise clusters using the features provided by the operator.</p>
 <h2 id="authentication">Authentication<a class="headerlink" href="#authentication" title="Anchor link to this section">&para;</a></h2>
 <p>The operator provides first-class, typed configuration for external identity providers. You define providers via <code>spec.auth</code> and the operator generates the correct <code>neo4j.conf</code> entries automatically — no manual <code>dbms.security.*</code> keys required.</p>
-<p><strong>Supported providers:</strong></p>
+<p><strong>Supported providers (first-class typed configuration):</strong></p>
 <ul>
 <li><strong>Native Neo4j authentication</strong>: The default, managed via Kubernetes secrets.</li>
 <li><strong>LDAP / Active Directory</strong>: Full typed support — host, DN templates, group-to-role mapping, system account credentials (injected securely via env vars, never in ConfigMap).</li>
 <li><strong>OIDC / SSO</strong>: Multiple named providers (e.g., Okta + Azure AD simultaneously) with discovery URI, claims mapping, and group-to-role mapping.</li>
-<li><strong>Kerberos</strong>: For enterprise environments with Kerberos infrastructure.</li>
-<li><strong>JWT</strong>: Use JSON Web Tokens for authentication.</li>
 </ul>
+<p>Kerberos and JWT authentication are configurable via raw <code>spec.config</code> keys (<code>dbms.security.authentication_providers</code>, <code>dbms.security.authorization_providers</code>, and provider-specific <code>dbms.security.*</code> settings) but do not currently have first-class typed CRD fields — <code>spec.auth.kerberos</code> and <code>spec.auth.jwt</code> are not wired through to Neo4j config. Track <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/issues/128">issue #128</a> for the typed enhancement.</p>
 <p><strong>Multi-provider support</strong>: Neo4j evaluates providers in order, so you can configure <code>authenticationProviders: [ldap, native]</code> to try LDAP first with native as fallback.</p>
-<p><strong>JVM TrustStore</strong>: For LDAPS or OIDC with internal CAs, configure <code>spec.auth.trustStore</code> and the operator automatically creates an init container that builds a JKS truststore from your CA certificate.</p>
+<p><strong>JVM TrustStore</strong>: For LDAPS or OIDC with internal CAs, use the top-level <code>spec.trustedCASecrets</code> field to add extra trust anchors to the operator-managed JKS truststore (seeded from the JDK <code>cacerts</code>). The legacy <code>spec.auth.trustStore</code> field still works for back-compat but is folded into the same path — prefer <code>spec.trustedCASecrets</code> for new deployments. See the <a href="../../security/#custom-ca-truststore">Security Best Practices</a> guide for the full configuration.</p>
 <p>For full configuration details and examples, see the <a href="../../security/#authentication-configuration">Security Best Practices</a> guide and the <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/clusters/auth-example.yaml">auth examples</a>.</p>
 <h2 id="tls">TLS<a class="headerlink" href="#tls" title="Anchor link to this section">&para;</a></h2>
-<p>The operator makes it easy to enable TLS encryption for all communication to and from your Neo4j cluster. You can enable TLS by setting the <code>spec.tls.enabled</code> field to <code>true</code>.</p>
-<p>The operator integrates with <code>cert-manager</code> to automatically provision and manage TLS certificates. This is the recommended approach for production environments. You can specify a <code>cert-manager</code> issuer to use for signing certificates.</p>
+<p>The operator makes it easy to enable TLS encryption for all communication to and from your Neo4j cluster. Enable TLS by setting <code>spec.tls.mode: cert-manager</code> and pointing <code>spec.tls.issuerRef</code> at a cert-manager <code>Issuer</code> or <code>ClusterIssuer</code>:</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">spec</span><span class="p">:</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">tls</span><span class="p">:</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">    </span><span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cert-manager</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">    </span><span class="nt">issuerRef</span><span class="p">:</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ca-cluster-issuer</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">      </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ClusterIssuer</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">    </span><span class="c1"># strictPeerValidation defaults to true (mutual TLS on cluster links).</span>
+</span></code></pre></div>
+<p>The operator integrates with <code>cert-manager</code> to automatically provision and manage TLS certificates. This is the recommended approach for production environments. Intra-cluster mutual TLS is enabled by default via <code>spec.tls.strictPeerValidation: true</code>. See the dedicated <a href="../../configuration/tls/">TLS Configuration</a> guide for the full configuration surface, including third-party issuers (AWS PCA, Vault) and the <code>strictPeerValidation: false</code> opt-out.</p>
 <h2 id="network-policies">Network Policies<a class="headerlink" href="#network-policies" title="Anchor link to this section">&para;</a></h2>
 <p>The operator can automatically create Kubernetes <code>NetworkPolicy</code> resources to restrict traffic to your Neo4j cluster. This helps to enforce a zero-trust security model by ensuring that only authorized applications can connect to the database.</p>
 <h2 id="rbac">RBAC<a class="headerlink" href="#rbac" title="Anchor link to this section">&para;</a></h2>

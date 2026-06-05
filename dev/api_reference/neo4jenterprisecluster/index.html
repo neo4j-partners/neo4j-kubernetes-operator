@@ -5273,12 +5273,12 @@ keytab) until full support lands.</p>
 <tr>
 <td><code>mode</code></td>
 <td><code>string</code></td>
-<td>TLS mode: <code>"cert-manager"</code> (default) or <code>"disabled"</code></td>
+<td>TLS mode: <code>"cert-manager"</code> (default) or <code>"disabled"</code>. The validator rejects any other value.</td>
 </tr>
 <tr>
 <td><code>issuerRef</code></td>
 <td><a href="#issuerref"><code>*IssuerRef</code></a></td>
-<td>cert-manager issuer reference</td>
+<td>cert-manager issuer reference. <strong>Required when <code>mode: cert-manager</code>.</strong> Validator rejects a <code>cert-manager</code> mode with no <code>issuerRef</code>.</td>
 </tr>
 <tr>
 <td><code>certificateSecret</code></td>

@@ -3599,8 +3599,9 @@
 </li>
 <li>
 <p><strong>Verify Network Connectivity</strong>:
-   <div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Test inter-pod communication</span>
-</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>production-cluster-server-0<span class="w"> </span>--<span class="w"> </span>nc<span class="w"> </span>-zv<span class="w"> </span>production-cluster-server-1<span class="w"> </span><span class="m">5000</span>
+   <div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Test inter-pod communication on the V2 discovery/transaction port (6000).</span>
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="c1"># Port 5000 was the V1 discovery port — never used by this operator.</span>
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>production-cluster-server-0<span class="w"> </span>--<span class="w"> </span>nc<span class="w"> </span>-zv<span class="w"> </span>production-cluster-server-1<span class="w"> </span><span class="m">6000</span>
 </span></code></pre></div></p>
 </li>
 <li>
