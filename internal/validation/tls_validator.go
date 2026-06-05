@@ -68,13 +68,20 @@ func (v *TLSValidator) Validate(cluster *neo4jv1beta1.Neo4jEnterpriseCluster) fi
 
 	// Validate cert-manager specific fields
 	if cluster.Spec.TLS.Mode == CertManagerMode {
-		if cluster.Spec.TLS.IssuerRef != nil {
-			if cluster.Spec.TLS.IssuerRef.Name == "" {
-				allErrs = append(allErrs, field.Required(
-					tlsPath.Child("issuerRef", "name"),
-					"issuer name must be specified when using cert-manager",
-				))
-			}
+		// IssuerRef itself is required when Mode=cert-manager. Without it the
+		// resource builder (BuildCertificateForEnterprise) panics on nil deref
+		// of cluster.Spec.TLS.IssuerRef.Name. Standalone validator enforces
+		// the same — keep them in lockstep.
+		if cluster.Spec.TLS.IssuerRef == nil {
+			allErrs = append(allErrs, field.Required(
+				tlsPath.Child("issuerRef"),
+				"issuerRef is required when TLS mode is 'cert-manager'",
+			))
+		} else if cluster.Spec.TLS.IssuerRef.Name == "" {
+			allErrs = append(allErrs, field.Required(
+				tlsPath.Child("issuerRef", "name"),
+				"issuer name must be specified when using cert-manager",
+			))
 			// kind is intentionally not restricted to a fixed allowlist: cert-manager's
 			// external issuer interface allows any registered CRD (e.g. AWSPCAClusterIssuer,
 			// VaultIssuer) to act as an issuer. Restricting to Issuer/ClusterIssuer would
@@ -193,7 +200,15 @@ func (v *TLSValidator) Validate(cluster *neo4jv1beta1.Neo4jEnterpriseCluster) fi
 			}
 		}
 
-		// Validate refresh interval
+		// Validate refresh interval.
+		//
+		// We intentionally validate using Go's time.ParseDuration because it
+		// accepts the format ESO uses in practice ("15m", "1h"), and
+		// time.ParseDuration("0") returns 0 — matching ESO's convention of
+		// "0" meaning "disable polling". If ESO's duration semantics ever
+		// diverge from Go's (it currently uses Kubernetes metav1.Duration,
+		// which wraps time.ParseDuration), switch this to an ESO-specific
+		// parser. Pure-numeric tokens like "0" are accepted here on purpose.
 		if cluster.Spec.TLS.ExternalSecrets.RefreshInterval != "" {
 			if _, err := time.ParseDuration(cluster.Spec.TLS.ExternalSecrets.RefreshInterval); err != nil {
 				allErrs = append(allErrs, field.Invalid(

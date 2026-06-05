@@ -185,6 +185,24 @@ func TestTLSValidator_Validate(t *testing.T) {
 			wantErrors: true,
 		},
 		{
+			name: "cert-manager mode missing issuerRef",
+			cluster: &neo4jv1beta1.Neo4jEnterpriseCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "test-namespace",
+				},
+				Spec: neo4jv1beta1.Neo4jEnterpriseClusterSpec{
+					TLS: &neo4jv1beta1.TLSSpec{
+						Mode: "cert-manager",
+						// IssuerRef intentionally omitted — must be rejected
+						// to prevent a nil-deref panic in
+						// BuildCertificateForEnterprise (cluster.go).
+					},
+				},
+			},
+			wantErrors: true,
+		},
+		{
 			name: "valid external secrets TLS configuration",
 			cluster: &neo4jv1beta1.Neo4jEnterpriseCluster{
 				ObjectMeta: metav1.ObjectMeta{
@@ -194,6 +212,10 @@ func TestTLSValidator_Validate(t *testing.T) {
 				Spec: neo4jv1beta1.Neo4jEnterpriseClusterSpec{
 					TLS: &neo4jv1beta1.TLSSpec{
 						Mode: "cert-manager",
+						IssuerRef: &neo4jv1beta1.IssuerRef{
+							Name: "ca-cluster-issuer",
+							Kind: "ClusterIssuer",
+						},
 						ExternalSecrets: &neo4jv1beta1.ExternalSecretsConfig{
 							Enabled: true,
 							SecretStoreRef: &neo4jv1beta1.SecretStoreRef{
@@ -231,6 +253,10 @@ func TestTLSValidator_Validate(t *testing.T) {
 				Spec: neo4jv1beta1.Neo4jEnterpriseClusterSpec{
 					TLS: &neo4jv1beta1.TLSSpec{
 						Mode: "cert-manager",
+						IssuerRef: &neo4jv1beta1.IssuerRef{
+							Name: "ca-cluster-issuer",
+							Kind: "ClusterIssuer",
+						},
 						ExternalSecrets: &neo4jv1beta1.ExternalSecretsConfig{
 							Enabled: true,
 						},
@@ -249,6 +275,10 @@ func TestTLSValidator_Validate(t *testing.T) {
 				Spec: neo4jv1beta1.Neo4jEnterpriseClusterSpec{
 					TLS: &neo4jv1beta1.TLSSpec{
 						Mode: "cert-manager",
+						IssuerRef: &neo4jv1beta1.IssuerRef{
+							Name: "ca-cluster-issuer",
+							Kind: "ClusterIssuer",
+						},
 						ExternalSecrets: &neo4jv1beta1.ExternalSecretsConfig{
 							Enabled: true,
 							SecretStoreRef: &neo4jv1beta1.SecretStoreRef{
@@ -270,6 +300,10 @@ func TestTLSValidator_Validate(t *testing.T) {
 				Spec: neo4jv1beta1.Neo4jEnterpriseClusterSpec{
 					TLS: &neo4jv1beta1.TLSSpec{
 						Mode: "cert-manager",
+						IssuerRef: &neo4jv1beta1.IssuerRef{
+							Name: "ca-cluster-issuer",
+							Kind: "ClusterIssuer",
+						},
 						ExternalSecrets: &neo4jv1beta1.ExternalSecretsConfig{
 							Enabled: true,
 							SecretStoreRef: &neo4jv1beta1.SecretStoreRef{
@@ -292,6 +326,10 @@ func TestTLSValidator_Validate(t *testing.T) {
 				Spec: neo4jv1beta1.Neo4jEnterpriseClusterSpec{
 					TLS: &neo4jv1beta1.TLSSpec{
 						Mode: "cert-manager",
+						IssuerRef: &neo4jv1beta1.IssuerRef{
+							Name: "ca-cluster-issuer",
+							Kind: "ClusterIssuer",
+						},
 						ExternalSecrets: &neo4jv1beta1.ExternalSecretsConfig{
 							Enabled: true,
 							SecretStoreRef: &neo4jv1beta1.SecretStoreRef{
@@ -315,6 +353,10 @@ func TestTLSValidator_Validate(t *testing.T) {
 				Spec: neo4jv1beta1.Neo4jEnterpriseClusterSpec{
 					TLS: &neo4jv1beta1.TLSSpec{
 						Mode: "cert-manager",
+						IssuerRef: &neo4jv1beta1.IssuerRef{
+							Name: "ca-cluster-issuer",
+							Kind: "ClusterIssuer",
+						},
 						ExternalSecrets: &neo4jv1beta1.ExternalSecretsConfig{
 							Enabled: true,
 							SecretStoreRef: &neo4jv1beta1.SecretStoreRef{
@@ -337,6 +379,10 @@ func TestTLSValidator_Validate(t *testing.T) {
 				Spec: neo4jv1beta1.Neo4jEnterpriseClusterSpec{
 					TLS: &neo4jv1beta1.TLSSpec{
 						Mode: "cert-manager",
+						IssuerRef: &neo4jv1beta1.IssuerRef{
+							Name: "ca-cluster-issuer",
+							Kind: "ClusterIssuer",
+						},
 						ExternalSecrets: &neo4jv1beta1.ExternalSecretsConfig{
 							Enabled: true,
 							SecretStoreRef: &neo4jv1beta1.SecretStoreRef{
@@ -366,6 +412,10 @@ func TestTLSValidator_Validate(t *testing.T) {
 				Spec: neo4jv1beta1.Neo4jEnterpriseClusterSpec{
 					TLS: &neo4jv1beta1.TLSSpec{
 						Mode: "cert-manager",
+						IssuerRef: &neo4jv1beta1.IssuerRef{
+							Name: "ca-cluster-issuer",
+							Kind: "ClusterIssuer",
+						},
 						ExternalSecrets: &neo4jv1beta1.ExternalSecretsConfig{
 							Enabled: true,
 							SecretStoreRef: &neo4jv1beta1.SecretStoreRef{
@@ -586,6 +636,10 @@ func TestTLSValidator_ValidSecretStoreKinds(t *testing.T) {
 				Spec: neo4jv1beta1.Neo4jEnterpriseClusterSpec{
 					TLS: &neo4jv1beta1.TLSSpec{
 						Mode: "cert-manager",
+						IssuerRef: &neo4jv1beta1.IssuerRef{
+							Name: "ca-cluster-issuer",
+							Kind: "ClusterIssuer",
+						},
 						ExternalSecrets: &neo4jv1beta1.ExternalSecretsConfig{
 							Enabled: true,
 							SecretStoreRef: &neo4jv1beta1.SecretStoreRef{
