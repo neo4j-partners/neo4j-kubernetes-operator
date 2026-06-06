@@ -407,6 +407,23 @@ func (r *Neo4jRestoreReconciler) handleRestoreSuccess(ctx context.Context, resto
 			fmt.Sprintf("Restore succeeded but failed to create database %q: %v", restore.Spec.DatabaseName, err))
 	}
 
+	// For multi-server clusters, force all servers to re-seed the
+	// restored database from server-0's PVC (which is the only one the
+	// restore Job wrote to). Without this step, post-restart cluster
+	// bootstrap picks the primary non-deterministically; if the stale-
+	// data server wins consensus the restored data is overwritten when
+	// other servers re-sync from it. Skipped silently for standalone /
+	// single-server topologies (nothing to re-seed) and for Neo4j
+	// versions that don't expose the recreate procedure (pre-5.24
+	// SemVer or pre-2025.02 CalVer). Non-fatal — if recreate fails the
+	// restore still completes; the operator events surface the issue.
+	if err := r.recreateRestoredDatabaseOnCluster(ctx, restore, cluster); err != nil {
+		logger.Error(err, "Failed to recreate restored database from seed server")
+		r.Recorder.Event(restore, corev1.EventTypeWarning, EventReasonDatabaseCreateFailed,
+			fmt.Sprintf("Restore succeeded but recreate-from-seed failed for %q: %v",
+				restore.Spec.DatabaseName, err))
+	}
+
 	// Restore completed successfully
 	r.updateRestoreStatus(ctx, restore, StatusCompleted, "Restore completed successfully")
 	r.Recorder.Event(restore, corev1.EventTypeNormal, EventReasonRestoreCompleted, "Restore completed successfully")
@@ -432,6 +449,108 @@ func (r *Neo4jRestoreReconciler) createOrStartDatabase(ctx context.Context, rest
 		return neo4jClient.StartDatabase(ctx, restore.Spec.DatabaseName, false)
 	}
 	return neo4jClient.CreateDatabase(ctx, restore.Spec.DatabaseName, nil, false, false)
+}
+
+// recreateRestoredDatabaseOnCluster invokes `dbms.[cluster.]recreateDatabase`
+// against the live cluster to force every server to re-seed its store from
+// server-0 — the only PVC the restore Job wrote to. Without this step, the
+// post-restart bootstrap picks the database's primary non-deterministically,
+// and if a stale-data server wins consensus the restored data is overwritten
+// when others re-sync from it.
+//
+// Skipped (no-op, no error) when:
+//   - The target is standalone or a single-server cluster (Topology.Servers
+//     < 2): nothing to re-seed across.
+//   - Neo4j version doesn't support the recreate procedure (pre-5.24 SemVer
+//     / pre-2025.02 CalVer): `RecreateDatabaseProcedure()` returns "".
+//   - server-0 can't be located via SHOW SERVERS (defensive — if the
+//     cluster's topology has drifted from spec, fall back to Neo4j's
+//     auto-seed which picks the most up-to-date allocation; that's still
+//     better than no-op since the restored server is by definition the
+//     most up-to-date).
+//
+// Required Neo4j privileges: CREATE DATABASE + DROP DATABASE (per the
+// recreate procedure docs). The admin secret used by the operator has both.
+func (r *Neo4jRestoreReconciler) recreateRestoredDatabaseOnCluster(
+	ctx context.Context,
+	restore *neo4jv1beta1.Neo4jRestore,
+	cluster *neo4jv1beta1.Neo4jEnterpriseCluster,
+) error {
+	if cluster.Spec.Topology.Servers < 2 {
+		// Standalone / single-server: server-0's PVC IS the cluster's
+		// only data, no cross-server seeding needed.
+		return nil
+	}
+
+	imageTag := fmt.Sprintf("%s:%s", cluster.Spec.Image.Repo, cluster.Spec.Image.Tag)
+	version, err := neo4j.GetImageVersion(imageTag)
+	if err != nil {
+		// Same fallback used elsewhere in the controller — assume
+		// 5.26 defaults so we don't lose recreate on exotic tags.
+		version = &neo4j.Version{Major: 5, Minor: 26, Patch: 0}
+	}
+	if version.RecreateDatabaseProcedure() == "" {
+		// Version doesn't support recreate. Log so operators see why
+		// the post-restore deterministic-seed guarantee was skipped.
+		log.FromContext(ctx).Info(
+			"Skipping post-restore recreate: Neo4j version doesn't support the procedure",
+			"version", fmt.Sprintf("%d.%d.%d", version.Major, version.Minor, version.Patch),
+			"database", restore.Spec.DatabaseName)
+		return nil
+	}
+
+	neo4jClient, err := r.createNeo4jClient(ctx, cluster)
+	if err != nil {
+		return fmt.Errorf("failed to create Neo4j client for recreate: %w", err)
+	}
+	defer func() { _ = neo4jClient.Close() }()
+
+	servers, err := neo4jClient.ListServers(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list servers for recreate seed: %w", err)
+	}
+
+	// Match server-0 by Address, not Name. SHOW SERVERS's `name` column
+	// is a free-form display label (often empty or a UUID-derived
+	// string) — the Pod hostname only appears in `address` (e.g.
+	// `mycluster-server-0.mycluster-headless.ns.svc.cluster.local:7687`).
+	// This is the same matching idiom used in WaitForServerAvailable
+	// (internal/neo4j/client.go:WaitForServerAvailable) — keep it
+	// consistent so a single change to Neo4j's naming would only break
+	// one place.
+	seedHostname := cluster.Name + "-server-0"
+	var seedID string
+	for _, s := range servers {
+		if strings.Contains(s.Address, seedHostname) {
+			seedID = s.ID
+			break
+		}
+	}
+
+	// Empty seeders → Neo4j auto-picks the most up-to-date allocation,
+	// which post-restore IS server-0 (it has the freshest data). Used
+	// as the fallback when we couldn't resolve server-0 by name.
+	var seeders []string
+	if seedID != "" {
+		seeders = []string{seedID}
+	} else {
+		log.FromContext(ctx).Info(
+			"Could not match server-0 by name in SHOW SERVERS; falling back to auto-seed",
+			"expectedName", seedHostname, "serverCount", len(servers))
+	}
+
+	applied, err := neo4jClient.RecreateDatabase(ctx, version, restore.Spec.DatabaseName, seeders)
+	if err != nil {
+		return err
+	}
+	if applied {
+		log.FromContext(ctx).Info(
+			"Re-seeded restored database across all cluster servers",
+			"database", restore.Spec.DatabaseName,
+			"seedServerID", seedID, "seedServerName", seedHostname,
+			"procedure", version.RecreateDatabaseProcedure())
+	}
+	return nil
 }
 
 func (r *Neo4jRestoreReconciler) validateRestore(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore) error {
@@ -639,9 +758,27 @@ func (r *Neo4jRestoreReconciler) createRestoreJob(ctx context.Context, restore *
 		return nil, err
 	}
 
-	// Create the job
+	// Create the job. Two reconciles can race here: when stopCluster=true,
+	// the scale-down path goes through a 10s wait, so the controller queues
+	// a fresh reconcile via watches before the original reconcile has
+	// finished creating the Job. Both reconciles then call Create — one
+	// wins, the other gets AlreadyExists and (without this fallback)
+	// terminal-fails the restore via the "Restore previously failed"
+	// guard, even though the Job actually ran and succeeded.
+	// AlreadyExists is treated as "another reconcile got there first";
+	// re-fetch the existing Job so the caller sees a populated object.
 	if err := r.Create(ctx, job); err != nil {
-		return nil, err
+		if !errors.IsAlreadyExists(err) {
+			return nil, err
+		}
+		existing := &batchv1.Job{}
+		if getErr := r.Get(ctx, types.NamespacedName{
+			Name: job.Name, Namespace: job.Namespace,
+		}, existing); getErr != nil {
+			return nil, fmt.Errorf("restore Job %s/%s already exists but cannot be re-fetched: %w",
+				job.Namespace, job.Name, getErr)
+		}
+		return existing, nil
 	}
 
 	return job, nil
@@ -870,6 +1007,69 @@ func (r *Neo4jRestoreReconciler) buildRestoreFromPath(restore *neo4jv1beta1.Neo4
 	}
 }
 
+// isLocalPVCRestoreSource reports whether the restore reads from a
+// PVC-mounted backup directory (as opposed to a cloud URI). Used in two
+// places: (1) shell-side file-path resolution via buildLocalRestoreFilePath,
+// and (2) the `mkdir -p /tmp/restore-tmp` prelude that pairs with the
+// default `--temp-path=/tmp/restore-tmp`. Centralising the condition makes
+// these two stay in sync.
+//
+// Treats nil Storage and Type=="" as PVC, matching the volume-mount
+// behaviour in buildRestoreVolumeMounts which mounts the backup PVC at
+// /backup whenever the source is local.
+func isLocalPVCRestoreSource(restore *neo4jv1beta1.Neo4jRestore) bool {
+	if restore.Spec.Source.Type != "storage" {
+		return false
+	}
+	st := restore.Spec.Source.Storage
+	if st == nil {
+		return true
+	}
+	return st.Type == "" || st.Type == "pvc"
+}
+
+// buildLocalRestoreFilePath returns a shell command-substitution expression
+// that resolves the target database's `<dbname>-*.backup` file path at Pod
+// exec time, suitable to pass to `neo4j-admin database restore --from-path=`.
+//
+// Returns "" for sources that don't need shell-side resolution (cloud URIs).
+//
+// Why this is necessary: per the Neo4j 5.26 docs, `neo4j-admin database
+// restore --from-path=<path>` requires <path> to be a FILE path (or a
+// comma-separated list of file paths), not a directory containing the
+// .backup file. The operator's backup output is
+//
+//	/backup/<run-id>/<dbname>-<timestamp>.backup
+//
+// but the operator doesn't know <timestamp> at reconcile time (it's set by
+// neo4j-admin database backup at execution). Instead of staging the file or
+// teaching the operator to predict timestamps, the shell resolves the path
+// at Pod startup via command substitution: `$(ls .../<dbname>-*.backup
+// | head -1)`. This sidesteps both the "directory not file" issue and the
+// multi-database directory issue (cluster-target backups co-locate one
+// .backup per database in one folder).
+//
+// Cloud URIs (s3://, gs://, azb://) bypass this — neo4j-admin's native
+// cloud readers handle per-file selection from the bucket prefix, and the
+// shell `ls` would have no filesystem to enumerate anyway.
+//
+// Security note: shellQuote() wraps the database name (user-controlled via
+// spec.DatabaseName) so shell metacharacters can't escape the glob.
+func buildLocalRestoreFilePath(restore *neo4jv1beta1.Neo4jRestore, sourceDir string) string {
+	if !isLocalPVCRestoreSource(restore) {
+		return ""
+	}
+	if restore.Spec.DatabaseName == "" {
+		return ""
+	}
+	quotedDB := shellQuote(restore.Spec.DatabaseName)
+	// `ls ... | head -1` picks the single matching file (per-run subfolder
+	// holds at most one `<dbname>-*.backup`). If no match exists, ls prints
+	// to stderr and head returns nothing, so --from-path= becomes empty and
+	// neo4j-admin errors with a clear "missing argument" message.
+	return fmt.Sprintf("$(ls %s/%s-*.backup | head -1)", sourceDir, quotedDB)
+}
+
 func (r *Neo4jRestoreReconciler) buildRestoreCommand(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore, cluster *neo4jv1beta1.Neo4jEnterpriseCluster) (string, error) {
 	var backupPath string
 
@@ -890,6 +1090,20 @@ func (r *Neo4jRestoreReconciler) buildRestoreCommand(ctx context.Context, restor
 		return "", fmt.Errorf("internal: source.type=backup reached buildRestoreCommand without being resolved")
 	}
 
+	// PVC sources need shell-side file-path resolution. Reason:
+	// `neo4j-admin database restore --from-path=<path>` requires a FILE
+	// path (not a directory), and the operator's backup writes
+	//   /backup/<run-id>/<dbname>-<timestamp>.backup
+	// where <timestamp> is set by neo4j-admin at backup execution and isn't
+	// known to the operator at restore-CR reconcile time. The shell resolves
+	// it via `$(ls .../<dbname>-*.backup | head -1)` at Pod startup.
+	// This also handles the cluster-target backup case where multiple
+	// `*.backup` files co-locate in one directory (one per database) — the
+	// glob naturally selects only the requested DB's file.
+	if resolved := buildLocalRestoreFilePath(restore, backupPath); resolved != "" {
+		backupPath = resolved
+	}
+
 	// Extract Neo4j version from cluster image
 	imageTag := fmt.Sprintf("%s:%s", cluster.Spec.Image.Repo, cluster.Spec.Image.Tag)
 	version, err := neo4j.GetImageVersion(imageTag)
@@ -897,8 +1111,16 @@ func (r *Neo4jRestoreReconciler) buildRestoreCommand(ctx context.Context, restor
 		version = &neo4j.Version{Major: 5, Minor: 26, Patch: 0}
 	}
 
-	// Build the neo4j-admin restore command with correct Neo4j 5.26+ syntax
-	cmd := neo4j.GetRestoreCommand(version, restore.Spec.DatabaseName, backupPath)
+	// Build the neo4j-admin restore command with correct Neo4j 5.26+ syntax.
+	// PVC sources also get a `rm -rf /tmp/restore-tmp && mkdir -p` prelude so
+	// the default --temp-path (added further down) starts empty per Pod
+	// attempt — neo4j-admin refuses to write into a non-empty temp dir. The
+	// /tmp dir is the Pod's in-memory tmpfs, cheap and self-cleaning.
+	preludeCmd := ""
+	if isLocalPVCRestoreSource(restore) {
+		preludeCmd = "rm -rf /tmp/restore-tmp && mkdir -p /tmp/restore-tmp && "
+	}
+	cmd := preludeCmd + neo4j.GetRestoreCommand(version, restore.Spec.DatabaseName, backupPath)
 
 	// Add --overwrite-destination flag if force is specified
 	if restore.Spec.Force {
@@ -906,11 +1128,26 @@ func (r *Neo4jRestoreReconciler) buildRestoreCommand(ctx context.Context, restor
 	}
 
 	// Add --temp-path when the user has configured staging storage.
-	// TempStorage (PVC reference) takes priority, then explicit TempPath.
-	if restore.Spec.Options != nil && restore.Spec.Options.TempStorage != nil {
+	// TempStorage (PVC reference) takes priority, then explicit TempPath,
+	// then a sensible default for PVC sources.
+	switch {
+	case restore.Spec.Options != nil && restore.Spec.Options.TempStorage != nil:
 		cmd += " --temp-path=/tmp/neo4j-staging"
-	} else if restore.Spec.Options != nil && restore.Spec.Options.TempPath != "" {
+	case restore.Spec.Options != nil && restore.Spec.Options.TempPath != "":
 		cmd += " --temp-path=" + restore.Spec.Options.TempPath
+	case isLocalPVCRestoreSource(restore):
+		// Default for PVC sources. neo4j-admin's restore needs a
+		// writable scratch dir to extract the artifact; if not told
+		// otherwise it writes alongside the source file. The backup
+		// PVC is mounted ReadOnly (safety — we never want restore to
+		// mutate user backups), so without an explicit --temp-path
+		// neo4j-admin errors with
+		//   FileSystemException: .../<dbname>-temp-extracted-artifacts-0: Read-only file system
+		// /tmp is the Pod's tmpfs — empty per Pod start, auto-cleaned
+		// on exit, plenty fast. The paired prelude (rm -rf + mkdir -p
+		// upstream of GetRestoreCommand) ensures the dir starts empty,
+		// which neo4j-admin requires.
+		cmd += " --temp-path=/tmp/restore-tmp"
 	}
 
 	// Add point-in-time restore if specified
@@ -1355,10 +1592,27 @@ func (r *Neo4jRestoreReconciler) startCluster(ctx context.Context, cluster *neo4
 		return fmt.Errorf("failed to get StatefulSet: %w", err)
 	}
 
-	// Restore original replica count from annotation
+	// Restore original replica count from annotation. The annotation
+	// is deleted on first successful startCluster, so a re-entry from a
+	// concurrent reconcile (e.g. the post-Job-success flow racing
+	// itself while waitForClusterReady blocks the original reconcile)
+	// finds it missing. That's not a failure — the cluster is already
+	// being scaled back up by the original caller. Treat the missing
+	// annotation as idempotent success: if the STS has non-zero
+	// replicas (or matches cluster.Spec.Topology.Servers) the scale-up
+	// has already happened. Returning an error here used to terminal-
+	// fail the restore via the "Restore previously failed" guard, even
+	// though everything was actually working.
 	originalReplicasStr, exists := sts.Annotations["neo4j.neo4j.com/original-replicas"]
 	if !exists {
-		return fmt.Errorf("original replica count not found in annotations")
+		current := int32(0)
+		if sts.Spec.Replicas != nil {
+			current = *sts.Spec.Replicas
+		}
+		logger.Info(
+			"original-replicas annotation absent; assuming startCluster already ran",
+			"currentReplicas", current)
+		return nil
 	}
 
 	originalReplicas, err := strconv.ParseInt(originalReplicasStr, 10, 32)

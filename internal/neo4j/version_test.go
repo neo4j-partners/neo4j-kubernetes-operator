@@ -303,6 +303,44 @@ func TestSupportsParallelDownload(t *testing.T) {
 	}
 }
 
+// TestRecreateDatabaseProcedure pins the procedure-name picker across the
+// three Neo4j eras that matter:
+//   - SemVer 5.24+ (incl. 5.26 LTS): cluster.* form.
+//   - CalVer 2025.02–2025.03: cluster.* form (briefly).
+//   - CalVer 2025.04+, 2026.x+: unprefixed form (cluster.* deprecated).
+//
+// Plus the defensive zero-return on pre-5.24 / pre-2025.02.
+func TestRecreateDatabaseProcedure(t *testing.T) {
+	cases := []struct {
+		version string
+		want    string
+	}{
+		// SemVer: 5.24+ has the cluster.* form. 5.23 has nothing.
+		{"5.26.0-enterprise", "dbms.cluster.recreateDatabase"},
+		{"5.26.26-enterprise", "dbms.cluster.recreateDatabase"},
+		{"5.24.0-enterprise", "dbms.cluster.recreateDatabase"},
+		{"5.23.0-enterprise", ""}, // pre-introduction
+		// CalVer 2025.02 and 2025.03 use cluster.* (briefly), then
+		// 2025.04 flipped to unprefixed.
+		{"2025.02.0-enterprise", "dbms.cluster.recreateDatabase"},
+		{"2025.03.0-enterprise", "dbms.cluster.recreateDatabase"},
+		{"2025.04.0-enterprise", "dbms.recreateDatabase"},
+		{"2025.10.5-enterprise", "dbms.recreateDatabase"},
+		// CalVer 2026.x+ — always unprefixed, even at .01.
+		{"2026.01.0-enterprise", "dbms.recreateDatabase"},
+		{"2027.05.0-enterprise", "dbms.recreateDatabase"},
+		// Pre-2025.02 CalVer: no recreate.
+		{"2025.01.0-enterprise", ""},
+	}
+	for _, tc := range cases {
+		v, _ := ParseVersion(tc.version)
+		if got := v.RecreateDatabaseProcedure(); got != tc.want {
+			t.Errorf("RecreateDatabaseProcedure(%s) = %q, want %q",
+				tc.version, got, tc.want)
+		}
+	}
+}
+
 func TestSupportsAuthRules(t *testing.T) {
 	cases := []struct {
 		version string

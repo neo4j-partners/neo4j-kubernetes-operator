@@ -468,3 +468,129 @@ func TestBuildRestoreFromPath_S3WithTempStorage(t *testing.T) {
 	}
 	assert.True(t, hasTempMount, "should mount temp-staging PVC at /tmp/neo4j-staging")
 }
+
+// TestBuildLocalRestoreFilePath_PVCResolvesToShellSubst pins the contract
+// that PVC restores resolve --from-path via a shell command substitution
+// `$(ls .../<dbname>-*.backup | head -1)`.
+//
+// Why this matters: neo4j-admin 5.26 requires --from-path to point at a
+// .backup FILE (not a directory). The operator's backup writes
+//
+//	/backup/<run-id>/<dbname>-<timestamp>.backup
+//
+// where <timestamp> is set at backup execution and not known to the
+// operator. Resolving via the shell at Pod startup avoids both that lookup
+// problem AND the cluster-target-backup multi-file directory issue (the
+// glob naturally selects only the target DB's file).
+func TestBuildLocalRestoreFilePath_PVCResolvesToShellSubst(t *testing.T) {
+	restore := &neo4jv1beta1.Neo4jRestore{
+		Spec: neo4jv1beta1.Neo4jRestoreSpec{
+			DatabaseName: "neo4j",
+			Source: neo4jv1beta1.RestoreSource{
+				Type:       "storage",
+				BackupPath: "roundtrip-backup-backup",
+				Storage: &neo4jv1beta1.StorageLocation{
+					Type: "pvc",
+					PVC:  &neo4jv1beta1.PVCSpec{Name: "backup-pvc"},
+				},
+			},
+		},
+	}
+	got := buildLocalRestoreFilePath(restore, "/backup/roundtrip-backup-backup")
+	assert.Equal(t,
+		"$(ls /backup/roundtrip-backup-backup/'neo4j'-*.backup | head -1)",
+		got,
+		"PVC restore must resolve --from-path via shell $() so neo4j-admin gets a file path, not a directory")
+}
+
+// TestBuildLocalRestoreFilePath_NilStorageDefaultsToPVC: when Source.Storage
+// is nil (legacy CRs that just set BackupPath without a Storage block), the
+// volume mount in buildRestoreVolumeMounts treats it as PVC at /backup, so
+// path resolution MUST run. Otherwise these older CRs would silently hit
+// the directory-vs-file error.
+func TestBuildLocalRestoreFilePath_NilStorageDefaultsToPVC(t *testing.T) {
+	restore := &neo4jv1beta1.Neo4jRestore{
+		Spec: neo4jv1beta1.Neo4jRestoreSpec{
+			DatabaseName: "neo4j",
+			Source: neo4jv1beta1.RestoreSource{
+				Type:       "storage",
+				BackupPath: "some-backup",
+				// Storage left nil intentionally
+			},
+		},
+	}
+	got := buildLocalRestoreFilePath(restore, "/backup/some-backup")
+	assert.NotEmpty(t, got, "nil Storage must still trigger resolution — defaulted to PVC")
+	assert.Contains(t, got, "$(ls /backup/some-backup/'neo4j'-*.backup")
+}
+
+// TestBuildLocalRestoreFilePath_CloudSkipsResolution: cloud URIs (s3://,
+// gs://, azb://) bypass shell-side resolution — neo4j-admin's native cloud
+// readers select the correct file from the bucket/prefix, and the shell
+// `ls` would have no filesystem to enumerate anyway.
+func TestBuildLocalRestoreFilePath_CloudSkipsResolution(t *testing.T) {
+	for _, storageType := range []string{"s3", "gcs", "azure"} {
+		t.Run(storageType, func(t *testing.T) {
+			restore := &neo4jv1beta1.Neo4jRestore{
+				Spec: neo4jv1beta1.Neo4jRestoreSpec{
+					DatabaseName: "neo4j",
+					Source: neo4jv1beta1.RestoreSource{
+						Type: "storage",
+						Storage: &neo4jv1beta1.StorageLocation{
+							Type:   storageType,
+							Bucket: "my-bucket",
+						},
+					},
+				},
+			}
+			got := buildLocalRestoreFilePath(restore, "s3://my-bucket/path")
+			assert.Empty(t, got, "%s sources must NOT trigger shell resolution", storageType)
+		})
+	}
+}
+
+// TestBuildLocalRestoreFilePath_ShellInjectionGuard: spec.DatabaseName is
+// user-controlled. shellQuote() wraps it in single quotes so a dbname
+// containing shell metacharacters can't escape the glob and run extra
+// commands. Defense-in-depth — the database name validator also rejects
+// these — but pinning here prevents future refactors from dropping the
+// quoting.
+func TestBuildLocalRestoreFilePath_ShellInjectionGuard(t *testing.T) {
+	restore := &neo4jv1beta1.Neo4jRestore{
+		Spec: neo4jv1beta1.Neo4jRestoreSpec{
+			DatabaseName: "evil; rm -rf /data",
+			Source: neo4jv1beta1.RestoreSource{
+				Type:       "storage",
+				BackupPath: "x",
+				Storage:    &neo4jv1beta1.StorageLocation{Type: "pvc"},
+			},
+		},
+	}
+	got := buildLocalRestoreFilePath(restore, "/backup/x")
+	// The single-quoted form `'evil; rm -rf /data'` makes the entire
+	// dbname a single shell token inside the glob; the `;` is literal,
+	// not a command separator. If shellQuote ever regresses, this fires.
+	assert.Contains(t, got, "'evil; rm -rf /data'-*.backup",
+		"dbname must be single-quoted so shell metacharacters stay literal")
+	assert.NotContains(t, got, "; rm -rf /data ",
+		"a successful injection would chain rm -rf as a separate command — must not happen")
+}
+
+// TestBuildLocalRestoreFilePath_EmptyDatabaseNameSkips: a Neo4jRestore with
+// empty spec.DatabaseName would produce a glob like `/-*.backup` which is
+// meaningless. Validators catch empty DB names upstream, but if a future
+// code path bypasses that, returning empty is the safe fallback —
+// neo4j-admin will fail with a clearer error than a malformed glob.
+func TestBuildLocalRestoreFilePath_EmptyDatabaseNameSkips(t *testing.T) {
+	restore := &neo4jv1beta1.Neo4jRestore{
+		Spec: neo4jv1beta1.Neo4jRestoreSpec{
+			Source: neo4jv1beta1.RestoreSource{
+				Type:       "storage",
+				BackupPath: "x",
+				Storage:    &neo4jv1beta1.StorageLocation{Type: "pvc"},
+			},
+		},
+	}
+	got := buildLocalRestoreFilePath(restore, "/backup/x")
+	assert.Empty(t, got, "empty dbname must skip shell-side resolution")
+}

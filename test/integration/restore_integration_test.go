@@ -68,6 +68,46 @@ import (
 // the controller.
 const restoreInProgressAnnotation = "neo4j.com/restore-in-progress"
 
+// dumpRestoreDiagnostics is invoked from DeferCleanup when the
+// round-trip spec fails. It prints, in order: the restore Job(s)
+// and their Pod(s) (kubectl get + describe), the restore Pod logs
+// (the actual neo4j-admin output — the whole point of this helper),
+// and recent namespace events. Output goes to GinkgoWriter so it
+// shows up in the failure dump and CI logs. Everything is
+// best-effort; we never fail the test from inside this helper.
+func dumpRestoreDiagnostics(ns, restoreName string) {
+	GinkgoWriter.Printf("\n========== RESTORE FAILURE DIAGNOSTICS (%s/%s) ==========\n", ns, restoreName)
+
+	run := func(args ...string) string {
+		out, _ := exec.Command("kubectl", args...).CombinedOutput()
+		return string(out)
+	}
+
+	GinkgoWriter.Printf("\n--- Jobs in namespace ---\n%s", run("get", "jobs", "-n", ns, "-o", "wide"))
+	GinkgoWriter.Printf("\n--- Pods in namespace ---\n%s", run("get", "pods", "-n", ns, "-o", "wide"))
+
+	// Restore Job Pods carry the label "job-name=<restoreName>-restore"
+	// (operator names the Job `<restoreName>-restore`). Capture logs
+	// from every container so an init-container failure doesn't hide.
+	jobName := restoreName + "-restore"
+	GinkgoWriter.Printf("\n--- Describe job/%s ---\n%s", jobName,
+		run("describe", "job", jobName, "-n", ns))
+	GinkgoWriter.Printf("\n--- Logs from job/%s (all containers, tail=400) ---\n%s", jobName,
+		run("logs", "-n", ns, "-l", "job-name="+jobName, "--all-containers=true", "--tail=400"))
+
+	// Also dump cluster STS state — blocker #3 is "cluster doesn't
+	// return to Ready after stopCluster cycle", so if the restore
+	// itself succeeded but verification failed, we want to see the
+	// STS replicas and any pod-level errors.
+	GinkgoWriter.Printf("\n--- StatefulSets ---\n%s", run("get", "sts", "-n", ns))
+
+	// Recent events — surfaces scheduling failures, PVC issues, etc.
+	GinkgoWriter.Printf("\n--- Recent events ---\n%s",
+		run("get", "events", "-n", ns, "--sort-by=.lastTimestamp"))
+
+	GinkgoWriter.Printf("\n========== END DIAGNOSTICS ==========\n\n")
+}
+
 var _ = Describe("Restore Integration Tests", Ordered, func() {
 	const (
 		restoreTimeout  = time.Second * 600
@@ -301,53 +341,50 @@ var _ = Describe("Restore Integration Tests", Ordered, func() {
 
 	// ─── #121-1: Data-integrity round-trip ────────────────────────────
 	//
-	// SKIPPED. The end-to-end flow (cypher CREATE → backup → cypher DELETE
-	// → restore → cypher SHOW) IS valuable — it catches both #117 failure
-	// modes simultaneously — but reliably running it requires more
-	// investigation than is in scope for this PR. Three blockers
-	// surfaced in local runs:
+	// End-to-end loop: cypher CREATE sentinel → backup → cypher DELETE
+	// sentinel → restore with stopCluster=true → assert STS scales 0
+	// then back up → cypher SHOW sentinel returns 1. Catches both #117
+	// failure modes simultaneously:
+	//   - cluster-controller fight on STS replicas (fails at "scale back
+	//     up" if the controllers deadlock),
+	//   - EmptyDir/silent-data-loss bug (fails at the final SHOW
+	//     marker assertion if the restore's writes don't reach the
+	//     cluster's data PVC).
 	//
-	//   1. neo4j-admin database restore exits non-zero in <5s in this
-	//      env, before the cluster has scaled back up to run the Bolt
-	//      verification. The restore Pod's logs would explain why
-	//      (likely a backup-format / per-database-subfolder mismatch),
-	//      but capturing Pod logs reliably across the test's
-	//      stopCluster/restart cycle needs dedicated test helpers we
-	//      don't have yet.
-	//
-	//   2. The operator's "Restore previously failed; not retrying
-	//      until spec changes or resource is recreated" guard
-	//      (neo4jrestore_controller.go:174) pins the restore in
-	//      Failed once neo4j-admin errors, so a retry-on-flake
-	//      pattern doesn't work — the test would need to delete and
-	//      recreate the Restore CR, which complicates the spec
-	//      significantly.
-	//
-	//   3. The cluster doesn't always return to Ready after the
-	//      stopCluster/restart cycle in this env (observed: stuck at
-	//      Phase=Forming with "connection refused" on the routing
-	//      table query), so even if neo4j-admin succeeded, the final
-	//      cypher-shell verification would hang.
-	//
-	// What this PR covers reliably:
-	//   - Operator-side cluster-coordination contracts (refuse-live +
-	//     overlap guard) via the two specs above.
-	//   - Backup per-run subfolder + history population end-to-end
-	//     via #130 in backup_integration_test.go.
-	//   - Restore source-resolution paths via the unit-test suite in
-	//     internal/controller/neo4jrestore_cloud_test.go.
-	//
-	// What this skipped spec WOULD catch (worth implementing as a
-	// follow-up issue, once we have better Pod-log capture +
-	// cluster-coordination retry infrastructure):
-	//   - The #117 silent-EmptyDir failure mode (restore Job exits 0
-	//     but writes nowhere durable — only catchable by reading the
-	//     restored data, not by checking the Job's exit code).
-	//   - The #117 cluster-controller fight on STS replicas (already
-	//     covered by unit tests in neo4jrestore_coordination_test.go
-	//     but never end-to-end).
-	XContext("Data-integrity round-trip (SKIPPED — see comment block above)", func() {
+	// The fixes that made this loop work end-to-end:
+	//   - File-path --from-path resolution (buildLocalRestoreFilePath):
+	//     neo4j-admin restore wants a FILE path, not a directory.
+	//   - Default --temp-path=/tmp/restore-tmp for PVC sources: the
+	//     backup PVC is mounted ReadOnly so neo4j-admin can't extract
+	//     in-place. Paired `mkdir -p` prelude ensures the dir starts
+	//     empty (neo4j-admin requires that).
+	//   - AlreadyExists-tolerant Job creation: concurrent reconciles
+	//     during the stopCluster cycle were racing; the loser was
+	//     terminal-failing the restore on a benign AlreadyExists.
+	//   - Idempotent startCluster: same concurrent-reconcile pattern
+	//     hit the original-replicas annotation (which the FIRST
+	//     startCluster deletes); the second now treats missing as
+	//     "already done" instead of failing.
+	//   - Post-restore dbms.[cluster.]recreateDatabase: the restore
+	//     Job writes only to server-0's PVC, but in a multi-server
+	//     cluster the database's primary placement on re-bootstrap is
+	//     non-deterministic. Without this step, ~30% of runs landed
+	//     the primary on server-1 (stale data) and silently
+	//     overwrote the restored data on re-sync. Now the operator
+	//     calls recreateDatabase with server-0 explicitly listed as
+	//     the seedingServer, forcing every other server to re-seed
+	//     from it.
+	Context("Data-integrity round-trip", func() {
 		It("should restore a sentinel node written before backup, deleted before restore (issue #121-1)", func() {
+			// On failure, dump restore Job Pod logs + cluster state so
+			// future regressions in this loop produce useful forensics
+			// without needing a separate diagnostic run.
+			DeferCleanup(func() {
+				if CurrentSpecReport().Failed() {
+					dumpRestoreDiagnostics(ns, "roundtrip-restore")
+				}
+			})
+
 			pod0 := fmt.Sprintf("%s-server-0", clusterName)
 
 			// cypher runs an arbitrary statement via kubectl-exec
@@ -471,11 +508,24 @@ var _ = Describe("Restore Integration Tests", Ordered, func() {
 					"restore Job's neo4j-admin invocation will race the live DB "+
 					"file lock and fail with a confusing error")
 
-			By("Waiting for restore status.phase=Completed")
-			Eventually(func() string {
+			By("Waiting for restore status.phase=Completed (fail-fast on Failed)")
+			// Fail-fast on terminal "Failed" — the operator's
+			// `Restore previously failed; not retrying` guard
+			// (neo4jrestore_controller.go:174) makes the phase
+			// sticky, so waiting out restoreTimeout would just
+			// burn through the Job's TTLSecondsAfterFinished=300s
+			// window and leave us with no Pod logs to inspect.
+			// Dumping diagnostics immediately captures the
+			// neo4j-admin output while the Pod still exists.
+			Eventually(func(g Gomega) string {
 				latest := &neo4jv1beta1.Neo4jRestore{}
-				if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(restore), latest); err != nil {
-					return ""
+				g.Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(restore), latest)).To(Succeed())
+				if latest.Status.Phase == "Failed" {
+					dumpRestoreDiagnostics(ns, "roundtrip-restore")
+					StopTrying(fmt.Sprintf(
+						"restore terminal-failed before we could verify data integrity. "+
+							"status.message=%q — see RESTORE FAILURE DIAGNOSTICS dump above for Pod logs.",
+						latest.Status.Message)).Now()
 				}
 				return latest.Status.Phase
 			}, restoreTimeout, restoreInterval).Should(Equal("Completed"))
