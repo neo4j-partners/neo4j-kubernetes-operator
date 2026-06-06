@@ -1570,6 +1570,17 @@ func BuildPodSpecForEnterprise(cluster *neo4jv1beta1.Neo4jEnterpriseCluster, ser
 	if cluster.Spec.TLS != nil && cluster.Spec.TLS.Mode == CertManagerMode {
 		source := &corev1.SecretVolumeSource{
 			SecretName: fmt.Sprintf("%s-tls-secret", cluster.Name),
+			// Owner + group read only (0440) so the private key at
+			// /ssl/tls.key is not world-readable inside the pod.
+			// Neo4j runs as UID/GID 7474 with FSGroup 7474 (see
+			// security_context.Neo4jPodUID) so owner=7474, group=7474
+			// both have read; CIS Kubernetes baseline and Pod Security
+			// "restricted" both flag world-readable key files. Applied
+			// to ALL projected files (tls.crt, ca.crt) — those are
+			// public material so 0440 doesn't lose anything for them
+			// either, and a single DefaultMode keeps the strict/loose
+			// projection branches symmetric.
+			DefaultMode: func() *int32 { mode := int32(0o440); return &mode }(),
 		}
 		if clusterStrictPeerValidationEnabled(cluster) {
 			source.Items = []corev1.KeyToPath{
@@ -2671,8 +2682,25 @@ func buildLDAPConfig(ldap *neo4jv1beta1.Neo4jLDAPSpec) ([]string, []string) {
 
 	addLine("dbms.security.ldap.host", ldap.Host)
 
-	if ldap.UseStartTLS != nil {
+	// Default use_starttls=true for plain ldap:// hosts as a
+	// secure-by-default per the Neo4j security checklist
+	// ("Configure your LDAP system with encryption via StartTLS.").
+	// Neo4j's own default is false, which silently leaves the bind
+	// unencrypted on plain ldap:// — the most common LDAP misconfig
+	// in production deployments.
+	//
+	// Skip the default flip for ldaps:// hosts (already encrypted at
+	// the protocol level — StartTLS is a no-op there and emitting the
+	// line would just add noise to the rendered config).
+	//
+	// Dev setups using mock LDAP without TLS must explicitly set
+	// useStartTLS: false to opt out — that's the deliberate path; a
+	// silent unencrypted bind in prod is not.
+	switch {
+	case ldap.UseStartTLS != nil:
 		addLine("dbms.security.ldap.use_starttls", fmt.Sprintf("%t", *ldap.UseStartTLS))
+	case strings.HasPrefix(strings.ToLower(strings.TrimSpace(ldap.Host)), "ldap://"):
+		addLine("dbms.security.ldap.use_starttls", "true")
 	}
 
 	// Authentication settings

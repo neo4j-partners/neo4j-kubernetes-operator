@@ -244,7 +244,7 @@ stringData:
 | Field | Neo4j Config Key | Description |
 |-------|-----------------|-------------|
 | `ldap.host` | `dbms.security.ldap.host` | LDAP server URL (`ldap://` or `ldaps://`) |
-| `ldap.useStartTLS` | `dbms.security.ldap.use_starttls` | Use STARTTLS with `ldap://` (typically port 389) to upgrade the connection to TLS after connection. Use `ldaps://` (typically port 636) for immediate TLS negotiation at connect time. These approaches are mutually exclusive; do not enable STARTTLS when using `ldaps://`. |
+| `ldap.useStartTLS` | `dbms.security.ldap.use_starttls` | Use STARTTLS with `ldap://` (typically port 389) to upgrade the connection to TLS after connection. Use `ldaps://` (typically port 636) for immediate TLS negotiation at connect time. These approaches are mutually exclusive; do not enable STARTTLS when using `ldaps://`. **Secure-by-default**: when `host` starts with `ldap://` and `useStartTLS` is unset, the operator emits `use_starttls=true` automatically (per the Neo4j security checklist). Set `useStartTLS: false` explicitly to opt out — required for dev setups with mock LDAP that doesn't speak StartTLS. `ldaps://` hosts are unaffected (already encrypted at the protocol level). |
 | `ldap.authentication.userDNTemplate` | `dbms.security.ldap.authentication.user_dn_template` | DN template, `{0}` = username |
 | `ldap.authentication.searchForAttribute` | `dbms.security.ldap.authentication.search_for_attribute` | Use attribute search instead of DN template |
 | `ldap.authentication.attribute` | `dbms.security.ldap.authentication.attribute` | Attribute to search (e.g., `samaccountname`) |

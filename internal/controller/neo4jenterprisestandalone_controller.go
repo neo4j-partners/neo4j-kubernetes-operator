@@ -1419,13 +1419,21 @@ func (r *Neo4jEnterpriseStandaloneReconciler) buildVolumes(standalone *neo4jv1be
 		},
 	})
 
-	// Add TLS certificate volume if TLS is enabled
+	// Add TLS certificate volume if TLS is enabled.
+	//
+	// DefaultMode 0440 makes the private key at /ssl/tls.key
+	// owner+group readable but not world-readable. Neo4j runs as
+	// UID/GID 7474 with FSGroup 7474 so both owner and group are
+	// the Neo4j process; world-readable key files fail Pod Security
+	// "restricted" and CIS Kubernetes baseline checks. Mirrors the
+	// cluster path's hardening (internal/resources/cluster.go).
 	if standalone.Spec.TLS != nil && standalone.Spec.TLS.Mode == "cert-manager" {
 		volumes = append(volumes, corev1.Volume{
 			Name: "neo4j-certs",
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{
-					SecretName: fmt.Sprintf("%s-tls-secret", standalone.Name),
+					SecretName:  fmt.Sprintf("%s-tls-secret", standalone.Name),
+					DefaultMode: func() *int32 { mode := int32(0o440); return &mode }(),
 				},
 			},
 		})

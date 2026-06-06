@@ -180,7 +180,7 @@ Specifies role constraints for individual servers.
 | Field | Type | Description |
 |---|---|---|
 | `host` | `string` | **Required.** LDAP server URL (e.g., `ldap://host:389` or `ldaps://host:636`) |
-| `useStartTLS` | `*bool` | Enable STARTTLS (use with `ldap://`, not `ldaps://`) |
+| `useStartTLS` | `*bool` | Enable STARTTLS (use with `ldap://`, not `ldaps://`). **Defaults to `true` when host starts with `ldap://` and the field is unset** — the Neo4j security checklist's secure-by-default. Set to `false` explicitly to opt out (dev / mock-LDAP setups). |
 | `authentication` | [`*LDAPAuthenticationSpec`](#ldapauthenticationspec) | User authentication settings |
 | `authorization` | [`*LDAPAuthorizationSpec`](#ldapauthorizationspec) | Group/role authorization settings |
 | `debugGroupLogging` | `*bool` | Debug-level LDAP group logging (disable in production) |

@@ -372,3 +372,85 @@ func TestCollectTrustedCASecrets_Both(t *testing.T) {
 	assert.Equal(t, "plural-2", cas[1].Name)
 	assert.Equal(t, "legacy-only", cas[2].Name)
 }
+
+// TestBuildAuthConfig_LDAP_UseStartTLSDefault pins the secure-by-default
+// behavior for plain ldap:// hosts: when UseStartTLS is unset, the
+// operator emits use_starttls=true to force TLS upgrade on the bind.
+// Neo4j's own default is false (silent unencrypted bind); without this
+// the most common LDAP misconfig in production deployments was
+// "I forgot to set useStartTLS".
+//
+// Per the Neo4j security checklist:
+// "Configure your LDAP system with encryption via StartTLS."
+func TestBuildAuthConfig_LDAP_UseStartTLSDefault(t *testing.T) {
+	tests := []struct {
+		name        string
+		host        string
+		useStartTLS *bool
+		want        string // expected value of use_starttls=, or "" if line absent
+	}{
+		{
+			name:        "plain ldap:// + unset → default to true",
+			host:        "ldap://ldap.example.com",
+			useStartTLS: nil,
+			want:        "true",
+		},
+		{
+			name:        "plain LDAP:// (uppercase) + unset → default to true",
+			host:        "LDAP://ldap.example.com",
+			useStartTLS: nil,
+			want:        "true",
+		},
+		{
+			name:        "ldap:// + explicit false → honors opt-out (dev / mock LDAP)",
+			host:        "ldap://mock-ldap:389",
+			useStartTLS: ptr.To(false),
+			want:        "false",
+		},
+		{
+			name:        "ldap:// + explicit true → honors explicit value",
+			host:        "ldap://ldap.example.com",
+			useStartTLS: ptr.To(true),
+			want:        "true",
+		},
+		{
+			name:        "ldaps:// + unset → no line (already TLS at protocol level)",
+			host:        "ldaps://ldap.example.com:636",
+			useStartTLS: nil,
+			want:        "", // no use_starttls line at all
+		},
+		{
+			name:        "ldaps:// + explicit true → still emitted if user asked",
+			host:        "ldaps://ldap.example.com:636",
+			useStartTLS: ptr.To(true),
+			want:        "true",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			auth := &neo4jv1beta1.AuthSpec{
+				LDAP: &neo4jv1beta1.Neo4jLDAPSpec{
+					Host:        tt.host,
+					UseStartTLS: tt.useStartTLS,
+				},
+			}
+			cfg := resources.BuildAuthConfig(auth).Config
+
+			if tt.want == "" {
+				// Explicit "absence" check — `Contains "use_starttls"` on
+				// the raw config would also match commented lines if any
+				// were ever added; use a line-level check instead.
+				for _, line := range strings.Split(cfg, "\n") {
+					assert.False(t, strings.HasPrefix(strings.TrimSpace(line), "dbms.security.ldap.use_starttls"),
+						"no use_starttls line should be emitted for host=%s + UseStartTLS=nil; got line: %q",
+						tt.host, line)
+				}
+				return
+			}
+			assert.Contains(t, cfg, "dbms.security.ldap.use_starttls="+tt.want,
+				"want use_starttls=%s for host=%s UseStartTLS=%v; got:\n%s",
+				tt.want, tt.host, tt.useStartTLS, cfg)
+		})
+	}
+}

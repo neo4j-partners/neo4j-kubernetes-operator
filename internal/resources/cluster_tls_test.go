@@ -384,3 +384,60 @@ func TestBuildStatefulSet_TLSVolumeProjectsCAToTrustedDir(t *testing.T) {
 	require.Contains(t, paths, "tls.crt->tls.crt", "tls.crt projected at root")
 	require.Contains(t, paths, "tls.key->tls.key", "tls.key projected at root")
 }
+
+// TestBuildStatefulSet_TLSVolumeDefaultMode0440 pins the file-mode
+// hardening: the cert-manager Secret volume must set DefaultMode=0440
+// so the projected private key at /ssl/tls.key is not world-readable
+// inside the pod. CIS Kubernetes baseline and Pod Security "restricted"
+// both flag world-readable private-key files. Neo4j runs as UID/GID
+// 7474 with FSGroup 7474, so owner+group both reach the file at 0440.
+//
+// Pin both strict (Items[] projection) and loose (flat Secret mount)
+// paths to keep the strict/loose branches symmetric — both must
+// equally protect the key.
+func TestBuildStatefulSet_TLSVolumeDefaultMode0440(t *testing.T) {
+	const expectedMode = int32(0o440)
+
+	tests := []struct {
+		name                 string
+		strictPeerValidation *bool
+	}{
+		{name: "strict (default)", strictPeerValidation: nil},
+		{name: "strict (explicit)", strictPeerValidation: func() *bool { b := true; return &b }()},
+		{name: "loose (opt-out)", strictPeerValidation: func() *bool { b := false; return &b }()},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cluster := &neo4jv1beta1.Neo4jEnterpriseCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "tls-mode", Namespace: "default"},
+				Spec: neo4jv1beta1.Neo4jEnterpriseClusterSpec{
+					Image:    neo4jv1beta1.ImageSpec{Repo: "neo4j", Tag: "5.26.0-enterprise"},
+					Topology: neo4jv1beta1.TopologyConfiguration{Servers: 3},
+					TLS: &neo4jv1beta1.TLSSpec{
+						Mode:                 "cert-manager",
+						IssuerRef:            &neo4jv1beta1.IssuerRef{Name: "ca-cluster-issuer", Kind: "ClusterIssuer"},
+						StrictPeerValidation: tt.strictPeerValidation,
+					},
+					Storage: neo4jv1beta1.StorageSpec{ClassName: "standard", Size: "10Gi"},
+				},
+			}
+
+			sts := resources.BuildServerStatefulSetsForEnterprise(cluster)[0]
+			var certsVol *corev1.Volume
+			for i := range sts.Spec.Template.Spec.Volumes {
+				v := &sts.Spec.Template.Spec.Volumes[i]
+				if v.Name == "certs" {
+					certsVol = v
+					break
+				}
+			}
+			require.NotNil(t, certsVol, "certs volume must be present when TLS enabled")
+			require.NotNil(t, certsVol.Secret, "certs volume must be backed by a Secret")
+			require.NotNil(t, certsVol.Secret.DefaultMode,
+				"cert-manager Secret volume must set DefaultMode (otherwise tls.key is world-readable at 0644)")
+			require.Equal(t, expectedMode, *certsVol.Secret.DefaultMode,
+				"DefaultMode must be 0440 (owner+group read) — defends against CIS Kubernetes baseline / Pod Security restricted; Neo4j runs as 7474:7474 so owner=group=Neo4j and reads succeed")
+		})
+	}
+}

@@ -420,7 +420,16 @@ type Neo4jLDAPSpec struct {
 	// +kubebuilder:validation:Required
 	Host string `json:"host"`
 
-	// UseStartTLS enables STARTTLS on the LDAP connection (use with ldap:// scheme, not ldaps://)
+	// UseStartTLS enables STARTTLS on the LDAP connection (use with
+	// ldap:// scheme, not ldaps://).
+	//
+	// Defaults to true when host starts with `ldap://` and this field
+	// is unset — secure-by-default per the Neo4j security checklist
+	// ("Configure your LDAP system with encryption via StartTLS").
+	// Set to false explicitly to opt out (e.g. dev / mock-LDAP setups
+	// that don't speak StartTLS). `ldaps://` hosts are unaffected by
+	// the default — they're already encrypted at the protocol level.
+	//
 	// Maps to: dbms.security.ldap.use_starttls
 	// +optional
 	UseStartTLS *bool `json:"useStartTLS,omitempty"`
