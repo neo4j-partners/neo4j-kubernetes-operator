@@ -4888,7 +4888,7 @@ the cluster reaches <code>Ready</code> — see <a href="../neo4jrestore/"><code>
 <tr>
 <td><code>useStartTLS</code></td>
 <td><code>*bool</code></td>
-<td>Enable STARTTLS (use with <code>ldap://</code>, not <code>ldaps://</code>)</td>
+<td>Enable STARTTLS (use with <code>ldap://</code>, not <code>ldaps://</code>). <strong>Defaults to <code>true</code> when host starts with <code>ldap://</code> and the field is unset</strong> — the Neo4j security checklist's secure-by-default. Set to <code>false</code> explicitly to opt out (dev / mock-LDAP setups).</td>
 </tr>
 <tr>
 <td><code>authentication</code></td>
