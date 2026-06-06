@@ -20,7 +20,8 @@ When a `Neo4jRestore` resource is created, the operator:
 4. After the restore Job succeeds, the operator automatically issues one of the following Cypher commands via the Bolt client:
    - `CREATE DATABASE <dbname>` — when the database did not exist before
    - `START DATABASE <dbname>` — when the database existed but was stopped for the restore
-5. Status fields and conditions are updated throughout the lifecycle.
+5. For multi-server clusters (`spec.topology.servers >= 2`), the operator then calls Neo4j's `dbms.[cluster.]recreateDatabase` procedure with **server-0 as the explicit seed**, forcing every other server to re-seed its store from server-0's restored data. This step is what makes cluster restores deterministic — without it, post-restart cluster bootstrap picks the primary non-deterministically, and a server with stale pre-restore data can win consensus and silently overwrite the restored data on re-sync. Skipped silently for standalone / single-server deployments and for Neo4j versions that don't expose the procedure (pre-5.24 SemVer, pre-2025.02 CalVer).
+6. Status fields and conditions are updated throughout the lifecycle.
 
 ## Neo4jRestore Spec
 
@@ -295,6 +296,25 @@ After the restore Job completes successfully, the operator automatically issues 
 - **Existing database** (was stopped for restore): `START DATABASE <dbname>`
 
 This means the restore workflow is fully automated — you do not need to manually start the database after restore completes. The `status.phase` transitions to `Completed` only after the database bring-up command succeeds.
+
+### Multi-Server Cluster Re-Seed
+
+For clusters where `spec.topology.servers >= 2`, the operator additionally calls Neo4j's recreate procedure after the bring-up step:
+
+```cypher
+CALL dbms.cluster.recreateDatabase($db, {seedingServers: [$server0Id]})  -- Neo4j 5.24+ / 2025.02–2025.03
+CALL dbms.recreateDatabase($db, {seedingServers: [$server0Id]})           -- Neo4j 2025.04+ / 2026.x+
+```
+
+This step exists because the restore Job only writes to `data-{cluster}-server-0`'s PVC, but the database's primary placement after the cluster's restart is non-deterministic. Without re-seeding, a server with stale data can win consensus and overwrite the restored data on re-sync.
+
+The procedure is invoked with **server-0 as the explicit seed**, so the cluster reconciles every server's store to server-0's restored data. Server-0 is resolved at runtime via `SHOW SERVERS` (matched by `address`, which contains the Pod hostname); if the lookup can't find server-0, the operator falls back to Neo4j's auto-select mode (empty `seedingServers` list).
+
+**Version requirement**: the recreate procedure is available in Neo4j 5.24+ (incl. 5.26 LTS) and Neo4j 2025.02+. On unsupported versions the step is skipped silently with an informational log; multi-server cluster restores on those versions are best-effort and may need manual re-seeding via Neo4j tools.
+
+**Required Neo4j privileges**: `CREATE DATABASE` + `DROP DATABASE` (per the [Neo4j recreate-database docs](https://neo4j.com/docs/operations-manual/current/database-administration/standard-databases/recreate-database/)). The operator's admin secret has both.
+
+**Failure handling**: the recreate step is non-fatal — if it fails (network blip, permission issue, procedure unavailable), the restore still transitions to `Completed` and the failure is surfaced via an operator Event of type `Warning` with reason `DatabaseCreateFailed`. Re-run the procedure manually against the system database if needed.
 
 ## `stopCluster` and Offline Restore
 

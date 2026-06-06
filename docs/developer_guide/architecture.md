@@ -1,6 +1,6 @@
 # Architecture Overview
 
-This guide provides a comprehensive overview of the Neo4j Enterprise Operator's architecture, design principles, and current implementation status as of August 2025.
+This guide provides a comprehensive overview of the Neo4j Enterprise Operator's architecture, design principles, and current implementation.
 
 ## Core Design Principles
 
@@ -13,7 +13,7 @@ The Neo4j Enterprise Operator follows cloud-native best practices with a focus o
 - **Observability**: Comprehensive monitoring and operational insights
 - **Validation**: Proactive resource validation and recommendations
 
-## Current Architecture (August 2025)
+## Current Architecture
 
 ### Server-Based Architecture
 
@@ -122,13 +122,41 @@ type Neo4jDatabaseSpec struct {
 #### Neo4jBackup (`neo4jbackup_types.go`)
 - **Purpose**: Manages backup operations for both clusters and standalone deployments
 - **Centralized Architecture**: Uses single backup pod per cluster (not sidecars)
-- **Target Support**: Can backup both cluster and standalone deployments
+- **Target Support**: Cluster OR standalone (`spec.target.kind` resolves the type; the controller probes the cluster ref and routes to `BuildStandaloneBackupFromAddress` for standalones, `BuildBackupFromAddresses` for clusters)
 - **Neo4j 5.26+ Support**: Modern backup syntax with `--to-path` parameter
+- **Per-run subfolders**: Every Job writes into `<base>/${BACKUP_RUN_ID}/` where `BACKUP_RUN_ID` is the Job's name (injected via downward API). The same value is recorded in `status.history[].backupsPath` so each history entry deterministically identifies its artifact directory without log parsing. One-shot Job name = `<backup>-backup`; CronJob child Job name = `<cronjob>-<unix-seconds>`.
 
 #### Neo4jRestore (`neo4jrestore_types.go`)
 - **Purpose**: Manages database restoration from backups
 - **Point-in-Time Recovery**: Supports `--restore-until` for precise recovery
-- **Cross-Deployment Support**: Can restore to different deployment types
+- **Cross-Deployment Support**: Works with both `Neo4jEnterpriseCluster` and `Neo4jEnterpriseStandalone` (auto-detected via `clusterRef`)
+- **Source types**: `backup` (reference a `Neo4jBackup` CR), `storage` (local PVC), `s3`/`gcs`/`azure` (cloud URIs), `pitr` (point-in-time)
+
+### Identity, Access & Sharding CRDs
+
+#### Neo4jUser (`neo4juser_types.go`)
+- **Purpose**: Declarative user lifecycle (create/update/drop) with password rotation via Secret hash
+- **Dual Support**: Cluster or standalone (auto-detected; `clusterRef` is namespace-scoped)
+- **Authoritative spec**: password (via Secret), `accountStatus`, `homeDatabase`, `roles[]`, `externalAuth`. Drift is reverted every reconcile.
+- **No inline privileges**: privileges live on `Neo4jRole`, never on `Neo4juser` — users carry only `roles: []` bindings.
+
+#### Neo4jRole (`neo4jrole_types.go`)
+- **Purpose**: Declarative role + privilege management
+- **Authoritative spec**: `privileges[]` when `enforcePrivileges: true` (default). Diff-based reconciliation via `SHOW ROLE ... PRIVILEGES AS COMMANDS`; revokes are derived textually (`DerivePrivilegeRevoke`).
+- **Built-in role guard**: names in `{PUBLIC, reader, editor, publisher, architect, admin}` rejected unless `spec.adoptBuiltin: true`. Adopted built-ins are NEVER dropped on CR delete.
+
+#### Neo4jRoleBinding (`neo4jrolebinding_types.go`)
+- **Purpose**: Grants existing externally-provisioned users (SSO / LDAP first-login) into operator-managed roles, without creating or dropping the user
+- **Overlap guard**: validator rejects bindings whose `clusterRef`+`username` match an existing `Neo4jUser` CR in the same namespace
+
+#### Neo4jAuthRule (`neo4jauthrule_types.go`)
+- **Purpose**: Attribute-based access control (ABAC) — declarative `AUTH RULE` DDL
+- **Version-gated**: requires Neo4j 2026.03+ (`SupportsAuthRules`); controller refuses to reconcile against older versions
+- **Cypher**: every statement prepends `CYPHER 25` because system DB defaults to Cypher 5 on 2026.x, which can't parse `AUTH` keywords
+
+#### Neo4jShardedDatabase (`neo4jshardeddatabase_types.go`)
+- **Purpose**: Sharded database management (property sharding via `db.shard.*`)
+- **Version-gated**: requires Neo4j 2025.12+ images and 5+ servers with 4-8Gi/server, 2+ CPU/server
 
 ## Controllers Architecture
 
@@ -187,9 +215,52 @@ type Neo4jDatabaseSpec struct {
 
 #### Restore Controller (`neo4jrestore_controller.go`)
 **Database restoration management:**
-- **Point-in-Time Recovery**: Supports precise timestamp restoration
-- **Flexible Targets**: Can restore to different deployment types
+- **Point-in-Time Recovery**: Supports precise timestamp restoration via `--restore-until`
+- **Flexible Targets**: Cluster OR standalone (auto-detected through `getClusterRef`; standalone is converted into a synthetic cluster representation with `Topology.Servers=1` via `standaloneAsCluster`)
 - **Validation**: Ensures target deployment compatibility
+
+**Restore lifecycle** (post-Job-success path):
+
+1. **Restore Job** — `neo4j-admin database restore` runs in a Pod that mounts `data-{cluster}-server-0` PVC (the only PVC the operator writes restored data to). `--from-path` is resolved at Pod startup via shell substitution `$(ls /backup/<run>/<dbname>-*.backup | head -1)` so a single artifact file is passed even when the directory holds multiple `.backup` files (cluster-target backups write one per database). `--temp-path=/tmp/restore-tmp` is defaulted for PVC sources because the backup PVC is mounted ReadOnly.
+
+2. **Cluster scale-up** — `startCluster` reads the `neo4j.neo4j.com/original-replicas` annotation off the StatefulSet and scales it back. The annotation is deleted on first successful scale-up; the second concurrent reconcile finds it missing and treats this as idempotent success (avoids a regression where a race terminal-failed the restore on a benign empty-annotation).
+
+3. **Wait for cluster Ready** — `waitForClusterReady` polls cluster status until `Phase=Ready`.
+
+4. **Database bring-up** — `createOrStartDatabase` issues `CREATE DATABASE` (if absent) or `START DATABASE` (if it existed and was stopped) via the Bolt client against the system DB.
+
+5. **Multi-server re-seed** *(clusters with `topology.servers >= 2` only)* — `recreateRestoredDatabaseOnCluster` calls `dbms.[cluster.]recreateDatabase($db, {seedingServers: [$server0Id]})` to force every server to re-sync from server-0's restored data. Server-0 is resolved via `SHOW SERVERS YIELD ... address`, matched by `cluster.Name + "-server-0"`. The procedure name is version-gated by `version.RecreateDatabaseProcedure()`:
+   - **`dbms.cluster.recreateDatabase`** — SemVer 5.24+ (incl. 5.26 LTS), CalVer 2025.02–2025.03
+   - **`dbms.recreateDatabase`** — CalVer 2025.04+ and 2026.x+ (the `cluster.*` form was deprecated in 2025.04)
+   - **Empty string** (skipped silently) — pre-5.24 SemVer / pre-2025.02 CalVer; multi-server restores on those versions are best-effort
+
+   The step is non-fatal — restore still transitions to `Completed` if the procedure fails, but emits a Warning event.
+
+6. **Skipped for standalone** — `Topology.Servers < 2` makes step 5 a no-op. Standalone has a single PVC, a single server, and no re-seed semantics. The standalone restore flow is otherwise identical (steps 1–4). `getClusterRef` accepts a standalone name and returns a synthetic `Neo4jEnterpriseCluster` via `standaloneAsCluster` (with `Spec.Topology.Servers=1`) so every downstream builder (command, env vars, volumes) works without a separate code path.
+
+**Standalone backup**: `neo4jbackup_controller.go::isStandaloneTarget` detects when `spec.target` references a `Neo4jEnterpriseStandalone`. The `--from` address resolution switches from `BuildBackupFromAddresses` (cluster: comma-separated FQDNs) to `BuildStandaloneBackupFromAddress` (single FQDN). The rest of the backup flow — Job spec, PVC/cloud storage, per-run subfolder, history population — is identical.
+
+**Integration test coverage caveat**: the `test/integration` suite covers backup and restore of clusters only. Standalone backup/restore is exercised by unit tests in `internal/controller/*_test.go` and manual smoke tests. End-to-end Ginkgo coverage for the standalone path is a known follow-up — the code paths are the same so failures would surface in the cluster specs, but a dedicated standalone round-trip would harden the contract.
+
+**Race-tolerance**: AlreadyExists on Job creation is treated as "another reconcile got there first" rather than terminal-failure. Concurrent reconciles during the stopCluster cycle (10s scale-down delay queues a fresh reconcile before the original finishes) are common; without this tolerance the loser would flip the restore to `Failed` and the "Restore previously failed" guard would pin it permanently.
+
+#### Neo4jUser / Neo4jRole / Neo4jRoleBinding Controllers (`neo4juser_controller.go`, `neo4jrole_controller.go`, `neo4jrolebinding_controller.go`)
+**Identity & access management:**
+- **Shared cluster resolver**: `cluster_resolver.go` — `ResolveClusterRef` handles cluster + standalone lookup
+- **Watches**: the user controller watches `Neo4jRole` so users referencing missing custom roles re-reconcile when the role lands (sets `PendingDependencies` condition meanwhile, not terminal-fail)
+- **Source-of-truth model**: Privileges live on `Neo4jRole` (never on users). Built-in roles require `adoptBuiltin: true` to be managed; never dropped on CR delete
+- **`Neo4jRoleBinding` is non-destructive**: never creates or drops users — only grants/revokes role assignments on externally-provisioned (SSO / LDAP) users
+
+#### Neo4jAuthRule Controller (`neo4jauthrule_controller.go`)
+**ABAC / attribute-based access control:**
+- **Version requirement**: refuses to reconcile against Neo4j versions where `SupportsAuthRules()` returns false (pre-2026.03)
+- **Production wiring**: always present in `setupProductionControllers`; dev mode (`--controllers`) MUST list `authrule` or local deployments will silently accept `Neo4jAuthRule` CRs without reconciling them
+- **Cypher prefix**: every AUTH RULE DDL prepends `CYPHER 25` (system DB defaults to Cypher 5 on 2026.x, which can't parse `AUTH` keywords)
+
+#### Neo4jShardedDatabase Controller (`neo4jshardeddatabase_controller.go`)
+**Property-sharding management:**
+- **Version-gated**: requires Neo4j 2025.12+ images
+- **Resource requirements**: 5+ servers, 4-8Gi memory per server, 2+ CPU per server
 
 ## Validation Framework (`internal/validation/`)
 
@@ -244,6 +315,20 @@ CalVer detection: `ParseVersion()` → `IsCalver` (`major >= 2025`) covers 2026.
 - **TLS/SSL**: `server.https.*` and `server.bolt.*` (not `dbms.connector.*`)
 - **Database Format**: `db.format: "block"` (not deprecated formats)
 - **Discovery**: managed entirely by operator startup script — do not set in `spec.config`
+
+#### Version-gated Cypher procedures + flags:
+
+| Feature | First available |
+|---|---|
+| `dbms.cluster.recreateDatabase` (post-restore re-seed) | SemVer 5.24+ (incl. 5.26 LTS), CalVer 2025.02–2025.03 |
+| `dbms.recreateDatabase` (replaces `cluster.*`) | CalVer 2025.04+ and 2026.x+ |
+| `AUTH RULE` (ABAC) | CalVer 2026.03+ |
+| Backup `--parallel-download`, `--skip-recovery` | CalVer 2025.11+ |
+| Backup `--remote-address-resolution` | CalVer 2025.09+ |
+| Backup `--prefer-diff-as-parent` | CalVer 2025.04+ |
+| Restore `--source-database` filter | CalVer 2025.02+ |
+
+Picked at runtime by helpers in `internal/neo4j/version.go` (`SupportsParallelDownload`, `SupportsAuthRules`, `RecreateDatabaseProcedure`, etc.). Code paths that depend on these helpers MUST fall back gracefully when the version doesn't support the feature — never hard-fail a reconcile.
 
 ### Database Creation Syntax
 
