@@ -657,6 +657,88 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
 ```
 
+## Audit Logging
+
+Neo4j Enterprise produces two compliance-relevant logs by default:
+
+- `security.log` — authentication attempts (success + failure) and
+  administration commands run against the `system` database.
+- `query.log` — every query executed, with parameters and timing.
+
+In Neo4j 5.x / 2025.x there is **no** separate `dbms.security.audit.*`
+config block (those were 4.x keys; removed). What modern Neo4j calls
+"audit logging" is the combination of `dbms.security.*` and
+`db.logs.query.*` keys. The operator exposes the audit-relevant subset
+as a typed `spec.audit` field so you don't have to hand-roll spec.config
+entries — and so the secure-by-default value for query-literal
+obfuscation is one flag away.
+
+### Minimum-viable compliance setup
+
+```yaml
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: my-cluster
+spec:
+  topology:
+    servers: 3
+  audit:
+    enabled: true   # secure-by-default: query literals are redacted
+```
+
+With `audit.enabled: true` and no other audit fields, the operator
+emits `db.logs.query.obfuscate_literals=true`. PII / passwords passed
+as query literals are scrubbed from `query.log` before it lands on
+disk. Authentication logging and parameter logging keep Neo4j's
+upstream defaults (both on).
+
+### Field reference
+
+| Field | Neo4j config key | Default | What it does |
+|---|---|---|---|
+| `audit.enabled` | — | `false` | Master flag. When `true` AND `obfuscateQueryLiterals` is unset, the operator defaults the emitted obfuscation value to `true` (the secure default). |
+| `audit.logSuccessfulAuthentication` | `dbms.security.log_successful_authentication` | Neo4j default (`true`) | When `false`, only FAILED logins appear in `security.log`. Useful in high-volume environments. |
+| `audit.obfuscateQueryLiterals` | `db.logs.query.obfuscate_literals` | `false` (Neo4j default); `true` when `audit.enabled=true` and field is unset | Redact literal values in `query.log`. **Strongly recommended for PCI / HIPAA / GDPR**. Doesn't redact node labels, relationship types, or property keys. |
+| `audit.parameterLogging` | `db.logs.query.parameter_logging_enabled` | Neo4j default (`true`) | Include parameter VALUES in `query.log`. Set `false` when parameter values themselves are sensitive (passwords passed as params). |
+
+### Tuning trade-offs
+
+- **PII in query literals**: enable obfuscation
+  (`audit.obfuscateQueryLiterals: true` or just `audit.enabled: true`).
+  Note Neo4j's docs flag that obfuscation does NOT cover node labels,
+  relationship types, or property keys — those remain visible.
+- **PII in query parameters**: set `audit.parameterLogging: false`. You
+  lose the parameter audit trail but the query SHAPES remain visible
+  (useful for forensics; sufficient for compliance reviews focused on
+  "what query ran, when, by whom").
+- **High-volume successful logins**: `audit.logSuccessfulAuthentication:
+  false`. Failed logins (the security-relevant signal) stay logged.
+
+### Overlap with `spec.monitoring`
+
+`spec.monitoring` and `spec.audit` both touch
+`db.logs.query.obfuscate_literals`. When set on both,
+**`spec.audit` wins** — the operator emits monitoring first, then
+audit, and Neo4j's last-write-wins config semantics give audit the
+final value. Direct `spec.config` overrides (last in the rendered conf)
+still win over both.
+
+### What's NOT exposed (yet)
+
+These knobs require hand-rolled `spec.config` (or `user-logs.xml` /
+`server-logs.xml` for log4j-level tuning):
+
+- JSON log format (`<JsonTemplateLayout>` in the log4j XML).
+- Per-log file rotation tuning beyond Neo4j's `20MB × 7` defaults.
+- `db.logs.query.transaction.enabled` (transaction-level audit events).
+- `db.logs.query.max_parameter_length` (parameter truncation).
+- `db.logs.query.obfuscate_errors` (2026.01+).
+- `dbms.logs.http.enabled` / `server.logs.gc.enabled`.
+
+Track [issue #128](https://github.com/neo4j-partners/neo4j-kubernetes-operator/issues/128)
+for typed-field requests.
+
 ## Network Security
 
 ### Operator-Managed Network Policy (recommended)

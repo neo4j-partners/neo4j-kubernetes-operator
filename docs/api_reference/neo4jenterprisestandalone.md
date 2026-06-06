@@ -283,6 +283,17 @@ monitoring:
   obfuscateLiterals: false
 ```
 
+#### `audit` (AuditSpec)
+
+Compliance-oriented logging — `security.log` + `query.log` tuning for
+PCI / HIPAA / GDPR. Same shape as
+[Neo4jEnterpriseCluster.spec.audit](neo4jenterprisecluster.md#auditspec).
+
+```yaml
+audit:
+  enabled: true   # secure-by-default: redacts query literals
+```
+
 #### `networkPolicy` (NetworkPolicySpec)
 
 Optional NetworkPolicy emission that restricts ingress to the Neo4j

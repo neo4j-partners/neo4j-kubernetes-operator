@@ -1837,6 +1837,12 @@ server.bolt.tls_level=REQUIRED
 		config += BuildMonitoringConfig(cluster.Spec.Monitoring)
 	}
 
+	// Audit logging — emitted AFTER monitoring so audit-driven values
+	// override monitoring defaults on the keys they share. User
+	// spec.config still wins (appended last) per the project's
+	// "user override always allowed" precedence rule.
+	config += BuildAuditConfig(cluster.Spec.Audit)
+
 	// Authentication/Authorization configuration from typed auth fields
 	// Generated keys are tracked so they are excluded from custom config merge below
 	var authGeneratedKeys []string
@@ -1968,6 +1974,68 @@ func BuildMonitoringConfig(mon *neo4jv1beta1.MonitoringSpec) string {
 	}
 
 	return strings.Join(lines, "\n") + "\n"
+}
+
+// BuildAuditConfig generates Neo4j config lines for compliance-oriented
+// audit logging. Emits AFTER BuildMonitoringConfig in the rendered
+// neo4j.conf so audit-driven values override the monitoring defaults on
+// the keys they both touch (`db.logs.query.obfuscate_literals`,
+// `db.logs.query.parameter_logging_enabled`). User-supplied spec.config
+// keys still win over both — they're appended last.
+//
+// Returns an empty string when audit is nil so the caller can
+// unconditionally concatenate this into the config without an "if".
+//
+// Field-by-field emission rules:
+//
+//   - LogSuccessfulAuthentication: emit only when explicitly set
+//     (nil → Neo4j default applies).
+//
+//   - ObfuscateQueryLiterals: secure-by-default — when audit.Enabled=true
+//     AND this field is nil, emit `true`. Otherwise emit the explicit
+//     value if set; nothing if unset and Enabled=false.
+//
+//   - ParameterLogging: emit only when explicitly set.
+//
+// This means a CR with `spec.audit.enabled: true` and no other audit
+// fields gets the secure-by-default obfuscation behavior with one flag,
+// while users who want finer control set the individual *bool fields
+// directly.
+func BuildAuditConfig(audit *neo4jv1beta1.AuditSpec) string {
+	if audit == nil {
+		return ""
+	}
+
+	var lines []string
+
+	if audit.LogSuccessfulAuthentication != nil {
+		lines = append(lines,
+			fmt.Sprintf("dbms.security.log_successful_authentication=%t", *audit.LogSuccessfulAuthentication))
+	}
+
+	// ObfuscateQueryLiterals: explicit value wins; otherwise default to
+	// true if the user opted in to the audit block (Enabled=true).
+	switch {
+	case audit.ObfuscateQueryLiterals != nil:
+		lines = append(lines,
+			fmt.Sprintf("db.logs.query.obfuscate_literals=%t", *audit.ObfuscateQueryLiterals))
+	case audit.Enabled:
+		lines = append(lines, "db.logs.query.obfuscate_literals=true")
+	}
+
+	if audit.ParameterLogging != nil {
+		lines = append(lines,
+			fmt.Sprintf("db.logs.query.parameter_logging_enabled=%t", *audit.ParameterLogging))
+	}
+
+	if len(lines) == 0 {
+		return ""
+	}
+
+	// Section header makes the rendered conf easier to read when the user
+	// inspects it via `kubectl get configmap ... -o yaml`.
+	header := []string{"# Audit logging (compliance) — overrides spec.monitoring on shared keys"}
+	return strings.Join(append(header, lines...), "\n") + "\n\n"
 }
 
 // IsNeo4jVersion202512OrHigher checks if the Neo4j version supports property sharding.

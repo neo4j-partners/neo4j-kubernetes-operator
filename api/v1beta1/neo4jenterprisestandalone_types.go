@@ -63,6 +63,12 @@ type Neo4jEnterpriseStandaloneSpec struct {
 	// Monitoring configuration (Prometheus metrics, query logging, diagnostics)
 	Monitoring *MonitoringSpec `json:"monitoring,omitempty"`
 
+	// Audit configures compliance-oriented logging. Shared with
+	// Neo4jEnterpriseCluster — see the AuditSpec docstring for the
+	// rationale on how spec.audit relates to spec.monitoring.
+	// +optional
+	Audit *AuditSpec `json:"audit,omitempty"`
+
 	// NetworkPolicy controls emission of a Kubernetes NetworkPolicy that
 	// restricts ingress to the standalone pod. Public client ports
 	// (7474/7473/7687) remain open to any pod; the backup port (6362)
