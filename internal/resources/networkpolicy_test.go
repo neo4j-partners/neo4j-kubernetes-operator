@@ -116,7 +116,8 @@ func TestBuildNetworkPolicyForEnterprise_RestrictsBackupPort(t *testing.T) {
 }
 
 // TestBuildNetworkPolicyForEnterprise_PublicPortsOpen — HTTP/HTTPS/Bolt
-// AND the Prometheus metrics port (2004) must be reachable from any pod.
+// AND the Prometheus metrics port (2004, the MetricsPort constant in
+// internal/resources/cluster.go) must be reachable from any pod.
 // HTTP/Bolt are client-facing; 2004 is the scrape endpoint and scrape
 // solutions vary too widely to encode in a label selector. Regression
 // guard: a future change that adds a From restriction to any of these
@@ -225,7 +226,10 @@ func findRuleCoveringPort(t *testing.T, rules []networkingv1.NetworkPolicyIngres
 		}
 	}
 	t.Fatalf("no ingress rule covers port %d (rules=%+v)", port, rules)
-	return networkingv1.NetworkPolicyIngressRule{}
+	// t.Fatalf terminates the goroutine via runtime.Goexit before this
+	// line is reached. The panic exists only to satisfy Go's static
+	// "missing return" check without returning a misleading zero value.
+	panic("unreachable")
 }
 
 // labelsEqual is a small equality check that doesn't bring in

@@ -1400,7 +1400,10 @@ bundled example CRs that intentionally trip Audit warnings.
    # Verify certificate content. Note: `grep tls.crt | base64 -d` is
    # broken because grep returns the field name + colon + value, not the
    # value alone, so base64 refuses to decode. Use jsonpath to extract
-   # the base64 value directly.
+   # the base64 value directly. Keep the jsonpath in single quotes so
+   # the shell doesn't reinterpret the `\.` escape:
+   #   single-quote form: -o jsonpath='{.data.tls\.crt}'
+   #   double-quote form: -o jsonpath="{.data.tls\\.crt}"  (escape the backslash)
    kubectl get secret <cluster-name>-tls-secret \
      -o jsonpath='{.data.tls\.crt}' | base64 -d | openssl x509 -text -noout
    ```

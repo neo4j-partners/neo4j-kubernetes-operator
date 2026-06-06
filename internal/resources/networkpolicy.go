@@ -135,9 +135,12 @@ func BuildNetworkPolicyForEnterprise(cluster *neo4jv1beta1.Neo4jEnterpriseCluste
 				// pod-to-pod discovery.
 				//
 				// Port set must mirror the cluster server pod's
-				// ContainerPort declarations (see
-				// internal/resources/cluster.go around line 1465).
-				// Missing one here doesn't break the cluster on a
+				// ContainerPort declarations — search
+				// internal/resources/cluster.go for `Ports:
+				// []corev1.ContainerPort{` on the Neo4j server
+				// container (line numbers shift, the structure
+				// doesn't). Missing one here doesn't break the
+				// cluster on a
 				// non-enforcing CNI but DOES break it on
 				// Calico/Cilium/Antrea — pod-to-pod traffic on the
 				// missing port silently fails after the policy lands.
