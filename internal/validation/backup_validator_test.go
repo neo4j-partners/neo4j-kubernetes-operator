@@ -17,6 +17,7 @@ limitations under the License.
 package validation
 
 import (
+	"strings"
 	"testing"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -32,6 +33,14 @@ func TestBackupValidator_Validate(t *testing.T) {
 		backup      *neo4jv1beta1.Neo4jBackup
 		expectError bool
 		errorCount  int
+		// expectedErrorContains, when non-empty, asserts that at least one
+		// returned validation error's message contains the given substring.
+		// Counting errors alone doesn't tell you WHICH validator fired;
+		// for cases where the error identity matters (cron schedule,
+		// PVC.Name rejection, etc.) we also pin a fragment of the
+		// expected message so a regression that produces the same count
+		// from a different validator can't silently pass.
+		expectedErrorContains string
 	}{
 		{
 			name: "valid cluster backup to S3",
@@ -156,9 +165,11 @@ func TestBackupValidator_Validate(t *testing.T) {
 				},
 			},
 			// Without a PVC name, /backup in the Pod is an EmptyDir;
-			// the backup "succeeds" but artifacts evaporate at Job TTL.
-			expectError: true,
-			errorCount:  1,
+			// the backup "succeeds" but artifacts are discarded when
+			// the Job's TTL elapses (matches the validator's error text).
+			expectError:           true,
+			errorCount:            1,
+			expectedErrorContains: "spec.storage.pvc.name",
 		},
 		{
 			name: "PVC storage with whitespace-only pvc.name is rejected",
@@ -177,8 +188,9 @@ func TestBackupValidator_Validate(t *testing.T) {
 					},
 				},
 			},
-			expectError: true,
-			errorCount:  1,
+			expectError:           true,
+			errorCount:            1,
+			expectedErrorContains: "spec.storage.pvc.name",
 		},
 		{
 			name: "PVC storage with nil PVC is rejected",
@@ -189,8 +201,9 @@ func TestBackupValidator_Validate(t *testing.T) {
 					Storage: neo4jv1beta1.StorageLocation{Type: "pvc"}, // no PVC block at all
 				},
 			},
-			expectError: true,
-			errorCount:  1,
+			expectError:           true,
+			errorCount:            1,
+			expectedErrorContains: "spec.storage.pvc",
 		},
 		{
 			name: "S3 without cloud provider",
@@ -236,6 +249,11 @@ func TestBackupValidator_Validate(t *testing.T) {
 			},
 			expectError: true,
 			errorCount:  1,
+			// Pin the message fragment to prove validateSchedule is the
+			// validator firing — without this, a regression where some
+			// other check happens to produce one error would silently
+			// pass on the wrong assertion.
+			expectedErrorContains: "cron schedule",
 		},
 		{
 			name: "valid backup with encryption",
@@ -303,6 +321,18 @@ func TestBackupValidator_Validate(t *testing.T) {
 				}
 				if len(errors) != tt.errorCount {
 					t.Errorf("expected %d errors but got %d: %v", tt.errorCount, len(errors), errors)
+				}
+				if tt.expectedErrorContains != "" {
+					found := false
+					for _, err := range errors {
+						if strings.Contains(err.Error(), tt.expectedErrorContains) {
+							found = true
+							break
+						}
+					}
+					if !found {
+						t.Errorf("expected an error containing %q but got: %v", tt.expectedErrorContains, errors)
+					}
 				}
 			} else if len(errors) > 0 {
 				t.Errorf("expected no validation errors but got %d: %v", len(errors), errors)
