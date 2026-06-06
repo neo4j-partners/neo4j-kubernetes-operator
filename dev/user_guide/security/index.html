@@ -1601,13 +1601,41 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#security-monitoring-with-prometheus" class="md-nav__link">
+  <a href="#metrics-scraping-and-security" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Security Monitoring with Prometheus
+        Metrics Scraping and Security
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Metrics Scraping and Security">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scraping-the-cluster" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scraping the cluster
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#whats-not-exposed-as-typed-fields" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What's NOT exposed as typed fields
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
         
@@ -3942,13 +3970,41 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#security-monitoring-with-prometheus" class="md-nav__link">
+  <a href="#metrics-scraping-and-security" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Security Monitoring with Prometheus
+        Metrics Scraping and Security
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Metrics Scraping and Security">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scraping-the-cluster" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scraping the cluster
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#whats-not-exposed-as-typed-fields" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What's NOT exposed as typed fields
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
         
@@ -5449,16 +5505,88 @@ deployments that don't actually use the integration.</p>
 </span><span id="__span-38-14"><a id="__codelineno-38-14" name="__codelineno-38-14" href="#__codelineno-38-14"></a><span class="w">    </span><span class="c1"># Transaction logging</span>
 </span><span id="__span-38-15"><a id="__codelineno-38-15" name="__codelineno-38-15" href="#__codelineno-38-15"></a><span class="w">    </span><span class="nt">db.logs.query.transaction_logging_enabled</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
 </span></code></pre></div>
-<h3 id="security-monitoring-with-prometheus">Security Monitoring with Prometheus<a class="headerlink" href="#security-monitoring-with-prometheus" title="Anchor link to this section">&para;</a></h3>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-39-1"><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-39-2"><a id="__codelineno-39-2" name="__codelineno-39-2" href="#__codelineno-39-2"></a><span class="w">  </span><span class="nt">monitoring</span><span class="p">:</span>
-</span><span id="__span-39-3"><a id="__codelineno-39-3" name="__codelineno-39-3" href="#__codelineno-39-3"></a><span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-39-4"><a id="__codelineno-39-4" name="__codelineno-39-4" href="#__codelineno-39-4"></a><span class="w">  </span><span class="nt">config</span><span class="p">:</span>
-</span><span id="__span-39-5"><a id="__codelineno-39-5" name="__codelineno-39-5" href="#__codelineno-39-5"></a><span class="w">    </span><span class="c1"># Security metrics configuration</span>
-</span><span id="__span-39-6"><a id="__codelineno-39-6" name="__codelineno-39-6" href="#__codelineno-39-6"></a><span class="w">    </span><span class="nt">metrics.security.authentication.enabled</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
-</span><span id="__span-39-7"><a id="__codelineno-39-7" name="__codelineno-39-7" href="#__codelineno-39-7"></a><span class="w">    </span><span class="nt">metrics.security.authorization.enabled</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
-</span><span id="__span-39-8"><a id="__codelineno-39-8" name="__codelineno-39-8" href="#__codelineno-39-8"></a><span class="w">    </span><span class="nt">metrics.security.log.enabled</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
+<h3 id="metrics-scraping-and-security">Metrics Scraping and Security<a class="headerlink" href="#metrics-scraping-and-security" title="Anchor link to this section">&para;</a></h3>
+<p>The operator's metrics surface is intentionally narrow. Default
+behavior:</p>
+<table>
+<thead>
+<tr>
+<th>Subsystem</th>
+<th>Operator default</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Prometheus endpoint (port 2004)</td>
+<td><code>enabled=true</code> when <code>spec.monitoring.enabled=true</code>, off otherwise</td>
+<td>The sanctioned scrape path. Bound to <code>0.0.0.0</code> for in-cluster scrape.</td>
+</tr>
+<tr>
+<td>JMX MBeans</td>
+<td><strong><code>enabled=false</code> unconditionally</strong></td>
+<td>Neo4j upstream defaults JMX ON, exposing an unauthenticated management surface inside the Pod. Operator overrides because Prometheus is sufficient and JMX is redundant.</td>
+</tr>
+<tr>
+<td>CSV file export</td>
+<td><strong><code>enabled=false</code> unconditionally</strong></td>
+<td>Neo4j upstream defaults CSV ON, writing per-metric files into the Pod's ephemeral filesystem. Useless in K8s — files disappear on restart.</td>
+</tr>
+<tr>
+<td>Graphite</td>
+<td>off (Neo4j default)</td>
+<td>Operator doesn't enable; users who need Graphite can opt in via <code>spec.config</code>.</td>
+</tr>
+</tbody>
+</table>
+<p>Users who genuinely need JMX or CSV can re-enable them through
+<code>spec.config["server.metrics.jmx.enabled"]: "true"</code> — the user's
+<code>spec.config</code> is appended last in the rendered conf and wins over the
+operator-emitted defaults.</p>
+<blockquote>
+<p><strong>Important security caveat from the Neo4j ops manual</strong>: <em>"You should
+never expose the Prometheus endpoint directly to the Internet."</em> The
+operator binds 2004 to <code>0.0.0.0</code> because that's required for in-cluster
+scraping, but the endpoint is unauthenticated. Keep it behind:</p>
+<ul>
+<li>The cluster's ClusterIP Service (not exposed externally by default).</li>
+<li><code>spec.networkPolicy.enabled: true</code> — this opens 2004 to any pod in
+  the cluster's namespace but blocks external traffic.</li>
+<li>For tighter scoping (e.g. only allow Prometheus operator's scraper
+  pod), write a custom NetworkPolicy alongside the operator's; the
+  operator uses a unique <code>app.kubernetes.io/component: network-policy</code>
+  label so the two don't collide.</li>
+</ul>
+</blockquote>
+<h4 id="scraping-the-cluster">Scraping the cluster<a class="headerlink" href="#scraping-the-cluster" title="Anchor link to this section">&para;</a></h4>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-39-1"><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a><span class="c1"># Example Prometheus scrape config — point at the cluster&#39;s ClusterIP</span>
+</span><span id="__span-39-2"><a id="__codelineno-39-2" name="__codelineno-39-2" href="#__codelineno-39-2"></a><span class="c1"># Service. The operator already adds the standard</span>
+</span><span id="__span-39-3"><a id="__codelineno-39-3" name="__codelineno-39-3" href="#__codelineno-39-3"></a><span class="c1"># prometheus.io/{scrape,port,path} annotations.</span>
+</span><span id="__span-39-4"><a id="__codelineno-39-4" name="__codelineno-39-4" href="#__codelineno-39-4"></a><span class="nt">scrape_configs</span><span class="p">:</span>
+</span><span id="__span-39-5"><a id="__codelineno-39-5" name="__codelineno-39-5" href="#__codelineno-39-5"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">job_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j-prod</span>
+</span><span id="__span-39-6"><a id="__codelineno-39-6" name="__codelineno-39-6" href="#__codelineno-39-6"></a><span class="w">    </span><span class="nt">kubernetes_sd_configs</span><span class="p">:</span>
+</span><span id="__span-39-7"><a id="__codelineno-39-7" name="__codelineno-39-7" href="#__codelineno-39-7"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">role</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pod</span>
+</span><span id="__span-39-8"><a id="__codelineno-39-8" name="__codelineno-39-8" href="#__codelineno-39-8"></a><span class="w">        </span><span class="nt">namespaces</span><span class="p">:</span>
+</span><span id="__span-39-9"><a id="__codelineno-39-9" name="__codelineno-39-9" href="#__codelineno-39-9"></a><span class="w">          </span><span class="nt">names</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">neo4j-prod</span><span class="p p-Indicator">]</span>
+</span><span id="__span-39-10"><a id="__codelineno-39-10" name="__codelineno-39-10" href="#__codelineno-39-10"></a><span class="w">    </span><span class="nt">relabel_configs</span><span class="p">:</span>
+</span><span id="__span-39-11"><a id="__codelineno-39-11" name="__codelineno-39-11" href="#__codelineno-39-11"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">source_labels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">__meta_kubernetes_pod_annotation_prometheus_io_scrape</span><span class="p p-Indicator">]</span>
+</span><span id="__span-39-12"><a id="__codelineno-39-12" name="__codelineno-39-12" href="#__codelineno-39-12"></a><span class="w">        </span><span class="nt">action</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">keep</span>
+</span><span id="__span-39-13"><a id="__codelineno-39-13" name="__codelineno-39-13" href="#__codelineno-39-13"></a><span class="w">        </span><span class="nt">regex</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
+</span><span id="__span-39-14"><a id="__codelineno-39-14" name="__codelineno-39-14" href="#__codelineno-39-14"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">source_labels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">__meta_kubernetes_pod_annotation_prometheus_io_port</span><span class="p p-Indicator">]</span>
+</span><span id="__span-39-15"><a id="__codelineno-39-15" name="__codelineno-39-15" href="#__codelineno-39-15"></a><span class="w">        </span><span class="nt">target_label</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">__address__</span>
+</span><span id="__span-39-16"><a id="__codelineno-39-16" name="__codelineno-39-16" href="#__codelineno-39-16"></a><span class="w">        </span><span class="nt">regex</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">(.+)</span>
+</span><span id="__span-39-17"><a id="__codelineno-39-17" name="__codelineno-39-17" href="#__codelineno-39-17"></a><span class="w">        </span><span class="nt">replacement</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">$1:2004</span>
 </span></code></pre></div>
+<h4 id="whats-not-exposed-as-typed-fields">What's NOT exposed as typed fields<a class="headerlink" href="#whats-not-exposed-as-typed-fields" title="Anchor link to this section">&para;</a></h4>
+<p>The following Neo4j metrics knobs are reachable only via <code>spec.config</code>:</p>
+<ul>
+<li><code>server.metrics.filter</code> — comma-separated globbing pattern to subset
+  the emitted metrics (e.g. <code>*check_point*,neo4j.page_cache.*</code>).</li>
+<li><code>server.metrics.prefix</code> — override the default <code>neo4j.</code> prefix on
+  every metric name. Useful for multi-cluster Prometheus federation.</li>
+</ul>
+<p>These are advanced tuning. The defaults work for the standard
+Prometheus + Grafana stack.</p>
 <h2 id="compliance-and-governance">Compliance and Governance<a class="headerlink" href="#compliance-and-governance" title="Anchor link to this section">&para;</a></h2>
 <h3 id="gdpr-compliance-configuration">GDPR Compliance Configuration<a class="headerlink" href="#gdpr-compliance-configuration" title="Anchor link to this section">&para;</a></h3>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-40-1"><a id="__codelineno-40-1" name="__codelineno-40-1" href="#__codelineno-40-1"></a><span class="nt">spec</span><span class="p">:</span>
