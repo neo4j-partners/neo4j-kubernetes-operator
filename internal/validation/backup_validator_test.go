@@ -33,14 +33,20 @@ func TestBackupValidator_Validate(t *testing.T) {
 		backup      *neo4jv1beta1.Neo4jBackup
 		expectError bool
 		errorCount  int
-		// expectedErrorContains, when non-empty, asserts that at least one
-		// returned validation error's message contains the given substring.
-		// Counting errors alone doesn't tell you WHICH validator fired;
-		// for cases where the error identity matters (cron schedule,
-		// PVC.Name rejection, etc.) we also pin a fragment of the
-		// expected message so a regression that produces the same count
-		// from a different validator can't silently pass.
-		expectedErrorContains string
+		// expectedErrorContains lists message fragments. For each entry,
+		// at least one returned validation error must contain that
+		// substring (independent matches — one error can satisfy multiple
+		// entries, but each entry must hit at least one error). Counting
+		// errors alone doesn't tell you WHICH validator fired; pinning
+		// fragments catches regressions where two different validators
+		// happen to fire to produce the same total count.
+		//
+		// Multi-entry usage is for cases like "invalid target kind"
+		// where a single CR is designed to trip TWO validators
+		// simultaneously — each substring asserts a distinct expected
+		// failure mode, so a regression that drops one of them surfaces
+		// instead of being absorbed into the count.
+		expectedErrorContains []string
 	}{
 		{
 			name: "valid cluster backup to S3",
@@ -109,7 +115,16 @@ func TestBackupValidator_Validate(t *testing.T) {
 				},
 			},
 			expectError: true,
-			errorCount:  2, // Invalid kind + missing cloud config
+			errorCount:  2,
+			// Both validators MUST fire — invalid `target.kind` AND the
+			// S3 storage requiring a cloud block. The count alone could
+			// be satisfied by any two errors; pinning one fragment per
+			// expected validator catches a regression that swaps either
+			// firing site for an unrelated one and still produces 2.
+			expectedErrorContains: []string{
+				"target.kind", // field.NotSupported on Spec.Target.Kind
+				"cloud",       // S3 storage requires cloud provider
+			},
 		},
 		{
 			name: "missing target name",
@@ -169,7 +184,7 @@ func TestBackupValidator_Validate(t *testing.T) {
 			// the Job's TTL elapses (matches the validator's error text).
 			expectError:           true,
 			errorCount:            1,
-			expectedErrorContains: "spec.storage.pvc.name",
+			expectedErrorContains: []string{"spec.storage.pvc.name"},
 		},
 		{
 			name: "PVC storage with whitespace-only pvc.name is rejected",
@@ -190,7 +205,7 @@ func TestBackupValidator_Validate(t *testing.T) {
 			},
 			expectError:           true,
 			errorCount:            1,
-			expectedErrorContains: "spec.storage.pvc.name",
+			expectedErrorContains: []string{"spec.storage.pvc.name"},
 		},
 		{
 			name: "PVC storage with nil PVC is rejected",
@@ -203,7 +218,7 @@ func TestBackupValidator_Validate(t *testing.T) {
 			},
 			expectError:           true,
 			errorCount:            1,
-			expectedErrorContains: "spec.storage.pvc",
+			expectedErrorContains: []string{"spec.storage.pvc"},
 		},
 		{
 			name: "S3 without cloud provider",
@@ -223,8 +238,9 @@ func TestBackupValidator_Validate(t *testing.T) {
 					},
 				},
 			},
-			expectError: true,
-			errorCount:  1,
+			expectError:           true,
+			errorCount:            1,
+			expectedErrorContains: []string{"cloud"},
 		},
 		{
 			name: "invalid cron schedule",
@@ -253,7 +269,7 @@ func TestBackupValidator_Validate(t *testing.T) {
 			// validator firing — without this, a regression where some
 			// other check happens to produce one error would silently
 			// pass on the wrong assertion.
-			expectedErrorContains: "cron schedule",
+			expectedErrorContains: []string{"cron schedule"},
 		},
 		{
 			name: "valid backup with encryption",
@@ -322,16 +338,20 @@ func TestBackupValidator_Validate(t *testing.T) {
 				if len(errors) != tt.errorCount {
 					t.Errorf("expected %d errors but got %d: %v", tt.errorCount, len(errors), errors)
 				}
-				if tt.expectedErrorContains != "" {
+				// Each expected fragment must appear in at least one error.
+				// One error can satisfy multiple fragments, but every
+				// fragment must hit — so dropping any of the expected
+				// validators fails the test.
+				for _, want := range tt.expectedErrorContains {
 					found := false
 					for _, err := range errors {
-						if strings.Contains(err.Error(), tt.expectedErrorContains) {
+						if strings.Contains(err.Error(), want) {
 							found = true
 							break
 						}
 					}
 					if !found {
-						t.Errorf("expected an error containing %q but got: %v", tt.expectedErrorContains, errors)
+						t.Errorf("expected an error containing %q but got: %v", want, errors)
 					}
 				}
 			} else if len(errors) > 0 {
