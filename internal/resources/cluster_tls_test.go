@@ -441,3 +441,50 @@ func TestBuildStatefulSet_TLSVolumeDefaultMode0440(t *testing.T) {
 		})
 	}
 }
+
+// TestBuildConfigMapForEnterprise_MetricsHardening pins the
+// unconditional metrics-subsystem hardening: JMX off + CSV off
+// regardless of whether spec.monitoring is enabled. Per the Neo4j
+// ops-manual metrics/expose docs, both subsystems default to ON
+// upstream — JMX adds an unauthenticated MBeans surface, CSV writes
+// pod-ephemeral files. Operator's Prometheus emission is the
+// sanctioned scrape path; the other two are noise.
+func TestBuildConfigMapForEnterprise_MetricsHardening(t *testing.T) {
+	tests := []struct {
+		name       string
+		monitoring *neo4jv1beta1.MonitoringSpec
+	}{
+		{name: "no monitoring spec", monitoring: nil},
+		{name: "monitoring disabled", monitoring: &neo4jv1beta1.MonitoringSpec{Enabled: false}},
+		{name: "monitoring enabled", monitoring: &neo4jv1beta1.MonitoringSpec{Enabled: true}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cluster := &neo4jv1beta1.Neo4jEnterpriseCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "metrics-harden", Namespace: "default"},
+				Spec: neo4jv1beta1.Neo4jEnterpriseClusterSpec{
+					Image:      neo4jv1beta1.ImageSpec{Repo: "neo4j", Tag: "5.26.0-enterprise"},
+					Topology:   neo4jv1beta1.TopologyConfiguration{Servers: 3},
+					Storage:    neo4jv1beta1.StorageSpec{ClassName: "standard", Size: "10Gi"},
+					Monitoring: tt.monitoring,
+				},
+			}
+
+			neo4jConf := resources.BuildConfigMapForEnterprise(cluster).Data["neo4j.conf"]
+
+			assert.Contains(t, neo4jConf, "server.metrics.jmx.enabled=false",
+				"JMX must be disabled regardless of monitoring.enabled — Neo4j defaults JMX MBeans ON, which is an unauthenticated management surface")
+			assert.Contains(t, neo4jConf, "server.metrics.csv.enabled=false",
+				"CSV must be disabled regardless of monitoring.enabled — pod-ephemeral metric files are useless in K8s")
+
+			// Sanity on the inverse: when monitoring IS enabled, the
+			// Prometheus emission also lands (proving the move didn't
+			// break the existing emission flow).
+			if tt.monitoring != nil && tt.monitoring.Enabled {
+				assert.Contains(t, neo4jConf, "server.metrics.prometheus.enabled=true",
+					"with monitoring.enabled=true, Prometheus emission must still happen")
+			}
+		})
+	}
+}

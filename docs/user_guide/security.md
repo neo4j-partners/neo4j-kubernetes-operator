@@ -1151,18 +1151,69 @@ spec:
     db.logs.query.transaction_logging_enabled: "true"
 ```
 
-### Security Monitoring with Prometheus
+### Metrics Scraping and Security
+
+The operator's metrics surface is intentionally narrow. Default
+behavior:
+
+| Subsystem | Operator default | Why |
+|---|---|---|
+| Prometheus endpoint (port 2004) | `enabled=true` when `spec.monitoring.enabled=true`, off otherwise | The sanctioned scrape path. Bound to `0.0.0.0` for in-cluster scrape. |
+| JMX MBeans | **`enabled=false` unconditionally** | Neo4j upstream defaults JMX ON, exposing an unauthenticated management surface inside the Pod. Operator overrides because Prometheus is sufficient and JMX is redundant. |
+| CSV file export | **`enabled=false` unconditionally** | Neo4j upstream defaults CSV ON, writing per-metric files into the Pod's ephemeral filesystem. Useless in K8s — files disappear on restart. |
+| Graphite | off (Neo4j default) | Operator doesn't enable; users who need Graphite can opt in via `spec.config`. |
+
+Users who genuinely need JMX or CSV can re-enable them through
+`spec.config["server.metrics.jmx.enabled"]: "true"` — the user's
+`spec.config` is appended last in the rendered conf and wins over the
+operator-emitted defaults.
+
+> **Important security caveat from the Neo4j ops manual**: *"You should
+> never expose the Prometheus endpoint directly to the Internet."* The
+> operator binds 2004 to `0.0.0.0` because that's required for in-cluster
+> scraping, but the endpoint is unauthenticated. Keep it behind:
+>
+> - The cluster's ClusterIP Service (not exposed externally by default).
+> - `spec.networkPolicy.enabled: true` — this opens 2004 to any pod in
+>   the cluster's namespace but blocks external traffic.
+> - For tighter scoping (e.g. only allow Prometheus operator's scraper
+>   pod), write a custom NetworkPolicy alongside the operator's; the
+>   operator uses a unique `app.kubernetes.io/component: network-policy`
+>   label so the two don't collide.
+
+#### Scraping the cluster
 
 ```yaml
-spec:
-  monitoring:
-    enabled: true
-  config:
-    # Security metrics configuration
-    metrics.security.authentication.enabled: "true"
-    metrics.security.authorization.enabled: "true"
-    metrics.security.log.enabled: "true"
+# Example Prometheus scrape config — point at the cluster's ClusterIP
+# Service. The operator already adds the standard
+# prometheus.io/{scrape,port,path} annotations.
+scrape_configs:
+  - job_name: neo4j-prod
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names: [neo4j-prod]
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        action: keep
+        regex: "true"
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_port]
+        target_label: __address__
+        regex: (.+)
+        replacement: $1:2004
 ```
+
+#### What's NOT exposed as typed fields
+
+The following Neo4j metrics knobs are reachable only via `spec.config`:
+
+- `server.metrics.filter` — comma-separated globbing pattern to subset
+  the emitted metrics (e.g. `*check_point*,neo4j.page_cache.*`).
+- `server.metrics.prefix` — override the default `neo4j.` prefix on
+  every metric name. Useful for multi-cluster Prometheus federation.
+
+These are advanced tuning. The defaults work for the standard
+Prometheus + Grafana stack.
 
 ## Compliance and Governance
 

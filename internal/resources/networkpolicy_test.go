@@ -116,9 +116,11 @@ func TestBuildNetworkPolicyForEnterprise_RestrictsBackupPort(t *testing.T) {
 }
 
 // TestBuildNetworkPolicyForEnterprise_PublicPortsOpen — HTTP/HTTPS/Bolt
-// must be reachable from any pod (those are the client-facing ports).
-// Regression guard: a future change that adds a From restriction to those
-// ports would silently break every application pod that talks to Neo4j.
+// AND the Prometheus metrics port (2004) must be reachable from any pod.
+// HTTP/Bolt are client-facing; 2004 is the scrape endpoint and scrape
+// solutions vary too widely to encode in a label selector. Regression
+// guard: a future change that adds a From restriction to any of these
+// ports would silently break application pods OR Prometheus scrape.
 func TestBuildNetworkPolicyForEnterprise_PublicPortsOpen(t *testing.T) {
 	cluster := &neo4jv1beta1.Neo4jEnterpriseCluster{
 		ObjectMeta: metav1.ObjectMeta{Name: "c", Namespace: "ns"},
@@ -129,10 +131,13 @@ func TestBuildNetworkPolicyForEnterprise_PublicPortsOpen(t *testing.T) {
 	np := resources.BuildNetworkPolicyForEnterprise(cluster)
 	require.NotNil(t, np)
 
-	for _, port := range []int{7474, 7473, 7687} {
+	// 2004 is included to prevent the silent break described in the
+	// metrics-audit pass — without it, networkPolicy.enabled=true +
+	// monitoring.enabled=true would isolate the Pod from Prometheus.
+	for _, port := range []int{7474, 7473, 7687, 2004} {
 		rule := findRuleCoveringPort(t, np.Spec.Ingress, port)
 		assert.Empty(t, rule.From,
-			"client port %d must have an empty From (allow from any pod); got %+v",
+			"public/scrape port %d must have an empty From (allow from any pod); got %+v",
 			port, rule.From)
 	}
 }
@@ -192,10 +197,10 @@ func TestBuildNetworkPolicyForStandalone(t *testing.T) {
 		// zero pods and silently does nothing.
 		assert.Equal(t, "dev-single", np.Spec.PodSelector.MatchLabels["app"])
 
-		// Public ports open, backup port restricted.
-		for _, port := range []int{7474, 7473, 7687} {
+		// Public ports + Prometheus scrape (2004) open; backup restricted.
+		for _, port := range []int{7474, 7473, 7687, 2004} {
 			rule := findRuleCoveringPort(t, np.Spec.Ingress, port)
-			assert.Empty(t, rule.From, "standalone public port %d must allow from any pod", port)
+			assert.Empty(t, rule.From, "standalone public/scrape port %d must allow from any pod", port)
 		}
 		backupRule := findRuleCoveringPort(t, np.Spec.Ingress, 6362)
 		require.NotEmpty(t, backupRule.From,

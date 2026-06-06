@@ -1832,6 +1832,26 @@ server.bolt.tls_level=REQUIRED
 `
 	}
 
+	// Metrics-subsystem hardening: unconditionally disable JMX and CSV
+	// regardless of spec.monitoring.enabled. Neo4j's upstream defaults
+	// turn BOTH on, which is a security + housekeeping problem:
+	//   - JMX exposes an unauthenticated MBeans surface (any pod that
+	//     reaches the JVM remote-management port can dump metrics or
+	//     issue management ops). We use Prometheus; JMX is redundant.
+	//   - CSV writes one file per metric per interval into the pod's
+	//     filesystem — useless under Kubernetes since the pod is
+	//     ephemeral and the files disappear on restart.
+	// Setting these here (not inside BuildMonitoringConfig) means even
+	// users with no spec.monitoring block get the secure defaults.
+	// Users who genuinely need JMX or CSV can still re-enable via
+	// spec.config (which is appended last).
+	config += `
+# Metrics subsystem hardening (issue #128 follow-up — see ops-manual /monitoring/metrics/expose/)
+server.metrics.jmx.enabled=false
+server.metrics.csv.enabled=false
+
+`
+
 	if cluster.Spec.Monitoring != nil && cluster.Spec.Monitoring.Enabled {
 		config += "\n# Query Monitoring and Metrics\n"
 		config += BuildMonitoringConfig(cluster.Spec.Monitoring)
@@ -1950,9 +1970,6 @@ func BuildMonitoringConfig(mon *neo4jv1beta1.MonitoringSpec) string {
 		"# Prometheus metrics exposure",
 		"server.metrics.prometheus.enabled=true",
 		fmt.Sprintf("server.metrics.prometheus.endpoint=0.0.0.0:%d", MetricsPort),
-		"",
-		"# Disable CSV metrics export (unnecessary in Kubernetes — files are lost on pod restart)",
-		"server.metrics.csv.enabled=false",
 		"",
 		"# Query logging",
 		fmt.Sprintf("db.logs.query.enabled=%s", queryLogLevel),

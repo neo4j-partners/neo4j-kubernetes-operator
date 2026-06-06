@@ -734,6 +734,17 @@ func (r *Neo4jEnterpriseStandaloneReconciler) createConfigMap(standalone *neo4jv
 	configLines = append(configLines, "server.backup.listen_address=0.0.0.0:6362")
 	configLines = append(configLines, "")
 
+	// Metrics-subsystem hardening (unconditional, mirrors cluster path):
+	// JMX off (unauthenticated MBeans surface) + CSV off (pod-ephemeral
+	// files). See internal/resources/cluster.go for the full rationale.
+	// Users who need either subsystem can re-enable via spec.config.
+	configLines = append(configLines,
+		"# Metrics subsystem hardening",
+		"server.metrics.jmx.enabled=false",
+		"server.metrics.csv.enabled=false",
+		"",
+	)
+
 	if standalone.Spec.Monitoring != nil && standalone.Spec.Monitoring.Enabled {
 		configLines = append(configLines, strings.Split(resources.BuildMonitoringConfig(standalone.Spec.Monitoring), "\n")...)
 		configLines = append(configLines, "")

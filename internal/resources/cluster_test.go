@@ -1113,11 +1113,20 @@ func TestBuildMonitoringConfig(t *testing.T) {
 		// Must contain valid settings
 		assert.Contains(t, config, "server.metrics.prometheus.enabled=true")
 		assert.Contains(t, config, "server.metrics.prometheus.endpoint=0.0.0.0:2004")
-		assert.Contains(t, config, "server.metrics.csv.enabled=false")
 		assert.Contains(t, config, "db.logs.query.enabled=INFO")
 		assert.Contains(t, config, "db.logs.query.threshold=5s")
 		assert.Contains(t, config, "db.logs.query.plan_description_enabled=false")
 		assert.Contains(t, config, "db.logs.query.obfuscate_literals=false")
+
+		// CSV-disable moved out of BuildMonitoringConfig — it's now
+		// emitted unconditionally by the caller (cluster.go +
+		// neo4jenterprisestandalone_controller.go) so users without
+		// spec.monitoring also get the secure default. The check moved
+		// to TestBuildConfigMapForEnterprise_MetricsHardening below.
+		assert.NotContains(t, config, "server.metrics.csv",
+			"CSV disable is emitted by the caller, not BuildMonitoringConfig")
+		assert.NotContains(t, config, "server.metrics.jmx",
+			"JMX disable is emitted by the caller, not BuildMonitoringConfig")
 
 		// Must NOT contain invalid/removed settings
 		assert.NotContains(t, config, "slow_threshold")
