@@ -739,6 +739,14 @@ func (r *Neo4jEnterpriseStandaloneReconciler) createConfigMap(standalone *neo4jv
 		configLines = append(configLines, "")
 	}
 
+	// Audit logging — appended AFTER monitoring so audit-driven values
+	// override monitoring defaults on shared keys. BuildAuditConfig
+	// returns "" when spec.audit is nil, so the call is unconditional.
+	if auditCfg := resources.BuildAuditConfig(standalone.Spec.Audit); auditCfg != "" {
+		configLines = append(configLines, strings.Split(strings.TrimRight(auditCfg, "\n"), "\n")...)
+		configLines = append(configLines, "")
+	}
+
 	// Aura Fleet Management configuration
 	if standalone.Spec.AuraFleetManagement != nil && standalone.Spec.AuraFleetManagement.Enabled {
 		configLines = append(configLines, "# Aura Fleet Management")

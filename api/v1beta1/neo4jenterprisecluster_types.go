@@ -72,6 +72,15 @@ type Neo4jEnterpriseClusterSpec struct {
 	// Monitoring configuration (Prometheus metrics, query logging, diagnostics)
 	Monitoring *MonitoringSpec `json:"monitoring,omitempty"`
 
+	// Audit configures compliance-oriented logging. Neo4j Enterprise
+	// already produces a security log (auth + admin events) and a
+	// query log (data access) by default; this block lets users tune
+	// what those logs CONTAIN — most importantly, redaction of query
+	// literals to avoid PII leakage in compliance-monitored
+	// environments (PCI / HIPAA / GDPR).
+	// +optional
+	Audit *AuditSpec `json:"audit,omitempty"`
+
 	// NetworkPolicy controls emission of a Kubernetes NetworkPolicy that
 	// restricts ingress to the server pods. Public client ports
 	// (7474/7473/7687) remain open to any pod; intra-cluster ports
@@ -1298,6 +1307,74 @@ type Neo4jEnterpriseClusterList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []Neo4jEnterpriseCluster `json:"items"`
+}
+
+// AuditSpec configures audit-grade logging — the Neo4j security log
+// (authentication + admin commands) and query log (data access) — for
+// compliance use cases (PCI / HIPAA / GDPR).
+//
+// Important framing: Neo4j 5.x / 2025.x has NO unified
+// `dbms.security.audit.*` config (those were 4.x keys, removed). What
+// modern Neo4j calls "audit logging" is the combination of
+// security.log (controlled by `dbms.security.*` keys) and query.log
+// (controlled by `db.logs.query.*` keys). This spec exposes the
+// audit-relevant subset of those keys as typed fields so users don't
+// have to hand-roll spec.config entries.
+//
+// Overlap with spec.monitoring: spec.monitoring owns the
+// PERFORMANCE-monitoring view of the query log (slow-query threshold,
+// plan capture). spec.audit owns the COMPLIANCE view (literal/parameter
+// redaction, successful-auth logging). Where they overlap on
+// `db.logs.query.obfuscate_literals`, spec.audit fields are emitted
+// AFTER monitoring fields in the rendered neo4j.conf, so audit values
+// take priority on the audit-relevant keys. User-supplied spec.config
+// entries still win over both (they're appended last).
+type AuditSpec struct {
+	// Enabled, when true, opts the cluster into compliance-oriented
+	// defaults: ObfuscateQueryLiterals defaults to true when unset.
+	// When false (default), each field still behaves independently
+	// when set, but the secure-by-default behavior of the
+	// ObfuscateQueryLiterals nil case is not applied. This lets users
+	// opt in to "the right thing by default" with one flag rather
+	// than having to know which knobs matter.
+	// +optional
+	Enabled bool `json:"enabled,omitempty"`
+
+	// LogSuccessfulAuthentication controls whether successful login
+	// events appear in security.log. Defaults to Neo4j upstream
+	// (true) when unset. Set false in high-volume production
+	// environments where success-rate logging would dominate the log
+	// — failures remain logged.
+	// Maps to: dbms.security.log_successful_authentication
+	// +optional
+	LogSuccessfulAuthentication *bool `json:"logSuccessfulAuthentication,omitempty"`
+
+	// ObfuscateQueryLiterals controls whether literal values in
+	// query.log are redacted. Neo4j's upstream default is false (raw
+	// literals logged), which leaks any PII / password / secret
+	// passed as a query literal into the log file. Strongly
+	// recommended true for PCI / HIPAA / GDPR compliance.
+	//
+	// When spec.audit.enabled=true AND this field is unset, the
+	// operator defaults the emitted value to true (secure-by-default).
+	// When spec.audit.enabled=false OR this field is set explicitly,
+	// the explicit value (or Neo4j default) wins.
+	//
+	// Note: Neo4j docs flag that obfuscation does not apply to node
+	// labels, relationship types, or property keys. Set
+	// ParameterLogging=false to also redact parameter VALUES.
+	// Maps to: db.logs.query.obfuscate_literals
+	// +optional
+	ObfuscateQueryLiterals *bool `json:"obfuscateQueryLiterals,omitempty"`
+
+	// ParameterLogging controls whether query parameter VALUES are
+	// included in query.log. Defaults to Neo4j upstream (true) when
+	// unset. Set false when parameter values themselves are sensitive
+	// (passwords passed as parameters) and a query-shape audit trail
+	// is sufficient.
+	// Maps to: db.logs.query.parameter_logging_enabled
+	// +optional
+	ParameterLogging *bool `json:"parameterLogging,omitempty"`
 }
 
 // NetworkPolicySpec controls emission of a Kubernetes NetworkPolicy that

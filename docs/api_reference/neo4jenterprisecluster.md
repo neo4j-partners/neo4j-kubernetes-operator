@@ -93,6 +93,7 @@ the cluster reaches `Ready` — see [`Neo4jRestore`](neo4jrestore.md).
 | `mcp` | [`MCPServerSpec`](#mcpserverspec) | MCP server deployment and exposure settings |
 | `propertySharding` | [`PropertyShardingSpec`](#propertyshardingspec) | Property sharding configuration (Neo4j 2025.12+) |
 | `monitoring` | [`MonitoringSpec`](#monitoringspec) | Query monitoring configuration |
+| `audit` | [`AuditSpec`](#auditspec) | Compliance-oriented logging — security.log + query.log tuning for PCI / HIPAA / GDPR. `audit.enabled=true` is a one-flag opt-in to secure-by-default query-literal redaction. |
 | `networkPolicy` | [`NetworkPolicySpec`](#networkpolicyspec) | Optional NetworkPolicy emission that restricts ingress to port 6362 to operator-managed backup pods. Disabled by default. Requires a CNI that enforces NetworkPolicy (Calico/Cilium/Antrea/Weave). |
 | `auraFleetManagement` | [`AuraFleetManagementSpec`](#aurafleetmanagementspec) | Aura Fleet Management integration (optional) |
 | `trustedCASecrets` | `[]`[`TrustedCASecret`](#trustedcasecret) | CA bundles to add to Neo4j's JVM truststore (OIDC, LDAPS, plugin downloads, peer-cluster replication) |
@@ -655,6 +656,28 @@ Configures how Neo4j is exposed outside the Kubernetes cluster.
 | `externalTrafficPolicy` | `string` | External traffic policy: `"Cluster"` or `"Local"` |
 | `ingress` | [`IngressSpec`](#ingressspec) | Ingress configuration |
 | `route` | [`RouteSpec`](#routespec) | OpenShift Route configuration |
+
+### AuditSpec
+
+Compliance-oriented logging configuration. Neo4j 5.x / 2025.x has no
+unified `dbms.security.audit.*` block (those were 4.x keys, removed) —
+"audit logging" in modern Neo4j is the combination of `security.log`
+(controlled by `dbms.security.*`) and `query.log` (controlled by
+`db.logs.query.*`). This spec exposes the audit-relevant subset of
+those keys as typed fields.
+
+| Field | Type | Neo4j Config Key | Description |
+|---|---|---|---|
+| `enabled` | `bool` | — | Master flag. When `true` AND `obfuscateQueryLiterals` is unset, the operator defaults the emitted obfuscation value to `true` (secure-by-default). Default `false`. |
+| `logSuccessfulAuthentication` | `*bool` | `dbms.security.log_successful_authentication` | When `false`, only FAILED logins appear in `security.log`. Unset → Neo4j default (`true`) applies. |
+| `obfuscateQueryLiterals` | `*bool` | `db.logs.query.obfuscate_literals` | Redact literal values in `query.log`. Strongly recommended for PCI / HIPAA / GDPR. Unset + `enabled=true` → defaults to `true`. Doesn't redact node labels, relationship types, or property keys. |
+| `parameterLogging` | `*bool` | `db.logs.query.parameter_logging_enabled` | Include parameter VALUES in `query.log`. Set `false` when parameter values are sensitive. Unset → Neo4j default (`true`) applies. |
+
+**Overlap with [`MonitoringSpec`](#monitoringspec)**: both touch
+`db.logs.query.obfuscate_literals`. When set on both, `spec.audit` wins
+— the operator emits monitoring first, then audit, and Neo4j's
+last-write-wins config semantics give audit the final value. User
+`spec.config` overrides (appended last) still win over both.
 
 ### NetworkPolicySpec
 
