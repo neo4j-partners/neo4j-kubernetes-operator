@@ -71,12 +71,20 @@ Complete deployment examples demonstrating real-world scenarios:
 
 ## 🆕 What's New
 
+### Security & Compliance Surface (June 2026)
+*   **🆕 `spec.networkPolicy`**: opt-in ingress NetworkPolicy that restricts the backup port (6362) to operator-managed backup pods, peer ports to same-cluster servers, and leaves client + Prometheus ports open. See [Network Security](user_guide/security.md#operator-managed-network-policy-recommended) for the port allowlist table and CNI prerequisites.
+*   **🆕 `spec.audit`**: typed compliance logging — one-flag opt-in to PII-redacted query literals, plus per-knob control over successful-auth logging and parameter logging. Designed against the actual Neo4j 5.x/2025.x logging surface (`security.log` + `query.log` keys). See [Audit Logging](user_guide/security.md#audit-logging).
+*   **🆕 Per-run backup subfolder isolation** ([#129](https://github.com/neo4j-partners/neo4j-kubernetes-operator/issues/129)): every backup writes into its own subfolder; `status.history[i].backupsPath` identifies the artifact directory. Restore from a specific historical run by name via `source.type: backup` + `source.backupRef`.
+*   **🆕 LDAP secure-by-default**: plain `ldap://` hosts now get `use_starttls=true` automatically when the field is unset. See [LDAP Field Reference](user_guide/security.md#ldap-field-reference).
+*   **🆕 TLS key file mode hardening**: projected `tls.key` is now `0440` (defends CIS Kubernetes baseline / Pod Security `restricted`).
+*   **🆕 Metrics-subsystem hardening**: JMX MBeans and CSV file export disabled unconditionally; Prometheus on `:2004` is the sanctioned scrape path.
+
 ### Latest Features (Neo4j 5.26+ and 2025.x)
 *   **Database Management**: Create databases with `IF NOT EXISTS`, `WAIT`/`NOWAIT` options
-*   **🆕 Aura Fleet Management**: Monitor self-managed Neo4j deployments from the Aura console — operator installs the pre-bundled plugin and handles token registration automatically; works alongside any `Neo4jPlugin` CRDs
-*   **🆕 Seed URI Functionality**: Create databases directly from existing backups stored in cloud storage
-*   **🆕 Property Sharding**: Horizontal scaling for large datasets with separate graph and property shards
-*   **🆕 MCP Server Support**: Optional MCP server deployment for Neo4j clusters and standalone workloads (HTTPS preferred, STDIO for in-cluster use)
+*   **Aura Fleet Management**: Monitor self-managed Neo4j deployments from the Aura console — operator installs the pre-bundled plugin and handles token registration automatically; works alongside any `Neo4jPlugin` CRDs
+*   **Seed URI Functionality**: Create databases directly from existing backups stored in cloud storage
+*   **Property Sharding**: Horizontal scaling for large datasets with separate graph and property shards
+*   **MCP Server Support**: Optional MCP server deployment for Neo4j clusters and standalone workloads (HTTPS preferred, STDIO for in-cluster use)
 *   **Topology Constraints**: Specify primary/secondary distribution for databases
 *   **Version Detection**: Automatic adaptation for Neo4j 5.26.x (SemVer) and 2025.x (CalVer)
 *   **CalVer Acceptance Note**: 2025.x+ (including 2026.x) is accepted by default, but new CalVer features may need operator updates for full compatibility

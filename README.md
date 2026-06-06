@@ -604,16 +604,20 @@ See the [User & Role Management Guide](docs/user_guide/user_role_management.md) 
 - **OpenShift Route Support**: Optional OpenShift Routes via `spec.service.route` for cluster and standalone services
 
 ### 🔐 Security & Authentication
-- **TLS/SSL**: Configurable TLS encryption for client and cluster communications
-- **Authentication**: Native, LDAP, and OIDC/SSO via typed `spec.auth` fields (operator generates Neo4j config); JWT and Kerberos by setting `dbms.security.{jwt,kerberos}.*` keys in `spec.config` directly
-- **Automatic RBAC**: Operator automatically creates all necessary RBAC resources for backups
-- **Network Policies**: Pod-to-pod communication security
+- **TLS/SSL**: cert-manager-driven certificates with **strict-by-default intra-cluster mTLS** (`spec.tls.strictPeerValidation: true`); projected `tls.key` mode `0440` (defends CIS Kubernetes baseline / Pod Security `restricted`)
+- **Authentication**: Native, LDAP, and OIDC/SSO via typed `spec.auth` fields. **LDAP `useStartTLS` defaults to `true` for plain `ldap://` hosts** (secure-by-default per Neo4j security checklist). JWT and Kerberos by setting `dbms.security.{jwt,kerberos}.*` keys in `spec.config` directly
+- **Trust anchors**: `spec.trustedCASecrets` projects extra CAs into Neo4j's JVM truststore (seeded from JDK `cacerts`, so adding a corporate CA doesn't remove trust in public CAs)
+- **NetworkPolicy**: Opt-in `spec.networkPolicy.enabled` emits an ingress NetworkPolicy that scopes the backup port (6362) to operator-managed backup pods, peer ports (6000/7000/7688/7689) to same-cluster servers, and leaves client + Prometheus ports open. Requires a CNI that enforces NetworkPolicy (Calico/Cilium/Antrea/Weave; flannel ignores)
+- **Audit logging**: Typed `spec.audit` block — one-flag compliance defaults (PII-redacted query literals), plus per-knob control over successful-auth logging and parameter logging
+- **Automatic RBAC**: Operator automatically creates the necessary RBAC + ServiceAccounts for backup and restore Jobs (including IRSA / GKE Workload Identity / Azure WI annotations from `spec.cloud.identity.autoCreate.annotations`)
+- **Metrics-subsystem hardening**: JMX MBeans and CSV file export are disabled unconditionally (Neo4j defaults BOTH ON, exposing an unauthenticated management surface + writing pod-ephemeral metric files). Prometheus scrape on `:2004` is the sanctioned path
 
 ### 🚀 Operations & Automation
-- **Automated Backups**: Scheduled backups with centralized backup StatefulSet (resource-efficient)
+- **Automated Backups**: Scheduled backups via `CronJob` with safe defaults (`ConcurrencyPolicy: Forbid` prevents overlap, `StartingDeadlineSeconds: 60` blocks thundering-herd on operator recovery). Centralized backup StatefulSet for resource efficiency
+- **Per-run subfolder isolation**: Every backup run writes its `.backup` artifacts into a run-specific subfolder under `spec.storage.path` (`status.history[i].backupsPath`). Restore a specific historical run by setting `source.type: backup`, `source.backupRef: <name>` — the operator looks up the most-recent succeeded run from `status.history` and builds the right path automatically
 - **Point-in-Time Recovery**: Restore clusters to specific timestamps with `--restore-until`
 - **Database Management**: Create databases with topology constraints, seed URIs, and point-in-time recovery
-- **Version-Aware Operations**: Automatic detection and adaptation for Neo4j 5.26.x and 2025.x
+- **Version-Aware Operations**: Automatic detection and adaptation for Neo4j 5.26.x and 2025.x/2026.x
 - **Plugin Management**: Smart plugin installation with automatic configuration (APOC, GDS, Bloom, GenAI, N10s, GraphQL)
 - **Split-Brain Detection**: Automatic detection and repair of split-brain scenarios in clusters
 
@@ -669,6 +673,42 @@ kubectl logs -l app.kubernetes.io/name=neo4j-operator
 Note: "Compliance-ready logging and auditing" means the operator exposes Neo4j logging/audit controls via `spec.config` and emits Kubernetes Events for key actions; you still need to enable the desired Neo4j log settings and ship/retain logs per your compliance requirements.
 
 ## 🎯 Recent Improvements
+
+### Security checklist closure + backup lifecycle (June 2026)
+
+Closes [issue #128](https://github.com/neo4j-partners/neo4j-kubernetes-operator/issues/128)
+(Neo4j security checklist coverage) and [issue #129](https://github.com/neo4j-partners/neo4j-kubernetes-operator/issues/129)
+(per-run backup subfolders). New typed surfaces:
+
+- **`spec.networkPolicy.enabled`** — opt-in ingress policy that
+  restricts the backup port (6362) to operator-managed backup pods.
+  Requires Calico/Cilium/Antrea/Weave (flannel ignores).
+- **`spec.audit`** — compliance-oriented logging. `audit.enabled: true`
+  is a one-flag opt-in to PII-redacted query literals; per-knob
+  control over `logSuccessfulAuthentication` + `parameterLogging`.
+- **Per-run subfolder isolation** — every backup execution writes
+  into its own subfolder; restore from a specific historical run via
+  `source.type: backup` + `source.backupRef`. `status.history[i].backupsPath`
+  is the artifact directory.
+
+Secure-by-default tightenings (no spec changes required):
+TLS key file mode `0440`, LDAP `useStartTLS=true` for plain `ldap://`
+hosts, JMX MBeans + CSV file export disabled unconditionally
+(Prometheus on `:2004` is the sanctioned scrape path), CronJob
+backups gain `ConcurrencyPolicy: Forbid` + `StartingDeadlineSeconds: 60`.
+
+Restore lifecycle fixes: `source.type: backup` actually works now
+(was previously broken; hardcoded `/backup/<backup-ref>` over an
+EmptyDir); restore Pod gets a dedicated SA with workload-identity
+annotations from the resolved cloud block; failed one-shot Jobs are
+now appended to `status.history`; restores against a backup with no
+succeeded runs sit in `Pending` and auto-promote instead of going
+terminal-`Failed`.
+
+End-to-end audit confirmed no legitimate operator/Neo4j traffic path
+is blocked by the new policy (LoadBalancer/Ingress, operator → Bolt,
+Prometheus scrape, peer ports including 7689 catchup — all verified).
+Detail: [`docs/user_guide/security.md`](docs/user_guide/security.md#network-security).
 
 ### Multi-CA Trust + Extra Volumes (April 2026)
 

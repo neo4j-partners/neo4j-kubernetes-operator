@@ -65,6 +65,16 @@ CalVer release line — 2025.x, 2026.x, and onward — are both supported, with
 automatic version detection for Cypher 25 syntax and version-appropriate
 configuration keys.
 
+**Security-checklist coverage.** The operator addresses the
+[Neo4j security checklist](https://neo4j.com/docs/operations-manual/current/security/checklist/)
+defaults out of the box: strict-by-default intra-cluster mTLS,
+`tls.key` mode `0440`, secure-by-default LDAP StartTLS for plain
+`ldap://` hosts, JMX MBeans + CSV metrics export disabled, and a
+typed `spec.audit` block for compliance-oriented logging. An opt-in
+`spec.networkPolicy.enabled` emits an ingress policy that scopes
+the backup port (6362) to operator-managed backup pods while leaving
+client + Prometheus ports open.
+
 ---
 
 ## Installation
