@@ -1,0 +1,152 @@
+# Apply to your ArgoCD installation to enable health checks for Neo4j operator resources.
+#
+# Usage:
+#   kubectl patch configmap argocd-cm -n argocd \
+#     --type merge --patch-file docs/gitops/argocd-health-checks.yaml
+#
+# Or include in your ArgoCD App-of-Apps configuration.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cm
+  namespace: argocd
+data:
+  resource.customizations.health.neo4j.neo4j.com_Neo4jEnterpriseCluster: |
+    hs = {}
+    if obj.status == nil or obj.status.phase == nil or obj.status.phase == "" then
+      hs.status = "Progressing"
+      hs.message = "Waiting for cluster status"
+      return hs
+    end
+    phase = obj.status.phase
+    if phase == "Ready" then
+      hs.status = "Healthy"
+      hs.message = obj.status.message or "Neo4j cluster is ready"
+    elseif phase == "Failed" or phase == "Degraded" then
+      hs.status = "Degraded"
+      hs.message = obj.status.message or "Neo4j cluster is in a failed state"
+    else
+      hs.status = "Progressing"
+      hs.message = obj.status.message or ("Neo4j cluster is " .. phase)
+    end
+    return hs
+
+  resource.customizations.health.neo4j.neo4j.com_Neo4jEnterpriseStandalone: |
+    hs = {}
+    if obj.status == nil or obj.status.phase == nil or obj.status.phase == "" then
+      hs.status = "Progressing"
+      hs.message = "Waiting for standalone status"
+      return hs
+    end
+    phase = obj.status.phase
+    if phase == "Ready" then
+      hs.status = "Healthy"
+      hs.message = obj.status.message or "Neo4j standalone is ready"
+    elseif phase == "Failed" or phase == "Degraded" then
+      hs.status = "Degraded"
+      hs.message = obj.status.message or "Neo4j standalone is in a failed state"
+    else
+      hs.status = "Progressing"
+      hs.message = obj.status.message or ("Neo4j standalone is " .. phase)
+    end
+    return hs
+
+  resource.customizations.health.neo4j.neo4j.com_Neo4jDatabase: |
+    hs = {}
+    if obj.status == nil or obj.status.phase == nil or obj.status.phase == "" then
+      hs.status = "Progressing"
+      hs.message = "Waiting for database status"
+      return hs
+    end
+    phase = obj.status.phase
+    if phase == "Ready" then
+      hs.status = "Healthy"
+      hs.message = obj.status.message or "Database is ready"
+    elseif phase == "Failed" then
+      hs.status = "Degraded"
+      hs.message = obj.status.message or "Database creation failed"
+    else
+      hs.status = "Progressing"
+      hs.message = obj.status.message or ("Database is " .. phase)
+    end
+    return hs
+
+  resource.customizations.health.neo4j.neo4j.com_Neo4jBackup: |
+    hs = {}
+    if obj.status == nil or obj.status.phase == nil or obj.status.phase == "" then
+      hs.status = "Progressing"
+      hs.message = "Waiting for backup status"
+      return hs
+    end
+    phase = obj.status.phase
+    if phase == "Succeeded" or phase == "Completed" or phase == "Ready" then
+      hs.status = "Healthy"
+      hs.message = obj.status.message or "Backup completed"
+    elseif phase == "Failed" then
+      hs.status = "Degraded"
+      hs.message = obj.status.message or "Backup failed"
+    else
+      hs.status = "Progressing"
+      hs.message = obj.status.message or ("Backup is " .. phase)
+    end
+    return hs
+
+  resource.customizations.health.neo4j.neo4j.com_Neo4jRestore: |
+    hs = {}
+    if obj.status == nil or obj.status.phase == nil or obj.status.phase == "" then
+      hs.status = "Progressing"
+      hs.message = "Waiting for restore status"
+      return hs
+    end
+    phase = obj.status.phase
+    if phase == "Completed" or phase == "Ready" then
+      hs.status = "Healthy"
+      hs.message = obj.status.message or "Restore completed"
+    elseif phase == "Failed" then
+      hs.status = "Degraded"
+      hs.message = obj.status.message or "Restore failed"
+    else
+      hs.status = "Progressing"
+      hs.message = obj.status.message or ("Restore is " .. phase)
+    end
+    return hs
+
+  resource.customizations.health.neo4j.neo4j.com_Neo4jPlugin: |
+    hs = {}
+    if obj.status == nil or obj.status.phase == nil or obj.status.phase == "" then
+      hs.status = "Progressing"
+      hs.message = "Waiting for plugin status"
+      return hs
+    end
+    phase = obj.status.phase
+    if phase == "Ready" or phase == "Installed" then
+      hs.status = "Healthy"
+      hs.message = obj.status.message or "Plugin is installed and ready"
+    elseif phase == "Failed" then
+      hs.status = "Degraded"
+      hs.message = obj.status.message or "Plugin installation failed"
+    else
+      hs.status = "Progressing"
+      hs.message = obj.status.message or ("Plugin is " .. phase)
+    end
+    return hs
+
+  resource.customizations.health.neo4j.neo4j.com_Neo4jShardedDatabase: |
+    hs = {}
+    if obj.status == nil or obj.status.phase == nil or obj.status.phase == "" then
+      hs.status = "Progressing"
+      hs.message = "Waiting for sharded database status"
+      return hs
+    end
+    phase = obj.status.phase
+    if phase == "Ready" then
+      hs.status = "Healthy"
+      hs.message = obj.status.message or "Sharded database is ready"
+    elseif phase == "Failed" then
+      hs.status = "Degraded"
+      hs.message = obj.status.message or "Sharded database failed"
+    else
+      hs.status = "Progressing"
+      hs.message = obj.status.message or ("Sharded database is " .. phase)
+    end
+    return hs
