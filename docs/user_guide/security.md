@@ -789,6 +789,78 @@ hitting Prometheus metrics on 2004), enabling this policy will break them
 on enforcing CNIs. Audit your traffic first; the hand-rolled
 NetworkPolicy below remains a valid escape hatch.
 
+### External access and the additive-policy trade-off
+
+Kubernetes NetworkPolicies are **additive (OR)**: when two policies select
+the same Pod, the rendered allow-list is the **union** of their ingress
+rules. This has a counterintuitive consequence for the operator-emitted
+policy:
+
+> The operator's public-ports rule uses `From: nil` (allow from any
+> source, including external clients via LoadBalancer/Ingress). You
+> **cannot** tighten this to a CIDR allowlist by adding a second
+> NetworkPolicy — the operator's permissive rule already permits any
+> source on those ports, and additive union semantics mean your second
+> policy's narrower CIDR is ignored.
+
+If you need to restrict who can reach 7474/7473/7687 (e.g. only
+corporate VPN ranges, only specific application namespaces), pick one of
+the following approaches:
+
+1. **Disable the operator policy and roll your own.** Set
+   `spec.networkPolicy.enabled: false` and write the entire policy
+   yourself. You take on the responsibility of allowing the cluster
+   peer ports (6000/7000/7688/7689), the backup pods (6362), the
+   Prometheus scrapers (2004), and probes (kubelet handled
+   automatically on most CNIs; see below).
+
+2. **Use a CNI-specific extension that supports deny rules.** Calico
+   GlobalNetworkPolicy and Cilium CiliumNetworkPolicy both allow deny
+   semantics that override standard K8s NetworkPolicy. With those you
+   can layer a restrictive deny over the operator's permissive allow.
+
+3. **Restrict at the Service / Ingress layer instead.** Use
+   `spec.service.type: ClusterIP` (no LoadBalancer external IP), or an
+   Ingress with `nginx.ingress.kubernetes.io/whitelist-source-range` or
+   equivalent. NetworkPolicy operates on Pod-to-Pod traffic; external
+   traffic going through a LoadBalancer/Ingress is more naturally
+   shaped at those layers anyway.
+
+### External access via LoadBalancer / Ingress
+
+When `spec.networkPolicy.enabled: true`, external traffic via
+LoadBalancer or Ingress **does** reach the Pod on 7474/7473/7687:
+
+- The operator's public-ports rule has `From: nil`, which matches
+  "any source including external clients" per the K8s NetworkPolicy
+  spec.
+- This holds whether `externalTrafficPolicy: Cluster` (kube-proxy
+  SNATs to a node IP) or `Local` (preserve client IP) is set.
+- The Ingress controller's Pod itself is the source from the Neo4j
+  Pod's perspective; that Pod matches the open `From: nil` selector.
+
+So enabling the operator's policy does NOT break LoadBalancer or Ingress
+exposure — it only adds the protections on 6362 (backup) and the peer
+ports.
+
+### Kubelet probes and the policy
+
+The Neo4j Pod's readiness/liveness probes are HTTP on port 7474.
+Kubelet — the source of probe traffic — is **not** a Pod and is
+**not** subject to NetworkPolicy in conformant CNIs:
+
+| CNI | Kubelet probe handling |
+|---|---|
+| Calico | Auto-allowed (host endpoint detection) |
+| Cilium | Auto-allowed (host-firewall policy in CiliumNetworkPolicy, not standard NetworkPolicy) |
+| Antrea | Auto-allowed |
+| Weave | Auto-allowed |
+
+The operator's policy doesn't include an explicit kubelet carve-out
+because it isn't needed on conformant CNIs. If you use a CNI where
+probes fail after enabling the policy, add an `ipBlock` rule for the
+node CIDR on port 7474. This is a CNI bug, not an operator one.
+
 ### Hand-Rolled Network Policy (escape hatch)
 
 If you need a custom policy shape — for example, restricting client
