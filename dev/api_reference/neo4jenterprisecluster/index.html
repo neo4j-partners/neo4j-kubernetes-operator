@@ -2410,6 +2410,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#auditspec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AuditSpec
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#networkpolicyspec" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3988,6 +3999,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#auditspec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AuditSpec
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#networkpolicyspec" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4643,6 +4665,11 @@ the cluster reaches <code>Ready</code> — see <a href="../neo4jrestore/"><code>
 <td><code>monitoring</code></td>
 <td><a href="#monitoringspec"><code>MonitoringSpec</code></a></td>
 <td>Query monitoring configuration</td>
+</tr>
+<tr>
+<td><code>audit</code></td>
+<td><a href="#auditspec"><code>AuditSpec</code></a></td>
+<td>Compliance-oriented logging — security.log + query.log tuning for PCI / HIPAA / GDPR. <code>audit.enabled=true</code> is a one-flag opt-in to secure-by-default query-literal redaction.</td>
 </tr>
 <tr>
 <td><code>networkPolicy</code></td>
@@ -6138,6 +6165,54 @@ keytab) until full support lands.</p>
 </tr>
 </tbody>
 </table>
+<h3 id="auditspec">AuditSpec<a class="headerlink" href="#auditspec" title="Anchor link to this section">&para;</a></h3>
+<p>Compliance-oriented logging configuration. Neo4j 5.x / 2025.x has no
+unified <code>dbms.security.audit.*</code> block (those were 4.x keys, removed) —
+"audit logging" in modern Neo4j is the combination of <code>security.log</code>
+(controlled by <code>dbms.security.*</code>) and <code>query.log</code> (controlled by
+<code>db.logs.query.*</code>). This spec exposes the audit-relevant subset of
+those keys as typed fields.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Neo4j Config Key</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>enabled</code></td>
+<td><code>bool</code></td>
+<td>—</td>
+<td>Master flag. When <code>true</code> AND <code>obfuscateQueryLiterals</code> is unset, the operator defaults the emitted obfuscation value to <code>true</code> (secure-by-default). Default <code>false</code>.</td>
+</tr>
+<tr>
+<td><code>logSuccessfulAuthentication</code></td>
+<td><code>*bool</code></td>
+<td><code>dbms.security.log_successful_authentication</code></td>
+<td>When <code>false</code>, only FAILED logins appear in <code>security.log</code>. Unset → Neo4j default (<code>true</code>) applies.</td>
+</tr>
+<tr>
+<td><code>obfuscateQueryLiterals</code></td>
+<td><code>*bool</code></td>
+<td><code>db.logs.query.obfuscate_literals</code></td>
+<td>Redact literal values in <code>query.log</code>. Strongly recommended for PCI / HIPAA / GDPR. Unset + <code>enabled=true</code> → defaults to <code>true</code>. Doesn't redact node labels, relationship types, or property keys.</td>
+</tr>
+<tr>
+<td><code>parameterLogging</code></td>
+<td><code>*bool</code></td>
+<td><code>db.logs.query.parameter_logging_enabled</code></td>
+<td>Include parameter VALUES in <code>query.log</code>. Set <code>false</code> when parameter values are sensitive. Unset → Neo4j default (<code>true</code>) applies.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Overlap with <a href="#monitoringspec"><code>MonitoringSpec</code></a></strong>: both touch
+<code>db.logs.query.obfuscate_literals</code>. When set on both, <code>spec.audit</code> wins
+— the operator emits monitoring first, then audit, and Neo4j's
+last-write-wins config semantics give audit the final value. User
+<code>spec.config</code> overrides (appended last) still win over both.</p>
 <h3 id="networkpolicyspec">NetworkPolicySpec<a class="headerlink" href="#networkpolicyspec" title="Anchor link to this section">&para;</a></h3>
 <p>Controls operator emission of a Kubernetes NetworkPolicy that hardens
 ingress to the Neo4j server pods. Most importantly, closes the backup
