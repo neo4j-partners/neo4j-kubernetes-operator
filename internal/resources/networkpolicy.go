@@ -74,6 +74,7 @@ func BuildNetworkPolicyForEnterprise(cluster *neo4jv1beta1.Neo4jEnterpriseCluste
 	discoveryPort := intstr.FromInt(DiscoveryPort)
 	raftPort := intstr.FromInt(RaftPort)
 	routingPort := intstr.FromInt(RoutingPort)
+	transactionPort := intstr.FromInt(TransactionPort)
 	backupPort := intstr.FromInt(BackupPort)
 	metricsPort := intstr.FromInt(MetricsPort)
 
@@ -132,6 +133,25 @@ func BuildNetworkPolicyForEnterprise(cluster *neo4jv1beta1.Neo4jEnterpriseCluste
 				// Rule 2: intra-cluster ports — peer servers only. Same
 				// label that the cluster headless service uses for
 				// pod-to-pod discovery.
+				//
+				// Port set must mirror the cluster server pod's
+				// ContainerPort declarations (see
+				// internal/resources/cluster.go around line 1465).
+				// Missing one here doesn't break the cluster on a
+				// non-enforcing CNI but DOES break it on
+				// Calico/Cilium/Antrea — pod-to-pod traffic on the
+				// missing port silently fails after the policy lands.
+				//
+				// - 6000: V2 discovery + tcp-tx
+				// - 7000: RAFT consensus
+				// - 7688: routing service
+				// - 7689: transaction streaming / catchup protocol
+				//   (store-copy and log shipping between cluster
+				//   members). Declared on both the headless Service
+				//   and the Pod ContainerPort list; future cluster
+				//   modes (read-replicas, store-copy bootstrap) need
+				//   this open between peers even if the steady-state
+				//   workload doesn't constantly use it.
 				{
 					From: []networkingv1.NetworkPolicyPeer{
 						{PodSelector: &metav1.LabelSelector{
@@ -142,6 +162,7 @@ func BuildNetworkPolicyForEnterprise(cluster *neo4jv1beta1.Neo4jEnterpriseCluste
 						{Protocol: tcp, Port: &discoveryPort},
 						{Protocol: tcp, Port: &raftPort},
 						{Protocol: tcp, Port: &routingPort},
+						{Protocol: tcp, Port: &transactionPort},
 					},
 				},
 				// Rule 3: backup port — operator-managed backup pods only.

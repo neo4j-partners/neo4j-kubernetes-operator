@@ -157,7 +157,12 @@ func TestBuildNetworkPolicyForEnterprise_PeerPortsRestrictedToCluster(t *testing
 	np := resources.BuildNetworkPolicyForEnterprise(cluster)
 	require.NotNil(t, np)
 
-	for _, port := range []int{6000, 7000, 7688} {
+	// Port set MUST match the cluster server pod's ContainerPort list.
+	// 7689 was added after a sanity-check audit found it declared on
+	// Pod + Service but missing from the policy — would have caused
+	// silent peer-to-peer transaction-streaming failures under enforcing
+	// CNIs.
+	for _, port := range []int{6000, 7000, 7688, 7689} {
 		rule := findRuleCoveringPort(t, np.Spec.Ingress, port)
 		require.NotEmpty(t, rule.From, "peer port %d must restrict From", port)
 		// Every From peer must select the cluster — no other selectors
