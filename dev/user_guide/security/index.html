@@ -1390,6 +1390,39 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#external-access-and-the-additive-policy-trade-off" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        External access and the additive-policy trade-off
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#external-access-via-loadbalancer-ingress" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        External access via LoadBalancer / Ingress
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#kubelet-probes-and-the-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Kubelet probes and the policy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#hand-rolled-network-policy-escape-hatch" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3759,6 +3792,39 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#external-access-and-the-additive-policy-trade-off" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        External access and the additive-policy trade-off
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#external-access-via-loadbalancer-ingress" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        External access via LoadBalancer / Ingress
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#kubelet-probes-and-the-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Kubelet probes and the policy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#hand-rolled-network-policy-escape-hatch" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5149,6 +5215,95 @@ talk to Neo4j on a port not in the table above (e.g. a custom dashboard
 hitting Prometheus metrics on 2004), enabling this policy will break them
 on enforcing CNIs. Audit your traffic first; the hand-rolled
 NetworkPolicy below remains a valid escape hatch.</p>
+<h3 id="external-access-and-the-additive-policy-trade-off">External access and the additive-policy trade-off<a class="headerlink" href="#external-access-and-the-additive-policy-trade-off" title="Anchor link to this section">&para;</a></h3>
+<p>Kubernetes NetworkPolicies are <strong>additive (OR)</strong>: when two policies select
+the same Pod, the rendered allow-list is the <strong>union</strong> of their ingress
+rules. This has a counterintuitive consequence for the operator-emitted
+policy:</p>
+<blockquote>
+<p>The operator's public-ports rule uses <code>From: nil</code> (allow from any
+source, including external clients via LoadBalancer/Ingress). You
+<strong>cannot</strong> tighten this to a CIDR allowlist by adding a second
+NetworkPolicy — the operator's permissive rule already permits any
+source on those ports, and additive union semantics mean your second
+policy's narrower CIDR is ignored.</p>
+</blockquote>
+<p>If you need to restrict who can reach 7474/7473/7687 (e.g. only
+corporate VPN ranges, only specific application namespaces), pick one of
+the following approaches:</p>
+<ol>
+<li>
+<p><strong>Disable the operator policy and roll your own.</strong> Set
+   <code>spec.networkPolicy.enabled: false</code> and write the entire policy
+   yourself. You take on the responsibility of allowing the cluster
+   peer ports (6000/7000/7688/7689), the backup pods (6362), the
+   Prometheus scrapers (2004), and probes (kubelet handled
+   automatically on most CNIs; see below).</p>
+</li>
+<li>
+<p><strong>Use a CNI-specific extension that supports deny rules.</strong> Calico
+   GlobalNetworkPolicy and Cilium CiliumNetworkPolicy both allow deny
+   semantics that override standard K8s NetworkPolicy. With those you
+   can layer a restrictive deny over the operator's permissive allow.</p>
+</li>
+<li>
+<p><strong>Restrict at the Service / Ingress layer instead.</strong> Use
+   <code>spec.service.type: ClusterIP</code> (no LoadBalancer external IP), or an
+   Ingress with <code>nginx.ingress.kubernetes.io/whitelist-source-range</code> or
+   equivalent. NetworkPolicy operates on Pod-to-Pod traffic; external
+   traffic going through a LoadBalancer/Ingress is more naturally
+   shaped at those layers anyway.</p>
+</li>
+</ol>
+<h3 id="external-access-via-loadbalancer-ingress">External access via LoadBalancer / Ingress<a class="headerlink" href="#external-access-via-loadbalancer-ingress" title="Anchor link to this section">&para;</a></h3>
+<p>When <code>spec.networkPolicy.enabled: true</code>, external traffic via
+LoadBalancer or Ingress <strong>does</strong> reach the Pod on 7474/7473/7687:</p>
+<ul>
+<li>The operator's public-ports rule has <code>From: nil</code>, which matches
+  "any source including external clients" per the K8s NetworkPolicy
+  spec.</li>
+<li>This holds whether <code>externalTrafficPolicy: Cluster</code> (kube-proxy
+  SNATs to a node IP) or <code>Local</code> (preserve client IP) is set.</li>
+<li>The Ingress controller's Pod itself is the source from the Neo4j
+  Pod's perspective; that Pod matches the open <code>From: nil</code> selector.</li>
+</ul>
+<p>So enabling the operator's policy does NOT break LoadBalancer or Ingress
+exposure — it only adds the protections on 6362 (backup) and the peer
+ports.</p>
+<h3 id="kubelet-probes-and-the-policy">Kubelet probes and the policy<a class="headerlink" href="#kubelet-probes-and-the-policy" title="Anchor link to this section">&para;</a></h3>
+<p>The Neo4j Pod's readiness/liveness probes are HTTP on port 7474.
+Kubelet — the source of probe traffic — is <strong>not</strong> a Pod and is
+<strong>not</strong> subject to NetworkPolicy in conformant CNIs:</p>
+<table>
+<thead>
+<tr>
+<th>CNI</th>
+<th>Kubelet probe handling</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Calico</td>
+<td>Auto-allowed (host endpoint detection)</td>
+</tr>
+<tr>
+<td>Cilium</td>
+<td>Auto-allowed (host-firewall policy in CiliumNetworkPolicy, not standard NetworkPolicy)</td>
+</tr>
+<tr>
+<td>Antrea</td>
+<td>Auto-allowed</td>
+</tr>
+<tr>
+<td>Weave</td>
+<td>Auto-allowed</td>
+</tr>
+</tbody>
+</table>
+<p>The operator's policy doesn't include an explicit kubelet carve-out
+because it isn't needed on conformant CNIs. If you use a CNI where
+probes fail after enabling the policy, add an <code>ipBlock</code> rule for the
+node CIDR on port 7474. This is a CNI bug, not an operator one.</p>
 <h3 id="hand-rolled-network-policy-escape-hatch">Hand-Rolled Network Policy (escape hatch)<a class="headerlink" href="#hand-rolled-network-policy-escape-hatch" title="Anchor link to this section">&para;</a></h3>
 <p>If you need a custom policy shape — for example, restricting client
 ports to specific namespaces, or adding egress rules — write a
