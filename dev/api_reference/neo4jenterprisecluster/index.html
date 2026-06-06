@@ -2410,6 +2410,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#networkpolicyspec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        NetworkPolicySpec
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#ingressspec" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3977,6 +3988,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#networkpolicyspec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        NetworkPolicySpec
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#ingressspec" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4621,6 +4643,11 @@ the cluster reaches <code>Ready</code> — see <a href="../neo4jrestore/"><code>
 <td><code>monitoring</code></td>
 <td><a href="#monitoringspec"><code>MonitoringSpec</code></a></td>
 <td>Query monitoring configuration</td>
+</tr>
+<tr>
+<td><code>networkPolicy</code></td>
+<td><a href="#networkpolicyspec"><code>NetworkPolicySpec</code></a></td>
+<td>Optional NetworkPolicy emission that restricts ingress to port 6362 to operator-managed backup pods. Disabled by default. Requires a CNI that enforces NetworkPolicy (Calico/Cilium/Antrea/Weave).</td>
 </tr>
 <tr>
 <td><code>auraFleetManagement</code></td>
@@ -6111,6 +6138,33 @@ keytab) until full support lands.</p>
 </tr>
 </tbody>
 </table>
+<h3 id="networkpolicyspec">NetworkPolicySpec<a class="headerlink" href="#networkpolicyspec" title="Anchor link to this section">&para;</a></h3>
+<p>Controls operator emission of a Kubernetes NetworkPolicy that hardens
+ingress to the Neo4j server pods. Most importantly, closes the backup
+port (6362) to non-backup pods — Neo4j security checklist gap addressed
+in issue #128.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>enabled</code></td>
+<td><code>bool</code></td>
+<td>When <code>true</code>, the operator emits a NetworkPolicy named <code>&lt;cluster&gt;-server-netpol</code> (cluster) or <code>&lt;standalone&gt;-standalone-netpol</code> (standalone). Public client ports (7474/7473/7687) remain open to any pod; intra-cluster ports (6000/7000/7688) are restricted to peer servers; backup port (6362) is restricted to operator-managed backup pods. Default <code>false</code>.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>CNI prerequisite</strong>: NetworkPolicy is enforced only by Calico, Cilium,
+Antrea, Weave, and most managed offerings. Flannel does NOT enforce
+NetworkPolicy — enabling this on a flannel cluster creates the resource
+but has no effect on traffic. See
+<a href="../../user_guide/security/#operator-managed-network-policy-recommended">Network Security</a>
+for details.</p>
 <h3 id="ingressspec">IngressSpec<a class="headerlink" href="#ingressspec" title="Anchor link to this section">&para;</a></h3>
 <p>Configures an Ingress resource for HTTP(S) access to Neo4j Browser.</p>
 <table>
