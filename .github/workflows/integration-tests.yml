@@ -13,6 +13,23 @@ on:
         required: false
         default: '90'
         type: string
+  # Auto-run on PRs that touch the restore or cluster controllers, or
+  # the integration suite itself. These are the code paths whose bugs
+  # (issue #117, #129) silently slipped past unit-test coverage and
+  # were only caught after release. Path filter is intentionally
+  # narrow — running the full 90-min suite on every PR would slow
+  # delivery; running it on the specific controllers most likely to
+  # silently break the cluster-coordination contract is the cheap
+  # signal that catches the bug-shaped regressions.
+  pull_request:
+    paths:
+      - 'internal/controller/neo4jrestore_controller.go'
+      - 'internal/controller/neo4jrestore_coordination*.go'
+      - 'internal/controller/neo4jbackup_controller.go'
+      - 'internal/controller/neo4jenterprisecluster_controller.go'
+      - 'internal/controller/neo4jenterprisestandalone_controller.go'
+      - 'test/integration/**'
+      - '.github/workflows/integration-tests.yml'
 
 env:
   GO_VERSION: '1.26'
