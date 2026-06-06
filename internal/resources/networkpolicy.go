@@ -75,6 +75,7 @@ func BuildNetworkPolicyForEnterprise(cluster *neo4jv1beta1.Neo4jEnterpriseCluste
 	raftPort := intstr.FromInt(RaftPort)
 	routingPort := intstr.FromInt(RoutingPort)
 	backupPort := intstr.FromInt(BackupPort)
+	metricsPort := intstr.FromInt(MetricsPort)
 
 	return &networkingv1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
@@ -103,13 +104,29 @@ func BuildNetworkPolicyForEnterprise(cluster *neo4jv1beta1.Neo4jEnterpriseCluste
 			},
 			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
 			Ingress: []networkingv1.NetworkPolicyIngressRule{
-				// Rule 1: public client ports — open to any pod in any
-				// namespace. From: omitted ⇒ all sources.
+				// Rule 1: public client + scrape ports — open to any pod
+				// in any namespace. From: omitted ⇒ all sources.
+				//
+				// Port 2004 (Prometheus metrics) is here because
+				// scrape mechanisms vary widely (Prometheus operator,
+				// kube-prometheus-stack, vendor-specific scrapers,
+				// OpenTelemetry collectors) and the policy can't
+				// reasonably encode all their Pod-label conventions.
+				// "Any pod" matches the Service-level access model —
+				// the cluster's ClusterIP Service already exposes 2004
+				// inside the namespace, so the NetworkPolicy doesn't
+				// add or remove a security boundary here; it just has
+				// to not BREAK scrape. The Neo4j docs warn that
+				// "you should never expose the Prometheus endpoint
+				// directly to the Internet"; that's a Service / Ingress
+				// boundary (which we don't expose externally by
+				// default) and is documented in security.md.
 				{
 					Ports: []networkingv1.NetworkPolicyPort{
 						{Protocol: tcp, Port: &httpPort},
 						{Protocol: tcp, Port: &httpsPort},
 						{Protocol: tcp, Port: &boltPort},
+						{Protocol: tcp, Port: &metricsPort},
 					},
 				},
 				// Rule 2: intra-cluster ports — peer servers only. Same
@@ -155,6 +172,7 @@ func BuildNetworkPolicyForStandalone(standalone *neo4jv1beta1.Neo4jEnterpriseSta
 	httpsPort := intstr.FromInt(HTTPSPort)
 	boltPort := intstr.FromInt(BoltPort)
 	backupPort := intstr.FromInt(BackupPort)
+	metricsPort := intstr.FromInt(MetricsPort)
 
 	return &networkingv1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
@@ -178,12 +196,15 @@ func BuildNetworkPolicyForStandalone(standalone *neo4jv1beta1.Neo4jEnterpriseSta
 			},
 			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
 			Ingress: []networkingv1.NetworkPolicyIngressRule{
-				// Rule 1: public client ports — open to any pod.
+				// Rule 1: public client + scrape ports — open to any pod.
+				// Port 2004 is the Prometheus metrics endpoint; see the
+				// rationale on the cluster builder above.
 				{
 					Ports: []networkingv1.NetworkPolicyPort{
 						{Protocol: tcp, Port: &httpPort},
 						{Protocol: tcp, Port: &httpsPort},
 						{Protocol: tcp, Port: &boltPort},
+						{Protocol: tcp, Port: &metricsPort},
 					},
 				},
 				// Rule 2: backup port — operator-managed backup pods only.
