@@ -2653,6 +2653,15 @@ privilege drift are visible via <code>kubectl describe</code>.</p>
 CalVer release line — 2025.x, 2026.x, and onward — are both supported, with
 automatic version detection for Cypher 25 syntax and version-appropriate
 configuration keys.</p>
+<p><strong>Security-checklist coverage.</strong> The operator addresses the
+<a href="https://neo4j.com/docs/operations-manual/current/security/checklist/">Neo4j security checklist</a>
+defaults out of the box: strict-by-default intra-cluster mTLS,
+<code>tls.key</code> mode <code>0440</code>, secure-by-default LDAP StartTLS for plain
+<code>ldap://</code> hosts, JMX MBeans + CSV metrics export disabled, and a
+typed <code>spec.audit</code> block for compliance-oriented logging. An opt-in
+<code>spec.networkPolicy.enabled</code> emits an ingress policy that scopes
+the backup port (6362) to operator-managed backup pods while leaving
+client + Prometheus ports open.</p>
 <hr />
 <h2 id="installation">Installation<a class="headerlink" href="#installation" title="Anchor link to this section">&para;</a></h2>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>helm<span class="w"> </span>repo<span class="w"> </span>add<span class="w"> </span>neo4j<span class="w"> </span>https://neo4j-partners.github.io/neo4j-kubernetes-operator/charts
