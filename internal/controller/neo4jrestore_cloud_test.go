@@ -576,6 +576,156 @@ func TestBuildLocalRestoreFilePath_ShellInjectionGuard(t *testing.T) {
 		"a successful injection would chain rm -rf as a separate command — must not happen")
 }
 
+// TestResolveLocalPVCFromPath_PVCPathGlobbed pins the path-based PVC
+// resolution used by buildPITRRestoreCommand (which doesn't have a direct
+// `Source.Storage` to inspect since the source is resolved through
+// `BaseBackup`). The string `/backup` prefix is the canonical signal that
+// the path is a local mount.
+func TestResolveLocalPVCFromPath_PVCPathGlobbed(t *testing.T) {
+	got := resolveLocalPVCFromPath("/backup/daily-backup-cron-1738000000", "neo4j")
+	assert.Equal(t,
+		"$(ls /backup/daily-backup-cron-1738000000/'neo4j'-*.backup | head -1)",
+		got)
+}
+
+// TestResolveLocalPVCFromPath_CloudUnchanged: cloud URIs must NOT be
+// transformed — neo4j-admin's native cloud readers handle per-file
+// selection from the bucket prefix.
+func TestResolveLocalPVCFromPath_CloudUnchanged(t *testing.T) {
+	for _, uri := range []string{
+		"s3://my-bucket/path/to/backup.backup",
+		"gs://gcs-bucket/daily/neo4j-2026-01-01.backup",
+		"azb://account/container/path",
+	} {
+		t.Run(uri, func(t *testing.T) {
+			assert.Equal(t, uri, resolveLocalPVCFromPath(uri, "neo4j"),
+				"%s must be passed through unchanged", uri)
+		})
+	}
+}
+
+// TestResolveLocalPVCFromPath_EmptyDBNameUnchanged: defensive — empty DB
+// name skips substitution (validators catch upstream; this is the safety
+// net).
+func TestResolveLocalPVCFromPath_EmptyDBNameUnchanged(t *testing.T) {
+	assert.Equal(t, "/backup/somedir",
+		resolveLocalPVCFromPath("/backup/somedir", ""))
+}
+
+// TestIsPVCBackupPath: prefix-based PVC detection used by the PITR path.
+// Anything under /backup is treated as PVC; URI schemes are treated as
+// cloud (path unchanged, no prelude, no default temp-path).
+func TestIsPVCBackupPath(t *testing.T) {
+	cases := []struct {
+		path string
+		want bool
+	}{
+		{"/backup/daily-cron-12345", true},
+		{"/backup/some-file.backup", true},
+		{"/backup", true},
+		{"s3://bucket/path", false},
+		{"gs://bucket/path", false},
+		{"azb://account/container", false},
+		{"/data/backups", false}, // explicit non-/backup path
+		{"", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.path, func(t *testing.T) {
+			assert.Equal(t, tc.want, isPVCBackupPath(tc.path))
+		})
+	}
+}
+
+// TestBuildPITRRestoreCommand_PVCBaseBackupAppliesFixups verifies that
+// PITR restores from a PVC-backed base backup (the most common shape: a
+// Neo4jBackup CR's history entry referencing a per-run subfolder on a PVC)
+// get the SAME shell-substitution + `mkdir -p` prelude + default
+// --temp-path as non-PITR PVC restores. The reviewer originally flagged
+// this as omitted; this test pins the fix.
+func TestBuildPITRRestoreCommand_PVCBaseBackupAppliesFixups(t *testing.T) {
+	cluster := &neo4jv1beta1.Neo4jEnterpriseCluster{
+		Spec: neo4jv1beta1.Neo4jEnterpriseClusterSpec{
+			Image: neo4jv1beta1.ImageSpec{Repo: "neo4j", Tag: "5.26-enterprise"},
+		},
+	}
+	restore := &neo4jv1beta1.Neo4jRestore{
+		Spec: neo4jv1beta1.Neo4jRestoreSpec{
+			DatabaseName: "neo4j",
+			Source: neo4jv1beta1.RestoreSource{
+				Type: "pitr",
+				PITR: &neo4jv1beta1.PITRConfig{
+					BaseBackup: &neo4jv1beta1.BaseBackupSource{
+						Type: "storage",
+						Storage: &neo4jv1beta1.StorageLocation{
+							Type: "pvc",
+						},
+						BackupPath: "daily-backup-cron-1738000000",
+					},
+				},
+			},
+		},
+	}
+
+	r := &Neo4jRestoreReconciler{}
+	cmd, err := r.buildPITRRestoreCommand(context.Background(), restore, cluster)
+	require.NoError(t, err)
+
+	// Shell-substitution form for --from-path (FILE, not directory)
+	assert.Contains(t, cmd, "--from-path=$(ls /backup/daily-backup-cron-1738000000/'neo4j'-*.backup | head -1)",
+		"PITR PVC path must use shell substitution to resolve to a single .backup file")
+	// Prelude that creates the empty temp dir
+	assert.Contains(t, cmd, "rm -rf /tmp/restore-tmp && mkdir -p /tmp/restore-tmp",
+		"PITR PVC path must include the temp-dir setup prelude")
+	// Default --temp-path so neo4j-admin doesn't try to extract into the
+	// ReadOnly-mounted /backup
+	assert.Contains(t, cmd, "--temp-path=/tmp/restore-tmp",
+		"PITR PVC path must default --temp-path to the writable tmpfs")
+}
+
+// TestBuildPITRRestoreCommand_CloudBaseBackupNoFixups: cloud-source PITR
+// restores must NOT pick up the PVC-specific fixups. neo4j-admin's native
+// cloud readers handle per-file selection; injecting `ls` would fail
+// because there's no local filesystem to enumerate.
+func TestBuildPITRRestoreCommand_CloudBaseBackupNoFixups(t *testing.T) {
+	cluster := &neo4jv1beta1.Neo4jEnterpriseCluster{
+		Spec: neo4jv1beta1.Neo4jEnterpriseClusterSpec{
+			Image: neo4jv1beta1.ImageSpec{Repo: "neo4j", Tag: "5.26-enterprise"},
+		},
+	}
+	restore := &neo4jv1beta1.Neo4jRestore{
+		Spec: neo4jv1beta1.Neo4jRestoreSpec{
+			DatabaseName: "neo4j",
+			Source: neo4jv1beta1.RestoreSource{
+				Type: "pitr",
+				PITR: &neo4jv1beta1.PITRConfig{
+					BaseBackup: &neo4jv1beta1.BaseBackupSource{
+						Type: "storage",
+						Storage: &neo4jv1beta1.StorageLocation{
+							Type:   "s3",
+							Bucket: "my-bucket",
+							Path:   "neo4j-backups",
+						},
+						BackupPath: "neo4j-2026-01-01.backup",
+					},
+				},
+			},
+		},
+	}
+
+	r := &Neo4jRestoreReconciler{}
+	cmd, err := r.buildPITRRestoreCommand(context.Background(), restore, cluster)
+	require.NoError(t, err)
+
+	assert.Contains(t, cmd, "--from-path=s3://my-bucket/neo4j-backups/neo4j-2026-01-01.backup",
+		"cloud PITR must pass the cloud URI unchanged")
+	assert.NotContains(t, cmd, "$(ls",
+		"cloud PITR must NOT use shell substitution")
+	assert.NotContains(t, cmd, "rm -rf /tmp/restore-tmp",
+		"cloud PITR must NOT include the local-tempdir prelude")
+	// Note: cloud PITR doesn't default --temp-path either (the cloud
+	// reader streams directly), so the absence here is intentional.
+}
+
 // TestBuildLocalRestoreFilePath_EmptyDatabaseNameSkips: a Neo4jRestore with
 // empty spec.DatabaseName would produce a glob like `/-*.backup` which is
 // meaningless. Validators catch empty DB names upstream, but if a future

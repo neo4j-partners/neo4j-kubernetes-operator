@@ -1062,12 +1062,41 @@ func buildLocalRestoreFilePath(restore *neo4jv1beta1.Neo4jRestore, sourceDir str
 	if restore.Spec.DatabaseName == "" {
 		return ""
 	}
-	quotedDB := shellQuote(restore.Spec.DatabaseName)
+	return resolveLocalPVCFromPath(sourceDir, restore.Spec.DatabaseName)
+}
+
+// resolveLocalPVCFromPath is the path-based equivalent of
+// buildLocalRestoreFilePath: given a `--from-path` string and a database
+// name, returns the shell command-substitution form for local PVC mounts
+// (path starts with `/backup`) and the input unchanged for cloud URIs.
+//
+// This exists for the PITR code path where the source is determined by
+// resolving a `BaseBackup` (which could be a Neo4jBackup ref OR explicit
+// storage), not by inspecting `Source.Type/Storage` directly. The PVC
+// detection is purely string-based here: anything starting with `/backup`
+// is a local mount, anything else (s3://, gs://, azb://) is a URI that
+// neo4j-admin's native readers handle.
+//
+// Returns the input unchanged for empty DB names (defensive — neo4j-admin
+// will surface a clearer error than a malformed glob).
+func resolveLocalPVCFromPath(backupPath, databaseName string) string {
+	if databaseName == "" || !strings.HasPrefix(backupPath, "/backup") {
+		return backupPath
+	}
+	quotedDB := shellQuote(databaseName)
 	// `ls ... | head -1` picks the single matching file (per-run subfolder
 	// holds at most one `<dbname>-*.backup`). If no match exists, ls prints
 	// to stderr and head returns nothing, so --from-path= becomes empty and
 	// neo4j-admin errors with a clear "missing argument" message.
-	return fmt.Sprintf("$(ls %s/%s-*.backup | head -1)", sourceDir, quotedDB)
+	return fmt.Sprintf("$(ls %s/%s-*.backup | head -1)", backupPath, quotedDB)
+}
+
+// isPVCBackupPath reports whether a resolved restore `--from-path` value
+// points at a local PVC mount (vs. a cloud URI). The PVC volume mount in
+// buildRestoreVolumeMounts always uses `/backup` as the mount path, so
+// the prefix check is sufficient.
+func isPVCBackupPath(backupPath string) bool {
+	return strings.HasPrefix(backupPath, "/backup")
 }
 
 func (r *Neo4jRestoreReconciler) buildRestoreCommand(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore, cluster *neo4jv1beta1.Neo4jEnterpriseCluster) (string, error) {
@@ -1235,10 +1264,47 @@ func (r *Neo4jRestoreReconciler) buildPITRRestoreCommand(ctx context.Context, re
 		return "", fmt.Errorf("no backup source path could be determined for PITR restore")
 	}
 
-	cmd := neo4j.GetRestoreCommand(version, restore.Spec.DatabaseName, backupPath)
+	// Apply the same PVC fixups as buildRestoreCommand. PITR base-backup
+	// resolution can also produce a `/backup/<run-subfolder>` directory
+	// path (either from `BaseBackup.Type=backup` dereferencing through
+	// resolveBackupRef, or from `BaseBackup.Type=storage` with a
+	// PVC-backed StorageLocation). Without these fixups, PITR restores
+	// hit the same three failure modes the main path used to:
+	//   1. neo4j-admin rejects `--from-path=<dir>` (requires a FILE).
+	//   2. neo4j-admin can't extract into the source dir when the
+	//      backup PVC is mounted ReadOnly (its default behavior).
+	//   3. The default --temp-path needs an empty directory.
+	// Cloud URIs (s3://, gs://, azb://) skip both fixups via
+	// isPVCBackupPath. PVC detection happens BEFORE the shell-resolution
+	// transformation so the post-transform `$(ls ...)` form doesn't have
+	// to be re-detected downstream.
+	isPVC := isPVCBackupPath(backupPath)
+	if isPVC {
+		backupPath = resolveLocalPVCFromPath(backupPath, restore.Spec.DatabaseName)
+	}
+	preludeCmd := ""
+	if isPVC {
+		preludeCmd = "rm -rf /tmp/restore-tmp && mkdir -p /tmp/restore-tmp && "
+	}
+
+	cmd := preludeCmd + neo4j.GetRestoreCommand(version, restore.Spec.DatabaseName, backupPath)
 
 	if restore.Spec.Force {
 		cmd += " --overwrite-destination=true"
+	}
+
+	// Mirror the main path's --temp-path handling: user-supplied options
+	// win; otherwise default to /tmp/restore-tmp for PVC-backed sources
+	// (the prelude above guarantees it's empty). Without this, neo4j-admin
+	// fails with `FileSystemException: Read-only file system` because the
+	// backup PVC is mounted ReadOnly.
+	switch {
+	case restore.Spec.Options != nil && restore.Spec.Options.TempStorage != nil:
+		cmd += " --temp-path=/tmp/neo4j-staging"
+	case restore.Spec.Options != nil && restore.Spec.Options.TempPath != "":
+		cmd += " --temp-path=" + restore.Spec.Options.TempPath
+	case isPVC:
+		cmd += " --temp-path=/tmp/restore-tmp"
 	}
 
 	// --restore-until is the Neo4j PITR mechanism
