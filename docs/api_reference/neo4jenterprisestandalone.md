@@ -283,6 +283,18 @@ monitoring:
   obfuscateLiterals: false
 ```
 
+#### `networkPolicy` (NetworkPolicySpec)
+
+Optional NetworkPolicy emission that restricts ingress to the Neo4j
+backup port (6362) to operator-managed backup pods only. Public client
+ports remain open. Disabled by default. Same shape as
+[Neo4jEnterpriseCluster.spec.networkPolicy](neo4jenterprisecluster.md#networkpolicyspec).
+
+```yaml
+networkPolicy:
+  enabled: true   # opt-in; requires a CNI that enforces NetworkPolicy
+```
+
 #### `trustedCASecrets` ([]TrustedCASecret)
 
 CA bundles to add to Neo4j's JVM truststore for outgoing TLS — OIDC providers

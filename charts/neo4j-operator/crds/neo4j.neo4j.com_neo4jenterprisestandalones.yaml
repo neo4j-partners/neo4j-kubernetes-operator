@@ -4664,6 +4664,29 @@ spec:
                       in Neo4j config
                     type: string
                 type: object
+              networkPolicy:
+                description: |-
+                  NetworkPolicy controls emission of a Kubernetes NetworkPolicy that
+                  restricts ingress to the standalone pod. Public client ports
+                  (7474/7473/7687) remain open to any pod; the backup port (6362)
+                  is restricted to operator-managed backup pods only.
+
+                  Disabled by default; requires a CNI that enforces NetworkPolicy
+                  (Calico/Cilium/Antrea/Weave). See the shared NetworkPolicySpec
+                  docstring on the cluster type for the full rationale.
+                properties:
+                  enabled:
+                    description: |-
+                      Enabled turns the NetworkPolicy on. When true, the operator emits a
+                      NetworkPolicy that scopes ingress on port 6362 to operator-managed
+                      backup pods and leaves public/peer ports open to their normal
+                      callers. When false (default) no NetworkPolicy is emitted; any pod
+                      that can reach the Service on 6362 can attempt a backup, per Neo4j
+                      upstream behavior. See the Neo4j security checklist:
+                      "failing to protect this port may open a security hole by which an
+                      unauthorized user can make a copy of the database."
+                    type: boolean
+                type: object
               nodeSelector:
                 additionalProperties:
                   type: string

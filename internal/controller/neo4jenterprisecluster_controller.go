@@ -98,6 +98,7 @@ const (
 //+kubebuilder:rbac:groups=external-secrets.io,resources=clustersecretstores,verbs=get;list;watch
 //+kubebuilder:rbac:groups=storage.k8s.io,resources=storageclasses,verbs=get;list;watch
 //+kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=route.openshift.io,resources=routes,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=monitoring.coreos.com,resources=servicemonitors;prometheusrules,verbs=get;list;watch;create;update;patch;delete
 
@@ -431,6 +432,19 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 				_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Failed to create Ingress: %v", err))
 				return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 			}
+		}
+	}
+
+	// Create NetworkPolicy if enabled (issue #128 gap #2 — restricts
+	// port 6362 ingress to operator-managed backup pods). Effective only
+	// on CNIs that enforce NetworkPolicy (Calico/Cilium/Antrea/Weave);
+	// safe no-op on others. Build returns nil when disabled so this
+	// branch trivially short-circuits without a feature-flag dance.
+	if np := resources.BuildNetworkPolicyForEnterprise(cluster); np != nil {
+		if err := r.createOrUpdateResource(ctx, np, cluster); err != nil {
+			logger.Error(err, "Failed to create NetworkPolicy")
+			_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Failed to create NetworkPolicy: %v", err))
+			return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 		}
 	}
 

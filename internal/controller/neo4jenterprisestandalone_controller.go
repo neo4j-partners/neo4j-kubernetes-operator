@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strings"
 	"time"
 
@@ -248,6 +249,13 @@ func (r *Neo4jEnterpriseStandaloneReconciler) reconcileStandalone(ctx context.Co
 		}
 	}
 
+	// Reconcile NetworkPolicy if enabled (issue #128 gap #2 —
+	// restricts port 6362 ingress to operator-managed backup pods).
+	// Build returns nil when spec.networkPolicy.enabled is unset/false.
+	if err := r.reconcileNetworkPolicy(ctx, standalone); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to reconcile NetworkPolicy: %w", err)
+	}
+
 	// Reconcile OpenShift Route (if configured via spec.service.route)
 	if standalone.Spec.Service != nil && standalone.Spec.Service.Route != nil && standalone.Spec.Service.Route.Enabled {
 		route := resources.BuildRouteForStandalone(standalone)
@@ -451,6 +459,39 @@ func (r *Neo4jEnterpriseStandaloneReconciler) reconcileStatefulSet(ctx context.C
 	}
 	logger.Info("Successfully created or updated StatefulSet", "name", statefulSet.Name)
 
+	return nil
+}
+
+// reconcileNetworkPolicy reconciles the NetworkPolicy for the standalone
+// deployment. Builds nil and returns early when spec.networkPolicy is
+// disabled (default) — issue #128 gap #2.
+func (r *Neo4jEnterpriseStandaloneReconciler) reconcileNetworkPolicy(ctx context.Context, standalone *neo4jv1beta1.Neo4jEnterpriseStandalone) error {
+	logger := log.FromContext(ctx)
+
+	desired := resources.BuildNetworkPolicyForStandalone(standalone)
+	if desired == nil {
+		return nil
+	}
+	if err := controllerutil.SetControllerReference(standalone, desired, r.Scheme); err != nil {
+		return fmt.Errorf("failed to set owner reference on NetworkPolicy: %w", err)
+	}
+
+	existing := &networkingv1.NetworkPolicy{}
+	if err := r.Get(ctx, types.NamespacedName{Name: desired.Name, Namespace: desired.Namespace}, existing); err != nil {
+		if errors.IsNotFound(err) {
+			logger.Info("Creating NetworkPolicy", "name", desired.Name)
+			return r.Create(ctx, desired)
+		}
+		return fmt.Errorf("failed to get NetworkPolicy: %w", err)
+	}
+	// Update only when the spec actually drifted — avoids ResourceVersion
+	// churn on every reconcile.
+	if !reflect.DeepEqual(existing.Spec, desired.Spec) {
+		existing.Spec = desired.Spec
+		existing.Labels = desired.Labels
+		logger.Info("Updating NetworkPolicy", "name", desired.Name)
+		return r.Update(ctx, existing)
+	}
 	return nil
 }
 

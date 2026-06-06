@@ -63,6 +63,17 @@ type Neo4jEnterpriseStandaloneSpec struct {
 	// Monitoring configuration (Prometheus metrics, query logging, diagnostics)
 	Monitoring *MonitoringSpec `json:"monitoring,omitempty"`
 
+	// NetworkPolicy controls emission of a Kubernetes NetworkPolicy that
+	// restricts ingress to the standalone pod. Public client ports
+	// (7474/7473/7687) remain open to any pod; the backup port (6362)
+	// is restricted to operator-managed backup pods only.
+	//
+	// Disabled by default; requires a CNI that enforces NetworkPolicy
+	// (Calico/Cilium/Antrea/Weave). See the shared NetworkPolicySpec
+	// docstring on the cluster type for the full rationale.
+	// +optional
+	NetworkPolicy *NetworkPolicySpec `json:"networkPolicy,omitempty"`
+
 	// MCP server configuration for this standalone deployment
 	MCP *MCPServerSpec `json:"mcp,omitempty"`
 

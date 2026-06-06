@@ -659,7 +659,61 @@ roleRef:
 
 ## Network Security
 
-### Network Policies
+### Operator-Managed Network Policy (recommended)
+
+Set `spec.networkPolicy.enabled: true` on `Neo4jEnterpriseCluster` or
+`Neo4jEnterpriseStandalone` to have the operator emit a NetworkPolicy
+that hardens the Pod's ingress surface — closing [Neo4j security
+checklist](https://neo4j.com/docs/operations-manual/current/security/checklist/)
+gap #2 (backup port exposure) without hand-rolled YAML:
+
+```yaml
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jEnterpriseCluster
+metadata:
+  name: my-cluster
+spec:
+  topology:
+    servers: 3
+  networkPolicy:
+    enabled: true   # opt-in; disabled by default
+```
+
+The emitted policy:
+
+| Port  | Allowed source                                     | Why |
+|-------|----------------------------------------------------|-----|
+| 7474  | any pod                                            | HTTP — application clients |
+| 7473  | any pod                                            | HTTPS — application clients |
+| 7687  | any pod                                            | Bolt — application clients |
+| 6000  | pods labelled `neo4j.com/cluster: <cluster>`       | V2 discovery + tcp-tx — peers only |
+| 7000  | pods labelled `neo4j.com/cluster: <cluster>`       | RAFT — peers only |
+| 7688  | pods labelled `neo4j.com/cluster: <cluster>`       | Cluster routing — peers only |
+| 6362  | operator-managed backup pods only                  | Backup — only Neo4jBackup-spawned Jobs + the centralized backup STS |
+
+Standalone deployments get the same shape minus the peer-only ports
+(single-server, no RAFT).
+
+**CNI prerequisite.** NetworkPolicy is *enforced* only on CNI plugins that
+support it: Calico, Cilium, Antrea, Weave (and most managed offerings —
+EKS with VPC-CNI + Calico add-on, GKE Dataplane V2, AKS Azure CNI).
+**Flannel does not enforce NetworkPolicy** — on a flannel cluster the
+operator still creates the resource but the rules are inert. Verify with
+`kubectl get pods -n kube-system | grep -iE 'calico|cilium|antrea|weave'`.
+
+**Opting in safely.** If you have non-operator workloads that currently
+talk to Neo4j on a port not in the table above (e.g. a custom dashboard
+hitting Prometheus metrics on 2004), enabling this policy will break them
+on enforcing CNIs. Audit your traffic first; the hand-rolled
+NetworkPolicy below remains a valid escape hatch.
+
+### Hand-Rolled Network Policy (escape hatch)
+
+If you need a custom policy shape — for example, restricting client
+ports to specific namespaces, or adding egress rules — write a
+NetworkPolicy directly. The operator's policy uses
+`app.kubernetes.io/component: network-policy` as a label, so your custom
+policy doesn't collide.
 
 ```yaml
 # Restrictive NetworkPolicy for Neo4j cluster

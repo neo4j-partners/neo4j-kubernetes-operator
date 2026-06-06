@@ -72,6 +72,20 @@ type Neo4jEnterpriseClusterSpec struct {
 	// Monitoring configuration (Prometheus metrics, query logging, diagnostics)
 	Monitoring *MonitoringSpec `json:"monitoring,omitempty"`
 
+	// NetworkPolicy controls emission of a Kubernetes NetworkPolicy that
+	// restricts ingress to the server pods. Public client ports
+	// (7474/7473/7687) remain open to any pod; intra-cluster ports
+	// (6000/7000/7688) are restricted to peer servers; the backup port
+	// (6362) is restricted to operator-managed backup pods only.
+	//
+	// Disabled by default. NetworkPolicy enforcement depends on the
+	// cluster's CNI plugin (Calico/Cilium/Antrea/Weave enforce;
+	// flannel does not), so enabling this on a non-enforcing CNI is a
+	// safe no-op but does not actually protect the backup port. See
+	// docs/user_guide/security.md for the prerequisites.
+	// +optional
+	NetworkPolicy *NetworkPolicySpec `json:"networkPolicy,omitempty"`
+
 	// MCP server configuration for this cluster
 	MCP *MCPServerSpec `json:"mcp,omitempty"`
 
@@ -1284,6 +1298,28 @@ type Neo4jEnterpriseClusterList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []Neo4jEnterpriseCluster `json:"items"`
+}
+
+// NetworkPolicySpec controls emission of a Kubernetes NetworkPolicy that
+// hardens ingress to the Neo4j server pods — most importantly closing the
+// backup port (6362) to pods other than operator-managed backup workloads.
+//
+// See spec.networkPolicy on Neo4jEnterpriseCluster /
+// Neo4jEnterpriseStandalone for usage. Default is disabled — a
+// NetworkPolicy enables only when the cluster's CNI plugin enforces them
+// (Calico, Cilium, Antrea, Weave; NOT flannel), so enabling this on a
+// non-enforcing CNI is a safe no-op rather than a failure.
+type NetworkPolicySpec struct {
+	// Enabled turns the NetworkPolicy on. When true, the operator emits a
+	// NetworkPolicy that scopes ingress on port 6362 to operator-managed
+	// backup pods and leaves public/peer ports open to their normal
+	// callers. When false (default) no NetworkPolicy is emitted; any pod
+	// that can reach the Service on 6362 can attempt a backup, per Neo4j
+	// upstream behavior. See the Neo4j security checklist:
+	// "failing to protect this port may open a security hole by which an
+	// unauthorized user can make a copy of the database."
+	// +optional
+	Enabled bool `json:"enabled,omitempty"`
 }
 
 // MonitoringSpec defines monitoring, metrics, and query logging configuration.

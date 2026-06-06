@@ -93,6 +93,7 @@ the cluster reaches `Ready` — see [`Neo4jRestore`](neo4jrestore.md).
 | `mcp` | [`MCPServerSpec`](#mcpserverspec) | MCP server deployment and exposure settings |
 | `propertySharding` | [`PropertyShardingSpec`](#propertyshardingspec) | Property sharding configuration (Neo4j 2025.12+) |
 | `monitoring` | [`MonitoringSpec`](#monitoringspec) | Query monitoring configuration |
+| `networkPolicy` | [`NetworkPolicySpec`](#networkpolicyspec) | Optional NetworkPolicy emission that restricts ingress to port 6362 to operator-managed backup pods. Disabled by default. Requires a CNI that enforces NetworkPolicy (Calico/Cilium/Antrea/Weave). |
 | `auraFleetManagement` | [`AuraFleetManagementSpec`](#aurafleetmanagementspec) | Aura Fleet Management integration (optional) |
 | `trustedCASecrets` | `[]`[`TrustedCASecret`](#trustedcasecret) | CA bundles to add to Neo4j's JVM truststore (OIDC, LDAPS, plugin downloads, peer-cluster replication) |
 | `extraVolumes` | `[]corev1.Volume` | Arbitrary pod volumes mounted into the Neo4j pod; reference them via `extraVolumeMounts` |
@@ -654,6 +655,24 @@ Configures how Neo4j is exposed outside the Kubernetes cluster.
 | `externalTrafficPolicy` | `string` | External traffic policy: `"Cluster"` or `"Local"` |
 | `ingress` | [`IngressSpec`](#ingressspec) | Ingress configuration |
 | `route` | [`RouteSpec`](#routespec) | OpenShift Route configuration |
+
+### NetworkPolicySpec
+
+Controls operator emission of a Kubernetes NetworkPolicy that hardens
+ingress to the Neo4j server pods. Most importantly, closes the backup
+port (6362) to non-backup pods — Neo4j security checklist gap addressed
+in issue #128.
+
+| Field | Type | Description |
+|---|---|---|
+| `enabled` | `bool` | When `true`, the operator emits a NetworkPolicy named `<cluster>-server-netpol` (cluster) or `<standalone>-standalone-netpol` (standalone). Public client ports (7474/7473/7687) remain open to any pod; intra-cluster ports (6000/7000/7688) are restricted to peer servers; backup port (6362) is restricted to operator-managed backup pods. Default `false`. |
+
+**CNI prerequisite**: NetworkPolicy is enforced only by Calico, Cilium,
+Antrea, Weave, and most managed offerings. Flannel does NOT enforce
+NetworkPolicy — enabling this on a flannel cluster creates the resource
+but has no effect on traffic. See
+[Network Security](../user_guide/security.md#operator-managed-network-policy-recommended)
+for details.
 
 ### IngressSpec
 
