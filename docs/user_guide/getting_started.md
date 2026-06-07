@@ -172,32 +172,11 @@ See the [Examples README](https://github.com/neo4j-partners/neo4j-kubernetes-ope
 
 ### What Happens Next?
 
-The operator will now create several Kubernetes resources to bring your cluster to life:
+The operator creates a StatefulSet, per-pod PersistentVolumeClaims, headless + client Services, and a ConfigMap with the rendered Neo4j configuration. All Pods start in parallel; cluster formation typically takes 2-3 minutes for a 2-server cluster, 3-5 minutes for larger topologies.
 
-*   A **StatefulSet** to manage the Neo4j pods.
-*   **PersistentVolumeClaims** for storing data and logs.
-*   A **headless Service** for StatefulSet pod identity.
-*   A **discovery Service** for Kubernetes-based cluster formation.
-*   A **client-facing Service** for applications to connect to.
-*   A **ConfigMap** with your Neo4j configuration.
-
-### Cluster Formation Process
-
-For multi-server clusters, all pods start simultaneously using ParallelPodManagement:
-
-**Minimal Cluster (2 servers):**
-1. **All server pods**: Start simultaneously (ParallelPodManagement)
-2. **Cluster formation**: Servers discover each other and self-organize (1-2 minutes)
-3. **Ready state**: All servers join the cluster automatically
-
-**Multi-Server Cluster (3+ servers):**
-1. **All server pods**: Start simultaneously for optimal formation
-2. **Self-organization**: Servers automatically assign roles based on database topology requirements
-3. **Database hosting**: Servers can host databases as primaries or secondaries as needed
-
-**Total deployment time**: 2-3 minutes for minimal clusters, 3-5 minutes for multi-server clusters.
-
-You can monitor the progress with `kubectl get pods -w`.
+```bash
+kubectl get pods -w
+```
 
 ## Accessing Your Deployment
 
@@ -267,41 +246,12 @@ spec:
 EOF
 ```
 
-### Property Sharding for Large Datasets
+For large datasets that need horizontal scaling, see the [Property Sharding guide](property_sharding.md) (Neo4j 2025.12+, via `Neo4jShardedDatabase`).
 
-For large datasets that require horizontal scaling, you can enable property sharding (Neo4j 2025.12+):
-
-```bash
-# Create a property sharding enabled cluster
-kubectl apply -f examples/property_sharding/basic-property-sharding.yaml
-
-# Create a sharded database with property distribution
-kubectl apply -f - <<EOF
-apiVersion: neo4j.neo4j.com/v1beta1
-kind: Neo4jShardedDatabase
-metadata:
-  name: large-dataset-db
-spec:
-  clusterRef: basic-sharding-cluster
-  name: largedata
-  defaultCypherLanguage: "25"  # Cypher language version: "5" or "25". Cypher 25 requires Neo4j 2025.x or later.
-  propertySharding:
-    propertyShards: 4
-    graphShard:
-      primaries: 3
-      secondaries: 0
-    propertyShardTopology:
-      replicas: 1
-  wait: true
-EOF
-```
-
-For detailed database management, see:
+See also:
 - [Neo4jDatabase API Reference](../api_reference/neo4jdatabase.md)
-- [Property Sharding Guide](property_sharding.md)
 - [Database Seed URI Guide](guides/seed-uri.md)
 - [Database Examples](https://github.com/neo4j-partners/neo4j-kubernetes-operator/tree/main/examples/databases)
-- [Property Sharding Examples](https://github.com/neo4j-partners/neo4j-kubernetes-operator/tree/main/examples/property_sharding)
 
 ## Next Steps
 

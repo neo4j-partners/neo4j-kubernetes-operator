@@ -137,79 +137,29 @@ make deploy-prod-registry  # Deploy from ghcr.io registry (requires authenticati
 - All required RBAC permissions
 - ServiceAccount and ClusterRole bindings
 
-## Development Installation
+## Custom Kustomize Configuration
 
-For active development and testing with local images:
+For deployments that need a custom namespace, labels, or image tag, layer your own kustomization on top of `config/default`:
 
-```bash
-# Clone and setup development environment
-git clone https://github.com/neo4j-partners/neo4j-kubernetes-operator.git
-cd neo4j-kubernetes-operator
-
-# Create development cluster (uses Kind)
-make dev-cluster
-
-# Deploy operator (recommended for in-cluster testing)
-make operator-setup  # Automated setup (detects cluster and deploys)
-
-# Manual deployment options:
-make deploy-dev      # Development namespace with debug features (builds local image)
-make deploy-prod     # Production namespace (builds local image)
-
-# Registry-based deployment:
-make deploy-dev-registry   # Deploy from registry (requires authentication)
-make deploy-prod-registry  # Deploy from ghcr.io registry
-```
-
-## Advanced Installation Methods
-
-### Custom Kustomize Configuration
-
-For customized deployments with specific namespace, labels, or resource configurations:
-
-```bash
-# After cloning and checking out the latest tag
-# Create your own kustomization
-cat > kustomization.yaml << EOF
+```yaml
+# kustomization.yaml
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-
 resources:
 - config/default
-
-# Customize namespace
 namespace: my-neo4j-operator
-
-# Add custom labels
 commonLabels:
-  environment: production
   team: database
-
-# Customize images (optional)
 images:
 - name: ghcr.io/neo4j-partners/neo4j-kubernetes-operator
   newTag: v1.0.0
-EOF
+```
 
-# Apply custom configuration
+```bash
 kubectl apply -k .
 ```
 
-### Alternative Deployment Configurations
-
-After cloning the repository, you can use different deployment configurations based on your environment:
-
-```bash
-# Production deployment (optimized resource limits, no debug logging)
-make deploy-prod           # Builds and deploys local image
-# or
-make deploy-prod-registry  # Deploy from ghcr.io registry
-
-# Development deployment (with debug logging enabled, relaxed resource limits)
-make deploy-dev            # Builds and deploys local dev image
-# or
-make deploy-dev-registry   # Deploy from registry
-```
+For local development (Kind cluster + local image build) use `make dev-cluster` followed by `make operator-setup`. See the [developer guide](../developer_guide/development.md) for the full inner-loop workflow.
 
 ## Verifying the Installation
 
@@ -331,75 +281,22 @@ kubectl port-forward svc/standalone-neo4j-service 7474:7474
 
 ## Uninstalling the Operator
 
-### Helm Uninstallation
-
-If you installed via Helm (Methods 1, 2, or 4):
+> **Warning**: Deleting CRDs cascades to every Neo4j instance the operator manages. Back up first.
 
 ```bash
-# Uninstall the Helm release
+# Helm install — Methods 1, 2, 4
 helm uninstall neo4j-operator --namespace neo4j-operator-system
 
-# Optionally delete the namespace
-kubectl delete namespace neo4j-operator-system
+# kubectl-apply install — Method 3
+kubectl delete -f https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases/download/v1.10.0/neo4j-kubernetes-operator-complete.yaml
 
-# Note: CRDs are not automatically deleted by Helm uninstall
-# To remove CRDs manually (WARNING: This deletes all Neo4j instances):
-kubectl delete crd neo4jbackups.neo4j.neo4j.com
-kubectl delete crd neo4jdatabases.neo4j.neo4j.com
-kubectl delete crd neo4jenterpriseclusters.neo4j.neo4j.com
-kubectl delete crd neo4jenterprisestandalones.neo4j.neo4j.com
-kubectl delete crd neo4jplugins.neo4j.neo4j.com
-kubectl delete crd neo4jrestores.neo4j.neo4j.com
-kubectl delete crd neo4jroles.neo4j.neo4j.com
-kubectl delete crd neo4jrolebindings.neo4j.neo4j.com
-kubectl delete crd neo4jusers.neo4j.neo4j.com
-kubectl delete crd neo4jshardeddatabases.neo4j.neo4j.com
-```
+# git-clone + make install — Method 5
+make undeploy-prod   # or undeploy-dev
 
-### Quick Install Uninstallation
+# CRDs (any install method) — only after all Neo4j instances are deleted
+kubectl get crd -o name | grep neo4j.neo4j.com | xargs kubectl delete
 
-If you installed using Method 3 (kubectl apply from a GitHub release):
-
-```bash
-# Get the release version you installed
-RELEASE_VERSION=v1.8.0  # Replace with your installed version
-
-# Delete the operator and CRDs
-kubectl delete -f https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases/download/${RELEASE_VERSION}/neo4j-kubernetes-operator-complete.yaml
-```
-
-**Warning**: Deleting CRDs will also delete all Neo4j instances managed by the operator.
-
-### Make Targets Uninstallation
-
-If you installed using Method 5 (Git Clone with Make):
-
-```bash
-# From the cloned repository directory
-cd neo4j-kubernetes-operator
-
-# Undeploy operator (keeps CRDs and Neo4j instances)
-make undeploy-prod  # If you used deploy-prod
-# or
-make undeploy-dev   # If you used deploy-dev
-
-# Uninstall CRDs (WARNING: This deletes all Neo4j instances)
-make uninstall
-```
-
-**Complete Cleanup** (removes everything):
-```bash
-# Remove all Neo4j instances first (if you want to preserve data, backup first)
-kubectl delete neo4jenterpriseclusters --all -A
-kubectl delete neo4jenterprisestandalones --all -A
-
-# Undeploy operator
-make undeploy-prod  # or make undeploy-dev
-
-# Uninstall CRDs
-make uninstall
-
-# Delete namespace (optional)
+# Namespace (optional)
 kubectl delete namespace neo4j-operator-system
 ```
 

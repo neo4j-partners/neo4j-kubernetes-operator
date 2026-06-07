@@ -1,23 +1,4 @@
-# Neo4j Kubernetes Operator Modes and Scope Guide
-
-## Table of Contents
-- [Overview](#overview)
-- [Quick Start (Beginner)](#quick-start-beginner)
-- [Operator Modes](#operator-modes)
-  - [Production Mode](#production-mode)
-  - [Development Mode (In-Cluster Only)](#development-mode-in-cluster-only)
-- [Scope and RBAC](#scope-and-rbac)
-  - [Cluster Scope](#cluster-scope)
-  - [Namespace Scope](#namespace-scope)
-  - [Multi-Namespace Scope](#multi-namespace-scope)
-- [Helm Configuration](#helm-configuration)
-- [Non-Helm Configuration](#non-helm-configuration)
-- [Cache Strategies](#cache-strategies)
-- [Controller Selection (Dev Mode)](#controller-selection-dev-mode)
-- [Logging and Metrics](#logging-and-metrics)
-- [Troubleshooting](#troubleshooting)
-- [Quick Reference](#quick-reference)
-- [Additional Resources](#additional-resources)
+# Operator Modes and Scope
 
 ## Overview
 
@@ -313,37 +294,6 @@ Helm sets `--metrics-bind-address` based on `metrics.enabled` and `metrics.servi
 **Metrics not reachable:**
 - Ensure `metrics.enabled: true` or `--metrics-bind-address` is not `0`.
 - Confirm the Service port matches the bind address.
-
-## Quick Reference
-
-**Defaults by mode (when running `/manager` directly):**
-
-| Setting | Production | Development |
-|---------|------------|-------------|
-| `--mode` | `production` | `dev` |
-| Metrics bind | `:8080` | `:8082` |
-| Health bind | `:8081` | `:8083` |
-| Cache strategy | `on-demand` | `on-demand` |
-| `--skip-cache-wait` | `false` | `true` (auto) |
-
-**Common flags:**
-
-```bash
---mode=production|dev
---leader-elect=true|false
---metrics-bind-address=:8080
---health-probe-bind-address=:8081
---cache-strategy=standard|lazy|selective|on-demand|none
---ultra-fast
---skip-cache-wait
---controllers=cluster,standalone,database,backup,restore,plugin,shardeddatabase
-```
-
-**Scope environment variable:**
-
-```bash
-WATCH_NAMESPACE=team-a,team-b
-```
 
 ## Additional Resources
 
