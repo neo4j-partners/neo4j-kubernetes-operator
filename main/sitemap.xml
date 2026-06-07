@@ -77,10 +77,6 @@
          <lastmod>2026-06-07</lastmod>
     </url>
     <url>
-         <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/main/quick-reference/operator-modes-cheat-sheet/</loc>
-         <lastmod>2026-06-07</lastmod>
-    </url>
-    <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/main/user_guide/aura_fleet_management/</loc>
          <lastmod>2026-06-07</lastmod>
     </url>
@@ -129,7 +125,7 @@
          <lastmod>2026-06-07</lastmod>
     </url>
     <url>
-         <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/main/user_guide/tls_certificates/</loc>
+         <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/main/user_guide/tls_configuration/</loc>
          <lastmod>2026-06-07</lastmod>
     </url>
     <url>
@@ -138,10 +134,6 @@
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/main/user_guide/user_role_management/</loc>
-         <lastmod>2026-06-07</lastmod>
-    </url>
-    <url>
-         <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/main/user_guide/configuration/tls/</loc>
          <lastmod>2026-06-07</lastmod>
     </url>
     <url>
@@ -154,10 +146,6 @@
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/main/user_guide/guides/backup_restore/</loc>
-         <lastmod>2026-06-07</lastmod>
-    </url>
-    <url>
-         <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/main/user_guide/guides/configuration_best_practices/</loc>
          <lastmod>2026-06-07</lastmod>
     </url>
     <url>
@@ -210,10 +198,6 @@
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/main/user_guide/guides/upgrades/</loc>
-         <lastmod>2026-06-07</lastmod>
-    </url>
-    <url>
-         <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/main/user_guide/quick-reference/split-brain-recovery-quick-ref/</loc>
          <lastmod>2026-06-07</lastmod>
     </url>
     <url>
