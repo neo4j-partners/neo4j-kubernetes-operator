@@ -835,35 +835,6 @@ neo4j_dbms_bolt_connections_idle
 
 ---
 
-## Complete Operator Metrics Reference
+## Operator Metrics Reference
 
-All metrics use the prefix `neo4j_operator_` and are registered via the controller-runtime Prometheus registry.
-
-| Metric | Type | Labels | Description |
-|---|---|---|---|
-| `cluster_healthy` | Gauge | cluster_name, namespace | 1=healthy, 0=unhealthy |
-| `cluster_replicas_total` | Gauge | cluster_name, namespace, role | Replicas by role (primary/secondary) |
-| `cluster_phase` | Gauge | cluster_name, namespace, phase | 1 for active phase, 0 for others |
-| `split_brain_detected_total` | Counter | cluster_name, namespace | Split-brain detection events |
-| `server_health` | Gauge | cluster_name, namespace, server_name, server_address | 1=Enabled+Available, 0=degraded |
-| `reconcile_total` | Counter | cluster_name, namespace, operation, result | Reconciliation attempts |
-| `reconcile_duration_seconds` | Histogram | cluster_name, namespace, operation | Reconciliation duration |
-| `upgrade_total` | Counter | cluster_name, namespace, result | Upgrade attempts |
-| `upgrade_duration_seconds` | Histogram | cluster_name, namespace, phase | Upgrade duration per phase |
-| `backup_total` | Counter | cluster_name, namespace, result | Backup attempts |
-| `backup_duration_seconds` | Histogram | cluster_name, namespace | Backup duration |
-| `backup_size_bytes` | Gauge | cluster_name, namespace | Last backup size |
-| `cypher_executions_total` | Counter | cluster_name, namespace, operation, result | Cypher executions by the operator |
-| `cypher_execution_duration_seconds` | Histogram | cluster_name, namespace, operation | Cypher execution duration |
-| `security_operations_total` | Counter | cluster_name, namespace, operation, result | Security ops (user, role, grant) |
-| `resource_version_conflicts_total` | Counter | resource_type, namespace | K8s resource version conflicts |
-| `conflict_retry_attempts` | Histogram | resource_type, namespace | Retry attempts per conflict |
-| `conflict_retry_duration_seconds` | Histogram | resource_type, namespace | Time spent retrying conflicts |
-| `disaster_recovery_status` | Gauge | cluster_name, namespace, primary_region, secondary_region | 1=DR ready, 0=not ready |
-| `failover_total` | Counter | cluster_name, namespace, result | Failover events |
-| `replication_lag_seconds` | Gauge | cluster_name, namespace, primary_region, secondary_region | Cross-region replication lag |
-| `manual_scaler_enabled` | Gauge | cluster_name, namespace | 1=manual scaling on |
-| `scale_events_total` | Counter | cluster_name, namespace, node_type, direction | Scale up/down events |
-| `primary_count` | Gauge | cluster_name, namespace | Current primary count |
-| `secondary_count` | Gauge | cluster_name, namespace | Current secondary count |
-| `scaling_validation_total` | Counter | cluster_name, namespace, validation_type, result | Scaling validation attempts |
+For the full list of `neo4j_operator_*` metrics (cluster health, reconcile counters, backup/upgrade/scale events, etc.), see [monitoring.md § Complete Metrics Reference](../guides/monitoring.md#complete-metrics-reference).

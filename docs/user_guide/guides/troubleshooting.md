@@ -65,97 +65,7 @@ done
 kubectl delete pod <cluster>-server-1 <cluster>-server-2
 ```
 
-### 2. Test Environment Issues
-
-#### Problem: Integration tests failing with namespace termination issues
-Test namespaces get stuck in "Terminating" state due to resources with finalizers.
-
-**Solution**: Ensure proper cleanup in test code:
-```go
-// Always remove finalizers before deletion
-if len(resource.GetFinalizers()) > 0 {
-    resource.SetFinalizers([]string{})
-    _ = k8sClient.Update(ctx, resource)
-}
-_ = k8sClient.Delete(ctx, resource)
-```
-
-#### Problem: Backup sidecar test timeout
-Test waits for wrong readiness field on standalone deployments.
-
-**Solution**: Check the correct status field:
-```go
-// For standalone deployments
-return standalone.Status.Ready  // NOT Status.Conditions
-
-// Correct pod label selector
-client.MatchingLabels{"app": standalone.Name}
-```
-
-#### Problem: Operator not deployed in test cluster
-Integration tests fail because operator is not running.
-
-**Solution**: Deploy operator before running tests:
-```bash
-kubectl config use-context kind-neo4j-operator-test
-make operator-setup  # Deploy operator to cluster
-make test-integration
-```
-
-#### Problem: CI Failures Due to Resource Constraints (Added 2025-08-22)
-
-GitHub Actions CI often fails with "Unschedulable - 0/1 nodes are available: 1 Insufficient memory" when running integration tests.
-
-**Root Cause**: CI environments have limited memory (~7GB total), but tests request 1Gi+ per Neo4j pod.
-
-**Solution - Use CI Workflow Emulation**:
-```bash
-# Reproduce CI environment locally with debug logging
-make test-ci-local
-```
-
-**What CI Emulation Provides**:
-- **Identical Environment**: Sets `CI=true GITHUB_ACTIONS=true` variables
-- **Memory Constraints**: Uses 512Mi memory limits (same as CI)
-- **Debug Logging**: Comprehensive logs saved to `logs/ci-local-*.log`
-- **Complete Workflow**: Unit tests → Integration tests → Cleanup
-- **Troubleshooting**: Auto-provided diagnostic commands on failure
-
-**Generated Debug Files**:
-- `logs/ci-local-unit.log` - Unit test output with environment info
-- `logs/ci-local-integration.log` - Integration test output with cluster setup
-- `logs/ci-local-cleanup.log` - Environment cleanup output
-
-**Manual Resource Debugging**:
-```bash
-# Check memory allocation in CI logs
-cat logs/ci-local-integration.log | grep -E "(memory|Memory|512Mi)"
-
-# Check pod resource requests
-kubectl describe pod <pod-name> | grep -A10 "Requests"
-
-# Monitor real-time memory usage
-kubectl top pod <pod-name> --containers
-
-# Check for OOMKilled pods
-kubectl get events | grep OOMKilled
-```
-
-**Key Resource Requirements**:
-- **CI Environment**: 512Mi memory limits per pod
-- **Local Development**: 1.5Gi memory limits per pod (Neo4j Enterprise minimum)
-- **Automatic Detection**: Tests use `getCIAppropriateResourceRequirements()` function
-
-**Prevention**:
-```bash
-# Always test with CI constraints before pushing
-make test-ci-local
-
-# If CI emulation passes, CI should pass too
-echo "✅ Ready for CI deployment"
-```
-
-### 3. Deployment Validation Errors
+### 2. Deployment Validation Errors
 
 #### Problem: Single-Node Cluster Not Allowed
 ```
@@ -834,61 +744,13 @@ kubectl get networkpolicies --all-namespaces
 
 ## Collecting Diagnostic Information
 
-Use this script to collect comprehensive diagnostic information:
+When filing an issue, include the output of:
 
 ```bash
-#!/bin/bash
-# neo4j-debug.sh - Collect diagnostic information
-
-echo "=== Neo4j Kubernetes Operator Diagnostic Report ==="
-echo "Generated: $(date)"
-echo
-
-echo "=== Cluster Resources ==="
-kubectl get neo4jenterprisecluster
-echo
-
-echo "=== Standalone Resources ==="
-kubectl get neo4jenterprisestandalone
-echo
-
-echo "=== Cluster Pods ==="
-kubectl get pods -l neo4j.com/cluster=<cluster-name>
-echo
-
-echo "=== Standalone Pods ==="
-kubectl get pods -l app=<standalone-name>
-echo
-
-echo "=== Services ==="
-kubectl get svc -l app.kubernetes.io/name=neo4j
-echo
-
-echo "=== PVCs ==="
-kubectl get pvc
-echo
-
-echo "=== ConfigMaps ==="
-kubectl get configmap
-echo
-
-echo "=== Secrets ==="
-kubectl get secret
-echo
-
-echo "=== Recent Events ==="
-kubectl get events --sort-by=.metadata.creationTimestamp | tail -20
-echo
-
-echo "=== Operator Logs (last 100 lines) ==="
-kubectl logs -n neo4j-operator deployment/neo4j-operator-controller-manager --tail=100
-echo
-
-echo "=== Storage Classes ==="
-kubectl get storageclass
-echo
-
-echo "=== Node Resources ==="
+kubectl get neo4jenterprisecluster,neo4jenterprisestandalone -A
+kubectl get pods,svc,pvc -l app.kubernetes.io/name=neo4j
+kubectl get events --sort-by=.metadata.creationTimestamp | tail -30
+kubectl logs -n neo4j-operator deployment/neo4j-operator-controller-manager --tail=200
 kubectl describe nodes | grep -A 5 "Allocated resources:"
 ```
 

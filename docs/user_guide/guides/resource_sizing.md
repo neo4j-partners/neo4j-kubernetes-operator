@@ -837,70 +837,18 @@ resources:
 # Results in QoS Class: Guaranteed
 ```
 
-## Alignment with Neo4j Official Recommendations
-
-This guide follows Neo4j's official performance documentation for versions 5.26+ and 2025.x:
-
-### ✅ Neo4j Best Practices Implemented
-
-1. **Memory Configuration**
-   - Uses `server.memory.*` settings (not deprecated `dbms.memory.*`)
-   - Sets `heap.initial_size = heap.max_size` to avoid GC pauses
-   - Reserves ~1GB for OS operations
-
-2. **Page Cache Sizing**
-   - Formula: `Page Cache = Database Size × 1.2`
-   - Accounts for 20% growth buffer
-
-3. **JVM Tuning**
-   - G1GC for heaps > 4GB
-   - Compressed OOPs for heaps up to 31GB
-   - Proper GC tuning parameters
-
-4. **Transaction Memory**
-   - Global limits with `server.memory.transaction.total.max`
-   - Per-database limits with `db.memory.transaction.total.max`
-   - Per-transaction limits with `server.memory.transaction.max`
-
-5. **Vector Index Support (2025.x)**
-   - Formula: `Heap + PageCache + 0.25×(Vector Index Size) + OS`
-   - 1:4 memory-to-storage ratio recommendation
-
-### 📊 Memory Allocation Guidelines
-
-| Component | Neo4j Recommendation | Our Default |
-|-----------|---------------------|-------------|
-| Heap | 40-60% of available | 50-60% |
-| Page Cache | 1.2× database size | 40-50% of available |
-| OS Reserve | ~1GB | 512MB-1GB |
-| Transaction | Configure explicitly | Examples provided |
-
-### 🔧 Tools for Validation
+## Validation Tools
 
 ```bash
-# Use Neo4j's official memory recommendation tool
+# Neo4j's built-in memory recommendation
 neo4j-admin server memory-recommendation --memory=<container-memory>
 
-# Monitor with Neo4j procedures
+# Inspect runtime allocations
 CALL dbms.listPools()
 SHOW TRANSACTIONS
 ```
 
-## Summary
-
-Resource sizing is critical for Neo4j performance. Key takeaways:
-
-1. **Start with operator recommendations** based on cluster size
-2. **Memory is most critical** - ensure adequate allocation
-3. **CPU burst capacity** helps with query spikes
-4. **Monitor and adjust** based on actual workload
-5. **Validate configurations** before production deployment
-
-For most production deployments, the 3-4 server configuration with 4-8Gi memory per pod provides the best balance of performance, availability, and cost.
-
-**This guide aligns with Neo4j Operations Manual:**
-- [Neo4j 5.26 Performance Guide](https://neo4j.com/docs/operations-manual/5/performance/)
-- [Neo4j 2025.x Performance Guide](https://neo4j.com/docs/operations-manual/2025.07/performance/)
+See also the Neo4j Operations Manual: [5.x](https://neo4j.com/docs/operations-manual/5/performance/) · [2025.x](https://neo4j.com/docs/operations-manual/2025.07/performance/).
 
 ## Related Documentation
 
