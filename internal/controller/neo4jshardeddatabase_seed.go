@@ -23,14 +23,17 @@ import (
 // most-recent Succeeded run.
 //
 // Returns:
-//   - ("", nil)  when SeedBackupRef is empty — the caller falls through to
+//   - ("", "", nil)  when SeedBackupRef is empty — the caller falls through to
 //     the existing manual spec.SeedURI / spec.SeedURIs paths.
-//   - ("", wrapped ErrBackupNotReady)  when the backup CR exists but has no
+//   - ("", "", wrapped ErrBackupNotReady)  when the backup CR exists but has no
 //     Succeeded run yet. Caller should route to Pending + requeue.
-//   - ("", err)  for permanent failures (missing backup CR, PVC storage,
+//   - ("", "", err)  for permanent failures (missing backup CR, PVC storage,
 //     unsupported storage type). Caller routes to Failed.
-//   - (uri, nil)  on success. The URI is a directory (trailing slash) so
-//     neo4j-admin's CloudSeedProvider auto-discovers per-shard files inside.
+//   - (uri, credsSecretName, nil)  on success. The URI is a directory
+//     (trailing slash) so neo4j-admin's CloudSeedProvider auto-discovers
+//     per-shard files inside. credsSecretName is the Secret name from the
+//     backup's resolved cloud block — empty when the backup uses workload
+//     identity instead of an explicit Secret.
 //
 // PVC-storage backups are rejected here: the backup PVC is only mounted on
 // the backup Job pod, not on the Neo4j cluster server pods that execute the
@@ -39,9 +42,9 @@ import (
 // mutation outside the scope of the seedBackupRef field. Operators wanting
 // cloudless restore should copy artifacts from the backup PVC to a cloud
 // target first, or set spec.seedURI manually.
-func (r *Neo4jShardedDatabaseReconciler) resolveShardedSeed(ctx context.Context, shardedDB *neo4jv1beta1.Neo4jShardedDatabase) (string, error) {
+func (r *Neo4jShardedDatabaseReconciler) resolveShardedSeed(ctx context.Context, shardedDB *neo4jv1beta1.Neo4jShardedDatabase) (string, string, error) {
 	if shardedDB.Spec.SeedBackupRef == "" {
-		return "", nil
+		return "", "", nil
 	}
 
 	storage, backupPath, err := ResolveBackupRef(ctx, r.Client, shardedDB.Spec.SeedBackupRef, shardedDB.Namespace)
@@ -49,10 +52,18 @@ func (r *Neo4jShardedDatabaseReconciler) resolveShardedSeed(ctx context.Context,
 		// ErrBackupNotReady is wrapped through here unchanged so callers can
 		// use errors.Is to distinguish transient (Pending) from permanent
 		// (Failed) failures.
-		return "", err
+		return "", "", err
 	}
 
-	return buildSeedURIFromBackupStorage(storage, backupPath)
+	uri, err := buildSeedURIFromBackupStorage(storage, backupPath)
+	if err != nil {
+		return "", "", err
+	}
+	credsSecretName := ""
+	if storage.Cloud != nil {
+		credsSecretName = storage.Cloud.CredentialsSecretRef
+	}
+	return uri, credsSecretName, nil
 }
 
 // buildSeedURIFromBackupStorage converts a backup's resolved StorageLocation

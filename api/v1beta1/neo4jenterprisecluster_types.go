@@ -111,6 +111,26 @@ type Neo4jEnterpriseClusterSpec struct {
 	// +optional
 	AuraFleetManagement *AuraFleetManagementSpec `json:"auraFleetManagement,omitempty"`
 
+	// ExtraEnvFrom projects entire Secrets or ConfigMaps as environment
+	// variables on the neo4j container. Intended for credential bundles —
+	// e.g. a Secret with AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY /
+	// AWS_ENDPOINT_URL_S3 / AWS_REGION used by the AWS SDK default
+	// credential chain when Neo4j fetches a seed URI from S3 (or
+	// S3-compatible stores like MinIO).
+	//
+	// To enable Neo4jShardedDatabase.spec.seedBackupRef against a
+	// cloud-backed Neo4jBackup, this list MUST contain a SecretRef that
+	// matches the backup's `spec.cloud.credentialsSecretRef`. The sharded
+	// DB controller validates this at reconcile time and routes to
+	// Phase=Failed with an actionable error if absent.
+	//
+	// Opt-in auto-inherit: set annotation
+	// `neo4j.com/auto-inherit-seed-creds=true` on the cluster CR to let the
+	// sharded DB controller append the missing entry automatically. This
+	// triggers a rolling restart of cluster pods, which is why it's opt-in.
+	// +optional
+	ExtraEnvFrom []corev1.EnvFromSource `json:"extraEnvFrom,omitempty"`
+
 	// TrustedCASecrets references Secrets containing additional CA certificates
 	// (key defaults to "ca.crt") that Neo4j-the-server should trust for outgoing
 	// TLS connections — e.g. OIDC providers behind a corporate CA, LDAPS, Aura

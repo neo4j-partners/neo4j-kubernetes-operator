@@ -1590,6 +1590,13 @@ func (in *Neo4jEnterpriseClusterSpec) DeepCopyInto(out *Neo4jEnterpriseClusterSp
 		*out = new(AuraFleetManagementSpec)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.ExtraEnvFrom != nil {
+		in, out := &in.ExtraEnvFrom, &out.ExtraEnvFrom
+		*out = make([]v1.EnvFromSource, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
 	if in.TrustedCASecrets != nil {
 		in, out := &in.TrustedCASecrets, &out.TrustedCASecrets
 		*out = make([]TrustedCASecret, len(*in))

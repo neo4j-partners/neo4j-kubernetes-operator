@@ -176,7 +176,8 @@ func (r *Neo4jShardedDatabaseReconciler) Reconcile(ctx context.Context, req ctrl
 	//     for the restore controller.
 	//   - Anything else (missing CR, PVC storage, unsupported type) →
 	//     permanent; route to Failed.
-	if seedURI, seedErr := r.resolveShardedSeed(ctx, &shardedDatabase); seedURI != "" || seedErr != nil {
+	seedURI, seedCredsSecret, seedErr := r.resolveShardedSeed(ctx, &shardedDatabase)
+	if seedURI != "" || seedErr != nil {
 		if seedErr != nil {
 			if stderrors.Is(seedErr, ErrBackupNotReady) {
 				logger.Info("seedBackupRef target has no Succeeded run yet, requeuing",
@@ -203,6 +204,36 @@ func (r *Neo4jShardedDatabaseReconciler) Reconcile(ctx context.Context, req ctrl
 		shardedDatabase.Spec.SeedURI = seedURI
 		logger.Info("Resolved seedBackupRef to seedURI",
 			"seedBackupRef", shardedDatabase.Spec.SeedBackupRef, "seedURI", seedURI)
+
+		// Phase 2b: ensure the referenced cluster has the backup's
+		// credentials Secret projected onto its server pods, so the
+		// CloudSeedProvider can authenticate when CREATE DATABASE runs the
+		// seed fetch. Three branches:
+		//   - already configured (no-op),
+		//   - auto-inherit annotation set (operator patches, requeues to
+		//     wait for rolling restart),
+		//   - not configured + no annotation (Failed with copy-pasteable
+		//     remediation snippet).
+		autoInherited, credsErr := EnsureClusterHasSeedCreds(ctx, r.Client, cluster, seedCredsSecret)
+		if credsErr != nil {
+			logger.Error(credsErr, "Cluster missing seed credentials projection")
+			r.Recorder.Event(&shardedDatabase, corev1.EventTypeWarning, "SeedCredsMissing", credsErr.Error())
+			if statusErr := r.updateStatus(ctx, &shardedDatabase, "Failed", credsErr.Error(), nil); statusErr != nil {
+				logger.Error(statusErr, "Failed to update status to Failed")
+			}
+			return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
+		}
+		if autoInherited {
+			logger.Info("Auto-inherited seed credentials onto cluster; waiting for rolling restart",
+				"cluster", cluster.Name, "credentialsSecret", seedCredsSecret)
+			r.Recorder.Event(&shardedDatabase, corev1.EventTypeNormal, "SeedCredsAutoInherited",
+				fmt.Sprintf("Patched cluster %q spec.extraEnvFrom with %q; waiting for rolling restart", cluster.Name, seedCredsSecret))
+			if statusErr := r.updateStatus(ctx, &shardedDatabase, "Pending",
+				fmt.Sprintf("Auto-inherited seed credentials Secret %q onto cluster %q; waiting for cluster pods to restart", seedCredsSecret, cluster.Name), nil); statusErr != nil {
+				logger.Error(statusErr, "Failed to update status to Pending")
+			}
+			return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
+		}
 	}
 
 	// Create or update sharded database

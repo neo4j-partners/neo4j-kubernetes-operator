@@ -1481,6 +1481,11 @@ func BuildPodSpecForEnterprise(cluster *neo4jv1beta1.Neo4jEnterpriseCluster, ser
 		Image:           fmt.Sprintf("%s:%s", cluster.Spec.Image.Repo, cluster.Spec.Image.Tag),
 		ImagePullPolicy: corev1.PullPolicy(cluster.Spec.Image.PullPolicy),
 		Env:             env,
+		// Project user-supplied env-from-Secret / env-from-ConfigMap bundles
+		// onto the container. Common use-case is surfacing cloud creds
+		// (AWS_ACCESS_KEY_ID etc.) for Neo4j's CloudSeedProvider so
+		// CREATE DATABASE ... OPTIONS { seedURI } can authenticate.
+		EnvFrom:         cluster.Spec.ExtraEnvFrom,
 		SecurityContext: containerSecurityContextForCluster(cluster),
 		VolumeMounts:    volumeMounts,
 		Ports: []corev1.ContainerPort{

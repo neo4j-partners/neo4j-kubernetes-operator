@@ -197,7 +197,7 @@ func TestResolveShardedSeed_Matrix(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Name: "products", Namespace: "default"},
 				Spec:       neo4jv1beta1.Neo4jShardedDatabaseSpec{SeedBackupRef: tc.seedBackupRef},
 			}
-			uri, err := r.resolveShardedSeed(context.Background(), shardedDB)
+			uri, _, err := r.resolveShardedSeed(context.Background(), shardedDB)
 			if tc.wantErrIs != nil {
 				if err == nil || !stderrors.Is(err, tc.wantErrIs) {
 					t.Fatalf("err=%v, want errors.Is(%v)", err, tc.wantErrIs)

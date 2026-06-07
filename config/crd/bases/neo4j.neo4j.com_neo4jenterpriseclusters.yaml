@@ -1713,6 +1713,70 @@ spec:
                   - name
                   type: object
                 type: array
+              extraEnvFrom:
+                description: |-
+                  ExtraEnvFrom projects entire Secrets or ConfigMaps as environment
+                  variables on the neo4j container. Intended for credential bundles —
+                  e.g. a Secret with AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY /
+                  AWS_ENDPOINT_URL_S3 / AWS_REGION used by the AWS SDK default
+                  credential chain when Neo4j fetches a seed URI from S3 (or
+                  S3-compatible stores like MinIO).
+
+                  To enable Neo4jShardedDatabase.spec.seedBackupRef against a
+                  cloud-backed Neo4jBackup, this list MUST contain a SecretRef that
+                  matches the backup's `spec.cloud.credentialsSecretRef`. The sharded
+                  DB controller validates this at reconcile time and routes to
+                  Phase=Failed with an actionable error if absent.
+
+                  Opt-in auto-inherit: set annotation
+                  `neo4j.com/auto-inherit-seed-creds=true` on the cluster CR to let the
+                  sharded DB controller append the missing entry automatically. This
+                  triggers a rolling restart of cluster pods, which is why it's opt-in.
+                items:
+                  description: EnvFromSource represents the source of a set of ConfigMaps
+                    or Secrets
+                  properties:
+                    configMapRef:
+                      description: The ConfigMap to select from
+                      properties:
+                        name:
+                          default: ""
+                          description: |-
+                            Name of the referent.
+                            This field is effectively required, but due to backwards compatibility is
+                            allowed to be empty. Instances of this type with an empty value here are
+                            almost certainly wrong.
+                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                          type: string
+                        optional:
+                          description: Specify whether the ConfigMap must be defined
+                          type: boolean
+                      type: object
+                      x-kubernetes-map-type: atomic
+                    prefix:
+                      description: |-
+                        Optional text to prepend to the name of each environment variable.
+                        May consist of any printable ASCII characters except '='.
+                      type: string
+                    secretRef:
+                      description: The Secret to select from
+                      properties:
+                        name:
+                          default: ""
+                          description: |-
+                            Name of the referent.
+                            This field is effectively required, but due to backwards compatibility is
+                            allowed to be empty. Instances of this type with an empty value here are
+                            almost certainly wrong.
+                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                          type: string
+                        optional:
+                          description: Specify whether the Secret must be defined
+                          type: boolean
+                      type: object
+                      x-kubernetes-map-type: atomic
+                  type: object
+                type: array
               extraVolumeMounts:
                 description: |-
                   ExtraVolumeMounts are additional volume mounts for the Neo4j container.
