@@ -1,0 +1,54 @@
+/* Neo4j brand palette overrides for Material for MkDocs.
+   Activated by setting theme.palette.primary/accent to "custom" in mkdocs.yml. */
+
+/* Hide Material's default library/book logo in the header. */
+.md-header__button.md-logo {
+  display: none;
+}
+
+/* Light mode: scoped to [data-md-color-scheme="default"] so it overrides
+   Material's own light-scheme block (higher specificity than :root). */
+[data-md-color-scheme="default"] {
+  /* Neo4j Logo Blue — deep navy from dist.neo4j.com Logo_FullColor_RGB */
+  --md-primary-fg-color:        #014063;
+  --md-primary-fg-color--light: #2A6A8F;
+  --md-primary-fg-color--dark:  #002A45;
+  --md-primary-bg-color:        #FFFFFF;
+  --md-primary-bg-color--light: rgba(255, 255, 255, 0.7);
+
+  /* Neo4j Teal — accent (links, hover, active) */
+  --md-accent-fg-color:        #00A39C;
+  --md-accent-fg-color--transparent: rgba(0, 163, 156, 0.1);
+  --md-accent-bg-color:        #FFFFFF;
+  --md-accent-bg-color--light: rgba(255, 255, 255, 0.7);
+
+  /* Page background: subtle teal tint so the brand carries through the body */
+  --md-default-bg-color:       #EAF6F5;
+  --md-typeset-a-color:        #00736E;
+
+  /* Code blocks: clean white card so they pop against the teal page bg,
+     instead of Material's default gray which clashes. */
+  --md-code-bg-color:          #FFFFFF;
+  --md-code-fg-color:          #1A2D33;
+  --md-typeset-mark-color:     rgba(0, 163, 156, 0.25);
+}
+
+/* Dark mode: keep the logo navy on the header for brand consistency,
+   lift only the accent (teal) so links/hover read on the deep teal bg. */
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color:        #014063;
+  --md-primary-fg-color--light: #2A6A8F;
+  --md-primary-fg-color--dark:  #002A45;
+
+  --md-accent-fg-color:        #3DD9D0;
+  --md-accent-fg-color--transparent: rgba(61, 217, 208, 0.15);
+
+  /* Deep teal-tinted slate for dark mode */
+  --md-default-bg-color:       #0B2A2C;
+  --md-typeset-a-color:        #3DD9D0;
+
+  /* Code blocks darker than page bg so they read as recessed panels */
+  --md-code-bg-color:          #051618;
+  --md-code-fg-color:          #D5E8E6;
+  --md-typeset-mark-color:     rgba(61, 217, 208, 0.25);
+}
