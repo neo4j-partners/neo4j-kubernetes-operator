@@ -223,12 +223,15 @@ jobs:
         fi
 
         mkdir -p release-artifacts
+        mkdir -p bundle-artifact
 
         # CRD-only manifest (concatenated from all CRD bases)
         cat config/crd/bases/*.yaml > release-artifacts/neo4j-kubernetes-operator.yaml
 
-        # OperatorHub bundle (single tarball, not individual files)
-        tar -czf "release-artifacts/operatorhub-bundle-${CLEAN_TAG}.tar.gz" bundle/
+        # OperatorHub bundle for inter-job transfer to submit-operatorhub.
+        # Written outside release-artifacts/ so it is NOT uploaded as a
+        # public release asset — it is a workflow internal, not a user artifact.
+        tar -czf "bundle-artifact/operatorhub-bundle-${CLEAN_TAG}.tar.gz" bundle/
 
         # Complete operator manifest (CRDs + RBAC + Deployment) with OPERATOR_VERSION
         # stamped to the release tag via a kustomize strategic merge patch overlay.
@@ -263,6 +266,18 @@ jobs:
         ./bin/kustomize build config/overlays/release-temp \
           > release-artifacts/neo4j-kubernetes-operator-complete.yaml
         rm -rf config/overlays/release-temp
+
+    # Hand the OperatorHub bundle off to the submit-operatorhub job via the
+    # GHA artifact store. The two jobs run on separate runners with no shared
+    # filesystem; this is the idiomatic transfer mechanism. Short retention
+    # because nothing outside this workflow consumes it.
+    - name: Upload OperatorHub bundle for submission job
+      uses: actions/upload-artifact@v7
+      with:
+        name: operatorhub-bundle
+        path: bundle-artifact/operatorhub-bundle-*.tar.gz
+        retention-days: 1
+        if-no-files-found: error
 
     - name: Generate release notes
       id: release-notes
@@ -316,15 +331,11 @@ jobs:
       contents: read
 
     steps:
-    - name: Download OperatorHub bundle from release
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        CLEAN_TAG: ${{ needs.determine-tag.outputs.clean_tag }}
-      run: |
-        gh release download "v${CLEAN_TAG}" \
-          --repo "${{ github.repository }}" \
-          --pattern "operatorhub-bundle-${CLEAN_TAG}.tar.gz" \
-          --dir /tmp
+    - name: Download OperatorHub bundle from create-release job
+      uses: actions/download-artifact@v8
+      with:
+        name: operatorhub-bundle
+        path: /tmp
 
     - name: Clone community-operators fork
       env:
