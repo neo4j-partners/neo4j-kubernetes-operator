@@ -2973,27 +2973,28 @@
 </span></code></pre></div>
 <h2 id="deployment-details">Deployment Details<a class="headerlink" href="#deployment-details" title="Anchor link to this section">&para;</a></h2>
 <h3 id="local-image-deployment">Local Image Deployment<a class="headerlink" href="#local-image-deployment" title="Anchor link to this section">&para;</a></h3>
-<p>The <code>-local</code> targets provide the most reliable deployment experience:</p>
-<p><strong><code>make deploy-dev-local</code></strong>:
+<p><code>make deploy-dev</code> and <code>make deploy-prod</code> are aliases for the <code>-local</code> targets below — the same local-build path shown in the overview table above. Use whichever name you prefer; the <code>-local</code> variants are the explicit form.</p>
+<p><strong><code>make deploy-dev-local</code></strong> (alias: <code>make deploy-dev</code>):
 - Builds <code>neo4j-operator:dev</code> image locally
 - Loads image into Kind cluster automatically
 - Deploys to <code>neo4j-operator-dev</code> namespace
 - Runs the operator with <code>--mode=dev</code></p>
-<p><strong><code>make deploy-prod-local</code></strong>:
+<p><strong><code>make deploy-prod-local</code></strong> (alias: <code>make deploy-prod</code>):
 - Builds <code>neo4j-operator:latest</code> image locally
 - Loads image into Kind cluster automatically
 - Deploys to <code>neo4j-operator-system</code> namespace
 - Production resource limits and settings
 - No debug overhead</p>
 <h3 id="registry-based-deployment">Registry-Based Deployment<a class="headerlink" href="#registry-based-deployment" title="Anchor link to this section">&para;</a></h3>
-<p><strong><code>make deploy-prod</code></strong>:
-- Uses <code>ghcr.io/neo4j-partners/neo4j-kubernetes-operator:latest</code>
+<p>These variants skip the local image build and pull from a registry instead. Use them when you have a pre-built image and want to deploy without rebuilding from source.</p>
+<p><strong><code>make deploy-prod-registry</code></strong>:
+- Uses <code>ghcr.io/neo4j-partners/neo4j-kubernetes-operator:latest</code> (via the <code>config/overlays/prod-registry</code> kustomize overlay)
 - Requires authenticated access to ghcr.io
 - Suitable for production environments with registry access
 - Automatic updates when new versions are released</p>
-<p><strong><code>make deploy-dev</code></strong>:
-- Uses local <code>neo4j-operator:dev</code> image
-- Image must exist locally (build first with <code>make docker-build IMG=neo4j-operator:dev</code>)
+<p><strong><code>make deploy-dev-registry</code></strong>:
+- Uses the <code>config/overlays/dev</code> overlay without rebuilding the image
+- The <code>neo4j-operator:dev</code> image must already be present in the cluster (pre-loaded into Kind, or pullable from a configured registry)
 - Development namespace with debug features</p>
 <h2 id="verification">Verification<a class="headerlink" href="#verification" title="Anchor link to this section">&para;</a></h2>
 <p>After deployment, verify the operator is running:</p>
