@@ -6263,6 +6263,11 @@ keytab) until full support lands.</p>
 <td>External traffic policy: <code>"Cluster"</code> or <code>"Local"</code></td>
 </tr>
 <tr>
+<td><code>dnsName</code></td>
+<td><code>string</code></td>
+<td>Public DNS hostname (e.g. <code>"neo4j.example.com"</code>). Surfaces as the <code>external-dns.alpha.kubernetes.io/hostname</code> annotation on the front-facing Service and (when enabled) the Ingress so <a href="https://github.com/kubernetes-sigs/external-dns">external-dns</a> creates the matching cloud DNS record; also added to the cert-manager <code>Certificate</code> SAN list when <code>spec.tls</code> is enabled. See the <a href="../../user_guide/external_access/#public-dns-via-external-dns">External Access guide</a>.</td>
+</tr>
+<tr>
 <td><code>ingress</code></td>
 <td><a href="#ingressspec"><code>IngressSpec</code></a></td>
 <td>Ingress configuration</td>
