@@ -68,7 +68,6 @@ cosign verify ghcr.io/neo4j-partners/neo4j-kubernetes-operator:__TAG__ \
 |-------|-------------|
 | `neo4j-kubernetes-operator-complete.yaml` | Complete operator install (CRDs + RBAC + Deployment) |
 | `neo4j-kubernetes-operator.yaml` | CRDs only |
-| `operatorhub-bundle-__VERSION__.tar.gz` | OperatorHub bundle |
 
 ## Documentation
 
