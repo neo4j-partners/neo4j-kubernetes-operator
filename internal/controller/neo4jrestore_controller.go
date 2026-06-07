@@ -1014,16 +1014,26 @@ func (r *Neo4jRestoreReconciler) buildRestoreFromPath(restore *neo4jv1beta1.Neo4
 // default `--temp-path=/tmp/restore-tmp`. Centralising the condition makes
 // these two stay in sync.
 //
-// Treats nil Storage and Type=="" as PVC, matching the volume-mount
-// behaviour in buildRestoreVolumeMounts which mounts the backup PVC at
-// /backup whenever the source is local.
+// **Nil Storage is NOT treated as PVC** — that shape (Source.Type=storage
+// without a Storage block) is broken end-to-end in the operator:
+// buildRestoreVolumes only adds a `backup-storage` volume when
+// Source.Storage != nil, so a nil-Storage Pod fails to start with
+// "volume not found". buildRestoreFromPath also returns a bare relative
+// path (no `/backup/` prefix) for nil-Storage. Treating it as PVC here
+// would mis-apply the PVC fixups (shell substitution expects a
+// `/backup/...` source path, default --temp-path / prelude assume a
+// real backup mount exists). The nil-Storage CR shape is essentially a
+// no-op for our fixups — the user must specify Storage explicitly to
+// engage the PVC path. The underlying pre-existing brokenness is out
+// of scope for this PR; the validator should reject nil-Storage as a
+// follow-up.
 func isLocalPVCRestoreSource(restore *neo4jv1beta1.Neo4jRestore) bool {
 	if restore.Spec.Source.Type != "storage" {
 		return false
 	}
 	st := restore.Spec.Source.Storage
 	if st == nil {
-		return true
+		return false
 	}
 	return st.Type == "" || st.Type == "pvc"
 }

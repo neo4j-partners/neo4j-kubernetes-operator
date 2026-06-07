@@ -504,25 +504,43 @@ func TestBuildLocalRestoreFilePath_PVCResolvesToShellSubst(t *testing.T) {
 			"not a directory; both backup-path and dbname are single-quoted to prevent injection")
 }
 
-// TestBuildLocalRestoreFilePath_NilStorageDefaultsToPVC: when Source.Storage
-// is nil (legacy CRs that just set BackupPath without a Storage block), the
-// volume mount in buildRestoreVolumeMounts treats it as PVC at /backup, so
-// path resolution MUST run. Otherwise these older CRs would silently hit
-// the directory-vs-file error.
-func TestBuildLocalRestoreFilePath_NilStorageDefaultsToPVC(t *testing.T) {
+// TestBuildLocalRestoreFilePath_NilStorageSkipped: when Source.Storage is
+// nil (a malformed CR shape — Type=storage with no Storage block), the
+// helper must NOT apply PVC fixups. Reason: the broader operator flow
+// for nil-Storage is broken end-to-end:
+//
+//   - buildRestoreVolumes only adds a `backup-storage` volume when
+//     Source.Storage != nil (so a nil-Storage Pod fails to start with
+//     "volume not found").
+//   - buildRestoreFromPath returns bare `BackupPath` (no `/backup/`
+//     prefix) for nil-Storage, so applying shell substitution would
+//     produce a relative path the restore Pod can't use.
+//
+// Treating nil-Storage as PVC here would create an inconsistency where
+// our fixups assume a `/backup` mount that doesn't exist. The helper
+// returns empty (no resolution); the rest of the broken nil-Storage
+// path runs as-is and the Pod's startup failure surfaces the real
+// problem clearly. The fundamental fix (reject nil-Storage at
+// validation) is tracked as a follow-up — this test only pins the
+// contract that fixups are NOT silently mis-applied.
+func TestBuildLocalRestoreFilePath_NilStorageSkipped(t *testing.T) {
 	restore := &neo4jv1beta1.Neo4jRestore{
 		Spec: neo4jv1beta1.Neo4jRestoreSpec{
 			DatabaseName: "neo4j",
 			Source: neo4jv1beta1.RestoreSource{
 				Type:       "storage",
 				BackupPath: "some-backup",
-				// Storage left nil intentionally
+				// Storage left nil intentionally — this is the broken
+				// CR shape; we just want to ensure our helpers don't
+				// mis-apply PVC fixups to it.
 			},
 		},
 	}
 	got := buildLocalRestoreFilePath(restore, "/backup/some-backup")
-	assert.NotEmpty(t, got, "nil Storage must still trigger resolution — defaulted to PVC")
-	assert.Contains(t, got, "$(ls '/backup/some-backup'/'neo4j'-*.backup")
+	assert.Empty(t, got,
+		"nil Storage must NOT trigger resolution — buildRestoreVolumes wouldn't "+
+			"add the backup-storage volume, so the resulting --from-path would "+
+			"reference a mount that doesn't exist")
 }
 
 // TestBuildLocalRestoreFilePath_CloudSkipsResolution: cloud URIs (s3://,
