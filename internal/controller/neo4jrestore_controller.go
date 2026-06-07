@@ -62,16 +62,11 @@ const (
 	SourceTypeGCS    = "gcs"
 )
 
-// errBackupNotReady is a sentinel error returned by the source resolver
-// when the referenced Neo4jBackup exists but has no Succeeded run in
-// status.history yet. This is a *transient* condition — the backup may
-// complete on a future reconcile — so callers route it to StatusPending
-// (which the Reconcile guard requeues) rather than StatusFailed (which
-// the guard pins as a terminal state until the CR is recreated).
-//
-// Use errors.Is to detect; resolveBackupRef wraps it with fmt.Errorf
-// to preserve the human-readable backup name in the message.
-var errBackupNotReady = fmt.Errorf("backup has no Succeeded run yet")
+// errBackupNotReady is the package-internal alias for ErrBackupNotReady.
+// Kept for backward compatibility with the restore-controller's internal
+// usage; new code should use ErrBackupNotReady (defined in
+// backup_resolver.go) directly.
+var errBackupNotReady = ErrBackupNotReady
 
 // restoreServiceAccountName is the ServiceAccount used by all restore Job
 // pods. Mirrors neo4j-backup-sa on the backup side; intentionally separate
@@ -838,59 +833,11 @@ func (r *Neo4jRestoreReconciler) ensureRestoreServiceAccount(ctx context.Context
 	return err
 }
 
-// resolveBackupRef dereferences a Neo4jBackup CR name into a concrete
-// StorageLocation (with cloud creds folded in) and the per-run subfolder
-// (BackupsPath) of its most-recent Succeeded run. Used by both the main
-// restore path (source.type=backup) and the PITR base-backup branch
-// (pitr.baseBackup.type=backup).
-//
-// Returns an error if backupRef is empty, the Neo4jBackup is missing, or
-// its status.history contains no Succeeded run — restoring against a
-// failed/missing backup would silently produce garbage.
+// resolveBackupRef delegates to the package-shared ResolveBackupRef. Kept as
+// a method on the receiver so existing call sites in the restore controller
+// can stay unchanged; new controllers should call ResolveBackupRef directly.
 func (r *Neo4jRestoreReconciler) resolveBackupRef(ctx context.Context, backupRef, namespace string) (storage neo4jv1beta1.StorageLocation, backupPath string, err error) {
-	if backupRef == "" {
-		return neo4jv1beta1.StorageLocation{}, "", fmt.Errorf("backupRef is required")
-	}
-
-	backup := &neo4jv1beta1.Neo4jBackup{}
-	if err := r.Get(ctx, types.NamespacedName{Name: backupRef, Namespace: namespace}, backup); err != nil {
-		return neo4jv1beta1.StorageLocation{}, "", fmt.Errorf("failed to get Neo4jBackup %q: %w", backupRef, err)
-	}
-
-	// status.history is sorted newest-first by sortBackupRunsNewestFirst
-	// (see neo4jbackup_controller.go). Walk forward until we find the
-	// first Succeeded run — "the most recent successful backup" is the
-	// only reasonable default for a backupRef-based restore.
-	var succeeded *neo4jv1beta1.BackupRun
-	for i := range backup.Status.History {
-		if backup.Status.History[i].Status == "Succeeded" {
-			succeeded = &backup.Status.History[i]
-			break
-		}
-	}
-	if succeeded == nil {
-		// Wrap with errBackupNotReady so the caller can detect this
-		// transient condition with errors.Is and route to Pending +
-		// requeue instead of the terminal Failed phase.
-		return neo4jv1beta1.StorageLocation{}, "", fmt.Errorf(
-			"Neo4jBackup %q: %w (status.history has no Succeeded run yet)",
-			backupRef, errBackupNotReady,
-		)
-	}
-
-	// Materialize a StorageLocation copy with the backup's cloud creds
-	// folded in. Neo4jBackup historically allowed `spec.cloud` as an
-	// alternative to `spec.storage.cloud`; cloudBlockForBackup picks
-	// whichever is populated, and we project it onto the synthesized
-	// Storage so downstream cloudBlockForRestore finds it via the
-	// canonical path.
-	resolved := backup.Spec.Storage
-	if resolved.Cloud == nil {
-		if cb := cloudBlockForBackup(backup); cb != nil {
-			resolved.Cloud = cb
-		}
-	}
-	return resolved, succeeded.BackupsPath, nil
+	return ResolveBackupRef(ctx, r.Client, backupRef, namespace)
 }
 
 // resolveRestoreSource dereferences source.type=backup into a concrete

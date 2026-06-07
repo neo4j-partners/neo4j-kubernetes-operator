@@ -165,6 +165,8 @@ func (v *ShardedDatabaseValidator) validatePropertyShardingConfig(shardedDB *neo
 
 	// Validate seed options
 	specPath := field.NewPath("spec")
+	hasSeedSource := shardedDB.Spec.SeedURI != "" || len(shardedDB.Spec.SeedURIs) > 0 || shardedDB.Spec.SeedBackupRef != ""
+
 	if shardedDB.Spec.SeedURI != "" && len(shardedDB.Spec.SeedURIs) > 0 {
 		result.Errors = append(result.Errors, field.Invalid(
 			specPath.Child("seedURI"),
@@ -172,25 +174,41 @@ func (v *ShardedDatabaseValidator) validatePropertyShardingConfig(shardedDB *neo
 			"seedURI and seedURIs cannot be specified together"))
 	}
 
-	if shardedDB.Spec.SeedSourceDatabase != "" && shardedDB.Spec.SeedURI == "" && len(shardedDB.Spec.SeedURIs) == 0 {
+	// SeedBackupRef is mutually exclusive with the manual seed URI fields —
+	// it materialises into a seedURI at reconcile time, so passing both lets
+	// users contradict themselves without the operator picking a winner.
+	if shardedDB.Spec.SeedBackupRef != "" && shardedDB.Spec.SeedURI != "" {
+		result.Errors = append(result.Errors, field.Invalid(
+			specPath.Child("seedBackupRef"),
+			shardedDB.Spec.SeedBackupRef,
+			"seedBackupRef and seedURI cannot be specified together"))
+	}
+	if shardedDB.Spec.SeedBackupRef != "" && len(shardedDB.Spec.SeedURIs) > 0 {
+		result.Errors = append(result.Errors, field.Invalid(
+			specPath.Child("seedBackupRef"),
+			shardedDB.Spec.SeedBackupRef,
+			"seedBackupRef and seedURIs cannot be specified together"))
+	}
+
+	if shardedDB.Spec.SeedSourceDatabase != "" && !hasSeedSource {
 		result.Errors = append(result.Errors, field.Invalid(
 			specPath.Child("seedSourceDatabase"),
 			shardedDB.Spec.SeedSourceDatabase,
-			"seedSourceDatabase requires seedURI or seedURIs"))
+			"seedSourceDatabase requires seedURI, seedURIs, or seedBackupRef"))
 	}
 
-	if shardedDB.Spec.SeedConfig != nil && shardedDB.Spec.SeedURI == "" && len(shardedDB.Spec.SeedURIs) == 0 {
+	if shardedDB.Spec.SeedConfig != nil && !hasSeedSource {
 		result.Errors = append(result.Errors, field.Invalid(
 			specPath.Child("seedConfig"),
 			"",
-			"seedConfig requires seedURI or seedURIs"))
+			"seedConfig requires seedURI, seedURIs, or seedBackupRef"))
 	}
 
-	if shardedDB.Spec.SeedCredentials != nil && shardedDB.Spec.SeedURI == "" && len(shardedDB.Spec.SeedURIs) == 0 {
+	if shardedDB.Spec.SeedCredentials != nil && !hasSeedSource {
 		result.Errors = append(result.Errors, field.Invalid(
 			specPath.Child("seedCredentials"),
 			"",
-			"seedCredentials requires seedURI or seedURIs"))
+			"seedCredentials requires seedURI, seedURIs, or seedBackupRef"))
 	}
 
 	if strings.HasSuffix(shardedDB.Spec.SeedURI, ".dump") {

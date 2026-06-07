@@ -58,6 +58,23 @@ type Neo4jShardedDatabaseSpec struct {
 	// using shard suffixes (e.g., <db>-g000, <db>-p000).
 	SeedURI string `json:"seedURI,omitempty"`
 
+	// SeedBackupRef names a Neo4jBackup CR (in the same namespace) whose
+	// most-recent Succeeded run will be used as the seed for this sharded
+	// database. The operator resolves the reference at reconcile time into a
+	// concrete seedURI (computed from the backup's storage type + per-run
+	// subdirectory). Mutually exclusive with SeedURI and SeedURIs.
+	//
+	// Currently restricted to backups stored in cloud locations (S3, GCS,
+	// Azure Blob): PVC-stored backups would require mounting the backup PVC
+	// on cluster pods, which is out of scope for this field. The validator
+	// rejects PVC-backed seedBackupRef at reconcile time with an explanatory
+	// status message.
+	//
+	// If the referenced Neo4jBackup has no Succeeded run yet, the sharded
+	// database stays in Pending phase and the reconciler requeues — it does
+	// NOT route to Failed (mirrors CLAUDE.md rule 72's restore-side semantics).
+	SeedBackupRef string `json:"seedBackupRef,omitempty"`
+
 	// Seed URIs keyed by shard name for dump-based seeding or multi-location backups.
 	// Keys must match shard names (e.g., <db>-g000, <db>-p000).
 	SeedURIs map[string]string `json:"seedURIs,omitempty"`

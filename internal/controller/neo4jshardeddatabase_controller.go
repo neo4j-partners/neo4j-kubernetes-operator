@@ -50,6 +50,7 @@ package controller
 
 import (
 	"context"
+	stderrors "errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -166,6 +167,43 @@ func (r *Neo4jShardedDatabaseReconciler) Reconcile(ctx context.Context, req ctrl
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 	}
 	defer neo4jClient.Close()
+
+	// Phase 2 seed-from-backup: if spec.seedBackupRef is set, resolve it into
+	// a concrete seedURI before building the CREATE DATABASE Cypher. Errors
+	// from the resolver have two meanings:
+	//   - ErrBackupNotReady (backup exists but has no Succeeded run yet) →
+	//     transient; route to Pending + requeue. Mirrors CLAUDE.md rule 72
+	//     for the restore controller.
+	//   - Anything else (missing CR, PVC storage, unsupported type) →
+	//     permanent; route to Failed.
+	if seedURI, seedErr := r.resolveShardedSeed(ctx, &shardedDatabase); seedURI != "" || seedErr != nil {
+		if seedErr != nil {
+			if stderrors.Is(seedErr, ErrBackupNotReady) {
+				logger.Info("seedBackupRef target has no Succeeded run yet, requeuing",
+					"seedBackupRef", shardedDatabase.Spec.SeedBackupRef, "error", seedErr.Error())
+				r.Recorder.Event(&shardedDatabase, corev1.EventTypeNormal, "SeedBackupPending",
+					"Waiting for referenced Neo4jBackup to complete a successful run")
+				if statusErr := r.updateStatus(ctx, &shardedDatabase, "Pending",
+					fmt.Sprintf("Waiting for Neo4jBackup %q to produce a Succeeded run", shardedDatabase.Spec.SeedBackupRef), nil); statusErr != nil {
+					logger.Error(statusErr, "Failed to update status to Pending")
+				}
+				return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
+			}
+			logger.Error(seedErr, "Failed to resolve seedBackupRef", "seedBackupRef", shardedDatabase.Spec.SeedBackupRef)
+			r.Recorder.Event(&shardedDatabase, corev1.EventTypeWarning, "SeedBackupResolutionFailed", seedErr.Error())
+			if statusErr := r.updateStatus(ctx, &shardedDatabase, "Failed",
+				fmt.Sprintf("seedBackupRef resolution failed: %v", seedErr), nil); statusErr != nil {
+				logger.Error(statusErr, "Failed to update status to Failed")
+			}
+			return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
+		}
+		// Populate the in-memory spec so downstream Cypher builders use the
+		// resolved URI without needing to know about SeedBackupRef. The CR is
+		// not Updated — only the in-memory copy is mutated for this reconcile.
+		shardedDatabase.Spec.SeedURI = seedURI
+		logger.Info("Resolved seedBackupRef to seedURI",
+			"seedBackupRef", shardedDatabase.Spec.SeedBackupRef, "seedURI", seedURI)
+	}
 
 	// Create or update sharded database
 	if err := r.reconcileShardedDatabase(ctx, &shardedDatabase, neo4jClient); err != nil {
