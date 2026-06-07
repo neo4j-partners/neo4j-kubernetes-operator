@@ -914,8 +914,11 @@ func (r *Neo4jEnterpriseStandaloneReconciler) createService(standalone *neo4jv1b
 	// Get annotations from spec
 	annotations := make(map[string]string)
 	if standalone.Spec.Service != nil && standalone.Spec.Service.Annotations != nil {
-		annotations = standalone.Spec.Service.Annotations
+		for k, v := range standalone.Spec.Service.Annotations {
+			annotations[k] = v
+		}
 	}
+	resources.ApplyExternalDNSAnnotation(annotations, standalone.Spec.Service)
 
 	// Build service ports
 	ports := []corev1.ServicePort{
@@ -1562,6 +1565,19 @@ func (r *Neo4jEnterpriseStandaloneReconciler) reconcileTLSCertificate(ctx contex
 
 // createTLSCertificate creates a TLS certificate for the standalone deployment
 func (r *Neo4jEnterpriseStandaloneReconciler) createTLSCertificate(standalone *neo4jv1beta1.Neo4jEnterpriseStandalone) *certmanagerv1.Certificate {
+	dnsNames := []string{
+		fmt.Sprintf("%s-service", standalone.Name),
+		fmt.Sprintf("%s-service.%s", standalone.Name, standalone.Namespace),
+		fmt.Sprintf("%s-service.%s.svc", standalone.Name, standalone.Namespace),
+		fmt.Sprintf("%s-service.%s.svc.cluster.local", standalone.Name, standalone.Namespace),
+	}
+	// Include the public DNS name (spec.service.dnsName) so TLS connections
+	// to the external hostname pass hostname verification — same rationale
+	// as the cluster path in internal/resources/cluster.go.
+	if standalone.Spec.Service != nil && standalone.Spec.Service.DNSName != "" {
+		dnsNames = append(dnsNames, standalone.Spec.Service.DNSName)
+	}
+
 	return &certmanagerv1.Certificate{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s-tls-cert", standalone.Name),
@@ -1585,12 +1601,7 @@ func (r *Neo4jEnterpriseStandaloneReconciler) createTLSCertificate(standalone *n
 					"neo4j.com/owner-name":         standalone.Name,
 				},
 			},
-			DNSNames: []string{
-				fmt.Sprintf("%s-service", standalone.Name),
-				fmt.Sprintf("%s-service.%s", standalone.Name, standalone.Namespace),
-				fmt.Sprintf("%s-service.%s.svc", standalone.Name, standalone.Namespace),
-				fmt.Sprintf("%s-service.%s.svc.cluster.local", standalone.Name, standalone.Namespace),
-			},
+			DNSNames: dnsNames,
 		},
 	}
 }
@@ -1765,11 +1776,17 @@ func (r *Neo4jEnterpriseStandaloneReconciler) createIngress(standalone *neo4jv1b
 		},
 	}
 
+	ingressAnnotations := map[string]string{}
+	for k, v := range ingressSpec.Annotations {
+		ingressAnnotations[k] = v
+	}
+	resources.ApplyExternalDNSAnnotation(ingressAnnotations, standalone.Spec.Service)
+
 	return &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        fmt.Sprintf("%s-ingress", standalone.Name),
 			Namespace:   standalone.Namespace,
-			Annotations: ingressSpec.Annotations,
+			Annotations: ingressAnnotations,
 			Labels: map[string]string{
 				"app.kubernetes.io/name":       "neo4j",
 				"app.kubernetes.io/instance":   standalone.Name,

@@ -1187,3 +1187,94 @@ func TestBuildMonitoringConfig(t *testing.T) {
 			"metricsFilter line must not be concatenated with the next config entry")
 	})
 }
+
+// TestServiceDNSName covers the spec.service.dnsName feature: the typed
+// field surfaces as the external-dns hostname annotation on the front-facing
+// Service and the Ingress (when enabled), and as a SAN entry on the
+// cert-manager Certificate (when TLS is enabled). Each is a separate
+// integration point and we verify them together so a regression in any one
+// fails locally.
+func TestServiceDNSName(t *testing.T) {
+	clusterWithDNS := func(dnsName string, withTLS bool, withIngress bool, extraSvcAnnotations map[string]string) *neo4jv1beta1.Neo4jEnterpriseCluster {
+		c := &neo4jv1beta1.Neo4jEnterpriseCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: "graph", Namespace: "ops"},
+			Spec: neo4jv1beta1.Neo4jEnterpriseClusterSpec{
+				Topology: neo4jv1beta1.TopologyConfiguration{Servers: 3},
+				Service: &neo4jv1beta1.ServiceSpec{
+					Type:        "LoadBalancer",
+					DNSName:     dnsName,
+					Annotations: extraSvcAnnotations,
+				},
+			},
+		}
+		if withTLS {
+			c.Spec.TLS = &neo4jv1beta1.TLSSpec{
+				Mode: "cert-manager",
+				IssuerRef: &neo4jv1beta1.IssuerRef{
+					Name: "ca-cluster-issuer",
+					Kind: "ClusterIssuer",
+				},
+			}
+		}
+		if withIngress {
+			c.Spec.Service.Ingress = &neo4jv1beta1.IngressSpec{
+				Enabled:   true,
+				ClassName: "nginx",
+				Host:      dnsName,
+			}
+		}
+		return c
+	}
+
+	t.Run("dnsName annotates the client Service for external-dns", func(t *testing.T) {
+		svc := resources.BuildClientServiceForEnterprise(clusterWithDNS("neo4j.example.com", false, false, nil))
+		assert.Equal(t, "neo4j.example.com",
+			svc.Annotations[resources.ExternalDNSHostnameAnnotation],
+			"client Service must carry the external-dns hostname annotation when spec.service.dnsName is set")
+	})
+
+	t.Run("dnsName annotates the Ingress for external-dns", func(t *testing.T) {
+		ing := resources.BuildIngressForEnterprise(clusterWithDNS("neo4j.example.com", false, true, nil))
+		assert.NotNil(t, ing)
+		assert.Equal(t, "neo4j.example.com",
+			ing.Annotations[resources.ExternalDNSHostnameAnnotation],
+			"Ingress must carry the external-dns hostname annotation when spec.service.dnsName is set")
+	})
+
+	t.Run("dnsName is appended to the cert-manager Certificate SANs when TLS is enabled", func(t *testing.T) {
+		cert := resources.BuildCertificateForEnterprise(clusterWithDNS("neo4j.example.com", true, false, nil))
+		assert.NotNil(t, cert)
+		assert.Contains(t, cert.Spec.DNSNames, "neo4j.example.com",
+			"Certificate SAN list must include spec.service.dnsName so bolt+s://<dnsName> passes hostname verification")
+	})
+
+	t.Run("empty dnsName adds no annotation and no SAN", func(t *testing.T) {
+		c := clusterWithDNS("", true, true, nil)
+
+		svc := resources.BuildClientServiceForEnterprise(c)
+		_, svcHasAnn := svc.Annotations[resources.ExternalDNSHostnameAnnotation]
+		assert.False(t, svcHasAnn, "no annotation when dnsName is empty")
+
+		ing := resources.BuildIngressForEnterprise(c)
+		_, ingHasAnn := ing.Annotations[resources.ExternalDNSHostnameAnnotation]
+		assert.False(t, ingHasAnn, "no Ingress annotation when dnsName is empty")
+
+		cert := resources.BuildCertificateForEnterprise(c)
+		// Empty hostname must not be appended — would produce an invalid Certificate.
+		assert.NotContains(t, cert.Spec.DNSNames, "")
+	})
+
+	t.Run("user-supplied annotation wins over dnsName", func(t *testing.T) {
+		// If someone already set the external-dns annotation manually via
+		// spec.service.annotations, the typed field must not overwrite it.
+		// This lets users opt out of the typed flow or point at a different
+		// hostname without touching the field.
+		userAnnotations := map[string]string{
+			resources.ExternalDNSHostnameAnnotation: "manual.example.com",
+		}
+		svc := resources.BuildClientServiceForEnterprise(clusterWithDNS("neo4j.example.com", false, false, userAnnotations))
+		assert.Equal(t, "manual.example.com",
+			svc.Annotations[resources.ExternalDNSHostnameAnnotation],
+			"user-supplied annotation must take precedence over the typed dnsName field")
+	})
+}

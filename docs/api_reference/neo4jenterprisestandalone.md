@@ -170,6 +170,12 @@ service:
     - "10.0.0.0/8"
     - "192.168.0.0/16"
   externalTrafficPolicy: Local     # Cluster or Local
+  dnsName: neo4j.example.com       # Public DNS hostname — surfaces as the
+                                   # external-dns hostname annotation on the
+                                   # Service + Ingress, and is added to the
+                                   # cert-manager Certificate SANs when
+                                   # spec.tls is enabled. See External Access
+                                   # guide for prerequisites.
   ingress:                         # Ingress configuration
     enabled: true
     className: nginx

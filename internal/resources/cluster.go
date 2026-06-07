@@ -66,6 +66,11 @@ const (
 	// MetricsPort is the default port for Neo4j Prometheus metrics
 	MetricsPort = 2004
 
+	// ExternalDNSHostnameAnnotation is the annotation key external-dns
+	// (https://github.com/kubernetes-sigs/external-dns) watches to create
+	// matching cloud DNS records for a Service or Ingress.
+	ExternalDNSHostnameAnnotation = "external-dns.alpha.kubernetes.io/hostname"
+
 	// Neo4jContainer is the name of the main Neo4j container
 	Neo4jContainer = "neo4j"
 	// InitContainer is the name of the init container
@@ -494,6 +499,23 @@ func BuildInternalsServiceForEnterprise(cluster *neo4jv1beta1.Neo4jEnterpriseClu
 }
 
 // BuildClientServiceForEnterprise creates a service for client connections
+// ApplyExternalDNSAnnotation sets the external-dns hostname annotation
+// from spec.service.dnsName when it is set. A user-supplied annotation
+// (via spec.service.annotations or directly on the Ingress) wins — we
+// don't clobber explicit values because operators may legitimately want a
+// different hostname than the typed field, or may set the older
+// `external-dns.alpha.kubernetes.io/hostname` directly. Shared by both the
+// cluster and standalone code paths.
+func ApplyExternalDNSAnnotation(annotations map[string]string, svc *neo4jv1beta1.ServiceSpec) {
+	if svc == nil || svc.DNSName == "" {
+		return
+	}
+	if _, exists := annotations[ExternalDNSHostnameAnnotation]; exists {
+		return
+	}
+	annotations[ExternalDNSHostnameAnnotation] = svc.DNSName
+}
+
 func BuildClientServiceForEnterprise(cluster *neo4jv1beta1.Neo4jEnterpriseCluster) *corev1.Service {
 	serviceType := corev1.ServiceTypeClusterIP
 	if cluster.Spec.Service != nil && cluster.Spec.Service.Type != "" {
@@ -525,10 +547,13 @@ func BuildClientServiceForEnterprise(cluster *neo4jv1beta1.Neo4jEnterpriseCluste
 		})
 	}
 
-	annotations := make(map[string]string)
+	annotations := map[string]string{}
 	if cluster.Spec.Service != nil && cluster.Spec.Service.Annotations != nil {
-		annotations = cluster.Spec.Service.Annotations
+		for k, v := range cluster.Spec.Service.Annotations {
+			annotations[k] = v
+		}
 	}
+	ApplyExternalDNSAnnotation(annotations, cluster.Spec.Service)
 
 	labels := getLabelsForEnterprise(cluster, "client")
 	// Remove clustering label from client service
@@ -661,6 +686,16 @@ func BuildCertificateForEnterprise(cluster *neo4jv1beta1.Neo4jEnterpriseCluster)
 			fmt.Sprintf("%s.%s-headless.%s.svc", podName, cluster.Name, cluster.Namespace),
 			fmt.Sprintf("%s.%s-headless.%s.svc.cluster.local", podName, cluster.Name, cluster.Namespace),
 		)
+	}
+
+	// Include the public DNS name (spec.service.dnsName) so TLS connections
+	// to the external hostname pass hostname verification. external-dns
+	// manages the matching DNS record from the same field; without this SAN
+	// addition, drivers connecting via bolt+s://<dnsName>:7687 would fail
+	// hostname verification against a cert whose SANs only cover internal
+	// service / pod FQDNs.
+	if cluster.Spec.Service != nil && cluster.Spec.Service.DNSName != "" {
+		dnsNames = append(dnsNames, cluster.Spec.Service.DNSName)
 	}
 
 	// Build certificate spec.
@@ -937,12 +972,18 @@ func BuildIngressForEnterprise(cluster *neo4jv1beta1.Neo4jEnterpriseCluster) *ne
 		},
 	}
 
+	annotations := map[string]string{}
+	for k, v := range ingressSpec.Annotations {
+		annotations[k] = v
+	}
+	ApplyExternalDNSAnnotation(annotations, cluster.Spec.Service)
+
 	return &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        fmt.Sprintf("%s-ingress", cluster.Name),
 			Namespace:   cluster.Namespace,
 			Labels:      getLabelsForEnterprise(cluster, "ingress"),
-			Annotations: ingressSpec.Annotations,
+			Annotations: annotations,
 		},
 		Spec: networkingv1.IngressSpec{
 			IngressClassName: &ingressSpec.ClassName,

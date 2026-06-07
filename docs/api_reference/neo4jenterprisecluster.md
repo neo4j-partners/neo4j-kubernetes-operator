@@ -653,6 +653,7 @@ Configures how Neo4j is exposed outside the Kubernetes cluster.
 | `loadBalancerIP` | `string` | Static IP for LoadBalancer service (cloud provider specific) |
 | `loadBalancerSourceRanges` | `[]string` | IP ranges allowed to access LoadBalancer |
 | `externalTrafficPolicy` | `string` | External traffic policy: `"Cluster"` or `"Local"` |
+| `dnsName` | `string` | Public DNS hostname (e.g. `"neo4j.example.com"`). Surfaces as the `external-dns.alpha.kubernetes.io/hostname` annotation on the front-facing Service and (when enabled) the Ingress so [external-dns](https://github.com/kubernetes-sigs/external-dns) creates the matching cloud DNS record; also added to the cert-manager `Certificate` SAN list when `spec.tls` is enabled. See the [External Access guide](../user_guide/external_access.md#public-dns-via-external-dns). |
 | `ingress` | [`IngressSpec`](#ingressspec) | Ingress configuration |
 | `route` | [`RouteSpec`](#routespec) | OpenShift Route configuration |
 

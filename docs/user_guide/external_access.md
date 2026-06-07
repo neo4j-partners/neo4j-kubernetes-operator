@@ -103,6 +103,37 @@ spec:
         insecureEdgeTerminationPolicy: Redirect
 ```
 
+### Public DNS via external-dns
+
+When you expose Neo4j via `LoadBalancer` or `Ingress`, the cloud provider assigns a hostname like `a1b2c3.elb.us-east-1.amazonaws.com`. To map your real domain (`neo4j.example.com`) to that endpoint you typically install [external-dns](https://github.com/kubernetes-sigs/external-dns) — a Kubernetes controller that watches Services/Ingresses for an annotation and creates the matching record in your cloud DNS provider (Route 53, Cloud DNS, Azure DNS, Cloudflare, etc.).
+
+Set `spec.service.dnsName` and the operator will:
+
+1. Add `external-dns.alpha.kubernetes.io/hostname: <dnsName>` to the front-facing Service and (when enabled) the Ingress. external-dns picks this up and creates/updates the DNS record automatically.
+2. Add `<dnsName>` to the cert-manager `Certificate`'s SAN list when `spec.tls` is enabled, so that `bolt+s://<dnsName>:7687` and `https://<dnsName>:7473` pass hostname verification.
+
+```yaml
+spec:
+  service:
+    type: LoadBalancer
+    dnsName: neo4j.example.com
+    # Optional: skip the typed field and supply the annotation directly via
+    # spec.service.annotations — user-supplied annotations always win.
+  tls:
+    mode: cert-manager
+    issuerRef:
+      name: ca-cluster-issuer
+      kind: ClusterIssuer
+```
+
+Prerequisites: install [external-dns](https://github.com/kubernetes-sigs/external-dns/blob/master/docs/registry/registry.md) in your cluster and grant it write access to the DNS zone (IAM role on AWS, workload identity on GCP, service principal on Azure, API token elsewhere).
+
+**Scope and limitations**
+
+- `dnsName` covers the **single-endpoint Bolt** case (`bolt+s://<dnsName>:7687`) and the **Browser** case (`https://<dnsName>:7473`). External clients connecting via the routing scheme (`neo4j+s://`) need per-pod public endpoints; that's out of scope here because the driver fetches a routing table containing internal pod FQDNs that aren't externally resolvable.
+- If you set the `external-dns.alpha.kubernetes.io/hostname` annotation directly in `spec.service.annotations`, that wins — the operator will not overwrite it.
+- When `spec.service.ingress.enabled: true`, set `spec.service.ingress.host` to the same value as `spec.service.dnsName` so the Ingress controller routes the right host to your backend.
+
 ## Connection URLs
 
 After configuring external access:

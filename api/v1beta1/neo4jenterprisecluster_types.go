@@ -661,6 +661,23 @@ type ServiceSpec struct {
 	// +kubebuilder:validation:Enum=Cluster;Local
 	ExternalTrafficPolicy string `json:"externalTrafficPolicy,omitempty"`
 
+	// DNSName is the public DNS hostname that should resolve to this
+	// deployment's front-facing Service (e.g. "neo4j.example.com").
+	// When set, the operator:
+	//   - Adds the `external-dns.alpha.kubernetes.io/hostname` annotation
+	//     to the front-facing Service and (when enabled) the Ingress, so
+	//     external-dns (https://github.com/kubernetes-sigs/external-dns)
+	//     manages the matching cloud DNS record automatically.
+	//   - Injects DNSName into the SAN list of the cert-manager Certificate
+	//     when spec.tls is enabled, so TLS connections to the public name
+	//     pass hostname verification.
+	// external-dns must be installed separately. This field has no effect
+	// on cluster routing — external clients still use single-endpoint
+	// `bolt+s://` against this name; routing requires per-pod public
+	// endpoints, which is not in scope here.
+	// +optional
+	DNSName string `json:"dnsName,omitempty"`
+
 	// Ingress configuration
 	Ingress *IngressSpec `json:"ingress,omitempty"`
 
