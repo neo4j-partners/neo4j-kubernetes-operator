@@ -2255,28 +2255,6 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#kerberosauthspec" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        KerberosAuthSpec
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#secretkeyref-keytab" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        SecretKeyRef (Keytab)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#securitycontextspec" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3827,28 +3805,6 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#kerberosauthspec" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        KerberosAuthSpec
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#secretkeyref-keytab" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        SecretKeyRef (Keytab)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#securitycontextspec" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5017,11 +4973,6 @@ the cluster reaches <code>Ready</code> — see <a href="../neo4jrestore/"><code>
 <td>OIDC/SSO providers. Map key = provider name (used in <code>authenticationProviders</code> as <code>oidc-&lt;key&gt;</code>). For JWT-based auth, use OIDC — Neo4j ID tokens are JWTs.</td>
 </tr>
 <tr>
-<td><code>kerberos</code></td>
-<td><a href="#kerberosauthspec"><code>*KerberosAuthSpec</code></a></td>
-<td><strong>Schema-only.</strong> Defined on the API but the operator does not wire it to Neo4j config or mount the keytab. Use <code>spec.config["dbms.security.kerberos.*"]</code> plus <code>spec.extraVolumes</code> for the keytab Secret until full Kerberos support lands.</td>
-</tr>
-<tr>
 <td><code>authCacheTTL</code></td>
 <td><code>string</code></td>
 <td>Auth cache TTL (e.g., <code>"10m"</code>, <code>"600s"</code>). Maps to <code>dbms.security.auth_cache_ttl</code></td>
@@ -5346,61 +5297,6 @@ remove trust in public CAs.</p>
 filesystem path (e.g. <code>dbms.ssl.policy.&lt;name&gt;.truststore_path</code>), use
 <code>spec.extraVolumes</code> + <code>spec.extraVolumeMounts</code> instead — the operator does
 not parse policy config to wire up filesystem mounts automatically.</p>
-<h3 id="kerberosauthspec">KerberosAuthSpec<a class="headerlink" href="#kerberosauthspec" title="Anchor link to this section">&para;</a></h3>
-<blockquote>
-<p><strong>Schema-only — not wired by the operator yet.</strong> See the
-<a href="#authspec"><code>auth.kerberos</code> row in AuthSpec</a> for the recommended workaround
-(<code>spec.config["dbms.security.kerberos.*"]</code> + <code>spec.extraVolumes</code> for the
-keytab) until full support lands.</p>
-</blockquote>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Type</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>realm</code></td>
-<td><code>string</code></td>
-<td>Kerberos realm</td>
-</tr>
-<tr>
-<td><code>servicePrincipal</code></td>
-<td><code>string</code></td>
-<td>Service principal</td>
-</tr>
-<tr>
-<td><code>keytab</code></td>
-<td><a href="#secretkeyref-keytab"><code>*SecretKeyRef</code></a></td>
-<td>Keytab configuration</td>
-</tr>
-</tbody>
-</table>
-<h3 id="secretkeyref-keytab">SecretKeyRef (Keytab)<a class="headerlink" href="#secretkeyref-keytab" title="Anchor link to this section">&para;</a></h3>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Type</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>name</code></td>
-<td><code>string</code></td>
-<td>Secret containing keytab file</td>
-</tr>
-<tr>
-<td><code>key</code></td>
-<td><code>string</code></td>
-<td>Key in secret containing keytab (default: <code>"keytab"</code>)</td>
-</tr>
-</tbody>
-</table>
 <h3 id="securitycontextspec">SecurityContextSpec<a class="headerlink" href="#securitycontextspec" title="Anchor link to this section">&para;</a></h3>
 <table>
 <thead>

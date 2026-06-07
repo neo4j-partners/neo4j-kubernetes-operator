@@ -2699,7 +2699,7 @@
 <li><strong>LDAP / Active Directory</strong>: Full typed support — host, DN templates, group-to-role mapping, system account credentials (injected securely via env vars, never in ConfigMap).</li>
 <li><strong>OIDC / SSO</strong>: Multiple named providers (e.g., Okta + Azure AD simultaneously) with discovery URI, claims mapping, and group-to-role mapping.</li>
 </ul>
-<p>Kerberos and JWT authentication are configurable via raw <code>spec.config</code> keys (<code>dbms.security.authentication_providers</code>, <code>dbms.security.authorization_providers</code>, and provider-specific <code>dbms.security.*</code> settings) but do not currently have first-class typed CRD fields — <code>spec.auth.kerberos</code> and <code>spec.auth.jwt</code> are not wired through to Neo4j config. Track <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/issues/128">issue #128</a> for the typed enhancement.</p>
+<p>Kerberos and JWT authentication are not exposed as typed CRD fields — configure them by adding the provider to <code>spec.auth.authenticationProviders</code> and setting the relevant <code>dbms.security.*</code> keys in <code>spec.config</code>. JWT uses <code>dbms.security.jwt.{secret,public_key}</code> plus optional <code>dbms.security.jwt.audience</code>. Kerberos uses <code>dbms.security.kerberos.{service_principal,keytab}</code> plus a mounted keytab Secret via <code>spec.extraVolumes</code> / <code>spec.extraVolumeMounts</code>. If you'd like typed support for either, <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/issues">open an issue</a> describing the use case.</p>
 <p><strong>Multi-provider support</strong>: Neo4j evaluates providers in order, so you can configure <code>authenticationProviders: [ldap, native]</code> to try LDAP first with native as fallback.</p>
 <p><strong>JVM TrustStore</strong>: For LDAPS or OIDC with internal CAs, use the top-level <code>spec.trustedCASecrets</code> field to add extra trust anchors to the operator-managed JKS truststore (seeded from the JDK <code>cacerts</code>). The legacy <code>spec.auth.trustStore</code> field still works for back-compat but is folded into the same path — prefer <code>spec.trustedCASecrets</code> for new deployments. See the <a href="../../security/#jvm-truststore-for-internal-cas">Security Guide § JVM TrustStore</a> for the full configuration.</p>
 <p>For full configuration details and examples, see the <a href="../../security/#authentication-configuration">Security Best Practices</a> guide and the <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/clusters/auth-example.yaml">auth examples</a>.</p>
@@ -2725,7 +2725,12 @@
 <li><code>allowPrivilegeEscalation: false</code>, <code>capabilities.drop: ["ALL"]</code>, <code>seccompProfile: RuntimeDefault</code>.</li>
 <li>Root filesystem remains writable to support Neo4j startup scripts and tmp usage; keep volumes for data/logs/plugins mounted as before.</li>
 </ul>
-<p>These defaults are applied automatically; customization is not yet exposed via CRD fields. If you add sidecars, align their security contexts with these defaults.</p>
+<p>These defaults are applied automatically. If you need to override them (e.g. for Pod Security Standards / OpenShift SCC compatibility), set:</p>
+<ul>
+<li><code>spec.securityContext.podSecurityContext</code> — full <code>*corev1.PodSecurityContext</code> override (replaces the operator's default)</li>
+<li><code>spec.securityContext.containerSecurityContext</code> — full <code>*corev1.SecurityContext</code> override on the Neo4j container</li>
+</ul>
+<p>When either field is unset, the hardened default above is applied. If you add sidecars, align their security contexts with these defaults.</p>
 
 
 
