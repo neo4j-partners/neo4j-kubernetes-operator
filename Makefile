@@ -223,10 +223,16 @@ test: test-unit test-integration ## Run all tests
 	@echo "✅ All tests completed"
 
 .PHONY: test-coverage
-test-coverage: ## Generate coverage report
+test-coverage: manifests generate fmt vet envtest ## Generate coverage report
 	@echo "📊 Generating coverage report..."
 	@mkdir -p coverage
-	@./scripts/run-tests-clean.sh go test -coverprofile=coverage/coverage.out -covermode=atomic ./...
+	@# Coverage runs `go test ./...` which includes the controller suite (envtest).
+	@# We MUST set KUBEBUILDER_ASSETS the same way test-unit does — without it the
+	@# controller suite can't find the envtest API server binaries and fails to
+	@# start. Pre-fix: suite_test.go had a hardcoded BinaryAssetsDirectory that
+	@# silently masked this gap, but only because stale prior-version binaries
+	@# happened to exist under bin/k8s/.
+	@./scripts/run-tests-clean.sh env KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test -coverprofile=coverage/coverage.out -covermode=atomic ./...
 	@go tool cover -html=coverage/coverage.out -o coverage/coverage.html
 	@go tool cover -func=coverage/coverage.out | tail -1
 
@@ -905,8 +911,8 @@ dev-cluster: ## Create a Kind cluster for development
 
 .PHONY: test-cluster
 test-cluster: ## Create a Kind cluster for testing
-	@echo "Creating test cluster..."
-	@./scripts/test-env.sh cluster
+	@echo "Creating test cluster (image: $(KIND_NODE_IMAGE))..."
+	@KIND_NODE_IMAGE=$(KIND_NODE_IMAGE) ./scripts/test-env.sh cluster
 
 .PHONY: test-cluster-clean
 test-cluster-clean: ## Clean operator resources from test cluster
