@@ -172,7 +172,6 @@ Specifies role constraints for individual servers.
 | `externalSecrets` | [`*ExternalSecretsConfig`](#externalsecretsconfig) | External secrets configuration |
 | `ldap` | [`*Neo4jLDAPSpec`](#neo4jldapspec) | LDAP authentication and authorization configuration |
 | `oidc` | `map[string]`[`Neo4jOIDCProviderSpec`](#neo4joidcproviderspec) | OIDC/SSO providers. Map key = provider name (used in `authenticationProviders` as `oidc-<key>`). For JWT-based auth, use OIDC — Neo4j ID tokens are JWTs. |
-| `kerberos` | [`*KerberosAuthSpec`](#kerberosauthspec) | **Schema-only.** Defined on the API but the operator does not wire it to Neo4j config or mount the keytab. Use `spec.config["dbms.security.kerberos.*"]` plus `spec.extraVolumes` for the keytab Secret until full Kerberos support lands. |
 | `authCacheTTL` | `string` | Auth cache TTL (e.g., `"10m"`, `"600s"`). Maps to `dbms.security.auth_cache_ttl` |
 | `trustStore` | [`*SecretKeyRef`](#secretkeyref-truststore) | Custom JVM truststore for LDAPS or OIDC with internal CAs |
 
@@ -289,26 +288,6 @@ For the *less common* case where a Neo4j SSL policy needs a CA at a specific
 filesystem path (e.g. `dbms.ssl.policy.<name>.truststore_path`), use
 `spec.extraVolumes` + `spec.extraVolumeMounts` instead — the operator does
 not parse policy config to wire up filesystem mounts automatically.
-
-### KerberosAuthSpec
-
-> **Schema-only — not wired by the operator yet.** See the
-> [`auth.kerberos` row in AuthSpec](#authspec) for the recommended workaround
-> (`spec.config["dbms.security.kerberos.*"]` + `spec.extraVolumes` for the
-> keytab) until full support lands.
-
-| Field | Type | Description |
-|---|---|---|
-| `realm` | `string` | Kerberos realm |
-| `servicePrincipal` | `string` | Service principal |
-| `keytab` | [`*SecretKeyRef`](#secretkeyref-keytab) | Keytab configuration |
-
-### SecretKeyRef (Keytab)
-
-| Field | Type | Description |
-|---|---|---|
-| `name` | `string` | Secret containing keytab file |
-| `key` | `string` | Key in secret containing keytab (default: `"keytab"`) |
 
 ### SecurityContextSpec
 

@@ -68,9 +68,6 @@ func (v *ShardedDatabaseValidator) ValidateShardedDatabase(ctx context.Context, 
 	// Validate topology configuration
 	v.validateTopologyConfig(shardedDB, result)
 
-	// Validate backup configuration
-	v.validateBackupConfig(shardedDB, result)
-
 	// Validate Cypher language version
 	v.validateCypherLanguage(shardedDB, result)
 
@@ -285,40 +282,6 @@ func (v *ShardedDatabaseValidator) validateClusterCapacity(cluster *neo4jv1beta1
 	return nil
 }
 
-// validateBackupConfig validates backup configuration
-func (v *ShardedDatabaseValidator) validateBackupConfig(shardedDB *neo4jv1beta1.Neo4jShardedDatabase, result *ShardedDatabaseValidationResult) {
-	if shardedDB.Spec.BackupConfig == nil {
-		return // Backup is optional
-	}
-
-	backupPath := field.NewPath("spec", "backupConfig")
-	config := shardedDB.Spec.BackupConfig
-
-	// Validate consistency mode
-	validModes := []string{"strict", "eventual"}
-	if config.ConsistencyMode != "" && !containsStringItem(validModes, config.ConsistencyMode) {
-		result.Errors = append(result.Errors, field.NotSupported(
-			backupPath.Child("consistencyMode"),
-			config.ConsistencyMode,
-			validModes))
-	}
-
-	// Validate schedule format (basic check)
-	if config.Schedule != "" {
-		if !strings.Contains(config.Schedule, " ") {
-			result.Errors = append(result.Errors, field.Invalid(
-				backupPath.Child("schedule"),
-				config.Schedule,
-				"schedule must be in cron format (e.g., '0 2 * * *')"))
-		}
-	}
-
-	// Validate retention format
-	if config.Retention != "" && !strings.HasSuffix(config.Retention, "d") && !strings.HasSuffix(config.Retention, "h") {
-		result.Warnings = append(result.Warnings, "retention should specify time unit (e.g., '7d', '24h')")
-	}
-}
-
 // validateCypherLanguage validates Cypher language version
 func (v *ShardedDatabaseValidator) validateCypherLanguage(shardedDB *neo4jv1beta1.Neo4jShardedDatabase, result *ShardedDatabaseValidationResult) {
 	specPath := field.NewPath("spec")
@@ -358,14 +321,4 @@ func (v *ShardedDatabaseValidator) validateDatabaseName(name string) error {
 	}
 
 	return nil
-}
-
-// containsStringItem checks if slice contains a value
-func containsStringItem(slice []string, item string) bool {
-	for _, s := range slice {
-		if s == item {
-			return true
-		}
-	}
-	return false
 }

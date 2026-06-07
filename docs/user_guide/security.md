@@ -562,24 +562,29 @@ Short TTL = changes propagate faster. Long TTL = better performance. Setting to 
 
 ### Kerberos Authentication
 
-> **⚠️ Not yet implemented as a typed field.** `spec.auth.kerberos` was previously documented as a typed configuration block; the operator does not currently wire it through to Neo4j config and the typed-spec block has been removed. Use `spec.auth.authenticationProviders: [kerberos, native]` plus `spec.config["dbms.security.kerberos.*"]` keys directly until this is implemented.
->
-> A working configuration looks roughly like:
->
-> ```yaml
-> spec:
->   auth:
->     authenticationProviders: [kerberos, native]
->     authorizationProviders:  [kerberos, native]
->     adminSecret: neo4j-admin-secret
->   config:
->     dbms.security.kerberos.realm: "CORP.EXAMPLE.COM"
->     dbms.security.kerberos.service_principal: "neo4j/neo4j-server.corp.example.com@CORP.EXAMPLE.COM"
->     # Mount the keytab via spec.extraVolumes / spec.extraVolumeMounts and point
->     # dbms.security.kerberos.keytab at the mounted path.
-> ```
->
-> Full Kerberos support (with operator-managed keytab Secret mount + generated config) is on the roadmap but not currently scheduled.
+Kerberos has no typed CRD field. Configure it by listing `kerberos` in `spec.auth.authenticationProviders`, setting the relevant `dbms.security.kerberos.*` keys in `spec.config`, and mounting the keytab via `spec.extraVolumes` / `spec.extraVolumeMounts`:
+
+```yaml
+spec:
+  auth:
+    authenticationProviders: [kerberos, native]
+    authorizationProviders:  [kerberos, native]
+    adminSecret: neo4j-admin-secret
+  config:
+    dbms.security.kerberos.realm: "CORP.EXAMPLE.COM"
+    dbms.security.kerberos.service_principal: "neo4j/neo4j-server.corp.example.com@CORP.EXAMPLE.COM"
+    dbms.security.kerberos.keytab: "/etc/neo4j/krb5/neo4j.keytab"
+  extraVolumes:
+    - name: kerberos-keytab
+      secret:
+        secretName: neo4j-keytab
+  extraVolumeMounts:
+    - name: kerberos-keytab
+      mountPath: /etc/neo4j/krb5
+      readOnly: true
+```
+
+If you want typed support (operator-managed keytab mount + generated config), [open an issue](https://github.com/neo4j-partners/neo4j-kubernetes-operator/issues) describing your use case.
 
 ## Authorization and RBAC
 

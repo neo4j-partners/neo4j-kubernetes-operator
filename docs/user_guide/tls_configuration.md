@@ -92,7 +92,7 @@ The opt-out exists for installations whose external issuer (e.g. some custom `AW
 
 ### Bolt client-certificate auth is not exposed today
 
-Bolt and HTTPS SSL policies are managed with `client_auth=NONE` so standard Neo4j drivers — none of which ship with operator-issued client certs — can connect. A future enhancement could expose a typed field for Bolt mTLS; track via [issue #128](https://github.com/neo4j-partners/neo4j-kubernetes-operator/issues/128).
+Bolt and HTTPS SSL policies are managed with `client_auth=NONE` so standard Neo4j drivers — none of which ship with operator-issued client certs — can connect. There is no typed field for Bolt mTLS today, and no design committed for one. The blocker isn't the operator (which can emit any `dbms.ssl.policy.bolt.client_auth` value) — it's that none of the Neo4j Bolt drivers expose a clean way to load a client cert from a K8s Secret in the application namespace, so the app-side story is the harder half. If you need this for a specific compliance regime, [open an issue](https://github.com/neo4j-partners/neo4j-kubernetes-operator/issues) describing the driver/language combination.
 
 ## Certificate Storage
 

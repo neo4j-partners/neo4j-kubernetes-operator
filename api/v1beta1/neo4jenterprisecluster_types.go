@@ -391,10 +391,6 @@ type AuthSpec struct {
 	// +optional
 	OIDC map[string]Neo4jOIDCProviderSpec `json:"oidc,omitempty"`
 
-	// Kerberos configuration for Kerberos auth provider
-	// +optional
-	Kerberos *KerberosAuthSpec `json:"kerberos,omitempty"`
-
 	// AuthCacheTTL sets dbms.security.auth_cache_ttl (e.g., "10m", "600s").
 	// Controls how long authentication/authorization results are cached.
 	// +optional
@@ -629,18 +625,6 @@ type SecretKeyRef struct {
 	// Key within the Secret. The default depends on context (e.g., "ca.crt" for TrustStore, "token" for fleet management).
 	// +optional
 	Key string `json:"key,omitempty"`
-}
-
-// KerberosAuthSpec defines Kerberos authentication configuration
-type KerberosAuthSpec struct {
-	// Kerberos realm
-	Realm string `json:"realm,omitempty"`
-
-	// Service principal name
-	ServicePrincipal string `json:"servicePrincipal,omitempty"`
-
-	// Keytab secret reference. Name is the Secret name; Key defaults to "keytab" if omitted.
-	Keytab *SecretKeyRef `json:"keytab,omitempty"`
 }
 
 // ServiceSpec defines service configuration

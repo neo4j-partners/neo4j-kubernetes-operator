@@ -139,7 +139,6 @@ spec:
   seedConfig: SeedConfiguration                 # Optional
   seedCredentials: SeedCredentials              # Optional
   txLogEnrichment: string                       # Optional
-  backupConfig: ShardedDatabaseBackupConfig     # Optional
 ```
 
 #### Fields
@@ -158,7 +157,6 @@ spec:
 | `seedConfig` | `SeedConfiguration` | No | - | Seed configuration for initialization |
 | `seedCredentials` | `SeedCredentials` | No | - | Credentials for seed URI access |
 | `txLogEnrichment` | `string` | No | - | Transaction log enrichment option |
-| `backupConfig` | `ShardedDatabaseBackupConfig` | No | - | Backup configuration |
 
 **Seed URI Notes**:
 - `seedURI` is for a single backup location (expects shard-suffixed artifacts).
@@ -216,35 +214,9 @@ propertyShardTopology:
 - Recommended: 2+ replicas for fault tolerance
 - Uses replica-based replication
 
-### ShardedDatabaseBackupConfig
+### Backups
 
-Note: The operator does not yet orchestrate `backupConfig` for sharded databases. Use `Neo4jBackup` resources for coordinated shard backups.
-
-```yaml
-backupConfig:
-  enabled: boolean           # Optional: true
-  schedule: string          # Optional: Cron expression
-  storage: StorageLocation  # Optional
-  retention: string         # Optional: "168h"
-  consistencyMode: string   # Optional: "strict"|"eventual"
-  timeout: string          # Optional: "30m"
-```
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `enabled` | `boolean` | true | Enable coordinated backups |
-| `schedule` | `string` | - | Cron schedule for backups |
-| `storage` | `StorageLocation` | - | Backup storage configuration |
-| `retention` | `string` | "168h" | Backup retention policy |
-| `consistencyMode` | `string` | "strict" | "strict" or "eventual" consistency |
-| `timeout` | `string` | "30m" | Maximum backup operation timeout |
-
-#### Consistency Modes
-
-| Mode | Description | Performance | Use Case |
-|------|-------------|-------------|----------|
-| `strict` | All shards backed up simultaneously | Lower | Consistent point-in-time backups |
-| `eventual` | Shards backed up sequentially | Higher | Faster backups, less consistency |
+There is no typed `backupConfig` field on `Neo4jShardedDatabase`. Use `Neo4jBackup` resources to back up the individual shard databases — coordinated cross-shard point-in-time backups are not yet implemented at the operator level.
 
 ### Neo4jShardedDatabaseStatus
 

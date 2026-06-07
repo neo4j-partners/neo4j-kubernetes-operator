@@ -62,20 +62,30 @@ Four typed fields that were defined on the schema but were never wired through t
 grep -rE 'spec:.*\b(jwt|ui|restoreFrom|license):' path/to/manifests/
 ```
 
-### 2. `spec.auth.passwordPolicy` is removed from the CRD
+### 2. `spec.auth.passwordPolicy` and `spec.auth.kerberos` are removed from the CRD
 
-The `spec.auth.passwordPolicy` block was always schema-only — the operator never wired it through to Neo4j config. It has been removed from the CRD entirely. `spec.auth.kerberos` remains for back-compat but is also schema-only (still on the CRD; the operator does not mount keytabs or write `dbms.security.kerberos.*` config from it).
+Both blocks were always schema-only — the operator never wired either through to Neo4j config. Both have been removed from the CRD entirely. Manifests still carrying `spec.auth.passwordPolicy` or `spec.auth.kerberos` will be rejected by the API server after the upgrade.
 
-**Action**: set the equivalent Neo4j config keys directly in `spec.config`. Manifests still carrying `spec.auth.passwordPolicy` will be rejected by the API server after the upgrade.
+**Action**: set the equivalent Neo4j config keys directly in `spec.config`. For Kerberos, also mount the keytab Secret via `spec.extraVolumes` / `spec.extraVolumeMounts`.
 
 ```yaml
 spec:
   auth:
     adminSecret: neo4j-admin-secret
+    authenticationProviders: [kerberos, native]   # if using Kerberos
   config:
     dbms.security.auth_minimum_password_length: "12"
-    # Kerberos: dbms.security.kerberos.* keys here, plus a keytab volume
-    # mounted via spec.extraVolumes / spec.extraVolumeMounts.
+    # Kerberos:
+    dbms.security.kerberos.service_principal: "neo4j/neo4j.example.com@EXAMPLE.COM"
+    dbms.security.kerberos.keytab: "/etc/neo4j/krb5/neo4j.keytab"
+  extraVolumes:
+    - name: kerberos-keytab
+      secret:
+        secretName: neo4j-keytab
+  extraVolumeMounts:
+    - name: kerberos-keytab
+      mountPath: /etc/neo4j/krb5
+      readOnly: true
 ```
 
 ### 3. `neo4j_operator_cluster_replicas_total` metric: role label values renamed
@@ -144,7 +154,7 @@ Backups against the recreated standalone work end-to-end after step 4.
 ### Quick upgrade checklist
 
 1. Grep manifests for the removed fields (step 1) and migrate them.
-2. If you set `spec.auth.passwordPolicy` (now removed) or `spec.auth.kerberos` (still schema-only) and were depending on it doing something, move the equivalent keys into `spec.config` (step 2).
+2. If you set `spec.auth.passwordPolicy` or `spec.auth.kerberos` (both now removed) and were depending on them doing something, move the equivalent keys into `spec.config` (step 2).
 3. Update PromQL / Grafana queries on `cluster_replicas_total` (step 3).
 4. Audit `spec.config` if you have long-edit-history clusters that may have relied on the env-var-removal bug (step 4).
 5. If you have existing `Neo4jEnterpriseStandalone` CRs AND want backups against them, delete + recreate with `retentionPolicy=Retain` per step 5 above. Standalones that never need backups can be left as-is.

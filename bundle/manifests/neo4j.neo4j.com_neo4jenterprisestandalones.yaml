@@ -1149,31 +1149,6 @@ spec:
                         - name
                         type: object
                     type: object
-                  kerberos:
-                    description: Kerberos configuration for Kerberos auth provider
-                    properties:
-                      keytab:
-                        description: Keytab secret reference. Name is the Secret name;
-                          Key defaults to "keytab" if omitted.
-                        properties:
-                          key:
-                            description: Key within the Secret. The default depends
-                              on context (e.g., "ca.crt" for TrustStore, "token" for
-                              fleet management).
-                            type: string
-                          name:
-                            description: Name of the Kubernetes Secret
-                            type: string
-                        required:
-                        - name
-                        type: object
-                      realm:
-                        description: Kerberos realm
-                        type: string
-                      servicePrincipal:
-                        description: Service principal name
-                        type: string
-                    type: object
                   ldap:
                     description: LDAP configures LDAP authentication and authorization
                     properties:

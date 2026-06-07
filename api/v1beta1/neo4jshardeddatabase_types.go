@@ -75,12 +75,6 @@ type Neo4jShardedDatabaseSpec struct {
 	// Transaction log enrichment for sharded database creation.
 	// Valid values are Neo4j-supported txLogEnrichment options (e.g., "FULL").
 	TxLogEnrichment string `json:"txLogEnrichment,omitempty"`
-
-	// Backup configuration for sharded database
-	//
-	// Defines how backups are coordinated across graph and property shards.
-	// The operator ensures consistent backup snapshots across all shards.
-	BackupConfig *ShardedDatabaseBackupConfig `json:"backupConfig,omitempty"`
 }
 
 // PropertyShardingConfiguration defines how property shards are distributed
@@ -114,36 +108,6 @@ type PropertyShardTopology struct {
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:default=1
 	Replicas int32 `json:"replicas,omitempty"`
-}
-
-// ShardedDatabaseBackupConfig defines backup coordination across shards
-type ShardedDatabaseBackupConfig struct {
-	// Enable coordinated backups across all shards
-	// +kubebuilder:default=true
-	Enabled bool `json:"enabled,omitempty"`
-
-	// Backup schedule using cron syntax
-	// Applies to all shards simultaneously for consistency
-	Schedule string `json:"schedule,omitempty"`
-
-	// Storage location for sharded database backups
-	Storage *StorageLocation `json:"storage,omitempty"`
-
-	// Backup retention policy (e.g., "168h" for 7 days)
-	// +kubebuilder:default="168h"
-	Retention string `json:"retention,omitempty"`
-
-	// Consistency mode for cross-shard backups
-	// +kubebuilder:validation:Enum=strict;eventual
-	// +kubebuilder:default=strict
-	//
-	// - strict: All shards backed up simultaneously (consistent point-in-time)
-	// - eventual: Shards backed up sequentially (faster, less consistent)
-	ConsistencyMode string `json:"consistencyMode,omitempty"`
-
-	// Maximum backup operation timeout
-	// +kubebuilder:default="30m"
-	Timeout string `json:"timeout,omitempty"`
 }
 
 // Neo4jShardedDatabaseStatus defines the observed state of Neo4jShardedDatabase

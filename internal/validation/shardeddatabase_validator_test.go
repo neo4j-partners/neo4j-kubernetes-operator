@@ -68,96 +68,6 @@ func TestValidateCypherLanguage(t *testing.T) {
 	})
 }
 
-func TestValidateBackupConfig(t *testing.T) {
-	v := &ShardedDatabaseValidator{}
-
-	t.Run("nil config is valid", func(t *testing.T) {
-		result := &ShardedDatabaseValidationResult{}
-		db := &neo4jv1beta1.Neo4jShardedDatabase{}
-		v.validateBackupConfig(db, result)
-		assert.Empty(t, result.Errors)
-		assert.Empty(t, result.Warnings)
-	})
-
-	t.Run("valid consistency mode", func(t *testing.T) {
-		result := &ShardedDatabaseValidationResult{}
-		db := &neo4jv1beta1.Neo4jShardedDatabase{
-			Spec: neo4jv1beta1.Neo4jShardedDatabaseSpec{
-				BackupConfig: &neo4jv1beta1.ShardedDatabaseBackupConfig{
-					ConsistencyMode: "strict",
-				},
-			},
-		}
-		v.validateBackupConfig(db, result)
-		assert.Empty(t, result.Errors)
-	})
-
-	t.Run("invalid consistency mode", func(t *testing.T) {
-		result := &ShardedDatabaseValidationResult{}
-		db := &neo4jv1beta1.Neo4jShardedDatabase{
-			Spec: neo4jv1beta1.Neo4jShardedDatabaseSpec{
-				BackupConfig: &neo4jv1beta1.ShardedDatabaseBackupConfig{
-					ConsistencyMode: "invalid",
-				},
-			},
-		}
-		v.validateBackupConfig(db, result)
-		assert.NotEmpty(t, result.Errors)
-	})
-
-	t.Run("valid cron schedule", func(t *testing.T) {
-		result := &ShardedDatabaseValidationResult{}
-		db := &neo4jv1beta1.Neo4jShardedDatabase{
-			Spec: neo4jv1beta1.Neo4jShardedDatabaseSpec{
-				BackupConfig: &neo4jv1beta1.ShardedDatabaseBackupConfig{
-					Schedule: "0 2 * * *",
-				},
-			},
-		}
-		v.validateBackupConfig(db, result)
-		assert.Empty(t, result.Errors)
-	})
-
-	t.Run("invalid schedule no space", func(t *testing.T) {
-		result := &ShardedDatabaseValidationResult{}
-		db := &neo4jv1beta1.Neo4jShardedDatabase{
-			Spec: neo4jv1beta1.Neo4jShardedDatabaseSpec{
-				BackupConfig: &neo4jv1beta1.ShardedDatabaseBackupConfig{
-					Schedule: "invalid",
-				},
-			},
-		}
-		v.validateBackupConfig(db, result)
-		assert.NotEmpty(t, result.Errors)
-	})
-
-	t.Run("retention warning without unit", func(t *testing.T) {
-		result := &ShardedDatabaseValidationResult{}
-		db := &neo4jv1beta1.Neo4jShardedDatabase{
-			Spec: neo4jv1beta1.Neo4jShardedDatabaseSpec{
-				BackupConfig: &neo4jv1beta1.ShardedDatabaseBackupConfig{
-					Retention: "7",
-				},
-			},
-		}
-		v.validateBackupConfig(db, result)
-		assert.NotEmpty(t, result.Warnings)
-	})
-
-	t.Run("retention valid with unit", func(t *testing.T) {
-		result := &ShardedDatabaseValidationResult{}
-		db := &neo4jv1beta1.Neo4jShardedDatabase{
-			Spec: neo4jv1beta1.Neo4jShardedDatabaseSpec{
-				BackupConfig: &neo4jv1beta1.ShardedDatabaseBackupConfig{
-					Retention: "7d",
-				},
-			},
-		}
-		v.validateBackupConfig(db, result)
-		assert.Empty(t, result.Warnings)
-	})
-}
-
 func TestValidateBasicFields(t *testing.T) {
 	v := &ShardedDatabaseValidator{}
 
@@ -194,11 +104,4 @@ func TestValidateBasicFields(t *testing.T) {
 		v.validateBasicFields(db, result)
 		assert.Empty(t, result.Errors)
 	})
-}
-
-func TestContainsStringItem(t *testing.T) {
-	assert.True(t, containsStringItem([]string{"a", "b", "c"}, "b"))
-	assert.False(t, containsStringItem([]string{"a", "b", "c"}, "d"))
-	assert.False(t, containsStringItem([]string{}, "a"))
-	assert.False(t, containsStringItem(nil, "a"))
 }

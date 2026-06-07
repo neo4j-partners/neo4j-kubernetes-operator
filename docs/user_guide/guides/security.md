@@ -12,7 +12,7 @@ The operator provides first-class, typed configuration for external identity pro
 *   **LDAP / Active Directory**: Full typed support — host, DN templates, group-to-role mapping, system account credentials (injected securely via env vars, never in ConfigMap).
 *   **OIDC / SSO**: Multiple named providers (e.g., Okta + Azure AD simultaneously) with discovery URI, claims mapping, and group-to-role mapping.
 
-Kerberos and JWT authentication are configurable via raw `spec.config` keys (`dbms.security.authentication_providers`, `dbms.security.authorization_providers`, and provider-specific `dbms.security.*` settings) but do not currently have first-class typed CRD fields — `spec.auth.kerberos` and `spec.auth.jwt` are not wired through to Neo4j config. Track [issue #128](https://github.com/neo4j-partners/neo4j-kubernetes-operator/issues/128) for the typed enhancement.
+Kerberos and JWT authentication are not exposed as typed CRD fields — configure them by adding the provider to `spec.auth.authenticationProviders` and setting the relevant `dbms.security.*` keys in `spec.config`. JWT uses `dbms.security.jwt.{secret,public_key}` plus optional `dbms.security.jwt.audience`. Kerberos uses `dbms.security.kerberos.{service_principal,keytab}` plus a mounted keytab Secret via `spec.extraVolumes` / `spec.extraVolumeMounts`. If you'd like typed support for either, [open an issue](https://github.com/neo4j-partners/neo4j-kubernetes-operator/issues) describing the use case.
 
 **Multi-provider support**: Neo4j evaluates providers in order, so you can configure `authenticationProviders: [ldap, native]` to try LDAP first with native as fallback.
 
@@ -52,4 +52,9 @@ The operator now hardens all Neo4j data-plane pods (servers, centralized backup,
 - `allowPrivilegeEscalation: false`, `capabilities.drop: ["ALL"]`, `seccompProfile: RuntimeDefault`.
 - Root filesystem remains writable to support Neo4j startup scripts and tmp usage; keep volumes for data/logs/plugins mounted as before.
 
-These defaults are applied automatically; customization is not yet exposed via CRD fields. If you add sidecars, align their security contexts with these defaults.
+These defaults are applied automatically. If you need to override them (e.g. for Pod Security Standards / OpenShift SCC compatibility), set:
+
+- `spec.securityContext.podSecurityContext` — full `*corev1.PodSecurityContext` override (replaces the operator's default)
+- `spec.securityContext.containerSecurityContext` — full `*corev1.SecurityContext` override on the Neo4j container
+
+When either field is unset, the hardened default above is applied. If you add sidecars, align their security contexts with these defaults.
