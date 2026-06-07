@@ -283,6 +283,69 @@ type BackupRun struct {
 	// BackupsPath — those artifacts live flat in spec.storage.path.
 	// +optional
 	BackupsPath string `json:"backupsPath,omitempty"`
+
+	// ShardArtifacts records the per-shard `.backup` files produced by a
+	// sharded backup run (target.kind=ShardedDatabase). Populated by the
+	// backup controller after parsing the trailing `ls -la` output appended
+	// to the backup command. Empty for non-sharded runs.
+	// +optional
+	ShardArtifacts []ShardArtifact `json:"shardArtifacts,omitempty"`
+
+	// Validation captures the per-shard outcome of an optional
+	// `neo4j-admin backup validate` step run after the backup completes.
+	// Populated only when the operator was able to run validate and parse
+	// its output (sharded backups on a Neo4j version that exposes the
+	// validate subcommand). Absent on older versions or non-sharded runs.
+	// +optional
+	Validation *BackupValidationResult `json:"validation,omitempty"`
+}
+
+// ShardArtifact identifies one `.backup` file produced by a sharded backup.
+type ShardArtifact struct {
+	// ShardName is the per-shard database name (e.g. "products-g000",
+	// "products-p000"). Derived by stripping the timestamp suffix from the
+	// neo4j-admin output filename.
+	ShardName string `json:"shardName"`
+
+	// Filename is the on-disk filename as written by neo4j-admin (e.g.
+	// "products-g000-2025-06-11T21-04-42.backup").
+	Filename string `json:"filename,omitempty"`
+
+	// Size is the artifact size in bytes as reported by `ls -la`. Zero if
+	// not parseable. Use `humanize.IBytes` or equivalent on the consumer
+	// side for display.
+	Size int64 `json:"size,omitempty"`
+}
+
+// BackupValidationResult captures the output of `neo4j-admin backup validate`
+// run after a sharded backup, surfacing per-shard recoverability.
+type BackupValidationResult struct {
+	// OverallStatus is "OK" if every shard's chain is recoverable to the
+	// same transaction or higher; "Degraded" if any shard is ahead/behind
+	// beyond the lenient consistency window; "Unknown" if the validate step
+	// failed or its output couldn't be parsed.
+	// +kubebuilder:validation:Enum=OK;Degraded;Unknown
+	OverallStatus string `json:"overallStatus,omitempty"`
+
+	// PerShard holds the validate command's status report for each shard.
+	// +optional
+	PerShard []ShardValidationStatus `json:"perShard,omitempty"`
+
+	// RawOutput is the truncated stdout of `neo4j-admin backup validate`,
+	// kept for operator debugging when the parser couldn't classify a
+	// per-shard line. Capped at 2 KiB; longer outputs are truncated with a
+	// "…(truncated)" marker.
+	// +optional
+	RawOutput string `json:"rawOutput,omitempty"`
+}
+
+// ShardValidationStatus is one row of validate output.
+type ShardValidationStatus struct {
+	ShardName string `json:"shardName"`
+	// Status is one of OK / Ahead / Behind / Unknown.
+	// +kubebuilder:validation:Enum=OK;Ahead;Behind;Unknown
+	Status  string `json:"status,omitempty"`
+	Message string `json:"message,omitempty"`
 }
 
 // +kubebuilder:object:root=true

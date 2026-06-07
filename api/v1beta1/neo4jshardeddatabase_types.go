@@ -141,6 +141,37 @@ type Neo4jShardedDatabaseStatus struct {
 
 	// Total size across all shards
 	TotalSize string `json:"totalSize,omitempty"`
+
+	// LastBackup records the most recent successful backup that targeted this
+	// sharded database. Populated by the backup controller's reverse-lookup
+	// when a Neo4jBackup with target.kind=ShardedDatabase and target.name
+	// matching this CR's name reaches a Succeeded run. Populated only on
+	// Success — Failed/Running runs do not overwrite the field. The reference
+	// is informational; operators auditing backup health should also consult
+	// the Neo4jBackup CR's status.history for the full chain.
+	LastBackup *ShardedDatabaseBackupReference `json:"lastBackup,omitempty"`
+}
+
+// ShardedDatabaseBackupReference is the reverse-lookup pointer populated by
+// the backup controller when a Neo4jBackup of kind=ShardedDatabase succeeds.
+// All fields together identify a specific run's artifacts: BackupRef + RunID
+// give the exact entry in the Neo4jBackup CR's status.history; BackupsPath
+// names the on-disk subdirectory under the backup target storage; Timestamp
+// is when the backup Job's Pod reported completion.
+type ShardedDatabaseBackupReference struct {
+	// BackupRef is the Neo4jBackup CR name in the same namespace.
+	BackupRef string `json:"backupRef"`
+
+	// RunID matches BackupRun.RunID in the Neo4jBackup CR (the backup Job's
+	// metadata.uid). Stable across status refreshes and unique per run.
+	RunID string `json:"runID,omitempty"`
+
+	// BackupsPath is the per-run subdirectory inside the backup storage where
+	// the per-shard artifacts were written. Same value as BackupRun.BackupsPath.
+	BackupsPath string `json:"backupsPath,omitempty"`
+
+	// Timestamp is the time the backup Job's Pod reported completion.
+	Timestamp *metav1.Time `json:"timestamp,omitempty"`
 }
 
 // ShardStatus tracks the status of individual shards (graph or property)

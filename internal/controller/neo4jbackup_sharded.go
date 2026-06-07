@@ -17,6 +17,8 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	ctrl "sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	neo4jv1beta1 "github.com/neo4j-partners/neo4j-kubernetes-operator/api/v1beta1"
@@ -154,6 +156,107 @@ func contains(s []string, v string) bool {
 		}
 	}
 	return false
+}
+
+// expectedShardArtifactsForBackup returns the per-shard artifact stubs for a
+// sharded backup run by reading the referenced Neo4jShardedDatabase CR's spec.
+// Returns nil (no error) for:
+//   - non-ShardedDatabase backups,
+//   - missing CR (sharded DB was deleted between backup creation and run
+//     completion),
+//   - any fetch error (caller treats this as a UX-only signal, not a hard
+//     failure).
+//
+// Phase 3 deliberately leaves ShardArtifact.Filename + Size empty: capturing
+// the actual neo4j-admin output filenames + bytes would require Pod-log
+// access (kubernetes.Clientset) the operator doesn't currently wire in.
+// ShardName alone is the audit-load-bearing field ("did all shards get
+// backed up?") and can be filled from the spec without log parsing. A
+// future enhancement can populate Filename/Size from Pod logs without a CRD
+// break.
+func (r *Neo4jBackupReconciler) expectedShardArtifactsForBackup(ctx context.Context, backup *neo4jv1beta1.Neo4jBackup) []neo4jv1beta1.ShardArtifact {
+	if backup.Spec.Target.Kind != neo4jv1beta1.BackupTargetKindShardedDatabase {
+		return nil
+	}
+
+	ns := backup.Spec.Target.Namespace
+	if ns == "" {
+		ns = backup.Namespace
+	}
+	shardedDB := &neo4jv1beta1.Neo4jShardedDatabase{}
+	if err := r.Get(ctx, types.NamespacedName{Name: backup.Spec.Target.Name, Namespace: ns}, shardedDB); err != nil {
+		log.FromContext(ctx).Info("expectedShardArtifactsForBackup: sharded DB CR not found, returning empty artifact list",
+			"shardedDB", backup.Spec.Target.Name, "namespace", ns)
+		return nil
+	}
+
+	logical := backup.Spec.Target.Name
+	count := int(shardedDB.Spec.PropertySharding.PropertyShards)
+	if count < 0 {
+		count = 0
+	}
+	artifacts := make([]neo4jv1beta1.ShardArtifact, 0, 1+count)
+	artifacts = append(artifacts, neo4jv1beta1.ShardArtifact{ShardName: fmt.Sprintf("%s-g000", logical)})
+	for i := 0; i < count; i++ {
+		artifacts = append(artifacts, neo4jv1beta1.ShardArtifact{ShardName: fmt.Sprintf("%s-p%03d", logical, i)})
+	}
+	return artifacts
+}
+
+// updateShardedDBLastBackup is the Phase 3 reverse-lookup that updates a
+// Neo4jShardedDatabase CR's status.lastBackup when a sharded backup run
+// completes successfully. Non-fatal: any failure (CR not found, status patch
+// conflict beyond the retry budget) is logged and swallowed — the backup's
+// own status.history remains the source of truth, this is just a UX hint on
+// the sharded DB CR so operators can audit backup health without grepping
+// Neo4jBackup CRs.
+//
+// No-op when:
+//   - backup target.kind is not ShardedDatabase,
+//   - the run is not Succeeded (Failed runs do not overwrite lastBackup),
+//   - the target Neo4jShardedDatabase CR doesn't exist (e.g. user deleted it
+//     while a backup was still in flight, or the CR is managed externally).
+//
+// Conflict-on-update: the sharded DB controller writes to its own status on
+// every reconcile, so concurrent writes are normal. Use the standard
+// retry.RetryOnConflict pattern (matches CLAUDE.md rule 1).
+func (r *Neo4jBackupReconciler) updateShardedDBLastBackup(ctx context.Context, backup *neo4jv1beta1.Neo4jBackup, run neo4jv1beta1.BackupRun) {
+	if backup.Spec.Target.Kind != neo4jv1beta1.BackupTargetKindShardedDatabase {
+		return
+	}
+	if run.Status != "Succeeded" {
+		return
+	}
+
+	logger := log.FromContext(ctx)
+
+	ns := backup.Spec.Target.Namespace
+	if ns == "" {
+		ns = backup.Namespace
+	}
+
+	update := func() error {
+		shardedDB := &neo4jv1beta1.Neo4jShardedDatabase{}
+		if err := r.Get(ctx, types.NamespacedName{Name: backup.Spec.Target.Name, Namespace: ns}, shardedDB); err != nil {
+			return err
+		}
+		shardedDB.Status.LastBackup = &neo4jv1beta1.ShardedDatabaseBackupReference{
+			BackupRef:   backup.Name,
+			RunID:       run.RunID,
+			BackupsPath: run.BackupsPath,
+			Timestamp:   run.CompletionTime,
+		}
+		return r.Status().Update(ctx, shardedDB)
+	}
+	if err := retry.RetryOnConflict(retry.DefaultBackoff, update); err != nil {
+		if errors.IsNotFound(err) {
+			logger.Info("Skipping Neo4jShardedDatabase.status.lastBackup update — CR not found",
+				"shardedDB", backup.Spec.Target.Name, "namespace", ns)
+			return
+		}
+		logger.Error(err, "Failed to update Neo4jShardedDatabase.status.lastBackup (non-fatal)",
+			"shardedDB", backup.Spec.Target.Name, "namespace", ns, "backup", backup.Name)
+	}
 }
 
 // applyShardedPreflight is the convenience wrapper used by the reconcile flow:

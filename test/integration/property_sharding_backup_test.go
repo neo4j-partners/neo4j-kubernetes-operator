@@ -267,6 +267,25 @@ var _ = Describe("Property Sharding Backup Integration Tests", Serial, func() {
 			Expect(backup.Status.History).ToNot(BeEmpty(),
 				"status.history must record the sharded backup run")
 			Expect(backup.Status.History[0].Status).To(Equal("Succeeded"))
+
+			By("Verifying BackupRun.ShardArtifacts records the per-shard manifest (Phase 3b)")
+			Expect(backup.Status.History[0].ShardArtifacts).To(HaveLen(3),
+				"expected 1 graph + 2 property shards in the manifest")
+			gotShards := make([]string, 0, 3)
+			for _, a := range backup.Status.History[0].ShardArtifacts {
+				gotShards = append(gotShards, a.ShardName)
+			}
+			Expect(gotShards).To(ConsistOf("products-g000", "products-p000", "products-p001"))
+
+			By("Verifying Neo4jShardedDatabase.status.lastBackup was reverse-populated (Phase 3a)")
+			Eventually(func() *neo4jv1beta1.ShardedDatabaseBackupReference {
+				_ = k8sClient.Get(ctx, client.ObjectKeyFromObject(shardedDB), shardedDB)
+				return shardedDB.Status.LastBackup
+			}, 2*time.Minute, pollInterval).ShouldNot(BeNil(),
+				"sharded DB CR status.lastBackup must be populated after a Succeeded sharded backup run")
+			Expect(shardedDB.Status.LastBackup.BackupRef).To(Equal(backup.Name))
+			Expect(shardedDB.Status.LastBackup.RunID).ToNot(BeEmpty(),
+				"lastBackup.runID is the Job UID; must not be empty")
 		})
 
 		It("rejects a sharded backup against a cluster without propertySharding.enabled", func() {

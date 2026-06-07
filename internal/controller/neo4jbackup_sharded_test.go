@@ -12,11 +12,13 @@ package controller
 
 import (
 	"context"
+	"reflect"
 	"strings"
 	"testing"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -39,7 +41,7 @@ func newShardedTestReconciler(t *testing.T, objs ...runtime.Object) *Neo4jBackup
 	c := fake.NewClientBuilder().
 		WithScheme(scheme).
 		WithRuntimeObjects(objs...).
-		WithStatusSubresource(&neo4jv1beta1.Neo4jBackup{}).
+		WithStatusSubresource(&neo4jv1beta1.Neo4jBackup{}, &neo4jv1beta1.Neo4jShardedDatabase{}).
 		Build()
 	return &Neo4jBackupReconciler{
 		Client:   c,
@@ -143,6 +145,184 @@ func TestEffectiveRemoteAddressResolution(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestExpectedShardArtifactsForBackup_Matrix pins the per-shard manifest
+// builder used by the backup controller to stamp BackupRun.ShardArtifacts.
+// Names are derived from Neo4jShardedDatabase.spec.propertySharding alone —
+// neo4j-admin output is not parsed in Phase 3.
+func TestExpectedShardArtifactsForBackup_Matrix(t *testing.T) {
+	sdb2 := &neo4jv1beta1.Neo4jShardedDatabase{
+		ObjectMeta: metav1.ObjectMeta{Name: "products", Namespace: "default"},
+		Spec: neo4jv1beta1.Neo4jShardedDatabaseSpec{
+			Name:       "products",
+			ClusterRef: "ec",
+			PropertySharding: neo4jv1beta1.PropertyShardingConfiguration{
+				PropertyShards: 2,
+				GraphShard:     neo4jv1beta1.DatabaseTopology{Primaries: 1},
+				PropertyShardTopology: neo4jv1beta1.PropertyShardTopology{
+					Replicas: 1,
+				},
+			},
+		},
+	}
+	sdb5 := &neo4jv1beta1.Neo4jShardedDatabase{
+		ObjectMeta: metav1.ObjectMeta{Name: "orders", Namespace: "default"},
+		Spec: neo4jv1beta1.Neo4jShardedDatabaseSpec{
+			Name:       "orders",
+			ClusterRef: "ec",
+			PropertySharding: neo4jv1beta1.PropertyShardingConfiguration{
+				PropertyShards: 5,
+				GraphShard:     neo4jv1beta1.DatabaseTopology{Primaries: 1},
+				PropertyShardTopology: neo4jv1beta1.PropertyShardTopology{
+					Replicas: 1,
+				},
+			},
+		},
+	}
+
+	mkBackup := func(kind, name string) *neo4jv1beta1.Neo4jBackup {
+		return &neo4jv1beta1.Neo4jBackup{
+			ObjectMeta: metav1.ObjectMeta{Name: name + "-backup", Namespace: "default"},
+			Spec: neo4jv1beta1.Neo4jBackupSpec{
+				Target: neo4jv1beta1.BackupTarget{Kind: kind, Name: name, ClusterRef: "ec"},
+			},
+		}
+	}
+
+	t.Run("ShardedDatabase with 2 property shards → g000 + p000 + p001", func(t *testing.T) {
+		r := newShardedTestReconciler(t, sdb2)
+		got := r.expectedShardArtifactsForBackup(context.Background(),
+			mkBackup(neo4jv1beta1.BackupTargetKindShardedDatabase, "products"))
+		want := []string{"products-g000", "products-p000", "products-p001"}
+		gotNames := make([]string, 0, len(got))
+		for _, a := range got {
+			gotNames = append(gotNames, a.ShardName)
+		}
+		if !reflect.DeepEqual(gotNames, want) {
+			t.Errorf("ShardNames = %v, want %v", gotNames, want)
+		}
+	})
+
+	t.Run("ShardedDatabase with 5 property shards → g000 + p000..p004", func(t *testing.T) {
+		r := newShardedTestReconciler(t, sdb5)
+		got := r.expectedShardArtifactsForBackup(context.Background(),
+			mkBackup(neo4jv1beta1.BackupTargetKindShardedDatabase, "orders"))
+		if len(got) != 6 {
+			t.Fatalf("expected 6 artifacts (1 graph + 5 property), got %d: %+v", len(got), got)
+		}
+		if got[0].ShardName != "orders-g000" {
+			t.Errorf("got[0] = %q, want orders-g000", got[0].ShardName)
+		}
+		// Spot check the last property shard uses the 3-digit pattern.
+		if got[5].ShardName != "orders-p004" {
+			t.Errorf("got[5] = %q, want orders-p004", got[5].ShardName)
+		}
+	})
+
+	t.Run("Cluster-kind backup → nil", func(t *testing.T) {
+		r := newShardedTestReconciler(t, sdb2)
+		got := r.expectedShardArtifactsForBackup(context.Background(),
+			mkBackup(neo4jv1beta1.BackupTargetKindCluster, "products"))
+		if got != nil {
+			t.Errorf("expected nil for Cluster kind, got %+v", got)
+		}
+	})
+
+	t.Run("Sharded DB CR missing → nil (non-fatal)", func(t *testing.T) {
+		r := newShardedTestReconciler(t) // no objects
+		got := r.expectedShardArtifactsForBackup(context.Background(),
+			mkBackup(neo4jv1beta1.BackupTargetKindShardedDatabase, "products"))
+		if got != nil {
+			t.Errorf("expected nil when sharded DB CR missing, got %+v", got)
+		}
+	})
+}
+
+// TestUpdateShardedDBLastBackup_Matrix pins the reverse-lookup that wires
+// Neo4jShardedDatabase.status.lastBackup from a completed Neo4jBackup run.
+// Phase 3 observability — Failed runs and non-sharded kinds must be no-ops.
+func TestUpdateShardedDBLastBackup_Matrix(t *testing.T) {
+	now := metav1.Now()
+	succeededRun := neo4jv1beta1.BackupRun{
+		RunID:          "uid-1",
+		Status:         "Succeeded",
+		BackupsPath:    "/backup/products-backup",
+		CompletionTime: &now,
+	}
+	failedRun := neo4jv1beta1.BackupRun{
+		RunID:  "uid-2",
+		Status: "Failed",
+	}
+
+	shardedDB := func() *neo4jv1beta1.Neo4jShardedDatabase {
+		return &neo4jv1beta1.Neo4jShardedDatabase{
+			ObjectMeta: metav1.ObjectMeta{Name: "products", Namespace: "default"},
+			Spec:       neo4jv1beta1.Neo4jShardedDatabaseSpec{Name: "products", ClusterRef: "ec"},
+		}
+	}
+
+	backup := func(kind string) *neo4jv1beta1.Neo4jBackup {
+		return &neo4jv1beta1.Neo4jBackup{
+			ObjectMeta: metav1.ObjectMeta{Name: "products-backup", Namespace: "default"},
+			Spec: neo4jv1beta1.Neo4jBackupSpec{
+				Target: neo4jv1beta1.BackupTarget{Kind: kind, Name: "products", ClusterRef: "ec"},
+			},
+		}
+	}
+
+	t.Run("Succeeded sharded run → lastBackup populated", func(t *testing.T) {
+		sdb := shardedDB()
+		r := newShardedTestReconciler(t, sdb)
+		r.updateShardedDBLastBackup(context.Background(), backup(neo4jv1beta1.BackupTargetKindShardedDatabase), succeededRun)
+
+		updated := &neo4jv1beta1.Neo4jShardedDatabase{}
+		if err := r.Get(context.Background(), types.NamespacedName{Name: "products", Namespace: "default"}, updated); err != nil {
+			t.Fatalf("get sharded DB: %v", err)
+		}
+		if updated.Status.LastBackup == nil {
+			t.Fatalf("expected LastBackup to be populated, got nil")
+		}
+		if updated.Status.LastBackup.RunID != "uid-1" {
+			t.Errorf("RunID = %q, want uid-1", updated.Status.LastBackup.RunID)
+		}
+		if updated.Status.LastBackup.BackupsPath != "/backup/products-backup" {
+			t.Errorf("BackupsPath = %q, want /backup/products-backup", updated.Status.LastBackup.BackupsPath)
+		}
+		if updated.Status.LastBackup.BackupRef != "products-backup" {
+			t.Errorf("BackupRef = %q, want products-backup", updated.Status.LastBackup.BackupRef)
+		}
+	})
+
+	t.Run("Failed run → no-op (lastBackup untouched)", func(t *testing.T) {
+		sdb := shardedDB()
+		r := newShardedTestReconciler(t, sdb)
+		r.updateShardedDBLastBackup(context.Background(), backup(neo4jv1beta1.BackupTargetKindShardedDatabase), failedRun)
+
+		updated := &neo4jv1beta1.Neo4jShardedDatabase{}
+		_ = r.Get(context.Background(), types.NamespacedName{Name: "products", Namespace: "default"}, updated)
+		if updated.Status.LastBackup != nil {
+			t.Errorf("expected LastBackup nil on Failed run, got %+v", updated.Status.LastBackup)
+		}
+	})
+
+	t.Run("Cluster-kind backup → no-op", func(t *testing.T) {
+		sdb := shardedDB()
+		r := newShardedTestReconciler(t, sdb)
+		r.updateShardedDBLastBackup(context.Background(), backup(neo4jv1beta1.BackupTargetKindCluster), succeededRun)
+
+		updated := &neo4jv1beta1.Neo4jShardedDatabase{}
+		_ = r.Get(context.Background(), types.NamespacedName{Name: "products", Namespace: "default"}, updated)
+		if updated.Status.LastBackup != nil {
+			t.Errorf("expected LastBackup nil for Cluster-kind backup, got %+v", updated.Status.LastBackup)
+		}
+	})
+
+	t.Run("Sharded DB CR missing → swallowed silently", func(t *testing.T) {
+		r := newShardedTestReconciler(t) // no objects
+		// MUST NOT panic or return an error — the helper logs and moves on.
+		r.updateShardedDBLastBackup(context.Background(), backup(neo4jv1beta1.BackupTargetKindShardedDatabase), succeededRun)
+	})
 }
 
 // TestBuildBackupCommand_ShardedDatabase_EmitsFlagsWithNilOptions guards

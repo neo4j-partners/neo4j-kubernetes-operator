@@ -479,6 +479,38 @@ spec:
                         the actual Job artifact (or audit log) that produced it. Stable for
                         the lifetime of the Job; new for every retry.
                       type: string
+                    shardArtifacts:
+                      description: |-
+                        ShardArtifacts records the per-shard `.backup` files produced by a
+                        sharded backup run (target.kind=ShardedDatabase). Populated by the
+                        backup controller after parsing the trailing `ls -la` output appended
+                        to the backup command. Empty for non-sharded runs.
+                      items:
+                        description: ShardArtifact identifies one `.backup` file produced
+                          by a sharded backup.
+                        properties:
+                          filename:
+                            description: |-
+                              Filename is the on-disk filename as written by neo4j-admin (e.g.
+                              "products-g000-2025-06-11T21-04-42.backup").
+                            type: string
+                          shardName:
+                            description: |-
+                              ShardName is the per-shard database name (e.g. "products-g000",
+                              "products-p000"). Derived by stripping the timestamp suffix from the
+                              neo4j-admin output filename.
+                            type: string
+                          size:
+                            description: |-
+                              Size is the artifact size in bytes as reported by `ls -la`. Zero if
+                              not parseable. Use `humanize.IBytes` or equivalent on the consumer
+                              side for display.
+                            format: int64
+                            type: integer
+                        required:
+                        - shardName
+                        type: object
+                      type: array
                     startTime:
                       description: Start time of the backup run
                       format: date-time
@@ -503,6 +535,57 @@ spec:
                     status:
                       description: Status of the backup run
                       type: string
+                    validation:
+                      description: |-
+                        Validation captures the per-shard outcome of an optional
+                        `neo4j-admin backup validate` step run after the backup completes.
+                        Populated only when the operator was able to run validate and parse
+                        its output (sharded backups on a Neo4j version that exposes the
+                        validate subcommand). Absent on older versions or non-sharded runs.
+                      properties:
+                        overallStatus:
+                          description: |-
+                            OverallStatus is "OK" if every shard's chain is recoverable to the
+                            same transaction or higher; "Degraded" if any shard is ahead/behind
+                            beyond the lenient consistency window; "Unknown" if the validate step
+                            failed or its output couldn't be parsed.
+                          enum:
+                          - OK
+                          - Degraded
+                          - Unknown
+                          type: string
+                        perShard:
+                          description: PerShard holds the validate command's status
+                            report for each shard.
+                          items:
+                            description: ShardValidationStatus is one row of validate
+                              output.
+                            properties:
+                              message:
+                                type: string
+                              shardName:
+                                type: string
+                              status:
+                                description: Status is one of OK / Ahead / Behind
+                                  / Unknown.
+                                enum:
+                                - OK
+                                - Ahead
+                                - Behind
+                                - Unknown
+                                type: string
+                            required:
+                            - shardName
+                            type: object
+                          type: array
+                        rawOutput:
+                          description: |-
+                            RawOutput is the truncated stdout of `neo4j-admin backup validate`,
+                            kept for operator debugging when the parser couldn't classify a
+                            per-shard line. Capped at 2 KiB; longer outputs are truncated with a
+                            "…(truncated)" marker.
+                          type: string
+                      type: object
                   required:
                   - startTime
                   - status

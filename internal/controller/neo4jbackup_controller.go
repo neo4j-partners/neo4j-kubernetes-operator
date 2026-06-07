@@ -240,13 +240,24 @@ func (r *Neo4jBackupReconciler) reconcileScheduledHistory(ctx context.Context, b
 		return err
 	}
 
+	// Track newly-recorded Succeeded runs so we can fire the Phase 3
+	// reverse-lookup (Neo4jShardedDatabase.status.lastBackup) AFTER the
+	// status.history write commits — emitting before the commit would race
+	// against the same-CR resource-version churn.
+	var newSucceededRuns []neo4jv1beta1.BackupRun
+
 	update := func() error {
 		latest := &neo4jv1beta1.Neo4jBackup{}
 		if err := r.Get(ctx, client.ObjectKeyFromObject(backup), latest); err != nil {
 			return err
 		}
 
+		newSucceededRuns = nil // reset on every retry
 		changed := false
+		// Compute the expected sharded artifact list once per outer call (the
+		// answer doesn't depend on the Job; it depends on the sharded DB CR).
+		// No-op + nil for non-sharded backups.
+		shardArtifacts := r.expectedShardArtifactsForBackup(ctx, latest)
 		for i := range jobs.Items {
 			job := &jobs.Items[i]
 			run, ok := jobToBackupRun(job)
@@ -256,8 +267,14 @@ func (r *Neo4jBackupReconciler) reconcileScheduledHistory(ctx context.Context, b
 			if backupRunAlreadyRecorded(latest.Status.History, run) {
 				continue
 			}
+			if len(shardArtifacts) > 0 {
+				run.ShardArtifacts = shardArtifacts
+			}
 			latest.Status.History = append(latest.Status.History, run)
 			changed = true
+			if run.Status == "Succeeded" {
+				newSucceededRuns = append(newSucceededRuns, run)
+			}
 		}
 		if !changed {
 			return nil
@@ -272,7 +289,25 @@ func (r *Neo4jBackupReconciler) reconcileScheduledHistory(ctx context.Context, b
 
 		return r.Status().Update(ctx, latest)
 	}
-	return retry.RetryOnConflict(retry.DefaultBackoff, update)
+	if err := retry.RetryOnConflict(retry.DefaultBackoff, update); err != nil {
+		return err
+	}
+
+	// Phase 3: reverse-lookup so the Neo4jShardedDatabase CR's
+	// status.lastBackup surfaces the most recent succeeded scheduled run. Use
+	// the most-recently-completed run (sortBackupRunsNewestFirst ordering
+	// would lose ties from same-second StartTimes; sort the newly-recorded
+	// subset by CompletionTime and pick the last). No-op for non-sharded.
+	if len(newSucceededRuns) > 0 {
+		latestRun := newSucceededRuns[0]
+		for _, r := range newSucceededRuns[1:] {
+			if r.CompletionTime != nil && (latestRun.CompletionTime == nil || r.CompletionTime.After(latestRun.CompletionTime.Time)) {
+				latestRun = r
+			}
+		}
+		r.updateShardedDBLastBackup(ctx, backup, latestRun)
+	}
+	return nil
 }
 
 // sortBackupRunsNewestFirst orders history newest-first by StartTime, with
@@ -1307,6 +1342,11 @@ func (r *Neo4jBackupReconciler) recordOneShotBackupRun(ctx context.Context, back
 		// reaching this is a programming error elsewhere, not user data.
 		return
 	}
+	// Phase 3: stamp the per-shard audit list onto the BackupRun. No-op for
+	// non-sharded kinds; failure to fetch the sharded DB CR is non-fatal.
+	if artifacts := r.expectedShardArtifactsForBackup(ctx, backup); len(artifacts) > 0 {
+		run.ShardArtifacts = artifacts
+	}
 	// Size, Throughput, FileCount are intentionally omitted from run.Stats:
 	// they require parsing neo4j-admin stdout from Job pod logs (future
 	// enhancement). jobToBackupRun populates Duration when both StartTime
@@ -1346,6 +1386,11 @@ func (r *Neo4jBackupReconciler) recordOneShotBackupRun(ctx context.Context, back
 	if err := retry.RetryOnConflict(retry.DefaultBackoff, update); err != nil {
 		logger.Error(err, "Failed to record one-shot backup run in history")
 	}
+
+	// Phase 3: reverse-lookup so the Neo4jShardedDatabase CR's
+	// status.lastBackup surfaces this run. No-op for non-sharded kinds and
+	// for non-Succeeded runs.
+	r.updateShardedDBLastBackup(ctx, backup, run)
 }
 
 // validateNeo4jVersion validates that the target cluster uses Neo4j 5.26+ or 2025.01+
