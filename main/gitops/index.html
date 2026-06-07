@@ -2566,9 +2566,12 @@ to interpret Neo4j operator resource states.</p>
 </tr>
 </tbody>
 </table>
-<p>Health checks are configured for all 7 CRDs in the <code>neo4j.neo4j.com</code> group:
-<code>Neo4jEnterpriseCluster</code>, <code>Neo4jEnterpriseStandalone</code>, <code>Neo4jDatabase</code>,
-<code>Neo4jBackup</code>, <code>Neo4jRestore</code>, <code>Neo4jPlugin</code>, <code>Neo4jShardedDatabase</code>.</p>
+<p>Health checks are configured for the 7 workload CRDs in the <code>neo4j.neo4j.com</code>
+group: <code>Neo4jEnterpriseCluster</code>, <code>Neo4jEnterpriseStandalone</code>, <code>Neo4jDatabase</code>,
+<code>Neo4jBackup</code>, <code>Neo4jRestore</code>, <code>Neo4jPlugin</code>, <code>Neo4jShardedDatabase</code>. The four
+identity CRDs (<code>Neo4jAuthRule</code>, <code>Neo4jUser</code>, <code>Neo4jRole</code>, <code>Neo4jRoleBinding</code>)
+do not yet have ArgoCD health customizations — ArgoCD will fall back to its
+default "Progressing" assessment for those resources.</p>
 <h2 id="flux-health-checks">Flux Health Checks<a class="headerlink" href="#flux-health-checks" title="Anchor link to this section">&para;</a></h2>
 <p>Flux automatically detects readiness via <code>status.conditions</code> when CRDs expose a
 standard <code>Ready</code> condition (type <code>Ready</code>, using <code>metav1.Condition</code>). No extra
