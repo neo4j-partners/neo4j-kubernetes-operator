@@ -80,7 +80,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#neo4j-kubernetes-operator-modes-and-scope-guide" class="md-skip">
+        <a href="#operator-modes-and-scope" class="md-skip">
           Skip to content
         </a>
       
@@ -510,17 +510,6 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#table-of-contents" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Table of Contents
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#overview" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -691,17 +680,6 @@
     <span class="md-ellipsis">
       
         Troubleshooting
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#quick-reference" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Quick Reference
       
     </span>
   </a>
@@ -2653,17 +2631,6 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#table-of-contents" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Table of Contents
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#overview" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2841,17 +2808,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#quick-reference" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Quick Reference
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#additional-resources" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2887,27 +2843,7 @@
   
 
 
-<h1 id="neo4j-kubernetes-operator-modes-and-scope-guide">Neo4j Kubernetes Operator Modes and Scope Guide<a class="headerlink" href="#neo4j-kubernetes-operator-modes-and-scope-guide" title="Anchor link to this section">&para;</a></h1>
-<h2 id="table-of-contents">Table of Contents<a class="headerlink" href="#table-of-contents" title="Anchor link to this section">&para;</a></h2>
-<ul>
-<li><a href="#overview">Overview</a></li>
-<li><a href="#quick-start-beginner">Quick Start (Beginner)</a></li>
-<li><a href="#operator-modes">Operator Modes</a></li>
-<li><a href="#production-mode">Production Mode</a></li>
-<li><a href="#development-mode-in-cluster-only">Development Mode (In-Cluster Only)</a></li>
-<li><a href="#scope-and-rbac">Scope and RBAC</a></li>
-<li><a href="#cluster-scope">Cluster Scope</a></li>
-<li><a href="#namespace-scope">Namespace Scope</a></li>
-<li><a href="#multi-namespace-scope">Multi-Namespace Scope</a></li>
-<li><a href="#helm-configuration">Helm Configuration</a></li>
-<li><a href="#non-helm-configuration">Non-Helm Configuration</a></li>
-<li><a href="#cache-strategies">Cache Strategies</a></li>
-<li><a href="#controller-selection-dev-mode">Controller Selection (Dev Mode)</a></li>
-<li><a href="#logging-and-metrics">Logging and Metrics</a></li>
-<li><a href="#troubleshooting">Troubleshooting</a></li>
-<li><a href="#quick-reference">Quick Reference</a></li>
-<li><a href="#additional-resources">Additional Resources</a></li>
-</ul>
+<h1 id="operator-modes-and-scope">Operator Modes and Scope<a class="headerlink" href="#operator-modes-and-scope" title="Anchor link to this section">&para;</a></h1>
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Anchor link to this section">&para;</a></h2>
 <p>The operator has two separate axes of configuration:</p>
 <ul>
@@ -3164,57 +3100,6 @@ Explicit flags and Helm values always override the mode defaults.</p>
 <p><strong>Metrics not reachable:</strong>
 - Ensure <code>metrics.enabled: true</code> or <code>--metrics-bind-address</code> is not <code>0</code>.
 - Confirm the Service port matches the bind address.</p>
-<h2 id="quick-reference">Quick Reference<a class="headerlink" href="#quick-reference" title="Anchor link to this section">&para;</a></h2>
-<p><strong>Defaults by mode (when running <code>/manager</code> directly):</strong></p>
-<table>
-<thead>
-<tr>
-<th>Setting</th>
-<th>Production</th>
-<th>Development</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>--mode</code></td>
-<td><code>production</code></td>
-<td><code>dev</code></td>
-</tr>
-<tr>
-<td>Metrics bind</td>
-<td><code>:8080</code></td>
-<td><code>:8082</code></td>
-</tr>
-<tr>
-<td>Health bind</td>
-<td><code>:8081</code></td>
-<td><code>:8083</code></td>
-</tr>
-<tr>
-<td>Cache strategy</td>
-<td><code>on-demand</code></td>
-<td><code>on-demand</code></td>
-</tr>
-<tr>
-<td><code>--skip-cache-wait</code></td>
-<td><code>false</code></td>
-<td><code>true</code> (auto)</td>
-</tr>
-</tbody>
-</table>
-<p><strong>Common flags:</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>--mode<span class="o">=</span>production<span class="p">|</span>dev
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>--leader-elect<span class="o">=</span>true<span class="p">|</span><span class="nb">false</span>
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>--metrics-bind-address<span class="o">=</span>:8080
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>--health-probe-bind-address<span class="o">=</span>:8081
-</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>--cache-strategy<span class="o">=</span>standard<span class="p">|</span>lazy<span class="p">|</span>selective<span class="p">|</span>on-demand<span class="p">|</span>none
-</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>--ultra-fast
-</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>--skip-cache-wait
-</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a>--controllers<span class="o">=</span>cluster,standalone,database,backup,restore,plugin,shardeddatabase
-</span></code></pre></div>
-<p><strong>Scope environment variable:</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="nv">WATCH_NAMESPACE</span><span class="o">=</span>team-a,team-b
-</span></code></pre></div>
 <h2 id="additional-resources">Additional Resources<a class="headerlink" href="#additional-resources" title="Anchor link to this section">&para;</a></h2>
 <ul>
 <li><code>docs/developer_guide/architecture.md</code></li>
