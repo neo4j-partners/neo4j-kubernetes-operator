@@ -262,6 +262,47 @@ func (v *Version) SupportsSourceDatabaseFilter() bool {
 	return false
 }
 
+// RecreateDatabaseProcedure returns the Cypher procedure name to invoke for
+// `dbms.[cluster.]recreateDatabase`, varying by Neo4j version:
+//
+//   - SemVer 5.24+ (incl. 5.26 LTS): `dbms.cluster.recreateDatabase`
+//   - CalVer 2025.02–2025.03:        `dbms.cluster.recreateDatabase`
+//   - CalVer 2025.04+:               `dbms.recreateDatabase` (the `cluster.`
+//     form was deprecated in favor of the unprefixed name in 2025.04)
+//
+// Returns "" if the version doesn't support recreate at all (pre-5.24 SemVer
+// or pre-2025.02 CalVer, which shouldn't happen given the operator's
+// supported versions but kept as a defensive fallback). Callers should
+// check for empty and skip the recreate step.
+//
+// See https://neo4j.com/docs/operations-manual/current/database-administration/standard-databases/recreate-database/
+// and the same path under /5/ for the 5.26 reference.
+func (v *Version) RecreateDatabaseProcedure() string {
+	if v.IsCalver {
+		// 2026.x+ (any minor): cluster.* form was deprecated in
+		// 2025.04 and the unprefixed name is the only one going
+		// forward. Same applies to 2025.04+.
+		if v.Major > 2025 {
+			return "dbms.recreateDatabase"
+		}
+		if v.Major == 2025 && v.Minor >= 4 {
+			return "dbms.recreateDatabase"
+		}
+		// 2025.02 and 2025.03: only the cluster.* form exists.
+		if v.Major == 2025 && v.Minor >= 2 {
+			return "dbms.cluster.recreateDatabase"
+		}
+		// Pre-2025.02 (shouldn't be reachable given supported
+		// versions, but kept for safety): no recreate.
+		return ""
+	}
+	// SemVer path: introduced in 5.24, present in 5.26 LTS.
+	if v.Major == 5 && v.Minor >= 24 {
+		return "dbms.cluster.recreateDatabase"
+	}
+	return ""
+}
+
 // SupportsAuthRules reports whether this Neo4j version exposes the AUTH RULE
 // DDL used by attribute-based access control (ABAC). ABAC was introduced in
 // Neo4j 2026.03. 5.26 LTS and earlier CalVer (2025.x, 2026.01, 2026.02) do

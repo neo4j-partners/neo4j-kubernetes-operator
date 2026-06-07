@@ -310,6 +310,28 @@ kubectl logs target-cluster-server-0 | grep -i restore
    kubectl exec target-cluster-server-0 -- neo4j version
    ```
 
+#### Symptom: Restore Job succeeds but data isn't visible after restore (multi-server clusters)
+
+**Cause:** The restore Job writes to a single PVC (`data-{cluster}-server-0`). In a multi-server cluster, post-restart bootstrap can place the database's primary on any server. If the primary lands on a non-server-0 pod (which still has stale data), that server wins consensus and overwrites the restored data on re-sync.
+
+The operator's post-restore step calls `dbms.[cluster.]recreateDatabase` with server-0 as the seed to force every server to re-sync from the restored data. Verify this ran:
+
+```bash
+# Look for the re-seed event in the operator log
+kubectl logs -n neo4j-operator-system deployment/neo4j-operator-controller-manager \
+  | grep "Re-seeded restored database"
+# Expected log entry includes seedServerID (a UUID), seedHostname (e.g. mycluster-server-0),
+# and procedure (dbms.cluster.recreateDatabase or dbms.recreateDatabase).
+```
+
+**If the re-seed entry is absent:**
+- Check the Neo4j version. The procedure requires SemVer 5.24+ (including 5.26 LTS) or CalVer 2025.02+. Older versions skip the step and log `Skipping post-restore recreate`.
+- On unsupported versions, manually re-seed by running the recreate procedure yourself, or restore on a single-server cluster.
+
+**If the re-seed entry shows `seedServerID: ""`:** the operator couldn't match `{cluster}-server-0` against `SHOW SERVERS YIELD address`. The cluster fell back to Neo4j's auto-select which may pick the wrong server. File an issue with the operator logs and `SHOW SERVERS` output from `kubectl exec {cluster}-server-0 -- cypher-shell -u neo4j -p <pw> 'SHOW SERVERS'`.
+
+**If the re-seed entry shows a `Failed to recreate restored database` Event:** check the operator log for the underlying Cypher error. Most common causes are missing privileges (`CREATE DATABASE` + `DROP DATABASE` are required on the admin user) or the system DB being unavailable.
+
 ### Point-in-Time Recovery (PITR) Issues
 
 #### Symptom: PITR restore fails with timestamp errors

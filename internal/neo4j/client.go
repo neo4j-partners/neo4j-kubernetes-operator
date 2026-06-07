@@ -135,6 +135,11 @@ type DatabaseInfo struct {
 
 // ServerInfo represents information about a Neo4j server
 type ServerInfo struct {
+	// ID is the Neo4j-internal UUID assigned to the server at first
+	// bootstrap. Populated by ListServers (via `SHOW SERVERS YIELD
+	// serverId, ...`); other code paths that constructed ServerInfo
+	// without querying SHOW SERVERS may leave this empty.
+	ID      string
 	Name    string
 	Address string
 	State   string
@@ -1703,6 +1708,123 @@ func getCredentials(ctx context.Context, k8sClient client.Client, namespace, sec
 		Username: username,
 		Password: password,
 	}, nil
+}
+
+// ListServers runs `SHOW SERVERS` against the system DB and returns one entry
+// per server in the cluster. Used to resolve a Pod-ordinal-relative seed to
+// the Neo4j-internal server ID required by dbms.cluster.recreateDatabase.
+//
+// Returns an empty slice on a standalone (single-node) deployment — the
+// procedure still works but produces a list of 1.
+func (c *Client) ListServers(ctx context.Context) ([]ServerInfo, error) {
+	session := c.driver.NewSession(ctx, neo4j.SessionConfig{
+		AccessMode:   neo4j.AccessModeRead,
+		DatabaseName: "system",
+	})
+	defer session.Close(ctx)
+
+	// YIELD an explicit column set so we don't depend on Neo4j's default
+	// projection (which has shifted across 5.x patch releases). Address
+	// includes the bolt port; we don't strip it because the column is
+	// purely diagnostic — only `id` is consumed by recreate.
+	result, err := session.Run(ctx,
+		"SHOW SERVERS YIELD serverId, name, address, state, health", nil)
+	if err != nil {
+		return nil, fmt.Errorf("SHOW SERVERS failed: %w", err)
+	}
+
+	var servers []ServerInfo
+	for result.Next(ctx) {
+		rec := result.Record()
+		s := ServerInfo{}
+		if v, ok := rec.Get("serverId"); ok {
+			if str, ok := v.(string); ok {
+				s.ID = str
+			}
+		}
+		if v, ok := rec.Get("name"); ok {
+			if str, ok := v.(string); ok {
+				s.Name = str
+			}
+		}
+		if v, ok := rec.Get("address"); ok {
+			if str, ok := v.(string); ok {
+				s.Address = str
+			}
+		}
+		if v, ok := rec.Get("state"); ok {
+			if str, ok := v.(string); ok {
+				s.State = str
+			}
+		}
+		if v, ok := rec.Get("health"); ok {
+			if str, ok := v.(string); ok {
+				s.Health = str
+			}
+		}
+		servers = append(servers, s)
+	}
+	if err := result.Err(); err != nil {
+		return nil, fmt.Errorf("iterating SHOW SERVERS rows: %w", err)
+	}
+	return servers, nil
+}
+
+// RecreateDatabase invokes `dbms.[cluster.]recreateDatabase(...)` with the
+// given seeding server IDs. Picks the correct procedure name based on the
+// Neo4j version (`dbms.cluster.recreateDatabase` for 5.24–2025.03,
+// `dbms.recreateDatabase` for 2025.04+).
+//
+// Why this exists: after restoring a backup to a single server's PVC in a
+// multi-server cluster, the operator needs to force Neo4j to re-seed every
+// other server from that one's restored data. Without this, post-restart
+// cluster bootstrap picks the primary non-deterministically — sometimes the
+// stale-data server wins consensus and the restored data is overwritten on
+// re-sync. See `internal/controller/neo4jrestore_controller.go`'s
+// recreateRestoredDatabase phase for the full flow.
+//
+// An empty seedingServerIDs slice asks Neo4j to auto-select the most
+// up-to-date allocation; pass an explicit list to pin the seed (which is
+// what the restore flow does — server-0 always holds the restored data).
+//
+// Returns nil-or-skip-marker (no error, no action) when the procedure isn't
+// supported on this version. Callers detect by inspecting the returned
+// `applied` bool.
+func (c *Client) RecreateDatabase(
+	ctx context.Context,
+	version *Version,
+	databaseName string,
+	seedingServerIDs []string,
+) (applied bool, err error) {
+	procedure := version.RecreateDatabaseProcedure()
+	if procedure == "" {
+		// Pre-5.24 / pre-2025.02 — recreate isn't available. Caller
+		// proceeds without the deterministic-seed guarantee.
+		return false, nil
+	}
+
+	session := c.driver.NewSession(ctx, neo4j.SessionConfig{
+		AccessMode:   neo4j.AccessModeWrite,
+		DatabaseName: "system",
+	})
+	defer session.Close(ctx)
+
+	// Empty list maps to {seedingServers: []} which is Neo4j's
+	// "auto-select" mode. Explicit list pins the seeders.
+	seeders := seedingServerIDs
+	if seeders == nil {
+		seeders = []string{}
+	}
+
+	query := fmt.Sprintf("CALL %s($db, {seedingServers: $seeders})", procedure)
+	if _, err := session.Run(ctx, query, map[string]any{
+		"db":      databaseName,
+		"seeders": seeders,
+	}); err != nil {
+		return false, fmt.Errorf("CALL %s for %q with %d seeders: %w",
+			procedure, databaseName, len(seeders), err)
+	}
+	return true, nil
 }
 
 // DatabaseExists checks if a database exists
