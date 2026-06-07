@@ -3989,10 +3989,13 @@ This project <strong>exclusively uses Kind</strong> for all development and test
 </span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>make<span class="w"> </span>test-unit
 </span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>
 </span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="c1"># Run specific controller tests</span>
-</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>go<span class="w"> </span><span class="nb">test</span><span class="w"> </span>./internal/controller<span class="w"> </span>-run<span class="w"> </span>TestClusterReconciler<span class="w"> </span>-v
-</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>
-</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="c1"># Run validation tests</span>
-</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a>go<span class="w"> </span><span class="nb">test</span><span class="w"> </span>./internal/validation<span class="w"> </span>-v
+</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="c1"># `./internal/controller` needs envtest binaries — `make test-unit` sets</span>
+</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="c1"># KUBEBUILDER_ASSETS automatically; direct `go test` requires:</span>
+</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="c1">#   export KUBEBUILDER_ASSETS=$(bin/setup-envtest use 1.34.0 --bin-dir bin -p path)</span>
+</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a>go<span class="w"> </span><span class="nb">test</span><span class="w"> </span>./internal/controller<span class="w"> </span>-run<span class="w"> </span>TestClusterReconciler<span class="w"> </span>-v
+</span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a>
+</span><span id="__span-16-10"><a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a><span class="c1"># Run validation tests (no envtest needed)</span>
+</span><span id="__span-16-11"><a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a>go<span class="w"> </span><span class="nb">test</span><span class="w"> </span>./internal/validation<span class="w"> </span>-v
 </span></code></pre></div>
 <h3 id="integration-testing">Integration Testing<a class="headerlink" href="#integration-testing" title="Anchor link to this section">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Full integration test suite — creates a fresh cluster, builds and deploys</span>
@@ -4226,7 +4229,9 @@ tests against an already-configured cluster without rebuilding the environment.<
 <h3 id="testing-environment-variables">Testing Environment Variables<a class="headerlink" href="#testing-environment-variables" title="Anchor link to this section">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="c1"># CI/CD testing</span>
 </span><span id="__span-30-2"><a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="nb">export</span><span class="w"> </span><span class="nv">CI</span><span class="o">=</span><span class="nb">true</span>
-</span><span id="__span-30-3"><a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a><span class="nb">export</span><span class="w"> </span><span class="nv">KUBEBUILDER_ASSETS</span><span class="o">=</span><span class="s2">&quot;</span><span class="k">$(</span><span class="nb">pwd</span><span class="k">)</span><span class="s2">/bin/k8s/1.31.0-linux-amd64&quot;</span>
+</span><span id="__span-30-3"><a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a><span class="c1"># Resolve the envtest asset path via setup-envtest so it tracks Makefile&#39;s</span>
+</span><span id="__span-30-4"><a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a><span class="c1"># ENVTEST_K8S_VERSION automatically — no need to hand-edit when bumping.</span>
+</span><span id="__span-30-5"><a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a><span class="nb">export</span><span class="w"> </span><span class="nv">KUBEBUILDER_ASSETS</span><span class="o">=</span><span class="k">$(</span>bin/setup-envtest<span class="w"> </span>use<span class="w"> </span><span class="m">1</span>.34.0<span class="w"> </span>--bin-dir<span class="w"> </span>bin<span class="w"> </span>-p<span class="w"> </span>path<span class="k">)</span>
 </span></code></pre></div>
 <h2 id="next-steps">Next Steps<a class="headerlink" href="#next-steps" title="Anchor link to this section">&para;</a></h2>
 <ul>
