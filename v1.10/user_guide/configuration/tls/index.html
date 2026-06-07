@@ -922,52 +922,13 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#troubleshooting-tls-issues" class="md-nav__link">
+  <a href="#troubleshooting" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Troubleshooting TLS Issues
+        Troubleshooting
       
     </span>
   </a>
-  
-    <nav class="md-nav" aria-label="Troubleshooting TLS Issues">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#split-brain-in-tls-clusters" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Split-Brain in TLS Clusters
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#certificate-issues" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Certificate Issues
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#connection-refused" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Connection Refused
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
@@ -1029,28 +990,6 @@
         
       </ul>
     </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#best-practices" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Best Practices
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#summary" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Summary
-      
-    </span>
-  </a>
   
 </li>
       
@@ -3010,52 +2949,13 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#troubleshooting-tls-issues" class="md-nav__link">
+  <a href="#troubleshooting" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Troubleshooting TLS Issues
+        Troubleshooting
       
     </span>
   </a>
-  
-    <nav class="md-nav" aria-label="Troubleshooting TLS Issues">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#split-brain-in-tls-clusters" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Split-Brain in TLS Clusters
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#certificate-issues" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Certificate Issues
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#connection-refused" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Connection Refused
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
@@ -3117,28 +3017,6 @@
         
       </ul>
     </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#best-practices" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Best Practices
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#summary" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Summary
-      
-    </span>
-  </a>
   
 </li>
       
@@ -3304,123 +3182,87 @@
 </span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="c1"># From outside (after port-forward)</span>
 </span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>cypher-shell<span class="w"> </span>-a<span class="w"> </span>bolt+ssc://localhost:7687<span class="w"> </span>-u<span class="w"> </span>neo4j<span class="w"> </span>-p<span class="w"> </span>&lt;password&gt;
 </span></code></pre></div>
-<h2 id="troubleshooting-tls-issues">Troubleshooting TLS Issues<a class="headerlink" href="#troubleshooting-tls-issues" title="Anchor link to this section">&para;</a></h2>
-<h3 id="split-brain-in-tls-clusters">Split-Brain in TLS Clusters<a class="headerlink" href="#split-brain-in-tls-clusters" title="Anchor link to this section">&para;</a></h3>
-<p>TLS clusters may experience split-brain during initial formation if not properly configured. The operator includes fixes to minimize this:</p>
-<ol>
-<li><strong>Strict peer validation</strong> (default): the operator validates peers against the issuer's CA at <code>/ssl/trusted/ca.crt</code> with mutual TLS. Mismatched certs fail closed instead of silently joining the wrong cluster.</li>
-<li><strong>Parallel startup</strong>: All pods start together for faster formation.</li>
-<li><strong>Proper RBAC</strong>: Endpoints permission for discovery.</li>
-</ol>
-<p>If split-brain occurs, see the <a href="../../troubleshooting/split-brain-recovery/">Split-Brain Recovery Guide</a>.</p>
-<h3 id="certificate-issues">Certificate Issues<a class="headerlink" href="#certificate-issues" title="Anchor link to this section">&para;</a></h3>
-<p>Check certificate status:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>certificate<span class="w"> </span>&lt;cluster-name&gt;-tls
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>certificate<span class="w"> </span>&lt;cluster-name&gt;-tls
-</span></code></pre></div></p>
-<p>Check cert-manager logs:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>cert-manager<span class="w"> </span>deployment/cert-manager
-</span></code></pre></div></p>
-<h3 id="connection-refused">Connection Refused<a class="headerlink" href="#connection-refused" title="Anchor link to this section">&para;</a></h3>
-<p>If TLS connections fail:
-1. Verify certificate is ready
-2. Check Neo4j logs for SSL errors
-3. Ensure ports 7473 (HTTPS) and 7687 (Bolt) are accessible</p>
+<h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Anchor link to this section">&para;</a></h2>
+<p>See <a href="../../tls_certificates/#troubleshooting">tls_certificates.md § Troubleshooting</a> for cert-not-found, connection-refused, and validation errors. For split-brain in TLS clusters (typically a peer-trust mismatch on first formation), see <a href="../../troubleshooting/split-brain-recovery/">Split-Brain Recovery</a>.</p>
 <h2 id="advanced-configuration">Advanced Configuration<a class="headerlink" href="#advanced-configuration" title="Anchor link to this section">&para;</a></h2>
 <h3 id="using-an-external-ca-or-third-party-issuer">Using an External CA or Third-Party Issuer<a class="headerlink" href="#using-an-external-ca-or-third-party-issuer" title="Anchor link to this section">&para;</a></h3>
 <p>The operator supports any cert-manager-compatible issuer, including third-party external issuers.
 Set <code>kind</code> to the issuer's resource kind and <code>group</code> to its API group.</p>
 <p><strong>Standard cert-manager CA</strong> (most common):
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">spec</span><span class="p">:</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span><span class="nt">tls</span><span class="p">:</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">    </span><span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cert-manager</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">    </span><span class="nt">issuerRef</span><span class="p">:</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-internal-ca</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">      </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ClusterIssuer</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">      </span><span class="c1"># group defaults to cert-manager.io — can be omitted</span>
+</span></code></pre></div></p>
+<p><strong>AWS Private Certificate Authority</strong>:
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nt">spec</span><span class="p">:</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span><span class="nt">tls</span><span class="p">:</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">    </span><span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cert-manager</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">    </span><span class="nt">issuerRef</span><span class="p">:</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">aws-pca-issuer</span>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">      </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">AWSPCAClusterIssuer</span>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">      </span><span class="nt">group</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">awspca.cert-manager.io</span>
+</span></code></pre></div></p>
+<p><strong>HashiCorp Vault</strong> (native cert-manager — no separate CRD):</p>
+<p>Vault is supported by cert-manager itself, not via a third-party external-issuer CRD. Configure it on a standard <code>Issuer</code>/<code>ClusterIssuer</code> via <code>spec.vault</code> (see <a href="https://cert-manager.io/docs/configuration/vault/">cert-manager Vault docs</a>) and reference it the same way as any other built-in issuer:</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nt">spec</span><span class="p">:</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span><span class="nt">tls</span><span class="p">:</span>
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">    </span><span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cert-manager</span>
 </span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">    </span><span class="nt">issuerRef</span><span class="p">:</span>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-internal-ca</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">vault-issuer</span><span class="w">          </span><span class="c1"># name of your Issuer/ClusterIssuer with spec.vault</span>
 </span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="w">      </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ClusterIssuer</span>
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="w">      </span><span class="c1"># group defaults to cert-manager.io — can be omitted</span>
-</span></code></pre></div></p>
-<p><strong>AWS Private Certificate Authority</strong>:
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="w">      </span><span class="c1"># group defaults to cert-manager.io — Vault is built-in, no external group</span>
+</span></code></pre></div>
+<p><strong>Google Certificate Authority Service</strong>:
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="nt">spec</span><span class="p">:</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">  </span><span class="nt">tls</span><span class="p">:</span>
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">    </span><span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cert-manager</span>
 </span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">    </span><span class="nt">issuerRef</span><span class="p">:</span>
-</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">aws-pca-issuer</span>
-</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="w">      </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">AWSPCAClusterIssuer</span>
-</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="w">      </span><span class="nt">group</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">awspca.cert-manager.io</span>
-</span></code></pre></div></p>
-<p><strong>HashiCorp Vault</strong> (native cert-manager — no separate CRD):</p>
-<p>Vault is supported by cert-manager itself, not via a third-party external-issuer CRD. Configure it on a standard <code>Issuer</code>/<code>ClusterIssuer</code> via <code>spec.vault</code> (see <a href="https://cert-manager.io/docs/configuration/vault/">cert-manager Vault docs</a>) and reference it the same way as any other built-in issuer:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">  </span><span class="nt">tls</span><span class="p">:</span>
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">    </span><span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cert-manager</span>
-</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">    </span><span class="nt">issuerRef</span><span class="p">:</span>
-</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">vault-issuer</span><span class="w">          </span><span class="c1"># name of your Issuer/ClusterIssuer with spec.vault</span>
-</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">      </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ClusterIssuer</span>
-</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="w">      </span><span class="c1"># group defaults to cert-manager.io — Vault is built-in, no external group</span>
-</span></code></pre></div>
-<p><strong>Google Certificate Authority Service</strong>:
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="w">  </span><span class="nt">tls</span><span class="p">:</span>
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">    </span><span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cert-manager</span>
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">    </span><span class="nt">issuerRef</span><span class="p">:</span>
-</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">google-cas-issuer</span>
-</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="w">      </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">GoogleCASClusterIssuer</span>
-</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="w">      </span><span class="nt">group</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cas-issuer.jetstack.io</span>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">google-cas-issuer</span>
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="w">      </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">GoogleCASClusterIssuer</span>
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="w">      </span><span class="nt">group</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cas-issuer.jetstack.io</span>
 </span></code></pre></div></p>
 <p>The <code>kind</code> field is intentionally unrestricted — the operator passes it through directly to cert-manager's <code>Certificate</code> resource, which supports any registered external issuer CRD.</p>
 <h3 id="ca-certificate-verification">CA Certificate Verification<a class="headerlink" href="#ca-certificate-verification" title="Anchor link to this section">&para;</a></h3>
 <p>By default, the operator automatically loads the CA certificate from the cert-manager-generated TLS Secret (<code>{cluster-name}-tls-secret</code>) to verify Neo4j connections. This means TLS verification works out of the box when cert-manager includes <code>ca.crt</code> in the Secret.</p>
 <p>If the CA certificate cannot be loaded (e.g., during initial startup before cert-manager issues the cert, or when using an issuer that doesn't provide <code>ca.crt</code>), the operator falls back to skipping TLS verification with a warning.</p>
 <p>To use a custom CA certificate (e.g., from an external PKI), specify <code>trustedCASecret</code>:</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nt">spec</span><span class="p">:</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">  </span><span class="nt">tls</span><span class="p">:</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">    </span><span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cert-manager</span>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">    </span><span class="nt">issuerRef</span><span class="p">:</span>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-issuer</span>
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">      </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ClusterIssuer</span>
+</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="w">    </span><span class="nt">trustedCASecret</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-ca-bundle</span><span class="w">  </span><span class="c1"># Secret must contain key &quot;ca.crt&quot;</span>
+</span></code></pre></div>
+<p>Create the CA Secret:
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>kubectl<span class="w"> </span>create<span class="w"> </span>secret<span class="w"> </span>generic<span class="w"> </span>my-ca-bundle<span class="w"> </span>--from-file<span class="o">=</span>ca.crt<span class="o">=</span>/path/to/ca-certificate.pem
+</span></code></pre></div></p>
+<p>When <code>trustedCASecret</code> is set, it takes priority over the auto-discovered cert-manager CA.</p>
+<h3 id="custom-certificate-duration">Custom Certificate Duration<a class="headerlink" href="#custom-certificate-duration" title="Anchor link to this section">&para;</a></h3>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="nt">spec</span><span class="p">:</span>
 </span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="w">  </span><span class="nt">tls</span><span class="p">:</span>
 </span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">    </span><span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cert-manager</span>
 </span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="w">    </span><span class="nt">issuerRef</span><span class="p">:</span>
-</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-issuer</span>
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ca-cluster-issuer</span>
 </span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="w">      </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ClusterIssuer</span>
-</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="w">    </span><span class="nt">trustedCASecret</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-ca-bundle</span><span class="w">  </span><span class="c1"># Secret must contain key &quot;ca.crt&quot;</span>
-</span></code></pre></div>
-<p>Create the CA Secret:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>kubectl<span class="w"> </span>create<span class="w"> </span>secret<span class="w"> </span>generic<span class="w"> </span>my-ca-bundle<span class="w"> </span>--from-file<span class="o">=</span>ca.crt<span class="o">=</span>/path/to/ca-certificate.pem
-</span></code></pre></div></p>
-<p>When <code>trustedCASecret</code> is set, it takes priority over the auto-discovered cert-manager CA.</p>
-<h3 id="custom-certificate-duration">Custom Certificate Duration<a class="headerlink" href="#custom-certificate-duration" title="Anchor link to this section">&para;</a></h3>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="w">  </span><span class="nt">tls</span><span class="p">:</span>
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">    </span><span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cert-manager</span>
-</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">    </span><span class="nt">issuerRef</span><span class="p">:</span>
-</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ca-cluster-issuer</span>
-</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="w">      </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ClusterIssuer</span>
-</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="w">    </span><span class="nt">duration</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">17520h</span><span class="w">    </span><span class="c1"># 2 years</span>
-</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="w">    </span><span class="nt">renewBefore</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1440h</span><span class="w">  </span><span class="c1"># 60 days</span>
+</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="w">    </span><span class="nt">duration</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">17520h</span><span class="w">    </span><span class="c1"># 2 years</span>
+</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="w">    </span><span class="nt">renewBefore</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1440h</span><span class="w">  </span><span class="c1"># 60 days</span>
 </span></code></pre></div>
 <h3 id="mutual-tls-mtls">Mutual TLS (mTLS)<a class="headerlink" href="#mutual-tls-mtls" title="Anchor link to this section">&para;</a></h3>
 <p><strong>Intra-cluster mTLS is enabled by default.</strong> When <code>spec.tls.mode: cert-manager</code> and <code>spec.tls.strictPeerValidation: true</code> (the default), the operator emits:</p>
-<div class="language-properties highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="na">dbms.ssl.policy.cluster.trust_all</span><span class="o">=</span><span class="s">false</span>
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="na">dbms.ssl.policy.cluster.client_auth</span><span class="o">=</span><span class="s">REQUIRE       # mutual TLS between server pods</span>
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="na">dbms.ssl.policy.cluster.verify_hostname</span><span class="o">=</span><span class="s">true</span>
+<div class="language-properties highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="na">dbms.ssl.policy.cluster.trust_all</span><span class="o">=</span><span class="s">false</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="na">dbms.ssl.policy.cluster.client_auth</span><span class="o">=</span><span class="s">REQUIRE       # mutual TLS between server pods</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="na">dbms.ssl.policy.cluster.verify_hostname</span><span class="o">=</span><span class="s">true</span>
 </span></code></pre></div>
 <p>No user configuration required. See the <em>Important: TLS and Cluster Formation</em> section above for the full rationale and the <code>strictPeerValidation: false</code> opt-out.</p>
 <blockquote>
 <p><strong>Do not set <code>dbms.ssl.policy.*</code> keys in <code>spec.config</code>.</strong> The operator owns the SSL policy surface end-to-end. The cluster validator rejects any <code>dbms.ssl.policy.*</code> / <code>server.bolt.tls_level</code> / <code>server.directories.certificates</code> key in <code>spec.config</code> with a <code>Forbidden</code> error at apply time, because user values would silently override the operator-managed configuration (<code>server.config.strict_validation.enabled=false</code> makes Neo4j accept duplicates without a warning).</p>
 </blockquote>
 <p><strong>Bolt mTLS (client-certificate authentication for external drivers) is not configurable via the operator today.</strong> Bolt and HTTPS SSL policies are managed by the operator with <code>client_auth=NONE</code> so standard Neo4j drivers — none of which ship with operator-issued client certs — can connect. A future enhancement could expose a typed field for this; track via <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/issues/128">issue #128</a> (security checklist gaps).</p>
-<h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Anchor link to this section">&para;</a></h2>
-<ol>
-<li><strong>Always use cert-manager</strong> for automatic certificate lifecycle management</li>
-<li><strong>Don't override cluster trust settings</strong> in <code>spec.config</code> — let the operator manage <code>trust_all</code>, <code>client_auth</code>, and <code>verify_hostname</code> via the <code>spec.tls.strictPeerValidation</code> toggle</li>
-<li><strong>Monitor certificate expiry</strong> - Set up alerts for certificate renewal</li>
-<li><strong>Test in staging</strong> - Always test TLS configuration in non-production first</li>
-<li><strong>Use parallel pod management</strong> - Already configured by the operator</li>
-<li><strong>Keep join timeout at 10m</strong> - Don't reduce <code>dbms.cluster.raft.membership.join_timeout</code></li>
-</ol>
-<h2 id="summary">Summary<a class="headerlink" href="#summary" title="Anchor link to this section">&para;</a></h2>
-<p>TLS configuration with the Neo4j Kubernetes Operator is straightforward:
-1. Install cert-manager and create an issuer
-2. Enable TLS in your Neo4j resource
-3. The operator handles all certificate and Neo4j configuration
-4. Connect using TLS-enabled endpoints</p>
-<p>The operator includes specific optimizations for TLS cluster formation, making it reliable even with encryption enabled.</p>
 
 
 

@@ -1749,10 +1749,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#complete-operator-metrics-reference" class="md-nav__link">
+  <a href="#operator-metrics-reference" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Complete Operator Metrics Reference
+        Operator Metrics Reference
       
     </span>
   </a>
@@ -3176,10 +3176,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#complete-operator-metrics-reference" class="md-nav__link">
+  <a href="#operator-metrics-reference" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Complete Operator Metrics Reference
+        Operator Metrics Reference
       
     </span>
   </a>
@@ -3976,176 +3976,8 @@
 <li>Check reconcile logs: <code>kubectl logs -n neo4j-operator deployment/neo4j-operator-controller-manager | grep -i reconcile</code></li>
 </ul>
 <hr />
-<h2 id="complete-operator-metrics-reference">Complete Operator Metrics Reference<a class="headerlink" href="#complete-operator-metrics-reference" title="Anchor link to this section">&para;</a></h2>
-<p>All metrics use the prefix <code>neo4j_operator_</code> and are registered via the controller-runtime Prometheus registry.</p>
-<table>
-<thead>
-<tr>
-<th>Metric</th>
-<th>Type</th>
-<th>Labels</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>cluster_healthy</code></td>
-<td>Gauge</td>
-<td>cluster_name, namespace</td>
-<td>1=healthy, 0=unhealthy</td>
-</tr>
-<tr>
-<td><code>cluster_replicas_total</code></td>
-<td>Gauge</td>
-<td>cluster_name, namespace, role</td>
-<td>Replicas by role (primary/secondary)</td>
-</tr>
-<tr>
-<td><code>cluster_phase</code></td>
-<td>Gauge</td>
-<td>cluster_name, namespace, phase</td>
-<td>1 for active phase, 0 for others</td>
-</tr>
-<tr>
-<td><code>split_brain_detected_total</code></td>
-<td>Counter</td>
-<td>cluster_name, namespace</td>
-<td>Split-brain detection events</td>
-</tr>
-<tr>
-<td><code>server_health</code></td>
-<td>Gauge</td>
-<td>cluster_name, namespace, server_name, server_address</td>
-<td>1=Enabled+Available, 0=degraded</td>
-</tr>
-<tr>
-<td><code>reconcile_total</code></td>
-<td>Counter</td>
-<td>cluster_name, namespace, operation, result</td>
-<td>Reconciliation attempts</td>
-</tr>
-<tr>
-<td><code>reconcile_duration_seconds</code></td>
-<td>Histogram</td>
-<td>cluster_name, namespace, operation</td>
-<td>Reconciliation duration</td>
-</tr>
-<tr>
-<td><code>upgrade_total</code></td>
-<td>Counter</td>
-<td>cluster_name, namespace, result</td>
-<td>Upgrade attempts</td>
-</tr>
-<tr>
-<td><code>upgrade_duration_seconds</code></td>
-<td>Histogram</td>
-<td>cluster_name, namespace, phase</td>
-<td>Upgrade duration per phase</td>
-</tr>
-<tr>
-<td><code>backup_total</code></td>
-<td>Counter</td>
-<td>cluster_name, namespace, result</td>
-<td>Backup attempts</td>
-</tr>
-<tr>
-<td><code>backup_duration_seconds</code></td>
-<td>Histogram</td>
-<td>cluster_name, namespace</td>
-<td>Backup duration</td>
-</tr>
-<tr>
-<td><code>backup_size_bytes</code></td>
-<td>Gauge</td>
-<td>cluster_name, namespace</td>
-<td>Last backup size</td>
-</tr>
-<tr>
-<td><code>cypher_executions_total</code></td>
-<td>Counter</td>
-<td>cluster_name, namespace, operation, result</td>
-<td>Cypher executions by the operator</td>
-</tr>
-<tr>
-<td><code>cypher_execution_duration_seconds</code></td>
-<td>Histogram</td>
-<td>cluster_name, namespace, operation</td>
-<td>Cypher execution duration</td>
-</tr>
-<tr>
-<td><code>security_operations_total</code></td>
-<td>Counter</td>
-<td>cluster_name, namespace, operation, result</td>
-<td>Security ops (user, role, grant)</td>
-</tr>
-<tr>
-<td><code>resource_version_conflicts_total</code></td>
-<td>Counter</td>
-<td>resource_type, namespace</td>
-<td>K8s resource version conflicts</td>
-</tr>
-<tr>
-<td><code>conflict_retry_attempts</code></td>
-<td>Histogram</td>
-<td>resource_type, namespace</td>
-<td>Retry attempts per conflict</td>
-</tr>
-<tr>
-<td><code>conflict_retry_duration_seconds</code></td>
-<td>Histogram</td>
-<td>resource_type, namespace</td>
-<td>Time spent retrying conflicts</td>
-</tr>
-<tr>
-<td><code>disaster_recovery_status</code></td>
-<td>Gauge</td>
-<td>cluster_name, namespace, primary_region, secondary_region</td>
-<td>1=DR ready, 0=not ready</td>
-</tr>
-<tr>
-<td><code>failover_total</code></td>
-<td>Counter</td>
-<td>cluster_name, namespace, result</td>
-<td>Failover events</td>
-</tr>
-<tr>
-<td><code>replication_lag_seconds</code></td>
-<td>Gauge</td>
-<td>cluster_name, namespace, primary_region, secondary_region</td>
-<td>Cross-region replication lag</td>
-</tr>
-<tr>
-<td><code>manual_scaler_enabled</code></td>
-<td>Gauge</td>
-<td>cluster_name, namespace</td>
-<td>1=manual scaling on</td>
-</tr>
-<tr>
-<td><code>scale_events_total</code></td>
-<td>Counter</td>
-<td>cluster_name, namespace, node_type, direction</td>
-<td>Scale up/down events</td>
-</tr>
-<tr>
-<td><code>primary_count</code></td>
-<td>Gauge</td>
-<td>cluster_name, namespace</td>
-<td>Current primary count</td>
-</tr>
-<tr>
-<td><code>secondary_count</code></td>
-<td>Gauge</td>
-<td>cluster_name, namespace</td>
-<td>Current secondary count</td>
-</tr>
-<tr>
-<td><code>scaling_validation_total</code></td>
-<td>Counter</td>
-<td>cluster_name, namespace, validation_type, result</td>
-<td>Scaling validation attempts</td>
-</tr>
-</tbody>
-</table>
+<h2 id="operator-metrics-reference">Operator Metrics Reference<a class="headerlink" href="#operator-metrics-reference" title="Anchor link to this section">&para;</a></h2>
+<p>For the full list of <code>neo4j_operator_*</code> metrics (cluster health, reconcile counters, backup/upgrade/scale events, etc.), see <a href="../monitoring/#complete-metrics-reference">monitoring.md § Complete Metrics Reference</a>.</p>
 
 
 

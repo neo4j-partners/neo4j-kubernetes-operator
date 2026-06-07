@@ -2923,9 +2923,14 @@ reflect cluster health without requiring <code>kubectl exec</code>. See the
 <li><code>spec.mcp</code>: Optional Neo4j MCP server deployment for client integrations (HTTP or STDIO). Requires the APOC plugin via Neo4jPlugin; HTTP uses per-request auth and supports Service/Ingress/Route exposure with optional TLS.</li>
 <li><code>spec.tls</code>: Configure TLS/SSL encryption. Set mode to <code>cert-manager</code> and provide an issuerRef for automatic certificate management.</li>
 <li><code>spec.config</code>: Add custom Neo4j configuration settings as key-value pairs. These are added to neo4j.conf.</li>
-<li><code>spec.env</code>: Add environment variables to Neo4j pods. Note that NEO4J_AUTH and NEO4J_ACCEPT_LICENSE_AGREEMENT are managed by the operator.</li>
-<li><code>spec.service</code>: Configure service type (ClusterIP, NodePort, LoadBalancer), annotations, and external access settings (Ingress; OpenShift Route).</li>
-<li><code>spec.propertySharding</code>: (Neo4j 2025.12+) Enable property sharding for horizontal scaling of large datasets. See the <a href="../property_sharding/">Property Sharding Guide</a> for detailed configuration options.</li>
+<li>
+<p><code>spec.env</code>: Add environment variables to Neo4j pods. Note that NEO4J_AUTH and NEO4J_ACCEPT_LICENSE_AGREEMENT are managed by the operator.</p>
+<blockquote>
+<p><strong>Warning</strong>: Do not set <code>NEO4J_AUTH</code> via <code>spec.env</code>. The operator builds it from the admin Secret's <code>username</code> / <code>password</code> keys (referenced via <code>spec.auth.adminSecret</code>); overriding via <code>spec.env</code> bypasses the Secret-managed flow and the two paths can desync on Secret rotation. Override the Secret itself, not the env var.
+*   <code>spec.service</code>: Configure service type (ClusterIP, NodePort, LoadBalancer), annotations, and external access settings (Ingress; OpenShift Route).
+*   <code>spec.propertySharding</code>: (Neo4j 2025.12+) Enable property sharding for horizontal scaling of large datasets. See the <a href="../property_sharding/">Property Sharding Guide</a> for detailed configuration options.</p>
+</blockquote>
+</li>
 </ul>
 <h2 id="storage-and-pvc-retention">Storage and PVC Retention<a class="headerlink" href="#storage-and-pvc-retention" title="Anchor link to this section">&para;</a></h2>
 <p>The <code>spec.storage</code> section configures persistent volumes for Neo4j data. The most important field users overlook is <code>retentionPolicy</code>, which controls what happens to your data when a cluster or standalone is deleted.</p>

@@ -1747,60 +1747,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#alignment-with-neo4j-official-recommendations" class="md-nav__link">
+  <a href="#validation-tools" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Alignment with Neo4j Official Recommendations
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Alignment with Neo4j Official Recommendations">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#neo4j-best-practices-implemented" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        ✅ Neo4j Best Practices Implemented
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#memory-allocation-guidelines" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        📊 Memory Allocation Guidelines
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#tools-for-validation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        🔧 Tools for Validation
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#summary" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Summary
+        Validation Tools
       
     </span>
   </a>
@@ -3569,60 +3519,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#alignment-with-neo4j-official-recommendations" class="md-nav__link">
+  <a href="#validation-tools" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Alignment with Neo4j Official Recommendations
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Alignment with Neo4j Official Recommendations">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#neo4j-best-practices-implemented" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        ✅ Neo4j Best Practices Implemented
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#memory-allocation-guidelines" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        📊 Memory Allocation Guidelines
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#tools-for-validation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        🔧 Tools for Validation
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#summary" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Summary
+        Validation Tools
       
     </span>
   </a>
@@ -4492,98 +4392,15 @@
 </span><span id="__span-35-7"><a id="__codelineno-35-7" name="__codelineno-35-7" href="#__codelineno-35-7"></a><span class="w">    </span><span class="nt">cpu</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;4&quot;</span><span class="w">        </span><span class="c1"># Same as requests</span>
 </span><span id="__span-35-8"><a id="__codelineno-35-8" name="__codelineno-35-8" href="#__codelineno-35-8"></a><span class="c1"># Results in QoS Class: Guaranteed</span>
 </span></code></pre></div>
-<h2 id="alignment-with-neo4j-official-recommendations">Alignment with Neo4j Official Recommendations<a class="headerlink" href="#alignment-with-neo4j-official-recommendations" title="Anchor link to this section">&para;</a></h2>
-<p>This guide follows Neo4j's official performance documentation for versions 5.26+ and 2025.x:</p>
-<h3 id="neo4j-best-practices-implemented">✅ Neo4j Best Practices Implemented<a class="headerlink" href="#neo4j-best-practices-implemented" title="Anchor link to this section">&para;</a></h3>
-<ol>
-<li><strong>Memory Configuration</strong></li>
-<li>Uses <code>server.memory.*</code> settings (not deprecated <code>dbms.memory.*</code>)</li>
-<li>Sets <code>heap.initial_size = heap.max_size</code> to avoid GC pauses</li>
-<li>
-<p>Reserves ~1GB for OS operations</p>
-</li>
-<li>
-<p><strong>Page Cache Sizing</strong></p>
-</li>
-<li>Formula: <code>Page Cache = Database Size × 1.2</code></li>
-<li>
-<p>Accounts for 20% growth buffer</p>
-</li>
-<li>
-<p><strong>JVM Tuning</strong></p>
-</li>
-<li>G1GC for heaps &gt; 4GB</li>
-<li>Compressed OOPs for heaps up to 31GB</li>
-<li>
-<p>Proper GC tuning parameters</p>
-</li>
-<li>
-<p><strong>Transaction Memory</strong></p>
-</li>
-<li>Global limits with <code>server.memory.transaction.total.max</code></li>
-<li>Per-database limits with <code>db.memory.transaction.total.max</code></li>
-<li>
-<p>Per-transaction limits with <code>server.memory.transaction.max</code></p>
-</li>
-<li>
-<p><strong>Vector Index Support (2025.x)</strong></p>
-</li>
-<li>Formula: <code>Heap + PageCache + 0.25×(Vector Index Size) + OS</code></li>
-<li>1:4 memory-to-storage ratio recommendation</li>
-</ol>
-<h3 id="memory-allocation-guidelines">📊 Memory Allocation Guidelines<a class="headerlink" href="#memory-allocation-guidelines" title="Anchor link to this section">&para;</a></h3>
-<table>
-<thead>
-<tr>
-<th>Component</th>
-<th>Neo4j Recommendation</th>
-<th>Our Default</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Heap</td>
-<td>40-60% of available</td>
-<td>50-60%</td>
-</tr>
-<tr>
-<td>Page Cache</td>
-<td>1.2× database size</td>
-<td>40-50% of available</td>
-</tr>
-<tr>
-<td>OS Reserve</td>
-<td>~1GB</td>
-<td>512MB-1GB</td>
-</tr>
-<tr>
-<td>Transaction</td>
-<td>Configure explicitly</td>
-<td>Examples provided</td>
-</tr>
-</tbody>
-</table>
-<h3 id="tools-for-validation">🔧 Tools for Validation<a class="headerlink" href="#tools-for-validation" title="Anchor link to this section">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-36-1"><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a><span class="c1"># Use Neo4j&#39;s official memory recommendation tool</span>
+<h2 id="validation-tools">Validation Tools<a class="headerlink" href="#validation-tools" title="Anchor link to this section">&para;</a></h2>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-36-1"><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a><span class="c1"># Neo4j&#39;s built-in memory recommendation</span>
 </span><span id="__span-36-2"><a id="__codelineno-36-2" name="__codelineno-36-2" href="#__codelineno-36-2"></a>neo4j-admin<span class="w"> </span>server<span class="w"> </span>memory-recommendation<span class="w"> </span>--memory<span class="o">=</span>&lt;container-memory&gt;
 </span><span id="__span-36-3"><a id="__codelineno-36-3" name="__codelineno-36-3" href="#__codelineno-36-3"></a>
-</span><span id="__span-36-4"><a id="__codelineno-36-4" name="__codelineno-36-4" href="#__codelineno-36-4"></a><span class="c1"># Monitor with Neo4j procedures</span>
+</span><span id="__span-36-4"><a id="__codelineno-36-4" name="__codelineno-36-4" href="#__codelineno-36-4"></a><span class="c1"># Inspect runtime allocations</span>
 </span><span id="__span-36-5"><a id="__codelineno-36-5" name="__codelineno-36-5" href="#__codelineno-36-5"></a>CALL<span class="w"> </span>dbms.listPools<span class="o">()</span>
 </span><span id="__span-36-6"><a id="__codelineno-36-6" name="__codelineno-36-6" href="#__codelineno-36-6"></a>SHOW<span class="w"> </span>TRANSACTIONS
 </span></code></pre></div>
-<h2 id="summary">Summary<a class="headerlink" href="#summary" title="Anchor link to this section">&para;</a></h2>
-<p>Resource sizing is critical for Neo4j performance. Key takeaways:</p>
-<ol>
-<li><strong>Start with operator recommendations</strong> based on cluster size</li>
-<li><strong>Memory is most critical</strong> - ensure adequate allocation</li>
-<li><strong>CPU burst capacity</strong> helps with query spikes</li>
-<li><strong>Monitor and adjust</strong> based on actual workload</li>
-<li><strong>Validate configurations</strong> before production deployment</li>
-</ol>
-<p>For most production deployments, the 3-4 server configuration with 4-8Gi memory per pod provides the best balance of performance, availability, and cost.</p>
-<p><strong>This guide aligns with Neo4j Operations Manual:</strong>
-- <a href="https://neo4j.com/docs/operations-manual/5/performance/">Neo4j 5.26 Performance Guide</a>
-- <a href="https://neo4j.com/docs/operations-manual/2025.07/performance/">Neo4j 2025.x Performance Guide</a></p>
+<p>See also the Neo4j Operations Manual: <a href="https://neo4j.com/docs/operations-manual/5/performance/">5.x</a> · <a href="https://neo4j.com/docs/operations-manual/2025.07/performance/">2025.x</a>.</p>
 <h2 id="related-documentation">Related Documentation<a class="headerlink" href="#related-documentation" title="Anchor link to this section">&para;</a></h2>
 <ul>
 <li><a href="../configuration_best_practices/">Configuration Best Practices</a></li>

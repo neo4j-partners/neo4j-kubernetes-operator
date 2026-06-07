@@ -553,17 +553,6 @@
   
 </li>
         
-          <li class="md-nav__item">
-  <a href="#cluster-formation-process" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Cluster Formation Process
-      
-    </span>
-  </a>
-  
-</li>
-        
       </ul>
     </nav>
   
@@ -642,17 +631,6 @@
   
 </li>
         
-          <li class="md-nav__item">
-  <a href="#property-sharding-for-large-datasets" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Property Sharding for Large Datasets
-      
-    </span>
-  </a>
-  
-</li>
-        
       </ul>
     </nav>
   
@@ -663,6 +641,17 @@
     <span class="md-ellipsis">
       
         Next Steps
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#browse-the-examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Browse the examples
       
     </span>
   </a>
@@ -2814,17 +2803,6 @@
   
 </li>
         
-          <li class="md-nav__item">
-  <a href="#cluster-formation-process" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Cluster Formation Process
-      
-    </span>
-  </a>
-  
-</li>
-        
       </ul>
     </nav>
   
@@ -2903,17 +2881,6 @@
   
 </li>
         
-          <li class="md-nav__item">
-  <a href="#property-sharding-for-large-datasets" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Property Sharding for Large Datasets
-      
-    </span>
-  </a>
-  
-</li>
-        
       </ul>
     </nav>
   
@@ -2924,6 +2891,17 @@
     <span class="md-ellipsis">
       
         Next Steps
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#browse-the-examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Browse the examples
       
     </span>
   </a>
@@ -2959,7 +2937,7 @@
 <p>This guide will walk you through the process of deploying your first Neo4j Enterprise instance on Kubernetes using the Neo4j Enterprise Operator. You can choose between clustered and standalone deployments based on your needs.</p>
 <h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Anchor link to this section">&para;</a></h2>
 <ul>
-<li>A Kubernetes cluster (v1.30+)</li>
+<li>A Kubernetes cluster (v1.32+)</li>
 <li><code>kubectl</code> installed and configured</li>
 <li>Neo4j Enterprise Edition (evaluation license acceptable for testing)</li>
 <li>Go 1.26+ (for building from source)</li>
@@ -3100,110 +3078,66 @@
 </ol>
 <p>See the <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/tree/main/examples">Examples README</a> for detailed customization guidance.</p>
 <h3 id="what-happens-next">What Happens Next?<a class="headerlink" href="#what-happens-next" title="Anchor link to this section">&para;</a></h3>
-<p>The operator will now create several Kubernetes resources to bring your cluster to life:</p>
-<ul>
-<li>A <strong>StatefulSet</strong> to manage the Neo4j pods.</li>
-<li><strong>PersistentVolumeClaims</strong> for storing data and logs.</li>
-<li>A <strong>headless Service</strong> for StatefulSet pod identity.</li>
-<li>A <strong>discovery Service</strong> for Kubernetes-based cluster formation.</li>
-<li>A <strong>client-facing Service</strong> for applications to connect to.</li>
-<li>A <strong>ConfigMap</strong> with your Neo4j configuration.</li>
-</ul>
-<h3 id="cluster-formation-process">Cluster Formation Process<a class="headerlink" href="#cluster-formation-process" title="Anchor link to this section">&para;</a></h3>
-<p>For multi-server clusters, all pods start simultaneously using ParallelPodManagement:</p>
-<p><strong>Minimal Cluster (2 servers):</strong>
-1. <strong>All server pods</strong>: Start simultaneously (ParallelPodManagement)
-2. <strong>Cluster formation</strong>: Servers discover each other and self-organize (1-2 minutes)
-3. <strong>Ready state</strong>: All servers join the cluster automatically</p>
-<p><strong>Multi-Server Cluster (3+ servers):</strong>
-1. <strong>All server pods</strong>: Start simultaneously for optimal formation
-2. <strong>Self-organization</strong>: Servers automatically assign roles based on database topology requirements
-3. <strong>Database hosting</strong>: Servers can host databases as primaries or secondaries as needed</p>
-<p><strong>Total deployment time</strong>: 2-3 minutes for minimal clusters, 3-5 minutes for multi-server clusters.</p>
-<p>You can monitor the progress with <code>kubectl get pods -w</code>.</p>
+<p>The operator creates a StatefulSet, per-pod PersistentVolumeClaims, headless + client Services, and a ConfigMap with the rendered Neo4j configuration. All Pods start in parallel; cluster formation typically takes 2-3 minutes for a 2-server cluster, 3-5 minutes for larger topologies.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-w
+</span></code></pre></div>
 <h2 id="accessing-your-deployment">Accessing Your Deployment<a class="headerlink" href="#accessing-your-deployment" title="Anchor link to this section">&para;</a></h2>
 <p>Once the pods are in the <code>Running</code> state, you can access your deployment using <code>kubectl port-forward</code>:</p>
 <h3 id="for-standalone-deployments">For Standalone Deployments<a class="headerlink" href="#for-standalone-deployments" title="Anchor link to this section">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># For standalone deployment</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>kubectl<span class="w"> </span>port-forward<span class="w"> </span>service/standalone-neo4j-service<span class="w"> </span><span class="m">7474</span>:7474<span class="w"> </span><span class="m">7687</span>:7687
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># For standalone deployment</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>kubectl<span class="w"> </span>port-forward<span class="w"> </span>service/standalone-neo4j-service<span class="w"> </span><span class="m">7474</span>:7474<span class="w"> </span><span class="m">7687</span>:7687
 </span></code></pre></div>
 <h3 id="for-cluster-deployments">For Cluster Deployments<a class="headerlink" href="#for-cluster-deployments" title="Anchor link to this section">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># For minimal cluster</span>
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>kubectl<span class="w"> </span>port-forward<span class="w"> </span>service/minimal-cluster-client<span class="w"> </span><span class="m">7474</span>:7474<span class="w"> </span><span class="m">7687</span>:7687
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>
-</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="c1"># For multi-server cluster</span>
-</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a>kubectl<span class="w"> </span>port-forward<span class="w"> </span>service/multi-server-cluster-client<span class="w"> </span><span class="m">7474</span>:7474<span class="w"> </span><span class="m">7687</span>:7687
-</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a>
-</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="c1"># For your custom cluster (replace with your cluster name)</span>
-</span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a>kubectl<span class="w"> </span>port-forward<span class="w"> </span>service/YOUR-CLUSTER-NAME-client<span class="w"> </span><span class="m">7474</span>:7474<span class="w"> </span><span class="m">7687</span>:7687
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># For minimal cluster</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>kubectl<span class="w"> </span>port-forward<span class="w"> </span>service/minimal-cluster-client<span class="w"> </span><span class="m">7474</span>:7474<span class="w"> </span><span class="m">7687</span>:7687
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="c1"># For multi-server cluster</span>
+</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>kubectl<span class="w"> </span>port-forward<span class="w"> </span>service/multi-server-cluster-client<span class="w"> </span><span class="m">7474</span>:7474<span class="w"> </span><span class="m">7687</span>:7687
+</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>
+</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="c1"># For your custom cluster (replace with your cluster name)</span>
+</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a>kubectl<span class="w"> </span>port-forward<span class="w"> </span>service/YOUR-CLUSTER-NAME-client<span class="w"> </span><span class="m">7474</span>:7474<span class="w"> </span><span class="m">7687</span>:7687
 </span></code></pre></div>
 <p>You can then access the Neo4j Browser at <code>http://localhost:7474</code>.</p>
 <h2 id="creating-databases">Creating Databases<a class="headerlink" href="#creating-databases" title="Anchor link to this section">&para;</a></h2>
 <p>Once your cluster is running, you can create and manage databases using the Neo4jDatabase CRD:</p>
 <h3 id="basic-database-creation">Basic Database Creation<a class="headerlink" href="#basic-database-creation" title="Anchor link to this section">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Create a simple database</span>
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>-<span class="w"> </span><span class="s">&lt;&lt;EOF</span>
-</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="s">apiVersion: neo4j.neo4j.com/v1beta1</span>
-</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="s">kind: Neo4jDatabase</span>
-</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="s">metadata:</span>
-</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="s">  name: my-database</span>
-</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="s">spec:</span>
-</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="s">  clusterRef: minimal-cluster  # or your cluster name</span>
-</span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a><span class="s">  name: mydb</span>
-</span><span id="__span-16-10"><a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a><span class="s">  wait: true</span>
-</span><span id="__span-16-11"><a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a><span class="s">  ifNotExists: true</span>
-</span><span id="__span-16-12"><a id="__codelineno-16-12" name="__codelineno-16-12" href="#__codelineno-16-12"></a><span class="s">EOF</span>
-</span></code></pre></div>
-<h3 id="database-from-existing-backup-seed-uri">Database from Existing Backup (Seed URI)<a class="headerlink" href="#database-from-existing-backup-seed-uri" title="Anchor link to this section">&para;</a></h3>
-<p>If you have existing Neo4j backups in cloud storage, you can create databases directly from them:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Create database from S3 backup</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Create a simple database</span>
 </span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>-<span class="w"> </span><span class="s">&lt;&lt;EOF</span>
 </span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="s">apiVersion: neo4j.neo4j.com/v1beta1</span>
 </span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="s">kind: Neo4jDatabase</span>
 </span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="s">metadata:</span>
-</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="s">  name: restored-database</span>
+</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="s">  name: my-database</span>
 </span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="s">spec:</span>
-</span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a><span class="s">  clusterRef: minimal-cluster</span>
-</span><span id="__span-17-9"><a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a><span class="s">  name: restored-db</span>
-</span><span id="__span-17-10"><a id="__codelineno-17-10" name="__codelineno-17-10" href="#__codelineno-17-10"></a><span class="s">  seedURI: &quot;s3://my-backups/database.backup&quot;</span>
-</span><span id="__span-17-11"><a id="__codelineno-17-11" name="__codelineno-17-11" href="#__codelineno-17-11"></a><span class="s">  topology:</span>
-</span><span id="__span-17-12"><a id="__codelineno-17-12" name="__codelineno-17-12" href="#__codelineno-17-12"></a><span class="s">    primaries: 1</span>
-</span><span id="__span-17-13"><a id="__codelineno-17-13" name="__codelineno-17-13" href="#__codelineno-17-13"></a><span class="s">    secondaries: 1</span>
-</span><span id="__span-17-14"><a id="__codelineno-17-14" name="__codelineno-17-14" href="#__codelineno-17-14"></a><span class="s">  wait: true</span>
-</span><span id="__span-17-15"><a id="__codelineno-17-15" name="__codelineno-17-15" href="#__codelineno-17-15"></a><span class="s">  ifNotExists: true</span>
-</span><span id="__span-17-16"><a id="__codelineno-17-16" name="__codelineno-17-16" href="#__codelineno-17-16"></a><span class="s">EOF</span>
+</span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a><span class="s">  clusterRef: minimal-cluster  # or your cluster name</span>
+</span><span id="__span-17-9"><a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a><span class="s">  name: mydb</span>
+</span><span id="__span-17-10"><a id="__codelineno-17-10" name="__codelineno-17-10" href="#__codelineno-17-10"></a><span class="s">  wait: true</span>
+</span><span id="__span-17-11"><a id="__codelineno-17-11" name="__codelineno-17-11" href="#__codelineno-17-11"></a><span class="s">  ifNotExists: true</span>
+</span><span id="__span-17-12"><a id="__codelineno-17-12" name="__codelineno-17-12" href="#__codelineno-17-12"></a><span class="s">EOF</span>
 </span></code></pre></div>
-<h3 id="property-sharding-for-large-datasets">Property Sharding for Large Datasets<a class="headerlink" href="#property-sharding-for-large-datasets" title="Anchor link to this section">&para;</a></h3>
-<p>For large datasets that require horizontal scaling, you can enable property sharding (Neo4j 2025.12+):</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Create a property sharding enabled cluster</span>
-</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>examples/property_sharding/basic-property-sharding.yaml
-</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>
-</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="c1"># Create a sharded database with property distribution</span>
-</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>-<span class="w"> </span><span class="s">&lt;&lt;EOF</span>
-</span><span id="__span-18-6"><a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a><span class="s">apiVersion: neo4j.neo4j.com/v1beta1</span>
-</span><span id="__span-18-7"><a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a><span class="s">kind: Neo4jShardedDatabase</span>
-</span><span id="__span-18-8"><a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a><span class="s">metadata:</span>
-</span><span id="__span-18-9"><a id="__codelineno-18-9" name="__codelineno-18-9" href="#__codelineno-18-9"></a><span class="s">  name: large-dataset-db</span>
-</span><span id="__span-18-10"><a id="__codelineno-18-10" name="__codelineno-18-10" href="#__codelineno-18-10"></a><span class="s">spec:</span>
-</span><span id="__span-18-11"><a id="__codelineno-18-11" name="__codelineno-18-11" href="#__codelineno-18-11"></a><span class="s">  clusterRef: basic-sharding-cluster</span>
-</span><span id="__span-18-12"><a id="__codelineno-18-12" name="__codelineno-18-12" href="#__codelineno-18-12"></a><span class="s">  name: largedata</span>
-</span><span id="__span-18-13"><a id="__codelineno-18-13" name="__codelineno-18-13" href="#__codelineno-18-13"></a><span class="s">  defaultCypherLanguage: &quot;25&quot;  # Cypher language version: &quot;5&quot; or &quot;25&quot;. Cypher 25 requires Neo4j 2025.x or later.</span>
-</span><span id="__span-18-14"><a id="__codelineno-18-14" name="__codelineno-18-14" href="#__codelineno-18-14"></a><span class="s">  propertySharding:</span>
-</span><span id="__span-18-15"><a id="__codelineno-18-15" name="__codelineno-18-15" href="#__codelineno-18-15"></a><span class="s">    propertyShards: 4</span>
-</span><span id="__span-18-16"><a id="__codelineno-18-16" name="__codelineno-18-16" href="#__codelineno-18-16"></a><span class="s">    graphShard:</span>
-</span><span id="__span-18-17"><a id="__codelineno-18-17" name="__codelineno-18-17" href="#__codelineno-18-17"></a><span class="s">      primaries: 3</span>
-</span><span id="__span-18-18"><a id="__codelineno-18-18" name="__codelineno-18-18" href="#__codelineno-18-18"></a><span class="s">      secondaries: 0</span>
-</span><span id="__span-18-19"><a id="__codelineno-18-19" name="__codelineno-18-19" href="#__codelineno-18-19"></a><span class="s">    propertyShardTopology:</span>
-</span><span id="__span-18-20"><a id="__codelineno-18-20" name="__codelineno-18-20" href="#__codelineno-18-20"></a><span class="s">      replicas: 1</span>
-</span><span id="__span-18-21"><a id="__codelineno-18-21" name="__codelineno-18-21" href="#__codelineno-18-21"></a><span class="s">  wait: true</span>
-</span><span id="__span-18-22"><a id="__codelineno-18-22" name="__codelineno-18-22" href="#__codelineno-18-22"></a><span class="s">EOF</span>
+<h3 id="database-from-existing-backup-seed-uri">Database from Existing Backup (Seed URI)<a class="headerlink" href="#database-from-existing-backup-seed-uri" title="Anchor link to this section">&para;</a></h3>
+<p>If you have existing Neo4j backups in cloud storage, you can create databases directly from them:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Create database from S3 backup</span>
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>-<span class="w"> </span><span class="s">&lt;&lt;EOF</span>
+</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="s">apiVersion: neo4j.neo4j.com/v1beta1</span>
+</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="s">kind: Neo4jDatabase</span>
+</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="s">metadata:</span>
+</span><span id="__span-18-6"><a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a><span class="s">  name: restored-database</span>
+</span><span id="__span-18-7"><a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a><span class="s">spec:</span>
+</span><span id="__span-18-8"><a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a><span class="s">  clusterRef: minimal-cluster</span>
+</span><span id="__span-18-9"><a id="__codelineno-18-9" name="__codelineno-18-9" href="#__codelineno-18-9"></a><span class="s">  name: restored-db</span>
+</span><span id="__span-18-10"><a id="__codelineno-18-10" name="__codelineno-18-10" href="#__codelineno-18-10"></a><span class="s">  seedURI: &quot;s3://my-backups/database.backup&quot;</span>
+</span><span id="__span-18-11"><a id="__codelineno-18-11" name="__codelineno-18-11" href="#__codelineno-18-11"></a><span class="s">  topology:</span>
+</span><span id="__span-18-12"><a id="__codelineno-18-12" name="__codelineno-18-12" href="#__codelineno-18-12"></a><span class="s">    primaries: 1</span>
+</span><span id="__span-18-13"><a id="__codelineno-18-13" name="__codelineno-18-13" href="#__codelineno-18-13"></a><span class="s">    secondaries: 1</span>
+</span><span id="__span-18-14"><a id="__codelineno-18-14" name="__codelineno-18-14" href="#__codelineno-18-14"></a><span class="s">  wait: true</span>
+</span><span id="__span-18-15"><a id="__codelineno-18-15" name="__codelineno-18-15" href="#__codelineno-18-15"></a><span class="s">  ifNotExists: true</span>
+</span><span id="__span-18-16"><a id="__codelineno-18-16" name="__codelineno-18-16" href="#__codelineno-18-16"></a><span class="s">EOF</span>
 </span></code></pre></div>
-<p>For detailed database management, see:
+<p>For large datasets that need horizontal scaling, see the <a href="../property_sharding/">Property Sharding guide</a> (Neo4j 2025.12+, via <code>Neo4jShardedDatabase</code>).</p>
+<p>See also:
 - <a href="../../api_reference/neo4jdatabase/">Neo4jDatabase API Reference</a>
-- <a href="../property_sharding/">Property Sharding Guide</a>
 - <a href="../guides/seed-uri/">Database Seed URI Guide</a>
-- <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/tree/main/examples/databases">Database Examples</a>
-- <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/tree/main/examples/property_sharding">Property Sharding Examples</a></p>
+- <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/tree/main/examples/databases">Database Examples</a></p>
 <h2 id="next-steps">Next Steps<a class="headerlink" href="#next-steps" title="Anchor link to this section">&para;</a></h2>
 <p>Now that you have Neo4j running on Kubernetes:</p>
 <ol>
@@ -3214,10 +3148,54 @@
 <li><strong>Plan backups</strong> - Implement backup strategies for data protection</li>
 <li><strong>Scale your deployment</strong> - For clusters, you can scale up/down based on your needs</li>
 </ol>
+<h2 id="browse-the-examples">Browse the examples<a class="headerlink" href="#browse-the-examples" title="Anchor link to this section">&para;</a></h2>
+<p>Ready-to-apply YAML manifests for every CRD live under <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/tree/main/examples"><code>examples/</code></a>:</p>
+<table>
+<thead>
+<tr>
+<th>Directory</th>
+<th>What's in it</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/tree/main/examples/standalone"><code>standalone/</code></a></td>
+<td>Single-node <code>Neo4jEnterpriseStandalone</code> examples</td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/tree/main/examples/clusters"><code>clusters/</code></a></td>
+<td><code>Neo4jEnterpriseCluster</code> topologies (minimal, prod, TLS, fleet-managed)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/tree/main/examples/databases"><code>databases/</code></a></td>
+<td><code>Neo4jDatabase</code> examples (basic, seed URI, custom topology)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/tree/main/examples/users-and-roles"><code>users-and-roles/</code></a></td>
+<td><code>Neo4jUser</code>, <code>Neo4jRole</code>, <code>Neo4jRoleBinding</code>, <code>Neo4jAuthRule</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/tree/main/examples/plugins"><code>plugins/</code></a></td>
+<td><code>Neo4jPlugin</code> examples (APOC, GDS, Bloom, GenAI, …)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/tree/main/examples/backup-restore"><code>backup-restore/</code></a></td>
+<td><code>Neo4jBackup</code>, <code>Neo4jRestore</code> (PVC, S3, GCS, Azure, PITR)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/tree/main/examples/property_sharding"><code>property_sharding/</code></a></td>
+<td><code>Neo4jShardedDatabase</code> setups</td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/tree/main/examples/security"><code>security/</code></a></td>
+<td>NetworkPolicy + Kyverno conformance policies</td>
+</tr>
+</tbody>
+</table>
 <p>For more advanced topics, see:
 - <a href="../configuration/">Configuration Guide</a> - Advanced configuration options
-- <a href="../guides/security/">Security Guide</a> - Authentication, TLS, and security best practices
-- <a href="../guides/performance/">Performance Guide</a> - Optimization and scaling strategies
+- <a href="../security/">Security Guide</a> - Authentication, TLS, and security best practices
+- <a href="../performance/">Performance Guide</a> - Optimization and scaling strategies
 - <a href="../migration_guide/">Migration Guide</a> - Migrating from previous versions</p>
 
 

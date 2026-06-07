@@ -1162,63 +1162,13 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#performance-considerations-and-optimization" class="md-nav__link">
+  <a href="#performance-and-sizing" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Performance Considerations and Optimization
+        Performance and Sizing
       
     </span>
   </a>
-  
-    <nav class="md-nav" aria-label="Performance Considerations and Optimization">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#query-performance-patterns" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Query Performance Patterns
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#performance-optimization-strategies" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Performance Optimization Strategies
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#storage-scaling-considerations" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Storage Scaling Considerations
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#performance-troubleshooting" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Performance Troubleshooting
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
@@ -3227,63 +3177,13 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#performance-considerations-and-optimization" class="md-nav__link">
+  <a href="#performance-and-sizing" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Performance Considerations and Optimization
+        Performance and Sizing
       
     </span>
   </a>
-  
-    <nav class="md-nav" aria-label="Performance Considerations and Optimization">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#query-performance-patterns" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Query Performance Patterns
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#performance-optimization-strategies" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Performance Optimization Strategies
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#storage-scaling-considerations" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Storage Scaling Considerations
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#performance-troubleshooting" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Performance Troubleshooting
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
@@ -3846,115 +3746,9 @@ Solution: Ensure <code>propertySharding.enabled: true</code> on the referenced c
 </span><span id="__span-25-21"><a id="__codelineno-25-21" name="__codelineno-25-21" href="#__codelineno-25-21"></a><span class="w">  </span><span class="nt">schedule</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;0</span><span class="nv"> </span><span class="s">2</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*&quot;</span>
 </span><span id="__span-25-22"><a id="__codelineno-25-22" name="__codelineno-25-22" href="#__codelineno-25-22"></a><span class="w">  </span><span class="nt">consistency</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;cross-database&quot;</span><span class="w">  </span><span class="c1"># Ensure consistent backup point</span>
 </span></code></pre></div>
-<h2 id="performance-considerations-and-optimization">Performance Considerations and Optimization<a class="headerlink" href="#performance-considerations-and-optimization" title="Anchor link to this section">&para;</a></h2>
-<h3 id="query-performance-patterns">Query Performance Patterns<a class="headerlink" href="#query-performance-patterns" title="Anchor link to this section">&para;</a></h3>
-<p><strong>Fast Queries (Graph Shard Only):</strong>
-<div class="language-cypher highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="c1">// Structure queries - very fast (single shard)</span>
-</span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="k">MATCH</span><span class="w"> </span><span class="p">(</span><span class="n">n</span><span class="p">)</span><span class="o">-[</span><span class="n">r</span><span class="o">]-&gt;</span><span class="p">(</span><span class="n">m</span><span class="p">)</span><span class="w"> </span><span class="k">RETURN</span><span class="w"> </span><span class="n">count</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
-</span><span id="__span-26-3"><a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a>
-</span><span id="__span-26-4"><a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a><span class="c1">// Index-based lookups on graph properties - fast</span>
-</span><span id="__span-26-5"><a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a><span class="k">MATCH</span><span class="w"> </span><span class="p">(</span><span class="n">p</span><span class="p">:</span><span class="n">Product</span><span class="p">)</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="n">p</span><span class="p">.</span><span class="n">id</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s">&quot;12345&quot;</span><span class="w"> </span><span class="k">RETURN</span><span class="w"> </span><span class="n">p</span><span class="p">.</span><span class="n">name</span><span class="p">,</span><span class="w"> </span><span class="n">p</span><span class="p">.</span><span class="n">category</span>
-</span></code></pre></div></p>
-<p><strong>Moderate Queries (Mixed Access):</strong>
-<div class="language-cypher highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="c1">// Graph structure + property shard access - moderate speed</span>
-</span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="k">MATCH</span><span class="w"> </span><span class="p">(</span><span class="n">p</span><span class="p">:</span><span class="n">Product</span><span class="p">)</span>
-</span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a><span class="k">WHERE</span><span class="w"> </span><span class="n">p</span><span class="p">.</span><span class="n">category</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s">&quot;electronics&quot;</span><span class="w">    </span><span class="c1">// Graph shard</span>
-</span><span id="__span-27-4"><a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a><span class="k">RETURN</span><span class="w"> </span><span class="n">p</span><span class="p">.</span><span class="n">name</span><span class="p">,</span><span class="w"> </span><span class="n">p</span><span class="p">.</span><span class="n">description</span><span class="w">        </span><span class="c1">// Mixed: graph + property shard</span>
-</span></code></pre></div></p>
-<p><strong>Slower Queries (Heavy Property Access):</strong>
-<div class="language-cypher highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="c1">// Full property shard scans - slower</span>
-</span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a><span class="k">MATCH</span><span class="w"> </span><span class="p">(</span><span class="n">p</span><span class="p">:</span><span class="n">Product</span><span class="p">)</span>
-</span><span id="__span-28-3"><a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a><span class="k">WHERE</span><span class="w"> </span><span class="n">p</span><span class="p">.</span><span class="n">description</span><span class="w"> </span><span class="n">CONTAINS</span><span class="w"> </span><span class="s">&quot;high-performance&quot;</span><span class="w">  </span><span class="c1">// Property shard scan</span>
-</span><span id="__span-28-4"><a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a><span class="k">RETURN</span><span class="w"> </span><span class="n">p</span><span class="p">.</span><span class="n">name</span><span class="p">,</span><span class="w"> </span><span class="n">p</span><span class="p">.</span><span class="n">specifications</span><span class="w">                  </span><span class="c1">// Property shard data</span>
-</span></code></pre></div></p>
-<h3 id="performance-optimization-strategies">Performance Optimization Strategies<a class="headerlink" href="#performance-optimization-strategies" title="Anchor link to this section">&para;</a></h3>
-<p><strong>1. Automatic Property Distribution:</strong></p>
-<p>Property distribution is automatic for sharded databases. Focus on shard count, replica topology, and resource sizing.</p>
-<p><strong>2. Resource Scaling Recommendations:</strong></p>
-<p><em>Development (Basic Testing):</em>
-- <strong>Memory</strong>: 6-8GB per server (basic functionality)
-- <strong>CPU</strong>: 1-2 cores per server (acceptable for development)
-- <strong>Network</strong>: Standard Kubernetes networking (1Gbps)
-- <strong>Servers</strong>: 2 minimum (3+ recommended for HA)</p>
-<p><em>Production (Recommended):</em>
-- <strong>Memory</strong>: 4-8GB per server (4GB minimum, 8GB recommended)
-- <strong>CPU</strong>: 2-4 cores per server (cross-shard query performance)
-- <strong>Network</strong>: High-speed networking (10Gbps+, low latency)
-- <strong>Servers</strong>: 3-7 servers (better shard distribution)</p>
-<p><em>High-Performance (Enterprise):</em>
-- <strong>Memory</strong>: 16-20GB+ per server (maximum throughput)
-- <strong>CPU</strong>: 4-6+ cores per server (concurrent cross-shard queries)
-- <strong>Network</strong>: Ultra-low latency networking (&lt;1ms)
-- <strong>Servers</strong>: 7+ servers (optimal shard placement)</p>
-<p><strong>3. Monitoring Key Metrics:</strong></p>
-<p><em>Resource Utilization:</em>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="c1"># Monitor memory usage per server</span>
-</span><span id="__span-29-2"><a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a>kubectl<span class="w"> </span>top<span class="w"> </span>pods<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/name<span class="o">=</span>your-cluster<span class="w"> </span>--containers
-</span><span id="__span-29-3"><a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a>
-</span><span id="__span-29-4"><a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a><span class="c1"># Check CPU utilization during peak queries</span>
-</span><span id="__span-29-5"><a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a>kubectl<span class="w"> </span>top<span class="w"> </span>pods<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/name<span class="o">=</span>your-cluster<span class="w"> </span>--containers
-</span></code></pre></div></p>
-<p><em>Query Performance:</em>
-<div class="language-cypher highlight"><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="c1">// Monitor cross-shard query latencies</span>
-</span><span id="__span-30-2"><a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="k">CALL</span><span class="w"> </span><span class="n">dbms</span><span class="p">.</span><span class="n">queryJmx</span><span class="p">(</span><span class="s">&quot;org.neo4j:instance=kernel#0,name=Transactions&quot;</span><span class="p">)</span>
-</span><span id="__span-30-3"><a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a><span class="k">YIELD</span><span class="w"> </span><span class="n">attributes</span>
-</span><span id="__span-30-4"><a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a><span class="k">RETURN</span><span class="w"> </span><span class="n">attributes</span><span class="p">.</span><span class="n">NumberOfOpenTransactions</span><span class="p">;</span>
-</span><span id="__span-30-5"><a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a>
-</span><span id="__span-30-6"><a id="__codelineno-30-6" name="__codelineno-30-6" href="#__codelineno-30-6"></a><span class="c1">// Check transaction log positions</span>
-</span><span id="__span-30-7"><a id="__codelineno-30-7" name="__codelineno-30-7" href="#__codelineno-30-7"></a><span class="n">SHOW</span><span class="w"> </span><span class="n">DATABASES</span>
-</span><span id="__span-30-8"><a id="__codelineno-30-8" name="__codelineno-30-8" href="#__codelineno-30-8"></a><span class="w">  </span><span class="k">WHERE</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="k">STARTS</span><span class="w"> </span><span class="k">WITH</span><span class="w"> </span><span class="s">&quot;your-db-&quot;</span>
-</span><span id="__span-30-9"><a id="__codelineno-30-9" name="__codelineno-30-9" href="#__codelineno-30-9"></a><span class="w">  </span><span class="k">RETURN</span><span class="w"> </span><span class="n">name</span><span class="p">,</span><span class="w"> </span><span class="n">currentStatus</span><span class="p">,</span><span class="w"> </span><span class="n">requestedStatus</span><span class="p">;</span>
-</span></code></pre></div></p>
-<p><em>Network and I/O:</em>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="c1"># Monitor network traffic between pods</span>
-</span><span id="__span-31-2"><a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>your-cluster-server-0<span class="w"> </span>--<span class="w"> </span>ss<span class="w"> </span>-tuln
-</span><span id="__span-31-3"><a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a>
-</span><span id="__span-31-4"><a id="__codelineno-31-4" name="__codelineno-31-4" href="#__codelineno-31-4"></a><span class="c1"># Check storage I/O patterns</span>
-</span><span id="__span-31-5"><a id="__codelineno-31-5" name="__codelineno-31-5" href="#__codelineno-31-5"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>your-cluster-server-0<span class="w"> </span>--<span class="w"> </span>iostat<span class="w"> </span>-x<span class="w"> </span><span class="m">1</span>
-</span></code></pre></div></p>
-<h3 id="storage-scaling-considerations">Storage Scaling Considerations<a class="headerlink" href="#storage-scaling-considerations" title="Anchor link to this section">&para;</a></h3>
-<p><strong>Graph Shard Growth:</strong>
-- Grows with number of nodes and relationships
-- Index storage for graph properties
-- Transaction logs for consensus</p>
-<p><strong>Property Shard Growth:</strong>
-- Grows with property volume per shard
-- Distributed based on hash function
-- Each shard has independent transaction logs</p>
-<p><strong>Total Storage Planning:</strong>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-32-1"><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a>Total Storage = Graph_Shard + (Property_Shards × Avg_Property_Size) + Overhead
-</span><span id="__span-32-2"><a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a>
-</span><span id="__span-32-3"><a id="__codelineno-32-3" name="__codelineno-32-3" href="#__codelineno-32-3"></a>Example:
-</span><span id="__span-32-4"><a id="__codelineno-32-4" name="__codelineno-32-4" href="#__codelineno-32-4"></a>- Graph: 10GB (structure + graph properties)
-</span><span id="__span-32-5"><a id="__codelineno-32-5" name="__codelineno-32-5" href="#__codelineno-32-5"></a>- Property Shards: 4 × 25GB = 100GB (distributed properties)
-</span><span id="__span-32-6"><a id="__codelineno-32-6" name="__codelineno-32-6" href="#__codelineno-32-6"></a>- Overhead: 20GB (transaction logs, indexes, system)
-</span><span id="__span-32-7"><a id="__codelineno-32-7" name="__codelineno-32-7" href="#__codelineno-32-7"></a>- Total: ~130GB per server (with replication)
-</span></code></pre></div></p>
-<p><strong>Network Performance Requirements:</strong></p>
-<p><em>Transaction Log Synchronization:</em>
-- <strong>Latency</strong>: &lt;10ms between servers (critical)
-- <strong>Bandwidth</strong>: 100MB/s+ sustained (busy clusters)
-- <strong>Consistency</strong>: All shards must stay within transaction log window</p>
-<p><em>Cross-Shard Query Traffic:</em>
-- <strong>Latency</strong>: &lt;5ms for responsive queries
-- <strong>Bandwidth</strong>: Proportional to result set size
-- <strong>Concurrent Queries</strong>: Multiple cross-shard queries increase traffic</p>
-<h3 id="performance-troubleshooting">Performance Troubleshooting<a class="headerlink" href="#performance-troubleshooting" title="Anchor link to this section">&para;</a></h3>
-<p><strong>Slow Query Performance:</strong>
-1. Check property distribution strategy
-2. Monitor cross-shard query patterns
-3. Verify adequate CPU allocation
-4. Check network latency between servers</p>
-<p><strong>High Memory Usage:</strong>
-1. Monitor heap usage during peak loads
-2. Check transaction log retention settings
-3. Verify property shard distribution balance
-4. Consider increasing memory limits</p>
-<p><strong>Network Saturation:</strong>
-1. Monitor inter-pod network traffic
-2. Check for transaction log lag
-3. Verify network bandwidth capacity
-4. Consider network policy optimizations</p>
+<h2 id="performance-and-sizing">Performance and Sizing<a class="headerlink" href="#performance-and-sizing" title="Anchor link to this section">&para;</a></h2>
+<p>Queries hitting only the graph shard (structure + graph properties) are fastest; cross-shard queries touching property shards add latency proportional to result-set size. For sizing, see the dedicated <a href="../guides/resource_sizing/">Resource Sizing guide</a>. Sharded clusters benefit from low-latency networking (&lt;10ms inter-pod for transaction-log sync, &lt;5ms for query responsiveness) — co-locate pods in the same zone where possible.</p>
+<p><strong>Storage planning</strong>: total ≈ graph-shard size + (property-shards × avg property data per shard) + ~20% transaction-log + index overhead. Each property shard has its own transaction log; size accordingly.</p>
 <h2 id="migration-from-standard-databases">Migration from Standard Databases<a class="headerlink" href="#migration-from-standard-databases" title="Anchor link to this section">&para;</a></h2>
 <p>Property sharding cannot be enabled on existing databases. Migration approaches:</p>
 <ol>
