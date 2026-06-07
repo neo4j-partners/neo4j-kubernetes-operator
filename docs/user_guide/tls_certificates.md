@@ -24,73 +24,16 @@ Inside the secret, you'll find:
 
 ## Retrieving Certificates for Clients
 
-### Quick Export Commands
-
-Create a helper script `neo4j-cert-export.sh`:
-
 ```bash
-#!/bin/bash
-# neo4j-cert-export.sh - Export Neo4j TLS certificates for client use
+# Extract the CA certificate for client trust stores
+kubectl get secret <deployment-name>-tls-secret \
+    -o jsonpath='{.data.ca\.crt}' | base64 -d > ca.crt
 
-DEPLOYMENT_NAME=$1
-NAMESPACE=${2:-default}
-OUTPUT_DIR=${3:-.}
+# Extract the server certificate
+kubectl get secret <deployment-name>-tls-secret \
+    -o jsonpath='{.data.tls\.crt}' | base64 -d > server.crt
 
-if [ -z "$DEPLOYMENT_NAME" ]; then
-    echo "Usage: $0 <deployment-name> [namespace] [output-dir]"
-    echo "Example: $0 my-cluster default ./certs"
-    exit 1
-fi
-
-SECRET_NAME="${DEPLOYMENT_NAME}-tls-secret"
-mkdir -p "$OUTPUT_DIR"
-
-echo "Exporting certificates from $SECRET_NAME in namespace $NAMESPACE..."
-
-# Export CA certificate (for client trust stores)
-kubectl get secret "$SECRET_NAME" -n "$NAMESPACE" -o jsonpath='{.data.ca\.crt}' | base64 -d > "$OUTPUT_DIR/neo4j-ca.crt"
-
-# Export server certificate (optional, for verification)
-kubectl get secret "$SECRET_NAME" -n "$NAMESPACE" -o jsonpath='{.data.tls\.crt}' | base64 -d > "$OUTPUT_DIR/neo4j-server.crt"
-
-# Display certificate information
-echo ""
-echo "Certificate Subject:"
-openssl x509 -in "$OUTPUT_DIR/neo4j-server.crt" -noout -subject
-
-echo ""
-echo "Certificate Validity:"
-openssl x509 -in "$OUTPUT_DIR/neo4j-server.crt" -noout -dates
-
-echo ""
-echo "Certificate DNS Names:"
-openssl x509 -in "$OUTPUT_DIR/neo4j-server.crt" -noout -text | grep -A1 "Subject Alternative Name"
-
-echo ""
-echo "Certificates exported to $OUTPUT_DIR/"
-echo "  - neo4j-ca.crt: Use this for client trust stores"
-echo "  - neo4j-server.crt: Server certificate (for reference)"
-```
-
-Make it executable:
-```bash
-chmod +x neo4j-cert-export.sh
-./neo4j-cert-export.sh my-cluster default ./certs
-```
-
-### Manual Commands
-
-```bash
-# View certificate details
-kubectl get secret <deployment-name>-tls-secret -o yaml
-
-# Extract CA certificate
-kubectl get secret <deployment-name>-tls-secret -o jsonpath='{.data.ca\.crt}' | base64 -d > ca.crt
-
-# Extract server certificate
-kubectl get secret <deployment-name>-tls-secret -o jsonpath='{.data.tls\.crt}' | base64 -d > server.crt
-
-# View certificate details
+# Inspect (SANs, validity)
 openssl x509 -in server.crt -text -noout
 ```
 

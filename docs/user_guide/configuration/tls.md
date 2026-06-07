@@ -173,37 +173,9 @@ kubectl exec -it <pod-name> -c neo4j -- cypher-shell \
 cypher-shell -a bolt+ssc://localhost:7687 -u neo4j -p <password>
 ```
 
-## Troubleshooting TLS Issues
+## Troubleshooting
 
-### Split-Brain in TLS Clusters
-
-TLS clusters may experience split-brain during initial formation if not properly configured. The operator includes fixes to minimize this:
-
-1. **Strict peer validation** (default): the operator validates peers against the issuer's CA at `/ssl/trusted/ca.crt` with mutual TLS. Mismatched certs fail closed instead of silently joining the wrong cluster.
-2. **Parallel startup**: All pods start together for faster formation.
-3. **Proper RBAC**: Endpoints permission for discovery.
-
-If split-brain occurs, see the [Split-Brain Recovery Guide](../troubleshooting/split-brain-recovery.md).
-
-### Certificate Issues
-
-Check certificate status:
-```bash
-kubectl get certificate <cluster-name>-tls
-kubectl describe certificate <cluster-name>-tls
-```
-
-Check cert-manager logs:
-```bash
-kubectl logs -n cert-manager deployment/cert-manager
-```
-
-### Connection Refused
-
-If TLS connections fail:
-1. Verify certificate is ready
-2. Check Neo4j logs for SSL errors
-3. Ensure ports 7473 (HTTPS) and 7687 (Bolt) are accessible
+See [tls_certificates.md § Troubleshooting](../tls_certificates.md#troubleshooting) for cert-not-found, connection-refused, and validation errors. For split-brain in TLS clusters (typically a peer-trust mismatch on first formation), see [Split-Brain Recovery](../troubleshooting/split-brain-recovery.md).
 
 ## Advanced Configuration
 
@@ -314,22 +286,3 @@ No user configuration required. See the *Important: TLS and Cluster Formation* s
 > **Do not set `dbms.ssl.policy.*` keys in `spec.config`.** The operator owns the SSL policy surface end-to-end. The cluster validator rejects any `dbms.ssl.policy.*` / `server.bolt.tls_level` / `server.directories.certificates` key in `spec.config` with a `Forbidden` error at apply time, because user values would silently override the operator-managed configuration (`server.config.strict_validation.enabled=false` makes Neo4j accept duplicates without a warning).
 
 **Bolt mTLS (client-certificate authentication for external drivers) is not configurable via the operator today.** Bolt and HTTPS SSL policies are managed by the operator with `client_auth=NONE` so standard Neo4j drivers — none of which ship with operator-issued client certs — can connect. A future enhancement could expose a typed field for this; track via [issue #128](https://github.com/neo4j-partners/neo4j-kubernetes-operator/issues/128) (security checklist gaps).
-
-## Best Practices
-
-1. **Always use cert-manager** for automatic certificate lifecycle management
-2. **Don't override cluster trust settings** in `spec.config` — let the operator manage `trust_all`, `client_auth`, and `verify_hostname` via the `spec.tls.strictPeerValidation` toggle
-3. **Monitor certificate expiry** - Set up alerts for certificate renewal
-4. **Test in staging** - Always test TLS configuration in non-production first
-5. **Use parallel pod management** - Already configured by the operator
-6. **Keep join timeout at 10m** - Don't reduce `dbms.cluster.raft.membership.join_timeout`
-
-## Summary
-
-TLS configuration with the Neo4j Kubernetes Operator is straightforward:
-1. Install cert-manager and create an issuer
-2. Enable TLS in your Neo4j resource
-3. The operator handles all certificate and Neo4j configuration
-4. Connect using TLS-enabled endpoints
-
-The operator includes specific optimizations for TLS cluster formation, making it reliable even with encryption enabled.

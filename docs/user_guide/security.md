@@ -1,16 +1,6 @@
-# Security Best Practices Guide
+# Security Guide
 
-This comprehensive guide covers security best practices for Neo4j clusters deployed with the Neo4j Kubernetes Operator, including authentication, authorization, network security, and compliance considerations.
-
-## Overview
-
-Security for Neo4j in Kubernetes involves multiple layers:
-- **Cluster Security**: TLS encryption, certificates, and secure communication
-- **Authentication**: User management and identity providers
-- **Authorization**: Role-based access control (RBAC)
-- **Network Security**: Network policies, ingress, and service mesh
-- **Data Security**: Encryption at rest, backup security, and data governance
-- **Compliance**: Auditing, logging, and regulatory requirements
+Security configuration for Neo4j clusters managed by the operator: TLS, authentication, authorization, network policies, audit logging, and secrets management.
 
 ## TLS/SSL Configuration
 
@@ -593,69 +583,9 @@ Short TTL = changes propagate faster. Long TTL = better performance. Setting to 
 
 ## Authorization and RBAC
 
-### Neo4j Role-Based Access Control
+Manage Neo4j users, roles, and privileges declaratively via the `Neo4jUser`, `Neo4jRole`, and `Neo4jRoleBinding` CRDs — see the [User & Role Management guide](user_role_management.md) for the full design (privileges live on `Neo4jRole`, never on users) and worked examples.
 
-```cypher
-// Create custom roles for different access levels
-CREATE ROLE data_analyst;
-CREATE ROLE data_engineer;
-CREATE ROLE database_admin;
-
-// Grant database permissions
-GRANT ACCESS ON DATABASE production TO data_analyst;
-GRANT START ON DATABASE production TO data_engineer;
-GRANT ALL ON DATABASE production TO database_admin;
-
-// Grant graph permissions
-GRANT MATCH {*} ON GRAPH production TO data_analyst;
-GRANT WRITE ON GRAPH production TO data_engineer;
-GRANT ALL GRAPH PRIVILEGES ON GRAPH production TO database_admin;
-
-// Create users and assign roles
-CREATE USER analyst_user SET PASSWORD 'SecurePassword123!' CHANGE NOT REQUIRED;
-GRANT ROLE data_analyst TO analyst_user;
-```
-
-### Kubernetes RBAC Integration
-
-```yaml
-# ServiceAccount for Neo4j operation
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: neo4j-operator
-  namespace: neo4j-system
----
-# ClusterRole with minimal required permissions
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: neo4j-operator-role
-rules:
-- apiGroups: [""]
-  resources: ["pods", "services", "configmaps", "secrets", "persistentvolumeclaims"]
-  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-- apiGroups: ["apps"]
-  resources: ["statefulsets", "deployments"]
-  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-- apiGroups: ["cert-manager.io"]
-  resources: ["certificates"]
-  verbs: ["get", "list", "watch", "create", "update", "patch"]
----
-# ClusterRoleBinding
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: neo4j-operator-binding
-subjects:
-- kind: ServiceAccount
-  name: neo4j-operator
-  namespace: neo4j-system
-roleRef:
-  kind: ClusterRole
-  name: neo4j-operator-role
-  apiGroup: rbac.authorization.k8s.io
-```
+The operator's own Kubernetes RBAC is installed by the Helm chart / OLM bundle; you don't need to author it. See the [Installation guide](installation.md) for chart values that scope the operator to selected namespaces.
 
 ## Audit Logging
 
@@ -702,42 +632,12 @@ upstream defaults (both on).
 | `audit.obfuscateQueryLiterals` | `db.logs.query.obfuscate_literals` | `false` (Neo4j default); `true` when `audit.enabled=true` and field is unset | Redact literal values in `query.log`. **Strongly recommended for PCI / HIPAA / GDPR**. Doesn't redact node labels, relationship types, or property keys. |
 | `audit.parameterLogging` | `db.logs.query.parameter_logging_enabled` | Neo4j default (`true`) | Include parameter VALUES in `query.log`. Set `false` when parameter values themselves are sensitive (passwords passed as params). |
 
-### Tuning trade-offs
+### Notes
 
-- **PII in query literals**: enable obfuscation
-  (`audit.obfuscateQueryLiterals: true` or just `audit.enabled: true`).
-  Note Neo4j's docs flag that obfuscation does NOT cover node labels,
-  relationship types, or property keys — those remain visible.
-- **PII in query parameters**: set `audit.parameterLogging: false`. You
-  lose the parameter audit trail but the query SHAPES remain visible
-  (useful for forensics; sufficient for compliance reviews focused on
-  "what query ran, when, by whom").
-- **High-volume successful logins**: `audit.logSuccessfulAuthentication:
-  false`. Failed logins (the security-relevant signal) stay logged.
-
-### Overlap with `spec.monitoring`
-
-`spec.monitoring` and `spec.audit` both touch
-`db.logs.query.obfuscate_literals`. When set on both,
-**`spec.audit` wins** — the operator emits monitoring first, then
-audit, and Neo4j's last-write-wins config semantics give audit the
-final value. Direct `spec.config` overrides (last in the rendered conf)
-still win over both.
-
-### What's NOT exposed (yet)
-
-These knobs require hand-rolled `spec.config` (or `user-logs.xml` /
-`server-logs.xml` for log4j-level tuning):
-
-- JSON log format (`<JsonTemplateLayout>` in the log4j XML).
-- Per-log file rotation tuning beyond Neo4j's `20MB × 7` defaults.
-- `db.logs.query.transaction.enabled` (transaction-level audit events).
-- `db.logs.query.max_parameter_length` (parameter truncation).
-- `db.logs.query.obfuscate_errors` (2026.01+).
-- `dbms.logs.http.enabled` / `server.logs.gc.enabled`.
-
-Track [issue #128](https://github.com/neo4j-partners/neo4j-kubernetes-operator/issues/128)
-for typed-field requests.
+- **PII in query parameters**: set `audit.parameterLogging: false` if parameter values themselves are sensitive (passwords passed as params). Query shapes remain logged.
+- **High-volume successful logins**: `audit.logSuccessfulAuthentication: false` keeps failed logins (the security-relevant signal) while suppressing successful ones.
+- **`spec.monitoring` overlap**: when both set `db.logs.query.obfuscate_literals`, `spec.audit` wins (audit emits last). Direct `spec.config` overrides still win over both.
+- **Not typed-exposed yet**: log4j JSON format, file rotation tuning, `db.logs.query.transaction.enabled`, `max_parameter_length`, `obfuscate_errors`, HTTP/GC logs. Set these via `spec.config` directly; track [#128](https://github.com/neo4j-partners/neo4j-kubernetes-operator/issues/128) for typed-field requests.
 
 ## Network Security
 
@@ -924,32 +824,9 @@ spec:
           app.kubernetes.io/name: neo4j
 ```
 
-### Service Mesh Integration (Istio)
+### Service Mesh Integration
 
-```yaml
-# DestinationRule for mTLS
-apiVersion: networking.istio.io/v1beta1
-kind: DestinationRule
-metadata:
-  name: neo4j-destination-rule
-spec:
-  host: neo4j-cluster-client.default.svc.cluster.local
-  trafficPolicy:
-    tls:
-      mode: ISTIO_MUTUAL  # Enable mTLS
----
-# PeerAuthentication for strict mTLS
-apiVersion: security.istio.io/v1beta1
-kind: PeerAuthentication
-metadata:
-  name: neo4j-peer-auth
-spec:
-  selector:
-    matchLabels:
-      app.kubernetes.io/name: neo4j
-  mtls:
-    mode: STRICT
-```
+If you're running Istio/Linkerd, target the operator-managed `Service`s (e.g. `{cluster}-client.{ns}.svc.cluster.local`) with your usual `DestinationRule` / `PeerAuthentication` to enforce mTLS at the mesh layer. Nothing operator-specific is required.
 
 ## Data Encryption and Security
 
@@ -1201,29 +1078,7 @@ kubectl get secrets -A -l app.kubernetes.io/managed-by=neo4j-operator,app.kubern
     -o custom-columns='NAMESPACE:.metadata.namespace,NAME:.metadata.name,OWNER:.metadata.labels.neo4j\.com/owner-kind,OWNER-NAME:.metadata.labels.neo4j\.com/owner-name'
 ```
 
-## Security Monitoring and Auditing
-
-### Audit Logging Configuration
-
-```yaml
-spec:
-  config:
-    # Enable security event logging
-    dbms.security.log.successful_authentication: "true"
-    dbms.logs.security.level: "INFO"
-    dbms.logs.security.rotation.keep_number: "10"
-    dbms.logs.security.rotation.size: "20m"
-
-    # Query logging for security analysis
-    db.logs.query.enabled: "INFO"
-    db.logs.query.allocation_logging_enabled: "true"
-    db.logs.query.parameter_logging_enabled: "false"  # Avoid logging sensitive data
-
-    # Transaction logging
-    db.logs.query.transaction_logging_enabled: "true"
-```
-
-### Metrics Scraping and Security
+## Metrics Scraping and Security
 
 The operator's metrics surface is intentionally narrow. Default
 behavior:
@@ -1289,53 +1144,14 @@ Prometheus + Grafana stack.
 
 ## Compliance and Governance
 
-### GDPR Compliance Configuration
+For GDPR / PCI DSS / HIPAA setups, combine:
 
-```yaml
-spec:
-  config:
-    # Data retention policies
-    db.transaction.logs.rotation.retention_policy: "7 days"
-    db.transaction.logs.rotation.size: "250M"
+- **TLS** — `spec.tls.mode: cert-manager` with `strictPeerValidation: true` (default). The operator emits the canonical strict cluster SSL policy (`trust_all=false`, `client_auth=REQUIRE`, `verify_hostname=true`, `tls_versions=TLSv1.3,TLSv1.2`).
+- **Audit** — `spec.audit.enabled: true` (see the [Audit Logging](#audit-logging) section above for the typed-field reference).
+- **Authentication** — set `dbms.security.auth_minimum_password_length` and `dbms.security.auth_cache_ttl` via `spec.config`, or use OIDC/LDAP (see [Authentication Configuration](#authentication-configuration)).
+- **Retention** — `db.transaction.logs.rotation.retention_policy` and `db.logs.query.*` via `spec.config`. Backup retention is governed by `Neo4jBackup.spec.retention`.
 
-    # Query logging for data access tracking
-    db.logs.query.enabled: "INFO"
-    db.logs.query.threshold: "0ms"  # Log all queries for audit
-    db.logs.query.allocation_logging_enabled: "true"
-
-    # Security logging
-    dbms.logs.security.level: "INFO"
-    dbms.security.log.successful_authentication: "true"
-    dbms.security.log.failed_authentication: "true"
-```
-
-### PCI DSS Compliance
-
-```yaml
-spec:
-  # Strong TLS configuration — operator-managed via spec.tls
-  tls:
-    mode: cert-manager
-    issuerRef:
-      name: pci-compliant-issuer
-      kind: ClusterIssuer
-    # strictPeerValidation: true (default) emits the canonical strict
-    # cluster SSL policy: trust_all=false, client_auth=REQUIRE,
-    # verify_hostname=true, tls_versions=TLSv1.3,TLSv1.2.
-
-  config:
-    # Authentication and session management
-    dbms.security.auth_minimum_password_length: "12"
-    dbms.security.auth_cache_ttl: "15m"
-
-    # Access logging
-    db.logs.query.enabled: "INFO"
-    dbms.logs.security.level: "INFO"
-```
-
-> **TLS version and cipher pinning is not user-configurable today.** The operator owns the `dbms.ssl.policy.*` surface end-to-end (the cluster validator rejects any `dbms.ssl.policy.*` key in `spec.config` with `Forbidden`). The cluster SSL policy is emitted with `tls_versions=TLSv1.3,TLSv1.2`; bolt/https policies inherit Neo4j defaults. If your PCI assessment requires TLS 1.3-only or a custom cipher allowlist, track this as a gap — there is no in-operator override today. See [issue #128](https://github.com/neo4j-partners/neo4j-kubernetes-operator/issues/128) for the broader security-checklist gaps.
-
-> **Why TLS 1.3 over TLS 1.2.** PCI DSS v4.0 mandates a TLS 1.2 minimum but expects active migration toward TLS 1.3. Several adjacent regimes also discourage TLS 1.2 for new builds — FIPS-140-3 module validations and NIST SP 800-52r2 guidance both recommend TLS 1.3 as the baseline (the latter as guidance, not a strict prohibition). Tracking the TLS 1.3-only enhancement is the path to closing this PCI gap inside the operator.
+> **TLS version pinning is not user-configurable.** The operator owns the `dbms.ssl.policy.*` surface end-to-end (the validator rejects any `dbms.ssl.policy.*` key in `spec.config`). The cluster policy is emitted with `tls_versions=TLSv1.3,TLSv1.2`; bolt/https policies inherit Neo4j defaults. For TLS 1.3-only or custom cipher allowlists, file an issue — there is no override today.
 
 ## Conformance Policies (Kyverno)
 
@@ -1349,37 +1165,18 @@ they never block operator reconciliation. See the directory's README
 for install, the Audit → Enforce migration path, and the list of
 bundled example CRs that intentionally trip Audit warnings.
 
-## Security Best Practices Checklist
+## Production Checklist
 
-### Deployment Security
-- [ ] **TLS Encryption**: Enable TLS for all communications (Bolt, HTTP, cluster)
-- [ ] **Certificate Management**: Use cert-manager with proper certificate rotation
-- [ ] **Strong Authentication**: Implement multi-factor authentication where possible
-- [ ] **RBAC**: Configure least-privilege access for all users and services
-- [ ] **Network Policies**: Restrict network access with Kubernetes NetworkPolicies
-- [ ] **Secrets Management**: Use external secret management (Vault, AWS Secrets Manager)
+Operator-specific posture for production deployments:
 
-### Data Security
-- [ ] **Encryption at Rest**: Enable storage encryption and transparent data encryption
-- [ ] **Backup Encryption**: Encrypt all backups and use secure storage
-- [ ] **Data Masking**: Implement data masking for non-production environments
-- [ ] **Access Controls**: Implement fine-grained database and graph permissions
-- [ ] **Audit Logging**: Enable comprehensive security and query logging
-- [ ] **Data Retention**: Implement compliant data retention policies
-
-### Operational Security
-- [ ] **Regular Updates**: Keep Neo4j and operator versions current
-- [ ] **Security Scanning**: Regular vulnerability scanning of containers
-- [ ] **Monitoring**: Comprehensive security monitoring and alerting
-- [ ] **Incident Response**: Defined security incident response procedures
-- [ ] **Backup Testing**: Regular testing of backup restoration procedures
-- [ ] **Access Reviews**: Regular review of user access and permissions
-
-### Compliance Considerations
-- [ ] **Regulatory Requirements**: Meet specific compliance requirements (GDPR, HIPAA, PCI DSS)
-- [ ] **Documentation**: Maintain security documentation and procedures
-- [ ] **Training**: Regular security training for operations teams
-- [ ] **Assessments**: Regular security assessments and penetration testing
+- [ ] `spec.tls.mode: cert-manager` with `strictPeerValidation: true` (default)
+- [ ] Enterprise image (`neo4j:X-enterprise`, never `neo4j:X`)
+- [ ] `spec.audit.enabled: true`
+- [ ] `spec.monitoring.enabled: true` + Prometheus scrape (see [Prometheus & Grafana](guides/prometheus-grafana-setup.md))
+- [ ] `spec.networkPolicy.enabled: true` if your CNI enforces (Calico/Cilium/Antrea/Weave)
+- [ ] Admin credentials sourced from External Secrets Operator or Vault, not literal Secret YAML
+- [ ] Backup CRs with retention configured + restore tested at least once
+- [ ] Audit Kyverno policies under `examples/security/policies/` deployed in `Audit` mode
 
 ## Troubleshooting Security Issues
 
