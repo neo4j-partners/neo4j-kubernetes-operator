@@ -1116,17 +1116,6 @@
   
 </li>
       
-        <li class="md-nav__item">
-  <a href="#future-improvements" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Future Improvements
-      
-    </span>
-  </a>
-  
-</li>
-      
     </ul>
   
 </nav>
@@ -3165,17 +3154,6 @@
   
 </li>
       
-        <li class="md-nav__item">
-  <a href="#future-improvements" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Future Improvements
-      
-    </span>
-  </a>
-  
-</li>
-      
     </ul>
   
 </nav>
@@ -3286,6 +3264,7 @@
 <li><strong>NodePort</strong>: <code>http://&lt;node-ip&gt;:&lt;node-port&gt;</code></li>
 <li><strong>Ingress</strong>: <code>https://neo4j.example.com</code></li>
 </ul>
+<p>For <strong>SSO into Neo4j Browser</strong> (login button → IdP redirect), configure one or more OIDC providers via <code>spec.auth.oidc</code> on the <code>Neo4jEnterpriseCluster</code> / <code>Neo4jEnterpriseStandalone</code> resource. Neo4j Browser supports OIDC natively — no oauth2-proxy or external gateway needed. See the <a href="../guides/security/">Authentication &amp; Authorization guide</a> for the field reference and provider examples (Okta, Azure AD, Google, etc.).</p>
 <h3 id="bolt-applications">Bolt (Applications)<a class="headerlink" href="#bolt-applications" title="Anchor link to this section">&para;</a></h3>
 <ul>
 <li><strong>Port Forward</strong>: <code>bolt://localhost:7687</code></li>
@@ -3419,10 +3398,6 @@
 <li><strong>Use DNS</strong>: Point domain names to load balancer IPs</li>
 <li><strong>Implement Rate Limiting</strong>: Protect against abuse</li>
 </ol>
-<h2 id="future-improvements">Future Improvements<a class="headerlink" href="#future-improvements" title="Anchor link to this section">&para;</a></h2>
-<p>The operator team is working on:
-- Built-in DNS management
-- OAuth/OIDC integration for Browser access</p>
 
 
 
