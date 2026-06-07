@@ -602,10 +602,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#2-specauthpasswordpolicy-and-specauthkerberos-are-now-documented-as-schema-only" class="md-nav__link">
+  <a href="#2-specauthpasswordpolicy-is-removed-from-the-crd" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. spec.auth.passwordPolicy and spec.auth.kerberos are now documented as schema-only
+        2. spec.auth.passwordPolicy is removed from the CRD
       
     </span>
   </a>
@@ -2795,10 +2795,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#2-specauthpasswordpolicy-and-specauthkerberos-are-now-documented-as-schema-only" class="md-nav__link">
+  <a href="#2-specauthpasswordpolicy-is-removed-from-the-crd" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. spec.auth.passwordPolicy and spec.auth.kerberos are now documented as schema-only
+        2. spec.auth.passwordPolicy is removed from the CRD
       
     </span>
   </a>
@@ -3108,18 +3108,16 @@
 <p><strong>Action</strong>: grep your manifests for these fields and migrate before upgrading the operator:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>grep<span class="w"> </span>-rE<span class="w"> </span><span class="s1">&#39;spec:.*\b(jwt|ui|restoreFrom|license):&#39;</span><span class="w"> </span>path/to/manifests/
 </span></code></pre></div>
-<h3 id="2-specauthpasswordpolicy-and-specauthkerberos-are-now-documented-as-schema-only">2. <code>spec.auth.passwordPolicy</code> and <code>spec.auth.kerberos</code> are now documented as schema-only<a class="headerlink" href="#2-specauthpasswordpolicy-and-specauthkerberos-are-now-documented-as-schema-only" title="Anchor link to this section">&para;</a></h3>
-<p>These typed blocks remain on the CRD for back-compat — manifests carrying them will not be rejected — but the operator does <strong>not</strong> wire them through to Neo4j config and never has. Earlier docs implied otherwise.</p>
-<p><strong>Action</strong>: until typed-field support is implemented, set the equivalent Neo4j config keys directly in <code>spec.config</code>:</p>
+<h3 id="2-specauthpasswordpolicy-is-removed-from-the-crd">2. <code>spec.auth.passwordPolicy</code> is removed from the CRD<a class="headerlink" href="#2-specauthpasswordpolicy-is-removed-from-the-crd" title="Anchor link to this section">&para;</a></h3>
+<p>The <code>spec.auth.passwordPolicy</code> block was always schema-only — the operator never wired it through to Neo4j config. It has been removed from the CRD entirely. <code>spec.auth.kerberos</code> remains for back-compat but is also schema-only (still on the CRD; the operator does not mount keytabs or write <code>dbms.security.kerberos.*</code> config from it).</p>
+<p><strong>Action</strong>: set the equivalent Neo4j config keys directly in <code>spec.config</code>. Manifests still carrying <code>spec.auth.passwordPolicy</code> will be rejected by the API server after the upgrade.</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">spec</span><span class="p">:</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="nt">auth</span><span class="p">:</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">    </span><span class="nt">adminSecret</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j-admin-secret</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">    </span><span class="c1"># spec.auth.passwordPolicy is schema-only and ignored — set the Neo4j</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">    </span><span class="c1"># keys directly until typed-field support lands.</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">  </span><span class="nt">config</span><span class="p">:</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">    </span><span class="nt">dbms.security.auth_minimum_password_length</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;12&quot;</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">    </span><span class="c1"># Kerberos: dbms.security.kerberos.* keys here, plus a keytab volume</span>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">    </span><span class="c1"># mounted via spec.extraVolumes / spec.extraVolumeMounts.</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="nt">config</span><span class="p">:</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">    </span><span class="nt">dbms.security.auth_minimum_password_length</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;12&quot;</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">    </span><span class="c1"># Kerberos: dbms.security.kerberos.* keys here, plus a keytab volume</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">    </span><span class="c1"># mounted via spec.extraVolumes / spec.extraVolumeMounts.</span>
 </span></code></pre></div>
 <h3 id="3-neo4j_operator_cluster_replicas_total-metric-role-label-values-renamed">3. <code>neo4j_operator_cluster_replicas_total</code> metric: role label values renamed<a class="headerlink" href="#3-neo4j_operator_cluster_replicas_total-metric-role-label-values-renamed" title="Anchor link to this section">&para;</a></h3>
 <p>The Prometheus gauge that exposes server counts had its <code>role</code> label values renamed:</p>
@@ -3186,7 +3184,7 @@
 <h3 id="quick-upgrade-checklist">Quick upgrade checklist<a class="headerlink" href="#quick-upgrade-checklist" title="Anchor link to this section">&para;</a></h3>
 <ol>
 <li>Grep manifests for the removed fields (step 1) and migrate them.</li>
-<li>If you set <code>spec.auth.passwordPolicy</code> or <code>spec.auth.kerberos</code> and were depending on it doing something, move the equivalent keys into <code>spec.config</code> (step 2).</li>
+<li>If you set <code>spec.auth.passwordPolicy</code> (now removed) or <code>spec.auth.kerberos</code> (still schema-only) and were depending on it doing something, move the equivalent keys into <code>spec.config</code> (step 2).</li>
 <li>Update PromQL / Grafana queries on <code>cluster_replicas_total</code> (step 3).</li>
 <li>Audit <code>spec.config</code> if you have long-edit-history clusters that may have relied on the env-var-removal bug (step 4).</li>
 <li>If you have existing <code>Neo4jEnterpriseStandalone</code> CRs AND want backups against them, delete + recreate with <code>retentionPolicy=Retain</code> per step 5 above. Standalones that never need backups can be left as-is.</li>

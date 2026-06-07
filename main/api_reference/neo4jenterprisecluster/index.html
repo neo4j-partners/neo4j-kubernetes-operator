@@ -4895,11 +4895,6 @@ the cluster reaches <code>Ready</code> — see <a href="../neo4jrestore/"><code>
 <td>External secrets configuration</td>
 </tr>
 <tr>
-<td><code>passwordPolicy</code></td>
-<td><code>*PasswordPolicySpec</code></td>
-<td><strong>Schema-only.</strong> Defined on the API but the operator does not currently generate <code>dbms.security.auth_minimum_password_length</code> (and friends) from this. Set those keys via <code>spec.config</code> directly until implemented.</td>
-</tr>
-<tr>
 <td><code>ldap</code></td>
 <td><a href="#neo4jldapspec"><code>*Neo4jLDAPSpec</code></a></td>
 <td>LDAP authentication and authorization configuration</td>
@@ -7439,11 +7434,7 @@ visible via <code>kubectl get svc</code>.</p>
 </span><span id="__span-15-89"><a id="__codelineno-15-89" name="__codelineno-15-89" href="#__codelineno-15-89"></a><span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ca-cluster-issuer</span>
 </span><span id="__span-15-90"><a id="__codelineno-15-90" name="__codelineno-15-90" href="#__codelineno-15-90"></a><span class="w">      </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ClusterIssuer</span>
 </span><span id="__span-15-91"><a id="__codelineno-15-91" name="__codelineno-15-91" href="#__codelineno-15-91"></a><span class="w">  </span><span class="nt">auth</span><span class="p">:</span>
-</span><span id="__span-15-92"><a id="__codelineno-15-92" name="__codelineno-15-92" href="#__codelineno-15-92"></a><span class="w">    </span><span class="c1"># NOTE: spec.auth.passwordPolicy is schema-only and currently ignored</span>
-</span><span id="__span-15-93"><a id="__codelineno-15-93" name="__codelineno-15-93" href="#__codelineno-15-93"></a><span class="w">    </span><span class="c1"># by the operator. Set the equivalent Neo4j config keys via spec.config</span>
-</span><span id="__span-15-94"><a id="__codelineno-15-94" name="__codelineno-15-94" href="#__codelineno-15-94"></a><span class="w">    </span><span class="c1"># (e.g. dbms.security.auth_minimum_password_length=12) until typed-field</span>
-</span><span id="__span-15-95"><a id="__codelineno-15-95" name="__codelineno-15-95" href="#__codelineno-15-95"></a><span class="w">    </span><span class="c1"># support lands.</span>
-</span><span id="__span-15-96"><a id="__codelineno-15-96" name="__codelineno-15-96" href="#__codelineno-15-96"></a><span class="w">    </span><span class="nt">adminSecret</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j-admin-secret</span>
+</span><span id="__span-15-92"><a id="__codelineno-15-92" name="__codelineno-15-92" href="#__codelineno-15-92"></a><span class="w">    </span><span class="nt">adminSecret</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j-admin-secret</span>
 </span></code></pre></div>
 <h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Anchor link to this section">&para;</a></h2>
 <ol>

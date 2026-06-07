@@ -4042,8 +4042,7 @@ kubectl get svc -l neo4j.com/cluster=&lt;cluster-name&gt; -o yaml | grep -A 3 -B
 </li>
 <li>
 <p><strong>Check Password Policy:</strong>
-   <code>spec.auth.passwordPolicy</code> is schema-only and currently ignored — set the
-   Neo4j keys directly in <code>spec.config</code> instead:
+   Set the Neo4j password-policy keys in <code>spec.config</code>:
    <div class="language-yaml highlight"><pre><span></span><code><span id="__span-46-1"><a id="__codelineno-46-1" name="__codelineno-46-1" href="#__codelineno-46-1"></a><span class="nt">spec</span><span class="p">:</span>
 </span><span id="__span-46-2"><a id="__codelineno-46-2" name="__codelineno-46-2" href="#__codelineno-46-2"></a><span class="w">  </span><span class="nt">config</span><span class="p">:</span>
 </span><span id="__span-46-3"><a id="__codelineno-46-3" name="__codelineno-46-3" href="#__codelineno-46-3"></a><span class="w">    </span><span class="nt">dbms.security.auth_minimum_password_length</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;8&quot;</span>

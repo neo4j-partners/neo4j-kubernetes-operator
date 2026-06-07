@@ -150,3 +150,88 @@ data:
       hs.message = obj.status.message or ("Sharded database is " .. phase)
     end
     return hs
+
+  resource.customizations.health.neo4j.neo4j.com_Neo4jUser: |
+    hs = {}
+    if obj.status == nil or obj.status.phase == nil or obj.status.phase == "" then
+      hs.status = "Progressing"
+      hs.message = "Waiting for user status"
+      return hs
+    end
+    phase = obj.status.phase
+    if phase == "Ready" then
+      hs.status = "Healthy"
+      hs.message = obj.status.message or "User is in sync"
+    elseif phase == "Failed" then
+      hs.status = "Degraded"
+      hs.message = obj.status.message or "User reconciliation failed"
+    else
+      hs.status = "Progressing"
+      hs.message = obj.status.message or ("User is " .. phase)
+    end
+    return hs
+
+  resource.customizations.health.neo4j.neo4j.com_Neo4jRole: |
+    hs = {}
+    if obj.status == nil or obj.status.phase == nil or obj.status.phase == "" then
+      hs.status = "Progressing"
+      hs.message = "Waiting for role status"
+      return hs
+    end
+    phase = obj.status.phase
+    if phase == "Ready" then
+      hs.status = "Healthy"
+      hs.message = obj.status.message or "Role is in sync"
+    elseif phase == "Failed" then
+      hs.status = "Degraded"
+      hs.message = obj.status.message or "Role reconciliation failed"
+    else
+      hs.status = "Progressing"
+      hs.message = obj.status.message or ("Role is " .. phase)
+    end
+    return hs
+
+  resource.customizations.health.neo4j.neo4j.com_Neo4jRoleBinding: |
+    hs = {}
+    if obj.status == nil or obj.status.phase == nil or obj.status.phase == "" then
+      hs.status = "Progressing"
+      hs.message = "Waiting for role binding status"
+      return hs
+    end
+    phase = obj.status.phase
+    if phase == "Ready" then
+      hs.status = "Healthy"
+      hs.message = obj.status.message or "Role binding is in sync"
+    elseif phase == "Failed" then
+      hs.status = "Degraded"
+      hs.message = obj.status.message or "Role binding reconciliation failed"
+    else
+      -- "Pending" covers UserNotFound (waiting for externally-provisioned
+      -- user to appear) and the cluster-not-ready cases — both are normal
+      -- transient states, not failures.
+      hs.status = "Progressing"
+      hs.message = obj.status.message or ("Role binding is " .. phase)
+    end
+    return hs
+
+  resource.customizations.health.neo4j.neo4j.com_Neo4jAuthRule: |
+    hs = {}
+    if obj.status == nil or obj.status.phase == nil or obj.status.phase == "" then
+      hs.status = "Progressing"
+      hs.message = "Waiting for auth rule status"
+      return hs
+    end
+    phase = obj.status.phase
+    if phase == "Ready" then
+      hs.status = "Healthy"
+      hs.message = obj.status.message or "Auth rule is in sync"
+    elseif phase == "Failed" then
+      hs.status = "Degraded"
+      hs.message = obj.status.message or "Auth rule reconciliation failed"
+    else
+      -- "PendingDependencies" means one or more granted roles haven't
+      -- been created yet — auto-reconciles when the roles land.
+      hs.status = "Progressing"
+      hs.message = obj.status.message or ("Auth rule is " .. phase)
+    end
+    return hs

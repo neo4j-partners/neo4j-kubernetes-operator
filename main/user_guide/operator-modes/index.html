@@ -3067,7 +3067,6 @@ Explicit flags and Helm values always override the mode defaults.</p>
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>--ultra-fast<span class="w">           </span><span class="c1"># equivalent to none and enables skip-cache-wait</span>
 </span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>--skip-cache-wait<span class="w">      </span><span class="c1"># readiness does not wait for cache sync</span>
 </span></code></pre></div>
-<p>Note: <code>--lazy-informers</code> is accepted for backward compatibility with older deployment manifests but is currently a no-op (the flag's value is ignored by <code>configureDevelopmentCache</code>). Use <code>--cache-strategy</code> for all new deployments.</p>
 <h2 id="controller-selection-dev-mode">Controller Selection (Dev Mode)<a class="headerlink" href="#controller-selection-dev-mode" title="Anchor link to this section">&para;</a></h2>
 <p>In development mode, you can load only a subset of controllers:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>--controllers<span class="o">=</span>cluster,standalone,database
