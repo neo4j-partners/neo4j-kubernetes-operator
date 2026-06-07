@@ -280,9 +280,12 @@ The operator implements a **server-based architecture**:
 make test-unit
 
 # Run specific controller tests
+# `./internal/controller` needs envtest binaries — `make test-unit` sets
+# KUBEBUILDER_ASSETS automatically; direct `go test` requires:
+#   export KUBEBUILDER_ASSETS=$(bin/setup-envtest use 1.34.0 --bin-dir bin -p path)
 go test ./internal/controller -run TestClusterReconciler -v
 
-# Run validation tests
+# Run validation tests (no envtest needed)
 go test ./internal/validation -v
 ```
 
@@ -559,7 +562,9 @@ export GOMAXPROCS=4
 ```bash
 # CI/CD testing
 export CI=true
-export KUBEBUILDER_ASSETS="$(pwd)/bin/k8s/1.31.0-linux-amd64"
+# Resolve the envtest asset path via setup-envtest so it tracks Makefile's
+# ENVTEST_K8S_VERSION automatically — no need to hand-edit when bumping.
+export KUBEBUILDER_ASSETS=$(bin/setup-envtest use 1.34.0 --bin-dir bin -p path)
 ```
 
 ## Next Steps

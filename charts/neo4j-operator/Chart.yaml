@@ -4,7 +4,7 @@ description: Neo4j Enterprise Operator for Kubernetes - Manages Neo4j Enterprise
 type: application
 version: 0.0.1
 appVersion: "0.0.1"
-kubeVersion: ">=1.30.0-0"
+kubeVersion: ">=1.32.0-0"
 keywords:
   - neo4j
   - graph

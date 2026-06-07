@@ -35,9 +35,14 @@ Unit tests are fast, require no Kubernetes cluster, and test individual function
 make test-unit
 
 # Run specific package tests
+# Note: ./internal/controller and any package that imports envtest needs
+# KUBEBUILDER_ASSETS set — `make test-unit` handles this for you.
+# To run directly with `go test`, export it first:
+export KUBEBUILDER_ASSETS="$(bin/setup-envtest use $(awk -F= '/ENVTEST_K8S_VERSION/ {gsub(/ /,""); print $2}' Makefile) --bin-dir bin -p path)"
+
 go test ./internal/controller -v
-go test ./internal/validation -v
-go test ./api/v1beta1 -v
+go test ./internal/validation -v   # no envtest needed
+go test ./api/v1beta1 -v           # no envtest needed
 
 # Run specific test functions
 go test ./internal/controller -run TestGetStatefulSetName -v
@@ -497,7 +502,9 @@ Tests run automatically in CI with:
 ```bash
 # Environment variables for CI
 export CI=true
-export KUBEBUILDER_ASSETS="$(pwd)/bin/k8s/1.31.0-linux-amd64"
+# Resolve KUBEBUILDER_ASSETS via setup-envtest so it tracks Makefile's
+# ENVTEST_K8S_VERSION — no manual edit needed when the version is bumped.
+export KUBEBUILDER_ASSETS=$(bin/setup-envtest use 1.34.0 --bin-dir bin -p path)
 export KUBECONFIG=~/.kube/config
 ```
 

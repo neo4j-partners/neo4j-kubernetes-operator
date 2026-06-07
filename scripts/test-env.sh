@@ -7,11 +7,37 @@ CLUSTER_NAME="neo4j-operator-test"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
+# Required-env validator. Called by cluster() — the only subcommand that
+# actually creates a Kind cluster and installs cert-manager. setup() and
+# cleanup() must NOT require these vars because `make test-setup` /
+# `test-cleanup` / `test-destroy` invoke the script without passing them
+# (they don't create clusters; setup just makes directories + runs
+# manifests, cleanup just deletes directories + tears down any existing
+# cluster). Putting the `${VAR:?msg}` checks at script-top would block
+# those harmless paths.
+require_cluster_env() {
+    # KIND_NODE_IMAGE pins the K8s version. Single source of truth = the
+    # Makefile (`KIND_NODE_IMAGE` variable, passed via `make
+    # test-cluster`). No fallback default here on purpose — a default
+    # would silently shadow Makefile bumps and let test clusters drift
+    # from dev clusters / CI / envtest.
+    : "${KIND_NODE_IMAGE:?KIND_NODE_IMAGE must be set (e.g. via 'make test-cluster' or 'KIND_NODE_IMAGE=kindest/node:v1.34.0 scripts/test-env.sh cluster')}"
+
+    # CERT_MANAGER_VERSION pins the cert-manager release applied to the
+    # test cluster. Same single-source-of-truth contract as KIND_NODE_IMAGE.
+    : "${CERT_MANAGER_VERSION:?CERT_MANAGER_VERSION must be set (e.g. via 'make test-cluster' or 'CERT_MANAGER_VERSION=v1.20.0 scripts/test-env.sh cluster')}"
+}
+
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
 }
 
 cluster() {
+    # Validate required env BEFORE any side effects (cluster create, etc).
+    # Other subcommands (setup, cleanup, clean_cluster) don't call this —
+    # they don't need the K8s / cert-manager pins.
+    require_cluster_env
+
     log "Setting up test cluster..."
 
     # Clean up any existing cluster
@@ -21,15 +47,15 @@ cluster() {
     fi
 
     # Create new cluster
-    log "Creating cluster: ${CLUSTER_NAME}"
-    kind create cluster --name "${CLUSTER_NAME}" --wait 10m
+    log "Creating cluster: ${CLUSTER_NAME} (image: ${KIND_NODE_IMAGE})"
+    kind create cluster --name "${CLUSTER_NAME}" --image "${KIND_NODE_IMAGE}" --wait 10m
 
     # Export kubeconfig
     kind export kubeconfig --name "${CLUSTER_NAME}"
 
     # Install cert-manager
-    log "Installing cert-manager..."
-    kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.20.0/cert-manager.yaml
+    log "Installing cert-manager ${CERT_MANAGER_VERSION}..."
+    kubectl apply -f "https://github.com/cert-manager/cert-manager/releases/download/${CERT_MANAGER_VERSION}/cert-manager.yaml"
     kubectl wait --for=condition=ready pod -l app.kubernetes.io/instance=cert-manager -n cert-manager --timeout=300s
 
     # Create self-signed ClusterIssuer for testing

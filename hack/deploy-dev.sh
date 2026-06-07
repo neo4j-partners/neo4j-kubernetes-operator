@@ -12,7 +12,17 @@ NC='\033[0m' # No Color
 # Configuration
 CLUSTER_NAME="neo4j-operator-dev"
 NAMESPACE="neo4j-operator-system"
-CERT_MANAGER_VERSION="v1.20.0"
+# KIND_NODE_IMAGE pins the K8s version for the dev cluster. Defaults match
+# the Makefile's KIND_NODE_IMAGE so direct `hack/deploy-dev.sh` invocations
+# get the same K8s version as `make dev-cluster` / `make test-cluster` /
+# envtest. Bumping should happen in both places — the Makefile is canonical
+# for CI/test paths, this fallback covers direct hack/ invocations.
+# Without this, `kind create cluster --config hack/kind-config.yaml` would
+# inherit Kind's built-in default node image, which can lag behind the K8s
+# version the rest of the project targets.
+KIND_NODE_IMAGE="${KIND_NODE_IMAGE:-kindest/node:v1.34.0}"
+# cert-manager release — same single-source-of-truth contract.
+CERT_MANAGER_VERSION="${CERT_MANAGER_VERSION:-v1.20.0}"
 # PROMETHEUS_VERSION="v0.68.0"  # Reserved for future Prometheus setup
 
 print_status() {
@@ -69,7 +79,7 @@ create_cluster() {
         return 0
     fi
 
-    kind create cluster --name "$CLUSTER_NAME" --config hack/kind-config.yaml
+    kind create cluster --name "$CLUSTER_NAME" --image "$KIND_NODE_IMAGE" --config hack/kind-config.yaml
 
     # Wait for cluster to be ready
     print_status "Waiting for cluster to be ready..."

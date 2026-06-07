@@ -251,7 +251,8 @@ make test-unit
 #### `make test-coverage`
 **Description**: Generate detailed coverage report
 **Usage**: `make test-coverage`
-**Dependencies**: Test environment
+**Dependencies**: `manifests generate fmt vet envtest` (auto-resolved)
+**Env**: `KUBEBUILDER_ASSETS` is set automatically from `ENVTEST_K8S_VERSION` — the controller suite needs it to start envtest. Running `go test -coverprofile ./...` directly without `make` requires you to export it yourself.
 **Output**: `coverage/coverage.html`
 **Example**:
 ```bash
@@ -265,7 +266,7 @@ make test-coverage
 #### `make test-integration`
 **Description**: Run comprehensive integration tests with real Kubernetes API
 **Usage**: `make test-integration`
-**Dependencies**: `test-cluster`, Kind cluster
+**Dependencies**: `manifests generate test-cluster ginkgo kustomize` — the `manifests`/`generate` prereqs guarantee CRDs and RBAC deployed to the test cluster match the current controller source. Skipping `manifests` (e.g., by calling kustomize directly) silently deploys stale schemas.
 **Duration**: ~10-15 minutes
 **Features**:
 - Auto-creates test cluster if needed
@@ -350,8 +351,13 @@ make test-cleanup
 **Usage**: `make test-cluster`
 **Dependencies**: Kind installed
 **Cluster Name**: `neo4j-operator-test`
+**Variables** (Makefile defaults, overridable via `make VAR=...`):
+- `KIND_NODE_IMAGE ?= kindest/node:v1.34.0` — pins the K8s version. Kept in sync with `ENVTEST_K8S_VERSION` so unit tests, dev cluster, and integration tests all run on the same K8s.
+- `CERT_MANAGER_VERSION ?= v1.20.0` — pins the cert-manager release.
+
+Both are threaded into `scripts/test-env.sh` via environment variables; the script enforces them as required (no fallback) so direct invocations can't drift from the Makefile defaults.
+
 **Features**:
-- Includes cert-manager v1.20.0
 - Pre-configured with self-signed issuer
 - Optimized for testing workloads
 
@@ -959,7 +965,7 @@ make clean
 ### Testing Configuration
 - `CI`: Enable CI mode (affects resource limits)
 - `GITHUB_ACTIONS`: Enable GitHub Actions mode
-- `ENVTEST_K8S_VERSION`: Kubernetes version for testing (1.31.0)
+- `ENVTEST_K8S_VERSION`: Kubernetes version for testing (1.34.0)
 
 ### Bundle Configuration
 - `CHANNELS`: Bundle channels for OLM
