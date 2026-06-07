@@ -225,11 +225,11 @@ func (v *ShardedDatabaseValidator) validatePropertyShardingConfig(shardedDB *neo
 				shardedDB.Spec.ReplaceExisting,
 				"replaceExisting=true is destructive (DROP DATABASE DESTROY DATA) and requires force=true as confirmation"))
 		}
-		if shardedDB.Spec.IfNotExists {
+		if shardedDB.Spec.IfNotExistsEffective() {
 			result.Errors = append(result.Errors, field.Invalid(
 				specPath.Child("ifNotExists"),
-				shardedDB.Spec.IfNotExists,
-				"ifNotExists=true is mutually exclusive with replaceExisting=true (the former skips when present, the latter drops when present). Set ifNotExists=false."))
+				shardedDB.Spec.IfNotExistsEffective(),
+				"ifNotExists is implicitly true (the default) — mutually exclusive with replaceExisting=true (the former skips when present, the latter drops when present). Set ifNotExists=false explicitly."))
 		}
 		if !hasSeedSource {
 			result.Errors = append(result.Errors, field.Invalid(

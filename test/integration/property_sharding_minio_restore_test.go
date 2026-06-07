@@ -196,7 +196,7 @@ var _ = Describe("Property Sharding Restore (MinIO) Integration Tests", Serial, 
 					},
 				},
 				Wait:        true,
-				IfNotExists: true,
+				IfNotExists: func() *bool { v := true; return &v }(),
 			},
 		}
 		Expect(k8sClient.Create(ctx, shardedDB)).To(Succeed())
@@ -248,7 +248,7 @@ var _ = Describe("Property Sharding Restore (MinIO) Integration Tests", Serial, 
 				SeedBackupRef:      "products-backup",
 				SeedSourceDatabase: "products",
 				Wait:               true,
-				IfNotExists:        true,
+				IfNotExists:        func() *bool { v := true; return &v }(),
 			},
 		}
 		Expect(k8sClient.Create(ctx, shardedDB2)).To(Succeed())
@@ -315,7 +315,7 @@ var _ = Describe("Property Sharding Restore (MinIO) Integration Tests", Serial, 
 					PropertyShardTopology: neo4jv1beta1.PropertyShardTopology{Replicas: 1},
 				},
 				Wait:        true,
-				IfNotExists: true,
+				IfNotExists: func() *bool { v := true; return &v }(),
 			},
 		}
 		Expect(k8sClient.Create(ctx, shardedDB)).To(Succeed())
@@ -357,7 +357,8 @@ var _ = Describe("Property Sharding Restore (MinIO) Integration Tests", Serial, 
 			}
 			shardedDB.Spec.ReplaceExisting = true
 			shardedDB.Spec.Force = true
-			shardedDB.Spec.IfNotExists = false
+			ifn := false
+			shardedDB.Spec.IfNotExists = &ifn
 			shardedDB.Spec.SeedBackupRef = "products-backup"
 			shardedDB.Spec.SeedSourceDatabase = "products"
 			return k8sClient.Update(ctx, shardedDB)

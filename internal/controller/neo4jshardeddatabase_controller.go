@@ -440,7 +440,7 @@ func (r *Neo4jShardedDatabaseReconciler) createShardedDatabase(ctx context.Conte
 	query.WriteString(fmt.Sprintf("CYPHER 25 CREATE DATABASE `%s`", shardedDB.Spec.Name))
 
 	// Add IF NOT EXISTS if specified
-	if shardedDB.Spec.IfNotExists {
+	if shardedDB.Spec.IfNotExistsEffective() {
 		query.WriteString(" IF NOT EXISTS")
 	}
 
@@ -516,7 +516,7 @@ func (r *Neo4jShardedDatabaseReconciler) createShardedDatabase(ctx context.Conte
 		}
 
 		// Check if database already exists (not an error if IfNotExists is true)
-		if shardedDB.Spec.IfNotExists && strings.Contains(err.Error(), "already exists") {
+		if shardedDB.Spec.IfNotExistsEffective() && strings.Contains(err.Error(), "already exists") {
 			logger.Info("Database already exists, continuing")
 			return nil
 		}

@@ -109,7 +109,8 @@ func TestValidateReplaceExisting(t *testing.T) {
 		spec := baseSpec()
 		spec.ReplaceExisting = true
 		spec.Force = true
-		spec.IfNotExists = true
+		ifn := true
+		spec.IfNotExists = &ifn
 		spec.SeedBackupRef = "products-backup"
 		result := &ShardedDatabaseValidationResult{}
 		v.validatePropertyShardingConfig(&neo4jv1beta1.Neo4jShardedDatabase{Spec: spec}, result)
@@ -142,7 +143,8 @@ func TestValidateReplaceExisting(t *testing.T) {
 		spec := baseSpec()
 		spec.ReplaceExisting = true
 		spec.Force = true
-		spec.IfNotExists = false
+		ifn := false
+		spec.IfNotExists = &ifn
 		spec.SeedBackupRef = "products-backup"
 		result := &ShardedDatabaseValidationResult{}
 		v.validatePropertyShardingConfig(&neo4jv1beta1.Neo4jShardedDatabase{Spec: spec}, result)

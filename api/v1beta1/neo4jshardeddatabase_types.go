@@ -49,9 +49,21 @@ type Neo4jShardedDatabaseSpec struct {
 	// +kubebuilder:default=true
 	Wait bool `json:"wait,omitempty"`
 
-	// Create database only if it doesn't exist
-	// +kubebuilder:default=true
-	IfNotExists bool `json:"ifNotExists,omitempty"`
+	// IfNotExists controls whether the sharded database creation is
+	// idempotent. When unset (nil) or true, the operator emits
+	// `CREATE DATABASE ... IF NOT EXISTS` which is a no-op if the database
+	// already exists. Set explicitly to false to allow `CREATE DATABASE`
+	// without the `IF NOT EXISTS` clause — required when paired with
+	// `replaceExisting=true` (the destructive recreate path), and disallowed
+	// otherwise without manual handling of "database already exists" errors.
+	//
+	// Pointer type rather than bool with default=true: a `bool` field with
+	// `omitempty` would silently revert to the server-side default whenever
+	// a user explicitly set it to false, since `false` serializes as the
+	// JSON zero value and is dropped from the wire. Using *bool preserves
+	// "explicitly false" through Update round-trips.
+	// +optional
+	IfNotExists *bool `json:"ifNotExists,omitempty"`
 
 	// ReplaceExisting destroys an existing logical sharded database before
 	// recreating it from the seed (typically `spec.seedBackupRef`). Intended
@@ -120,6 +132,19 @@ type Neo4jShardedDatabaseSpec struct {
 	// Transaction log enrichment for sharded database creation.
 	// Valid values are Neo4j-supported txLogEnrichment options (e.g., "FULL").
 	TxLogEnrichment string `json:"txLogEnrichment,omitempty"`
+}
+
+// IfNotExistsEffective returns the resolved value of spec.IfNotExists with
+// the default applied: nil → true (the kubebuilder default), explicit
+// true/false → as set. Use this anywhere the operator needs to decide
+// whether to emit `IF NOT EXISTS` in CREATE DATABASE Cypher — callers
+// MUST NOT dereference Spec.IfNotExists directly because the pointer is
+// nil for unset values.
+func (s *Neo4jShardedDatabaseSpec) IfNotExistsEffective() bool {
+	if s.IfNotExists == nil {
+		return true
+	}
+	return *s.IfNotExists
 }
 
 // PropertyShardingConfiguration defines how property shards are distributed

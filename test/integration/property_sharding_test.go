@@ -383,7 +383,7 @@ var _ = Describe("Property Sharding Integration Tests", Serial, func() {
 							},
 						},
 						Wait:        true,
-						IfNotExists: true,
+						IfNotExists: func() *bool { v := true; return &v }(),
 					},
 				}
 

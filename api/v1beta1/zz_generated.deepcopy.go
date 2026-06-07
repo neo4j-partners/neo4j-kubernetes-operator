@@ -2527,6 +2527,11 @@ func (in *Neo4jShardedDatabaseList) DeepCopyObject() runtime.Object {
 func (in *Neo4jShardedDatabaseSpec) DeepCopyInto(out *Neo4jShardedDatabaseSpec) {
 	*out = *in
 	out.PropertySharding = in.PropertySharding
+	if in.IfNotExists != nil {
+		in, out := &in.IfNotExists, &out.IfNotExists
+		*out = new(bool)
+		**out = **in
+	}
 	if in.SeedURIs != nil {
 		in, out := &in.SeedURIs, &out.SeedURIs
 		*out = make(map[string]string, len(*in))

@@ -82,8 +82,20 @@ spec:
                   data — the user must consciously set BOTH fields.
                 type: boolean
               ifNotExists:
-                default: true
-                description: Create database only if it doesn't exist
+                description: |-
+                  IfNotExists controls whether the sharded database creation is
+                  idempotent. When unset (nil) or true, the operator emits
+                  `CREATE DATABASE ... IF NOT EXISTS` which is a no-op if the database
+                  already exists. Set explicitly to false to allow `CREATE DATABASE`
+                  without the `IF NOT EXISTS` clause — required when paired with
+                  `replaceExisting=true` (the destructive recreate path), and disallowed
+                  otherwise without manual handling of "database already exists" errors.
+
+                  Pointer type rather than bool with default=true: a `bool` field with
+                  `omitempty` would silently revert to the server-side default whenever
+                  a user explicitly set it to false, since `false` serializes as the
+                  JSON zero value and is dropped from the wire. Using *bool preserves
+                  "explicitly false" through Update round-trips.
                 type: boolean
               name:
                 description: Name of the sharded database to create
