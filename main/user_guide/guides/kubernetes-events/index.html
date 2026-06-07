@@ -3045,14 +3045,9 @@ and alerting systems.</p>
 <td>Plugin installation failed</td>
 </tr>
 <tr>
-<td><code>PluginEnabled</code></td>
-<td>Normal</td>
-<td>Plugin enabled on cluster</td>
-</tr>
-<tr>
-<td><code>PluginDisabled</code></td>
-<td>Normal</td>
-<td>Plugin disabled on cluster</td>
+<td><code>PluginDuplicate</code></td>
+<td>Warning</td>
+<td>Another <code>Neo4jPlugin</code> already targets this name (only the first owner reconciles; duplicates sit in <code>Failed</code> until the conflict is resolved)</td>
 </tr>
 </tbody>
 </table>

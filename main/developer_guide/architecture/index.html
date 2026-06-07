@@ -5004,7 +5004,7 @@ CalVer detection: <code>ParseVersion()</code> → <code>IsCalver</code> (<code>m
 <h4 id="startup-optimization">Startup Optimization:<a class="headerlink" href="#startup-optimization" title="Anchor link to this section">&para;</a></h4>
 <ul>
 <li><strong>Parallel Pod Management</strong>: All server pods start simultaneously</li>
-<li><strong>Minimum Primaries = 1</strong>: First pod forms cluster immediately</li>
+<li><strong><code>minimum_initial_system_primaries_count = TOTAL_SERVERS</code></strong>: Set only on initial cluster formation (when <code>/data/databases/system</code> doesn't exist). Forces RAFT to wait until every configured server is visible before electing a bootstrap leader — eliminates the split-brain window when multiple pods come up in parallel. Skipped on restart so a single server can rejoin without waiting on its peers.</li>
 <li><strong>PublishNotReadyAddresses</strong>: Discovery includes pending pods</li>
 <li><strong>Resource Version Conflict Retry</strong>: Handles concurrent updates gracefully</li>
 </ul>
