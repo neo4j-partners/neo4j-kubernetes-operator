@@ -66,27 +66,19 @@ grep -rE 'spec:.*\b(jwt|ui|restoreFrom|license):' path/to/manifests/
 
 Both blocks were always schema-only — the operator never wired either through to Neo4j config. Both have been removed from the CRD entirely. Manifests still carrying `spec.auth.passwordPolicy` or `spec.auth.kerberos` will be rejected by the API server after the upgrade.
 
-**Action**: set the equivalent Neo4j config keys directly in `spec.config`. For Kerberos, also mount the keytab Secret via `spec.extraVolumes` / `spec.extraVolumeMounts`.
+**Action for `passwordPolicy`**: set the equivalent Neo4j config keys directly in `spec.config`:
 
 ```yaml
 spec:
   auth:
     adminSecret: neo4j-admin-secret
-    authenticationProviders: [kerberos, native]   # if using Kerberos
   config:
     dbms.security.auth_minimum_password_length: "12"
-    # Kerberos:
-    dbms.security.kerberos.service_principal: "neo4j/neo4j.example.com@EXAMPLE.COM"
-    dbms.security.kerberos.keytab: "/etc/neo4j/krb5/neo4j.keytab"
-  extraVolumes:
-    - name: kerberos-keytab
-      secret:
-        secretName: neo4j-keytab
-  extraVolumeMounts:
-    - name: kerberos-keytab
-      mountPath: /etc/neo4j/krb5
-      readOnly: true
 ```
+
+**Action for `kerberos`**: there is no drop-in `spec.config` replacement. Neo4j Kerberos requires the separate [Neo4j Kerberos Add-On](https://neo4j.com/docs/kerberos-add-on/current/) (a plugin JAR + its own `kerberos.conf` + `krb5.conf` files), and the operator does not assemble that bundle today. See the [Security Guide § Kerberos Authentication](security.md#kerberos-authentication) for the current state.
+
+Also: the operator's earlier validator that required `dbms.security.kerberos.service_principal` and `dbms.security.kerberos.keytab` keys in `spec.config` whenever `kerberos` appeared in `authenticationProviders` has been removed. Those keys aren't actually part of Neo4j's Kerberos configuration surface (which lives in `kerberos.conf`, not `neo4j.conf`); the validator was enforcing a wrong model.
 
 ### 3. `neo4j_operator_cluster_replicas_total` metric: role label values renamed
 

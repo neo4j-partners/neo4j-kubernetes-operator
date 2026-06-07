@@ -127,25 +127,6 @@ func TestSecurityValidator_Validate(t *testing.T) {
 			errorCount:  0,
 		},
 		{
-			name: "valid Kerberos authentication",
-			cluster: &neo4jv1beta1.Neo4jEnterpriseCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-cluster",
-				},
-				Spec: neo4jv1beta1.Neo4jEnterpriseClusterSpec{
-					Auth: &neo4jv1beta1.AuthSpec{
-						AuthenticationProviders: []string{"kerberos"},
-					},
-					Config: map[string]string{
-						"dbms.security.kerberos.service_principal": "neo4j/server.example.com@EXAMPLE.COM",
-						"dbms.security.kerberos.keytab":            "/etc/neo4j/krb5.keytab",
-					},
-				},
-			},
-			expectError: false,
-			errorCount:  0,
-		},
-		{
 			name: "invalid authentication provider",
 			cluster: &neo4jv1beta1.Neo4jEnterpriseCluster{
 				ObjectMeta: metav1.ObjectMeta{
@@ -291,25 +272,6 @@ func TestSecurityValidator_Validate(t *testing.T) {
 			},
 			expectError: true,
 			errorCount:  1,
-		},
-		{
-			name: "invalid Kerberos configuration",
-			cluster: &neo4jv1beta1.Neo4jEnterpriseCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-cluster",
-				},
-				Spec: neo4jv1beta1.Neo4jEnterpriseClusterSpec{
-					Auth: &neo4jv1beta1.AuthSpec{
-						AuthenticationProviders: []string{"kerberos"},
-					},
-					Config: map[string]string{
-						"dbms.security.kerberos.service_principal": "invalid-principal", // Invalid format
-						"dbms.security.kerberos.keytab":            "",                  // Empty keytab
-					},
-				},
-			},
-			expectError: true,
-			errorCount:  2,
 		},
 		{
 			name: "valid TLS configuration with cert-manager",
@@ -588,56 +550,6 @@ func TestSecurityValidator_isValidURL(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := validator.isValidURL(tt.url)
-			if result != tt.expected {
-				t.Errorf("expected %v, got %v", tt.expected, result)
-			}
-		})
-	}
-}
-
-func TestSecurityValidator_isValidKerberosPrincipal(t *testing.T) {
-	validator := NewSecurityValidator()
-
-	tests := []struct {
-		name      string
-		principal string
-		expected  bool
-	}{
-		{
-			name:      "valid principal",
-			principal: "neo4j/server.example.com@EXAMPLE.COM",
-			expected:  true,
-		},
-		{
-			name:      "valid principal with different service",
-			principal: "HTTP/web.example.com@EXAMPLE.COM",
-			expected:  true,
-		},
-		{
-			name:      "invalid principal - missing realm",
-			principal: "neo4j/server.example.com",
-			expected:  false,
-		},
-		{
-			name:      "invalid principal - missing hostname",
-			principal: "neo4j@EXAMPLE.COM",
-			expected:  false,
-		},
-		{
-			name:      "invalid principal - malformed",
-			principal: "invalid-principal",
-			expected:  false,
-		},
-		{
-			name:      "empty principal",
-			principal: "",
-			expected:  false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := validator.isValidKerberosPrincipal(tt.principal)
 			if result != tt.expected {
 				t.Errorf("expected %v, got %v", tt.expected, result)
 			}

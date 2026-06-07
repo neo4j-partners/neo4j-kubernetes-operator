@@ -562,29 +562,12 @@ Short TTL = changes propagate faster. Long TTL = better performance. Setting to 
 
 ### Kerberos Authentication
 
-Kerberos has no typed CRD field. Configure it by listing `kerberos` in `spec.auth.authenticationProviders`, setting the relevant `dbms.security.kerberos.*` keys in `spec.config`, and mounting the keytab via `spec.extraVolumes` / `spec.extraVolumeMounts`:
+Kerberos is **not currently supported through operator-typed configuration**. Neo4j implements Kerberos via the separate [Neo4j Kerberos Add-On](https://neo4j.com/docs/kerberos-add-on/current/), which uses its own `conf/kerberos.conf` file (not `neo4j.conf`), a Kerberos plugin JAR in `/plugins/`, and an external `krb5.conf` — a configuration shape that doesn't fit the operator's `spec.config` / typed-field model cleanly.
 
-```yaml
-spec:
-  auth:
-    authenticationProviders: [kerberos, native]
-    authorizationProviders:  [kerberos, native]
-    adminSecret: neo4j-admin-secret
-  config:
-    dbms.security.kerberos.realm: "CORP.EXAMPLE.COM"
-    dbms.security.kerberos.service_principal: "neo4j/neo4j-server.corp.example.com@CORP.EXAMPLE.COM"
-    dbms.security.kerberos.keytab: "/etc/neo4j/krb5/neo4j.keytab"
-  extraVolumes:
-    - name: kerberos-keytab
-      secret:
-        secretName: neo4j-keytab
-  extraVolumeMounts:
-    - name: kerberos-keytab
-      mountPath: /etc/neo4j/krb5
-      readOnly: true
-```
+You can in principle assemble it by hand using `spec.extraVolumes` to mount the plugin JAR + `kerberos.conf` + `krb5.conf`, plus `spec.auth.authenticationProviders: [plugin-Neo4j-Kerberos, native]`. We haven't shipped a worked example; follow [issue #137](https://github.com/neo4j-partners/neo4j-kubernetes-operator/issues/137) for progress on a proper walkthrough.
 
-If you want typed support (operator-managed keytab mount + generated config), [open an issue](https://github.com/neo4j-partners/neo4j-kubernetes-operator/issues) describing your use case.
+For the canonical Neo4j-side setup, see the upstream add-on documentation:
+[neo4j.com/docs/kerberos-add-on/current/](https://neo4j.com/docs/kerberos-add-on/current/).
 
 ## Authorization and RBAC
 

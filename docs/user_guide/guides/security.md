@@ -12,7 +12,11 @@ The operator provides first-class, typed configuration for external identity pro
 *   **LDAP / Active Directory**: Full typed support — host, DN templates, group-to-role mapping, system account credentials (injected securely via env vars, never in ConfigMap).
 *   **OIDC / SSO**: Multiple named providers (e.g., Okta + Azure AD simultaneously) with discovery URI, claims mapping, and group-to-role mapping.
 
-Kerberos and JWT authentication are not exposed as typed CRD fields — configure them by adding the provider to `spec.auth.authenticationProviders` and setting the relevant `dbms.security.*` keys in `spec.config`. JWT uses `dbms.security.jwt.{secret,public_key}` plus optional `dbms.security.jwt.audience`. Kerberos uses `dbms.security.kerberos.{service_principal,keytab}` plus a mounted keytab Secret via `spec.extraVolumes` / `spec.extraVolumeMounts`. If you'd like typed support for either, [open an issue](https://github.com/neo4j-partners/neo4j-kubernetes-operator/issues) describing the use case.
+**JWT** is not exposed as a typed field. Configure it by adding `jwt` to `spec.auth.authenticationProviders` and setting `dbms.security.jwt.{secret,public_key}` (plus optional `dbms.security.jwt.audience`) in `spec.config`.
+
+**Kerberos** is not supported through operator-typed configuration today. Neo4j Kerberos uses the separate [Kerberos Add-On](https://neo4j.com/docs/kerberos-add-on/current/) — a plugin JAR plus its own `kerberos.conf` and `krb5.conf` files — and the operator does not assemble that bundle for you. See the [Security Guide § Kerberos Authentication](../security.md#kerberos-authentication) for current state.
+
+If you'd like typed support for either, [open an issue](https://github.com/neo4j-partners/neo4j-kubernetes-operator/issues) describing the use case.
 
 **Multi-provider support**: Neo4j evaluates providers in order, so you can configure `authenticationProviders: [ldap, native]` to try LDAP first with native as fallback.
 

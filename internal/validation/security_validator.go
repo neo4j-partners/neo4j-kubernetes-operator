@@ -78,8 +78,6 @@ func (v *SecurityValidator) validateAuthenticationConfig(cluster *neo4jv1beta1.N
 			allErrs = append(allErrs, v.validateOIDCConfig(cluster)...)
 		case p == "saml":
 			allErrs = append(allErrs, v.validateSAMLConfig(cluster)...)
-		case p == "kerberos":
-			allErrs = append(allErrs, v.validateKerberosConfig(cluster)...)
 		}
 	}
 
@@ -284,48 +282,6 @@ func (v *SecurityValidator) validateSAMLConfig(cluster *neo4jv1beta1.Neo4jEnterp
 					"SAML entity ID cannot be empty",
 				))
 			}
-		}
-	}
-
-	return allErrs
-}
-
-// validateKerberosConfig validates Kerberos authentication configuration for Neo4j 5.26+
-func (v *SecurityValidator) validateKerberosConfig(cluster *neo4jv1beta1.Neo4jEnterpriseCluster) field.ErrorList {
-	var allErrs field.ErrorList
-	authPath := field.NewPath("spec", "auth")
-
-	if cluster.Spec.Config != nil {
-		// Validate Kerberos principal
-		if principal, exists := cluster.Spec.Config["dbms.security.kerberos.service_principal"]; exists {
-			if !v.isValidKerberosPrincipal(principal) {
-				allErrs = append(allErrs, field.Invalid(
-					authPath,
-					principal,
-					"Kerberos service principal must be in format 'service/hostname@REALM'",
-				))
-			}
-		} else {
-			allErrs = append(allErrs, field.Required(
-				authPath,
-				"Kerberos authentication requires 'dbms.security.kerberos.service_principal'",
-			))
-		}
-
-		// Validate Kerberos keytab file
-		if keytab, exists := cluster.Spec.Config["dbms.security.kerberos.keytab"]; exists {
-			if keytab == "" {
-				allErrs = append(allErrs, field.Invalid(
-					authPath,
-					keytab,
-					"Kerberos keytab file path cannot be empty",
-				))
-			}
-		} else {
-			allErrs = append(allErrs, field.Required(
-				authPath,
-				"Kerberos authentication requires 'dbms.security.kerberos.keytab'",
-			))
 		}
 	}
 
@@ -543,12 +499,6 @@ func (v *SecurityValidator) validateLogSecurityConfig(key, value string, configP
 func (v *SecurityValidator) isValidURL(url string) bool {
 	urlRegex := regexp.MustCompile(`^https?://[^\s/$.?#].[^\s]*$`)
 	return urlRegex.MatchString(url)
-}
-
-// isValidKerberosPrincipal validates Kerberos principal format
-func (v *SecurityValidator) isValidKerberosPrincipal(principal string) bool {
-	principalRegex := regexp.MustCompile(`^[^/@]+/[^/@]+@[^/@]+$`)
-	return principalRegex.MatchString(principal)
 }
 
 // isValidPositiveInteger validates positive integer strings
