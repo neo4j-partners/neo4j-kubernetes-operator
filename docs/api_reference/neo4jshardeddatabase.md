@@ -216,24 +216,24 @@ propertyShardTopology:
 
 ### Backups
 
-There is no typed `backupConfig` field on `Neo4jShardedDatabase`. Use `Neo4jBackup` resources to back up the individual shard databases — coordinated cross-shard point-in-time backups are not yet implemented at the operator level.
+There is **no first-class backup/restore support for sharded databases**. The `Neo4jBackup` CRD's `target.kind` only accepts `Cluster` or `Database`, not `ShardedDatabase`, and neither the backup nor restore controller has any sharded-aware code paths.
+
+You can back up the underlying per-shard databases individually by creating one `Neo4jBackup` resource per shard (`{name}-g000` for the graph shard, `{name}-p000`, `{name}-p001`, … for the property shards), but **the operator does not coordinate these** — backups will run independently without cross-shard point-in-time consistency. Coordinated sharded-database backup is a future enhancement; track via [GitHub issues](https://github.com/priyolahiri/neo4j-kubernetes-operator/issues).
 
 ### Neo4jShardedDatabaseStatus
 
 ```yaml
 status:
   conditions: []metav1.Condition         # Standard conditions
-  phase: string                         # Current phase
-  message: string                       # Status message
-  observedGeneration: int64             # Observed generation
-  shardingReady: boolean               # All shards operational
-  creationTime: metav1.Time            # Creation timestamp
-  graphShard: ShardStatus              # Graph shard status
-  propertyShards: []ShardStatus        # Property shard statuses
-  virtualDatabase: VirtualDatabaseStatus # Virtual database status
-  backupStatus: ShardedBackupStatus    # Backup status
-  totalSize: string                    # Total size across shards
-  lastBackupTime: metav1.Time          # Last backup time
+  phase: string                          # Current phase
+  message: string                        # Status message
+  observedGeneration: int64              # Observed generation
+  shardingReady: boolean                 # All shards operational
+  creationTime: metav1.Time              # Creation timestamp
+  graphShard: ShardStatus                # Graph shard status
+  propertyShards: []ShardStatus          # Property shard statuses
+  virtualDatabase: VirtualDatabaseStatus  # Virtual database status
+  totalSize: string                      # Total size across shards
 ```
 
 #### Phase Values

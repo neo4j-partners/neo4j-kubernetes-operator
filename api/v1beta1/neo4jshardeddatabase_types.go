@@ -139,14 +139,8 @@ type Neo4jShardedDatabaseStatus struct {
 	// Virtual database status (logical view combining all shards)
 	VirtualDatabase *VirtualDatabaseStatus `json:"virtualDatabase,omitempty"`
 
-	// Backup status across all shards
-	BackupStatus *ShardedBackupStatus `json:"backupStatus,omitempty"`
-
 	// Total size across all shards
 	TotalSize string `json:"totalSize,omitempty"`
-
-	// Last successful backup time across all shards
-	LastBackupTime *metav1.Time `json:"lastBackupTime,omitempty"`
 }
 
 // ShardStatus tracks the status of individual shards (graph or property)
@@ -218,42 +212,6 @@ type QueryPerformanceMetrics struct {
 
 	// Cache hit ratio for property lookups (0.0-1.0 as string)
 	PropertyCacheHitRatio string `json:"propertyCacheHitRatio,omitempty"`
-}
-
-// ShardedBackupStatus tracks backup status across all shards
-type ShardedBackupStatus struct {
-	// Overall backup status
-	Status string `json:"status,omitempty"`
-
-	// Last coordinated backup time
-	LastBackupTime *metav1.Time `json:"lastBackupTime,omitempty"`
-
-	// Individual shard backup statuses
-	ShardBackups []ShardBackupStatus `json:"shardBackups,omitempty"`
-
-	// Next scheduled backup time
-	NextBackupTime *metav1.Time `json:"nextBackupTime,omitempty"`
-
-	// Backup consistency check status
-	ConsistencyCheck string `json:"consistencyCheck,omitempty"`
-}
-
-// ShardBackupStatus tracks backup status for individual shards
-type ShardBackupStatus struct {
-	// Shard name
-	ShardName string `json:"shardName,omitempty"`
-
-	// Backup status for this shard
-	Status string `json:"status,omitempty"`
-
-	// Last backup time for this shard
-	LastBackupTime *metav1.Time `json:"lastBackupTime,omitempty"`
-
-	// Backup size for this shard
-	BackupSize string `json:"backupSize,omitempty"`
-
-	// Last error during backup
-	LastError string `json:"lastError,omitempty"`
 }
 
 // +kubebuilder:object:root=true

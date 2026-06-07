@@ -240,48 +240,6 @@ spec:
             description: Neo4jShardedDatabaseStatus defines the observed state of
               Neo4jShardedDatabase
             properties:
-              backupStatus:
-                description: Backup status across all shards
-                properties:
-                  consistencyCheck:
-                    description: Backup consistency check status
-                    type: string
-                  lastBackupTime:
-                    description: Last coordinated backup time
-                    format: date-time
-                    type: string
-                  nextBackupTime:
-                    description: Next scheduled backup time
-                    format: date-time
-                    type: string
-                  shardBackups:
-                    description: Individual shard backup statuses
-                    items:
-                      description: ShardBackupStatus tracks backup status for individual
-                        shards
-                      properties:
-                        backupSize:
-                          description: Backup size for this shard
-                          type: string
-                        lastBackupTime:
-                          description: Last backup time for this shard
-                          format: date-time
-                          type: string
-                        lastError:
-                          description: Last error during backup
-                          type: string
-                        shardName:
-                          description: Shard name
-                          type: string
-                        status:
-                          description: Backup status for this shard
-                          type: string
-                      type: object
-                    type: array
-                  status:
-                    description: Overall backup status
-                    type: string
-                type: object
               conditions:
                 description: Conditions represent the current state of the sharded
                   database
@@ -381,10 +339,6 @@ spec:
                     - property
                     type: string
                 type: object
-              lastBackupTime:
-                description: Last successful backup time across all shards
-                format: date-time
-                type: string
               message:
                 description: Message provides additional information about the current
                   state
