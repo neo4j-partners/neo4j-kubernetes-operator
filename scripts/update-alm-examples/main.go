@@ -89,7 +89,7 @@ func updateCSV(path string, almValue string) (bool, error) {
 		return false, nil
 	}
 
-	lines = setMinKubeVersion(lines, "1.30.0")
+	lines = setMinKubeVersion(lines, "1.32.0")
 	output := strings.Join(lines, "\n") + "\n"
 	return true, os.WriteFile(path, []byte(output), 0o644)
 }

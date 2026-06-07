@@ -100,6 +100,12 @@ jobs:
 
     - name: Set up Helm
       uses: azure/setup-helm@v5
+      with:
+        # Pin to match pages-helm.yml + .tool-versions. Without an
+        # explicit version the action installs whatever Helm 3.x is
+        # current at job time, so the release workflow would silently
+        # drift from the pages workflow that pins v3.16.0.
+        version: 3.16.0
 
     - name: Get build date
       id: build-date

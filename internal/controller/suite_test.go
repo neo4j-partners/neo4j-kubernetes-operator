@@ -18,9 +18,7 @@ package controller_test
 
 import (
 	"context"
-	"fmt"
 	"path/filepath"
-	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -80,13 +78,19 @@ var _ = BeforeSuite(func() {
 		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "config", "crd", "bases")},
 		ErrorIfCRDPathMissing: true,
 
-		// The BinaryAssetsDirectory is only required if you want to run the tests directly
-		// without call the makefile target test. If not informed it will look for the
-		// default path defined in controller-runtime which is /usr/local/kubebuilder/.
-		// Note that you must have the required binaries setup under the bin directory to perform
-		// the tests directly. When we run make test it will be setup and used automatically.
-		BinaryAssetsDirectory: filepath.Join("..", "..", "bin", "k8s",
-			fmt.Sprintf("1.31.0-%s-%s", runtime.GOOS, runtime.GOARCH)),
+		// Envtest binary location is resolved via the KUBEBUILDER_ASSETS env
+		// var (set by `make test-unit`, which derives it from
+		// $(ENVTEST) use $(ENVTEST_K8S_VERSION) — see Makefile). We deliberately
+		// do NOT set BinaryAssetsDirectory here because that field overrides
+		// KUBEBUILDER_ASSETS, and pinning a hardcoded version (e.g. "1.31.0")
+		// would silently shadow the Makefile contract whenever
+		// ENVTEST_K8S_VERSION is bumped — fresh CI runners only have the
+		// new version's binaries, so the hardcoded path would point at a
+		// missing directory and envtest startup would fail.
+		//
+		// To run these tests directly (`go test ./internal/controller`), set
+		// KUBEBUILDER_ASSETS yourself, e.g.:
+		//   export KUBEBUILDER_ASSETS=$(bin/setup-envtest use 1.34.0 -p path)
 	}
 
 	var err error

@@ -479,7 +479,7 @@ gh release list --repo neo4j-partners/neo4j-kubernetes-operator
 
 ### Installation Requirements
 
-- **Kubernetes**: Version 1.30 or higher
+- **Kubernetes**: Version 1.32 or higher
 - **Neo4j**: Version 5.26 LTS (the final SemVer release) or any CalVer release (2025.x, 2026.x, and onward)
 - **cert-manager**: Version 1.20+ (optional, only required for TLS-enabled Neo4j deployments)
 - **Permissions**: Cluster-admin access for CRD and RBAC installation

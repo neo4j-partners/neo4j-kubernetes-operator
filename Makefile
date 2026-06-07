@@ -56,7 +56,21 @@ IMG ?= ghcr.io/neo4j-partners/neo4j-kubernetes-operator:latest
 # MCP: use the official Docker Hub image (mcp/neo4j-cypher).
 # No custom image build is required.
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
-ENVTEST_K8S_VERSION = 1.31.0
+ENVTEST_K8S_VERSION = 1.34.0
+
+# KIND_NODE_IMAGE pins the Kubernetes version used by dev and test clusters.
+# Kept in sync with ENVTEST_K8S_VERSION so unit-test envtest, dev cluster,
+# and CI integration cluster all run against the same K8s version. The
+# user-facing minimum is currently 1.32 (see README + Helm Chart.yaml);
+# tests run one minor ahead at the upstream N-2 floor.
+KIND_NODE_IMAGE ?= kindest/node:v1.34.0
+
+# CERT_MANAGER_VERSION pins the cert-manager release applied to dev and
+# test clusters. The user-facing minimum per docs/README is v1.18+; we
+# install a known-good v1.20.x for tests. Single source of truth —
+# scripts/test-env.sh and hack/deploy-dev.sh both read this via env so
+# bumping here propagates to every cluster path.
+CERT_MANAGER_VERSION ?= v1.20.0
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -165,7 +179,7 @@ test-unit: manifests generate fmt vet envtest ## Run unit tests (no cluster requ
 
 # Integration Tests
 .PHONY: test-integration
-test-integration: test-cluster ginkgo kustomize ## Run integration tests (production mode, neo4j-operator-system)
+test-integration: manifests generate test-cluster ginkgo kustomize ## Run integration tests (production mode, neo4j-operator-system)
 	@echo "🔗 Running integration tests..."
 	@kind export kubeconfig --name neo4j-operator-test
 	@echo "📦 Building and loading operator image..."
@@ -216,10 +230,16 @@ test: test-unit test-integration ## Run all tests
 	@echo "✅ All tests completed"
 
 .PHONY: test-coverage
-test-coverage: ## Generate coverage report
+test-coverage: manifests generate fmt vet envtest ## Generate coverage report
 	@echo "📊 Generating coverage report..."
 	@mkdir -p coverage
-	@./scripts/run-tests-clean.sh go test -coverprofile=coverage/coverage.out -covermode=atomic ./...
+	@# Coverage runs `go test ./...` which includes the controller suite (envtest).
+	@# We MUST set KUBEBUILDER_ASSETS the same way test-unit does — without it the
+	@# controller suite can't find the envtest API server binaries and fails to
+	@# start. Pre-fix: suite_test.go had a hardcoded BinaryAssetsDirectory that
+	@# silently masked this gap, but only because stale prior-version binaries
+	@# happened to exist under bin/k8s/.
+	@./scripts/run-tests-clean.sh env KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test -coverprofile=coverage/coverage.out -covermode=atomic ./...
 	@go tool cover -html=coverage/coverage.out -o coverage/coverage.html
 	@go tool cover -func=coverage/coverage.out | tail -1
 
@@ -880,14 +900,14 @@ operator-setup: ## Deploy operator to available Kind cluster
 
 .PHONY: dev-cluster
 dev-cluster: ## Create a Kind cluster for development
-	@echo "Creating development cluster..."
+	@echo "Creating development cluster (image: $(KIND_NODE_IMAGE))..."
 	@./scripts/setup-kind-dirs.sh
 	@if ! kind get clusters | grep -q "neo4j-operator-dev"; then \
-		kind create cluster --name neo4j-operator-dev --config hack/kind-config.yaml; \
+		kind create cluster --name neo4j-operator-dev --image $(KIND_NODE_IMAGE) --config hack/kind-config.yaml; \
 		echo "Waiting for cluster to be ready..."; \
 		kubectl wait --for=condition=ready node --all --timeout=300s; \
-		echo "Installing cert-manager..."; \
-		kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.20.0/cert-manager.yaml; \
+		echo "Installing cert-manager $(CERT_MANAGER_VERSION)..."; \
+		kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/$(CERT_MANAGER_VERSION)/cert-manager.yaml; \
 		kubectl wait --for=condition=ready pod -l app.kubernetes.io/instance=cert-manager -n cert-manager --timeout=300s; \
 		echo "Creating self-signed ClusterIssuer for development..."; \
 		kubectl apply -f config/dev/self-signed-issuer.yaml || echo "Self-signed issuer creation skipped (file may not exist)"; \
@@ -898,8 +918,8 @@ dev-cluster: ## Create a Kind cluster for development
 
 .PHONY: test-cluster
 test-cluster: ## Create a Kind cluster for testing
-	@echo "Creating test cluster..."
-	@./scripts/test-env.sh cluster
+	@echo "Creating test cluster (image: $(KIND_NODE_IMAGE), cert-manager: $(CERT_MANAGER_VERSION))..."
+	@KIND_NODE_IMAGE=$(KIND_NODE_IMAGE) CERT_MANAGER_VERSION=$(CERT_MANAGER_VERSION) ./scripts/test-env.sh cluster
 
 .PHONY: test-cluster-clean
 test-cluster-clean: ## Clean operator resources from test cluster

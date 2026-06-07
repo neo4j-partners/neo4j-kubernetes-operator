@@ -558,7 +558,7 @@ spec:
   - email: 1254077+priyolahiri@users.noreply.github.com
     name: Priyadarshi Lahiri
   maturity: alpha
-  minKubeVersion: "1.30.0"
+  minKubeVersion: "1.32.0"
   provider:
     name: Neo4j Partners
     url: https://github.com/neo4j-partners

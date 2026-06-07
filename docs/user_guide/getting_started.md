@@ -4,7 +4,7 @@ This guide will walk you through the process of deploying your first Neo4j Enter
 
 ## Prerequisites
 
-*   A Kubernetes cluster (v1.30+)
+*   A Kubernetes cluster (v1.32+)
 *   `kubectl` installed and configured
 *   Neo4j Enterprise Edition (evaluation license acceptable for testing)
 *   Go 1.26+ (for building from source)
