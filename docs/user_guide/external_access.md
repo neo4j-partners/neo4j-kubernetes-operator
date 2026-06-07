@@ -72,7 +72,7 @@ kubectl get svc my-cluster-client -o jsonpath='{.spec.ports[?(@.name=="bolt")].n
 
 ### Ingress (HTTP/HTTPS Access)
 
-> **Note**: Currently, Ingress needs to be manually created for Neo4jEnterpriseCluster and is not yet supported for Neo4jEnterpriseStandalone.
+Both `Neo4jEnterpriseCluster` and `Neo4jEnterpriseStandalone` reconcile an Ingress object automatically when `spec.service.ingress.enabled: true` is set.
 
 ```yaml
 spec:
@@ -87,20 +87,36 @@ spec:
         nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
 ```
 
+### OpenShift Route
+
+OpenShift clusters can use Route in place of Ingress. The operator reconciles a `route.openshift.io/v1` Route for both `Neo4jEnterpriseCluster` and `Neo4jEnterpriseStandalone` when `spec.service.route.enabled: true`.
+
+```yaml
+spec:
+  service:
+    route:
+      enabled: true
+      host: neo4j.apps.example.com   # optional; OpenShift generates one if empty
+      targetPort: 7474               # defaults to 7474 (HTTP)
+      tls:
+        termination: edge            # edge | reencrypt | passthrough
+        insecureEdgeTerminationPolicy: Redirect
+```
+
 ## Connection URLs
 
 After configuring external access:
 
 ### Neo4j Browser
-- **Port Forward**: http://localhost:7474
-- **LoadBalancer**: http://<external-ip>:7474
-- **NodePort**: http://<node-ip>:<node-port>
-- **Ingress**: https://neo4j.example.com
+- **Port Forward**: `http://localhost:7474`
+- **LoadBalancer**: `http://<external-ip>:7474`
+- **NodePort**: `http://<node-ip>:<node-port>`
+- **Ingress**: `https://neo4j.example.com`
 
 ### Bolt (Applications)
-- **Port Forward**: bolt://localhost:7687
-- **LoadBalancer**: bolt://<external-ip>:7687
-- **NodePort**: bolt://<node-ip>:<node-port>
+- **Port Forward**: `bolt://localhost:7687`
+- **LoadBalancer**: `bolt://<external-ip>:7687`
+- **NodePort**: `bolt://<node-ip>:<node-port>`
 
 **With TLS** — pick the scheme that matches your trust chain:
 
@@ -128,14 +144,18 @@ spec:
 
 ### 2. Restrict Access
 
-For LoadBalancer services, use source ranges:
+For LoadBalancer services, use the typed `loadBalancerSourceRanges` field (cloud-agnostic, K8s-native):
+
 ```yaml
 spec:
   service:
     type: LoadBalancer
-    annotations:
-      service.beta.kubernetes.io/aws-load-balancer-source-ranges: "10.0.0.0/8,172.16.0.0/12"
+    loadBalancerSourceRanges:
+      - 10.0.0.0/8
+      - 172.16.0.0/12
 ```
+
+Some clouds (e.g. AWS NLB) require a provider-specific annotation instead — check your cloud provider's docs.
 
 ### 3. Use Strong Authentication
 
@@ -190,38 +210,6 @@ spec:
       service.beta.kubernetes.io/azure-dns-label-name: "my-neo4j-cluster"
 ```
 
-## Manual Ingress Creation
-
-Until automatic Ingress creation is implemented, create it manually:
-
-```yaml
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: neo4j-ingress
-  annotations:
-    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
-    nginx.ingress.kubernetes.io/proxy-body-size: "0"
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
-spec:
-  ingressClassName: nginx
-  tls:
-  - hosts:
-    - neo4j.example.com
-    secretName: neo4j-tls
-  rules:
-  - host: neo4j.example.com
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: my-cluster-client  # or my-standalone-service
-            port:
-              number: 7474
-```
-
 ## Troubleshooting
 
 ### Service Not Accessible
@@ -267,8 +255,5 @@ spec:
 ## Future Improvements
 
 The operator team is working on:
-- Automatic Ingress creation for clusters
-- Ingress support for standalone deployments
-- Better service configuration for standalone
 - Built-in DNS management
 - OAuth/OIDC integration for Browser access
