@@ -323,27 +323,21 @@ spec:
 
 ## Operator Warnings
 
-The Neo4j Kubernetes Operator will emit warnings for suboptimal configurations:
+The Neo4j Kubernetes Operator will emit warnings for suboptimal `spec.topology.servers` configurations (warnings apply to server count, not database-level primary count):
 
-### Even Number of Primaries
+### Even Number of Servers
 ```
-Warning: Even number of primary nodes (4) reduces fault tolerance.
-In a split-brain scenario, the cluster may become unavailable.
-Consider using an odd number (3, 5, or 7) for optimal fault tolerance.
+Even number of servers (4) may reduce fault tolerance when databases specify odd-numbered server allocations. Consider using an odd number of servers for optimal fault tolerance.
 ```
 
-### Two Primary Nodes
+### Two Servers
 ```
-Warning: 2 primary nodes provide limited fault tolerance.
-If one node fails, the remaining node cannot form quorum.
-Consider using 3 primary nodes for production deployments.
+2 servers provide limited fault tolerance. If one server fails, databases may lose quorum. Consider using 3 or more servers for production deployments.
 ```
 
-### Excessive Primary Nodes
+### Excessive Servers
 ```
-Warning: More than 7 primary nodes (9) may impact cluster performance
-due to increased consensus overhead.
-Consider using read replicas instead for scaling read capacity.
+More than 10 servers (12) may impact cluster performance due to increased coordination overhead. Consider the actual database topology needs when scaling servers.
 ```
 
 ## Migration Strategies
@@ -361,9 +355,15 @@ Consider using read replicas instead for scaling read capacity.
 ## Troubleshooting
 
 ### Split-Brain Scenarios
+
+Once a cluster has reached `Ready`, the operator automatically detects split-brain: it connects to each `my-cluster-server-N` pod over Bolt, compares each pod's view of the cluster (`SHOW SERVERS`), and restarts pods stranded in a minority partition so the StatefulSet recreates them and they rejoin the majority. Detection is skipped during initial formation (before the cluster is `Ready`) and for single-server clusters.
+
 ```bash
 # Check cluster status
 kubectl describe neo4jenterprisecluster my-cluster
+
+# See split-brain detection/repair events emitted by the operator
+kubectl get events --field-selector reason=SplitBrainDetected -A
 
 # Check individual node logs
 kubectl logs my-cluster-server-0

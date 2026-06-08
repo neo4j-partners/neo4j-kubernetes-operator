@@ -7,9 +7,9 @@ This guide explains how to tune the performance of your Neo4j Enterprise cluster
 The Neo4j Enterprise Operator has been optimized for production environments with several key performance improvements:
 
 ### Reconciliation Efficiency
-- **Optimized Rate Limiting**: The controller uses intelligent rate limiting to prevent excessive API calls (~34 reconciliations per minute vs. 18,000+)
+- **Optimized Rate Limiting**: The cluster controller caps reconciliations at roughly 10 per minute (a token-bucket limiter of one token every 6 seconds with a burst of 10), backed by exponential backoff from 5 seconds up to 30 seconds, to prevent excessive API calls
 - **Status Update Optimization**: Status updates only occur when cluster state actually changes, reducing unnecessary API server load
-- **ConfigMap Debouncing**: 2-minute debounce mechanism prevents restart loops from configuration changes
+- **ConfigMap Debouncing**: A short debounce interval coalesces rapid successive configuration changes, preventing restart loops
 
 ### Resource Management
 - **Memory Validation**: Automatic validation ensures Neo4j memory settings don't exceed available resources

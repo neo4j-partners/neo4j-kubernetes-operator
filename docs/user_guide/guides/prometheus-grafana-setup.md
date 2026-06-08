@@ -176,6 +176,11 @@ Or set it in your `values.yaml`:
 ```yaml
 metrics:
   enabled: true
+  # secure defaults to true: the operator serves /metrics over HTTPS and
+  # requires a Bearer token whose ServiceAccount has the `metrics-reader`
+  # ClusterRole bound. Set secure: false only for legacy scrapers that
+  # cannot present a bearer token.
+  secure: true
   serviceMonitor:
     enabled: true
     interval: 30s
@@ -183,7 +188,7 @@ metrics:
     labels: {}  # Add labels if your Prometheus uses label selectors
 ```
 
-This creates a `ServiceMonitor` that tells Prometheus to scrape the operator's `/metrics` endpoint on port 8080.
+This creates a `ServiceMonitor` that tells Prometheus to scrape the operator's `/metrics` endpoint on port 8080. When `secure: true` (the default), the template automatically sets `scheme: https`, `tlsConfig.insecureSkipVerify: true`, and wires the bearer-token path.
 
 The Neo4j cluster/standalone `ServiceMonitor` is created automatically when `monitoring.enabled: true` — no extra Helm config needed.
 
@@ -194,11 +199,15 @@ If you use plain Prometheus without the Operator, add scrape configs to your `pr
 ```yaml
 scrape_configs:
   # Scrape Neo4j Operator metrics
+  # NOTE: with the default metrics.secure=true the operator serves /metrics
+  # over HTTPS and requires a Bearer token (scheme: https, tls_config, and
+  # authorization/bearer_token_file must be added below). Set
+  # metrics.secure=false for plain-HTTP scraping shown here.
   - job_name: neo4j-operator
     metrics_path: /metrics
     static_configs:
       - targets:
-          - neo4j-operator-controller-manager-metrics.neo4j-operator.svc.cluster.local:8080
+          - neo4j-operator-metrics.neo4j-operator.svc.cluster.local:8080
 
   # Scrape Neo4j cluster metrics (one target per cluster)
   - job_name: neo4j-cluster
@@ -752,7 +761,10 @@ kubectl port-forward pod/my-cluster-server-0 2004:2004 &
 curl -s http://localhost:2004/metrics | grep neo4j_bolt
 
 # 2. Operator metrics endpoint is live
-kubectl port-forward -n neo4j-operator svc/neo4j-operator-controller-manager-metrics 8080:8080 &
+# (with the default metrics.secure=true the endpoint is HTTPS and needs a
+#  Bearer token; use -k https://... and an Authorization header, or set
+#  metrics.secure=false for the plain-HTTP form shown here)
+kubectl port-forward -n neo4j-operator svc/neo4j-operator-metrics 8080:8080 &
 curl -s http://localhost:8080/metrics | grep neo4j_operator
 
 # 3. ServiceMonitors exist

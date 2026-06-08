@@ -46,10 +46,11 @@ Two different `Neo4jBackup` CRs pointing at the same bucket+path stay isolated b
 
 | Type | Description | `backupType` value |
 |------|-------------|-------------------|
+| **Auto** (default) | FULL on the first run, DIFF on subsequent runs | `AUTO` |
 | **Full** | Complete snapshot of all database files | `FULL` |
 | **Differential** | Only pages changed since the last full backup | `DIFF` |
 
-Differential backups are significantly smaller and faster for large databases. Because all runs share a directory, `neo4j-admin` auto-detects the chain — set `backupType: DIFF` and the operator points `--to-path` at the directory containing the prior full. Set `preferDiffAsParent: true` (CalVer 2025.04+) to chain diffs off the latest diff instead of the latest full.
+`backupType` defaults to `AUTO` when omitted. Differential backups are significantly smaller and faster for large databases. Because all runs share a directory, `neo4j-admin` auto-detects the chain — set `backupType: DIFF` and the operator points `--to-path` at the directory containing the prior full. Set `preferDiffAsParent: true` (CalVer 2025.04+) to chain diffs off the latest diff instead of the latest full.
 
 ### Storage Backends
 
@@ -123,6 +124,7 @@ storage:
   cloud:
     provider: aws
     identity:
+      provider: aws
       autoCreate:
         annotations:
           eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/neo4j-backup-role
@@ -264,6 +266,7 @@ storage:
   cloud:
     provider: gcp
     identity:
+      provider: gcp
       autoCreate:
         annotations:
           iam.gke.io/gcp-service-account: neo4j-backup@my-project.iam.gserviceaccount.com
@@ -322,6 +325,7 @@ storage:
   cloud:
     provider: azure
     identity:
+      provider: azure
       autoCreate:
         annotations:
           azure.workload.identity/client-id: <AZURE_CLIENT_ID>
@@ -356,7 +360,7 @@ spec:
       storageClassName: standard
   options:
     compress: true
-    verify: true
+    validate: true
   retention:
     maxCount: 5
 ```
@@ -394,7 +398,7 @@ spec:
       credentialsSecretRef: aws-backup-creds
   options:
     compress: true
-    verify: true
+    validate: true
     tempStorage:
       size: "50Gi"
   retention:
@@ -422,12 +426,13 @@ spec:
     cloud:
       provider: aws
       identity:
+        provider: aws
         autoCreate:
           annotations:
             eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/neo4j-backup-role
   options:
     compress: true
-    verify: true
+    validate: true
     tempStorage:
       size: "50Gi"
   retention:
@@ -457,7 +462,7 @@ spec:
       credentialsSecretRef: gcs-backup-creds
   options:
     compress: true
-    verify: true
+    validate: true
     tempStorage:
       size: "50Gi"
   retention:
@@ -485,7 +490,7 @@ spec:
       credentialsSecretRef: azure-backup-creds
   options:
     compress: true
-    verify: true
+    validate: true
     tempStorage:
       size: "50Gi"
 ```
@@ -515,7 +520,7 @@ spec:
       credentialsSecretRef: gcs-backup-creds
   options:
     compress: true
-    verify: true
+    validate: true
     tempStorage:
       size: "50Gi"
 ```
@@ -541,7 +546,7 @@ spec:
       credentialsSecretRef: aws-backup-creds
   options:
     compress: true
-    verify: true
+    validate: true
     tempStorage:
       size: "50Gi"
 ```
@@ -569,7 +574,7 @@ spec:
   options:
     backupType: DIFF
     compress: true
-    verify: true
+    validate: true
     tempStorage:
       size: "50Gi"
 ```
@@ -670,7 +675,7 @@ spec:
       credentialsSecretRef: aws-backup-creds
   options:
     compress: true
-    verify: true
+    validate: true
     tempStorage:
       size: "50Gi"
   retention:
@@ -706,12 +711,13 @@ spec:
     cloud:
       provider: gcp
       identity:
+        provider: gcp
         autoCreate:
           annotations:
             iam.gke.io/gcp-service-account: neo4j-backup@my-project.iam.gserviceaccount.com
   options:
     compress: true
-    verify: true
+    validate: true
     tempStorage:
       size: "50Gi"
   retention:
@@ -1071,7 +1077,7 @@ kubectl get events --field-selector involvedObject.name=restore-operation
 
 ## Operational Notes
 
-- Always enable `verify: true` so corruption is caught at backup time, not at restore time.
+- Enable `validate: true` to run `neo4j-admin backup validate` after each backup, so recoverability issues are surfaced at backup time (on `status.history[].validation`) rather than discovered at restore time.
 - For cloud destinations, set `tempStorage` (PVC for staging) on large databases — without it `neo4j-admin` buffers in the Pod's filesystem.
 - The operator doesn't manage cloud object expiry — configure bucket lifecycle rules to delete old backups.
 - Restore is non-trivial post-incident; rehearse it against a staging cluster at least once.
@@ -1103,6 +1109,7 @@ storage:
 
     # Path 2: Workload Identity annotations on neo4j-backup-sa
     identity:
+      provider: aws | gcp | azure   # required; match the storage provider
       autoCreate:
         annotations:
           <annotation-key>: <annotation-value>
@@ -1140,8 +1147,8 @@ If you prefer to manage the PVC yourself, use `tempPath` instead (points to any 
 
 ```yaml
 options:
-  # Backup type: FULL (default) or DIFF
-  backupType: FULL
+  # Backup type: AUTO (default — FULL first run, DIFF after), FULL, or DIFF
+  backupType: AUTO
 
   # For DIFF backups on CalVer 2025.04+: use latest diff instead of latest full as parent
   preferDiffAsParent: false
@@ -1149,8 +1156,10 @@ options:
   # Compress backup data (recommended)
   compress: true
 
-  # Verify backup integrity after creation
-  verify: true
+  # Validate backup recoverability after creation by running
+  # `neo4j-admin backup validate`. Failures are recorded on
+  # status.history[].validation but do NOT fail the Job.
+  validate: true
 
   # Operator-managed staging PVC for cloud operations (recommended for large databases)
   tempStorage:

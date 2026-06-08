@@ -40,15 +40,15 @@ spec:
 
   # Neo4j memory settings
   config:
-    # Heap memory (25-50% of container memory)
-    server.memory.heap.initial_size: "4g"
-    server.memory.heap.max_size: "4g"
+    # Heap memory (operator default: 60% of container memory for >=4Gi)
+    server.memory.heap.initial_size: "9g"
+    server.memory.heap.max_size: "9g"
 
-    # Page cache (remaining available memory)
-    server.memory.pagecache.size: "8g"
+    # Page cache (operator default: 30% of container memory for >=4Gi)
+    server.memory.pagecache.size: "4g"
 
-    # Transaction state memory
-    db.memory.transaction.total.max: "2g"
+    # Global transaction state memory limit
+    dbms.memory.transaction.total.max: "2g"
 ```
 
 ## Storage Performance Optimization
@@ -88,7 +88,7 @@ spec:
     db.checkpoint.interval.tx: "100000"
 
     # Store files optimization
-    dbms.store.files.preallocate: "true"
+    db.store.files.preallocate: "true"
 ```
 
 ## CPU Performance Optimization
@@ -104,12 +104,11 @@ spec:
       cpu: "8"        # Burst capacity for peak loads
 
   config:
-    # Thread pool optimization
-    dbms.threads.worker_count: "8"           # 2x CPU cores
-    dbms.threads.scheduler_threads: "2"      # 0.5x CPU cores
+    # Worker thread pool (Neo4j 5.26+: server.* namespace)
+    server.threads.worker_count: "8"           # 2x CPU cores
 
-    # Query execution threads
-    db.query.parallel.execution.threads: "4"  # 1x CPU cores
+    # Bolt connection thread pool
+    server.bolt.thread_pool_max_size: "400"
 ```
 
 ### JVM Performance Tuning
@@ -117,14 +116,14 @@ spec:
 ```yaml
 spec:
   config:
-    # GC optimization for Neo4j
+    # GC optimization for Neo4j (JDK 17/21 — these flags are merged with the
+    # operator's built-in G1GC tuning, not replaced)
     server.jvm.additional: >
       -XX:+UseG1GC
-      -XX:+UnlockExperimentalVMOptions
-      -XX:+UseCGroupMemoryLimitForHeap
       -XX:MaxGCPauseMillis=200
       -XX:G1HeapRegionSize=32m
-      -XX:+DisableExplicitGC
+      -XX:+ParallelRefProcEnabled
+      -XX:+UseStringDeduplication
 ```
 
 ## Network and Discovery Performance
@@ -137,27 +136,25 @@ spec:
     # Cluster communication timeouts (Neo4j 5.26+)
     dbms.cluster.raft.election_timeout: "7s"
     dbms.cluster.raft.leader_failure_detection_window: "30s"
-
-    # Discovery resolution timeout (operator uses LIST discovery; no K8S API polling)
-    dbms.cluster.discovery.resolution_timeout: "30s"
-
-    # Network buffer sizes
-    dbms.netty.channel.send_buffer_size: "32k"
-    dbms.netty.channel.recv_buffer_size: "32k"
 ```
+
+> **Note:** Discovery settings (resolver type, endpoints, resolution timeout)
+> are managed entirely by the operator (LIST discovery with static pod FQDNs).
+> The config validator rejects user overrides such as
+> `dbms.cluster.discovery.v2.endpoints`, `dbms.cluster.endpoints`, or
+> `dbms.cluster.discovery.resolver_type`.
 
 ### Service Configuration for Performance
 
 ```yaml
 spec:
-  services:
-    client:
-      type: ClusterIP
-      annotations:
-        # AWS Load Balancer optimization
-        service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout: "3600"
-        # GCP optimization
-        cloud.google.com/backend-config: '{"ports": {"7687":"neo4j-backend-config"}}'
+  service:
+    type: ClusterIP
+    annotations:
+      # AWS Load Balancer optimization
+      service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout: "3600"
+      # GCP optimization
+      cloud.google.com/backend-config: '{"ports": {"7687":"neo4j-backend-config"}}'
 ```
 
 ## Database-Level Performance Optimization
@@ -187,17 +184,16 @@ spec:
 ```yaml
 spec:
   config:
-    # Query performance settings
+    # Query logging settings
     db.logs.query.enabled: "INFO"
     db.logs.query.threshold: "1s"
     db.logs.query.parameter_logging_enabled: "true"
 
-    # Query cache settings
-    db.query_cache_size: "1000"
-    db.query.timeout: "120s"
+    # Query cache size — entries per database (Neo4j 5.26+)
+    server.memory.query_cache.per_db_cache_num_entries: "1000"
 
-    # Result streaming
-    db.query.result.streaming.enabled: "true"
+    # Transaction timeout (kills long-running transactions)
+    dbms.transaction.timeout: "120s"
 ```
 
 ## Monitoring and Performance Analysis
@@ -281,9 +277,10 @@ spec:
 
 2. **Slow Query Performance**:
    ```bash
-   # Analyze slow queries
+   # Inspect currently-running queries (slow ones surface here; the query log
+   # configured via db.logs.query.* captures completed slow queries on disk)
    kubectl exec cluster-server-0 -- cypher-shell -u neo4j -p password \
-     "CALL db.logs.query.list() YIELD time, query, elapsedTimeMillis ORDER BY elapsedTimeMillis DESC LIMIT 10"
+     "SHOW TRANSACTIONS YIELD transactionId, currentQuery, elapsedTime ORDER BY elapsedTime DESC LIMIT 10"
    ```
 
 3. **Storage I/O Bottlenecks**:
@@ -294,7 +291,7 @@ spec:
 
 ### Performance Optimization Checklist
 
-- [ ] **Memory**: Heap size is 25-50% of container memory
+- [ ] **Memory**: Heap ~60% / page cache ~30% of container memory (operator default for >=4Gi), leaving a system reserve
 - [ ] **Storage**: Using SSD storage class with adequate IOPS
 - [ ] **CPU**: Request/limit ratio allows for burst capacity
 - [ ] **Network**: Cluster communication timeouts optimized
@@ -322,9 +319,9 @@ spec:
         topologyKey: kubernetes.io/hostname
 
   config:
-    # Cross-zone communication optimization (Neo4j 5.26+)
-    dbms.cluster.discovery.v2.refresh_rate: "5m"
-    dbms.cluster.discovery.resolution_timeout: "60s"
+    # Cross-zone communication tuning (Neo4j 5.26+). Discovery resolution itself
+    # is operator-managed; tune RAFT failure detection to tolerate cross-zone latency.
+    dbms.cluster.raft.leader_failure_detection_window: "60s"
 ```
 
 ### Resource Quotas and Limits

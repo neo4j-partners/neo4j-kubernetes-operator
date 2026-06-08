@@ -61,6 +61,7 @@ kubectl get events -A --field-selector involvedObject.apiVersion=neo4j.neo4j.com
 | `RestoreStarted` | Normal | Restore operation has started |
 | `RestoreCompleted` | Normal | Restore operation completed |
 | `RestoreFailed` | Warning | Restore operation failed |
+| `RestoreFromChainParent` | Warning | `source.backupRef` points at a FULL+DIFF chain parent; the restore seeds from its latest full snapshot, not the latest chain state |
 | `DatabaseCreateFailed` | Warning | Database creation failed during a restore operation |
 
 ### Databases
@@ -112,6 +113,7 @@ kubectl get events -A --field-selector involvedObject.apiVersion=neo4j.neo4j.com
 | `StorageExpansionStarted` | Normal | PVC expansion has begun after detecting `spec.storage.size` increase |
 | `StorageExpansionCompleted` | Normal | All PVCs expanded and StatefulSet recreated successfully |
 | `StorageExpansionFailed` | Warning | Expansion failed (non-expandable StorageClass, shrink attempt, or patch error) |
+| `StorageClassNotFound` | Warning | `spec.storage.className` references a StorageClass that does not exist in the cluster |
 
 ### Sharded Databases
 

@@ -150,9 +150,6 @@ If the operator can't find PVCs to expand, check that PVCs have the expected lab
 # Server PVCs
 kubectl get pvc -l neo4j.com/cluster=my-cluster -l neo4j.com/role=server
 
-# Backup PVCs
-kubectl get pvc -l neo4j.com/cluster=my-cluster -l neo4j.com/role=backup
-
 # Standalone PVCs
 kubectl get pvc -l neo4j.com/cluster=my-standalone -l neo4j.com/role=data
 ```

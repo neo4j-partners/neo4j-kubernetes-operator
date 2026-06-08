@@ -50,9 +50,15 @@ Configure the upgrade strategy with `spec.upgradeStrategy`:
 spec:
   upgradeStrategy:
     strategy: RollingUpgrade
-    upgradeTimeout: 30m      # per-pod Kubernetes readiness timeout (default 30m)
-    healthCheckTimeout: 5m   # per-pod Neo4j cluster-membership timeout (default 5m)
+    preUpgradeHealthCheck: true   # validate cluster health before upgrading (default true)
+    autoPauseOnFailure: true      # pause the upgrade for manual intervention if a check fails (default true)
+    upgradeTimeout: 30m           # per-pod Kubernetes readiness timeout (default 30m)
+    healthCheckTimeout: 5m        # per-pod Neo4j cluster-membership timeout (default 5m)
+    stabilizationTimeout: 3m      # post-upgrade cluster-stabilization wait (default 3m)
+    postUpgradeHealthCheck: true  # validate cluster health after upgrade (default true)
 ```
+
+When `preUpgradeHealthCheck` is enabled, the operator verifies connectivity to Neo4j before changing the image. If the check fails and `autoPauseOnFailure` is `true`, the upgrade is blocked until you intervene rather than proceeding against an unhealthy deployment.
 
 For the full field reference see the [API Reference](../../api_reference/neo4jenterprisecluster.md).
 
@@ -61,7 +67,7 @@ For the full field reference see the [API Reference](../../api_reference/neo4jen
 | From | To | Supported |
 |---|---|---|
 | SemVer 5.26.x | SemVer 5.26.y (patch only) | ✅ |
-| SemVer 5.x | CalVer 2025.y | ✅ |
-| CalVer 2025.x | CalVer 2025.y (y > x) | ✅ |
+| SemVer 5.26.x | CalVer 2025.y / 2026.y | ✅ (only 5.26.x — the last SemVer LTS — may cross to CalVer) |
+| CalVer 2025.x | CalVer 2025.y / 2026.y (newer minor, patch, or year) | ✅ |
 | CalVer 2025.x | SemVer 5.y | ❌ (downgrade) |
 | Any | earlier version | ❌ (downgrade) |

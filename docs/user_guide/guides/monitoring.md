@@ -10,7 +10,8 @@ The operator uses Neo4j's built-in Prometheus endpoint (see https://neo4j.com/do
 - Binds it to `0.0.0.0:2004` (safe in Kubernetes — pod network isolation prevents external access).
 - Exposes port `2004` on the Neo4j container.
 - Adds `prometheus.io/*` annotations for scrape-based setups.
-- Disables CSV metrics export (`server.metrics.csv.enabled=false`) to avoid unnecessary disk usage.
+
+Independently of `spec.monitoring`, the operator always disables the JMX and CSV metrics reporters (`server.metrics.jmx.enabled=false`, `server.metrics.csv.enabled=false`) on every Neo4j deployment — JMX is an unauthenticated management surface and CSV writes one file per metric into the pod's ephemeral filesystem. These hardening defaults are emitted regardless of whether monitoring is enabled; re-enable via `spec.config` if you genuinely need them.
 
 ### Cluster example
 
@@ -294,6 +295,11 @@ kubectl get neo4jenterprisecluster <name> \
 | `status.diagnostics.databases[].status` | string | Current status: `online`, `offline`, `quarantined` |
 | `status.diagnostics.databases[].requestedStatus` | string | Desired status |
 | `status.diagnostics.databases[].role` | string | Role on last-contacted server: `primary`, `secondary` |
+| `status.diagnostics.databases[].default` | bool | True for the default database |
+| `status.diagnostics.users[]` | Array | Bounded summary of users from `SHOW USERS` (user, roles, suspended, homeDatabase) |
+| `status.diagnostics.userCount` | int | Total users observed, even when the `users` list is truncated |
+| `status.diagnostics.roles[]` | Array | Bounded summary of roles from `SHOW ROLES` (role, immutable) |
+| `status.diagnostics.roleCount` | int | Total roles observed, even when the `roles` list is truncated |
 | `status.diagnostics.lastCollected` | RFC3339 | Timestamp of last successful collection |
 | `status.diagnostics.collectionError` | string | Error from last collection attempt; empty on success |
 
