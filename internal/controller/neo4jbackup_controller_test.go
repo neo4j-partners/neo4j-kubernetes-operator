@@ -35,7 +35,14 @@ import (
 
 var _ = Describe("Neo4jBackup Controller", func() {
 	const (
-		timeout  = time.Second * 30
+		// 60s (not 30s): these specs share one envtest manager with the
+		// cluster/standalone/restore suites, whose reconcilers continuously
+		// retry Neo4j connectivity (there's no real Neo4j in envtest) and
+		// saturate the shared work queue. Under that load a reconcile that
+		// normally creates e.g. neo4j-backup-sa in <1s can miss a 30s window
+		// — a CI-only flake, never a logic failure. 60s absorbs the queue
+		// contention while staying well under the suite's per-test budget.
+		timeout  = time.Second * 60
 		interval = time.Millisecond * 250
 	)
 
