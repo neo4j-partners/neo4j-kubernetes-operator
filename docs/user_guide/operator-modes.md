@@ -34,7 +34,7 @@ CLI flags and Helm values always override these defaults.
 --cache-strategy=standard|lazy|selective|on-demand|none
 --ultra-fast
 --skip-cache-wait
---controllers=cluster,standalone,database,backup,restore,plugin,shardeddatabase,authrule
+--controllers=cluster,standalone,database,backup,restore,plugin,shardeddatabase,user,role,rolebinding,authrule
 --zap-log-level=debug|info|warn|error|dpanic|panic|fatal
 ```
 
@@ -126,7 +126,7 @@ Explicit flags and Helm values always override the mode defaults.
 - **Health bind**: `:8081` (unless overridden)
 - **Cache strategy**: `on-demand` (unless overridden)
 - **Leader election**: off by default (recommended for HA)
-- **Controllers loaded**: cluster, standalone, database, backup, restore, plugin, shardeddatabase
+- **Controllers loaded**: all controllers — cluster, standalone, database, backup, restore, plugin, shardeddatabase, user, role, rolebinding, authrule
 
 **Helm defaults that matter:**
 - `leaderElection.enabled: true` (passes `--leader-elect=true`)
@@ -148,7 +148,7 @@ Development mode is optimized for faster iteration, but it **must run in-cluster
 - **Cache strategy**: `on-demand` (or `none` if `--ultra-fast`)
 - **skip-cache-wait**: auto-enabled if not explicitly set
 - **API rate limits**: QPS 100, Burst 200
-- **Controllers loaded**: cluster, standalone, database, backup, restore, plugin, shardeddatabase
+- **Controllers loaded**: defaults to all controllers (cluster, standalone, database, backup, restore, plugin, shardeddatabase, user, role, rolebinding, authrule); narrow with `--controllers`
 
 Helm always sets `--metrics-bind-address` and `--health-probe-bind-address`, so the dev-mode defaults above only apply when you run the binary directly or override those values.
 
@@ -313,8 +313,12 @@ Valid controller names:
 - `restore`
 - `plugin`
 - `shardeddatabase`
+- `user`
+- `role`
+- `rolebinding`
+- `authrule`
 
-The default dev list includes `shardeddatabase`; override with `--controllers` to narrow scope.
+The default dev `--controllers` value is the full list above; override with `--controllers` to narrow scope.
 
 ## Logging and Metrics
 

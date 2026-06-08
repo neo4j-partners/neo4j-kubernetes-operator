@@ -138,11 +138,11 @@ For production workloads requiring high availability and clustering:
 2.  **Deploy the cluster:**
 
     ```bash
-    # For production (with TLS)
+    # Five-server production cluster (TLS via cert-manager)
     kubectl apply -f examples/clusters/multi-server-cluster.yaml
 
-    # For testing (TLS disabled)
-    kubectl apply -f examples/clusters/three-node-cluster.yaml
+    # Three-server cluster, no TLS (simplest for local testing)
+    kubectl apply -f examples/clusters/three-node-simple.yaml
     ```
 
 3.  **Monitor deployment (3-5 minutes expected):**
@@ -193,8 +193,8 @@ kubectl port-forward service/standalone-neo4j-service 7474:7474 7687:7687
 # For minimal cluster
 kubectl port-forward service/minimal-cluster-client 7474:7474 7687:7687
 
-# For multi-server cluster
-kubectl port-forward service/multi-server-cluster-client 7474:7474 7687:7687
+# For multi-server cluster (multi-server-cluster.yaml deploys a CR named "multi-primary-cluster")
+kubectl port-forward service/multi-primary-cluster-client 7474:7474 7687:7687
 
 # For your custom cluster (replace with your cluster name)
 kubectl port-forward service/YOUR-CLUSTER-NAME-client 7474:7474 7687:7687

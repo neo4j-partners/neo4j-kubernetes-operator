@@ -22,7 +22,7 @@ helm install neo4j-operator neo4j-operator/neo4j-operator \
 **Pin to a specific version**:
 ```bash
 helm install neo4j-operator neo4j-operator/neo4j-operator \
-  --version 1.8.0 \
+  --version 1.10.2 \
   --namespace neo4j-operator-system \
   --create-namespace
 ```
@@ -56,19 +56,19 @@ Available for all releases (including pre-v1.8.0). Helm 3.8 or later is required
 
 ```bash
 helm install neo4j-operator oci://ghcr.io/neo4j-partners/charts/neo4j-operator \
-  --version 1.8.0 \
+  --version 1.10.2 \
   --namespace neo4j-operator-system \
   --create-namespace
 ```
 
-Use the chart version without the `v` prefix (for example, `1.8.0`).
+Use the chart version without the `v` prefix (for example, `1.10.2`).
 
 ### Method 3: Quick Install from GitHub Release
 
 For environments where running `helm` is inconvenient, every release also publishes a single kubectl-applyable YAML bundle:
 
 ```bash
-RELEASE_VERSION=v1.8.0  # Replace with desired version
+RELEASE_VERSION=v1.10.2  # Replace with desired version
 
 kubectl apply -f https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases/download/${RELEASE_VERSION}/neo4j-kubernetes-operator-complete.yaml
 ```
@@ -208,7 +208,6 @@ After cloning the repository, you have access to these make targets:
 | `make install` | Install CRDs into your cluster |
 | `make deploy-prod` | Deploy operator with production configuration |
 | `make deploy-dev` | Deploy with development configuration |
-| `make deploy-prod` | Deploy with production configuration |
 | `make undeploy-prod/undeploy-dev` | Remove operator deployment |
 | `make uninstall` | Remove CRDs (also removes all Neo4j instances) |
 
@@ -216,8 +215,7 @@ After cloning the repository, you have access to these make targets:
 | Target | Description |
 |--------|-------------|
 | `make dev-cluster` | Create Kind development cluster |
-| `make operator-setup` | Deploy operator in-cluster (required for proper DNS) |
-| `make operator-setup` | Deploy operator to existing cluster |
+| `make operator-setup` | Deploy operator in-cluster to an existing Kind cluster (required for proper DNS) |
 | `make test-unit` | Run unit tests |
 | `make test-integration` | Run integration tests |
 
@@ -294,7 +292,7 @@ kubectl port-forward svc/standalone-neo4j-service 7474:7474 7687:7687
 helm uninstall neo4j-operator --namespace neo4j-operator-system
 
 # kubectl-apply install — Method 3
-kubectl delete -f https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases/download/v1.10.0/neo4j-kubernetes-operator-complete.yaml
+kubectl delete -f https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases/download/v1.10.2/neo4j-kubernetes-operator-complete.yaml
 
 # git-clone + make install — Method 5
 make undeploy-prod   # or undeploy-dev
