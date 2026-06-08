@@ -12,9 +12,9 @@ If you've previously bootstrapped users by `kubectl exec`-ing into a pod and run
 | `Neo4jRole` | role existence, privileges (GRANT/DENY) on the role | `CREATE/DROP ROLE`, `GRANT/DENY/REVOKE` |
 | `Neo4jRoleBinding` | role grants for users the operator does NOT own (SSO/LDAP first-login users) | `GRANT/REVOKE ROLE` only |
 
-**Two CRDs, one design rule:** privileges live on `Neo4jRole`, not on `Neo4jUser`. Putting privileges on users would re-implement Neo4j's RBAC inside-out and create merge conflicts when two CRs touch the same role. Always model "what can be done" as a role and "who can do it" as a user-to-role binding.
+**Three CRDs, one design rule:** privileges live on `Neo4jRole`, not on `Neo4jUser` or `Neo4jRoleBinding`. Putting privileges on users would re-implement Neo4j's RBAC inside-out and create merge conflicts when two CRs touch the same role. Always model "what can be done" as a role and "who can do it" as a user-to-role binding.
 
-Both CRDs are **namespace-scoped** and reference their target Neo4j cluster via `spec.clusterRef` (must be in the same namespace). See [Cluster vs namespace scope](#cluster-vs-namespace-scope) below for the design rationale.
+All three CRDs are **namespace-scoped** and reference their target Neo4j cluster via `spec.clusterRef` (must be in the same namespace). See [Cluster vs namespace scope](#cluster-vs-namespace-scope) below for the design rationale.
 
 ## Prerequisites
 
@@ -137,7 +137,7 @@ spec:
   accountStatus: suspended
 ```
 
-For native users this revokes all role assignments client-side; reactivating restores them.
+The operator issues `ALTER USER ... SET STATUS SUSPENDED`; the user can no longer authenticate. Role grants in `spec.roles` continue to be reconciled (they are not revoked). Setting `accountStatus: active` issues `SET STATUS ACTIVE` and the user can authenticate again.
 
 ### Setting a home database
 
@@ -362,7 +362,7 @@ The user controller watches `Neo4jRole` resources and re-reconciles bound users 
 
 ## Cluster vs namespace scope
 
-Both CRDs are **namespace-scoped** with same-namespace `clusterRef` only. This matches the existing pattern of `Neo4jDatabase`, `Neo4jBackup`, `Neo4jPlugin`. It means:
+All three CRDs are **namespace-scoped** with same-namespace `clusterRef` only. This matches the existing pattern of `Neo4jDatabase`, `Neo4jBackup`, `Neo4jPlugin`. It means:
 
 - A team that owns a namespace owns its Neo4j cluster, users, and roles.
 - Standard `Role` + `RoleBinding` patterns apply — no `ClusterRole` required.

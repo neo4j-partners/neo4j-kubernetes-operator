@@ -656,9 +656,11 @@ The emitted policy:
 | 7474  | any pod                                            | HTTP — application clients |
 | 7473  | any pod                                            | HTTPS — application clients |
 | 7687  | any pod                                            | Bolt — application clients |
-| 6000  | pods labelled `neo4j.com/cluster: <cluster>`       | V2 discovery + tcp-tx — peers only |
+| 2004  | any pod                                            | Prometheus metrics — scrapers |
+| 6000  | pods labelled `neo4j.com/cluster: <cluster>`       | V2 discovery — peers only |
 | 7000  | pods labelled `neo4j.com/cluster: <cluster>`       | RAFT — peers only |
 | 7688  | pods labelled `neo4j.com/cluster: <cluster>`       | Cluster routing — peers only |
+| 7689  | pods labelled `neo4j.com/cluster: <cluster>`       | Transaction streaming / catchup — peers only |
 | 6362  | operator-managed backup pods only                  | Backup — only Neo4jBackup-spawned Jobs |
 
 Standalone deployments get the same shape minus the peer-only ports
@@ -1133,7 +1135,7 @@ For GDPR / PCI DSS / HIPAA setups, combine:
 - **Authentication** — set `dbms.security.auth_minimum_password_length` and `dbms.security.auth_cache_ttl` via `spec.config`, or use OIDC/LDAP (see [Authentication Configuration](#authentication-configuration)).
 - **Retention** — `db.transaction.logs.rotation.retention_policy` and `db.logs.query.*` via `spec.config`. Backup retention is governed by `Neo4jBackup.spec.retention`.
 
-> **TLS version pinning is not user-configurable.** The operator owns the `dbms.ssl.policy.*` surface end-to-end (the validator rejects any `dbms.ssl.policy.*` key in `spec.config`). The cluster policy is emitted with `tls_versions=TLSv1.3,TLSv1.2`; bolt/https policies inherit Neo4j defaults. For TLS 1.3-only or custom cipher allowlists, file an issue — there is no override today.
+> **TLS version pinning is not user-configurable.** The operator owns the `dbms.ssl.policy.*` surface end-to-end (the validator rejects any `dbms.ssl.policy.*` key in `spec.config`). All three policies (bolt, https, cluster) are emitted with `tls_versions=TLSv1.3,TLSv1.2`. For TLS 1.3-only or custom cipher allowlists, file an issue — there is no override today.
 
 ## Conformance Policies (Kyverno)
 
