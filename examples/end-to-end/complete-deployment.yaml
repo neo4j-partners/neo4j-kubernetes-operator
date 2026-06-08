@@ -17,6 +17,7 @@ metadata:
 # would re-apply it on every run and OVERWRITE the password with the placeholder,
 # silently clobbering a real credential you set earlier. Create it out-of-band:
 #
+#   kubectl create namespace neo4j-production   # this manifest also defines it; create it first
 #   kubectl create secret generic neo4j-admin-secret \
 #     --namespace neo4j-production \
 #     --from-literal=username=neo4j \

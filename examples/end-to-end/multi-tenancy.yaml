@@ -19,6 +19,7 @@ metadata:
 # would re-apply it on every run and OVERWRITE the password with the placeholder,
 # silently clobbering a real credential you set earlier. Create it out-of-band:
 #
+#   kubectl create namespace neo4j-multi-tenant   # this manifest also defines it; create it first
 #   kubectl create secret generic cluster-admin-secret \
 #     --namespace neo4j-multi-tenant \
 #     --from-literal=username=neo4j \
@@ -256,7 +257,7 @@ spec:
     bucket: tenant-backups
     path: "tenant-a/daily"
     cloud:
-      credentialsSecret: tenant-a-s3-credentials
+      credentialsSecretRef: tenant-a-s3-credentials
 
   retention:
     maxAge: "30d"
@@ -283,7 +284,7 @@ spec:
     bucket: tenant-backups
     path: "tenant-b/hourly"
     cloud:
-      credentialsSecret: tenant-b-s3-credentials
+      credentialsSecretRef: tenant-b-s3-credentials
 
   options:
     backupType: "DIFF"  # Differential for frequent backups
@@ -314,7 +315,7 @@ spec:
     bucket: tenant-backups
     path: "tenant-c/weekly"
     cloud:
-      credentialsSecret: tenant-c-s3-credentials
+      credentialsSecretRef: tenant-c-s3-credentials
 
   options:
     backupType: "FULL"

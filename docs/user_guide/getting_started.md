@@ -273,7 +273,7 @@ Ready-to-apply YAML manifests for every CRD live under [`examples/`](https://git
 | [`standalone/`](https://github.com/neo4j-partners/neo4j-kubernetes-operator/tree/main/examples/standalone) | Single-node `Neo4jEnterpriseStandalone` examples |
 | [`clusters/`](https://github.com/neo4j-partners/neo4j-kubernetes-operator/tree/main/examples/clusters) | `Neo4jEnterpriseCluster` topologies (minimal, prod, TLS, fleet-managed) |
 | [`databases/`](https://github.com/neo4j-partners/neo4j-kubernetes-operator/tree/main/examples/databases) | `Neo4jDatabase` examples (basic, seed URI, custom topology) |
-| [`users-and-roles/`](https://github.com/neo4j-partners/neo4j-kubernetes-operator/tree/main/examples/users-and-roles) | `Neo4jUser`, `Neo4jRole`, `Neo4jRoleBinding`, `Neo4jAuthRule` |
+| [`users-roles/`](https://github.com/neo4j-partners/neo4j-kubernetes-operator/tree/main/examples/users-roles) | `Neo4jUser`, `Neo4jRole`, `Neo4jRoleBinding`, `Neo4jAuthRule` |
 | [`plugins/`](https://github.com/neo4j-partners/neo4j-kubernetes-operator/tree/main/examples/plugins) | `Neo4jPlugin` examples (APOC, GDS, Bloom, GenAI, …) |
 | [`backup-restore/`](https://github.com/neo4j-partners/neo4j-kubernetes-operator/tree/main/examples/backup-restore) | `Neo4jBackup`, `Neo4jRestore` (PVC, S3, GCS, Azure, PITR) |
 | [`property_sharding/`](https://github.com/neo4j-partners/neo4j-kubernetes-operator/tree/main/examples/property_sharding) | `Neo4jShardedDatabase` setups |
