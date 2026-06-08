@@ -1,22 +1,23 @@
 # Testing Guide
 
-This guide explains the comprehensive testing strategy for the Neo4j Enterprise Operator, covering unit tests, integration tests, and end-to-end testing practices.
+This guide explains the comprehensive testing strategy for the Neo4j Enterprise Operator, covering unit tests and integration tests.
 
 ## Testing Strategy Overview
 
 The operator uses a multi-layered testing approach:
 
-- **Unit Tests**: Fast tests for individual functions and components
-- **Integration Tests**: Full workflow testing with Kubernetes API server
-- **End-to-End Tests**: Real cluster testing with Kind clusters
+- **Unit Tests**: Fast tests for individual functions and components (envtest for the controller suite, no cluster otherwise)
+- **Integration Tests**: Full workflow testing against a real Kind cluster with the operator deployed
 - **Performance Tests**: Reconciliation efficiency and resource usage validation
+
+(There is no separate end-to-end suite — the dedicated E2E targets were removed; integration tests against Kind cover real-cluster behavior.)
 
 ## Test Infrastructure
 
 ### Testing Framework
 - **Ginkgo/Gomega**: BDD-style testing framework for integration tests
-- **Envtest**: Kubernetes API server for integration testing
-- **Kind**: Kubernetes in Docker for real cluster testing
+- **Envtest**: Kubernetes API server for the unit-level controller suite (`internal/controller/`)
+- **Kind**: Kubernetes in Docker — the only supported cluster for integration tests (no minikube/k3s)
 - **Go Testing**: Standard Go testing for unit tests
 
 ### Test Environments
@@ -95,7 +96,7 @@ func TestGetStatefulSetName(t *testing.T) {
 
 ## Integration Tests
 
-Integration tests use envtest to provide a real Kubernetes API server without requiring a full cluster.
+Integration tests run against a real Kind cluster with the operator deployed. The suite connects to an existing cluster (`ctrl.GetConfig()`) rather than spinning up envtest — `make test-integration` creates the `neo4j-operator-test` cluster, builds and loads the operator image, and deploys it in production mode to `neo4j-operator-system` before running the Ginkgo suite. (Envtest is used only by the unit-level controller suite under `internal/controller/`.)
 
 ### Test Cluster Management
 
@@ -397,9 +398,10 @@ Test resources should use predictable naming:
 // Cluster naming
 clusterName := "test-cluster-" + unique-suffix
 
-// Expected StatefulSet names (server-based architecture)
+// Expected StatefulSet name (server-based architecture)
 expectedServerSts := clusterName + "-server"
-expectedBackupSts := clusterName + "-backup"
+// NOTE: there is no centralized backup StatefulSet — backups are Job-per-Neo4jBackup-CR
+// (one-shot Job name = <backup>-backup). The legacy <cluster>-backup StatefulSet was removed.
 
 // Standalone naming
 standaloneName := "test-standalone-" + unique-suffix
@@ -611,7 +613,6 @@ go tool cover -html=coverage.out
 ### Coverage Goals
 - **Unit Tests**: >80% coverage for controller logic
 - **Integration Tests**: All major workflows covered
-- **E2E Tests**: Critical user journeys verified
 
 ### Quality Checks
 

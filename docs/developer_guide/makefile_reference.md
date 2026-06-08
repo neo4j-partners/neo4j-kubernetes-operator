@@ -66,13 +66,18 @@ The Makefile is organized into logical categories:
 ## General Targets
 
 ### `make help`
-**Description**: Display comprehensive help with all available targets
+**Description**: Display a curated "Getting Started" list of the most common targets (`dev-up`, `dev-down`, `deploy-dev-local`, `test-unit`, `test-one`, `smoke-test`, `dev-watch`, `operator-logs`). Run `make help-all` for the complete list.
 **Usage**: `make help`
 **Dependencies**: None
 **Example**:
 ```bash
 make help
 ```
+
+### `make help-all`
+**Description**: Display every available target, grouped by `##@` category headers, with the inline `##` description for each.
+**Usage**: `make help-all`
+**Dependencies**: None
 
 ### `make all`
 **Description**: Default target - builds the operator binary
@@ -177,7 +182,10 @@ Chains: `manifests` → `generate` → `sync-kustomize` → `sync-editor-viewer-
 **Why**: the CSV's `customresourcedefinitions.owned` list is hand-curated (display names, descriptions need human input) — it's easy to forget to register a new CRD, which would silently ship a broken OperatorHub bundle.
 
 ### `make helm-lint`, `make helm-template`, `make helm-package`
-Standard helm chart targets. `helm-package` depends on the helm syncs, so packaging never ships stale rules or annotations.
+Standard helm chart targets. `helm-package` depends on `helm-sync-crds`, `helm-sync-rbac`, and `helm-sync-artifacthub-crds`, so packaging never ships stale rules or annotations. `helm-template` renders the chart into the `neo4j-operator-system` namespace.
+
+### `make helm-install`, `make helm-upgrade`, `make helm-uninstall`, `make helm-install-test`, `make helm-docs`
+Helm lifecycle targets. `helm-install` installs the chart as release `neo4j-operator` into `neo4j-operator-system` (with `--create-namespace`); `helm-upgrade` / `helm-uninstall` manage that release. `helm-install-test` runs `scripts/helm-install-test.sh` to validate a chart install in the Kind test cluster. `helm-docs` regenerates chart docs via `helm-docs` if installed.
 
 ### `make bundle`
 **Description**: Generate the OperatorHub bundle (CRDs, CSV, ClusterRoles, metadata) under `bundle/`. Also runs `operator-sdk bundle validate`.
@@ -316,6 +324,17 @@ make test-integration-ci-full
 # ⚠️  Full test suite - use with caution in CI
 # 🔋 High resource consumption
 ```
+
+#### `make test-one`
+**Description**: Run a single integration test by name (Ginkgo `--focus`). Exports the kubeconfig for `neo4j-operator-test` (falling back to `neo4j-operator-dev`), then runs `ginkgo run --focus "$TEST" --timeout=300s --procs=1 -v ./test/integration/...`.
+**Usage**: `make test-one TEST="should create standalone"`
+**Dependencies**: `ginkgo`
+**Notes**: assumes a cluster + operator already exist; errors out if `TEST` is empty.
+
+#### `make smoke-test`
+**Description**: Deploy a minimal standalone Neo4j instance (`hack/smoke-test-standalone.yaml`) and verify it reaches `Ready` within 5 minutes, then clean up the instance and the `neo4j-smoke-secret`.
+**Usage**: `make smoke-test`
+**Notes**: assumes a cluster + operator already exist.
 
 ### Test Environment Management
 
@@ -475,11 +494,12 @@ make build
 **Description**: Build Docker image with operator
 **Usage**: `make docker-build [IMG=<image-name>]`
 **Dependencies**: None
-**Default Image**: `controller:latest`
+**Default Image**: `ghcr.io/neo4j-partners/neo4j-kubernetes-operator:latest`
+**Notes**: Passes `VERSION`, `BUILD_DATE`, and `VCS_REF` build-args into the Dockerfile.
 **Example**:
 ```bash
 make docker-build
-# Builds controller:latest image
+# Builds ghcr.io/neo4j-partners/neo4j-kubernetes-operator:latest image
 
 make docker-build IMG=my-operator:v1.0
 # Builds custom image name
@@ -593,9 +613,9 @@ make deploy-prod-local
 ```
 
 #### `make deploy-dev-registry`
-**Description**: Deploy development configuration using registry image
+**Description**: Deploy development configuration using registry image (applies `config/overlays/dev`)
 **Usage**: `make deploy-dev-registry`
-**Dependencies**: `manifests`, `kustomize`
+**Dependencies**: `manifests`, `kustomize`, `check-rbac`
 **Image Source**: Container registry (requires authentication)
 **Example**:
 ```bash
@@ -605,9 +625,9 @@ make deploy-dev-registry
 ```
 
 #### `make deploy-prod-registry`
-**Description**: Deploy production configuration using registry image
+**Description**: Deploy production configuration using registry image (applies `config/overlays/prod-registry`)
 **Usage**: `make deploy-prod-registry`
-**Dependencies**: `manifests`, `kustomize`
+**Dependencies**: `manifests`, `kustomize`, `check-rbac`
 **Image Source**: Container registry (requires authentication)
 **Example**:
 ```bash
@@ -615,6 +635,15 @@ make deploy-prod-registry
 # 📥 Pulls from ghcr.io registry
 # 🚀 Deploys production configuration
 ```
+
+#### `make deploy-namespace-scoped`
+**Description**: Deploy the controller with namespace-scoped permissions only (no ClusterRole). Applies `config/overlays/namespace-scoped`. Limited functionality — only manages resources within the `neo4j-operator-dev` namespace.
+**Usage**: `make deploy-namespace-scoped`
+**Dependencies**: `manifests`, `kustomize`
+
+#### `make check-rbac`
+**Description**: Check and set up RBAC permissions if needed (runs `scripts/setup-rbac.sh`). A dependency of the registry deploy targets.
+**Usage**: `make check-rbac`
 
 ### Deployment Removal
 
@@ -638,9 +667,30 @@ make undeploy-prod
 # Keeps CRDs and instances
 ```
 
+#### `make undeploy-namespace-scoped`
+**Description**: Remove the namespace-scoped controller deployment (deletes `config/overlays/namespace-scoped`).
+**Usage**: `make undeploy-namespace-scoped`
+**Dependencies**: `kustomize`
+
 ## Development Environment
 
 > **Mandatory**: This project exclusively uses Kind for development. Install Kind before using development targets.
+
+### One-Command Bootstrap
+
+#### `make check-prereqs`
+**Description**: Verify all required tools are installed (`go`, `docker` + running daemon, `kubectl`, `kind`, `make`). Fails non-zero listing any missing tool with install hints.
+**Usage**: `make check-prereqs`
+
+#### `make dev-up`
+**Description**: Bootstrap the complete dev environment in one command. Chains `check-prereqs` → `dev-cluster` → `install` (CRDs) → `deploy-dev-local`, then waits for the operator rollout (tries `neo4j-operator-dev`, falls back to `neo4j-operator-system`).
+**Usage**: `make dev-up`
+**Dependencies**: `check-prereqs`
+**Cluster Name**: `neo4j-operator-dev`
+
+#### `make dev-down`
+**Description**: Tear down the complete dev environment (delegates to `dev-destroy`: runs `hack/cleanup-dev.sh` and deletes the `neo4j-operator-dev` cluster).
+**Usage**: `make dev-down`
 
 ### Cluster Management
 
@@ -768,6 +818,11 @@ make operator-logs
 # 🔍 Filtered for relevant events
 ```
 
+#### `make dev-watch`
+**Description**: File-watch dev loop — on changes under `api/`, `internal/`, `cmd/` re-runs `manifests generate build deploy-dev-local`. Uses `watchexec` if present, else `fswatch`; errors out with install hints if neither is available.
+**Usage**: `make dev-watch`
+**Prerequisite**: `watchexec` (recommended) or `fswatch`. For a richer loop, use `tilt up` instead.
+
 ### Demo Environment
 
 The demo deploys a TLS-enabled standalone instance and a 3-node TLS-enabled cluster, creates databases with sample data, and demonstrates external access.
@@ -874,6 +929,10 @@ make catalog-push CATALOG_IMG=ghcr.io/my-org/catalog:v1.0
 # Pushes catalog to registry
 ```
 
+#### `make scorecard`
+**Description**: Run `operator-sdk scorecard` checks against the generated bundle.
+**Usage**: `make scorecard`
+
 ### Core Tools
 
 #### `make kustomize`
@@ -937,11 +996,10 @@ make tidy
 **Description**: Clean all build artifacts and temporary files
 **Usage**: `make clean`
 **Removes**:
-- `bin/` directory
-- `tmp/` directory
-- Coverage files
-- Build logs
-- Test artifacts
+- `bin/`, `tmp/`, and `dist/` directories
+- `cover.out`, `coverage.html`
+- `results.sarif`, `build-errors.log`, `.air.toml`
+- Also invokes `make test-cleanup` to remove test artifacts
 
 **Example**:
 ```bash
@@ -953,8 +1011,9 @@ make clean
 ## Environment Variables
 
 ### Image Configuration
-- `IMG`: Container image name (default: `controller:latest`)
-- `VERSION`: Project version (default: `0.0.1`)
+- `IMG`: Container image name (default: `ghcr.io/neo4j-partners/neo4j-kubernetes-operator:latest`)
+- `IMAGE_TAG_BASE`: Registry + image name for bundle/catalog images (default: `ghcr.io/neo4j-partners/neo4j-kubernetes-operator`)
+- `VERSION`: Project version for the bundle (default: `0.0.1`)
 - `CONTAINER_TOOL`: Container tool (default: `docker`)
 
 ### Tool Configuration

@@ -163,7 +163,7 @@ make deploy-prod-registry  # Deploy prod overlay with ghcr.io image
 ```bash
 # Enable debug logging on running operator
 kubectl patch -n neo4j-operator-dev deployment/neo4j-operator-controller-manager \
-  -p '{"spec":{"template":{"spec":{"containers":[{"name":"manager","args":["--leader-elect","--health-probe-bind-address=:8081","--zap-log-level=debug"]}]}}}}'
+  -p '{"spec":{"template":{"spec":{"containers":[{"name":"manager","args":["--mode=dev","--zap-log-level=debug"]}]}}}}'
 ```
 
 ## Development Workflow

@@ -13,8 +13,9 @@ This project includes make targets for building an Operator Lifecycle Manager (O
 make bundle VERSION=0.0.1 IMG=ghcr.io/neo4j-partners/neo4j-kubernetes-operator:latest
 
 # Build and push bundle image
-make bundle-build BUNDLE_IMG=quay.io/your-org/neo4j-operator-bundle:0.0.1
-make bundle-push BUNDLE_IMG=quay.io/your-org/neo4j-operator-bundle:0.0.1
+# (the Makefile default tag is v$(VERSION), e.g. v0.0.1 — keep the `v` prefix)
+make bundle-build BUNDLE_IMG=quay.io/your-org/neo4j-operator-bundle:v0.0.1
+make bundle-push BUNDLE_IMG=quay.io/your-org/neo4j-operator-bundle:v0.0.1
 ```
 
 > **Release flow:** when publishing to OperatorHub, run `make bundle-release`
@@ -27,10 +28,10 @@ make bundle-push BUNDLE_IMG=quay.io/your-org/neo4j-operator-bundle:0.0.1
 
 ```bash
 # Build catalog index containing the bundle
-make catalog-build BUNDLE_IMGS=quay.io/your-org/neo4j-operator-bundle:0.0.1 \
-  CATALOG_IMG=quay.io/your-org/neo4j-operator-catalog:0.0.1
+make catalog-build BUNDLE_IMGS=quay.io/your-org/neo4j-operator-bundle:v0.0.1 \
+  CATALOG_IMG=quay.io/your-org/neo4j-operator-catalog:v0.0.1
 
-make catalog-push CATALOG_IMG=quay.io/your-org/neo4j-operator-catalog:0.0.1
+make catalog-push CATALOG_IMG=quay.io/your-org/neo4j-operator-catalog:v0.0.1
 ```
 
 ## Install via OLM on OpenShift

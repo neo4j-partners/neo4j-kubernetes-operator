@@ -6,7 +6,7 @@ We welcome contributions to the Neo4j Enterprise Operator! This guide provides c
 
 ### Prerequisites
 
-- **Go**: Version 1.24+ for development
+- **Go**: Version 1.26+ for development (CI builds against Go 1.26)
 - **Docker**: Container runtime for building images
 - **kubectl**: Kubernetes CLI tool
 - **kind**: Kubernetes in Docker for local clusters
@@ -39,11 +39,11 @@ make dev-cluster
 make operator-setup
 ```
 
-**Benefits of this setup**:
-- **Fast iteration**: No container rebuilds needed
-- **Debug support**: Full debugger capabilities
-- **Live reloading**: Operator restarts when code changes
-- **Direct logs**: Console output for immediate feedback
+The operator always runs **in-cluster** — never `make dev-run` (DNS resolution fails when the operator runs outside the cluster). For a fast inner loop after code changes:
+- **`make deploy-dev-local`**: Rebuild image + redeploy to Kind (~60s).
+- **`make dev-watch`**: Auto-rebuild and redeploy on file changes.
+- **`tilt up`**: Live reload (~5s, requires Tilt).
+- **Direct logs**: `make operator-logs` or `kubectl logs -n neo4j-operator-dev deployment/neo4j-operator-controller-manager -f`.
 
 ### 3. Make Your Changes
 
@@ -259,7 +259,7 @@ Brief description of changes and motivation.
 ```
 
 #### Review Process
-1. **Automated Checks**: CI/CD runs automated tests and linting
+1. **Automated Checks**: CI runs `check-drift` (regenerate + fail on stale artifacts) and `test-unit` (which includes `fmt` and `vet`). `golangci-lint` is not run in CI — run `make lint` locally before pushing.
 2. **Code Review**: Maintainers review code for quality and design
 3. **Integration Testing**: Changes tested against integration suite
 4. **Documentation Review**: Documentation changes reviewed for accuracy
