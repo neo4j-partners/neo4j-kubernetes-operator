@@ -2851,7 +2851,6 @@ type BackupOptions struct {
 	RemoteAddressResolution bool
 	SkipRecovery            bool
 	AdditionalArgs          []string
-	Encryption              *EncryptionOptions
 }
 
 // RestoreOptions defines options for restore operations
@@ -2859,13 +2858,6 @@ type RestoreOptions struct {
 	Force           bool
 	ReplaceExisting bool
 	AdditionalArgs  []string
-}
-
-// EncryptionOptions defines encryption options for backups
-type EncryptionOptions struct {
-	Enabled   bool
-	KeySecret string
-	Algorithm string
 }
 
 // BackupValidationResult represents the result of backup validation

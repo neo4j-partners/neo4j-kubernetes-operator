@@ -76,26 +76,8 @@ type PITRConfig struct {
 	// Transaction log storage location
 	LogStorage *StorageLocation `json:"logStorage,omitempty"`
 
-	// Transaction log retention period (e.g., "168h" for 7 days)
-	// +kubebuilder:default="168h"
-	LogRetention string `json:"logRetention,omitempty"`
-
-	// Recovery point objective
-	// +kubebuilder:default="1m"
-	RecoveryPointObjective string `json:"recoveryPointObjective,omitempty"`
-
 	// Base backup to restore from before applying transaction logs
 	BaseBackup *BaseBackupSource `json:"baseBackup,omitempty"`
-
-	// Validate transaction log integrity before restore
-	// +kubebuilder:default=true
-	ValidateLogIntegrity bool `json:"validateLogIntegrity,omitempty"`
-
-	// Compression settings for transaction logs
-	Compression *CompressionConfig `json:"compression,omitempty"`
-
-	// Encryption settings for transaction logs
-	Encryption *EncryptionSpec `json:"encryption,omitempty"`
 }
 
 // BaseBackupSource defines a backup source without PITR config to avoid circular references
@@ -113,21 +95,6 @@ type BaseBackupSource struct {
 
 	// Specific backup path within storage
 	BackupPath string `json:"backupPath,omitempty"`
-}
-
-// CompressionConfig defines compression settings
-type CompressionConfig struct {
-	// Enable compression
-	// +kubebuilder:default=true
-	Enabled bool `json:"enabled,omitempty"`
-
-	// Compression algorithm (gzip, lz4, zstd)
-	// +kubebuilder:validation:Enum=gzip;lz4;zstd
-	// +kubebuilder:default=gzip
-	Algorithm string `json:"algorithm,omitempty"`
-
-	// Compression level (1-9 for gzip, 1-12 for lz4, 1-22 for zstd)
-	Level int32 `json:"level,omitempty"`
 }
 
 // RestoreOptionsSpec defines restore-specific options

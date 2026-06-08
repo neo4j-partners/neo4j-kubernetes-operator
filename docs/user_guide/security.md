@@ -852,12 +852,6 @@ spec:
     cloud:
       provider: aws
 
-  # Backup encryption
-  options:
-    encryption:
-      enabled: true
-      keySecret: backup-encryption-key
-
   # Retention policy for compliance
   retention:
     maxCount: 30

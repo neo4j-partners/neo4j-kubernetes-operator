@@ -131,7 +131,7 @@ spec:
     bucket: neo4j-dr-backups
     path: "us-east-1/production"
     cloud:
-      credentialsSecret: s3-dr-credentials
+      credentialsSecretRef: s3-dr-credentials
       region: us-east-1
 
   schedule: "0 */4 * * *"  # Every 4 hours
@@ -139,9 +139,6 @@ spec:
   options:
     backupType: "AUTO"
     compress: true
-    encryption:
-      enabled: true
-      kmsKeyId: "arn:aws:kms:us-east-1:123456789:key/xxxxx"
 ---
 # Target region restore configuration
 apiVersion: neo4j.neo4j.com/v1beta1
@@ -159,7 +156,7 @@ spec:
     bucket: neo4j-dr-backups
     path: "us-east-1/production/backup-20250120-0800"
     cloud:
-      credentialsSecret: s3-dr-credentials
+      credentialsSecretRef: s3-dr-credentials
       region: us-west-2  # DR region
 
   force: true

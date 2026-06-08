@@ -72,7 +72,7 @@ var _ = Describe("Backup API Tests", func() {
 					Cloud:   &neo4jv1beta1.CloudBlock{Provider: "aws"},
 					Options: &neo4jv1beta1.BackupOptions{
 						BackupType: "AUTO",
-						Encryption: &neo4jv1beta1.EncryptionSpec{Enabled: true, Algorithm: "AES256", KeySecret: "backup-encryption-key"},
+						Compress:   true,
 					},
 				},
 			}
@@ -81,7 +81,7 @@ var _ = Describe("Backup API Tests", func() {
 				return k8sClient.Get(ctx, types.NamespacedName{Name: backup.Name, Namespace: testNamespace}, backup)
 			}, timeout, interval).Should(Succeed())
 			Expect(backup.Spec.Cloud.Provider).To(Equal("aws"))
-			Expect(backup.Spec.Options.Encryption.Enabled).To(BeTrue())
+			Expect(backup.Spec.Options.BackupType).To(Equal("AUTO"))
 		})
 	})
 })

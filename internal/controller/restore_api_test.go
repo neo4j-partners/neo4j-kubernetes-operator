@@ -56,10 +56,8 @@ var _ = Describe("Restore API Tests", func() {
 					Source: neo4jv1beta1.RestoreSource{
 						Type: "pitr",
 						PITR: &neo4jv1beta1.PITRConfig{
-							BaseBackup:           &neo4jv1beta1.BaseBackupSource{Type: "backup", BackupRef: "base-backup"},
-							LogStorage:           &neo4jv1beta1.StorageLocation{Type: "s3", Bucket: "logs-bucket", Path: "/transaction-logs"},
-							ValidateLogIntegrity: true,
-							Compression:          &neo4jv1beta1.CompressionConfig{Enabled: true, Algorithm: "gzip", Level: 6},
+							BaseBackup: &neo4jv1beta1.BaseBackupSource{Type: "backup", BackupRef: "base-backup"},
+							LogStorage: &neo4jv1beta1.StorageLocation{Type: "s3", Bucket: "logs-bucket", Path: "/transaction-logs"},
 						},
 						PointInTime: &now,
 					},
@@ -71,7 +69,7 @@ var _ = Describe("Restore API Tests", func() {
 			}, timeout, interval).Should(Succeed())
 			Expect(restore.Spec.Source.Type).To(Equal("pitr"))
 			Expect(restore.Spec.Source.PITR.BaseBackup.Type).To(Equal("backup"))
-			Expect(restore.Spec.Source.PITR.Compression.Algorithm).To(Equal("gzip"))
+			Expect(restore.Spec.Source.PITR.LogStorage.Bucket).To(Equal("logs-bucket"))
 		})
 
 		It("Should create a restore with hooks", func() {

@@ -105,9 +105,9 @@ source:
       path: production/logs/
       cloud:
         provider: aws
-    logRetention: "168h"
-    validateLogIntegrity: true
 ```
+
+> **Note:** `source.type: pitr` (the `--restore-until` path) applies only to a `Neo4jEnterpriseStandalone` target. For cluster point-in-time recovery, create a `Neo4jDatabase` with `spec.seedConfig.restoreUntil`. The operator rejects `source.type: pitr` against a cluster target with an actionable error.
 
 ### PITRConfig
 
@@ -117,11 +117,6 @@ Point-in-time recovery configuration for advanced restore scenarios.
 |-------|------|----------|-------------|
 | `baseBackup` | [`BaseBackupSource`](#basebackupsource) | ❌ | Base backup to restore before applying transaction logs |
 | `logStorage` | [`StorageLocation`](#storagelocation) | ❌ | Storage location for transaction logs |
-| `logRetention` | `string` | ❌ | Transaction log retention period (default: `"168h"`) |
-| `recoveryPointObjective` | `string` | ❌ | Recovery point objective (default: `"1m"`) |
-| `validateLogIntegrity` | `bool` | ❌ | Validate transaction log integrity before restore (default: `true`) |
-| `compression` | [`CompressionConfig`](#compressionconfig) | ❌ | Compression settings for transaction logs |
-| `encryption` | [`EncryptionConfig`](#encryptionconfig) | ❌ | Encryption settings for transaction logs |
 
 ### BaseBackupSource
 
@@ -133,27 +128,6 @@ Base backup configuration for PITR (avoids circular references).
 | `backupRef` | `string` | ❌ | Name of the `Neo4jBackup` resource (when `type="backup"`) |
 | `storage` | [`StorageLocation`](#storagelocation) | ❌ | Direct storage location (when `type="storage"`) |
 | `backupPath` | `string` | ❌ | Specific backup path within the storage location |
-
-### CompressionConfig
-
-Compression settings for transaction logs in PITR.
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `enabled` | `bool` | ❌ | Enable compression (default: `true`) |
-| `algorithm` | `string` | ❌ | Compression algorithm: `"gzip"` (default), `"lz4"`, `"zstd"` |
-| `level` | `int32` | ❌ | Compression level (algorithm-specific) |
-
-### EncryptionConfig
-
-Encryption settings for transaction logs in PITR.
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `enabled` | `bool` | ❌ | Enable encryption (default: `false`) |
-| `algorithm` | `string` | ❌ | Encryption algorithm: `"AES256"` (default), `"ChaCha20Poly1305"` |
-| `keySecret` | `string` | ❌ | Name of the Kubernetes Secret containing the encryption key |
-| `keySecretKey` | `string` | ❌ | Key within the secret that holds the value (default: `"key"`) |
 
 ### RestoreOptionsSpec
 
@@ -480,6 +454,8 @@ spec:
 
 ### Point-in-Time Recovery (PITR)
 
+> **Note:** `source.type: pitr` applies only to a `Neo4jEnterpriseStandalone` target. For cluster point-in-time recovery, create a `Neo4jDatabase` with `spec.seedConfig.restoreUntil`. The operator rejects `source.type: pitr` against a cluster target with an actionable error.
+
 ```yaml
 apiVersion: neo4j.neo4j.com/v1beta1
 kind: Neo4jRestore
@@ -503,17 +479,6 @@ spec:
         cloud:
           provider: aws
           credentialsSecretRef: aws-restore-credentials
-      logRetention: "168h"
-      recoveryPointObjective: "5m"
-      validateLogIntegrity: true
-      compression:
-        enabled: true
-        algorithm: lz4
-        level: 3
-      encryption:
-        enabled: true
-        keySecret: transaction-log-encryption
-        algorithm: AES256
   options:
     verifyBackup: true
     replaceExisting: true
