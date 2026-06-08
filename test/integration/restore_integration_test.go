@@ -202,28 +202,38 @@ var _ = Describe("Restore Integration Tests", Ordered, func() {
 		cleanupCustomResourcesInNamespace(ns)
 	})
 
-	// ─── #121-2: Refuse restore against a live cluster ──────────────────
-	Context("Restore refuses live cluster", func() {
-		It("should refuse a stopCluster=false restore against running pods (issue #121-2)", func() {
-			// We don't need a real backup to exist for this test — the
-			// refusal fires BEFORE the operator tries to resolve the
-			// backup source. But we DO need force=true so the flow
-			// gets past `checkDatabaseExists` (which would otherwise
-			// reject because the cluster's auto-created `neo4j`
-			// database already exists, producing a database-exists
-			// error instead of the live-cluster guard error we're
-			// testing for).
+	// ─── #121-2 / rule 75: cluster restore is safe against a live cluster ─
+	Context("Restore against a live cluster", func() {
+		It("must NOT refuse a stopCluster=false cluster restore — it uses the safe Cypher path (rule 75)", func() {
+			// Original #121-2 asserted that a stopCluster=false restore
+			// against a live CLUSTER terminal-fails via
+			// refuseRestoreIfPodsRunning — the guard that prevented the
+			// #117 silent-data-loss bug on the old Job + `neo4j-admin
+			// restore` path.
+			//
+			// Rule 75 retired that path for cluster targets: cluster
+			// restores now run the in-place Cypher path
+			// (`dbms.recreateDatabase` / `CREATE DATABASE OPTIONS{seedURI}`),
+			// which is SAFE against a live cluster — no StatefulSet
+			// scale-down, no PVC swap, so stopCluster is irrelevant and the
+			// live-cluster refusal must NOT fire. The guard now only applies
+			// to standalone (Job-path) targets.
+			//
+			// This is the regression guard for "someone re-introduces the
+			// unsafe Job path for clusters": if they do, the guard fires and
+			// the live-cluster message reappears, failing this expectation.
 			restore := &neo4jv1beta1.Neo4jRestore{
-				ObjectMeta: metav1.ObjectMeta{Name: "refuse-live", Namespace: ns},
+				ObjectMeta: metav1.ObjectMeta{Name: "live-cluster-cypher", Namespace: ns},
 				Spec: neo4jv1beta1.Neo4jRestoreSpec{
 					ClusterRef:   clusterName,
 					DatabaseName: "neo4j",
-					StopCluster:  false, // the dangerous knob
-					Force:        true,  // skip checkDatabaseExists so refuseRestoreIfPodsRunning is the failure
+					StopCluster:  false, // the formerly-dangerous knob — now a no-op for clusters
+					Force:        true,
 					Source: neo4jv1beta1.RestoreSource{
-						Type: "storage",
-						// Path is intentionally unreachable: these tests fail on an earlier guard
-						// (live-cluster refuse / annotation conflict) before backup-path resolution.
+						// Unreachable source: the Cypher path will fail later
+						// on seed resolution, but it must NEVER fail with the
+						// live-cluster refusal (which is what we're asserting).
+						Type:       "storage",
 						BackupPath: "intentionally-missing.backup",
 						Storage: &neo4jv1beta1.StorageLocation{
 							Type: "pvc",
@@ -234,30 +244,21 @@ var _ = Describe("Restore Integration Tests", Ordered, func() {
 			}
 			Expect(k8sClient.Create(ctx, restore)).To(Succeed())
 
-			By("Waiting for status.phase=Failed")
-			Eventually(func() string {
+			By("Asserting the restore is NEVER refused with the live-cluster guard message")
+			// Consistently over a window: whatever state the Cypher path
+			// lands in (Pending while the seed proxy rolls out, or Failed on
+			// seed resolution), the message must not be the live-cluster
+			// refusal — that guard is structurally bypassed for clusters.
+			Consistently(func() string {
 				latest := &neo4jv1beta1.Neo4jRestore{}
 				if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(restore), latest); err != nil {
 					return ""
 				}
-				return latest.Status.Phase
-			}, time.Second*60, restoreInterval).Should(Equal("Failed"),
-				"a stopCluster=false restore against a Ready cluster must terminal-fail; "+
-					"the alternative — running the restore into a fresh PVC or EmptyDir "+
-					"while the cluster's real data sits untouched — was the silent-loss "+
-					"bug from issue #117")
-
-			By("Asserting the error message names the live-cluster guard")
-			latest := &neo4jv1beta1.Neo4jRestore{}
-			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(restore), latest)).To(Succeed())
-			// The message from refuseRestoreIfPodsRunning is fixed-text;
-			// pinning a substring catches the case where the operator
-			// surfaces an unrelated error and we accidentally pass.
-			Expect(latest.Status.Message).To(ContainSubstring("cannot run against a live cluster"),
-				"status.message must surface the refuseRestoreIfPodsRunning guard, "+
-					"not a generic validation failure")
-			Expect(latest.Status.Message).To(ContainSubstring("stopCluster=true"),
-				"the message should also tell the user the fix — set spec.stopCluster=true")
+				return latest.Status.Message
+			}, time.Second*20, restoreInterval).ShouldNot(ContainSubstring("cannot run against a live cluster"),
+				"rule 75: cluster restores use the safe in-place Cypher path; the "+
+					"refuseRestoreIfPodsRunning guard must NOT fire for a cluster target. "+
+					"If this message reappears, the unsafe Job path was re-introduced for clusters.")
 		})
 	})
 
