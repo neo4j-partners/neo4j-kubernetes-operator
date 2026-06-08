@@ -20,6 +20,7 @@ import (
 	"context"
 	stderrors "errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -1979,6 +1980,13 @@ func (r *Neo4jRestoreReconciler) startClusterCypherRestore(
 		backupPath = restore.Spec.Source.BackupPath
 	}
 
+	// Advisory: restoring via a FULL+DIFF chain PARENT seeds from its latest
+	// full snapshot, not the latest chain state held by the differential
+	// children (rule 78). Surface that so the user isn't silently surprised.
+	if restore.Spec.Source.Type == SourceTypeBackup {
+		r.warnIfChainParent(ctx, restore, restore.Spec.Source.BackupRef)
+	}
+
 	// Build the seedURI. Cloud-backed backups produce a directory URI
 	// (s3://bucket/<base>/<cr-name>/) consumed by Neo4j's CloudSeedProvider.
 	// PVC-backed backups produce an http:// URL pointing at the captured
@@ -2240,6 +2248,50 @@ func (r *Neo4jRestoreReconciler) latestSucceededArtifactFilename(ctx context.Con
 		}
 	}
 	return "", fmt.Errorf("Neo4jBackup %q has no Succeeded run with a captured ArtifactFilename — re-run the backup with a recent operator version (Pod-log capture required for cluster restores), or copy the .backup file to storage and restore via type=storage with source.backupPath pointing at the file", backupRef)
+}
+
+// warnIfChainParent emits a Warning event when source.backupRef points at the
+// PARENT of a mixed-cadence FULL+DIFF chain (rule 78) — i.e. other Neo4jBackup
+// CRs declare spec.chainFromBackup == backupRef and have Succeeded runs.
+//
+// Restoring via the parent seeds from ITS latest artifact (a full snapshot),
+// NOT the latest chain state held by the differential children — Neo4j applies
+// a backup chain backward to the seed file, so seeding from the FULL omits the
+// newer diffs. That's a legitimate "roll back to the last full" operation, but
+// it's silent: a user who expects the latest state must instead reference the
+// differential CR (whose latest artifact is the newest DIFF). This advisory
+// turns that footgun into a visible signal. Purely informational — it never
+// changes the restore behavior or fails the reconcile.
+func (r *Neo4jRestoreReconciler) warnIfChainParent(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore, backupRef string) {
+	if backupRef == "" {
+		return
+	}
+	list := &neo4jv1beta1.Neo4jBackupList{}
+	if err := r.List(ctx, list, client.InNamespace(restore.Namespace)); err != nil {
+		return // best-effort advisory; never block the restore on this
+	}
+	var children []string
+	for i := range list.Items {
+		child := &list.Items[i]
+		if child.Spec.ChainFromBackup != backupRef {
+			continue
+		}
+		for _, run := range child.Status.History {
+			if run.Status == "Succeeded" {
+				children = append(children, child.Name)
+				break
+			}
+		}
+	}
+	if len(children) == 0 {
+		return
+	}
+	sort.Strings(children)
+	r.Recorder.Eventf(restore, corev1.EventTypeWarning, EventReasonRestoreFromChainParent,
+		"source.backupRef %q is a FULL+DIFF chain parent; differential backups exist on [%s]. "+
+			"This restore seeds from %q's latest full snapshot, NOT the latest chain state. "+
+			"To restore the latest state, set source.backupRef to the differential CR instead.",
+		backupRef, strings.Join(children, ", "), backupRef)
 }
 
 func ternaryString(cond bool, ifTrue, ifFalse string) string {

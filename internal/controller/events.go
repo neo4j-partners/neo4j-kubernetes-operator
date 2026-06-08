@@ -27,14 +27,15 @@ const (
 
 // Backup and restore events
 const (
-	EventReasonBackupScheduled      = "BackupScheduled"
-	EventReasonBackupStarted        = "BackupStarted"
-	EventReasonBackupCompleted      = "BackupCompleted"
-	EventReasonBackupFailed         = "BackupFailed"
-	EventReasonRestoreStarted       = "RestoreStarted"
-	EventReasonRestoreCompleted     = "RestoreCompleted"
-	EventReasonRestoreFailed        = "RestoreFailed"
-	EventReasonDatabaseCreateFailed = "DatabaseCreateFailed"
+	EventReasonBackupScheduled        = "BackupScheduled"
+	EventReasonBackupStarted          = "BackupStarted"
+	EventReasonBackupCompleted        = "BackupCompleted"
+	EventReasonBackupFailed           = "BackupFailed"
+	EventReasonRestoreStarted         = "RestoreStarted"
+	EventReasonRestoreCompleted       = "RestoreCompleted"
+	EventReasonRestoreFailed          = "RestoreFailed"
+	EventReasonRestoreFromChainParent = "RestoreFromChainParent"
+	EventReasonDatabaseCreateFailed   = "DatabaseCreateFailed"
 )
 
 // Database events

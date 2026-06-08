@@ -614,7 +614,12 @@ spec:
 
 **Concurrent runs across chained CRs are blocked automatically.** Each Job carries an `app.kubernetes.io/part-of: <chain-root>` label; the operator refuses to start a new backup Job while any other Job in the same chain is still active (`status.active>0`) — routes the new run to `Pending` and requeues. This prevents the hourly DIFF from firing while the daily FULL is still writing, which would corrupt the chain. Offsetting schedules (different minute on the hour) avoids the wait in practice.
 
-**Restore** via either CR (`Neo4jRestore.spec.source.backupRef: inventory-daily` or `inventory-hourly`) resolves to the latest `.backup` file in the shared directory. `CloudSeedProvider` seeds from that file and, when it's a differential, applies the full + differential chain from the same directory forward to that artifact — you get the state at the last successful DIFF.
+**Restore** seeds from the **latest successful artifact of the CR you reference** — *not* the latest file in the shared directory. This selects your recovery point:
+
+- `Neo4jRestore.spec.source.backupRef: inventory-hourly` → the newest **differential**. Neo4j applies the full + differential chain backward to it → you get the **latest state**.
+- `backupRef: inventory-daily` → the newest **full** → you roll back to the **last full snapshot**; the hourly diffs are **not** applied.
+
+So reference the CR whose latest backup matches the recovery point you want — the DIFF CR for "latest", the FULL CR for "last full snapshot". Restoring via the parent FULL CR emits a `RestoreFromChainParent` Warning event naming the DIFF children, so a restore that intends "latest" but references the FULL CR isn't a silent surprise.
 
 #### `preferDiffAsParent` (CalVer 2025.04+ only)
 
@@ -837,7 +842,7 @@ spec:
 
 **Best for:** Cross-cluster recovery, disaster recovery from a known directory in storage (no `Neo4jBackup` CR available in this namespace).
 
-> **Restoring a specific historical run**: every run lives in the same shared directory; restore default behavior is "latest run in the chain wins" — cluster targets seed from the latest `.backup` file (Neo4j applies the chain from the same directory), standalone via `tail -1` of timestamped filenames. To pin to an earlier run, you'd need to keep a snapshot of the directory at that point in time (cloud lifecycle rules or versioning).
+> **Which run a restore picks**: a cluster restore seeds from the **latest successful artifact of the referenced `Neo4jBackup` CR** (standalone uses `tail -1` of the timestamped glob in that CR's directory). In a FULL+DIFF chain, reference the **DIFF CR** for the latest state or the **FULL CR** to roll back to the last full snapshot — restoring via the FULL CR does *not* apply the newer diffs (and emits a `RestoreFromChainParent` warning). To pin to an arbitrary earlier run, set `source.type: storage` with `backupPath` pointing at the exact `.backup` file, or keep a point-in-time snapshot of the directory (cloud lifecycle rules / versioning).
 
 #### Restore to a Standalone Instance
 
