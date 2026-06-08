@@ -232,6 +232,13 @@ var _ = Describe("Property Sharding Backup Integration Tests", Serial, func() {
 							Name: backupPVC.Name,
 						},
 					},
+					// F4: opt into the post-backup neo4j-admin validate
+					// step so we can assert the Validation field gets
+					// populated (alongside the F3 ShardArtifacts filename
+					// parsing that runs unconditionally for sharded).
+					Options: &neo4jv1beta1.BackupOptions{
+						Validate: func() *bool { v := true; return &v }(),
+					},
 				},
 			}
 			Expect(k8sClient.Create(ctx, backup)).To(Succeed())
@@ -286,6 +293,58 @@ var _ = Describe("Property Sharding Backup Integration Tests", Serial, func() {
 			Expect(shardedDB.Status.LastBackup.BackupRef).To(Equal(backup.Name))
 			Expect(shardedDB.Status.LastBackup.RunID).ToNot(BeEmpty(),
 				"lastBackup.runID is the Job UID; must not be empty")
+
+			By("Verifying F3 — per-shard Filename + Size populated from Pod logs")
+			// ShardArtifacts may take a few polls to acquire Filename data
+			// since fetching Pod logs runs inside recordOneShotBackupRun
+			// AFTER the status.history append. Use Eventually so we don't
+			// race the parser.
+			Eventually(func() bool {
+				_ = k8sClient.Get(ctx, client.ObjectKeyFromObject(backup), backup)
+				if len(backup.Status.History) == 0 {
+					return false
+				}
+				for _, a := range backup.Status.History[0].ShardArtifacts {
+					if a.Filename == "" {
+						return false
+					}
+				}
+				return true
+			}, 3*time.Minute, pollInterval).Should(BeTrue(),
+				"every ShardArtifact must have Filename populated by F3 Pod-log parsing")
+			// Spot-check filename pattern + a non-zero Size (real backups
+			// are well over a byte, so Size==0 would indicate a parse miss).
+			for _, a := range backup.Status.History[0].ShardArtifacts {
+				Expect(a.Filename).To(MatchRegexp(`^`+a.ShardName+`-.+\.backup$`),
+					"Filename must match `<shardName>-<timestamp>.backup` pattern; got %q for %q",
+					a.Filename, a.ShardName)
+				// Size is best-effort — only the "(NNN bytes)" log format
+				// is parsed. neo4j-admin may not emit that for PVC
+				// backups; treat zero as acceptable but log it loudly so a
+				// CI run that finds non-zero values can be celebrated.
+				if a.Size == 0 {
+					GinkgoT().Logf("F3: ShardArtifact %q has Size=0 (neo4j-admin didn't emit '(N bytes)' for this shard)", a.ShardName)
+				}
+			}
+
+			By("Verifying F4 — neo4j-admin backup validate output captured in BackupRun.Validation")
+			Eventually(func() *neo4jv1beta1.BackupValidationResult {
+				_ = k8sClient.Get(ctx, client.ObjectKeyFromObject(backup), backup)
+				if len(backup.Status.History) == 0 {
+					return nil
+				}
+				return backup.Status.History[0].Validation
+			}, 3*time.Minute, pollInterval).ShouldNot(BeNil(),
+				"BackupRun.Validation must be populated when spec.options.validate=true")
+			validation := backup.Status.History[0].Validation
+			// A backup that JUST succeeded should validate cleanly — every
+			// shard is at the same transaction the backup captured. Accept
+			// OK or Unknown (parser tolerance for log-format variations
+			// between neo4j-admin versions); only treat Degraded as a real
+			// signal of trouble.
+			Expect(validation.OverallStatus).To(BeElementOf("OK", "Unknown"),
+				"freshly-Succeeded backup should validate to OK or Unknown (parser-tolerant); got %q with RawOutput=%q",
+				validation.OverallStatus, validation.RawOutput)
 		})
 
 		It("rejects a sharded backup against a cluster without propertySharding.enabled", func() {
