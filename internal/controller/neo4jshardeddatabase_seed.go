@@ -13,6 +13,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/types"
@@ -155,15 +156,42 @@ func (r *Neo4jShardedDatabaseReconciler) resolvePVCShardedSeed(
 
 	// Build per-shard URL map even if proxy isn't Ready yet — caller can
 	// inspect ProxyAvailable to decide whether to proceed or wait.
+	//
+	// Key transformation: Neo4j matches `seedURIs` entries against the
+	// TARGET database's shard names, not the SOURCE backup's. Strip the
+	// source DB name prefix from each shard (e.g. "products-g000") and
+	// rebuild against the target (e.g. "products-restored-g000"). Shard
+	// suffix (`-g000` / `-pNNN`) carries the per-shard role; everything
+	// before is just the DB name.
+	//
+	// Assumes source + target sharded DBs share the same shard count and
+	// graph/property layout. The validator enforces matching property
+	// shard count between the spec and the source backup's ShardArtifacts;
+	// resharding-on-restore would need a different code path.
 	perShard := make(map[string]string, len(run.ShardArtifacts))
 	for _, a := range run.ShardArtifacts {
-		perShard[a.ShardName] = pvcSeedProxyURLForShard(shardedDB.Name, shardedDB.Namespace, backupPath, a.Filename)
+		suffix := shardSuffix(a.ShardName)
+		if suffix == "" {
+			return nil, fmt.Errorf("PVC seed: cannot parse shard suffix from %q — expected `<name>-(g|p)NNN`", a.ShardName)
+		}
+		targetShardName := shardedDB.Spec.Name + suffix
+		perShard[targetShardName] = pvcSeedProxyURLForShard(shardedDB.Name, shardedDB.Namespace, backupPath, a.Filename)
 	}
 
 	return &ResolvedShardedSeed{
 		PerShardURIs:   perShard,
 		ProxyAvailable: available,
 	}, nil
+}
+
+// shardSuffixRegex extracts the trailing `-g000` / `-pNNN` portion of a
+// shard name. Used to map source shard names (e.g. "products-g000") to
+// target shard names (e.g. "products-restored-g000") for PVC-seeded
+// sharded restores.
+var shardSuffixRegex = regexp.MustCompile(`-(?:g|p)\d{3}$`)
+
+func shardSuffix(shardName string) string {
+	return shardSuffixRegex.FindString(shardName)
 }
 
 // buildSeedURIFromBackupStorage converts a backup's resolved StorageLocation
