@@ -230,6 +230,14 @@ func (r *Neo4jShardedDatabaseReconciler) Reconcile(ctx context.Context, req ctrl
 			shardedDatabase.Spec.SeedURIs = resolved.PerShardURIs
 			// Clear SeedURI so the Cypher options builder uses seedURIs map.
 			shardedDatabase.Spec.SeedURI = ""
+			// seedSourceDatabase is incompatible with the seedURIs map form
+			// — Neo4j rejects CREATE DATABASE with "OPTIONS specify
+			// 'seedSourceDatabase' expecting 'seedURI' to be present" when
+			// both are emitted. The per-shard URL map carries the source
+			// shard identity in its key (target-shard-name → source-shard
+			// URL), so seedSourceDatabase would just be redundant anyway.
+			// Clear it in-memory on the PVC path.
+			shardedDatabase.Spec.SeedSourceDatabase = ""
 			logger.Info("Resolved seedBackupRef to PVC per-shard URIs",
 				"seedBackupRef", shardedDatabase.Spec.SeedBackupRef, "shardCount", len(resolved.PerShardURIs))
 		}
