@@ -58,6 +58,62 @@ var shardArtifactFilenameRegex = regexp.MustCompile(
 // Same caveat as the filename regex: best-effort, non-fatal on miss.
 var shardArtifactSizeRegex = regexp.MustCompile(`(\d+)\s*bytes?\b`)
 
+// standardArtifactFilenameRegex matches the `.backup` filename produced by
+// a standard (non-sharded) database backup. Shape:
+//
+//	{dbname}-{ISO-timestamp}.backup
+//
+// e.g. `neo4j-2026-06-08T01-18-06.backup`,
+//
+//	`inventory-2026-06-08T01-23-44.842.backup`.
+//
+// We deliberately reject shard-shaped filenames (`<name>-g000-...backup`
+// or `<name>-p000-...backup`) so this parser doesn't double-capture
+// sharded-backup logs as standard ones. The negative lookahead Go regex
+// doesn't support is emulated by requiring the segment after the dbname
+// dash to start with a 4-digit year (`20\d\d`) rather than the
+// `(g|p)\d{3}` shard prefix.
+//
+// Capture groups:
+//
+//	[1] = full filename
+//	[2] = database name (matches Neo4jBackup.spec.target.name)
+var standardArtifactFilenameRegex = regexp.MustCompile(
+	`(([a-zA-Z][\w.-]*?)-(20\d\d[\d.:T+\-Z]+)\.backup)`,
+)
+
+// parseStandardArtifactFromLog scans neo4j-admin's stdout for a
+// standard-DB `.backup` filename matching the requested database name.
+// Returns "" if no match is found (the caller treats this as "not
+// captured" — the ArtifactFilename status field stays empty).
+//
+// Multiple matches → LAST occurrence wins, matching the
+// last-occurrence-wins semantics of the sharded parser.
+//
+// dbName is required because the same Job log can contain unrelated
+// `.backup` references (e.g. earlier backups listed by `ls`); we anchor
+// on the requested database name.
+func parseStandardArtifactFromLog(logContent, dbName string) string {
+	if dbName == "" {
+		return ""
+	}
+	var winner string
+	scanner := bufio.NewScanner(strings.NewReader(logContent))
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	for scanner.Scan() {
+		line := scanner.Text()
+		matches := standardArtifactFilenameRegex.FindAllStringSubmatch(line, -1)
+		for _, m := range matches {
+			filename, matchedDB := m[1], m[2]
+			if matchedDB != dbName {
+				continue
+			}
+			winner = filename
+		}
+	}
+	return winner
+}
+
 // parseShardArtifactsFromLog scans neo4j-admin stdout and returns a map
 // keyed by shard name (e.g. "products-g000") with Filename + Size set.
 // Filenames are deduplicated by shard name — if a shard appears multiple

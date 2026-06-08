@@ -283,8 +283,9 @@ func (r *Neo4jBackupReconciler) reconcileScheduledHistory(ctx context.Context, b
 			// with its own log, so we fetch per-Job rather than once per
 			// outer call. Errors non-fatal — empty fields still leave the
 			// ShardName audit list populated.
+			isStandardDB := latest.Spec.Target.Kind == neo4jv1beta1.BackupTargetKindDatabase
 			var jobLog string
-			if len(shardArtifacts) > 0 ||
+			if len(shardArtifacts) > 0 || isStandardDB ||
 				(latest.Spec.Options != nil && latest.Spec.Options.Validate != nil && *latest.Spec.Options.Validate) {
 				if got, logErr := r.fetchBackupPodLog(ctx, job.Name, job.Namespace); logErr == nil {
 					jobLog = got
@@ -296,6 +297,9 @@ func (r *Neo4jBackupReconciler) reconcileScheduledHistory(ctx context.Context, b
 					perJobArtifacts = mergeShardArtifactsFromLog(shardArtifacts, parseShardArtifactsFromLog(jobLog))
 				}
 				run.ShardArtifacts = perJobArtifacts
+			}
+			if isStandardDB && jobLog != "" {
+				run.ArtifactFilename = parseStandardArtifactFromLog(jobLog, latest.Spec.Target.Name)
 			}
 			if jobLog != "" {
 				if validation := parseValidationFromLog(jobLog); validation != nil {
@@ -1425,11 +1429,12 @@ func (r *Neo4jBackupReconciler) recordOneShotBackupRun(ctx context.Context, back
 	// once and feed it into both parsers — Pod logs are TTL-bound, so a
 	// single fetch is cheaper than separate calls. Non-fatal — log-fetch
 	// failures and parse misses leave the corresponding fields empty.
+	isStandardDB := backup.Spec.Target.Kind == neo4jv1beta1.BackupTargetKindDatabase
 	logContent := ""
-	if shouldFetchLog := r.expectedShardArtifactsForBackup(ctx, backup) != nil ||
+	if shouldFetchLog := r.expectedShardArtifactsForBackup(ctx, backup) != nil || isStandardDB ||
 		(backup.Spec.Options != nil && backup.Spec.Options.Validate != nil && *backup.Spec.Options.Validate); shouldFetchLog {
 		if got, logErr := r.fetchBackupPodLog(ctx, job.Name, job.Namespace); logErr != nil {
-			logger.Info("Failed to fetch backup pod log; ShardArtifacts/Validation may be incomplete",
+			logger.Info("Failed to fetch backup pod log; ShardArtifacts/ArtifactFilename/Validation may be incomplete",
 				"error", logErr.Error(), "job", job.Name)
 		} else {
 			logContent = got
@@ -1440,6 +1445,9 @@ func (r *Neo4jBackupReconciler) recordOneShotBackupRun(ctx context.Context, back
 			artifacts = mergeShardArtifactsFromLog(artifacts, parseShardArtifactsFromLog(logContent))
 		}
 		run.ShardArtifacts = artifacts
+	}
+	if isStandardDB && logContent != "" {
+		run.ArtifactFilename = parseStandardArtifactFromLog(logContent, backup.Spec.Target.Name)
 	}
 	if logContent != "" {
 		if validation := parseValidationFromLog(logContent); validation != nil {

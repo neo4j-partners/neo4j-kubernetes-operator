@@ -1978,29 +1978,56 @@ func (r *Neo4jRestoreReconciler) startClusterCypherRestore(
 		backupPath = restore.Spec.Source.BackupPath
 	}
 
-	seedURI, err := buildSeedURIFromBackupStorage(storage, backupPath)
-	if err != nil {
-		logger.Error(err, "Cluster Cypher restore requires a cloud-backed seed URI")
+	// Build the seedURI. Cloud-backed backups produce a directory URI
+	// (s3://bucket/<base>/<cr-name>/) consumed by Neo4j's CloudSeedProvider.
+	// PVC-backed backups produce an http:// URL pointing at the captured
+	// `.backup` filename served by an in-cluster proxy (the same approach
+	// used by the sharded PVC seedBackupRef path).
+	var seedURI string
+	switch storage.Type {
+	case "s3", "gcs", "azure":
+		seedURI, err = buildSeedURIFromBackupStorage(storage, backupPath)
+		if err != nil {
+			r.updateRestoreStatus(ctx, restore, StatusFailed, err.Error())
+			return ctrl.Result{}, err
+		}
+		// Project cloud credentials onto cluster pods (envFrom) so the JVM's
+		// SDK default credential chain can authenticate the seed fetch.
+		if storage.Cloud != nil && storage.Cloud.CredentialsSecretRef != "" {
+			autoInherited, credsErr := EnsureClusterHasSeedCreds(ctx, r.Client, cluster, storage.Cloud.CredentialsSecretRef)
+			if credsErr != nil {
+				logger.Error(credsErr, "Cluster missing seed credentials projection")
+				r.updateRestoreStatus(ctx, restore, StatusFailed, credsErr.Error())
+				return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
+			}
+			if autoInherited {
+				logger.Info("Auto-inherited seed credentials onto cluster; waiting for rolling restart",
+					"cluster", cluster.Name)
+				r.updateRestoreStatus(ctx, restore, StatusPending,
+					fmt.Sprintf("Auto-inherited seed credentials Secret %q onto cluster %q; waiting for rolling restart", storage.Cloud.CredentialsSecretRef, cluster.Name))
+				return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
+			}
+		}
+	case "pvc":
+		// Cluster + PVC restore: spawn the in-cluster HTTP proxy in front
+		// of the backup PVC, build a single-file seedURI against it. The
+		// cluster's seed_from_uri_providers default (rule 74) includes
+		// URLConnectionSeedProvider so http:// URIs are accepted.
+		uri, result, perr := r.resolveClusterPVCRestoreURI(ctx, restore, storage, backupPath)
+		if perr != nil {
+			r.updateRestoreStatus(ctx, restore, StatusFailed, perr.Error())
+			return ctrl.Result{}, perr
+		}
+		if uri == "" {
+			// Proxy still rolling out or backup CR not yet ready — caller
+			// already wrote the Pending status; just propagate the result.
+			return result, nil
+		}
+		seedURI = uri
+	default:
+		err := fmt.Errorf("cluster restore does not support storage type %q (expected s3, gcs, azure, or pvc)", storage.Type)
 		r.updateRestoreStatus(ctx, restore, StatusFailed, err.Error())
 		return ctrl.Result{}, err
-	}
-
-	// Project cloud credentials onto cluster pods (envFrom) so the JVM's
-	// SDK default credential chain can authenticate the seed fetch.
-	if storage.Cloud != nil && storage.Cloud.CredentialsSecretRef != "" {
-		autoInherited, credsErr := EnsureClusterHasSeedCreds(ctx, r.Client, cluster, storage.Cloud.CredentialsSecretRef)
-		if credsErr != nil {
-			logger.Error(credsErr, "Cluster missing seed credentials projection")
-			r.updateRestoreStatus(ctx, restore, StatusFailed, credsErr.Error())
-			return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
-		}
-		if autoInherited {
-			logger.Info("Auto-inherited seed credentials onto cluster; waiting for rolling restart",
-				"cluster", cluster.Name)
-			r.updateRestoreStatus(ctx, restore, StatusPending,
-				fmt.Sprintf("Auto-inherited seed credentials Secret %q onto cluster %q; waiting for rolling restart", storage.Cloud.CredentialsSecretRef, cluster.Name))
-			return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
-		}
 	}
 
 	// Open a Bolt connection to the cluster.
@@ -2064,6 +2091,97 @@ func (r *Neo4jRestoreReconciler) startClusterCypherRestore(
 	r.Recorder.Event(restore, corev1.EventTypeNormal, EventReasonRestoreCompleted,
 		fmt.Sprintf("Cluster Cypher restore completed for database %q", restore.Spec.DatabaseName))
 	return ctrl.Result{}, nil
+}
+
+// resolveClusterPVCRestoreURI spawns the in-cluster HTTP seed proxy for a
+// PVC-backed cluster restore and returns the seedURI pointing at the
+// captured `.backup` artifact filename.
+//
+// Returns:
+//   - (uri, _, nil)            success — uri is ready to be passed to
+//     dbms.recreateDatabase / CREATE DATABASE OPTIONS{seedURI}.
+//   - ("", result, nil)        transient — proxy still rolling out OR the
+//     backup CR's most-recent Succeeded run has no ArtifactFilename yet.
+//     Caller routes to Pending+requeue via the embedded `result`.
+//   - ("", _, err)             permanent failure — wrong storage type, no
+//     backup ref, missing PVC name. Caller routes to Failed.
+//
+// Mirrors the sharded PVC seedBackupRef path (rule 71) but for a single
+// `.backup` file rather than a per-shard map.
+func (r *Neo4jRestoreReconciler) resolveClusterPVCRestoreURI(
+	ctx context.Context,
+	restore *neo4jv1beta1.Neo4jRestore,
+	storage neo4jv1beta1.StorageLocation,
+	backupsPath string,
+) (string, ctrl.Result, error) {
+	logger := log.FromContext(ctx)
+
+	if storage.Type != "pvc" {
+		return "", ctrl.Result{}, fmt.Errorf("internal: resolveClusterPVCRestoreURI called with storage.type=%q", storage.Type)
+	}
+	if storage.PVC == nil || storage.PVC.Name == "" {
+		return "", ctrl.Result{}, fmt.Errorf("PVC-backed cluster restore requires storage.pvc.name to be set")
+	}
+
+	// We need the captured ArtifactFilename for the most-recent Succeeded
+	// run. type=backup paths can use the resolved BackupRun; type=storage
+	// users supply the filename via spec.source.backupPath as a complete
+	// path (handled below).
+	var filename string
+	switch restore.Spec.Source.Type {
+	case SourceTypeBackup:
+		backup := &neo4jv1beta1.Neo4jBackup{}
+		if err := r.Get(ctx, types.NamespacedName{Name: restore.Spec.Source.BackupRef, Namespace: restore.Namespace}, backup); err != nil {
+			return "", ctrl.Result{}, fmt.Errorf("PVC restore: re-fetch backup %q: %w", restore.Spec.Source.BackupRef, err)
+		}
+		for i := range backup.Status.History {
+			if backup.Status.History[i].Status == "Succeeded" {
+				filename = backup.Status.History[i].ArtifactFilename
+				break
+			}
+		}
+		if filename == "" {
+			msg := fmt.Sprintf("Neo4jBackup %q's most-recent Succeeded run has no captured ArtifactFilename — re-run the backup with a recent operator version (Pod-log capture required for PVC-backed cluster restores). Alternatively, copy the .backup file to S3/GCS/Azure and restore via type=storage.",
+				restore.Spec.Source.BackupRef)
+			r.updateRestoreStatus(ctx, restore, StatusFailed, msg)
+			return "", ctrl.Result{}, fmt.Errorf("%s", msg)
+		}
+	case "storage":
+		// User points us directly at the file via spec.source.backupPath.
+		// The proxy serves under /<backupsPath> by convention, so we need
+		// to separate dir from filename. If backupPath is a single file
+		// path like "inventory-backup/inventory-2026-…backup", split on
+		// the last slash.
+		fullPath := restore.Spec.Source.BackupPath
+		if fullPath == "" {
+			return "", ctrl.Result{}, fmt.Errorf("PVC restore with type=storage requires source.backupPath to be set to the .backup file path under the PVC root")
+		}
+		if idx := strings.LastIndex(fullPath, "/"); idx >= 0 {
+			backupsPath = fullPath[:idx]
+			filename = fullPath[idx+1:]
+		} else {
+			filename = fullPath
+		}
+	default:
+		return "", ctrl.Result{}, fmt.Errorf("PVC cluster restore not supported with source.type=%q", restore.Spec.Source.Type)
+	}
+
+	// Spawn (idempotent) the HTTP proxy in front of the backup PVC. The
+	// Neo4jRestore CR is the owner so the proxy is GC'd when the restore
+	// is deleted.
+	proxyAvailable, err := ensurePVCSeedProxyResources(ctx, r.Client, r.Scheme, restore, restore.Name, storage.PVC.Name)
+	if err != nil {
+		return "", ctrl.Result{}, fmt.Errorf("ensure PVC seed proxy: %w", err)
+	}
+	if !proxyAvailable {
+		logger.Info("PVC seed proxy not yet Ready; requeuing",
+			"backupPVC", storage.PVC.Name)
+		r.updateRestoreStatus(ctx, restore, StatusPending,
+			"Waiting for backup-seed-proxy Deployment to become Ready")
+		return "", ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
+	}
+
+	return pvcSeedProxyURL(restore.Name, restore.Namespace, backupsPath, filename), ctrl.Result{}, nil
 }
 
 func ternaryString(cond bool, ifTrue, ifFalse string) string {

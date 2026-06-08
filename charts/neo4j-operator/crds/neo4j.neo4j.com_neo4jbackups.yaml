@@ -464,22 +464,27 @@ spec:
                 items:
                   description: BackupRun represents a single backup execution
                   properties:
+                    artifactFilename:
+                      description: |-
+                        ArtifactFilename is the filename of the `.backup` artifact produced
+                        by this standard-DB run (e.g. "neo4j-2026-06-08T01-18-06.backup").
+                        Populated by parsing the Job's Pod log after completion. Empty when
+                        the operator couldn't fetch logs or the pattern didn't match.
+
+                        Used by the cluster PVC-restore path: the operator builds a
+                        per-restore HTTP proxy URL of the form
+                          http://<proxy>:8080/<backupsPath>/<artifactFilename>
+                        which is passed as seedURI to dbms.recreateDatabase /
+                        CREATE DATABASE OPTIONS{seedURI}. Sharded backups populate
+                        per-shard equivalents in ShardArtifacts[].Filename instead.
+                      type: string
                     backupsPath:
                       description: |-
-                        BackupsPath is the run-specific subfolder under spec.storage.path
-                        where this run's `.backup` artifact(s) were written. To restore from
-                        this run, set Neo4jRestore.spec.source.backupPath to
-                        "<spec.storage.path>/<BackupsPath>" — neo4j-admin's --from-path
-                        accepts directories and auto-discovers .backup files inside.
-
-                        The subfolder name is the backing Job's name: for one-shot
-                        Neo4jBackup CRs it is "<backup-name>-backup"; for scheduled
-                        (CronJob) backups Kubernetes auto-suffixes it with the run's
-                        scheduled Unix timestamp ("<cronjob-name>-<unix-seconds>"), so
-                        every run lands in its own directory.
-
-                        Older runs predating the per-run-subfolder change have an empty
-                        BackupsPath — those artifacts live flat in spec.storage.path.
+                        BackupsPath is the shared per-CR directory (relative to
+                        spec.storage.path) where this run wrote its `.backup` artifact.
+                        SAME VALUE FOR EVERY RUN OF ONE CR — all runs accumulate in this
+                        directory so neo4j-admin can chain differential backups off the
+                        prior full. Use the RunID field for per-run identity.
                       type: string
                     completionTime:
                       description: Completion time of the backup run
