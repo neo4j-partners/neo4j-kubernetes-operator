@@ -142,7 +142,7 @@ Create or edit `.vscode/mcp.json`:
 }
 ```
 
-VSCode will prompt for credentials or use the `Authorization` header you configure. Replace `<mcp-host>` with the Ingress hostname or `kubectl port-forward` address.
+VSCode will prompt for credentials or use the `Authorization` header you configure. Replace `<mcp-host>` with the Ingress hostname or `kubectl port-forward` address. When TLS is terminated at the Ingress or via container TLS (`spec.mcp.http.tls`, port `8443`), use `https://` instead.
 
 ## Claude Desktop
 
@@ -159,7 +159,7 @@ Edit `claude_desktop_config.json`:
 }
 ```
 
-Configure Basic Auth with your Neo4j username and password in the MCP client settings or via the `Authorization` header.
+Configure Basic Auth with your Neo4j username and password in the MCP client settings or via the `Authorization` header. When TLS is terminated at the Ingress or via container TLS (`spec.mcp.http.tls`, port `8443`), use `https://` instead.
 
 ## STDIO Mode: In-Cluster Usage
 
@@ -217,6 +217,6 @@ spec:
   mcp:
     enabled: true
     telemetry: false          # disable anonymous usage data
-    logLevel: debug           # debug|info|notice|warning|error
+    logLevel: debug           # debug|info|notice|warning|error|critical|alert|emergency
     logFormat: json           # text|json (useful for log aggregators)
 ```

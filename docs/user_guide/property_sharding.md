@@ -444,34 +444,50 @@ kubectl exec property-sharding-cluster-server-0 -- \
 
 ## Backup and Recovery
 
-Note: The operator does not orchestrate `backupConfig` for `Neo4jShardedDatabase`. Use explicit `Neo4jBackup` resources to back up each shard.
-
-Property sharding backup coordinates across all shards:
+Note: There is no `backupConfig` on `Neo4jShardedDatabase`. Use an explicit `Neo4jBackup`
+resource with `spec.target.kind: ShardedDatabase` and `spec.target.name` set to the
+logical sharded-database name (e.g. `products`). A single backup captures every shard
+consistently in one `neo4j-admin database backup` invocation via a `{name}*` glob — you
+do **not** list the individual shard databases (`products-g000`, `products-p000`, …).
 
 ```yaml
 apiVersion: neo4j.neo4j.com/v1beta1
 kind: Neo4jBackup
 metadata:
   name: sharded-backup
+  namespace: default
 spec:
-  clusterRef: property-sharding-cluster
+  target:
+    kind: ShardedDatabase          # backs up all shards in one invocation
+    name: products                 # logical sharded-database name
+    clusterRef: property-sharding-cluster
 
-  # Multi-database backup
-  databases:
-    - name: "products-g000"  # Graph shard
-      type: "full+differential"
-    - name: "products-p000"  # Property shards
-      type: "full"
-    - name: "products-p001"
-      type: "full"
-    - name: "products-p002"
-      type: "full"
-    - name: "products-p003"
-      type: "full"
+  storage:
+    type: pvc                      # one of: pvc | s3 | gcs | azure
+    pvc:
+      name: sharded-backup-storage
+      storageClassName: standard
+      size: 50Gi
 
-  schedule: "0 2 * * *"
-  consistency: "cross-database"  # Ensure consistent backup point
+  schedule: "0 2 * * *"            # optional cron; omit for one-shot
+
+  retention:
+    maxCount: 10
+
+  options:
+    backupType: AUTO               # FULL | DIFF | AUTO
+    validate: true                 # optional per-shard recoverability check
 ```
+
+The per-shard `.backup` artifacts produced by the run are recorded in
+`status.history[].shardArtifacts[]` (one entry per shard, e.g. `products-g000`,
+`products-p000`). When `options.validate: true`, per-shard recoverability is
+surfaced under `status.history[].validation`.
+
+To restore a sharded database from a backup, seed a new `Neo4jShardedDatabase`
+via `spec.seedBackupRef` (referencing this `Neo4jBackup` CR), or perform a
+destructive in-place restore with `spec.replaceExisting: true` + `spec.force: true`
+(see the field reference above).
 
 ## Performance and Sizing
 

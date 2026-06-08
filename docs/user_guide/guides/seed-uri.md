@@ -13,16 +13,25 @@ The seed URI feature allows you to create new Neo4j databases by restoring them 
 
 ## Supported URI Schemes
 
-The operator supports the following URI schemes through Neo4j's CloudSeedProvider:
+The operator registers Neo4j's modern seed providers via `dbms.databases.seed_from_uri_providers` (set automatically on both cluster and standalone pods). The registered providers are version-gated:
 
-| Scheme | Description | Example |
-|--------|-------------|---------|
-| `s3://` | Amazon S3 | `s3://my-bucket/backup.backup` |
-| `gs://` | Google Cloud Storage | `gs://my-bucket/backup.backup` |
-| `azb://` | Azure Blob Storage | `azb://account.blob.core.windows.net/container/backup.backup` |
-| `https://` | HTTPS URLs | `https://backup-server.com/backup.backup` |
-| `http://` | HTTP URLs | `http://backup-server.com/backup.backup` |
-| `ftp://` | FTP servers | `ftp://ftp.server.com/backup.backup` |
+- `CloudSeedProvider`, `FileSeedProvider`, `URLConnectionSeedProvider` — always registered (all supported Neo4j versions).
+- `ServerSeedProvider` — registered only on Neo4j **2026.04+** (the class is not present in earlier releases).
+- The deprecated `S3SeedProvider` is **never** registered — `CloudSeedProvider` handles `s3://` via the cloud SDK's default credential chain.
+
+These providers cover the following URI schemes:
+
+| Scheme | Provider | Example |
+|--------|----------|---------|
+| `s3://` | CloudSeedProvider | `s3://my-bucket/backup.backup` |
+| `gs://` | CloudSeedProvider | `gs://my-bucket/backup.backup` |
+| `azb://` | CloudSeedProvider | `azb://account.blob.core.windows.net/container/backup.backup` |
+| `https://` | URLConnectionSeedProvider | `https://backup-server.com/backup.backup` |
+| `http://` | URLConnectionSeedProvider | `http://backup-server.com/backup.backup` |
+| `ftp://` | URLConnectionSeedProvider | `ftp://ftp.server.com/backup.backup` |
+| `file://` | FileSeedProvider | `file:///path/backup.backup` |
+
+The `seedURI` must point at the **exact `.backup` file**, never a directory — Neo4j seeds a single database from one backup file. (For a DIFF backup, the single DIFF-file URI is sufficient; Neo4j resolves the full parent chain from the same directory.)
 
 ## Basic Usage
 
@@ -49,6 +58,27 @@ spec:
   ifNotExists: true
 ```
 
+### Seeding a Sharded Database
+
+`Neo4jShardedDatabase` supports three mutually-exclusive seed sources (`seedURI`, `seedURIs`, and `seedBackupRef` — the validator rejects combining them):
+
+- **`seedURI`** — a single URI; Neo4j expects per-shard backup artifacts named with shard suffixes (e.g. `<db>-g000`, `<db>-p000`).
+- **`seedURIs`** — a per-shard map keyed by shard name, for multi-location backups:
+
+  ```yaml
+  seedURIs:
+    mydb-g000: "s3://my-backups/mydb-g000.backup"
+    mydb-p000: "s3://my-backups/mydb-p000.backup"
+  ```
+
+- **`seedBackupRef`** — names a `Neo4jBackup` CR (same namespace) whose most-recent Succeeded run is resolved into a concrete seed at reconcile time. Supports both **cloud** backups (resolved to `seedURI`) and **PVC**-backed backups (resolved to per-shard URLs served through an in-cluster HTTP proxy — see [PVC-backed seeds](#pvc-backed-seeds)). If the referenced backup has no Succeeded run yet, the sharded database stays in `Pending` and the reconciler requeues (it does not fail).
+
+`seedBackupRef` is also mutually exclusive with `seedURI` / `seedURIs`.
+
+### PVC-backed seeds
+
+When a seed source resolves to a backup stored on a PVC, the operator spawns a short-lived `backup-seed-proxy-<owner>` Deployment + Service that mounts the backup PVC read-only and serves the `.backup` files over HTTP. Neo4j then fetches each file via `URLConnectionSeedProvider` at the exact `.backup` filename. The proxy is owner-referenced to the consuming CR and garbage-collected when that CR is deleted.
+
 ## Authentication Methods
 
 ### 1. System-Wide Authentication (Recommended)
@@ -71,7 +101,7 @@ Use cloud-native authentication mechanisms that don't require explicit credentia
 
 ### 2. Explicit Credentials via Secrets
 
-For environments where system-wide authentication isn't available:
+For environments where system-wide authentication isn't available, you can reference a credentials Secret with `spec.seedCredentials.secretRef`:
 
 ```yaml
 apiVersion: v1
@@ -94,6 +124,21 @@ spec:
   seedCredentials:
     secretRef: backup-credentials
 ```
+
+> **Important — where the credentials must live:** `CREATE DATABASE … OPTIONS { seedURI }` is executed by the Neo4j JVM **on the server pods**, so the cloud SDK's default credential chain resolves against the *server pods'* environment. For credentials to be visible there, the Secret must be projected onto the hosting cluster or standalone CR via `spec.extraEnvFrom`:
+>
+> ```yaml
+> apiVersion: neo4j.neo4j.com/v1beta1
+> kind: Neo4jEnterpriseCluster   # or Neo4jEnterpriseStandalone
+> metadata:
+>   name: my-cluster
+> spec:
+>   extraEnvFrom:
+>   - secretRef:
+>       name: backup-credentials
+> ```
+>
+> The operator validates this projection before seeding. If the Secret is missing from `extraEnvFrom`, it emits an actionable error with a copy-pasteable snippet. Add the annotation `neo4j.com/auto-inherit-seed-creds: "true"` on the hosting cluster/standalone CR to let the operator patch `spec.extraEnvFrom` automatically — note this triggers a rolling restart of the server pods. When relying on IRSA / GKE Workload Identity / Azure Workload Identity, no Secret projection is needed.
 
 ## Credential Requirements by Provider
 
