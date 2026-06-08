@@ -162,6 +162,13 @@ var _ = Describe("Property Sharding PVC Seed (F5) Integration Tests", Serial, fu
 						"internal.dbms.sharded_property_database.allow_external_shard_access": "false",
 					},
 				},
+				// PVC-backed seedBackupRef serves shard backups over plain HTTP via an
+				// in-cluster proxy Deployment. The default seed_from_uri_providers list
+				// is CloudSeedProvider only, so http:// URIs get "No seed providers
+				// found" without explicitly enabling URLConnectionSeedProvider.
+				Config: map[string]string{
+					"dbms.databases.seed_from_uri_providers": "CloudSeedProvider,URLConnectionSeedProvider",
+				},
 			},
 		}
 		Expect(k8sClient.Create(ctx, cluster)).To(Succeed())

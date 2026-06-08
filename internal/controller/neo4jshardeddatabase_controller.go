@@ -240,6 +240,32 @@ func (r *Neo4jShardedDatabaseReconciler) Reconcile(ctx context.Context, req ctrl
 			shardedDatabase.Spec.SeedSourceDatabase = ""
 			logger.Info("Resolved seedBackupRef to PVC per-shard URIs",
 				"seedBackupRef", shardedDatabase.Spec.SeedBackupRef, "shardCount", len(resolved.PerShardURIs))
+
+			// Neo4j's default seed_from_uri_providers list is "CloudSeedProvider"
+			// only; http:// URIs (served by our PVC proxy) fail with "No seed
+			// providers found" unless URLConnectionSeedProvider is explicitly
+			// added. Auto-enable under annotation gate; otherwise actionable
+			// error pointing at the cluster spec.
+			autoEnabled, providerErr := EnsureClusterHasURLSeedProvider(ctx, r.Client, cluster)
+			if providerErr != nil {
+				logger.Error(providerErr, "Cluster missing URLConnectionSeedProvider for PVC-backed restore")
+				r.Recorder.Event(&shardedDatabase, corev1.EventTypeWarning, "SeedProviderMissing", providerErr.Error())
+				if statusErr := r.updateStatus(ctx, &shardedDatabase, "Failed", providerErr.Error(), nil); statusErr != nil {
+					logger.Error(statusErr, "Failed to update status to Failed")
+				}
+				return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
+			}
+			if autoEnabled {
+				logger.Info("Auto-enabled URLConnectionSeedProvider on cluster; waiting for rolling restart",
+					"cluster", cluster.Name)
+				r.Recorder.Event(&shardedDatabase, corev1.EventTypeNormal, "SeedProviderAutoEnabled",
+					fmt.Sprintf("Patched cluster %q spec.config[%s] to include URLConnectionSeedProvider; waiting for rolling restart", cluster.Name, SeedFromURIProvidersConfigKey))
+				if statusErr := r.updateStatus(ctx, &shardedDatabase, "Pending",
+					fmt.Sprintf("Auto-enabled URLConnectionSeedProvider on cluster %q; waiting for cluster pods to restart", cluster.Name), nil); statusErr != nil {
+					logger.Error(statusErr, "Failed to update status to Pending")
+				}
+				return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
+			}
 		}
 
 		// Phase 2b: ensure the referenced cluster has the backup's
