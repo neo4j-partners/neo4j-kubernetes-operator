@@ -39,7 +39,8 @@ metadata:
 #   # authenticate to S3 without them:
 #   kubectl create secret generic tenant-a-s3-credentials --namespace neo4j-multi-tenant \
 #     --from-literal=AWS_ACCESS_KEY_ID='<tenant-a-access-key>' \
-#     --from-literal=AWS_SECRET_ACCESS_KEY='<tenant-a-secret-key>'
+#     --from-literal=AWS_SECRET_ACCESS_KEY='<tenant-a-secret-key>' \
+#     --from-literal=AWS_REGION='us-east-1'   # required: read as a non-optional env var
 #   # ...repeat for tenant-b-s3-credentials and tenant-c-s3-credentials.
 ---
 # Multi-tenant Neo4j Cluster

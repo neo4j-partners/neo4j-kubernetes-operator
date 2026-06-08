@@ -49,8 +49,11 @@ type UserValidationResult struct {
 }
 
 // neo4jUsernamePattern enforces Neo4j's username rules: ASCII letter
-// followed by letters, digits, underscore, dot or hyphen.
-var neo4jUsernamePattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_.\-]*$`)
+// followed by letters, digits, underscore, dot, at-sign or hyphen. The
+// at-sign allows email-style SSO/LDAP usernames (e.g. alice@example.com),
+// which Neo4jRoleBinding exists to bind. Backtick is deliberately excluded so
+// identifiers stay safe to backtick-quote in Cypher.
+var neo4jUsernamePattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_.@\-]*$`)
 
 const maxNeo4jUsernameLength = 65
 
@@ -230,7 +233,7 @@ func validateUsername(name string, path *field.Path) field.ErrorList {
 	}
 	if !neo4jUsernamePattern.MatchString(name) {
 		errs = append(errs, field.Invalid(path, name,
-			"must start with an ASCII letter and contain only letters, digits, underscore, dot or hyphen"))
+			"must start with an ASCII letter and contain only letters, digits, underscore, dot, at-sign or hyphen"))
 	}
 	return errs
 }

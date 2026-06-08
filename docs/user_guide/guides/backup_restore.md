@@ -95,6 +95,8 @@ kubectl create secret generic aws-backup-creds \
   --from-literal=AWS_REGION=us-east-1
 ```
 
+> The region lives in this Secret as `AWS_REGION` — there is no `spec.cloud.region` field. For `credentialsSecretRef` backups all three keys (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`) are required; a missing key fails the backup Job pod. With IRSA/Workload Identity (no Secret) the SDK resolves the region ambiently.
+
 Reference the Secret in your `Neo4jBackup`:
 
 ```yaml

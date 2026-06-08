@@ -67,7 +67,9 @@ func TestUserValidator_UsernameRules(t *testing.T) {
 	}{
 		{"valid", "alice", false},
 		{"valid with dot/hyphen", "alice.smith-1", false},
+		{"valid email-style SSO username", "alice@example.com", false},
 		{"starts with digit", "1bob", true},
+		{"backtick rejected (injection guard)", "al`ice", true},
 		{"too long", strings.Repeat("a", 70), true},
 	}
 	for _, tc := range cases {

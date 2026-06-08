@@ -45,7 +45,7 @@ type Neo4jRoleBindingSpec struct {
 	// provisioning) by the time the cluster is Ready. If absent, the binding
 	// enters the UserNotFound condition and reconciles when the user appears.
 	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Pattern=`^[a-zA-Z][a-zA-Z0-9_.\-]*$`
+	// +kubebuilder:validation:Pattern=`^[a-zA-Z][a-zA-Z0-9_.@\-]*$`
 	// +kubebuilder:validation:MaxLength=65
 	Username string `json:"username"`
 

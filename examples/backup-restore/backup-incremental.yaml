@@ -8,7 +8,8 @@
 # Create the AWS credentials secret first:
 #   kubectl create secret generic aws-backup-credentials \
 #     --from-literal=AWS_ACCESS_KEY_ID=<your-access-key-id> \
-#     --from-literal=AWS_SECRET_ACCESS_KEY=<your-secret-access-key>
+#     --from-literal=AWS_SECRET_ACCESS_KEY=<your-secret-access-key> \
+#     --from-literal=AWS_REGION=us-east-1
 # ============================================================
 apiVersion: neo4j.neo4j.com/v1beta1
 kind: Neo4jBackup
@@ -49,6 +50,9 @@ spec:
 #   kubectl create secret generic aws-backup-credentials \
 #     --namespace default \
 #     --from-literal=AWS_ACCESS_KEY_ID='<your-access-key-id>' \
-#     --from-literal=AWS_SECRET_ACCESS_KEY='<your-secret-access-key>'
+#     --from-literal=AWS_SECRET_ACCESS_KEY='<your-secret-access-key>' \
+#     --from-literal=AWS_REGION='us-east-1'
 #
+# AWS_REGION is required: the backup Job reads it from this Secret (the operator
+# wires it as a non-optional env var), so omit it and the Job pod won't start.
 # Referenced via spec.storage.cloud.credentialsSecretRef: aws-backup-credentials

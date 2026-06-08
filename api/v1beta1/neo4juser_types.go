@@ -41,8 +41,9 @@ type Neo4jUserSpec struct {
 
 	// Username is the user name in Neo4j. Defaults to metadata.name when
 	// empty. Must start with an ASCII letter and contain only letters,
-	// digits, underscore, dot, or hyphen. Maximum 65 characters.
-	// +kubebuilder:validation:Pattern=`^[a-zA-Z][a-zA-Z0-9_.\-]*$`
+	// digits, underscore, dot, at-sign, or hyphen (at-sign supports
+	// email-style SSO/LDAP usernames). Maximum 65 characters.
+	// +kubebuilder:validation:Pattern=`^[a-zA-Z][a-zA-Z0-9_.@\-]*$`
 	// +kubebuilder:validation:MaxLength=65
 	// +optional
 	Username string `json:"username,omitempty"`
