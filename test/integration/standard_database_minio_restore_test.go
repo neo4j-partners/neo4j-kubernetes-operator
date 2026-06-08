@@ -300,6 +300,89 @@ var _ = Describe("Standard Database Restore (MinIO) Integration Tests", Serial, 
 			return outStr
 		}, 2*time.Minute, pollInterval).Should(ContainSubstring("42"),
 			"restored data should match the pre-backup state (count=42), not the post-backup modification (count=999)")
+
+		// ── Second restore via source.type=storage (no Neo4jBackup CR) ──
+		// Same cluster + same backup files, but this time we restore by
+		// pointing directly at the storage location + exact .backup file —
+		// the cross-cluster / disaster-recovery path where no Neo4jBackup CR
+		// is available. Regression guard for the directory-vs-file fix on the
+		// type=storage cluster cloud path.
+		By("Capturing the backup's artifact filename for the type=storage restore")
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(backup), backup)).To(Succeed())
+		var artifact string
+		for i := range backup.Status.History {
+			if backup.Status.History[i].Status == "Succeeded" && backup.Status.History[i].ArtifactFilename != "" {
+				artifact = backup.Status.History[i].ArtifactFilename
+				break
+			}
+		}
+		Expect(artifact).ToNot(BeEmpty(), "backup must record an ArtifactFilename for a type=storage cluster restore")
+
+		By("Re-modifying data so the type=storage restore is meaningful (count=777)")
+		Eventually(func() error {
+			cmd := exec.CommandContext(ctx, "kubectl", "exec",
+				podName, "-n", testNamespace, "--",
+				"cypher-shell", "--format", "plain", "--database", dbName,
+				"-u", "neo4j", "-p", adminPass,
+				"MATCH (i:Item) SET i.count = 777 RETURN count(i) AS n;",
+			)
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				GinkgoWriter.Printf("pre-storage-restore modify err=%v out=%s\n", err, string(out))
+			}
+			return err
+		}, 2*time.Minute, pollInterval).Should(Succeed())
+
+		By("Restoring AGAIN via source.type=storage pointing at the exact .backup file")
+		restoreStorage := &neo4jv1beta1.Neo4jRestore{
+			ObjectMeta: metav1.ObjectMeta{Name: "inventory-restore-storage", Namespace: testNamespace},
+			Spec: neo4jv1beta1.Neo4jRestoreSpec{
+				ClusterRef:   cluster.Name,
+				DatabaseName: dbName,
+				StopCluster:  false,
+				Force:        true,
+				Source: neo4jv1beta1.RestoreSource{
+					Type: "storage",
+					Storage: &neo4jv1beta1.StorageLocation{
+						Type:   "s3",
+						Bucket: minioBucket,
+						Path:   "inventory",
+						Cloud: &neo4jv1beta1.CloudBlock{
+							Provider:             "aws",
+							CredentialsSecretRef: "minio-creds",
+							EndpointURL:          "http://minio:9000",
+							ForcePathStyle:       true,
+						},
+					},
+					// Exact .backup file path under storage.path: <chain-root>/<artifact>.
+					// chain-root is the backup CR name (no spec.chainFromBackup here).
+					BackupPath: fmt.Sprintf("%s/%s", backup.Name, artifact),
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, restoreStorage)).To(Succeed())
+
+		By("Verifying the type=storage restore reaches Completed (not Failed on a directory seedURI)")
+		Eventually(func() string {
+			_ = k8sClient.Get(ctx, client.ObjectKeyFromObject(restoreStorage), restoreStorage)
+			return restoreStorage.Status.Phase
+		}, restoreTimeout, pollInterval).Should(Equal("Completed"),
+			"type=storage cluster restore should reach Completed; status.message=%q", restoreStorage.Status.Message)
+
+		By("Verifying the type=storage restore brought the data back to count=42 (not 777)")
+		Eventually(func() string {
+			cmd := exec.CommandContext(ctx, "kubectl", "exec",
+				podName, "-n", testNamespace, "--",
+				"cypher-shell", "--format", "plain", "--database", dbName,
+				"-u", "neo4j", "-p", adminPass,
+				"MATCH (i:Item {sku: 'A-100'}) RETURN i.count AS count;",
+			)
+			out, err := cmd.CombinedOutput()
+			outStr := string(out)
+			GinkgoWriter.Printf("type=storage verify cypher-shell err=%v out=%s\n", err, outStr)
+			return outStr
+		}, 2*time.Minute, pollInterval).Should(ContainSubstring("42"),
+			"type=storage restore should match the backup state (count=42), not the post-restore modification (count=777)")
 	})
 
 	It("rejects sharded DB restores with an actionable error pointing at Neo4jShardedDatabase", func() {
