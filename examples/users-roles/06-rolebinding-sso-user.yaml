@@ -18,7 +18,7 @@ metadata:
   namespace: prod
 spec:
   clusterRef: prod-cluster
-  username: alice@example.com   # SSO-provisioned user, NOT a Neo4jUser CR
+  username: alice   # RoleBinding usernames must match ^[a-zA-Z][a-zA-Z0-9_.\-]*$ (no @)
   roles:
     - editor
     - analytics-reader          # may reference a Neo4jRole; pending until it exists

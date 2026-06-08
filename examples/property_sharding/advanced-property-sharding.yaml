@@ -110,17 +110,9 @@ spec:
     propertyShardTopology:
       replicas: 2      # Redundant replicas
 
-    # Advanced property sharding configuration
-    config:
-      # Hash ring configuration
-      internal.dbms.sharded_property_database.hash_ring_size: "1024"
-
-      # Replication settings
-      internal.dbms.sharded_property_database.replication_factor: "2"
-
-      # Performance tuning
-      internal.dbms.sharded_property_database.batch_size: "1000"
-      internal.dbms.sharded_property_database.flush_interval: "1s"
+  # Cluster-wide property-sharding tuning (hash ring, replication factor, etc.)
+  # lives on the Neo4jEnterpriseCluster's spec.propertySharding.config — not on
+  # the Neo4jShardedDatabase. See the cluster above.
 
   # Seed from backups (shard-suffixed artifacts required in the bucket)
   seedURI: "s3://ecommerce-backups/sharded/"

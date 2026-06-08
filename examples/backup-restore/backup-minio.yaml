@@ -106,7 +106,7 @@ spec:
       forcePathStyle: true
 
   options:
-    backupType: DIFFERENTIAL
+    backupType: DIFF
     compress: true
     # preferDiffAsParent chains diff backups without needing a new FULL each time.
     # Requires Neo4j CalVer 2025.04+. Remove this field for 5.26.x.

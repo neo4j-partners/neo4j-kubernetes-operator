@@ -73,6 +73,7 @@ spec:
     cloud:
       provider: aws
       identity:
+        provider: aws
         autoCreate:
           annotations:
             eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/neo4j-backup-role

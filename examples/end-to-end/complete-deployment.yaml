@@ -54,8 +54,11 @@ spec:
   topology:
     servers: 5  # 5 servers will self-organize into primary/secondary roles
     placement:
-      topologyKey: topology.kubernetes.io/zone
-      mode: preferred
+      # Spread servers across zones via pod anti-affinity.
+      antiAffinity:
+        enabled: true
+        topologyKey: topology.kubernetes.io/zone
+        type: preferred   # "preferred" or "required"
     availabilityZones:
       - us-east-1a
       - us-east-1b
@@ -102,15 +105,11 @@ spec:
     # Password policy
     dbms.security.auth_minimum_password_length: "12"
 
-  # Monitoring
+  # Monitoring — enabling this turns on Prometheus metrics (port 2004); the
+  # operator creates the metrics Service. A ServiceMonitor is included as a
+  # separate resource at the end of this file.
   monitoring:
     enabled: true
-    endpoints:
-      metrics: true
-      logs: true
-    serviceMonitor:
-      enabled: true
-      interval: 30s
 ---
 # Create main database with topology constraints
 apiVersion: neo4j.neo4j.com/v1beta1

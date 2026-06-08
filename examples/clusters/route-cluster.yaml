@@ -19,7 +19,8 @@ spec:
     route:
       enabled: true
       host: route-cluster.apps.example.com
-      termination: edge
+      tls:
+        termination: edge   # edge | reencrypt | passthrough
   securityContext:
     # Let platform defaults inject UID/FSGroup; adjust if your SCC requires specific IDs
     podSecurityContext:

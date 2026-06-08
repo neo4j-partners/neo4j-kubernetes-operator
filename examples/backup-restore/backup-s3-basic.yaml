@@ -70,6 +70,7 @@ spec:
     cloud:
       provider: aws
       identity:
+        provider: aws
         autoCreate:
           annotations:
             # Annotate the ServiceAccount with your IAM role ARN for IRSA

@@ -59,8 +59,8 @@ spec:
       className: nginx  # Your ingress controller class
       host: neo4j.example.com  # CHANGE THIS to your domain
 
-      # Enable TLS on the Ingress
-      tlsEnabled: true
+      # TLS on the Ingress is enabled by setting tlsSecretName (the cert-manager
+      # annotation below provisions the referenced Secret).
       tlsSecretName: neo4j-tls-ingress
 
       # Ingress annotations

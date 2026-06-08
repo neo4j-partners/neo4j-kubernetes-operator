@@ -181,7 +181,7 @@ spec:
               EOF
 
               echo "Sample data loaded successfully"
-          restartPolicy: Never
+      restartPolicy: Never
 ---
 # STEP 4: Database Migration Example
 ---
@@ -234,7 +234,7 @@ spec:
               EOF
 
               echo "Migration completed successfully"
-          restartPolicy: Never
+      restartPolicy: Never
 ---
 # STEP 5: Integration Test Database
 ---
@@ -373,7 +373,7 @@ spec:
               time cypher-shell -a bolt://dev-instance-neo4j-service:7687 \
                 -u $NEO4J_USERNAME -p $NEO4J_PASSWORD --database=devdb \
                 "MATCH (u:User)-[:VIEWED]->(p:Product) WITH u, count(p) as views WHERE views > 5 RETURN count(u)"
-          restartPolicy: Never
+      restartPolicy: Never
 ---
 # STEP 8: Development Tools Service
 ---
