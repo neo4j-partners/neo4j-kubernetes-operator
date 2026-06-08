@@ -19,7 +19,11 @@ spec:
         app.kubernetes.io/component: pre-install-check
     spec:
       restartPolicy: Never
-      serviceAccountName: {{ include "neo4j-operator.serviceAccountName" . }}
+      # Dedicated pre-install hook SA (see pre-install-rbac.yaml). The operator
+      # ServiceAccount isn't created until the main install phase, so the hook
+      # Job can't use it — doing so wedges `helm install` at the pre-install
+      # phase with `serviceaccount not found`.
+      serviceAccountName: {{ include "neo4j-operator.fullname" . }}-pre-install
       containers:
       - name: check
         image: {{ .Values.preInstallChecks.image }}

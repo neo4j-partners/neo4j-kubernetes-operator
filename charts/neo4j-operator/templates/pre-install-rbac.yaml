@@ -1,0 +1,62 @@
+{{- if .Values.preInstallChecks.enabled -}}
+# Dedicated RBAC for the pre-install check Job (pre-install-check.yaml).
+#
+# The check runs during Helm's pre-install hook phase, which executes BEFORE
+# the chart's main resources (the operator ServiceAccount + its RBAC) are
+# created. The Job therefore cannot use the operator ServiceAccount — at hook
+# time it does not exist yet, and the Job's pod fails to schedule with
+# `serviceaccount "<name>" not found`, hanging the install. These hook
+# resources are created at weight -10 (ahead of the Job at -5) so the SA and
+# the CRD-read permission it needs are present when the Job runs, and are
+# cleaned up automatically once the hook succeeds.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "neo4j-operator.fullname" . }}-pre-install
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "neo4j-operator.labels" . | nindent 4 }}
+    app.kubernetes.io/component: pre-install-check
+  annotations:
+    "helm.sh/hook": pre-install
+    "helm.sh/hook-weight": "-10"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "neo4j-operator.fullname" . }}-pre-install
+  labels:
+    {{- include "neo4j-operator.labels" . | nindent 4 }}
+    app.kubernetes.io/component: pre-install-check
+  annotations:
+    "helm.sh/hook": pre-install
+    "helm.sh/hook-weight": "-10"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+rules:
+# The check reads cluster-scoped CRDs (e.g. certificates.cert-manager.io) to
+# verify prerequisites before the operator is installed.
+- apiGroups: ["apiextensions.k8s.io"]
+  resources: ["customresourcedefinitions"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "neo4j-operator.fullname" . }}-pre-install
+  labels:
+    {{- include "neo4j-operator.labels" . | nindent 4 }}
+    app.kubernetes.io/component: pre-install-check
+  annotations:
+    "helm.sh/hook": pre-install
+    "helm.sh/hook-weight": "-10"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "neo4j-operator.fullname" . }}-pre-install
+subjects:
+- kind: ServiceAccount
+  name: {{ include "neo4j-operator.fullname" . }}-pre-install
+  namespace: {{ .Release.Namespace }}
+{{- end }}
