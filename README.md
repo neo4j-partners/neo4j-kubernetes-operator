@@ -42,10 +42,17 @@ kubectl apply -f https://raw.githubusercontent.com/neo4j-partners/neo4j-kubernet
 kubectl apply -f https://raw.githubusercontent.com/neo4j-partners/neo4j-kubernetes-operator/main/examples/clusters/minimal-cluster.yaml
 ```
 
-Access the Neo4j browser:
+Access the Neo4j browser (use the Service that matches what you deployed —
+standalone Services are `<name>-service`, cluster client Services are
+`<name>-client`):
 
 ```bash
+# Standalone (single-node-standalone → standalone-neo4j):
 kubectl port-forward svc/standalone-neo4j-service 7474:7474 7687:7687
+
+# OR cluster (minimal-cluster):
+kubectl port-forward svc/minimal-cluster-client 7474:7474 7687:7687
+
 # Open http://localhost:7474
 ```
 
