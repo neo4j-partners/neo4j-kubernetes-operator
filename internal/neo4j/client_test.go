@@ -225,20 +225,6 @@ var _ = Describe("Neo4j Client", func() {
 			err = neo4jClient.DropDatabase(ctx, "testdb")
 			Expect(err).To(HaveOccurred()) // Expected to fail without real Neo4j
 		})
-
-		It("Should handle backup operations", func() {
-			By("Creating backup options")
-			backupOptions := neo4j.BackupOptions{
-				Compress:       true,
-				Verify:         true,
-				AdditionalArgs: []string{},
-			}
-
-			By("Attempting backup operation")
-			// In a real test, this would connect to actual Neo4j
-			err := neo4jClient.CreateBackup(ctx, "neo4j", "test-backup", "/backup/test", backupOptions)
-			Expect(err).To(HaveOccurred()) // Expected to fail without real Neo4j
-		})
 	})
 
 	Context("Health monitoring", func() {

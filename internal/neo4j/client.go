@@ -2690,40 +2690,6 @@ func (c *Client) validateCredentialKeys(secret *corev1.Secret, scheme string) er
 	return nil
 }
 
-// CreateBackup creates a backup of the specified database or cluster
-func (c *Client) CreateBackup(ctx context.Context, databaseName, backupName, backupPath string, options BackupOptions) error {
-	// Validate backup path
-	if backupPath == "" {
-		return fmt.Errorf("backup path cannot be empty")
-	}
-
-	// Build backup command arguments
-	_ = c.buildBackupArgs(databaseName, backupName, backupPath, options)
-
-	// Execute backup using admin commands
-	session := c.driver.NewSession(ctx, neo4j.SessionConfig{
-		AccessMode:   neo4j.AccessModeRead,
-		DatabaseName: "system",
-	})
-	defer session.Close(ctx)
-
-	// Check if database exists before backup
-	if databaseName != "system" && databaseName != "*" {
-		exists, err := c.DatabaseExists(ctx, databaseName)
-		if err != nil {
-			return fmt.Errorf("failed to check if database exists: %w", err)
-		}
-		if !exists {
-			return fmt.Errorf("database %s does not exist", databaseName)
-		}
-	}
-
-	// For Neo4j Enterprise, backup operations are handled by the Neo4jBackup controller
-	// The controller creates Kubernetes Jobs that execute neo4j-admin backup commands
-	// This client method validates parameters and prepares metadata
-	return fmt.Errorf("backup operation must be performed via Neo4jBackup custom resource - this method validates parameters only")
-}
-
 // RestoreBackup restores a backup to the specified database
 func (c *Client) RestoreBackup(ctx context.Context, databaseName, backupPath string, _ RestoreOptions) error {
 	// Validate restore parameters
@@ -2799,58 +2765,6 @@ func (c *Client) GetBackupMetadata(ctx context.Context, backupPath string) (*Bac
 	}
 
 	return metadata, fmt.Errorf("backup metadata reading must be performed via the Neo4jBackup controller which has storage access")
-}
-
-// buildBackupArgs builds the arguments for neo4j-admin backup command
-func (c *Client) buildBackupArgs(databaseName, backupName, backupPath string, options BackupOptions) []string {
-	args := []string{"backup"}
-
-	// Add database specification
-	if databaseName == "*" {
-		args = append(args, "--include-metadata=all")
-	} else {
-		args = append(args, "--database="+databaseName)
-	}
-
-	// Add backup destination
-	args = append(args, "--to="+backupPath+"/"+backupName)
-
-	// Add compression if enabled
-	if options.Compress {
-		args = append(args, "--compress")
-	}
-
-	if options.ParallelDownload {
-		args = append(args, "--parallel-download=true")
-	}
-
-	if options.RemoteAddressResolution {
-		args = append(args, "--remote-address-resolution=true")
-	}
-
-	if options.SkipRecovery {
-		args = append(args, "--skip-recovery=true")
-	}
-
-	// Add verification if enabled
-	if options.Verify {
-		args = append(args, "--check-consistency")
-	}
-
-	// Add additional arguments
-	args = append(args, options.AdditionalArgs...)
-
-	return args
-}
-
-// BackupOptions defines options for backup operations
-type BackupOptions struct {
-	Compress                bool
-	Verify                  bool
-	ParallelDownload        bool
-	RemoteAddressResolution bool
-	SkipRecovery            bool
-	AdditionalArgs          []string
 }
 
 // RestoreOptions defines options for restore operations
