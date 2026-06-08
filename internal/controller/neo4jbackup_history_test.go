@@ -64,9 +64,10 @@ func TestJobToBackupRun(t *testing.T) {
 
 	t.Run("succeeded Job → BackupRun with Duration", func(t *testing.T) {
 		job := &batchv1.Job{
-			// Job.Name is the per-run artifact subfolder name (issue #129).
-			// For CronJob children Kubernetes formats it as
-			// "<cronjob>-<unix-seconds>", deterministic and unique per run.
+			// Under the shared-directory layout (rule 40), Job.Name is
+			// per-run unique (CronJob child = "<cronjob>-<unix-seconds>")
+			// and identifies the run for log correlation. BackupsPath is
+			// the CR-name directory shared by every run of one CR.
 			ObjectMeta: metav1.ObjectMeta{
 				UID:  types.UID("uid-a"),
 				Name: "my-backup-backup-cron-28832400",
@@ -77,7 +78,7 @@ func TestJobToBackupRun(t *testing.T) {
 				CompletionTime: &end,
 			},
 		}
-		run, ok := jobToBackupRun(job)
+		run, ok := jobToBackupRun(job, "my-backup")
 		if !ok {
 			t.Fatalf("expected ok=true for a succeeded Job")
 		}
@@ -90,9 +91,9 @@ func TestJobToBackupRun(t *testing.T) {
 		if run.Stats == nil || run.Stats.Duration != "45s" {
 			t.Errorf("Stats.Duration: got %+v, want 45s", run.Stats)
 		}
-		if run.BackupsPath != "my-backup-backup-cron-28832400" {
-			t.Errorf("BackupsPath: got %q, want %q (the Job name — issue #129)",
-				run.BackupsPath, "my-backup-backup-cron-28832400")
+		if run.BackupsPath != "my-backup" {
+			t.Errorf("BackupsPath: got %q, want %q (the CR-name shared dir — rule 40)",
+				run.BackupsPath, "my-backup")
 		}
 	})
 
@@ -101,7 +102,7 @@ func TestJobToBackupRun(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{UID: types.UID("uid-b")},
 			Status:     batchv1.JobStatus{Failed: 3, StartTime: &start},
 		}
-		run, ok := jobToBackupRun(job)
+		run, ok := jobToBackupRun(job, "my-backup")
 		if !ok {
 			t.Fatalf("expected ok=true for a failed Job")
 		}
@@ -118,7 +119,7 @@ func TestJobToBackupRun(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{UID: types.UID("uid-c")},
 			Status:     batchv1.JobStatus{StartTime: &start},
 		}
-		if _, ok := jobToBackupRun(job); ok {
+		if _, ok := jobToBackupRun(job, "my-backup"); ok {
 			t.Errorf("expected ok=false for a running Job")
 		}
 	})
@@ -405,8 +406,9 @@ func TestRecordOneShotBackupRun_FailedJobAppendsToHistory(t *testing.T) {
 		"failed one-shot Jobs must be appended to status.history (recheck gap 2)")
 	assert.Equal(t, "Failed", got.Status.History[0].Status)
 	assert.Equal(t, "uid-fail", got.Status.History[0].RunID)
-	assert.Equal(t, "my-backup-backup", got.Status.History[0].BackupsPath,
-		"BackupsPath must be populated for failed runs too — partial artifacts may exist")
+	assert.Equal(t, "b", got.Status.History[0].BackupsPath,
+		"BackupsPath must be populated for failed runs too — partial artifacts may exist. "+
+			"Value is the CR name (shared-directory layout, rule 40), not the Job name.")
 	// status.stats is the "latest succeeded run" summary; a failure must
 	// NOT overwrite it. If no prior success exists, it stays nil.
 	assert.Nil(t, got.Status.Stats,

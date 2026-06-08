@@ -1393,159 +1393,6 @@ spec:
                     - name
                     type: object
                 type: object
-              backups:
-                description: BackupsSpec defines default backup configuration
-                properties:
-                  cloud:
-                    description: CloudBlock defines cloud provider configuration
-                    properties:
-                      credentialsSecretRef:
-                        description: |-
-                          CredentialsSecretRef is the name of a Kubernetes Secret containing
-                          cloud provider credentials as environment variables. Optional when
-                          using workload identity / IAM instance profiles.
-                          For S3:    keys AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION
-                          For GCS:   key  GOOGLE_APPLICATION_CREDENTIALS_JSON (base64 service-account JSON)
-                          For Azure: keys AZURE_STORAGE_ACCOUNT, AZURE_STORAGE_KEY
-                        type: string
-                      endpointURL:
-                        description: |-
-                          EndpointURL overrides the S3 API endpoint URL. Use this to target
-                          S3-compatible stores such as MinIO, Ceph RGW, or Cloudflare R2.
-                          Example: "http://minio.minio-ns.svc:9000"
-                          Only applies to the "aws" provider; ignored for gcp and azure.
-                        type: string
-                      forcePathStyle:
-                        description: |-
-                          ForcePathStyle forces S3 path-style addressing, where the bucket name
-                          appears in the URL path (e.g. http://endpoint/bucket/key) rather than
-                          the subdomain (e.g. http://bucket.endpoint/key).
-                          Required for MinIO and most self-hosted S3-compatible stores.
-                          Only effective when EndpointURL is set.
-                        type: boolean
-                      identity:
-                        description: CloudIdentity defines cloud identity configuration
-                        properties:
-                          autoCreate:
-                            description: AutoCreateSpec defines auto-creation of service
-                              accounts
-                            properties:
-                              annotations:
-                                additionalProperties:
-                                  type: string
-                                type: object
-                              enabled:
-                                default: true
-                                type: boolean
-                            type: object
-                          provider:
-                            enum:
-                            - aws
-                            - gcp
-                            - azure
-                            type: string
-                          serviceAccount:
-                            type: string
-                        required:
-                        - provider
-                        type: object
-                      provider:
-                        enum:
-                        - aws
-                        - gcp
-                        - azure
-                        type: string
-                    type: object
-                  defaultStorage:
-                    description: StorageLocation defines storage location for backups
-                    properties:
-                      bucket:
-                        type: string
-                      cloud:
-                        description: Cloud provider configuration
-                        properties:
-                          credentialsSecretRef:
-                            description: |-
-                              CredentialsSecretRef is the name of a Kubernetes Secret containing
-                              cloud provider credentials as environment variables. Optional when
-                              using workload identity / IAM instance profiles.
-                              For S3:    keys AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION
-                              For GCS:   key  GOOGLE_APPLICATION_CREDENTIALS_JSON (base64 service-account JSON)
-                              For Azure: keys AZURE_STORAGE_ACCOUNT, AZURE_STORAGE_KEY
-                            type: string
-                          endpointURL:
-                            description: |-
-                              EndpointURL overrides the S3 API endpoint URL. Use this to target
-                              S3-compatible stores such as MinIO, Ceph RGW, or Cloudflare R2.
-                              Example: "http://minio.minio-ns.svc:9000"
-                              Only applies to the "aws" provider; ignored for gcp and azure.
-                            type: string
-                          forcePathStyle:
-                            description: |-
-                              ForcePathStyle forces S3 path-style addressing, where the bucket name
-                              appears in the URL path (e.g. http://endpoint/bucket/key) rather than
-                              the subdomain (e.g. http://bucket.endpoint/key).
-                              Required for MinIO and most self-hosted S3-compatible stores.
-                              Only effective when EndpointURL is set.
-                            type: boolean
-                          identity:
-                            description: CloudIdentity defines cloud identity configuration
-                            properties:
-                              autoCreate:
-                                description: AutoCreateSpec defines auto-creation
-                                  of service accounts
-                                properties:
-                                  annotations:
-                                    additionalProperties:
-                                      type: string
-                                    type: object
-                                  enabled:
-                                    default: true
-                                    type: boolean
-                                type: object
-                              provider:
-                                enum:
-                                - aws
-                                - gcp
-                                - azure
-                                type: string
-                              serviceAccount:
-                                type: string
-                            required:
-                            - provider
-                            type: object
-                          provider:
-                            enum:
-                            - aws
-                            - gcp
-                            - azure
-                            type: string
-                        type: object
-                      path:
-                        type: string
-                      pvc:
-                        description: PVC configuration
-                        properties:
-                          name:
-                            description: Name of the PVC to use (for referencing existing
-                              PVCs)
-                            type: string
-                          size:
-                            type: string
-                          storageClassName:
-                            type: string
-                        type: object
-                      type:
-                        enum:
-                        - s3
-                        - gcs
-                        - azure
-                        - pvc
-                        type: string
-                    required:
-                    - type
-                    type: object
-                type: object
               config:
                 additionalProperties:
                   type: string
@@ -1706,6 +1553,65 @@ spec:
                       type: object
                   required:
                   - name
+                  type: object
+                type: array
+              extraEnvFrom:
+                description: |-
+                  ExtraEnvFrom projects entire Secrets or ConfigMaps as environment
+                  variables on the neo4j container. Same semantics as
+                  Neo4jEnterpriseCluster.spec.extraEnvFrom — required when this
+                  standalone hosts a `Neo4jDatabase` with `spec.seedURI` against a
+                  cloud-backed source (S3/GCS/Azure) and `spec.seedCredentials` is
+                  set, so the Neo4j JVM's AWS/GCP/Azure SDK default credential chain
+                  can authenticate the seed fetch.
+
+                  Same actionable-error + annotation-gated auto-inherit semantics as
+                  the cluster field (see Neo4jEnterpriseCluster docs): set
+                  `neo4j.com/auto-inherit-seed-creds=true` on this CR to let the
+                  operator add missing entries automatically (triggers a pod restart).
+                items:
+                  description: EnvFromSource represents the source of a set of ConfigMaps
+                    or Secrets
+                  properties:
+                    configMapRef:
+                      description: The ConfigMap to select from
+                      properties:
+                        name:
+                          default: ""
+                          description: |-
+                            Name of the referent.
+                            This field is effectively required, but due to backwards compatibility is
+                            allowed to be empty. Instances of this type with an empty value here are
+                            almost certainly wrong.
+                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                          type: string
+                        optional:
+                          description: Specify whether the ConfigMap must be defined
+                          type: boolean
+                      type: object
+                      x-kubernetes-map-type: atomic
+                    prefix:
+                      description: |-
+                        Optional text to prepend to the name of each environment variable.
+                        May consist of any printable ASCII characters except '='.
+                      type: string
+                    secretRef:
+                      description: The Secret to select from
+                      properties:
+                        name:
+                          default: ""
+                          description: |-
+                            Name of the referent.
+                            This field is effectively required, but due to backwards compatibility is
+                            allowed to be empty. Instances of this type with an empty value here are
+                            almost certainly wrong.
+                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                          type: string
+                        optional:
+                          description: Specify whether the Secret must be defined
+                          type: boolean
+                      type: object
+                      x-kubernetes-map-type: atomic
                   type: object
                 type: array
               extraVolumeMounts:
@@ -5292,14 +5198,6 @@ spec:
               storage:
                 description: StorageSpec defines storage configuration
                 properties:
-                  backupStorage:
-                    description: Additional storage for backups
-                    properties:
-                      className:
-                        type: string
-                      size:
-                        type: string
-                    type: object
                   className:
                     type: string
                   retentionPolicy:
@@ -5701,10 +5599,6 @@ spec:
                   healthStatus:
                     description: HealthStatus shows the current health status of the
                       database
-                    type: string
-                  lastBackupTime:
-                    description: LastBackupTime shows when the last backup was completed
-                    format: date-time
                     type: string
                   lastHealthCheck:
                     description: LastHealthCheck shows when the last health check

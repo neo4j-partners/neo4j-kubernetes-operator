@@ -328,3 +328,61 @@ func TestBuildRestoreVolumesAlwaysMountsDataPVC(t *testing.T) {
 		})
 	}
 }
+
+// TestWarnIfChainParent pins the advisory that restoring via a FULL+DIFF chain
+// PARENT seeds from its full snapshot, not the latest diff state (rule 78).
+// The warning must fire only when differential children with a Succeeded run
+// actually exist — so a restore intending "latest" via the parent FULL CR is
+// surfaced, not silently downgraded.
+func TestWarnIfChainParent(t *testing.T) {
+	const ns = "chain-ns"
+	mkBackup := func(name, chainFrom, status string) *neo4jv1beta1.Neo4jBackup {
+		b := &neo4jv1beta1.Neo4jBackup{
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
+			Spec:       neo4jv1beta1.Neo4jBackupSpec{ChainFromBackup: chainFrom},
+		}
+		if status != "" {
+			b.Status.History = []neo4jv1beta1.BackupRun{{Status: status}}
+		}
+		return b
+	}
+	restore := &neo4jv1beta1.Neo4jRestore{ObjectMeta: metav1.ObjectMeta{Name: "r", Namespace: ns}}
+
+	drain := func(r *Neo4jRestoreReconciler) []string {
+		fr := r.Recorder.(*record.FakeRecorder)
+		var out []string
+		for {
+			select {
+			case e := <-fr.Events:
+				out = append(out, e)
+			default:
+				return out
+			}
+		}
+	}
+
+	t.Run("parent with a Succeeded diff child warns and names the child", func(t *testing.T) {
+		r := newRestoreTestReconciler(t,
+			mkBackup("daily", "", "Succeeded"),
+			mkBackup("hourly", "daily", "Succeeded"))
+		r.warnIfChainParent(context.Background(), restore, "daily")
+		ev := drain(r)
+		require.Len(t, ev, 1)
+		assert.Contains(t, ev[0], EventReasonRestoreFromChainParent)
+		assert.Contains(t, ev[0], "hourly")
+	})
+
+	t.Run("no chain children means no warning", func(t *testing.T) {
+		r := newRestoreTestReconciler(t, mkBackup("daily", "", "Succeeded"))
+		r.warnIfChainParent(context.Background(), restore, "daily")
+		assert.Empty(t, drain(r))
+	})
+
+	t.Run("child with no Succeeded run does not warn", func(t *testing.T) {
+		r := newRestoreTestReconciler(t,
+			mkBackup("daily", "", "Succeeded"),
+			mkBackup("hourly", "daily", "Failed"))
+		r.warnIfChainParent(context.Background(), restore, "daily")
+		assert.Empty(t, drain(r))
+	})
+}

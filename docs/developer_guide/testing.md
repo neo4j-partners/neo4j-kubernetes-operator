@@ -229,20 +229,20 @@ Eventually(func() error {
 Expect(*serverSts.Spec.Replicas).To(Equal(int32(2)))
 ```
 
-#### Centralized Backup Testing
+#### Backup Testing
 
-Tests verify centralized backup architecture:
+Backups are Job-per-`Neo4jBackup`-CR — there is no persistent backup pod or
+sidecar. Tests verify the Job spawned by a `Neo4jBackup` CR:
 
 ```go
-By("Verifying centralized backup StatefulSet")
-backupSts := &appsv1.StatefulSet{}
+By("Verifying the Neo4jBackup Job")
+backupJob := &batchv1.Job{}
 Eventually(func() error {
     return k8sClient.Get(ctx, types.NamespacedName{
-        Name:      clusterName + "-backup",  // Centralized backup
+        Name:      backupName + "-backup",  // one-shot Job
         Namespace: namespace.Name,
-    }, backupSts)
+    }, backupJob)
 }, timeout, interval).Should(Succeed())
-Expect(*backupSts.Spec.Replicas).To(Equal(int32(1)))  // Single backup pod
 ```
 
 #### Dual Deployment Support Testing
@@ -482,7 +482,6 @@ It("Should maintain efficient reconciliation rates", func() {
 
 ```go
 It("Should use optimal resource patterns", func() {
-    // Verify centralized backup uses <30% resources of sidecar approach
     // Check server-based StatefulSet efficiency
 })
 ```

@@ -20,6 +20,7 @@ import (
 	"context"
 	stderrors "errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -62,16 +63,11 @@ const (
 	SourceTypeGCS    = "gcs"
 )
 
-// errBackupNotReady is a sentinel error returned by the source resolver
-// when the referenced Neo4jBackup exists but has no Succeeded run in
-// status.history yet. This is a *transient* condition — the backup may
-// complete on a future reconcile — so callers route it to StatusPending
-// (which the Reconcile guard requeues) rather than StatusFailed (which
-// the guard pins as a terminal state until the CR is recreated).
-//
-// Use errors.Is to detect; resolveBackupRef wraps it with fmt.Errorf
-// to preserve the human-readable backup name in the message.
-var errBackupNotReady = fmt.Errorf("backup has no Succeeded run yet")
+// errBackupNotReady is the package-internal alias for ErrBackupNotReady.
+// Kept for backward compatibility with the restore-controller's internal
+// usage; new code should use ErrBackupNotReady (defined in
+// backup_resolver.go) directly.
+var errBackupNotReady = ErrBackupNotReady
 
 // restoreServiceAccountName is the ServiceAccount used by all restore Job
 // pods. Mirrors neo4j-backup-sa on the backup side; intentionally separate
@@ -122,6 +118,23 @@ func hardenedRestoreContainerSecurityContext() *corev1.SecurityContext {
 const (
 	// RestoreFinalizer is the finalizer for Neo4j restore resources
 	RestoreFinalizer = "neo4j.com/restore-finalizer"
+
+	// AnnotationCypherRestoreIssued marks that the cluster-native Cypher
+	// restore (the asynchronous `dbms.recreateDatabase` path) has already been
+	// issued against the live cluster. Its value is the RFC3339 timestamp of
+	// the issue. The annotation serves two purposes:
+	//   1. Guard: re-entering startClusterCypherRestore must NOT re-issue the
+	//      recreate (that would wipe the partially-seeded database and restart
+	//      the seed from scratch).
+	//   2. Deadline: pollClusterRestoreOnline derives the online-wait deadline
+	//      from this timestamp so the worker is never held blocking — it polls
+	//      one SHOW DATABASE per reconcile and requeues.
+	AnnotationCypherRestoreIssued = "neo4j.com/cypher-restore-issued"
+
+	// cypherRestoreOnlineTimeout bounds how long pollClusterRestoreOnline will
+	// wait (across requeues) for an asynchronously-recreated database to
+	// converge to online before marking the restore Failed.
+	cypherRestoreOnlineTimeout = 5 * time.Minute
 )
 
 // +kubebuilder:rbac:groups=neo4j.neo4j.com,resources=neo4jrestores,verbs=get;list;watch;create;update;patch;delete
@@ -247,6 +260,24 @@ func (r *Neo4jRestoreReconciler) startRestore(ctx context.Context, restore *neo4
 		return ctrl.Result{}, err
 	}
 
+	// Cluster targets bypass the Job + `neo4j-admin restore` path entirely
+	// (the docs flag it as unsafe on clusters — `--overwrite-destination`
+	// "is not safe on a cluster since clusters have additional state that
+	// would be inconsistent with the restored database"). Use the Cypher
+	// path documented at:
+	//   https://neo4j.com/docs/operations-manual/current/clustering/databases/#restore-database-using-uri-approach
+	//   https://neo4j.com/docs/operations-manual/current/clustering/databases/#restore-database-using-recreate-procedure
+	// Standalone targets keep the existing Job-based flow.
+	isTrueCluster, _, lookupErr := r.isRestoreTargetTrueCluster(ctx, restore)
+	if lookupErr != nil {
+		logger.Error(lookupErr, "Failed to determine target type")
+		r.updateRestoreStatus(ctx, restore, StatusFailed, fmt.Sprintf("Target lookup failed: %v", lookupErr))
+		return ctrl.Result{RequeueAfter: r.RequeueAfter}, lookupErr
+	}
+	if isTrueCluster {
+		return r.startClusterCypherRestore(ctx, restore, cluster)
+	}
+
 	// Check if database exists and handle accordingly
 	if !restore.Spec.Force {
 		if err := r.checkDatabaseExists(ctx, restore, cluster); err != nil {
@@ -327,6 +358,14 @@ func (r *Neo4jRestoreReconciler) startRestore(ctx context.Context, restore *neo4
 
 func (r *Neo4jRestoreReconciler) checkRestoreProgress(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore, cluster *neo4jv1beta1.Neo4jEnterpriseCluster) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
+
+	// Cluster-native Cypher restores have no Job — the asynchronous
+	// `dbms.recreateDatabase` was issued in a prior reconcile (marked by the
+	// cypher-restore-issued annotation). Poll the live database's online state
+	// instead of looking for a Job.
+	if _, issued := restore.Annotations[AnnotationCypherRestoreIssued]; issued {
+		return r.pollClusterRestoreOnline(ctx, restore, cluster)
+	}
 
 	// Get restore job
 	jobName := restore.Name + "-restore"
@@ -589,6 +628,26 @@ func (r *Neo4jRestoreReconciler) validateRestore(ctx context.Context, restore *n
 		return fmt.Errorf("databaseName is required")
 	}
 
+	// Sharded databases must NOT be restored via Neo4jRestore — the Cypher
+	// shape (`CREATE DATABASE … SET GRAPH SHARD … SET PROPERTY SHARDS …`)
+	// is owned by Neo4jShardedDatabase, and the destructive restore path
+	// is gated by `replaceExisting=true` + `force=true` (rule 63) on that
+	// CR. Detect via Neo4jShardedDatabase lookup in the same namespace.
+	shardedDB := &neo4jv1beta1.Neo4jShardedDatabase{}
+	if err := r.Get(ctx, types.NamespacedName{Name: restore.Spec.DatabaseName, Namespace: restore.Namespace}, shardedDB); err == nil {
+		return fmt.Errorf(
+			"database %q is a Neo4jShardedDatabase — use the Neo4jShardedDatabase restore path instead:\n"+
+				"  spec:\n"+
+				"    seedBackupRef: %q\n"+
+				"    replaceExisting: true\n"+
+				"    force: true\n"+
+				"Sharded restores require the SET GRAPH SHARD / SET PROPERTY SHARDS clauses that only CREATE DATABASE accepts; dbms.recreateDatabase doesn't support sharded topology",
+			restore.Spec.DatabaseName, restore.Spec.Source.BackupRef,
+		)
+	} else if !errors.IsNotFound(err) {
+		return fmt.Errorf("failed to check whether %q is a Neo4jShardedDatabase: %w", restore.Spec.DatabaseName, err)
+	}
+
 	return nil
 }
 
@@ -745,6 +804,7 @@ func (r *Neo4jRestoreReconciler) createRestoreJob(ctx context.Context, restore *
 								return envs
 							}(),
 							VolumeMounts: r.buildRestoreVolumeMounts(&resolvedRestore),
+							Resources:    resolveRestoreJobResources(restore.Spec.Options),
 						},
 					},
 					Volumes: r.buildRestoreVolumes(ctx, &resolvedRestore),
@@ -838,59 +898,11 @@ func (r *Neo4jRestoreReconciler) ensureRestoreServiceAccount(ctx context.Context
 	return err
 }
 
-// resolveBackupRef dereferences a Neo4jBackup CR name into a concrete
-// StorageLocation (with cloud creds folded in) and the per-run subfolder
-// (BackupsPath) of its most-recent Succeeded run. Used by both the main
-// restore path (source.type=backup) and the PITR base-backup branch
-// (pitr.baseBackup.type=backup).
-//
-// Returns an error if backupRef is empty, the Neo4jBackup is missing, or
-// its status.history contains no Succeeded run — restoring against a
-// failed/missing backup would silently produce garbage.
+// resolveBackupRef delegates to the package-shared ResolveBackupRef. Kept as
+// a method on the receiver so existing call sites in the restore controller
+// can stay unchanged; new controllers should call ResolveBackupRef directly.
 func (r *Neo4jRestoreReconciler) resolveBackupRef(ctx context.Context, backupRef, namespace string) (storage neo4jv1beta1.StorageLocation, backupPath string, err error) {
-	if backupRef == "" {
-		return neo4jv1beta1.StorageLocation{}, "", fmt.Errorf("backupRef is required")
-	}
-
-	backup := &neo4jv1beta1.Neo4jBackup{}
-	if err := r.Get(ctx, types.NamespacedName{Name: backupRef, Namespace: namespace}, backup); err != nil {
-		return neo4jv1beta1.StorageLocation{}, "", fmt.Errorf("failed to get Neo4jBackup %q: %w", backupRef, err)
-	}
-
-	// status.history is sorted newest-first by sortBackupRunsNewestFirst
-	// (see neo4jbackup_controller.go). Walk forward until we find the
-	// first Succeeded run — "the most recent successful backup" is the
-	// only reasonable default for a backupRef-based restore.
-	var succeeded *neo4jv1beta1.BackupRun
-	for i := range backup.Status.History {
-		if backup.Status.History[i].Status == "Succeeded" {
-			succeeded = &backup.Status.History[i]
-			break
-		}
-	}
-	if succeeded == nil {
-		// Wrap with errBackupNotReady so the caller can detect this
-		// transient condition with errors.Is and route to Pending +
-		// requeue instead of the terminal Failed phase.
-		return neo4jv1beta1.StorageLocation{}, "", fmt.Errorf(
-			"Neo4jBackup %q: %w (status.history has no Succeeded run yet)",
-			backupRef, errBackupNotReady,
-		)
-	}
-
-	// Materialize a StorageLocation copy with the backup's cloud creds
-	// folded in. Neo4jBackup historically allowed `spec.cloud` as an
-	// alternative to `spec.storage.cloud`; cloudBlockForBackup picks
-	// whichever is populated, and we project it onto the synthesized
-	// Storage so downstream cloudBlockForRestore finds it via the
-	// canonical path.
-	resolved := backup.Spec.Storage
-	if resolved.Cloud == nil {
-		if cb := cloudBlockForBackup(backup); cb != nil {
-			resolved.Cloud = cb
-		}
-	}
-	return resolved, succeeded.BackupsPath, nil
+	return ResolveBackupRef(ctx, r.Client, backupRef, namespace)
 }
 
 // resolveRestoreSource dereferences source.type=backup into a concrete
@@ -1103,11 +1115,20 @@ func resolveLocalPVCFromPath(backupPath, databaseName string) string {
 	if databaseName == "" || !strings.HasPrefix(backupPath, "/backup") {
 		return backupPath
 	}
-	// `ls ... | head -1` picks the single matching file (per-run subfolder
-	// holds at most one `<dbname>-*.backup`). If no match exists, ls prints
-	// to stderr and head returns nothing, so --from-path= becomes empty and
-	// neo4j-admin errors with a clear "missing argument" message.
-	return fmt.Sprintf("$(ls %s/%s-*.backup | head -1)",
+	// `ls ... | tail -1` picks the LATEST matching file. neo4j-admin embeds
+	// an ISO-8601 timestamp in each artifact's filename
+	// (`<dbname>-YYYY-MM-DDThh-mm-ss.backup`), and ISO-8601 sorts
+	// lexicographically into chronological order — so `ls` (default
+	// alphabetical) | `tail -1` reliably returns the most-recent run when
+	// multiple runs share the directory (the canonical layout for
+	// `--type=DIFF` chaining). Callers that need a specific run pin it via
+	// spec.source.backupRunID → the resolver pre-substitutes the captured
+	// ArtifactFilename into backupPath, in which case backupPath is already
+	// a file path and `resolveLocalPVCFromPath` is not used. If no match
+	// exists, ls prints to stderr and tail returns nothing, so --from-path=
+	// becomes empty and neo4j-admin errors with a clear "missing argument"
+	// message.
+	return fmt.Sprintf("$(ls %s/%s-*.backup | tail -1)",
 		shellQuote(backupPath), shellQuote(databaseName))
 }
 
@@ -1926,6 +1947,527 @@ func (r *Neo4jRestoreReconciler) getClusterRef(ctx context.Context, restore *neo
 			restore.Spec.ClusterRef, err)
 	}
 	return standaloneAsCluster(standalone), nil
+}
+
+// startClusterCypherRestore is the cluster-native restore path: skip the
+// `neo4j-admin database restore` Job entirely (unsafe on clusters per the
+// docs) and use Cypher against the live cluster instead.
+//
+// Decision matrix:
+//   - Database EXISTS  → `CALL dbms.recreateDatabase($db, {seedURI: $uri})`
+//     (preserves user/role privileges; no DROP needed; per-server atomic
+//     swap from the seed chain).
+//   - Database ABSENT  → `CREATE DATABASE $db OPTIONS { seedURI: $uri } WAIT`
+//     (the modern OPTIONS syntax; CloudSeedProvider scans the directory
+//     for the backup chain).
+//
+// In both forms the URI points at a DIRECTORY (with trailing slash)
+// containing the chain — CloudSeedProvider applies the full + diffs in
+// order. The `WAIT` clause + Neo4j's blocking semantics mean the call
+// returns after the new state is online; we then mark the restore
+// Completed.
+//
+// Sharded databases are NOT supported by this path — they require the
+// `Neo4jShardedDatabase.spec.replaceExisting` flow (rule 63). The
+// validator rejects sharded restores with an actionable error.
+func (r *Neo4jRestoreReconciler) startClusterCypherRestore(
+	ctx context.Context,
+	restore *neo4jv1beta1.Neo4jRestore,
+	cluster *neo4jv1beta1.Neo4jEnterpriseCluster,
+) (ctrl.Result, error) {
+	logger := log.FromContext(ctx)
+
+	// If the asynchronous recreate was already issued in a prior reconcile
+	// (e.g. the status update to Running failed after the recreate landed and
+	// the annotation was stamped), re-running the setup here would re-issue
+	// the recreate — wiping the partially-seeded database and restarting from
+	// scratch, and re-spawning the proxy / re-emitting chain-parent warnings.
+	// Hand straight off to the requeue-driven poll phase instead.
+	if _, issued := restore.Annotations[AnnotationCypherRestoreIssued]; issued {
+		return r.pollClusterRestoreOnline(ctx, restore, cluster)
+	}
+
+	// Resolve backupRef → storage + per-CR shared directory.
+	storage, backupPath, err := ResolveBackupRef(ctx, r.Client, restore.Spec.Source.BackupRef, restore.Namespace)
+	if err != nil {
+		if stderrors.Is(err, ErrBackupNotReady) {
+			logger.Info("Cluster Cypher restore waiting for backup to complete", "error", err.Error())
+			r.updateRestoreStatus(ctx, restore, StatusPending, fmt.Sprintf("Waiting for backup to complete: %v", err))
+			return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
+		}
+		// `storage` and `backupPath` are only used for type=backup. For
+		// type=storage we read directly from spec.source.
+		if restore.Spec.Source.Type != SourceTypeBackup {
+			storage = neo4jv1beta1.StorageLocation{}
+			backupPath = ""
+		} else {
+			logger.Error(err, "Failed to resolve backupRef")
+			r.updateRestoreStatus(ctx, restore, StatusFailed, fmt.Sprintf("Failed to resolve backupRef: %v", err))
+			return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
+		}
+	}
+	if restore.Spec.Source.Type == "storage" {
+		if restore.Spec.Source.Storage == nil {
+			r.updateRestoreStatus(ctx, restore, StatusFailed, "source.storage is required when type=storage")
+			return ctrl.Result{}, fmt.Errorf("source.storage required for type=storage")
+		}
+		storage = *restore.Spec.Source.Storage
+		backupPath = restore.Spec.Source.BackupPath
+	}
+
+	// Advisory: restoring via a FULL+DIFF chain PARENT seeds from its latest
+	// full snapshot, not the latest chain state held by the differential
+	// children (rule 78). Surface that so the user isn't silently surprised.
+	if restore.Spec.Source.Type == SourceTypeBackup {
+		r.warnIfChainParent(ctx, restore, restore.Spec.Source.BackupRef)
+	}
+
+	// Build the seedURI. Cloud-backed backups produce a directory URI
+	// (s3://bucket/<base>/<cr-name>/) consumed by Neo4j's CloudSeedProvider.
+	// PVC-backed backups produce an http:// URL pointing at the captured
+	// `.backup` filename served by an in-cluster proxy (the same approach
+	// used by the sharded PVC seedBackupRef path).
+	var seedURI string
+	switch storage.Type {
+	case "s3", "gcs", "azure":
+		seedURI, err = buildSeedURIFromBackupStorage(storage, backupPath)
+		if err != nil {
+			r.updateRestoreStatus(ctx, restore, StatusFailed, err.Error())
+			return ctrl.Result{}, err
+		}
+		// Neo4j's CloudSeedProvider seeds a single database from the exact
+		// `.backup` FILE — it does NOT scan a directory. Pointing it at the
+		// per-CR directory makes it try to open the directory name as a file
+		// ("Can't open seed file: …/<chain-root>").
+		if restore.Spec.Source.Type == SourceTypeBackup {
+			// type=backup: the operator knows the artifact filename from the
+			// backup's status.history — append it (same as the PVC path).
+			fname, ferr := r.latestSucceededArtifactFilename(ctx, restore.Spec.Source.BackupRef, restore.Namespace)
+			if ferr != nil {
+				r.updateRestoreStatus(ctx, restore, StatusFailed, ferr.Error())
+				return ctrl.Result{}, ferr
+			}
+			seedURI = strings.TrimRight(seedURI, "/") + "/" + fname
+		} else {
+			// type=storage: the operator has no Neo4jBackup history to read,
+			// so source.backupPath MUST be the exact `.backup` file path
+			// (e.g. "<chain-root>/<dbname>-<timestamp>.backup"). Strip the
+			// trailing slash buildSeedURIFromBackupStorage adds so the URI
+			// stays a file; reject a bare directory with an actionable error.
+			seedURI = strings.TrimRight(seedURI, "/")
+			if !strings.HasSuffix(seedURI, ".backup") {
+				msg := fmt.Sprintf("cluster restore with source.type=storage requires source.backupPath to be the exact .backup file (e.g. '<chain-root>/<dbname>-<timestamp>.backup'); got a non-file path resolving to %q. CloudSeedProvider cannot seed a single database from a directory.", seedURI)
+				r.updateRestoreStatus(ctx, restore, StatusFailed, msg)
+				return ctrl.Result{}, fmt.Errorf("%s", msg)
+			}
+		}
+		// Project cloud credentials onto cluster pods (envFrom) so the JVM's
+		// SDK default credential chain can authenticate the seed fetch.
+		if storage.Cloud != nil && storage.Cloud.CredentialsSecretRef != "" {
+			autoInherited, credsErr := EnsureClusterHasSeedCreds(ctx, r.Client, cluster, storage.Cloud.CredentialsSecretRef)
+			if credsErr != nil {
+				logger.Error(credsErr, "Cluster missing seed credentials projection")
+				r.updateRestoreStatus(ctx, restore, StatusFailed, credsErr.Error())
+				return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
+			}
+			if autoInherited {
+				logger.Info("Auto-inherited seed credentials onto cluster; waiting for rolling restart",
+					"cluster", cluster.Name)
+				r.updateRestoreStatus(ctx, restore, StatusPending,
+					fmt.Sprintf("Auto-inherited seed credentials Secret %q onto cluster %q; waiting for rolling restart", storage.Cloud.CredentialsSecretRef, cluster.Name))
+				return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
+			}
+		}
+	case "pvc":
+		// Cluster + PVC restore: spawn the in-cluster HTTP proxy in front
+		// of the backup PVC, build a single-file seedURI against it. The
+		// cluster's seed_from_uri_providers default (rule 74) includes
+		// URLConnectionSeedProvider so http:// URIs are accepted.
+		uri, result, perr := r.resolveClusterPVCRestoreURI(ctx, restore, storage, backupPath)
+		if perr != nil {
+			r.updateRestoreStatus(ctx, restore, StatusFailed, perr.Error())
+			return ctrl.Result{}, perr
+		}
+		if uri == "" {
+			// Proxy still rolling out or backup CR not yet ready — caller
+			// already wrote the Pending status; just propagate the result.
+			return result, nil
+		}
+		seedURI = uri
+	default:
+		err := fmt.Errorf("cluster restore does not support storage type %q (expected s3, gcs, azure, or pvc)", storage.Type)
+		r.updateRestoreStatus(ctx, restore, StatusFailed, err.Error())
+		return ctrl.Result{}, err
+	}
+
+	// Open a Bolt connection to the cluster.
+	neo4jClient, err := r.createNeo4jClient(ctx, cluster)
+	if err != nil {
+		logger.Error(err, "Failed to create Neo4j client for cluster Cypher restore")
+		r.updateRestoreStatus(ctx, restore, StatusFailed, fmt.Sprintf("Failed to connect to cluster: %v", err))
+		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
+	}
+	defer func() { _ = neo4jClient.Close() }()
+
+	exists, err := neo4jClient.DatabaseExists(ctx, restore.Spec.DatabaseName)
+	if err != nil {
+		logger.Error(err, "Failed to check database existence")
+		r.updateRestoreStatus(ctx, restore, StatusFailed, fmt.Sprintf("Database existence check failed: %v", err))
+		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
+	}
+
+	imageTag := fmt.Sprintf("%s:%s", cluster.Spec.Image.Repo, cluster.Spec.Image.Tag)
+	version, vErr := neo4j.GetImageVersion(imageTag)
+	if vErr != nil {
+		version = &neo4j.Version{Major: 5, Minor: 26, Patch: 0}
+	}
+
+	r.updateRestoreStatus(ctx, restore, StatusRunning, fmt.Sprintf("Cluster Cypher restore in progress (seedURI=%s, exists=%v)", seedURI, exists))
+	r.Recorder.Event(restore, corev1.EventTypeNormal, EventReasonRestoreStarted,
+		fmt.Sprintf("Cluster Cypher restore: database %q (%s), seedURI=%s",
+			restore.Spec.DatabaseName, ternaryString(exists, "recreate", "create"), seedURI))
+
+	if exists {
+		// `dbms.recreateDatabase` is ASYNCHRONOUS — it returns as soon as the
+		// recreate is scheduled, long before the per-server seed-from-URI
+		// finishes. We therefore must NOT block the reconcile worker on a
+		// 5-minute online-wait here: MaxConcurrentReconciles is small, and a
+		// blocking wait starves every other restore (a single un-seedable
+		// restore would hold the worker for the full timeout). Instead, issue
+		// the recreate exactly ONCE (guarded by the cypher-restore-issued
+		// annotation — re-issuing would wipe the partially-seeded database and
+		// restart the seed), then hand off to the requeue-driven poll phase
+		// (checkRestoreProgress → pollClusterRestoreOnline).
+		applied, recreateErr := neo4jClient.RecreateDatabaseWithSeedURI(ctx, version, restore.Spec.DatabaseName, seedURI)
+		if recreateErr != nil {
+			logger.Error(recreateErr, "dbms.recreateDatabase with seedURI failed")
+			r.updateRestoreStatus(ctx, restore, StatusFailed, fmt.Sprintf("recreateDatabase failed: %v", recreateErr))
+			return ctrl.Result{RequeueAfter: r.RequeueAfter}, recreateErr
+		}
+		if !applied {
+			// Version doesn't support recreate. CREATE DATABASE OPTIONS{seedURI}
+			// only works on absent databases — for an existing one we'd need
+			// DROP + CREATE. Surface as actionable failure.
+			msg := fmt.Sprintf("Neo4j version %d.%d doesn't support dbms.recreateDatabase; DROP DATABASE %q manually and re-run the restore",
+				version.Major, version.Minor, restore.Spec.DatabaseName)
+			r.updateRestoreStatus(ctx, restore, StatusFailed, msg)
+			return ctrl.Result{}, fmt.Errorf("%s", msg)
+		}
+		// Mark the recreate issued (annotation = issue timestamp → poll
+		// deadline) and move to Running. The next reconcile routes to
+		// pollClusterRestoreOnline, which polls SHOW DATABASE per requeue
+		// rather than holding the worker.
+		if err := r.markCypherRestoreIssued(ctx, restore); err != nil {
+			logger.Error(err, "Failed to mark cypher restore issued")
+			return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
+		}
+		r.updateRestoreStatus(ctx, restore, StatusRunning,
+			fmt.Sprintf("Database %q recreate issued; waiting for seed to converge online (seedURI=%s)", restore.Spec.DatabaseName, seedURI))
+		return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
+	}
+
+	// Database ABSENT: `CREATE DATABASE … OPTIONS{seedURI} WAIT` is
+	// SYNCHRONOUS — it blocks until the database is online (or fails fast on a
+	// bad/unreachable seed). It's a single atomic operation, so we keep it
+	// inline and mark Completed directly on success.
+	if createErr := neo4jClient.CreateDatabaseWithSeedURIOptions(ctx, restore.Spec.DatabaseName, seedURI, false); createErr != nil {
+		logger.Error(createErr, "CREATE DATABASE OPTIONS{seedURI} failed")
+		r.updateRestoreStatus(ctx, restore, StatusFailed, fmt.Sprintf("CREATE DATABASE OPTIONS{seedURI} failed: %v", createErr))
+		return ctrl.Result{RequeueAfter: r.RequeueAfter}, createErr
+	}
+
+	completion := metav1.Now()
+	restore.Status.CompletionTime = &completion
+	r.updateRestoreStatus(ctx, restore, StatusCompleted,
+		fmt.Sprintf("Database %q restored via cluster Cypher path (seedURI=%s)", restore.Spec.DatabaseName, seedURI))
+	r.Recorder.Event(restore, corev1.EventTypeNormal, EventReasonRestoreCompleted,
+		fmt.Sprintf("Cluster Cypher restore completed for database %q", restore.Spec.DatabaseName))
+	return ctrl.Result{}, nil
+}
+
+// markCypherRestoreIssued stamps the cypher-restore-issued annotation with the
+// current RFC3339 timestamp via a conflict-retried metadata Update. The
+// annotation guards against re-issuing the asynchronous recreate and anchors
+// the online-wait deadline used by pollClusterRestoreOnline.
+func (r *Neo4jRestoreReconciler) markCypherRestoreIssued(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore) error {
+	stamp := metav1.Now().UTC().Format(time.RFC3339)
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		latest := &neo4jv1beta1.Neo4jRestore{}
+		if err := r.Get(ctx, client.ObjectKeyFromObject(restore), latest); err != nil {
+			return err
+		}
+		if latest.Annotations == nil {
+			latest.Annotations = map[string]string{}
+		}
+		if _, ok := latest.Annotations[AnnotationCypherRestoreIssued]; ok {
+			return nil // already stamped — preserve the original timestamp
+		}
+		latest.Annotations[AnnotationCypherRestoreIssued] = stamp
+		return r.Update(ctx, latest)
+	})
+	if err != nil {
+		return err
+	}
+	// Reflect the annotation onto the in-memory object so the caller's
+	// subsequent status update / requeue sees it.
+	if restore.Annotations == nil {
+		restore.Annotations = map[string]string{}
+	}
+	if _, ok := restore.Annotations[AnnotationCypherRestoreIssued]; !ok {
+		restore.Annotations[AnnotationCypherRestoreIssued] = stamp
+	}
+	return nil
+}
+
+// pollClusterRestoreOnline is the requeue-driven poll phase for the
+// cluster-native Cypher restore. The asynchronous `dbms.recreateDatabase` was
+// already issued (cypher-restore-issued annotation present); here we open a
+// short-lived Bolt connection, run ONE SHOW DATABASE, and either:
+//   - mark Completed once every allocation is online,
+//   - mark Failed once the online-wait deadline (annotation timestamp +
+//     cypherRestoreOnlineTimeout) has passed without convergence,
+//   - otherwise requeue.
+//
+// Crucially this never blocks the worker for the full timeout — each reconcile
+// does a single bounded SHOW DATABASE and returns, so other restores keep
+// progressing under a small MaxConcurrentReconciles.
+func (r *Neo4jRestoreReconciler) pollClusterRestoreOnline(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore, cluster *neo4jv1beta1.Neo4jEnterpriseCluster) (ctrl.Result, error) {
+	logger := log.FromContext(ctx)
+
+	// Derive the deadline from the issue timestamp. A malformed/missing stamp
+	// falls back to "now" so a single extra requeue re-stamps via the wait.
+	deadline := time.Now().Add(cypherRestoreOnlineTimeout)
+	if raw, ok := restore.Annotations[AnnotationCypherRestoreIssued]; ok {
+		if issuedAt, perr := time.Parse(time.RFC3339, raw); perr == nil {
+			deadline = issuedAt.Add(cypherRestoreOnlineTimeout)
+		}
+	}
+	expired := time.Now().After(deadline)
+
+	neo4jClient, err := r.createNeo4jClient(ctx, cluster)
+	if err != nil {
+		// The cluster may be mid roll/unreachable transiently. Tolerate until
+		// the deadline, then fail.
+		if expired {
+			r.updateRestoreStatus(ctx, restore, StatusFailed,
+				fmt.Sprintf("Restore did not converge to online within %s: connect failed: %v", cypherRestoreOnlineTimeout, err))
+			return ctrl.Result{}, nil
+		}
+		logger.V(1).Info("Poll: cluster not yet reachable, requeueing", "error", err.Error())
+		return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
+	}
+	defer func() { _ = neo4jClient.Close() }()
+
+	online, total, diag, stateErr := neo4jClient.DatabaseOnlineState(ctx, restore.Spec.DatabaseName)
+	if stateErr == nil && total > 0 && online == total {
+		completion := metav1.Now()
+		restore.Status.CompletionTime = &completion
+		r.updateRestoreStatus(ctx, restore, StatusCompleted,
+			fmt.Sprintf("Database %q restored via cluster Cypher path (%d/%d allocations online)", restore.Spec.DatabaseName, online, total))
+		r.Recorder.Event(restore, corev1.EventTypeNormal, EventReasonRestoreCompleted,
+			fmt.Sprintf("Cluster Cypher restore completed for database %q", restore.Spec.DatabaseName))
+		return ctrl.Result{}, nil
+	}
+
+	if expired {
+		detail := diag
+		if stateErr != nil {
+			detail = stateErr.Error()
+		}
+		r.updateRestoreStatus(ctx, restore, StatusFailed,
+			fmt.Sprintf("Restore did not converge to online within %s (%d/%d allocations online); last status: %s",
+				cypherRestoreOnlineTimeout, online, total, detail))
+		r.Recorder.Event(restore, corev1.EventTypeWarning, EventReasonRestoreFailed,
+			fmt.Sprintf("Cluster Cypher restore for database %q did not converge online", restore.Spec.DatabaseName))
+		return ctrl.Result{}, nil
+	}
+
+	logger.V(1).Info("Poll: database not yet online, requeueing",
+		"database", restore.Spec.DatabaseName, "online", online, "total", total, "diag", diag)
+	return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
+}
+
+// resolveClusterPVCRestoreURI spawns the in-cluster HTTP seed proxy for a
+// PVC-backed cluster restore and returns the seedURI pointing at the
+// captured `.backup` artifact filename.
+//
+// Returns:
+//   - (uri, _, nil)            success — uri is ready to be passed to
+//     dbms.recreateDatabase / CREATE DATABASE OPTIONS{seedURI}.
+//   - ("", result, nil)        transient — proxy still rolling out OR the
+//     backup CR's most-recent Succeeded run has no ArtifactFilename yet.
+//     Caller routes to Pending+requeue via the embedded `result`.
+//   - ("", _, err)             permanent failure — wrong storage type, no
+//     backup ref, missing PVC name. Caller routes to Failed.
+//
+// Mirrors the sharded PVC seedBackupRef path (rule 71) but for a single
+// `.backup` file rather than a per-shard map.
+func (r *Neo4jRestoreReconciler) resolveClusterPVCRestoreURI(
+	ctx context.Context,
+	restore *neo4jv1beta1.Neo4jRestore,
+	storage neo4jv1beta1.StorageLocation,
+	backupsPath string,
+) (string, ctrl.Result, error) {
+	logger := log.FromContext(ctx)
+
+	if storage.Type != "pvc" {
+		return "", ctrl.Result{}, fmt.Errorf("internal: resolveClusterPVCRestoreURI called with storage.type=%q", storage.Type)
+	}
+	if storage.PVC == nil || storage.PVC.Name == "" {
+		return "", ctrl.Result{}, fmt.Errorf("PVC-backed cluster restore requires storage.pvc.name to be set")
+	}
+
+	// We need the captured ArtifactFilename for the most-recent Succeeded
+	// run. type=backup paths can use the resolved BackupRun; type=storage
+	// users supply the filename via spec.source.backupPath as a complete
+	// path (handled below).
+	var filename string
+	switch restore.Spec.Source.Type {
+	case SourceTypeBackup:
+		backup := &neo4jv1beta1.Neo4jBackup{}
+		if err := r.Get(ctx, types.NamespacedName{Name: restore.Spec.Source.BackupRef, Namespace: restore.Namespace}, backup); err != nil {
+			return "", ctrl.Result{}, fmt.Errorf("PVC restore: re-fetch backup %q: %w", restore.Spec.Source.BackupRef, err)
+		}
+		for i := range backup.Status.History {
+			if backup.Status.History[i].Status == "Succeeded" {
+				filename = backup.Status.History[i].ArtifactFilename
+				break
+			}
+		}
+		if filename == "" {
+			msg := fmt.Sprintf("Neo4jBackup %q's most-recent Succeeded run has no captured ArtifactFilename — re-run the backup with a recent operator version (Pod-log capture required for PVC-backed cluster restores). Alternatively, copy the .backup file to S3/GCS/Azure and restore via type=storage.",
+				restore.Spec.Source.BackupRef)
+			r.updateRestoreStatus(ctx, restore, StatusFailed, msg)
+			return "", ctrl.Result{}, fmt.Errorf("%s", msg)
+		}
+	case "storage":
+		// User points us directly at the file via spec.source.backupPath.
+		// The proxy serves under /<backupsPath> by convention, so we need
+		// to separate dir from filename. If backupPath is a single file
+		// path like "inventory-backup/inventory-2026-…backup", split on
+		// the last slash.
+		fullPath := restore.Spec.Source.BackupPath
+		if fullPath == "" {
+			return "", ctrl.Result{}, fmt.Errorf("PVC restore with type=storage requires source.backupPath to be set to the .backup file path under the PVC root")
+		}
+		if idx := strings.LastIndex(fullPath, "/"); idx >= 0 {
+			backupsPath = fullPath[:idx]
+			filename = fullPath[idx+1:]
+		} else {
+			filename = fullPath
+		}
+	default:
+		return "", ctrl.Result{}, fmt.Errorf("PVC cluster restore not supported with source.type=%q", restore.Spec.Source.Type)
+	}
+
+	// Spawn (idempotent) the HTTP proxy in front of the backup PVC. The
+	// Neo4jRestore CR is the owner so the proxy is GC'd when the restore
+	// is deleted.
+	proxyAvailable, err := ensurePVCSeedProxyResources(ctx, r.Client, r.Scheme, restore, restore.Name, storage.PVC.Name)
+	if err != nil {
+		return "", ctrl.Result{}, fmt.Errorf("ensure PVC seed proxy: %w", err)
+	}
+	if !proxyAvailable {
+		logger.Info("PVC seed proxy not yet Ready; requeuing",
+			"backupPVC", storage.PVC.Name)
+		r.updateRestoreStatus(ctx, restore, StatusPending,
+			"Waiting for backup-seed-proxy Deployment to become Ready")
+		return "", ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
+	}
+
+	return pvcSeedProxyURL(restore.Name, restore.Namespace, backupsPath, filename), ctrl.Result{}, nil
+}
+
+// latestSucceededArtifactFilename returns the captured `.backup` artifact
+// filename of a Neo4jBackup's most-recent Succeeded run (history is ordered
+// most-recent-first). Both the cloud and PVC cluster-restore paths need this:
+// Neo4j seeds a single database from the exact file, not a directory.
+func (r *Neo4jRestoreReconciler) latestSucceededArtifactFilename(ctx context.Context, backupRef, namespace string) (string, error) {
+	backup := &neo4jv1beta1.Neo4jBackup{}
+	if err := r.Get(ctx, types.NamespacedName{Name: backupRef, Namespace: namespace}, backup); err != nil {
+		return "", fmt.Errorf("re-fetch backup %q: %w", backupRef, err)
+	}
+	for i := range backup.Status.History {
+		if backup.Status.History[i].Status == "Succeeded" {
+			if fn := backup.Status.History[i].ArtifactFilename; fn != "" {
+				return fn, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("Neo4jBackup %q has no Succeeded run with a captured ArtifactFilename — re-run the backup with a recent operator version (Pod-log capture required for cluster restores), or copy the .backup file to storage and restore via type=storage with source.backupPath pointing at the file", backupRef)
+}
+
+// warnIfChainParent emits a Warning event when source.backupRef points at the
+// PARENT of a mixed-cadence FULL+DIFF chain (rule 78) — i.e. other Neo4jBackup
+// CRs declare spec.chainFromBackup == backupRef and have Succeeded runs.
+//
+// Restoring via the parent seeds from ITS latest artifact (a full snapshot),
+// NOT the latest chain state held by the differential children — Neo4j applies
+// a backup chain backward to the seed file, so seeding from the FULL omits the
+// newer diffs. That's a legitimate "roll back to the last full" operation, but
+// it's silent: a user who expects the latest state must instead reference the
+// differential CR (whose latest artifact is the newest DIFF). This advisory
+// turns that footgun into a visible signal. Purely informational — it never
+// changes the restore behavior or fails the reconcile.
+func (r *Neo4jRestoreReconciler) warnIfChainParent(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore, backupRef string) {
+	if backupRef == "" {
+		return
+	}
+	list := &neo4jv1beta1.Neo4jBackupList{}
+	if err := r.List(ctx, list, client.InNamespace(restore.Namespace)); err != nil {
+		return // best-effort advisory; never block the restore on this
+	}
+	var children []string
+	for i := range list.Items {
+		child := &list.Items[i]
+		if child.Spec.ChainFromBackup != backupRef {
+			continue
+		}
+		for _, run := range child.Status.History {
+			if run.Status == "Succeeded" {
+				children = append(children, child.Name)
+				break
+			}
+		}
+	}
+	if len(children) == 0 {
+		return
+	}
+	sort.Strings(children)
+	r.Recorder.Eventf(restore, corev1.EventTypeWarning, EventReasonRestoreFromChainParent,
+		"source.backupRef %q is a FULL+DIFF chain parent; differential backups exist on [%s]. "+
+			"This restore seeds from %q's latest full snapshot, NOT the latest chain state. "+
+			"To restore the latest state, set source.backupRef to the differential CR instead.",
+		backupRef, strings.Join(children, ", "), backupRef)
+}
+
+func ternaryString(cond bool, ifTrue, ifFalse string) string {
+	if cond {
+		return ifTrue
+	}
+	return ifFalse
+}
+
+// isRestoreTargetTrueCluster returns true when spec.clusterRef points at an
+// actual Neo4jEnterpriseCluster (not a Neo4jEnterpriseStandalone). The
+// cluster restore path uses Cypher (`dbms.recreateDatabase` or
+// `CREATE DATABASE OPTIONS{seedURI}`) per the Neo4j cluster restore docs;
+// standalone uses the Job + `neo4j-admin restore` path. We can't use
+// `getClusterRef` directly because it transparently wraps a Standalone as
+// a synthetic Cluster.
+func (r *Neo4jRestoreReconciler) isRestoreTargetTrueCluster(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore) (bool, *neo4jv1beta1.Neo4jEnterpriseCluster, error) {
+	key := types.NamespacedName{Name: restore.Spec.ClusterRef, Namespace: restore.Namespace}
+	cluster := &neo4jv1beta1.Neo4jEnterpriseCluster{}
+	if err := r.Get(ctx, key, cluster); err == nil {
+		return true, cluster, nil
+	} else if !errors.IsNotFound(err) {
+		return false, nil, err
+	}
+	standalone := &neo4jv1beta1.Neo4jEnterpriseStandalone{}
+	if err := r.Get(ctx, key, standalone); err != nil {
+		return false, nil, fmt.Errorf("target %q not found as Cluster or Standalone: %w", restore.Spec.ClusterRef, err)
+	}
+	return false, nil, nil
 }
 
 func (r *Neo4jRestoreReconciler) createNeo4jClient(_ context.Context, cluster *neo4jv1beta1.Neo4jEnterpriseCluster) (*neo4j.Client, error) {

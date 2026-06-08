@@ -348,21 +348,24 @@ var _ = Describe("Backup Integration Tests", Ordered, func() {
 		}, backupTimeout, backupInterval).Should(BeTrue())
 	})
 
-	// ─── Per-run subfolder + BackupRun.BackupsPath (issue #130) ────────
+	// ─── Shared --to-path directory + BackupRun.BackupsPath (rule 40) ──
 	//
-	// End-to-end coverage for the contract introduced by #129 (per-run
-	// backup-artifact subfolder layout). Unit tests pin each component
-	// in isolation; this test verifies the full handshake survives a
-	// real reconcile loop:
+	// End-to-end coverage for the shared-directory layout: all runs of one
+	// Neo4jBackup CR write to a single `<base>/<chain-root>/` directory so
+	// `neo4j-admin --type=DIFF` can chain off the prior FULL. Per-run
+	// identity is preserved at the filename level (timestamped artifacts),
+	// NOT via a `${BACKUP_RUN_ID}` subfolder under --to-path. Unit tests
+	// pin each component in isolation; this test verifies the full
+	// handshake survives a real reconcile loop:
 	//
-	//   1. operator emits `--to-path=...${BACKUP_RUN_ID}` in the Job's
-	//      command (the literal placeholder; the shell expands it at
-	//      runtime via the downward-API env var).
-	//   2. operator wires `BACKUP_RUN_ID` env var on the Pod via
-	//      downward-API to `metadata.labels['batch.kubernetes.io/job-name']`.
+	//   1. operator emits a `--to-path=<base>/<chain-root>/` with NO
+	//      `${BACKUP_RUN_ID}` segment (chain-root = the CR name by default).
+	//   2. operator still wires `BACKUP_RUN_ID` env var on the Pod via
+	//      downward-API to `metadata.labels['batch.kubernetes.io/job-name']`
+	//      — retained for log correlation, not for the path.
 	//   3. when the Job completes successfully, the operator populates
-	//      `Neo4jBackup.status.history[0].backupsPath` with the Job's
-	//      name (which is what the Pod expanded ${BACKUP_RUN_ID} to).
+	//      `Neo4jBackup.status.history[0].backupsPath` with the chain root
+	//      (the CR name), the shared per-CR artifact directory.
 	//
 	// Steps 1+2 are static command-shape assertions. Step 3 requires
 	// simulating Job completion via a status patch — we don't have a
@@ -413,18 +416,20 @@ var _ = Describe("Backup Integration Tests", Ordered, func() {
 		// a no-op.
 		quiesceBackupJob(ctx, k8sClient, jobKey)
 
-		By("Asserting the Job's container command contains the ${BACKUP_RUN_ID} placeholder")
+		By("Asserting the Job's --to-path is the shared per-CR directory, NOT a ${BACKUP_RUN_ID} subfolder")
 		// Single backup container; args[1] is the `/bin/sh -c "<cmd>"`
 		// payload because Command=["/bin/sh"] + Args=["-c", "<cmd>"].
 		Expect(job.Spec.Template.Spec.Containers).To(HaveLen(1), "backup Job must have exactly one container")
 		container := job.Spec.Template.Spec.Containers[0]
 		Expect(container.Args).To(HaveLen(2), "container Args must be [-c, <command>]")
-		Expect(container.Args[1]).To(ContainSubstring("${BACKUP_RUN_ID}"),
-			"command must include the ${BACKUP_RUN_ID} placeholder so the shell expands "+
-				"to the Job name at runtime, giving every run its own subfolder")
-		// Sanity: the literal --to-path= flag must precede the placeholder.
-		Expect(container.Args[1]).To(MatchRegexp(`--to-path=\S*\$\{BACKUP_RUN_ID\}`),
-			"placeholder must be inside the --to-path argument, not somewhere unrelated")
+		// Rule 40: all runs of one CR share `<base>/<chain-root>/`; the
+		// chain-root is the CR name by default. PVC target → /backup/<name>/.
+		Expect(container.Args[1]).To(MatchRegexp(`--to-path=/backup/`+backup.Name+`/?`),
+			"--to-path must be the shared per-CR directory /backup/<chain-root>/ (chain-root = CR name)")
+		Expect(container.Args[1]).ToNot(ContainSubstring("${BACKUP_RUN_ID}"),
+			"rule 40: --to-path must NOT include a ${BACKUP_RUN_ID} per-run subfolder — "+
+				"diff backups chain off the prior full in the SAME directory; per-run "+
+				"identity lives in the timestamped artifact filename")
 
 		By("Asserting BACKUP_RUN_ID env var is wired via downward-API")
 		var runIDEnv *corev1.EnvVar
@@ -477,10 +482,10 @@ var _ = Describe("Backup Integration Tests", Ordered, func() {
 				return ""
 			}
 			return latest.Status.History[0].BackupsPath
-		}, backupTimeout, backupInterval).Should(Equal(expectedJobName),
-			"status.history[0].backupsPath must equal the backing Job name — "+
-				"that's how a user maps a recorded run to its artifact subfolder. "+
-				"A regression in jobToBackupRun (e.g. dropping `BackupsPath: job.Name`) "+
+		}, backupTimeout, backupInterval).Should(Equal(backup.Name),
+			"status.history[0].backupsPath must equal the chain root (the CR name) — "+
+				"the shared per-CR artifact directory under the storage root (rule 40). "+
+				"A regression in jobToBackupRun (e.g. dropping `BackupsPath: chainRoot(backup)`) "+
 				"would silently leave this empty.")
 
 		By("Verifying the recorded RunID is the Job's UID (orthogonal contract from #118)")
@@ -561,14 +566,16 @@ var _ = Describe("Backup Integration Tests", Ordered, func() {
 			// Find the run for THIS Job (not any earlier run from other tests).
 			for _, run := range latest.Status.History {
 				if run.RunID == string(job.UID) {
-					return run.Status == "Failed" && run.BackupsPath == expectedJobName
+					// BackupsPath is the chain root (CR name) under the
+					// shared-directory layout (rule 40), not the Job name.
+					return run.Status == "Failed" && run.BackupsPath == backup.Name
 				}
 			}
 			return false
 		}, backupTimeout, backupInterval).Should(BeTrue(),
-			"failed Jobs MUST land in status.history with Status=Failed and BackupsPath set; "+
-				"a regression in recordOneShotBackupRun's failure branch would let failed "+
-				"runs vanish with the Job's TTL — only a metric counter would remain")
+			"failed Jobs MUST land in status.history with Status=Failed and BackupsPath set to the "+
+				"chain root (CR name); a regression in recordOneShotBackupRun's failure branch would "+
+				"let failed runs vanish with the Job's TTL — only a metric counter would remain")
 
 		// Belt-and-braces: ensure status.stats is NOT updated by a
 		// failed run. Stats is the "latest succeeded run" summary; a

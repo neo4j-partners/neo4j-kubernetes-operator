@@ -29,4 +29,18 @@ patches:
     kind: Deployment
     name: controller-manager
 
+# Relax property-sharding's 4Gi/1-core minimum so the sharded smoke test
+# fits within GitHub-hosted runners (~5Gi usable). Production overlays
+# do NOT set this — the floor exists to prevent silent OOMs in real
+# workloads. CI is the only place this env var should appear.
+- patch: |-
+    - op: add
+      path: /spec/template/spec/containers/0/env/-
+      value:
+        name: NEO4J_SHARDING_RELAX_MEMORY_MIN
+        value: "true"
+  target:
+    kind: Deployment
+    name: controller-manager
+
 namespace: neo4j-operator-system

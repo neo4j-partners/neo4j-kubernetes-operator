@@ -201,6 +201,41 @@ func (r *Neo4jDatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		}
 	}()
 
+	// Phase 2b: ensure the host (cluster OR standalone) has seed credentials
+	// projected onto its server pods when this database uses seedURI +
+	// seedCredentials. Without the Secret in spec.extraEnvFrom, the Neo4j JVM
+	// running CREATE DATABASE ... OPTIONS { seedURI } would have no
+	// AWS/GCP/Azure creds to authenticate the seed fetch. Skipped for the
+	// no-credentials case (user is presumably on IRSA / Workload Identity,
+	// which the operator can't validate here).
+	if database.Spec.SeedURI != "" && database.Spec.SeedCredentials != nil && database.Spec.SeedCredentials.SecretRef != "" {
+		var target SeedCredsTarget
+		var targetName string
+		if isStandalone {
+			target = standalone
+			targetName = standalone.Name
+		} else {
+			target = cluster
+			targetName = cluster.Name
+		}
+		autoInherited, credsErr := EnsureSeedCredsProjected(ctx, r.Client, target, database.Spec.SeedCredentials.SecretRef)
+		if credsErr != nil {
+			logger.Error(credsErr, "Host missing seed credentials projection")
+			r.updateDatabaseStatus(ctx, database, metav1.ConditionFalse, "SeedCredsMissing", credsErr.Error())
+			r.Recorder.Event(database, corev1.EventTypeWarning, "SeedCredsMissing", credsErr.Error())
+			return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
+		}
+		if autoInherited {
+			logger.Info("Auto-inherited seed credentials onto host; waiting for rolling restart",
+				"host", targetName, "credentialsSecret", database.Spec.SeedCredentials.SecretRef)
+			r.updateDatabaseStatus(ctx, database, metav1.ConditionFalse, "SeedCredsAutoInherited",
+				fmt.Sprintf("Patched %q spec.extraEnvFrom with %q; waiting for rolling restart", targetName, database.Spec.SeedCredentials.SecretRef))
+			r.Recorder.Event(database, corev1.EventTypeNormal, "SeedCredsAutoInherited",
+				fmt.Sprintf("Patched %q spec.extraEnvFrom with %q; waiting for rolling restart", targetName, database.Spec.SeedCredentials.SecretRef))
+			return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
+		}
+	}
+
 	// Ensure database exists (with seed URI support)
 	logger.Info("Starting database creation/verification", "database", database.Spec.Name, "wait", database.Spec.Wait, "topology", database.Spec.Topology)
 	dbCreateStart := time.Now()

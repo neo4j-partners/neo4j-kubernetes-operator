@@ -86,9 +86,9 @@ func TestBuildNetworkPolicyForEnterprise_RestrictsBackupPort(t *testing.T) {
 	require.NotEmpty(t, backupRule.From,
 		"backup-port rule must specify From peers; an empty From means anyone can connect")
 
-	// Verify all three backup-pod selectors are present (one-shot Job,
-	// CronJob children, centralized backup STS). Each pin protects against
-	// a regression that drops one of the three Pod shapes.
+	// Verify both backup-pod selectors are present (one-shot Job,
+	// CronJob children). Each pin protects against a regression that
+	// drops one of the two Pod shapes.
 	wantBackupSelectors := []map[string]string{
 		{
 			"app.kubernetes.io/managed-by": "neo4j-operator",
@@ -97,10 +97,6 @@ func TestBuildNetworkPolicyForEnterprise_RestrictsBackupPort(t *testing.T) {
 		{
 			"app.kubernetes.io/managed-by": "neo4j-operator",
 			"app.kubernetes.io/component":  "backup-cron",
-		},
-		{
-			"neo4j.com/cluster":   "prod",
-			"neo4j.com/component": "backup",
 		},
 	}
 	for _, want := range wantBackupSelectors {

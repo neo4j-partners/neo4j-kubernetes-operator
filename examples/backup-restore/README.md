@@ -39,12 +39,16 @@ kubectl get neo4jbackup simple-backup -w
 ### 🟢 Basic Backups (Start Here)
 - [`backup-pvc-simple.yaml`](backup-pvc-simple.yaml) - **Beginner**: Simple one-time backup to PVC
 - [`backup-s3-basic.yaml`](backup-s3-basic.yaml) - **Intermediate**: Basic S3 backup
+- [`backup-with-type.yaml`](backup-with-type.yaml) - **Intermediate**: Cluster backup to PVC with explicit `backupType`/`pageCache`
+- [`backup-minio.yaml`](backup-minio.yaml) - **Intermediate**: Backup to a self-hosted S3-compatible store (MinIO)
 
 ### 🟡 Scheduled Backups (Production Ready)
 - [`backup-scheduled-daily.yaml`](backup-scheduled-daily.yaml) - **Intermediate**: Daily scheduled backup
+- [`backup-incremental.yaml`](backup-incremental.yaml) - **Intermediate**: Scheduled `AUTO` (full-then-diff) backup of a single database to S3
 
 ### 🟢 Simple Restores (Start Here)
 - [`restore-from-backup.yaml`](restore-from-backup.yaml) - **Beginner**: Restore from backup reference
+- [`restore-overwrite.yaml`](restore-overwrite.yaml) - **Intermediate**: Destructive overwrite of an existing database (`force` + `replaceExisting`)
 
 ### 🔴 Point-in-Time Recovery (PITR) - Enterprise
 - [`restore-pitr-basic.yaml`](restore-pitr-basic.yaml) - **Advanced**: Basic PITR restore

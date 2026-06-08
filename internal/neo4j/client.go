@@ -1827,6 +1827,134 @@ func (c *Client) RecreateDatabase(
 	return true, nil
 }
 
+// RecreateDatabaseWithSeedURI invokes `dbms.[cluster.]recreateDatabase` with
+// a `seedURI` parameter — the cluster-native restore path documented at
+// https://neo4j.com/docs/operations-manual/current/clustering/databases/#restore-database-using-recreate-procedure.
+//
+// Use this for cluster restores when the target database EXISTS: every server
+// pulls the backup chain directly from the URI, preserving previously granted
+// user/role privileges, with no need to DROP first. The URI must point at a
+// DIRECTORY containing the backup chain (full + diffs); CloudSeedProvider
+// scans it and applies the chain.
+//
+// For NEW databases (database doesn't exist), use CreateDatabaseFromSeedURI
+// with the modern `OPTIONS { seedURI }` syntax instead.
+//
+// The procedure name is version-gated:
+//   - 5.24 / 2025.02–2025.03 → `dbms.cluster.recreateDatabase`
+//   - 2025.04+               → `dbms.recreateDatabase`
+//
+// Returns (false, nil) on versions that don't support recreate so the caller
+// can route to a different path (e.g. DROP + CREATE).
+func (c *Client) RecreateDatabaseWithSeedURI(
+	ctx context.Context,
+	version *Version,
+	databaseName string,
+	seedURI string,
+) (applied bool, err error) {
+	procedure := version.RecreateDatabaseProcedure()
+	if procedure == "" {
+		return false, nil
+	}
+	if seedURI == "" {
+		return false, fmt.Errorf("seedURI is required for seedURI-based recreate of database %q", databaseName)
+	}
+
+	session := c.driver.NewSession(ctx, neo4j.SessionConfig{
+		AccessMode:   neo4j.AccessModeWrite,
+		DatabaseName: "system",
+	})
+	defer session.Close(ctx)
+
+	query := fmt.Sprintf("CALL %s($db, {seedURI: $uri})", procedure)
+	if _, err := session.Run(ctx, query, map[string]any{
+		"db":  databaseName,
+		"uri": seedURI,
+	}); err != nil {
+		return false, fmt.Errorf("CALL %s for %q with seedURI: %w", procedure, databaseName, err)
+	}
+	return true, nil
+}
+
+// DatabaseOnlineState returns how many allocations of databaseName are online,
+// the total allocation count, and a human-readable diagnostic string
+// (currentStatus + statusMessage per row) for logging on timeout. It runs a
+// single bounded SHOW DATABASE, so callers can poll it across reconciles
+// without holding a worker (see pollClusterRestoreOnline).
+func (c *Client) DatabaseOnlineState(ctx context.Context, databaseName string) (online, total int, diag string, err error) {
+	session := c.driver.NewSession(ctx, neo4j.SessionConfig{
+		AccessMode:   neo4j.AccessModeRead,
+		DatabaseName: "system",
+	})
+	defer session.Close(ctx)
+
+	timeoutCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	result, err := session.Run(timeoutCtx,
+		"SHOW DATABASE $name YIELD currentStatus, statusMessage",
+		map[string]any{"name": databaseName})
+	if err != nil {
+		return 0, 0, "", fmt.Errorf("SHOW DATABASE %q: %w", databaseName, err)
+	}
+	var diags []string
+	for result.Next(timeoutCtx) {
+		rec := result.Record()
+		cur, _ := rec.Get("currentStatus")
+		msg, _ := rec.Get("statusMessage")
+		total++
+		if fmt.Sprintf("%v", cur) == "online" {
+			online++
+		}
+		d := fmt.Sprintf("%v", cur)
+		if m := fmt.Sprintf("%v", msg); m != "" && m != "<nil>" {
+			d += " (" + m + ")"
+		}
+		diags = append(diags, d)
+	}
+	if rerr := result.Err(); rerr != nil {
+		return 0, 0, "", fmt.Errorf("reading SHOW DATABASE %q: %w", databaseName, rerr)
+	}
+	return online, total, strings.Join(diags, "; "), nil
+}
+
+// CreateDatabaseWithSeedURIOptions creates a new database from a backup chain
+// using the modern `CREATE DATABASE … OPTIONS { seedURI }` Cypher syntax —
+// the cluster-native "new database from backup" path documented at
+// https://neo4j.com/docs/operations-manual/current/clustering/databases/#restore-database-using-uri-approach.
+//
+// For EXISTING databases use RecreateDatabaseWithSeedURI instead.
+//
+// The URI must point at a DIRECTORY (with trailing slash) containing the
+// backup chain. CloudSeedProvider scans for the chain; URLConnectionSeedProvider
+// expects a single artifact path.
+func (c *Client) CreateDatabaseWithSeedURIOptions(
+	ctx context.Context,
+	databaseName string,
+	seedURI string,
+	ifNotExists bool,
+) error {
+	if seedURI == "" {
+		return fmt.Errorf("seedURI is required for seedURI-based CREATE DATABASE of %q", databaseName)
+	}
+
+	session := c.driver.NewSession(ctx, neo4j.SessionConfig{
+		AccessMode:   neo4j.AccessModeWrite,
+		DatabaseName: "system",
+	})
+	defer session.Close(ctx)
+
+	ine := ""
+	if ifNotExists {
+		ine = " IF NOT EXISTS"
+	}
+	query := fmt.Sprintf("CREATE DATABASE `%s`%s OPTIONS { seedURI: $uri } WAIT", databaseName, ine)
+	if _, err := session.Run(ctx, query, map[string]any{"uri": seedURI}); err != nil {
+		return fmt.Errorf("CREATE DATABASE %q OPTIONS{seedURI}: %w", databaseName, err)
+	}
+	return nil
+}
+
 // DatabaseExists checks if a database exists
 func (c *Client) DatabaseExists(ctx context.Context, databaseName string) (bool, error) {
 	databases, err := c.GetDatabases(ctx)

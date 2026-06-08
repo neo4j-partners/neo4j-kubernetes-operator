@@ -42,7 +42,7 @@ The `pullSecrets` field accepts a list of secret names. Secrets must exist in th
 *   `spec.storage`: Configures the persistent storage for the cluster, including storage class, size, and [retention policy](#storage-and-pvc-retention).
 *   `spec.auth`: Manages authentication, allowing you to specify the provider (native, LDAP, etc.) and the secret containing credentials.
 *   `spec.resources`: Allows you to set specific CPU and memory requests and limits for the Neo4j pods, which is crucial for performance tuning.
-*   `spec.backups`: (Deprecated) Use the separate Neo4jBackup CRD for backup management. The operator now uses a centralized backup StatefulSet for resource efficiency.
+*   Backups: Use the separate `Neo4jBackup` CRD for backup management — see the [Backup and Restore guide](guides/backup_restore.md).
 *   `spec.monitoring`: Enable monitoring, Prometheus metrics exposure, and query logging.
 
 > **Live Diagnostics:** When `enabled: true` and the cluster is `Ready`, the operator

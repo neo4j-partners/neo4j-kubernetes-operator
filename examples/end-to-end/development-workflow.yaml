@@ -84,17 +84,17 @@ spec:
     source: cypher
     cypherStatements:
       # User management
-      - "CREATE CONSTRAINT user_id IF NOT EXISTS ON (u:User) ASSERT u.id IS UNIQUE"
-      - "CREATE CONSTRAINT user_email IF NOT EXISTS ON (u:User) ASSERT u.email IS UNIQUE"
+      - "CREATE CONSTRAINT user_id IF NOT EXISTS FOR (u:User) REQUIRE u.id IS UNIQUE"
+      - "CREATE CONSTRAINT user_email IF NOT EXISTS FOR (u:User) REQUIRE u.email IS UNIQUE"
       - "CREATE INDEX user_name IF NOT EXISTS FOR (u:User) ON (u.name)"
 
       # Product catalog
-      - "CREATE CONSTRAINT product_id IF NOT EXISTS ON (p:Product) ASSERT p.id IS UNIQUE"
+      - "CREATE CONSTRAINT product_id IF NOT EXISTS FOR (p:Product) REQUIRE p.id IS UNIQUE"
       - "CREATE INDEX product_category IF NOT EXISTS FOR (p:Product) ON (p.category)"
       - "CREATE INDEX product_price IF NOT EXISTS FOR (p:Product) ON (p.price)"
 
       # Orders
-      - "CREATE CONSTRAINT order_id IF NOT EXISTS ON (o:Order) ASSERT o.id IS UNIQUE"
+      - "CREATE CONSTRAINT order_id IF NOT EXISTS FOR (o:Order) REQUIRE o.id IS UNIQUE"
       - "CREATE INDEX order_date IF NOT EXISTS FOR (o:Order) ON (o.orderDate)"
       - "CREATE INDEX order_status IF NOT EXISTS FOR (o:Order) ON (o.status)"
 ---
@@ -227,7 +227,7 @@ spec:
               SET p.rating = 0.0, p.reviewCount = 0;
 
               // Create Review nodes
-              CREATE CONSTRAINT review_id IF NOT EXISTS ON (r:Review) ASSERT r.id IS UNIQUE;
+              CREATE CONSTRAINT review_id IF NOT EXISTS FOR (r:Review) REQUIRE r.id IS UNIQUE;
               CREATE INDEX review_rating IF NOT EXISTS FOR (r:Review) ON (r.rating);
               EOF
 

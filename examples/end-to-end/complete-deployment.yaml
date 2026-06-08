@@ -133,7 +133,7 @@ spec:
   initialData:
     source: cypher
     cypherStatements:
-      - "CREATE CONSTRAINT user_email_unique IF NOT EXISTS ON (u:User) ASSERT u.email IS UNIQUE"
+      - "CREATE CONSTRAINT user_email_unique IF NOT EXISTS FOR (u:User) REQUIRE u.email IS UNIQUE"
       - "CREATE INDEX user_created_index IF NOT EXISTS FOR (u:User) ON (u.createdAt)"
       - "CREATE INDEX product_name_index IF NOT EXISTS FOR (p:Product) ON (p.name)"
 ---

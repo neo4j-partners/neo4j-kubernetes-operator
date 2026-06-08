@@ -49,14 +49,71 @@ type Neo4jShardedDatabaseSpec struct {
 	// +kubebuilder:default=true
 	Wait bool `json:"wait,omitempty"`
 
-	// Create database only if it doesn't exist
-	// +kubebuilder:default=true
-	IfNotExists bool `json:"ifNotExists,omitempty"`
+	// IfNotExists controls whether the sharded database creation is
+	// idempotent. When unset (nil) or true, the operator emits
+	// `CREATE DATABASE ... IF NOT EXISTS` which is a no-op if the database
+	// already exists. Set explicitly to false to allow `CREATE DATABASE`
+	// without the `IF NOT EXISTS` clause — required when paired with
+	// `replaceExisting=true` (the destructive recreate path), and disallowed
+	// otherwise without manual handling of "database already exists" errors.
+	//
+	// Pointer type rather than bool with default=true: a `bool` field with
+	// `omitempty` would silently revert to the server-side default whenever
+	// a user explicitly set it to false, since `false` serializes as the
+	// JSON zero value and is dropped from the wire. Using *bool preserves
+	// "explicitly false" through Update round-trips.
+	// +optional
+	IfNotExists *bool `json:"ifNotExists,omitempty"`
+
+	// ReplaceExisting destroys an existing logical sharded database before
+	// recreating it from the seed (typically `spec.seedBackupRef`). Intended
+	// for the operationally-load-bearing recovery path where shards have
+	// become unrecoverable (e.g. all replicas of a property shard severed),
+	// and the only restore mechanism is drop-and-recreate from backup.
+	//
+	// REQUIRES `force: true` as a separate confirmation field, mirroring
+	// the safety pattern used by `Neo4jRestore.spec.force`. The validator
+	// rejects `replaceExisting: true` without `force: true`.
+	//
+	// Mutually exclusive with `ifNotExists: true` — those two settings
+	// contradict each other (one says "no-op if it exists", the other says
+	// "destroy if it exists"). Set `ifNotExists: false` explicitly when
+	// using `replaceExisting`.
+	//
+	// THIS IS DESTRUCTIVE: the operator runs `DROP DATABASE {name}
+	// DESTROY DATA WAIT` before CREATE. All existing data in the named
+	// sharded DB is lost. The seedBackupRef contents are the only source
+	// of data after the operation.
+	// +optional
+	ReplaceExisting bool `json:"replaceExisting,omitempty"`
+
+	// Force confirms the destructive ReplaceExisting operation. Required as
+	// a separate field so an accidental ReplaceExisting flip can't destroy
+	// data — the user must consciously set BOTH fields.
+	// +optional
+	Force bool `json:"force,omitempty"`
 
 	// Seed URI for creating the sharded database from backups or dumps.
 	// When provided as a single URI, Neo4j expects backup artifacts to be named
 	// using shard suffixes (e.g., <db>-g000, <db>-p000).
 	SeedURI string `json:"seedURI,omitempty"`
+
+	// SeedBackupRef names a Neo4jBackup CR (in the same namespace) whose
+	// most-recent Succeeded run will be used as the seed for this sharded
+	// database. The operator resolves the reference at reconcile time into a
+	// concrete seedURI (computed from the backup's storage type + per-run
+	// subdirectory). Mutually exclusive with SeedURI and SeedURIs.
+	//
+	// Currently restricted to backups stored in cloud locations (S3, GCS,
+	// Azure Blob): PVC-stored backups would require mounting the backup PVC
+	// on cluster pods, which is out of scope for this field. The validator
+	// rejects PVC-backed seedBackupRef at reconcile time with an explanatory
+	// status message.
+	//
+	// If the referenced Neo4jBackup has no Succeeded run yet, the sharded
+	// database stays in Pending phase and the reconciler requeues — it does
+	// NOT route to Failed (mirrors CLAUDE.md rule 72's restore-side semantics).
+	SeedBackupRef string `json:"seedBackupRef,omitempty"`
 
 	// Seed URIs keyed by shard name for dump-based seeding or multi-location backups.
 	// Keys must match shard names (e.g., <db>-g000, <db>-p000).
@@ -75,6 +132,19 @@ type Neo4jShardedDatabaseSpec struct {
 	// Transaction log enrichment for sharded database creation.
 	// Valid values are Neo4j-supported txLogEnrichment options (e.g., "FULL").
 	TxLogEnrichment string `json:"txLogEnrichment,omitempty"`
+}
+
+// IfNotExistsEffective returns the resolved value of spec.IfNotExists with
+// the default applied: nil → true (the kubebuilder default), explicit
+// true/false → as set. Use this anywhere the operator needs to decide
+// whether to emit `IF NOT EXISTS` in CREATE DATABASE Cypher — callers
+// MUST NOT dereference Spec.IfNotExists directly because the pointer is
+// nil for unset values.
+func (s *Neo4jShardedDatabaseSpec) IfNotExistsEffective() bool {
+	if s.IfNotExists == nil {
+		return true
+	}
+	return *s.IfNotExists
 }
 
 // PropertyShardingConfiguration defines how property shards are distributed
@@ -141,6 +211,50 @@ type Neo4jShardedDatabaseStatus struct {
 
 	// Total size across all shards
 	TotalSize string `json:"totalSize,omitempty"`
+
+	// LastBackup records the most recent successful backup that targeted this
+	// sharded database. Populated by the backup controller's reverse-lookup
+	// when a Neo4jBackup with target.kind=ShardedDatabase and target.name
+	// matching this CR's name reaches a Succeeded run. Populated only on
+	// Success — Failed/Running runs do not overwrite the field. The reference
+	// is informational; operators auditing backup health should also consult
+	// the Neo4jBackup CR's status.history for the full chain.
+	LastBackup *ShardedDatabaseBackupReference `json:"lastBackup,omitempty"`
+
+	// LastDestructiveRestoreGeneration is the spec.metadata.generation at
+	// which the operator last executed a successful destructive restore
+	// (replaceExisting+force). Set by the sharded DB controller after the
+	// DROP DATABASE … DESTROY DATA WAIT + CREATE DATABASE … OPTIONS { seedURI }
+	// cycle finishes. Used to prevent re-triggering the destructive flow on
+	// every reconcile: the controller only runs DROP if
+	// `LastDestructiveRestoreGeneration < Generation`. To re-trigger after
+	// a successful restore (e.g. to re-seed from a newer backup), the user
+	// updates spec — which bumps Generation past
+	// LastDestructiveRestoreGeneration — and the operator picks up the new
+	// request.
+	LastDestructiveRestoreGeneration int64 `json:"lastDestructiveRestoreGeneration,omitempty"`
+}
+
+// ShardedDatabaseBackupReference is the reverse-lookup pointer populated by
+// the backup controller when a Neo4jBackup of kind=ShardedDatabase succeeds.
+// All fields together identify a specific run's artifacts: BackupRef + RunID
+// give the exact entry in the Neo4jBackup CR's status.history; BackupsPath
+// names the on-disk subdirectory under the backup target storage; Timestamp
+// is when the backup Job's Pod reported completion.
+type ShardedDatabaseBackupReference struct {
+	// BackupRef is the Neo4jBackup CR name in the same namespace.
+	BackupRef string `json:"backupRef"`
+
+	// RunID matches BackupRun.RunID in the Neo4jBackup CR (the backup Job's
+	// metadata.uid). Stable across status refreshes and unique per run.
+	RunID string `json:"runID,omitempty"`
+
+	// BackupsPath is the per-run subdirectory inside the backup storage where
+	// the per-shard artifacts were written. Same value as BackupRun.BackupsPath.
+	BackupsPath string `json:"backupsPath,omitempty"`
+
+	// Timestamp is the time the backup Job's Pod reported completion.
+	Timestamp *metav1.Time `json:"timestamp,omitempty"`
 }
 
 // ShardStatus tracks the status of individual shards (graph or property)

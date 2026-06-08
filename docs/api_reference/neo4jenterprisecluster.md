@@ -18,7 +18,7 @@ The `Neo4jEnterpriseCluster` Custom Resource Definition (CRD) manages Neo4j Ente
 - **Single StatefulSet**: `{cluster-name}-server` with configurable replica count
 - **Server Pods**: Named `{cluster-name}-server-0`, `{cluster-name}-server-1`, etc.
 - **Self-Organization**: Servers automatically organize into primary/secondary roles for databases
-- **Centralized Backup**: Optional `{cluster-name}-backup-0` pod for centralized backup operations
+- **Backup**: Use the [`Neo4jBackup` CRD](neo4jbackup.md) — each CR spawns a Kubernetes Job. There is no persistent backup pod or sidecar.
 - **Role Flexibility**: Servers can host multiple databases with different roles
 
 **When to Use**:
@@ -73,11 +73,11 @@ The `Neo4jEnterpriseClusterSpec` defines the desired state of a Neo4j Enterprise
 
 | Field | Type | Description |
 |---|---|---|
-| `backups` | [`BackupsSpec`](#backupsspec) | Backup configuration |
 | `upgradeStrategy` | [`UpgradeStrategySpec`](#upgradestrategyspec) | Upgrade strategy configuration |
 
-To restore a cluster from a backup, create a separate `Neo4jRestore` CR after
-the cluster reaches `Ready` — see [`Neo4jRestore`](neo4jrestore.md).
+To back up a cluster, create a separate [`Neo4jBackup`](neo4jbackup.md) CR. To
+restore a cluster from a backup, create a separate `Neo4jRestore` CR after the
+cluster reaches `Ready` — see [`Neo4jRestore`](neo4jrestore.md).
 
 ### Networking
 
@@ -153,14 +153,6 @@ Specifies role constraints for individual servers.
 | `className` | `string` | Storage class name (immutable after creation) |
 | `size` | `string` | Storage size (e.g., `"10Gi"`). Can be increased after creation — the operator automatically expands PVCs and recreates the StatefulSet with zero downtime. **Cannot be decreased** (PVC shrink is not supported by Kubernetes). Requires the StorageClass to have `allowVolumeExpansion: true`. |
 | `retentionPolicy` | `string` | PVC retention policy: `"Delete"` (default) permanently removes PVCs on deletion; `"Retain"` preserves them. **Use `Retain` for production to prevent data loss.** See [Storage and PVC Retention](../user_guide/configuration.md#storage-and-pvc-retention). |
-| `backupStorage` | [`*BackupStorageSpec`](#backupstoragespec) | Additional storage for backups |
-
-### BackupStorageSpec
-
-| Field | Type | Description |
-|---|---|---|
-| `className` | `string` | Storage class name for backup volumes |
-| `size` | `string` | Storage size for backup volumes. Supports the same automatic expansion as `spec.storage.size`. |
 
 ### AuthSpec
 
@@ -505,13 +497,6 @@ resources:
 | `property sharding requires minimum 1 CPU core` | Insufficient CPU | Increase CPU to 2+ cores (recommended) |
 
 For detailed configuration, see the [Property Sharding Guide](../user_guide/property_sharding.md).
-
-### BackupsSpec
-
-| Field | Type | Description |
-|---|---|---|
-| `defaultStorage` | [`*StorageLocation`](#storagelocation) | Default storage location for backups |
-| `cloud` | [`*CloudBlock`](#cloudblock) | Cloud provider configuration (credentials/identity) |
 
 ### StorageLocation
 
@@ -1007,7 +992,9 @@ spec:
     adminSecret: neo4j-admin-secret
 ```
 
-### Cluster with Centralized Backup
+### Cluster with Query Monitoring
+
+> Backups are configured separately via the [`Neo4jBackup` CRD](neo4jbackup.md) — see the next example.
 
 ```yaml
 apiVersion: neo4j.neo4j.com/v1beta1
@@ -1025,17 +1012,6 @@ spec:
     size: 50Gi
   auth:
     adminSecret: neo4j-admin-secret
-  # Centralized backup configuration
-  backups:
-    defaultStorage:
-      type: s3
-      bucket: neo4j-backups
-      path: production/
-    cloud:
-      provider: aws
-      identity:
-        provider: aws
-        serviceAccount: neo4j-backup-sa  # Uses IAM roles for pods
   # Enhanced query monitoring
   monitoring:
     enabled: true
@@ -1339,7 +1315,7 @@ spec:
 4. **Storage**: Use fast SSD storage classes (`fast-ssd`, `premium-ssd`) for production workloads
 5. **Security**: Always enable TLS and use strong password policies in production
 6. **Monitoring**: Enable query monitoring and centralized logging for performance insights
-7. **Backup Strategy**: Use centralized backup with appropriate retention policies
+7. **Backup Strategy**: Define a `Neo4jBackup` CR per backup target (one-shot or scheduled via `spec.schedule`) with appropriate `retention` policies
 8. **Scaling**: Plan for growth - scaling up is easier than scaling down
 
 ## Troubleshooting

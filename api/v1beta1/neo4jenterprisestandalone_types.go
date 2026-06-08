@@ -35,6 +35,21 @@ type Neo4jEnterpriseStandaloneSpec struct {
 	// Environment variables for Neo4j pod
 	Env []corev1.EnvVar `json:"env,omitempty"`
 
+	// ExtraEnvFrom projects entire Secrets or ConfigMaps as environment
+	// variables on the neo4j container. Same semantics as
+	// Neo4jEnterpriseCluster.spec.extraEnvFrom — required when this
+	// standalone hosts a `Neo4jDatabase` with `spec.seedURI` against a
+	// cloud-backed source (S3/GCS/Azure) and `spec.seedCredentials` is
+	// set, so the Neo4j JVM's AWS/GCP/Azure SDK default credential chain
+	// can authenticate the seed fetch.
+	//
+	// Same actionable-error + annotation-gated auto-inherit semantics as
+	// the cluster field (see Neo4jEnterpriseCluster docs): set
+	// `neo4j.com/auto-inherit-seed-creds=true` on this CR to let the
+	// operator add missing entries automatically (triggers a pod restart).
+	// +optional
+	ExtraEnvFrom []corev1.EnvFromSource `json:"extraEnvFrom,omitempty"`
+
 	// Node selector for pod scheduling
 	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
 
@@ -55,8 +70,6 @@ type Neo4jEnterpriseStandaloneSpec struct {
 	Auth *AuthSpec `json:"auth,omitempty"`
 
 	Service *ServiceSpec `json:"service,omitempty"`
-
-	Backups *BackupsSpec `json:"backups,omitempty"`
 
 	// Plugin management configuration - DEPRECATED: Use Neo4jPlugin CRD instead
 
@@ -187,9 +200,6 @@ type StandaloneDatabaseStatus struct {
 
 	// DatabaseName shows the active database name
 	DatabaseName string `json:"databaseName,omitempty"`
-
-	// LastBackupTime shows when the last backup was completed
-	LastBackupTime *metav1.Time `json:"lastBackupTime,omitempty"`
 
 	// StorageSize shows the current storage usage
 	StorageSize string `json:"storageSize,omitempty"`

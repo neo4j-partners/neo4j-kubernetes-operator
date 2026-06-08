@@ -81,8 +81,9 @@ func TestBackupValidator_Validate(t *testing.T) {
 				},
 				Spec: neo4jv1beta1.Neo4jBackupSpec{
 					Target: neo4jv1beta1.BackupTarget{
-						Kind: "Database",
-						Name: "test-database",
+						Kind:       "Database",
+						Name:       "test-database",
+						ClusterRef: "test-cluster",
 					},
 					Storage: neo4jv1beta1.StorageLocation{
 						Type:   "gcs",
@@ -319,6 +320,85 @@ func TestBackupValidator_Validate(t *testing.T) {
 						PVC: &neo4jv1beta1.PVCSpec{
 							Name: "backup-pvc",
 						},
+					},
+				},
+			},
+			expectError: false,
+			errorCount:  0,
+		},
+		{
+			name: "valid sharded database backup",
+			backup: &neo4jv1beta1.Neo4jBackup{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-backup", Namespace: "default"},
+				Spec: neo4jv1beta1.Neo4jBackupSpec{
+					Target: neo4jv1beta1.BackupTarget{
+						Kind:       "ShardedDatabase",
+						Name:       "products",
+						ClusterRef: "my-cluster",
+					},
+					Storage: neo4jv1beta1.StorageLocation{
+						Type: "pvc",
+						PVC:  &neo4jv1beta1.PVCSpec{Name: "backup-pvc"},
+					},
+				},
+			},
+			expectError: false,
+			errorCount:  0,
+		},
+		{
+			name: "ShardedDatabase missing clusterRef",
+			backup: &neo4jv1beta1.Neo4jBackup{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-backup", Namespace: "default"},
+				Spec: neo4jv1beta1.Neo4jBackupSpec{
+					Target: neo4jv1beta1.BackupTarget{
+						Kind: "ShardedDatabase",
+						Name: "products",
+					},
+					Storage: neo4jv1beta1.StorageLocation{
+						Type: "pvc",
+						PVC:  &neo4jv1beta1.PVCSpec{Name: "backup-pvc"},
+					},
+				},
+			},
+			expectError:           true,
+			errorCount:            1,
+			expectedErrorContains: []string{"clusterRef is required when target.kind=ShardedDatabase"},
+		},
+		{
+			name: "ShardedDatabase with cross-namespace target.namespace",
+			backup: &neo4jv1beta1.Neo4jBackup{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-backup", Namespace: "default"},
+				Spec: neo4jv1beta1.Neo4jBackupSpec{
+					Target: neo4jv1beta1.BackupTarget{
+						Kind:       "ShardedDatabase",
+						Name:       "products",
+						ClusterRef: "my-cluster",
+						Namespace:  "other-ns",
+					},
+					Storage: neo4jv1beta1.StorageLocation{
+						Type: "pvc",
+						PVC:  &neo4jv1beta1.PVCSpec{Name: "backup-pvc"},
+					},
+				},
+			},
+			expectError:           true,
+			errorCount:            1,
+			expectedErrorContains: []string{"cross-namespace target references are not supported"},
+		},
+		{
+			name: "ShardedDatabase with matching target.namespace allowed",
+			backup: &neo4jv1beta1.Neo4jBackup{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-backup", Namespace: "default"},
+				Spec: neo4jv1beta1.Neo4jBackupSpec{
+					Target: neo4jv1beta1.BackupTarget{
+						Kind:       "ShardedDatabase",
+						Name:       "products",
+						ClusterRef: "my-cluster",
+						Namespace:  "default", // same as backup ns
+					},
+					Storage: neo4jv1beta1.StorageLocation{
+						Type: "pvc",
+						PVC:  &neo4jv1beta1.PVCSpec{Name: "backup-pvc"},
 					},
 				},
 			},

@@ -50,6 +50,7 @@ package controller
 
 import (
 	"context"
+	stderrors "errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -84,6 +85,12 @@ type Neo4jShardedDatabaseReconciler struct {
 // +kubebuilder:rbac:groups=neo4j.neo4j.com,resources=neo4jshardeddatabases,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=neo4j.neo4j.com,resources=neo4jshardeddatabases/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=neo4j.neo4j.com,resources=neo4jshardeddatabases/finalizers,verbs=update
+// PVC seed proxy resources (F5): the operator creates a busybox httpd
+// Deployment + ClusterIP Service per Neo4jShardedDatabase whose seedBackupRef
+// resolves to a PVC-backed backup. Owner reference on the sharded DB CR
+// handles GC on delete, so no explicit delete verb is needed.
+// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch
+// +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -167,8 +174,104 @@ func (r *Neo4jShardedDatabaseReconciler) Reconcile(ctx context.Context, req ctrl
 	}
 	defer neo4jClient.Close()
 
+	// Phase 2 seed-from-backup: if spec.seedBackupRef is set, resolve it into
+	// a concrete seedURI before building the CREATE DATABASE Cypher. Errors
+	// from the resolver have two meanings:
+	//   - ErrBackupNotReady (backup exists but has no Succeeded run yet) →
+	//     transient; route to Pending + requeue. Mirrors CLAUDE.md rule 72
+	//     for the restore controller.
+	//   - Anything else (missing CR, PVC storage, unsupported type) →
+	//     permanent; route to Failed.
+	resolved, seedErr := r.resolveShardedSeed(ctx, &shardedDatabase)
+	if resolved != nil || seedErr != nil {
+		if seedErr != nil {
+			if stderrors.Is(seedErr, ErrBackupNotReady) {
+				logger.Info("seedBackupRef target has no Succeeded run yet, requeuing",
+					"seedBackupRef", shardedDatabase.Spec.SeedBackupRef, "error", seedErr.Error())
+				r.Recorder.Event(&shardedDatabase, corev1.EventTypeNormal, "SeedBackupPending",
+					"Waiting for referenced Neo4jBackup to complete a successful run")
+				if statusErr := r.updateStatus(ctx, &shardedDatabase, "Pending",
+					fmt.Sprintf("Waiting for Neo4jBackup %q to produce a Succeeded run", shardedDatabase.Spec.SeedBackupRef), nil); statusErr != nil {
+					logger.Error(statusErr, "Failed to update status to Pending")
+				}
+				return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
+			}
+			logger.Error(seedErr, "Failed to resolve seedBackupRef", "seedBackupRef", shardedDatabase.Spec.SeedBackupRef)
+			r.Recorder.Event(&shardedDatabase, corev1.EventTypeWarning, "SeedBackupResolutionFailed", seedErr.Error())
+			if statusErr := r.updateStatus(ctx, &shardedDatabase, "Failed",
+				fmt.Sprintf("seedBackupRef resolution failed: %v", seedErr), nil); statusErr != nil {
+				logger.Error(statusErr, "Failed to update status to Failed")
+			}
+			return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
+		}
+		// Populate the in-memory spec so downstream Cypher builders use the
+		// resolved URI(s) without needing to know about SeedBackupRef. The
+		// CR is NOT Updated — only the in-memory copy is mutated for this
+		// reconcile. URI vs PerShardURIs is mutually exclusive: cloud
+		// backups populate the single URI; PVC backups populate the
+		// per-shard map served by the operator-managed seed proxy.
+		switch {
+		case resolved.URI != "":
+			shardedDatabase.Spec.SeedURI = resolved.URI
+			logger.Info("Resolved seedBackupRef to cloud seedURI",
+				"seedBackupRef", shardedDatabase.Spec.SeedBackupRef, "seedURI", resolved.URI)
+		case len(resolved.PerShardURIs) > 0:
+			if !resolved.ProxyAvailable {
+				logger.Info("PVC seed proxy not yet Ready; requeuing",
+					"seedBackupRef", shardedDatabase.Spec.SeedBackupRef)
+				r.Recorder.Event(&shardedDatabase, corev1.EventTypeNormal, "SeedProxyStarting",
+					"Waiting for backup-seed-proxy Deployment to become Ready")
+				if statusErr := r.updateStatus(ctx, &shardedDatabase, "Pending",
+					"Waiting for PVC seed proxy to become Ready", nil); statusErr != nil {
+					logger.Error(statusErr, "Failed to update status to Pending")
+				}
+				return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
+			}
+			shardedDatabase.Spec.SeedURIs = resolved.PerShardURIs
+			// Clear SeedURI so the Cypher options builder uses seedURIs map.
+			shardedDatabase.Spec.SeedURI = ""
+			// seedSourceDatabase is incompatible with the seedURIs map form
+			// — Neo4j rejects CREATE DATABASE with "OPTIONS specify
+			// 'seedSourceDatabase' expecting 'seedURI' to be present" when
+			// both are emitted. The per-shard URL map carries the source
+			// shard identity in its key (target-shard-name → source-shard
+			// URL), so seedSourceDatabase would just be redundant anyway.
+			// Clear it in-memory on the PVC path.
+			shardedDatabase.Spec.SeedSourceDatabase = ""
+			logger.Info("Resolved seedBackupRef to PVC per-shard URIs",
+				"seedBackupRef", shardedDatabase.Spec.SeedBackupRef, "shardCount", len(resolved.PerShardURIs))
+		}
+
+		// Phase 2b: ensure the referenced cluster has the backup's
+		// credentials Secret projected onto its server pods (cloud only;
+		// PVC seed uses in-cluster HTTP, no creds needed).
+		if resolved.CredsSecretName != "" {
+			autoInherited, credsErr := EnsureClusterHasSeedCreds(ctx, r.Client, cluster, resolved.CredsSecretName)
+			if credsErr != nil {
+				logger.Error(credsErr, "Cluster missing seed credentials projection")
+				r.Recorder.Event(&shardedDatabase, corev1.EventTypeWarning, "SeedCredsMissing", credsErr.Error())
+				if statusErr := r.updateStatus(ctx, &shardedDatabase, "Failed", credsErr.Error(), nil); statusErr != nil {
+					logger.Error(statusErr, "Failed to update status to Failed")
+				}
+				return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
+			}
+			if autoInherited {
+				logger.Info("Auto-inherited seed credentials onto cluster; waiting for rolling restart",
+					"cluster", cluster.Name, "credentialsSecret", resolved.CredsSecretName)
+				r.Recorder.Event(&shardedDatabase, corev1.EventTypeNormal, "SeedCredsAutoInherited",
+					fmt.Sprintf("Patched cluster %q spec.extraEnvFrom with %q; waiting for rolling restart", cluster.Name, resolved.CredsSecretName))
+				if statusErr := r.updateStatus(ctx, &shardedDatabase, "Pending",
+					fmt.Sprintf("Auto-inherited seed credentials Secret %q onto cluster %q; waiting for cluster pods to restart", resolved.CredsSecretName, cluster.Name), nil); statusErr != nil {
+					logger.Error(statusErr, "Failed to update status to Pending")
+				}
+				return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
+			}
+		}
+	}
+
 	// Create or update sharded database
-	if err := r.reconcileShardedDatabase(ctx, &shardedDatabase, neo4jClient); err != nil {
+	destructive, err := r.reconcileShardedDatabase(ctx, &shardedDatabase, neo4jClient)
+	if err != nil {
 		logger.Error(err, "Failed to reconcile sharded database")
 		r.Recorder.Event(&shardedDatabase, corev1.EventTypeWarning, EventReasonReconcileFailed, err.Error())
 
@@ -178,11 +281,23 @@ func (r *Neo4jShardedDatabaseReconciler) Reconcile(ctx context.Context, req ctrl
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 	}
 
-	// Update status to Ready if everything succeeded
+	// Update status to Ready if everything succeeded. When the destructive
+	// path fired AND succeeded, also stamp Status.LastDestructiveRestoreGeneration
+	// so the next reconcile at the same generation skips the destructive
+	// branch (otherwise the controller would re-drop on every poll cycle
+	// since IF EXISTS makes the drop idempotent).
 	ready := true
 	if err := r.updateStatus(ctx, &shardedDatabase, "Ready", "Sharded database is operational", &ready); err != nil {
 		logger.Error(err, "Failed to update status to Ready")
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
+	}
+	if destructive {
+		if err := r.recordDestructiveRestoreGeneration(ctx, &shardedDatabase); err != nil {
+			// Non-fatal: re-running drop+create at the same generation is
+			// safe-but-wasteful; the user can still recover by editing the
+			// CR. Log and continue.
+			logger.Error(err, "Failed to record LastDestructiveRestoreGeneration; reconciler may re-drop on next poll")
+		}
 	}
 
 	r.Recorder.Event(&shardedDatabase, corev1.EventTypeNormal, EventReasonShardedDatabaseReady, "Sharded database is ready and operational")
@@ -266,33 +381,79 @@ func (r *Neo4jShardedDatabaseReconciler) createNeo4jClient(ctx context.Context, 
 	return neo4j.NewClientForEnterprise(cluster, r.Client, cluster.Spec.Auth.AdminSecret)
 }
 
-// reconcileShardedDatabase handles the creation and management of sharded databases
-func (r *Neo4jShardedDatabaseReconciler) reconcileShardedDatabase(ctx context.Context, shardedDB *neo4jv1beta1.Neo4jShardedDatabase, client *neo4j.Client) error {
+// reconcileShardedDatabase handles the creation and management of sharded
+// databases. Returns destructive=true when the Phase 2c
+// replaceExisting+force path fired at the current spec generation; the
+// caller is expected to record that generation in
+// Status.LastDestructiveRestoreGeneration so future reconciles at the
+// same generation skip the destructive branch.
+func (r *Neo4jShardedDatabaseReconciler) reconcileShardedDatabase(ctx context.Context, shardedDB *neo4jv1beta1.Neo4jShardedDatabase, client *neo4j.Client) (destructive bool, err error) {
 	logger := log.FromContext(ctx)
 
 	// Wait for Neo4j to be ready for database operations
 	if err := r.waitForNeo4jReadiness(ctx, client); err != nil {
-		return fmt.Errorf("Neo4j not ready for database operations: %w", err)
+		return false, fmt.Errorf("Neo4j not ready for database operations: %w", err)
+	}
+
+	// Phase 2c: destructive drop-and-recreate path. Validator already
+	// ensured replaceExisting+force pair correctly and that a seed source
+	// is present. Generation guard: only run DROP if the current spec
+	// generation hasn't already been destructively restored — without this
+	// the controller would re-drop on every reconcile (and re-seed from
+	// the backup), since IF EXISTS keeps the DROP idempotent. The guard
+	// records Generation on Status.LastDestructiveRestoreGeneration once
+	// the drop+create cycle succeeds; any subsequent reconcile at the same
+	// generation skips the destructive branch and falls through to the
+	// standard create path.
+	destructive = shardedDB.Spec.ReplaceExisting && shardedDB.Spec.Force &&
+		shardedDB.Status.LastDestructiveRestoreGeneration < shardedDB.Generation
+	if destructive {
+		if dropErr := r.dropShardedDatabaseIfExists(ctx, shardedDB, client); dropErr != nil {
+			return false, fmt.Errorf("failed to DROP DATABASE %q for replaceExisting: %w", shardedDB.Spec.Name, dropErr)
+		}
+		logger.Info("Dropped existing sharded database for replaceExisting", "database", shardedDB.Spec.Name)
+		r.Recorder.Event(shardedDB, corev1.EventTypeNormal, "ShardedDatabaseDropped",
+			fmt.Sprintf("Dropped existing sharded database %q before recreating from seed", shardedDB.Spec.Name))
 	}
 
 	// Create the sharded database using Cypher 25 syntax in a single command
 	if (shardedDB.Spec.SeedURI != "" || len(shardedDB.Spec.SeedURIs) > 0) && shardedDB.Spec.SeedCredentials != nil {
-		if err := client.PrepareCloudCredentialsForShardedDatabase(ctx, r.Client, shardedDB); err != nil {
-			return fmt.Errorf("failed to prepare cloud credentials: %w", err)
+		if credErr := client.PrepareCloudCredentialsForShardedDatabase(ctx, r.Client, shardedDB); credErr != nil {
+			return destructive, fmt.Errorf("failed to prepare cloud credentials: %w", credErr)
 		}
 	}
 
-	if err := r.createShardedDatabase(ctx, shardedDB, client); err != nil {
-		return fmt.Errorf("failed to create sharded database: %w", err)
+	if createErr := r.createShardedDatabase(ctx, shardedDB, client); createErr != nil {
+		return destructive, fmt.Errorf("failed to create sharded database: %w", createErr)
 	}
 
 	// Update shard status
-	if err := r.updateShardStatus(ctx, shardedDB, client); err != nil {
-		logger.Error(err, "Failed to update shard status, continuing")
+	if statusErr := r.updateShardStatus(ctx, shardedDB, client); statusErr != nil {
+		logger.Error(statusErr, "Failed to update shard status, continuing")
 		// Non-fatal error, continue
 	}
 
-	return nil
+	return destructive, nil
+}
+
+// dropShardedDatabaseIfExists runs `CYPHER 25 DROP DATABASE name IF EXISTS
+// DESTROY DATA WAIT` against the system database, idempotently. Used by the
+// Phase 2c replaceExisting+force path before re-creating from seed.
+//
+// IF EXISTS makes the call a no-op when the logical sharded database isn't
+// present, so the helper is safe to invoke on every reconcile while the
+// caller still has replaceExisting=true. The WAIT clause blocks until the
+// drop completes (including all per-shard databases the sharded DB owns)
+// so the subsequent CREATE doesn't race against in-flight cleanup.
+//
+// CYPHER 25 prefix matches createShardedDatabase's invocation — the rest
+// of the sharded DB Cypher path is Cypher 25 so the prefix stays
+// consistent (CLAUDE.md rule 30 territory).
+func (r *Neo4jShardedDatabaseReconciler) dropShardedDatabaseIfExists(ctx context.Context, shardedDB *neo4jv1beta1.Neo4jShardedDatabase, client *neo4j.Client) error {
+	query := fmt.Sprintf("CYPHER 25 DROP DATABASE `%s` IF EXISTS DESTROY DATA WAIT", shardedDB.Spec.Name)
+	logger := log.FromContext(ctx).WithValues("database", shardedDB.Spec.Name, "query", query)
+	logger.Info("Executing destructive DROP DATABASE for replaceExisting")
+	return client.ExecuteCypher(ctx, "system", query)
 }
 
 // createShardedDatabase creates the sharded database using Cypher 25 syntax
@@ -312,7 +473,7 @@ func (r *Neo4jShardedDatabaseReconciler) createShardedDatabase(ctx context.Conte
 	query.WriteString(fmt.Sprintf("CYPHER 25 CREATE DATABASE `%s`", shardedDB.Spec.Name))
 
 	// Add IF NOT EXISTS if specified
-	if shardedDB.Spec.IfNotExists {
+	if shardedDB.Spec.IfNotExistsEffective() {
 		query.WriteString(" IF NOT EXISTS")
 	}
 
@@ -388,7 +549,7 @@ func (r *Neo4jShardedDatabaseReconciler) createShardedDatabase(ctx context.Conte
 		}
 
 		// Check if database already exists (not an error if IfNotExists is true)
-		if shardedDB.Spec.IfNotExists && strings.Contains(err.Error(), "already exists") {
+		if shardedDB.Spec.IfNotExistsEffective() && strings.Contains(err.Error(), "already exists") {
 			logger.Info("Database already exists, continuing")
 			return nil
 		}
@@ -544,6 +705,27 @@ func (r *Neo4jShardedDatabaseReconciler) updateStatus(ctx context.Context, shard
 		SetReadyCondition(&latest.Status.Conditions, latest.Generation, condStatus, condReason, message)
 
 		return r.Status().Update(ctx, &latest)
+	})
+}
+
+// recordDestructiveRestoreGeneration stamps Status.LastDestructiveRestoreGeneration
+// with the current spec generation after a Phase 2c destructive restore
+// completes successfully. Used as a guard against re-triggering the
+// drop-and-recreate cycle on every reconcile while
+// spec.replaceExisting=true (which is the steady state after a destructive
+// restore — users typically leave the field set rather than racing to
+// unset it after Ready). Done as a separate Status.Update from the Ready
+// transition so a single retry-on-conflict cycle covers it; failure here
+// is non-fatal because a re-trigger is just a wasteful drop+create at
+// the same generation, not data loss.
+func (r *Neo4jShardedDatabaseReconciler) recordDestructiveRestoreGeneration(ctx context.Context, shardedDB *neo4jv1beta1.Neo4jShardedDatabase) error {
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		latest := &neo4jv1beta1.Neo4jShardedDatabase{}
+		if err := r.Get(ctx, client.ObjectKeyFromObject(shardedDB), latest); err != nil {
+			return err
+		}
+		latest.Status.LastDestructiveRestoreGeneration = latest.Generation
+		return r.Status().Update(ctx, latest)
 	})
 }
 

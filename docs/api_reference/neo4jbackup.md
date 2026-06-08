@@ -287,7 +287,7 @@ Represents a single backup Job execution.
 | `status` | `string` | Run status: `"Running"`, `"Succeeded"`, `"Failed"` |
 | `error` | `string` | Error message if the backup failed |
 | `stats` | [`*BackupStats`](#backupstats) | Backup statistics for this run |
-| `backupsPath` | `string` | Run-specific subfolder under `spec.storage.path` where this run's `.backup` artifact(s) were written. The subfolder name is the backing Job's name (for one-shot backups: `<backup-name>-backup`; for CronJob children: `<cronjob-name>-<unix-seconds>`). To restore from this run set `Neo4jRestore.spec.source.backupPath` to `<spec.storage.path>/<backupsPath>` — neo4j-admin auto-discovers `.backup` files inside directories. Older runs predating the per-run-subfolder change (issue #129) have an empty `backupsPath` and live flat in `spec.storage.path`. |
+| `backupsPath` | `string` | The shared per-CR directory under `spec.storage.path` where this run wrote its `.backup` artifact. **Same value for every run of one CR** — all runs accumulate in this directory so `neo4j-admin` can chain differential backups off the prior full. Value is the Neo4jBackup CR name. Use the `runID` field (Job UID) for per-run identity. |
 
 ## Examples
 

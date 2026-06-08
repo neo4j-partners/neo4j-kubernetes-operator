@@ -24,7 +24,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	neo4jv1beta1 "github.com/neo4j-partners/neo4j-kubernetes-operator/api/v1beta1"
-	"github.com/neo4j-partners/neo4j-kubernetes-operator/internal/resources"
 )
 
 // ClusterValidationResult holds validation results including warnings
@@ -42,7 +41,6 @@ type ClusterValidator struct {
 	storageValidator  *StorageValidator
 	tlsValidator      *TLSValidator
 	authValidator     *AuthValidator
-	cloudValidator    *CloudValidator
 	upgradeValidator  *UpgradeValidator
 	memoryValidator   *MemoryValidator
 	resourceValidator *ResourceValidator
@@ -58,7 +56,6 @@ func NewClusterValidator(client client.Client) *ClusterValidator {
 		storageValidator:  NewStorageValidator(),
 		tlsValidator:      NewTLSValidator(),
 		authValidator:     NewAuthValidator(),
-		cloudValidator:    NewCloudValidator(),
 		upgradeValidator:  NewUpgradeValidator(),
 		memoryValidator:   NewMemoryValidator(),
 		resourceValidator: NewResourceValidator(client),
@@ -180,9 +177,6 @@ func (v *ClusterValidator) validateCluster(ctx context.Context, cluster *neo4jv1
 	// Memory validation (critical for preventing runtime failures)
 	allErrs = append(allErrs, v.memoryValidator.Validate(cluster)...)
 
-	// Cloud identity validation (least critical, do last)
-	allErrs = append(allErrs, v.cloudValidator.Validate(cluster)...)
-
 	// MCP server validation
 	allErrs = append(allErrs, validateMCPConfig(cluster.Spec.MCP, field.NewPath("spec", "mcp"))...)
 
@@ -265,23 +259,24 @@ func (v *ClusterValidator) ValidateUpdateWithWarnings(ctx context.Context, oldCl
 	return result
 }
 
-// validatePropertySharding validates property sharding configuration and version requirements
+// validatePropertySharding validates property sharding configuration and version requirements.
+// Delegates the underlying static check to IsClusterShardingReady so backup/restore
+// reconcilers can reuse the same precondition without duplicating the logic.
 func (v *ClusterValidator) validatePropertySharding(cluster *neo4jv1beta1.Neo4jEnterpriseCluster) field.ErrorList {
 	var allErrs field.ErrorList
 
-	// Only validate if property sharding is enabled
+	// Only run the gate when the user opted in. If sharding is disabled the
+	// version requirement does not apply — the helper would reject any image
+	// tag in that branch, which is wrong for the validator's purpose here.
 	if cluster.Spec.PropertySharding == nil || !cluster.Spec.PropertySharding.Enabled {
 		return allErrs
 	}
 
-	specPath := field.NewPath("spec")
-
-	// Validate minimum version requirement for property sharding
-	if !resources.IsNeo4jVersion202512OrHigher(cluster.Spec.Image.Tag) {
+	if err := IsClusterShardingReady(cluster); err != nil {
 		allErrs = append(allErrs, field.Invalid(
-			specPath.Child("image", "tag"),
+			field.NewPath("spec", "image", "tag"),
 			cluster.Spec.Image.Tag,
-			"property sharding requires Neo4j version 2025.12+ Enterprise"))
+			err.Error()))
 	}
 
 	return allErrs

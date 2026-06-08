@@ -42,8 +42,6 @@ type storageExpansionResult struct {
 	needed bool
 	// dataExpansion is true when data volume expansion is required.
 	dataExpansion bool
-	// backupExpansion is true when backup volume expansion is required.
-	backupExpansion bool
 	// shrinkDetected is true when the desired size is smaller than existing PVCs.
 	shrinkDetected bool
 	// shrinkMessage describes the shrink rejection.
@@ -74,8 +72,7 @@ func (r *Neo4jEnterpriseClusterReconciler) reconcileStorageExpansion(ctx context
 	}
 
 	logger.Info("Storage expansion required",
-		"dataExpansion", result.dataExpansion,
-		"backupExpansion", result.backupExpansion)
+		"dataExpansion", result.dataExpansion)
 
 	// Phase: Expanding
 	_ = r.updateClusterStatus(ctx, cluster, "Expanding", "Expanding storage volumes")
@@ -91,23 +88,6 @@ func (r *Neo4jEnterpriseClusterReconciler) reconcileStorageExpansion(ctx context
 			r.Recorder.Eventf(cluster, corev1.EventTypeWarning, EventReasonStorageExpansionFailed,
 				"Failed to expand data storage: %v", err)
 			_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Storage expansion failed: %v", err))
-			return false, err
-		}
-	}
-
-	// Expand backup volumes
-	if result.backupExpansion {
-		backupSize := cluster.Spec.Storage.Size
-		if cluster.Spec.Storage.BackupStorage != nil && cluster.Spec.Storage.BackupStorage.Size != "" {
-			backupSize = cluster.Spec.Storage.BackupStorage.Size
-		}
-		desiredSize := resource.MustParse(backupSize)
-		stsName := fmt.Sprintf("%s-backup", cluster.Name)
-
-		if err := r.expandVolumes(ctx, cluster, stsName, "backup-storage", desiredSize); err != nil {
-			r.Recorder.Eventf(cluster, corev1.EventTypeWarning, EventReasonStorageExpansionFailed,
-				"Failed to expand backup storage: %v", err)
-			_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Backup storage expansion failed: %v", err))
 			return false, err
 		}
 	}
@@ -138,27 +118,7 @@ func (r *Neo4jEnterpriseClusterReconciler) checkStorageExpansionNeeded(ctx conte
 	}
 	result.dataExpansion = (state == pvcSizeExpand)
 
-	// Check backup volumes
-	if cluster.Spec.Backups != nil {
-		backupSize := cluster.Spec.Storage.Size
-		if cluster.Spec.Storage.BackupStorage != nil && cluster.Spec.Storage.BackupStorage.Size != "" {
-			backupSize = cluster.Spec.Storage.BackupStorage.Size
-		}
-		desiredBackupSize := resource.MustParse(backupSize)
-		backupStsName := fmt.Sprintf("%s-backup", cluster.Name)
-		state, err := r.comparePVCSizes(ctx, cluster.Namespace, cluster.Name, backupStsName, "backup-storage", desiredBackupSize)
-		if err != nil {
-			return result, err
-		}
-		if state == pvcSizeShrink {
-			result.shrinkDetected = true
-			result.shrinkMessage = fmt.Sprintf("backup storage size (%s) is smaller than existing backup PVCs; PVC shrink is not supported by Kubernetes", backupSize)
-			return result, nil
-		}
-		result.backupExpansion = (state == pvcSizeExpand)
-	}
-
-	result.needed = result.dataExpansion || result.backupExpansion
+	result.needed = result.dataExpansion
 	return result, nil
 }
 

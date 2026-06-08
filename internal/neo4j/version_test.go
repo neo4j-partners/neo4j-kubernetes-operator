@@ -247,6 +247,31 @@ func TestGetBackupCommandNoFromWhenEmpty(t *testing.T) {
 	}
 }
 
+// Glob patterns like "products*" for sharded backups MUST be double-quoted so
+// the shell does not expand the asterisk before reaching neo4j-admin. The
+// universal cluster-backup case already used `"*"`; the per-database arg now
+// uses the same quoting so sharded callers can pass `name+"*"` safely.
+func TestGetBackupCommandQuotesShardedGlob(t *testing.T) {
+	v, _ := ParseVersion("2025.12.0-enterprise")
+	cmd := GetBackupCommand(v, "products*", "/backups/run", false, "host1:6362")
+	if !strings.Contains(cmd, `"products*"`) {
+		t.Errorf("expected quoted glob arg \"products*\", got: %q", cmd)
+	}
+	// Defensively: make sure the bare unquoted form is absent — a regression
+	// to non-quoting would leave the asterisk exposed to the shell.
+	if strings.Contains(cmd, " products* ") || strings.HasSuffix(cmd, " products*") {
+		t.Errorf("glob arg appears unquoted somewhere in command: %q", cmd)
+	}
+}
+
+func TestGetBackupCommandQuotesPlainName(t *testing.T) {
+	v, _ := ParseVersion("5.26.0-enterprise")
+	cmd := GetBackupCommand(v, "mydb", "/backups/mydb", false, "")
+	if !strings.Contains(cmd, `"mydb"`) {
+		t.Errorf("expected quoted database arg \"mydb\", got: %q", cmd)
+	}
+}
+
 func TestSupportsRemoteAddressResolution(t *testing.T) {
 	cases := []struct {
 		version string

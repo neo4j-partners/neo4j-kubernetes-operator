@@ -1,0 +1,34 @@
+# ============================================================
+# Destructive restore: overwrite an EXISTING database from a backup.
+#
+#   - force: true            overwrites the existing database (drop + recreate)
+#   - replaceExisting: true  replace rather than fail if the database exists
+#   - source.type: backup    pulls from a Neo4jBackup CR's latest successful run
+#
+# For point-in-time recovery, see restore-pitr-basic.yaml.
+# Hooks live under spec.options.{preRestore,postRestore} and accept either
+# `cypherStatements:` (run via Bolt) or a `job:` template — there is no
+# free-form `type: script` hook.
+# ============================================================
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jRestore
+metadata:
+  name: restore-orders
+  namespace: default
+spec:
+  clusterRef: my-neo4j-cluster
+  databaseName: orders
+  # Force restore over an existing database
+  force: true
+  source:
+    type: backup
+    backupRef: full-backup
+  options:
+    # Verify the backup before applying it
+    verifyBackup: true
+    # Replace the existing database rather than failing if it exists
+    replaceExisting: true
+    postRestore:
+      cypherStatements:
+        - "CALL db.awaitIndexes()"
+        - "CALL dbms.security.clearAuthCache()"

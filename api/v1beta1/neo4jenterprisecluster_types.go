@@ -62,8 +62,6 @@ type Neo4jEnterpriseClusterSpec struct {
 
 	Service *ServiceSpec `json:"service,omitempty"`
 
-	Backups *BackupsSpec `json:"backups,omitempty"`
-
 	// UpgradeStrategy specifies how to handle rolling upgrades
 	UpgradeStrategy *UpgradeStrategySpec `json:"upgradeStrategy,omitempty"`
 
@@ -110,6 +108,26 @@ type Neo4jEnterpriseClusterSpec struct {
 	// See: https://neo4j.com/docs/aura/fleet-management/
 	// +optional
 	AuraFleetManagement *AuraFleetManagementSpec `json:"auraFleetManagement,omitempty"`
+
+	// ExtraEnvFrom projects entire Secrets or ConfigMaps as environment
+	// variables on the neo4j container. Intended for credential bundles —
+	// e.g. a Secret with AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY /
+	// AWS_ENDPOINT_URL_S3 / AWS_REGION used by the AWS SDK default
+	// credential chain when Neo4j fetches a seed URI from S3 (or
+	// S3-compatible stores like MinIO).
+	//
+	// To enable Neo4jShardedDatabase.spec.seedBackupRef against a
+	// cloud-backed Neo4jBackup, this list MUST contain a SecretRef that
+	// matches the backup's `spec.cloud.credentialsSecretRef`. The sharded
+	// DB controller validates this at reconcile time and routes to
+	// Phase=Failed with an actionable error if absent.
+	//
+	// Opt-in auto-inherit: set annotation
+	// `neo4j.com/auto-inherit-seed-creds=true` on the cluster CR to let the
+	// sharded DB controller append the missing entry automatically. This
+	// triggers a rolling restart of cluster pods, which is why it's opt-in.
+	// +optional
+	ExtraEnvFrom []corev1.EnvFromSource `json:"extraEnvFrom,omitempty"`
 
 	// TrustedCASecrets references Secrets containing additional CA certificates
 	// (key defaults to "ca.crt") that Neo4j-the-server should trust for outgoing
@@ -191,15 +209,6 @@ type StorageSpec struct {
 	// +kubebuilder:validation:Enum=Delete;Retain
 	// +kubebuilder:default=Delete
 	RetentionPolicy string `json:"retentionPolicy,omitempty"`
-
-	// Additional storage for backups
-	BackupStorage *BackupStorageSpec `json:"backupStorage,omitempty"`
-}
-
-// BackupStorageSpec defines backup storage configuration
-type BackupStorageSpec struct {
-	ClassName string `json:"className,omitempty"`
-	Size      string `json:"size,omitempty"`
 }
 
 // TLSSpec defines TLS configuration
@@ -713,13 +722,6 @@ type RouteTLSSpec struct {
 
 	// Secret containing the certificate (for reencrypt/passthrough)
 	SecretName string `json:"secretName,omitempty"`
-}
-
-// BackupsSpec defines default backup configuration
-type BackupsSpec struct {
-	DefaultStorage *StorageLocation `json:"defaultStorage,omitempty"`
-
-	Cloud *CloudBlock `json:"cloud,omitempty"`
 }
 
 // StorageLocation defines storage location for backups

@@ -75,9 +75,27 @@ spec:
                 enum:
                 - "25"
                 type: string
+              force:
+                description: |-
+                  Force confirms the destructive ReplaceExisting operation. Required as
+                  a separate field so an accidental ReplaceExisting flip can't destroy
+                  data — the user must consciously set BOTH fields.
+                type: boolean
               ifNotExists:
-                default: true
-                description: Create database only if it doesn't exist
+                description: |-
+                  IfNotExists controls whether the sharded database creation is
+                  idempotent. When unset (nil) or true, the operator emits
+                  `CREATE DATABASE ... IF NOT EXISTS` which is a no-op if the database
+                  already exists. Set explicitly to false to allow `CREATE DATABASE`
+                  without the `IF NOT EXISTS` clause — required when paired with
+                  `replaceExisting=true` (the destructive recreate path), and disallowed
+                  otherwise without manual handling of "database already exists" errors.
+
+                  Pointer type rather than bool with default=true: a `bool` field with
+                  `omitempty` would silently revert to the server-side default whenever
+                  a user explicitly set it to false, since `false` serializes as the
+                  JSON zero value and is dropped from the wire. Using *bool preserves
+                  "explicitly false" through Update round-trips.
                 type: boolean
               name:
                 description: Name of the sharded database to create
@@ -141,6 +159,46 @@ spec:
                 - propertyShardTopology
                 - propertyShards
                 type: object
+              replaceExisting:
+                description: |-
+                  ReplaceExisting destroys an existing logical sharded database before
+                  recreating it from the seed (typically `spec.seedBackupRef`). Intended
+                  for the operationally-load-bearing recovery path where shards have
+                  become unrecoverable (e.g. all replicas of a property shard severed),
+                  and the only restore mechanism is drop-and-recreate from backup.
+
+                  REQUIRES `force: true` as a separate confirmation field, mirroring
+                  the safety pattern used by `Neo4jRestore.spec.force`. The validator
+                  rejects `replaceExisting: true` without `force: true`.
+
+                  Mutually exclusive with `ifNotExists: true` — those two settings
+                  contradict each other (one says "no-op if it exists", the other says
+                  "destroy if it exists"). Set `ifNotExists: false` explicitly when
+                  using `replaceExisting`.
+
+                  THIS IS DESTRUCTIVE: the operator runs `DROP DATABASE {name}
+                  DESTROY DATA WAIT` before CREATE. All existing data in the named
+                  sharded DB is lost. The seedBackupRef contents are the only source
+                  of data after the operation.
+                type: boolean
+              seedBackupRef:
+                description: |-
+                  SeedBackupRef names a Neo4jBackup CR (in the same namespace) whose
+                  most-recent Succeeded run will be used as the seed for this sharded
+                  database. The operator resolves the reference at reconcile time into a
+                  concrete seedURI (computed from the backup's storage type + per-run
+                  subdirectory). Mutually exclusive with SeedURI and SeedURIs.
+
+                  Currently restricted to backups stored in cloud locations (S3, GCS,
+                  Azure Blob): PVC-stored backups would require mounting the backup PVC
+                  on cluster pods, which is out of scope for this field. The validator
+                  rejects PVC-backed seedBackupRef at reconcile time with an explanatory
+                  status message.
+
+                  If the referenced Neo4jBackup has no Succeeded run yet, the sharded
+                  database stays in Pending phase and the reconciler requeues — it does
+                  NOT route to Failed (mirrors CLAUDE.md rule 72's restore-side semantics).
+                type: string
               seedConfig:
                 description: Seed configuration for advanced initialization
                 properties:
@@ -339,6 +397,53 @@ spec:
                     - property
                     type: string
                 type: object
+              lastBackup:
+                description: |-
+                  LastBackup records the most recent successful backup that targeted this
+                  sharded database. Populated by the backup controller's reverse-lookup
+                  when a Neo4jBackup with target.kind=ShardedDatabase and target.name
+                  matching this CR's name reaches a Succeeded run. Populated only on
+                  Success — Failed/Running runs do not overwrite the field. The reference
+                  is informational; operators auditing backup health should also consult
+                  the Neo4jBackup CR's status.history for the full chain.
+                properties:
+                  backupRef:
+                    description: BackupRef is the Neo4jBackup CR name in the same
+                      namespace.
+                    type: string
+                  backupsPath:
+                    description: |-
+                      BackupsPath is the per-run subdirectory inside the backup storage where
+                      the per-shard artifacts were written. Same value as BackupRun.BackupsPath.
+                    type: string
+                  runID:
+                    description: |-
+                      RunID matches BackupRun.RunID in the Neo4jBackup CR (the backup Job's
+                      metadata.uid). Stable across status refreshes and unique per run.
+                    type: string
+                  timestamp:
+                    description: Timestamp is the time the backup Job's Pod reported
+                      completion.
+                    format: date-time
+                    type: string
+                required:
+                - backupRef
+                type: object
+              lastDestructiveRestoreGeneration:
+                description: |-
+                  LastDestructiveRestoreGeneration is the spec.metadata.generation at
+                  which the operator last executed a successful destructive restore
+                  (replaceExisting+force). Set by the sharded DB controller after the
+                  DROP DATABASE … DESTROY DATA WAIT + CREATE DATABASE … OPTIONS { seedURI }
+                  cycle finishes. Used to prevent re-triggering the destructive flow on
+                  every reconcile: the controller only runs DROP if
+                  `LastDestructiveRestoreGeneration < Generation`. To re-trigger after
+                  a successful restore (e.g. to re-seed from a newer backup), the user
+                  updates spec — which bumps Generation past
+                  LastDestructiveRestoreGeneration — and the operator picks up the new
+                  request.
+                format: int64
+                type: integer
               message:
                 description: Message provides additional information about the current
                   state

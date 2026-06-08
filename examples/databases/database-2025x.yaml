@@ -14,6 +14,3 @@ spec:
   topology:
     primaries: 1
     secondaries: 0
-  options:
-    # Neo4j 2025.x supports new options
-    existingDataBehavior: "use"

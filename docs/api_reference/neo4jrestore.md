@@ -12,16 +12,25 @@ For practical examples and usage guidance, see the [Backup and Restore Guide](..
 
 ## How it works
 
-When a `Neo4jRestore` resource is created, the operator:
+The operator picks the restore method based on the target kind referenced by `clusterRef`. The Neo4j docs flag `neo4j-admin database restore` as **unsafe on clusters**, so the two paths diverge:
 
-1. Resolves the `clusterRef` — it accepts both `Neo4jEnterpriseCluster` and `Neo4jEnterpriseStandalone`. The controller detects the type automatically.
-2. Creates a restore Kubernetes Job that runs `neo4j-admin database restore` inside a container using the **same Neo4j enterprise image** as the target.
-3. If `stopCluster: true`, the operator scales down the cluster StatefulSet before starting the restore Job. When this flag is set, the operator mounts the actual server data PVC (`data-{cluster}-server-0`) directly into the restore Job container for offline restore access.
-4. After the restore Job succeeds, the operator automatically issues one of the following Cypher commands via the Bolt client:
-   - `CREATE DATABASE <dbname>` — when the database did not exist before
-   - `START DATABASE <dbname>` — when the database existed but was stopped for the restore
-5. For multi-server clusters (`spec.topology.servers >= 2`), the operator then calls Neo4j's `dbms.[cluster.]recreateDatabase` procedure with **server-0 as the explicit seed**, forcing every other server to re-seed its store from server-0's restored data. This step is what makes cluster restores deterministic — without it, post-restart cluster bootstrap picks the primary non-deterministically, and a server with stale pre-restore data can win consensus and silently overwrite the restored data on re-sync. Skipped silently for standalone / single-server deployments and for Neo4j versions that don't expose the procedure (pre-5.24 SemVer, pre-2025.02 CalVer).
-6. Status fields and conditions are updated throughout the lifecycle.
+**`Neo4jEnterpriseCluster` target** — Cypher over Bolt, no Job:
+1. Resolves `source.backupRef` (or `source.storage`) into the exact `.backup` **file** URI of the latest successful run, e.g. `s3://bucket/path/<cr-name>/<dbname>-<timestamp>.backup`. Neo4j's `CloudSeedProvider` seeds a single database from one file (a directory URI fails with `Can't open seed file`); when that file is a differential, Neo4j resolves and applies the full + differential chain from the same directory automatically.
+   - **Mixed-cadence chains (`spec.chainFromBackup`)**: "latest successful run" is scoped to the **referenced CR**, not the shared chain directory. Reference the **differential** CR to restore the latest state; referencing the parent **full** CR seeds from its latest full snapshot — the newer diffs are *not* applied. Restoring via a chain-parent CR emits a `RestoreFromChainParent` Warning event naming the differential children, so a restore intending "latest" that references the full CR isn't a silent surprise. To pin an arbitrary run, use `source.type: storage` with `backupPath` set to the exact `.backup` file.
+2. Projects cloud credentials onto cluster pods via `spec.extraEnvFrom` (cluster CR) — required so the JVM's AWS/GCP/Azure SDK can authenticate. The operator emits an actionable error if the Secret isn't projected; set the cluster annotation `neo4j.com/auto-inherit-seed-creds=true` to auto-patch.
+3. Opens a Bolt session and runs `SHOW DATABASES` to detect whether the target database already exists.
+4. Existing database → `CALL dbms.[cluster.]recreateDatabase($db, {seedURI: $uri})`. Preserves user/role privileges, atomically swaps the database on every server, no `DROP` needed.
+5. New database → `CREATE DATABASE $db OPTIONS { seedURI: '<file>' } WAIT`.
+6. `CREATE … WAIT` blocks until online, but `dbms.recreateDatabase` is **asynchronous** — it returns once the recreate is scheduled. The operator therefore polls `SHOW DATABASE` until every allocation reports `online` before marking the restore `Completed`; if the seed fails the restore goes `Failed` with the database's `statusMessage`.
+
+**`Neo4jEnterpriseStandalone` target** — Kubernetes Job:
+1. Spawns a restore Job that runs `neo4j-admin database restore --from-path=$(ls <dir>/<dbname>-*.backup | tail -1) <dbname>`. The shell substitution picks the latest run in the chain by default.
+2. If `stopCluster: true`, the operator scales down the StatefulSet first and mounts `data-{name}-server-0` directly into the Job container for offline access.
+3. After the Job succeeds, automatically runs `CREATE DATABASE <dbname>` (new) or `START DATABASE <dbname>` (existed but stopped) via Bolt.
+
+**`Neo4jShardedDatabase` target** — rejected. Sharded restore is owned by the `Neo4jShardedDatabase` CRD; set `spec.replaceExisting: true` + `spec.force: true` on the target sharded DB and reference the backup via `spec.seedBackupRef`. The Neo4jRestore validator emits an actionable error pointing at this flow.
+
+**No manual post-restore Cypher is required** for either path.
 
 ## Neo4jRestore Spec
 

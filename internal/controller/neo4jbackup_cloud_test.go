@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	neo4jv1beta1 "github.com/neo4j-partners/neo4j-kubernetes-operator/api/v1beta1"
 )
@@ -246,53 +247,68 @@ func TestBuildCloudEnvVars_NilCredentialsSecretRef(t *testing.T) {
 // "${BACKUP_RUN_ID}" subfolder is appended by buildBackupCommand at
 // command-construction time and expanded by the shell at runtime via the
 // downward-API env var.
-func TestBuildToPath_NoTrailingRunSubfolder(t *testing.T) {
+// TestBuildToPath_SharedDirectoryPerCR pins the shared-directory layout
+// (CLAUDE.md rule 40): all runs of one Neo4jBackup CR write to the SAME
+// `<base>/<cr-name>` directory so neo4j-admin can chain `--type=DIFF`
+// backups off the prior FULL. The CR name acts as the per-CR isolation
+// segment — multiple CRs pointed at the same storage location stay
+// separated. NO per-run subfolder is appended at command-build time; the
+// shell command in buildBackupCommand only adds a trailing slash.
+func TestBuildToPath_SharedDirectoryPerCR(t *testing.T) {
 	r := newReconcilerForCloudTest()
 
 	tests := []struct {
 		name     string
 		storage  neo4jv1beta1.StorageLocation
+		backupCR string
 		expected string
 	}{
 		{
 			name:     "s3 with explicit path",
 			storage:  neo4jv1beta1.StorageLocation{Type: "s3", Bucket: "my-bucket", Path: "neo4j/prod"},
-			expected: "s3://my-bucket/neo4j/prod",
+			backupCR: "daily-prod-backup",
+			expected: "s3://my-bucket/neo4j/prod/daily-prod-backup",
 		},
 		{
 			name:     "gcs with explicit path",
 			storage:  neo4jv1beta1.StorageLocation{Type: "gcs", Bucket: "my-bucket", Path: "neo4j/prod"},
-			expected: "gs://my-bucket/neo4j/prod",
+			backupCR: "daily-prod-backup",
+			expected: "gs://my-bucket/neo4j/prod/daily-prod-backup",
 		},
 		{
 			name:     "azure with explicit path",
 			storage:  neo4jv1beta1.StorageLocation{Type: "azure", Bucket: "my-container", Path: "neo4j/prod"},
-			expected: "azb://my-container/neo4j/prod",
+			backupCR: "weekly-prod-backup",
+			expected: "azb://my-container/neo4j/prod/weekly-prod-backup",
 		},
 		{
 			name:     "s3 empty path falls back to 'backups'",
 			storage:  neo4jv1beta1.StorageLocation{Type: "s3", Bucket: "my-bucket"},
-			expected: "s3://my-bucket/backups",
+			backupCR: "ad-hoc-backup",
+			expected: "s3://my-bucket/backups/ad-hoc-backup",
 		},
 		{
-			name:     "pvc returns mount root only",
+			name:     "pvc returns per-CR directory under /backup",
 			storage:  neo4jv1beta1.StorageLocation{Type: "pvc"},
-			expected: "/backup",
+			backupCR: "ad-hoc-backup",
+			expected: "/backup/ad-hoc-backup",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			backup := &neo4jv1beta1.Neo4jBackup{Spec: neo4jv1beta1.Neo4jBackupSpec{Storage: tt.storage}}
+			backup := &neo4jv1beta1.Neo4jBackup{
+				ObjectMeta: metav1.ObjectMeta{Name: tt.backupCR},
+				Spec:       neo4jv1beta1.Neo4jBackupSpec{Storage: tt.storage},
+			}
 			got := r.buildToPath(backup)
 			assert.Equal(t, tt.expected, got,
-				"buildToPath must return the BASE storage path; the per-run subfolder is appended at command-build time")
-			// Critical: no trailing slash. Previously buildToPath returned
-			// "s3://bucket/path/" with a trailing slash and every run dumped
-			// directly into this directory. The per-run subfolder is appended
-			// with an explicit slash separator at command-build time.
+				"buildToPath must embed the CR name as the per-CR shared segment (rule 40)")
+			// Critical: no trailing slash. The shell command in
+			// buildBackupCommand appends "/" so neo4j-admin sees directory
+			// semantics (required for cloud targets per the docs).
 			assert.NotEqual(t, "/", string(got[len(got)-1]),
-				"buildToPath must not return a trailing slash; the subfolder separator is added by the caller")
+				"buildToPath must not return a trailing slash; the separator is added by the caller")
 		})
 	}
 }

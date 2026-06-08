@@ -128,10 +128,7 @@ nav:
       - Users, Roles & Auth Rules: user_guide/user_role_management.md
 
   - Operate:
-      - Backup & Restore:
-          - Overview: user_guide/guides/backup_restore.md
-          - Disk Management: user_guide/guides/backup-disk-management.md
-          - Sidecar Requirements: user_guide/guides/backup-sidecar-requirements.md
+      - Backup & Restore: user_guide/guides/backup_restore.md
       - Upgrades: user_guide/guides/upgrades.md
       - Storage Expansion: user_guide/guides/storage_expansion.md
       - Fault Tolerance: user_guide/guides/fault_tolerance.md

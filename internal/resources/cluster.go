@@ -237,17 +237,6 @@ func BuildStandaloneBackupFromAddress(standalone *neo4jv1beta1.Neo4jEnterpriseSt
 		standalone.Name, standalone.Name, standalone.Namespace, BackupPort)
 }
 
-// BuildBackupStatefulSet creates a single, centralized backup StatefulSet for the cluster
-// This is more efficient than having backup sidecars in each server pod
-func BuildBackupStatefulSet(cluster *neo4jv1beta1.Neo4jEnterpriseCluster) *appsv1.StatefulSet {
-	// Only create backup StatefulSet if backups are configured
-	if cluster.Spec.Backups == nil {
-		return nil
-	}
-
-	return buildCentralizedBackupStatefulSet(cluster)
-}
-
 // buildStatefulSetForEnterprise is a helper function to create StatefulSet for individual Neo4j server
 func buildStatefulSetForEnterprise(cluster *neo4jv1beta1.Neo4jEnterpriseCluster, serverName string, replicas int32) *appsv1.StatefulSet {
 	adminSecret := DefaultAdminSecret
@@ -1099,248 +1088,6 @@ func buildMetricsAnnotations(cluster *neo4jv1beta1.Neo4jEnterpriseCluster) map[s
 	}
 }
 
-// buildBackupSidecarStatefulSet creates a separate StatefulSet for backup sidecar
-// buildCentralizedBackupStatefulSet creates a single backup StatefulSet for the entire cluster
-func buildCentralizedBackupStatefulSet(cluster *neo4jv1beta1.Neo4jEnterpriseCluster) *appsv1.StatefulSet {
-	adminSecret := DefaultAdminSecret
-	if cluster.Spec.Auth != nil && cluster.Spec.Auth.AdminSecret != "" {
-		adminSecret = cluster.Spec.Auth.AdminSecret
-	}
-
-	labels := getLabelsForEnterprise(cluster, "backup")
-	labels["neo4j.com/component"] = "backup"
-
-	return &appsv1.StatefulSet{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s-backup", cluster.Name),
-			Namespace: cluster.Namespace,
-			Labels:    labels,
-		},
-		Spec: appsv1.StatefulSetSpec{
-			Replicas:            &[]int32{1}[0],
-			ServiceName:         fmt.Sprintf("%s-backup-headless", cluster.Name),
-			PodManagementPolicy: appsv1.OrderedReadyPodManagement,
-			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{
-					"neo4j.com/cluster":   cluster.Name,
-					"neo4j.com/component": "backup",
-				},
-			},
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{
-						"neo4j.com/cluster":      cluster.Name,
-						"neo4j.com/component":    "backup",
-						"neo4j.com/instance":     cluster.Name,
-						"app.kubernetes.io/name": "neo4j",
-					},
-				},
-				Spec: buildCentralizedBackupPodSpec(cluster, adminSecret),
-			},
-			VolumeClaimTemplates: buildBackupVolumeClaimTemplates(cluster),
-		},
-	}
-}
-
-// buildCentralizedBackupPodSpec creates the pod spec for centralized backup
-func buildCentralizedBackupPodSpec(cluster *neo4jv1beta1.Neo4jEnterpriseCluster, adminSecret string) corev1.PodSpec {
-	// Environment variables for centralized backup
-	env := []corev1.EnvVar{
-		{
-			Name:  "NEO4J_CLUSTER_NAME",
-			Value: cluster.Name,
-		},
-		{
-			Name:  "NEO4J_BOLT_URI",
-			Value: fmt.Sprintf("bolt://%s-client:7687", cluster.Name),
-		},
-		{
-			Name: "NEO4J_USERNAME",
-			ValueFrom: &corev1.EnvVarSource{
-				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{
-						Name: adminSecret,
-					},
-					Key: "username",
-				},
-			},
-		},
-		{
-			Name: "NEO4J_PASSWORD",
-			ValueFrom: &corev1.EnvVarSource{
-				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{
-						Name: adminSecret,
-					},
-					Key: "password",
-				},
-			},
-		},
-		{
-			Name:  "NEO4J_EDITION",
-			Value: "enterprise",
-		},
-		{
-			Name:  "NEO4J_ACCEPT_LICENSE_AGREEMENT",
-			Value: "yes",
-		},
-	}
-
-	// Build resources for centralized backup - single instance for whole cluster
-	resources := corev1.ResourceRequirements{
-		Requests: corev1.ResourceList{
-			"cpu":    resource.MustParse("100m"),  // Lower CPU - only one instance
-			"memory": resource.MustParse("256Mi"), // Lower memory - optimized
-		},
-		Limits: corev1.ResourceList{
-			"cpu":    resource.MustParse("500m"),
-			"memory": resource.MustParse("1Gi"),
-		},
-	}
-
-	// Backup script with advanced functionality
-	backupScript := `#!/bin/bash
-set -e
-
-echo "Centralized backup service started for cluster $NEO4J_CLUSTER_NAME"
-echo "Connecting to cluster via $NEO4J_BOLT_URI"
-
-# Wait for cluster to be ready
-echo "Waiting for Neo4j cluster to be available..."
-while ! cypher-shell --format plain -a $NEO4J_BOLT_URI -u $NEO4J_USERNAME -p $NEO4J_PASSWORD "SHOW SERVERS" 2>/dev/null; do
-    echo "Cluster not ready, waiting..."
-    sleep 10
-done
-
-echo "Neo4j cluster is ready, starting backup monitoring"
-
-# Function to perform backup
-perform_backup() {
-    local backup_type=${1:-FULL}
-    local backup_name="backup-$(date +%Y%m%d_%H%M%S)"
-    local backup_path="/backups/$backup_name"
-
-    echo "Starting $backup_type backup to $backup_path"
-
-    # Create backup directory
-    mkdir -p "$backup_path"
-
-    # Perform backup using neo4j-admin
-    neo4j-admin database backup \
-        --to-path="$backup_path" \
-        --type="$backup_type" \
-        --include-metadata=all \
-        --verbose
-
-    echo "Backup completed: $backup_path"
-
-    # Clean up old backups (keep last 10)
-    cd /backups
-    ls -t | tail -n +11 | xargs -r rm -rf
-}
-
-# Monitor for backup requests and scheduled backups
-while true; do
-    # Check for manual backup requests via file system
-    if [ -f /backup-requests/backup.request ]; then
-        echo "Processing backup request"
-        backup_type=$(cat /backup-requests/backup.request | jq -r '.type // "FULL"')
-        perform_backup "$backup_type"
-        rm -f /backup-requests/backup.request
-        echo "COMPLETED" > /backup-requests/backup.status
-    fi
-
-    # Scheduled backup check (daily at 2 AM if current time matches)
-    current_hour=$(date +%H)
-    current_minute=$(date +%M)
-    if [ "$current_hour" = "02" ] && [ "$current_minute" = "00" ]; then
-        echo "Performing scheduled daily backup"
-        perform_backup "FULL"
-    fi
-
-    sleep 60
-done`
-
-	return corev1.PodSpec{
-		ServiceAccountName: getServiceAccountNameForEnterprise(cluster),
-		SecurityContext:    podSecurityContextForCluster(cluster),
-		Containers: []corev1.Container{
-			{
-				Name:            "backup",
-				Image:           fmt.Sprintf("%s:%s", cluster.Spec.Image.Repo, cluster.Spec.Image.Tag),
-				ImagePullPolicy: corev1.PullIfNotPresent,
-				Env:             env,
-				Resources:       resources,
-				Command:         []string{"/bin/bash", "-c"},
-				Args:            []string{backupScript},
-				SecurityContext: containerSecurityContextForCluster(cluster),
-				VolumeMounts: []corev1.VolumeMount{
-					{
-						Name:      "backup-storage",
-						MountPath: "/backups",
-					},
-					{
-						Name:      "backup-requests",
-						MountPath: "/backup-requests",
-					},
-				},
-			},
-		},
-		Volumes: []corev1.Volume{
-			{
-				Name: "backup-requests",
-				VolumeSource: corev1.VolumeSource{
-					EmptyDir: &corev1.EmptyDirVolumeSource{},
-				},
-			},
-		},
-	}
-}
-
-// buildBackupVolumeClaimTemplates creates PVC templates for backup storage
-func buildBackupVolumeClaimTemplates(cluster *neo4jv1beta1.Neo4jEnterpriseCluster) []corev1.PersistentVolumeClaim {
-	if cluster.Spec.Backups == nil {
-		return nil
-	}
-
-	// Use backup-specific storage or fall back to cluster storage
-	storageClassName := cluster.Spec.Storage.ClassName
-	storageSize := cluster.Spec.Storage.Size
-
-	// Check for backup-specific storage configuration in cluster storage spec
-	if cluster.Spec.Storage.BackupStorage != nil {
-		if cluster.Spec.Storage.BackupStorage.ClassName != "" {
-			storageClassName = cluster.Spec.Storage.BackupStorage.ClassName
-		}
-		if cluster.Spec.Storage.BackupStorage.Size != "" {
-			storageSize = cluster.Spec.Storage.BackupStorage.Size
-		}
-	}
-
-	pvc := corev1.PersistentVolumeClaim{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:   "backup-storage",
-			Labels: GetLabelsForPVC(cluster.Name, "backup"),
-		},
-		Spec: corev1.PersistentVolumeClaimSpec{
-			AccessModes: []corev1.PersistentVolumeAccessMode{
-				corev1.ReadWriteOnce,
-			},
-			Resources: corev1.VolumeResourceRequirements{
-				Requests: corev1.ResourceList{
-					corev1.ResourceStorage: resource.MustParse(storageSize),
-				},
-			},
-		},
-	}
-
-	if storageClassName != "" {
-		pvc.Spec.StorageClassName = &storageClassName
-	}
-
-	return []corev1.PersistentVolumeClaim{pvc}
-}
-
 func BuildPodSpecForEnterprise(cluster *neo4jv1beta1.Neo4jEnterpriseCluster, serverName, adminSecret string) corev1.PodSpec {
 	// Environment variables
 	env := []corev1.EnvVar{
@@ -1481,6 +1228,11 @@ func BuildPodSpecForEnterprise(cluster *neo4jv1beta1.Neo4jEnterpriseCluster, ser
 		Image:           fmt.Sprintf("%s:%s", cluster.Spec.Image.Repo, cluster.Spec.Image.Tag),
 		ImagePullPolicy: corev1.PullPolicy(cluster.Spec.Image.PullPolicy),
 		Env:             env,
+		// Project user-supplied env-from-Secret / env-from-ConfigMap bundles
+		// onto the container. Common use-case is surfacing cloud creds
+		// (AWS_ACCESS_KEY_ID etc.) for Neo4j's CloudSeedProvider so
+		// CREATE DATABASE ... OPTIONS { seedURI } can authenticate.
+		EnvFrom:         cluster.Spec.ExtraEnvFrom,
 		SecurityContext: containerSecurityContextForCluster(cluster),
 		VolumeMounts:    volumeMounts,
 		Ports: []corev1.ContainerPort{
@@ -1658,12 +1410,13 @@ func BuildPodSpecForEnterprise(cluster *neo4jv1beta1.Neo4jEnterpriseCluster, ser
 		initContainers = append(initContainers, BuildTrustStoreInitContainer(image, trustedCAs))
 	}
 
-	// Build pod spec - backup is now handled by centralized StatefulSet, not sidecars
+	// Build pod spec — backups are driven by the Neo4jBackup CRD (Job-per-CR),
+	// never sidecars or a persistent backup pod.
 	podSpec := corev1.PodSpec{
 		ServiceAccountName: getDiscoveryServiceAccountNameForEnterprise(cluster),
 		SecurityContext:    podSecurityContextForCluster(cluster),
 		InitContainers:     initContainers,
-		Containers:         []corev1.Container{neo4jContainer}, // Only Neo4j container, no backup sidecar
+		Containers:         []corev1.Container{neo4jContainer},
 		Volumes:            volumes,
 	}
 
@@ -1744,23 +1497,6 @@ func buildVolumeClaimTemplatesForEnterprise(cluster *neo4jv1beta1.Neo4jEnterpris
 			},
 		},
 	}
-}
-
-func getServiceAccountNameForEnterprise(cluster *neo4jv1beta1.Neo4jEnterpriseCluster) string {
-	if cluster.Spec.Backups != nil &&
-		cluster.Spec.Backups.Cloud != nil &&
-		cluster.Spec.Backups.Cloud.Identity.ServiceAccount != "" {
-		return cluster.Spec.Backups.Cloud.Identity.ServiceAccount
-	}
-
-	if cluster.Spec.Backups != nil &&
-		cluster.Spec.Backups.Cloud != nil &&
-		cluster.Spec.Backups.Cloud.Identity.AutoCreate != nil &&
-		cluster.Spec.Backups.Cloud.Identity.AutoCreate.Enabled {
-		return fmt.Sprintf("%s-cloud-identity", cluster.Name)
-	}
-
-	return "default"
 }
 
 func buildNeo4jConfigForEnterprise(cluster *neo4jv1beta1.Neo4jEnterpriseCluster) string {
@@ -1892,6 +1628,13 @@ server.metrics.jmx.enabled=false
 server.metrics.csv.enabled=false
 
 `
+	// Seed-from-URI providers — register every modern provider so all
+	// documented URI schemes resolve out of the box. ServerSeedProvider
+	// is version-gated (introduced in Neo4j 2026.04); deprecated
+	// S3SeedProvider is always excluded — CloudSeedProvider handles s3://
+	// via the SDK default credential chain, so legacy `seedCredentials`
+	// is unnecessary. Users override via spec.config.
+	config += fmt.Sprintf("# Seed-from-URI providers (S3SeedProvider deliberately excluded — use CloudSeedProvider)\ndbms.databases.seed_from_uri_providers=%s\n\n", SeedFromURIProvidersConfigValue(cluster.Spec.Image.Tag))
 
 	if cluster.Spec.Monitoring != nil && cluster.Spec.Monitoring.Enabled {
 		config += "\n# Query Monitoring and Metrics\n"
@@ -2114,6 +1857,54 @@ func IsNeo4jVersion202512OrHigher(imageTag string) bool {
 	}
 
 	return version.Major == 2025 && version.Minor >= 12
+}
+
+// IsNeo4jVersion202604OrHigher checks if the Neo4j version ships ServerSeedProvider
+// (the `server://` URI-scheme seed provider for catchup-style seeding from an
+// existing server). Introduced in 2026.04; CalVer-only. Older versions either
+// don't have the class or registered it under a different name, so adding
+// "ServerSeedProvider" to `dbms.databases.seed_from_uri_providers` on a pre-2026.04
+// install can cause Neo4j to log a warning (or refuse to start, depending on the
+// release).
+func IsNeo4jVersion202604OrHigher(imageTag string) bool {
+	if imageTag == "" {
+		return false
+	}
+
+	version, err := neo4j.ParseVersion(imageTag)
+	if err != nil || !version.IsCalver {
+		return false
+	}
+
+	if version.Major > 2026 {
+		return true
+	}
+
+	return version.Major == 2026 && version.Minor >= 4
+}
+
+// SeedFromURIProvidersConfigValue returns the value the operator should emit for
+// `dbms.databases.seed_from_uri_providers` given a Neo4j image tag. The base
+// list registers every modern provider so all documented URI schemes
+// (s3/gs/azb via CloudSeedProvider; file:// via FileSeedProvider;
+// ftp/http/https via URLConnectionSeedProvider) resolve out of the box.
+//
+// `ServerSeedProvider` is appended only on Neo4j 2026.04+ — it was introduced
+// in that release; pre-2026.04 the class isn't registered in
+// META-INF/services and Neo4j will log "provider not found" warnings or
+// refuse to bootstrap. Deprecated `S3SeedProvider` is deliberately excluded
+// across all versions — CloudSeedProvider handles s3:// via the SDK default
+// credential chain, making the legacy `seedCredentials` field unnecessary.
+//
+// Users can override the entire list via spec.config (cluster) or via
+// configLines spec equivalent (standalone) — both builders append user keys
+// last so anything the user sets wins.
+func SeedFromURIProvidersConfigValue(imageTag string) string {
+	providers := "CloudSeedProvider,FileSeedProvider,URLConnectionSeedProvider"
+	if IsNeo4jVersion202604OrHigher(imageTag) {
+		providers += ",ServerSeedProvider"
+	}
+	return providers
 }
 
 // buildPropertyShardingConfig merges required property sharding settings with user overrides

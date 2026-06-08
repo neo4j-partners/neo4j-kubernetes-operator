@@ -165,6 +165,8 @@ func (v *ShardedDatabaseValidator) validatePropertyShardingConfig(shardedDB *neo
 
 	// Validate seed options
 	specPath := field.NewPath("spec")
+	hasSeedSource := shardedDB.Spec.SeedURI != "" || len(shardedDB.Spec.SeedURIs) > 0 || shardedDB.Spec.SeedBackupRef != ""
+
 	if shardedDB.Spec.SeedURI != "" && len(shardedDB.Spec.SeedURIs) > 0 {
 		result.Errors = append(result.Errors, field.Invalid(
 			specPath.Child("seedURI"),
@@ -172,25 +174,69 @@ func (v *ShardedDatabaseValidator) validatePropertyShardingConfig(shardedDB *neo
 			"seedURI and seedURIs cannot be specified together"))
 	}
 
-	if shardedDB.Spec.SeedSourceDatabase != "" && shardedDB.Spec.SeedURI == "" && len(shardedDB.Spec.SeedURIs) == 0 {
+	// SeedBackupRef is mutually exclusive with the manual seed URI fields —
+	// it materialises into a seedURI at reconcile time, so passing both lets
+	// users contradict themselves without the operator picking a winner.
+	if shardedDB.Spec.SeedBackupRef != "" && shardedDB.Spec.SeedURI != "" {
+		result.Errors = append(result.Errors, field.Invalid(
+			specPath.Child("seedBackupRef"),
+			shardedDB.Spec.SeedBackupRef,
+			"seedBackupRef and seedURI cannot be specified together"))
+	}
+	if shardedDB.Spec.SeedBackupRef != "" && len(shardedDB.Spec.SeedURIs) > 0 {
+		result.Errors = append(result.Errors, field.Invalid(
+			specPath.Child("seedBackupRef"),
+			shardedDB.Spec.SeedBackupRef,
+			"seedBackupRef and seedURIs cannot be specified together"))
+	}
+
+	if shardedDB.Spec.SeedSourceDatabase != "" && !hasSeedSource {
 		result.Errors = append(result.Errors, field.Invalid(
 			specPath.Child("seedSourceDatabase"),
 			shardedDB.Spec.SeedSourceDatabase,
-			"seedSourceDatabase requires seedURI or seedURIs"))
+			"seedSourceDatabase requires seedURI, seedURIs, or seedBackupRef"))
 	}
 
-	if shardedDB.Spec.SeedConfig != nil && shardedDB.Spec.SeedURI == "" && len(shardedDB.Spec.SeedURIs) == 0 {
+	if shardedDB.Spec.SeedConfig != nil && !hasSeedSource {
 		result.Errors = append(result.Errors, field.Invalid(
 			specPath.Child("seedConfig"),
 			"",
-			"seedConfig requires seedURI or seedURIs"))
+			"seedConfig requires seedURI, seedURIs, or seedBackupRef"))
 	}
 
-	if shardedDB.Spec.SeedCredentials != nil && shardedDB.Spec.SeedURI == "" && len(shardedDB.Spec.SeedURIs) == 0 {
+	if shardedDB.Spec.SeedCredentials != nil && !hasSeedSource {
 		result.Errors = append(result.Errors, field.Invalid(
 			specPath.Child("seedCredentials"),
 			"",
-			"seedCredentials requires seedURI or seedURIs"))
+			"seedCredentials requires seedURI, seedURIs, or seedBackupRef"))
+	}
+
+	// replaceExisting is the destructive drop-and-recreate path. Two safety
+	// gates:
+	//   1. Must be paired with force=true so an accidental flip can't
+	//      destroy data (mirrors Neo4jRestore.spec.force semantics).
+	//   2. Mutex with ifNotExists=true — those two settings contradict
+	//      each other (one says "skip if exists", the other says "destroy
+	//      if exists").
+	if shardedDB.Spec.ReplaceExisting {
+		if !shardedDB.Spec.Force {
+			result.Errors = append(result.Errors, field.Invalid(
+				specPath.Child("replaceExisting"),
+				shardedDB.Spec.ReplaceExisting,
+				"replaceExisting=true is destructive (DROP DATABASE DESTROY DATA) and requires force=true as confirmation"))
+		}
+		if shardedDB.Spec.IfNotExistsEffective() {
+			result.Errors = append(result.Errors, field.Invalid(
+				specPath.Child("ifNotExists"),
+				shardedDB.Spec.IfNotExistsEffective(),
+				"ifNotExists is implicitly true (the default) — mutually exclusive with replaceExisting=true (the former skips when present, the latter drops when present). Set ifNotExists=false explicitly."))
+		}
+		if !hasSeedSource {
+			result.Errors = append(result.Errors, field.Invalid(
+				specPath.Child("replaceExisting"),
+				shardedDB.Spec.ReplaceExisting,
+				"replaceExisting=true requires a seed source (seedURI, seedURIs, or seedBackupRef) — re-creating without data would leave the database empty"))
+		}
 	}
 
 	if strings.HasSuffix(shardedDB.Spec.SeedURI, ".dump") {

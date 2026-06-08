@@ -41,7 +41,7 @@ func (v *BackupValidator) Validate(backup *neo4jv1beta1.Neo4jBackup) field.Error
 	var allErrs field.ErrorList
 
 	// Validate backup target
-	allErrs = append(allErrs, v.validateBackupTarget(&backup.Spec.Target)...)
+	allErrs = append(allErrs, v.validateBackupTarget(&backup.Spec.Target, backup.Namespace)...)
 
 	// Validate storage configuration
 	allErrs = append(allErrs, v.validateStorageConfiguration(&backup.Spec.Storage)...)
@@ -72,16 +72,33 @@ func (v *BackupValidator) Validate(backup *neo4jv1beta1.Neo4jBackup) field.Error
 		allErrs = append(allErrs, v.validateBackupOptions(backup.Spec.Options)...)
 	}
 
+	// chainFromBackup self-reference check. Cross-CR consistency
+	// (target match + storage match) is enforced by the reconciler at
+	// reconcile time, because it requires a client lookup.
+	if backup.Spec.ChainFromBackup != "" && backup.Spec.ChainFromBackup == backup.Name {
+		allErrs = append(allErrs, field.Invalid(
+			field.NewPath("spec", "chainFromBackup"),
+			backup.Spec.ChainFromBackup,
+			"cannot chain to self",
+		))
+	}
+
 	return allErrs
 }
 
-// validateBackupTarget validates the backup target configuration
-func (v *BackupValidator) validateBackupTarget(target *neo4jv1beta1.BackupTarget) field.ErrorList {
+// validateBackupTarget validates the backup target configuration. backupNamespace
+// is the namespace of the parent Neo4jBackup CR; used to enforce same-namespace
+// ClusterRef for database-scoped kinds.
+func (v *BackupValidator) validateBackupTarget(target *neo4jv1beta1.BackupTarget, backupNamespace string) field.ErrorList {
 	var allErrs field.ErrorList
 	targetPath := field.NewPath("spec", "target")
 
 	// Validate target kind
-	validKinds := []string{"Cluster", "Database"}
+	validKinds := []string{
+		neo4jv1beta1.BackupTargetKindCluster,
+		neo4jv1beta1.BackupTargetKindDatabase,
+		neo4jv1beta1.BackupTargetKindShardedDatabase,
+	}
 	if target.Kind == "" {
 		allErrs = append(allErrs, field.Required(
 			targetPath.Child("kind"),
@@ -117,6 +134,24 @@ func (v *BackupValidator) validateBackupTarget(target *neo4jv1beta1.BackupTarget
 			target.Name,
 			"invalid resource name format",
 		))
+	}
+
+	// Database-scoped kinds (Database, ShardedDatabase) require ClusterRef
+	// and only support same-namespace references in v1.
+	if neo4jv1beta1.IsDatabaseScopedBackupKind(target.Kind) {
+		if target.ClusterRef == "" {
+			allErrs = append(allErrs, field.Required(
+				targetPath.Child("clusterRef"),
+				fmt.Sprintf("clusterRef is required when target.kind=%s", target.Kind),
+			))
+		}
+		if target.Namespace != "" && target.Namespace != backupNamespace {
+			allErrs = append(allErrs, field.Invalid(
+				targetPath.Child("namespace"),
+				target.Namespace,
+				fmt.Sprintf("cross-namespace target references are not supported (backup namespace: %s)", backupNamespace),
+			))
+		}
 	}
 
 	return allErrs

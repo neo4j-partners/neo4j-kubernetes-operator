@@ -471,7 +471,7 @@ func TestBuildRestoreFromPath_S3WithTempStorage(t *testing.T) {
 
 // TestBuildLocalRestoreFilePath_PVCResolvesToShellSubst pins the contract
 // that PVC restores resolve --from-path via a shell command substitution
-// `$(ls .../<dbname>-*.backup | head -1)`.
+// `$(ls .../<dbname>-*.backup | tail -1)`.
 //
 // Why this matters: neo4j-admin 5.26 requires --from-path to point at a
 // .backup FILE (not a directory). The operator's backup writes
@@ -498,7 +498,7 @@ func TestBuildLocalRestoreFilePath_PVCResolvesToShellSubst(t *testing.T) {
 	}
 	got := buildLocalRestoreFilePath(restore, "/backup/roundtrip-backup-backup")
 	assert.Equal(t,
-		"$(ls '/backup/roundtrip-backup-backup'/'neo4j'-*.backup | head -1)",
+		"$(ls '/backup/roundtrip-backup-backup'/'neo4j'-*.backup | tail -1)",
 		got,
 		"PVC restore must resolve --from-path via shell $() so neo4j-admin gets a file path, "+
 			"not a directory; both backup-path and dbname are single-quoted to prevent injection")
@@ -604,7 +604,7 @@ func TestBuildLocalRestoreFilePath_ShellInjectionGuard(t *testing.T) {
 func TestResolveLocalPVCFromPath_PVCPathGlobbed(t *testing.T) {
 	got := resolveLocalPVCFromPath("/backup/daily-backup-cron-1738000000", "neo4j")
 	assert.Equal(t,
-		"$(ls '/backup/daily-backup-cron-1738000000'/'neo4j'-*.backup | head -1)",
+		"$(ls '/backup/daily-backup-cron-1738000000'/'neo4j'-*.backup | tail -1)",
 		got)
 }
 
@@ -613,7 +613,7 @@ func TestResolveLocalPVCFromPath_PVCPathGlobbed(t *testing.T) {
 // unquoted into the shell substitution. Without quoting, a backupPath
 // like `foo; rm -rf /data #` produced:
 //
-//	$(ls /backup/foo; rm -rf /data #/'neo4j'-*.backup | head -1)
+//	$(ls /backup/foo; rm -rf /data #/'neo4j'-*.backup | tail -1)
 //
 // — the `;` terminates the `ls` and `rm -rf /data` executes inside the
 // restore Pod, which mounts /data as ReadWrite (server-0's database PVC)
@@ -628,11 +628,11 @@ func TestResolveLocalPVCFromPath_BackupPathShellInjectionGuard(t *testing.T) {
 	// Pin the exact output to catch any future refactor that drops the
 	// quote on either input (backupPath OR dbname). The substitution
 	// body when parsed by /bin/sh is:
-	//   ls '/backup/foo; rm -rf /data #'/'neo4j'-*.backup | head -1
+	//   ls '/backup/foo; rm -rf /data #'/'neo4j'-*.backup | tail -1
 	// which after quote removal is a single literal path argument to
 	// `ls` — no command separator, no injection.
 	assert.Equal(t,
-		"$(ls '/backup/foo; rm -rf /data #'/'neo4j'-*.backup | head -1)",
+		"$(ls '/backup/foo; rm -rf /data #'/'neo4j'-*.backup | tail -1)",
 		got,
 		"output must match the expected fully-quoted form exactly")
 }
@@ -746,7 +746,7 @@ func TestBuildPITRRestoreCommand_PVCBaseBackupAppliesFixups(t *testing.T) {
 	// Shell-substitution form for --from-path (FILE, not directory).
 	// Both backup-path and dbname are single-quoted to prevent shell
 	// injection via spec.source.backupPath.
-	assert.Contains(t, cmd, "--from-path=$(ls '/backup/daily-backup-cron-1738000000'/'neo4j'-*.backup | head -1)",
+	assert.Contains(t, cmd, "--from-path=$(ls '/backup/daily-backup-cron-1738000000'/'neo4j'-*.backup | tail -1)",
 		"PITR PVC path must use shell substitution to resolve to a single .backup file")
 	// Prelude that creates the empty temp dir
 	assert.Contains(t, cmd, "rm -rf /tmp/restore-tmp && mkdir -p /tmp/restore-tmp",

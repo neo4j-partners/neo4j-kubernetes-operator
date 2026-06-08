@@ -85,7 +85,7 @@ Complete deployment examples demonstrating real-world scenarios:
 *   **Cypher Language**: Support for Cypher 25 in Neo4j 2025.x
 *   **Backup Improvements**: FULL/DIFF/AUTO backup types, backup from secondaries
 *   **Point-in-Time Recovery**: Restore to specific timestamps with `--restore-until`
-*   **Centralized Backup**: Single backup StatefulSet per cluster for resource efficiency
+*   **Backup**: Job-per-`Neo4jBackup`-CR (no persistent backup pod, no sidecars). Diff chaining via shared directories.
 
 ## 🚀 Seed URI Database Creation
 

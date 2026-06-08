@@ -166,6 +166,12 @@ func GetKubernetesDiscoveryParameter(version *Version) string {
 // GetBackupCommand generates the correct neo4j-admin database backup command.
 // fromAddresses is a comma-separated list of host:port backup endpoints (port 6362).
 // If fromAddresses is empty, the --from flag is omitted (local backup).
+//
+// The database-name argument is ALWAYS quoted with double quotes so that glob
+// patterns (e.g. "products*" for sharded backups) and any future special
+// characters are not expanded by the shell before reaching neo4j-admin. The
+// shell strips the outer double quotes before invoking neo4j-admin, so quoting
+// is transparent for plain names.
 func GetBackupCommand(version *Version, databaseName string, backupPath string, allDatabases bool, fromAddresses string) string {
 	cmd := "neo4j-admin database backup"
 
@@ -177,7 +183,7 @@ func GetBackupCommand(version *Version, databaseName string, backupPath string, 
 	if allDatabases {
 		cmd += ` "*"`
 	} else if databaseName != "" {
-		cmd += " " + databaseName
+		cmd += ` "` + databaseName + `"`
 	}
 
 	return cmd

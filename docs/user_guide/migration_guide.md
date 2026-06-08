@@ -41,9 +41,9 @@ No effect on `Neo4jEnterpriseStandalone` (single-server, no intra-cluster TLS).
 > **Single-node Cluster CRDs**: removed in v1.6-alpha. If you still have a `Neo4jEnterpriseCluster` with `topology.servers: 1`, migrate to `Neo4jEnterpriseStandalone` — same data via a backup/restore round-trip. For step-by-step alpha-era guidance, see the [v1.6-alpha migration section](#upgrading-to-v160-alpha-api-stabilization) below or the older versions of this doc in git history.
 
 
-## Upgrading from v1.9.x to the next release (Unreleased)
+## Upgrading from v1.10.x to v1.11.x
 
-This section covers the breaking and behavioural changes on `main` since `v1.9.0`. Replace the heading with the actual version when the next release is tagged.
+This section covers the breaking and behavioural changes landing in v1.11.x (since `v1.10.0`).
 
 ### 1. Removed spec fields (CRD validation will reject manifests using them)
 
@@ -125,9 +125,8 @@ A backup against a `Neo4jEnterpriseStandalone` used to fail end-to-end because t
 **Action for existing standalones**: delete and recreate the `Neo4jEnterpriseStandalone` CR (PVC retention applies — `spec.storage.retentionPolicy=Retain` preserves the data PVC across the delete/recreate cycle, so the new StatefulSet picks up the same data volume). New deployments get the headless routing automatically with no extra steps.
 
 ```bash
-# 1. (Optional but recommended) take a manual backup using the legacy
-#    sidecar pattern if your cluster supports it, OR cordon/quiesce
-#    application traffic.
+# 1. (Optional but recommended) take a backup with a Neo4jBackup CR
+#    targeting the standalone, OR cordon/quiesce application traffic.
 # 2. Set retentionPolicy=Retain so the data volume survives the delete.
 kubectl patch neo4jenterprisestandalone <name> --type=merge \
     -p '{"spec":{"storage":{"retentionPolicy":"Retain"}}}'
@@ -143,6 +142,49 @@ kubectl apply -f <name>.yaml
 
 Backups against the recreated standalone work end-to-end after step 4.
 
+### 6. `spec.backups` and the backup sidecar are removed
+
+The entire legacy centralized-backup architecture has been removed. The [`Neo4jBackup` CRD](../api_reference/neo4jbackup.md) (one Kubernetes Job per CR) is now the only backup path. Removed surfaces:
+
+| Removed | Replacement |
+|---|---|
+| `Neo4jEnterpriseCluster.spec.backups` and `Neo4jEnterpriseStandalone.spec.backups` | A `Neo4jBackup` CR targeting the cluster/standalone. |
+| `spec.storage.backupStorage` (per-cluster backup PVC) | `Neo4jBackup.spec.storage` (PVC or cloud); a PVC destination is auto-provisioned when needed. |
+| The centralized `{cluster}-backup` / `{cluster}-backup-0` StatefulSet | Each `Neo4jBackup` CR spawns a short-lived Job — no long-running backup pod. |
+| The standalone **backup sidecar** container (ran on every standalone pod) | Same `Neo4jBackup` CR path; standalones no longer carry a sidecar. |
+
+Manifests still carrying `spec.backups` or `spec.storage.backupStorage` will be rejected by CRD validation with `unknown field` errors after the upgrade.
+
+**Action:**
+
+1. Grep your manifests and remove the legacy blocks:
+   ```bash
+   grep -rE '^\s*(backups|backupStorage):' path/to/manifests/
+   ```
+2. For each former `spec.backups` destination, create a `Neo4jBackup` CR. A daily scheduled cluster backup to S3:
+   ```yaml
+   apiVersion: neo4j.neo4j.com/v1beta1
+   kind: Neo4jBackup
+   metadata:
+     name: daily-backup
+   spec:
+     target:
+       kind: Cluster        # or Standalone
+       name: my-cluster
+     storage:
+       type: s3
+       bucket: neo4j-backups
+       path: production/
+     schedule: "0 2 * * *"  # omit for a one-shot backup
+     retention:
+       maxAge: "30d"
+       maxCount: 30
+   ```
+   For Workload Identity (IRSA / GKE WI / Azure WI), set `spec.cloud.identity.autoCreate.annotations` on the `Neo4jBackup` — the operator annotates the auto-created `neo4j-backup-sa` ServiceAccount.
+3. **Standalone pods will roll once** on upgrade as the sidecar container is dropped from the pod template (one-time restart; PVC data is untouched).
+
+See the [Backup & Restore guide](guides/backup_restore.md) for scheduled backups, restore, sharded-database backups, and mixed-cadence FULL+DIFF chains.
+
 ### Quick upgrade checklist
 
 1. Grep manifests for the removed fields (step 1) and migrate them.
@@ -150,6 +192,7 @@ Backups against the recreated standalone work end-to-end after step 4.
 3. Update PromQL / Grafana queries on `cluster_replicas_total` (step 3).
 4. Audit `spec.config` if you have long-edit-history clusters that may have relied on the env-var-removal bug (step 4).
 5. If you have existing `Neo4jEnterpriseStandalone` CRs AND want backups against them, delete + recreate with `retentionPolicy=Retain` per step 5 above. Standalones that never need backups can be left as-is.
+6. Remove any `spec.backups` / `spec.storage.backupStorage` blocks and replace them with `Neo4jBackup` CRs (step 6). Expect a one-time standalone pod restart as the backup sidecar is dropped.
 
 ---
 

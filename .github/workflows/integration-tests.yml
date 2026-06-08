@@ -85,6 +85,20 @@ jobs:
         - name: ghcr.io/neo4j-partners/neo4j-kubernetes-operator
           newName: neo4j-operator
           newTag: integration-test
+        # Relax property-sharding's 4Gi/1-core floor so the sharded CI smoke
+        # test (gated to Neo4j 2025.12+) fits on a GitHub-hosted runner. This
+        # mirrors config/overlays/integration-test; without it the operator's
+        # validator rejects the CI sizing and the smoke test times out. CI-only.
+        patches:
+        - patch: |-
+            - op: add
+              path: /spec/template/spec/containers/0/env/-
+              value:
+                name: NEO4J_SHARDING_RELAX_MEMORY_MIN
+                value: "true"
+          target:
+            kind: Deployment
+            name: controller-manager
         EOF
         ./bin/kustomize build config/overlays/ci-temp | kubectl apply -f -
 

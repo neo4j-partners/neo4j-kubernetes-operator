@@ -20,6 +20,7 @@ import (
 	"context"
 	goerrors "errors"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -525,18 +526,6 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 	}
 
-	// Create centralized backup StatefulSet if backups are enabled
-	if cluster.Spec.Backups != nil {
-		backupSts := resources.BuildBackupStatefulSet(cluster)
-		if backupSts != nil {
-			if err := r.createOrUpdateResource(ctx, backupSts, cluster); err != nil {
-				logger.Error(err, "Failed to create backup StatefulSet")
-				_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Failed to create backup StatefulSet: %v", err))
-				return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
-			}
-		}
-	}
-
 	// Handle Query Performance Monitoring
 	if cluster.Spec.Monitoring != nil && cluster.Spec.Monitoring.Enabled {
 		queryMonitor := NewQueryMonitor(r.Client, r.Scheme)
@@ -634,15 +623,6 @@ func (r *Neo4jEnterpriseClusterReconciler) handleDeletion(ctx context.Context, c
 			logger.Error(err, "Failed to delete server StatefulSet")
 		}
 	}
-	backupStsName := fmt.Sprintf("%s-backup", cluster.Name)
-	backupSts := &appsv1.StatefulSet{}
-	if err := r.Get(ctx, types.NamespacedName{Name: backupStsName, Namespace: cluster.Namespace}, backupSts); err == nil {
-		logger.Info("Deleting backup StatefulSet", "name", backupStsName)
-		if err := r.Delete(ctx, backupSts); err != nil {
-			logger.Error(err, "Failed to delete backup StatefulSet")
-		}
-	}
-
 	logger.Info("Removing finalizer from cluster", "finalizers", cluster.Finalizers, "deletionTimestamp", cluster.DeletionTimestamp)
 	controllerutil.RemoveFinalizer(cluster, ClusterFinalizer)
 	err := r.Update(ctx, cluster)
@@ -2070,7 +2050,16 @@ func (r *Neo4jEnterpriseClusterReconciler) validatePropertyShardingConfiguration
 		logger.Info("Property sharding config is empty, will use default required settings")
 	}
 
-	// Validate resource requirements with lenient but realistic minimums
+	// Validate resource requirements with lenient but realistic minimums.
+	//
+	// The 4GB hard floor is the operator's defensive minimum, not a Neo4j
+	// JVM requirement. Below 4GB the JVM running multiple shards can OOM
+	// or thrash under real workloads. For CI / smoke tests with empty
+	// databases this is overly strict — the env var
+	// `NEO4J_SHARDING_RELAX_MEMORY_MIN=true` downgrades the hard reject to
+	// a warning so a minimal sharded smoke test can run in GitHub-hosted
+	// runners (2-server × 1.5Gi clusters). Never set this in production.
+	relaxMemoryMin := os.Getenv("NEO4J_SHARDING_RELAX_MEMORY_MIN") == "true"
 	if cluster.Spec.Resources != nil && cluster.Spec.Resources.Requests != nil {
 		if memory := cluster.Spec.Resources.Requests.Memory(); memory != nil {
 			memoryMB := memory.Value() / (1024 * 1024)
@@ -2079,7 +2068,12 @@ func (r *Neo4jEnterpriseClusterReconciler) validatePropertyShardingConfiguration
 					"requestedMB", memoryMB, "recommendedMB", 8192)
 			}
 			if memoryMB < 4096 { // 4GB absolute minimum for dev/test
-				return fmt.Errorf("property sharding requires minimum 4GB memory for basic operation, got %dMB (recommended: 8GB+ for production)", memoryMB)
+				if relaxMemoryMin {
+					logger.Info("Property sharding memory below 4GB minimum; relaxed via NEO4J_SHARDING_RELAX_MEMORY_MIN — DEV/TEST ONLY",
+						"requestedMB", memoryMB)
+				} else {
+					return fmt.Errorf("property sharding requires minimum 4GB memory for basic operation, got %dMB (recommended: 8GB+ for production)", memoryMB)
+				}
 			}
 		}
 
@@ -2091,7 +2085,12 @@ func (r *Neo4jEnterpriseClusterReconciler) validatePropertyShardingConfiguration
 					"requestedMillis", cpuMillis, "recommendedMillis", 2000)
 			}
 			if cpuMillis < 1000 { // 1 core absolute minimum
-				return fmt.Errorf("property sharding requires minimum 1 CPU core, got %dm (recommended: 2+ cores)", cpuMillis)
+				if relaxMemoryMin {
+					logger.Info("Property sharding CPU below 1-core minimum; relaxed via NEO4J_SHARDING_RELAX_MEMORY_MIN — DEV/TEST ONLY",
+						"requestedMillis", cpuMillis)
+				} else {
+					return fmt.Errorf("property sharding requires minimum 1 CPU core, got %dm (recommended: 2+ cores)", cpuMillis)
+				}
 			}
 		}
 	}

@@ -173,18 +173,6 @@ func TestFindPVCsForStatefulSet_PrefixCollisionProtection(t *testing.T) {
 	assert.Equal(t, "data-my-cluster-server-0", pvcs[0].Name)
 }
 
-func TestFindPVCsForStatefulSet_BackupLabelBased(t *testing.T) {
-	scheme := newStorageTestScheme()
-	pvc0 := makePVC("my-cluster", "default", "my-cluster-backup", "backup-storage", "ssd", "100Gi", 0, true)
-
-	r := newTestReconciler(scheme, pvc0)
-
-	pvcs, err := r.findPVCsForStatefulSet(context.Background(), "default", "my-cluster", "my-cluster-backup", "backup-storage")
-	require.NoError(t, err)
-	assert.Len(t, pvcs, 1)
-	assert.Equal(t, "backup-storage-my-cluster-backup-0", pvcs[0].Name)
-}
-
 func TestComparePVCSizes(t *testing.T) {
 	scheme := newStorageTestScheme()
 	pvc0 := makePVC("my-cluster", "default", "my-cluster-server", "data", "ssd", "100Gi", 0, true)
@@ -313,7 +301,6 @@ func TestCheckStorageExpansionNeeded(t *testing.T) {
 		require.NoError(t, err)
 		assert.False(t, result.needed)
 		assert.False(t, result.dataExpansion)
-		assert.False(t, result.backupExpansion)
 	})
 
 	t.Run("data expansion needed", func(t *testing.T) {
@@ -333,7 +320,6 @@ func TestCheckStorageExpansionNeeded(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, result.needed)
 		assert.True(t, result.dataExpansion)
-		assert.False(t, result.backupExpansion)
 	})
 
 	t.Run("shrink detected", func(t *testing.T) {

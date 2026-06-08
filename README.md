@@ -63,7 +63,7 @@ The operator ships these CRDs (all `neo4j.neo4j.com/v1beta1`):
 | `Neo4jUser`, `Neo4jRole`, `Neo4jRoleBinding` | Declarative users, roles, and privileges |
 | `Neo4jAuthRule` | Attribute-based access control (Neo4j 2026.03+) |
 | `Neo4jBackup`, `Neo4jRestore` | Backup and restore via `neo4j-admin` (PVC, S3, GCS, Azure) |
-| `Neo4jShardedDatabase` | Property-sharded databases (Neo4j 2025.12+) |
+| `Neo4jShardedDatabase` | Property-sharded databases with backup, restore, and full/differential chains (Neo4j 2025.12+) |
 | `Neo4jPlugin` | Plugin installs (APOC, GDS, Bloom, GenAI, …) |
 
 Each has examples under [`examples/`](examples/) and a dedicated guide on the [docs site](https://neo4j-partners.github.io/neo4j-kubernetes-operator/main/).

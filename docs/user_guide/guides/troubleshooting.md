@@ -445,16 +445,14 @@ kubectl describe clusterrole neo4j-operator-manager-role | grep -E "pods/exec|po
 - Role bindings for secure backup execution
 
 #### Problem: Backup path not found
-Neo4j 5.26+ requires backup destination path to exist.
+Neo4j 5.26+ requires backup destination path to exist. The operator's backup Job creates the directory automatically (`mkdir -p` is prepended to the command for PVC targets; cloud targets get a trailing slash for directory semantics).
 
-**Solution**: The operator's backup pod (clusters) or backup sidecar (standalone) automatically creates paths. Check the backup container is running:
+**Solution**: inspect the backup Job's Pod log:
+
 ```bash
-# Cluster backup pod
-kubectl get pod <cluster>-backup-0 -o yaml | grep backup
-kubectl logs <cluster>-backup-0 -c backup
-
-# Standalone backup sidecar
-kubectl logs <neo4j-pod> -c backup-sidecar
+# The Job is named "<neo4jbackup-name>-backup" (one-shot) or
+# "<neo4jbackup-name>-<unix-seconds>" (CronJob child).
+kubectl logs -n <ns> job/<job-name>
 ```
 
 ### 9. Security Issues

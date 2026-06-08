@@ -679,20 +679,6 @@ func (r *RollingUpgradeOrchestrator) validateStatefulSetsReady(
 			serverSts.Status.ReadyReplicas, *serverSts.Spec.Replicas)
 	}
 
-	// Check backup sidecar StatefulSet if configured
-	if cluster.Spec.Backups != nil {
-		backupSts := &appsv1.StatefulSet{}
-		if err := r.Get(ctx, types.NamespacedName{
-			Name:      fmt.Sprintf("%s-backup-sidecar", cluster.Name),
-			Namespace: cluster.Namespace,
-		}, backupSts); err == nil {
-			if backupSts.Status.ReadyReplicas != *backupSts.Spec.Replicas {
-				return fmt.Errorf("backup sidecar StatefulSet not ready: %d/%d replicas ready",
-					backupSts.Status.ReadyReplicas, *backupSts.Spec.Replicas)
-			}
-		}
-	}
-
 	return nil
 }
 

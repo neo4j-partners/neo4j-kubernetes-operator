@@ -50,7 +50,7 @@ The operator itself runs with a specific `ServiceAccount` that is bound to a `Cl
 
 ## Pod Security Defaults
 
-The operator now hardens all Neo4j data-plane pods (servers, centralized backup, standalone, restore jobs, and hook jobs) with strict security contexts by default:
+The operator now hardens all Neo4j data-plane pods (servers, standalone, backup jobs, restore jobs, and hook jobs) with strict security contexts by default:
 
 - `runAsNonRoot: true` with UID/GID `7474` (Neo4j user) and matching `fsGroup`.
 - `allowPrivilegeEscalation: false`, `capabilities.drop: ["ALL"]`, `seccompProfile: RuntimeDefault`.

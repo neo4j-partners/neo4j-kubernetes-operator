@@ -68,6 +68,90 @@ func TestValidateCypherLanguage(t *testing.T) {
 	})
 }
 
+// TestValidateReplaceExisting pins the Phase 2c safety gates around the
+// destructive drop-and-recreate path. replaceExisting=true must require:
+//
+//  1. force=true (mirrors Neo4jRestore safety semantics),
+//  2. ifNotExists=false (the two contradict each other),
+//  3. a seed source (seedURI / seedURIs / seedBackupRef) — recreating
+//     without data would leave the database empty.
+//
+// validatePropertyShardingConfig hosts the check; the test invokes it
+// directly to keep the surface narrow.
+func TestValidateReplaceExisting(t *testing.T) {
+	v := &ShardedDatabaseValidator{}
+	baseSpec := func() neo4jv1beta1.Neo4jShardedDatabaseSpec {
+		return neo4jv1beta1.Neo4jShardedDatabaseSpec{
+			ClusterRef:            "my-cluster",
+			Name:                  "products",
+			DefaultCypherLanguage: "25",
+			PropertySharding: neo4jv1beta1.PropertyShardingConfiguration{
+				PropertyShards: 2,
+				GraphShard:     neo4jv1beta1.DatabaseTopology{Primaries: 1},
+				PropertyShardTopology: neo4jv1beta1.PropertyShardTopology{
+					Replicas: 1,
+				},
+			},
+		}
+	}
+
+	t.Run("replaceExisting without force is rejected", func(t *testing.T) {
+		spec := baseSpec()
+		spec.ReplaceExisting = true
+		spec.Force = false
+		spec.SeedBackupRef = "products-backup"
+		result := &ShardedDatabaseValidationResult{}
+		v.validatePropertyShardingConfig(&neo4jv1beta1.Neo4jShardedDatabase{Spec: spec}, result)
+		assert.NotEmpty(t, result.Errors, "expected error for replaceExisting=true without force=true")
+	})
+
+	t.Run("replaceExisting with ifNotExists is rejected", func(t *testing.T) {
+		spec := baseSpec()
+		spec.ReplaceExisting = true
+		spec.Force = true
+		ifn := true
+		spec.IfNotExists = &ifn
+		spec.SeedBackupRef = "products-backup"
+		result := &ShardedDatabaseValidationResult{}
+		v.validatePropertyShardingConfig(&neo4jv1beta1.Neo4jShardedDatabase{Spec: spec}, result)
+		errs := 0
+		for _, e := range result.Errors {
+			if e.Field == "spec.ifNotExists" {
+				errs++
+			}
+		}
+		assert.Equal(t, 1, errs, "expected ifNotExists mutex error; got %v", result.Errors)
+	})
+
+	t.Run("replaceExisting without seed source is rejected", func(t *testing.T) {
+		spec := baseSpec()
+		spec.ReplaceExisting = true
+		spec.Force = true
+		// no seed set
+		result := &ShardedDatabaseValidationResult{}
+		v.validatePropertyShardingConfig(&neo4jv1beta1.Neo4jShardedDatabase{Spec: spec}, result)
+		errs := 0
+		for _, e := range result.Errors {
+			if e.Field == "spec.replaceExisting" {
+				errs++
+			}
+		}
+		assert.GreaterOrEqual(t, errs, 1, "expected error pointing at replaceExisting for missing seed source")
+	})
+
+	t.Run("valid: replaceExisting + force + seedBackupRef", func(t *testing.T) {
+		spec := baseSpec()
+		spec.ReplaceExisting = true
+		spec.Force = true
+		ifn := false
+		spec.IfNotExists = &ifn
+		spec.SeedBackupRef = "products-backup"
+		result := &ShardedDatabaseValidationResult{}
+		v.validatePropertyShardingConfig(&neo4jv1beta1.Neo4jShardedDatabase{Spec: spec}, result)
+		assert.Empty(t, result.Errors, "expected no errors for the canonical destructive-restore config: got %v", result.Errors)
+	})
+}
+
 func TestValidateBasicFields(t *testing.T) {
 	v := &ShardedDatabaseValidator{}
 

@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	stderrors "errors"
 	"fmt"
 	"os"
 	"sort"
@@ -32,6 +33,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -54,6 +56,16 @@ type Neo4jBackupReconciler struct {
 	Recorder                record.EventRecorder
 	MaxConcurrentReconciles int
 	RequeueAfter            time.Duration
+
+	// Clientset is the typed Kubernetes client used for pod-log fetches
+	// (BackupRun.ShardArtifacts filename/size population, BackupRun.Validation
+	// from `neo4j-admin backup validate` output). Optional — when nil the
+	// log-parsing features short-circuit and leave the corresponding status
+	// fields empty rather than failing the reconcile. Production wiring sets
+	// this in cmd/main.go via kubernetes.NewForConfig(mgr.GetConfig()); unit
+	// tests using a fake client.Client leave it nil and the pod-log paths
+	// no-op.
+	Clientset kubernetes.Interface
 }
 
 const (
@@ -154,6 +166,14 @@ func (r *Neo4jBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
 	}
 
+	// Sharded-DB-specific static preflight (cluster sharding enabled, version
+	// gate, Neo4jShardedDatabase CR exists + Ready, clusterRef matches). No-op
+	// for non-ShardedDatabase kinds. The expensive glob-safety SHOW DATABASES
+	// check fires later, only at Job creation time.
+	if done, result, preflightErr := r.applyShardedPreflight(ctx, backup, targetCluster); done {
+		return result, preflightErr
+	}
+
 	// Handle scheduled backups
 	if backup.Spec.Schedule != "" {
 		return r.handleScheduledBackup(ctx, backup, targetCluster)
@@ -232,24 +252,66 @@ func (r *Neo4jBackupReconciler) reconcileScheduledHistory(ctx context.Context, b
 		return err
 	}
 
+	// Track newly-recorded Succeeded runs so we can fire the Phase 3
+	// reverse-lookup (Neo4jShardedDatabase.status.lastBackup) AFTER the
+	// status.history write commits — emitting before the commit would race
+	// against the same-CR resource-version churn.
+	var newSucceededRuns []neo4jv1beta1.BackupRun
+
 	update := func() error {
 		latest := &neo4jv1beta1.Neo4jBackup{}
 		if err := r.Get(ctx, client.ObjectKeyFromObject(backup), latest); err != nil {
 			return err
 		}
 
+		newSucceededRuns = nil // reset on every retry
 		changed := false
+		// Compute the expected sharded artifact list once per outer call (the
+		// answer doesn't depend on the Job; it depends on the sharded DB CR).
+		// No-op + nil for non-sharded backups.
+		shardArtifacts := r.expectedShardArtifactsForBackup(ctx, latest)
 		for i := range jobs.Items {
 			job := &jobs.Items[i]
-			run, ok := jobToBackupRun(job)
+			run, ok := jobToBackupRun(job, chainRoot(latest))
 			if !ok {
 				continue // still running
 			}
 			if backupRunAlreadyRecorded(latest.Status.History, run) {
 				continue
 			}
+			// F3 / F4: augment with per-Job filename/size + validation
+			// from the Job's pod logs. Each CronJob child has its own Pod
+			// with its own log, so we fetch per-Job rather than once per
+			// outer call. Errors non-fatal — empty fields still leave the
+			// ShardName audit list populated.
+			isStandardDB := latest.Spec.Target.Kind == neo4jv1beta1.BackupTargetKindDatabase
+			var jobLog string
+			if len(shardArtifacts) > 0 || isStandardDB ||
+				(latest.Spec.Options != nil && latest.Spec.Options.Validate != nil && *latest.Spec.Options.Validate) {
+				if got, logErr := r.fetchBackupPodLog(ctx, job.Name, job.Namespace); logErr == nil {
+					jobLog = got
+				}
+			}
+			if len(shardArtifacts) > 0 {
+				perJobArtifacts := shardArtifacts
+				if jobLog != "" {
+					perJobArtifacts = mergeShardArtifactsFromLog(shardArtifacts, parseShardArtifactsFromLog(jobLog))
+				}
+				run.ShardArtifacts = perJobArtifacts
+			}
+			if isStandardDB && jobLog != "" {
+				run.ArtifactFilename = parseStandardArtifactFromLog(jobLog, latest.Spec.Target.Name)
+			}
+			if jobLog != "" {
+				if validation := parseValidationFromLog(jobLog); validation != nil {
+					run.Validation = validation
+				}
+			}
 			latest.Status.History = append(latest.Status.History, run)
 			changed = true
+			if run.Status == "Succeeded" {
+				newSucceededRuns = append(newSucceededRuns, run)
+			}
 		}
 		if !changed {
 			return nil
@@ -264,7 +326,25 @@ func (r *Neo4jBackupReconciler) reconcileScheduledHistory(ctx context.Context, b
 
 		return r.Status().Update(ctx, latest)
 	}
-	return retry.RetryOnConflict(retry.DefaultBackoff, update)
+	if err := retry.RetryOnConflict(retry.DefaultBackoff, update); err != nil {
+		return err
+	}
+
+	// Phase 3: reverse-lookup so the Neo4jShardedDatabase CR's
+	// status.lastBackup surfaces the most recent succeeded scheduled run. Use
+	// the most-recently-completed run (sortBackupRunsNewestFirst ordering
+	// would lose ties from same-second StartTimes; sort the newly-recorded
+	// subset by CompletionTime and pick the last). No-op for non-sharded.
+	if len(newSucceededRuns) > 0 {
+		latestRun := newSucceededRuns[0]
+		for _, r := range newSucceededRuns[1:] {
+			if r.CompletionTime != nil && (latestRun.CompletionTime == nil || r.CompletionTime.After(latestRun.CompletionTime.Time)) {
+				latestRun = r
+			}
+		}
+		r.updateShardedDBLastBackup(ctx, backup, latestRun)
+	}
+	return nil
 }
 
 // sortBackupRunsNewestFirst orders history newest-first by StartTime, with
@@ -292,10 +372,16 @@ func sortBackupRunsNewestFirst(runs []neo4jv1beta1.BackupRun) {
 
 // jobToBackupRun builds a BackupRun for a completed Job. Returns ok=false if
 // the Job has not finished (neither Succeeded nor Failed > 0).
-func jobToBackupRun(job *batchv1.Job) (neo4jv1beta1.BackupRun, bool) {
+//
+// `backupsPath` is the per-CR artifact directory (relative to storage
+// root) — same for every run of one CR under the shared-directory layout
+// (rule 40). Pass the Neo4jBackup CR name; jobToBackupRun records it as
+// `BackupRun.BackupsPath` for audit + sharded-seed-proxy URL building.
+// The Job UID still uniquely identifies the run via `BackupRun.RunID`.
+func jobToBackupRun(job *batchv1.Job, backupsPath string) (neo4jv1beta1.BackupRun, bool) {
 	run := neo4jv1beta1.BackupRun{
 		RunID:       string(job.UID),
-		BackupsPath: job.Name,
+		BackupsPath: backupsPath,
 	}
 	if job.Status.StartTime != nil {
 		run.StartTime = *job.Status.StartTime
@@ -372,6 +458,14 @@ func (r *Neo4jBackupReconciler) handleOneTimeBackup(ctx context.Context, backup 
 	// Create backup job
 	job, err := r.createBackupJob(ctx, backup, cluster)
 	if err != nil {
+		// errChainBusy is transient — another CR sharing the chain
+		// (parent or sibling chainFromBackup) is still running. Route to
+		// Pending and requeue rather than terminal Failed.
+		if stderrors.Is(err, errChainBusy) {
+			logger.Info("Backup waiting for chained CR to finish", "error", err.Error())
+			r.updateBackupStatus(ctx, backup, "Pending", err.Error())
+			return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
+		}
 		logger.Error(err, "Failed to create backup job")
 		r.updateBackupStatus(ctx, backup, "Failed", fmt.Sprintf("Failed to create backup job: %v", err))
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
@@ -456,10 +550,10 @@ func jobDuration(job *batchv1.Job) time.Duration {
 }
 
 // backupTargetName resolves the Neo4j instance name from a backup spec.
-// When Kind is "Database" the target name is the database name, not the instance;
-// ClusterRef holds the actual Neo4j instance in that case.
+// For database-scoped kinds (Database, ShardedDatabase) the target Name is the
+// database name and ClusterRef holds the actual Neo4j instance.
 func backupTargetName(backup *neo4jv1beta1.Neo4jBackup) string {
-	if backup.Spec.Target.Kind == "Database" && backup.Spec.Target.ClusterRef != "" {
+	if neo4jv1beta1.IsDatabaseScopedBackupKind(backup.Spec.Target.Kind) && backup.Spec.Target.ClusterRef != "" {
 		return backup.Spec.Target.ClusterRef
 	}
 	return backup.Spec.Target.Name
@@ -473,7 +567,12 @@ func backupLabels(backup *neo4jv1beta1.Neo4jBackup, component string) map[string
 		"app.kubernetes.io/instance":   backup.Name,
 		"app.kubernetes.io/component":  component,
 		"app.kubernetes.io/managed-by": "neo4j-operator",
-		"neo4j.com/backup-target":      backupTargetName(backup),
+		// part-of identifies the chain root — same value for every CR
+		// chained off this one. Used by waitForChainConcurrencyClear to
+		// block a Job submission while another Job in the same chain is
+		// still active.
+		"app.kubernetes.io/part-of": chainRoot(backup),
+		"neo4j.com/backup-target":   backupTargetName(backup),
 	}
 }
 
@@ -517,10 +616,166 @@ func (r *Neo4jBackupReconciler) ensureTempStagingPVC(ctx context.Context, backup
 	return r.Create(ctx, pvc)
 }
 
+// ensureBackupPVC provisions the destination backup PVC for storage.type=pvc
+// when the user has specified `storage.pvc.size` (and optionally
+// `storage.pvc.storageClassName`). If the PVC already exists (or `size` is
+// empty — user is referencing a pre-existing PVC), this is a no-op.
+//
+// The PVC is owned by the Neo4jBackup CR so it's GC'd when the CR is
+// deleted. To retain backups beyond CR lifetime, users should either
+// (a) pre-create the PVC themselves so the operator finds it existing,
+// or (b) leave `size` empty and provision externally.
+func (r *Neo4jBackupReconciler) ensureBackupPVC(ctx context.Context, backup *neo4jv1beta1.Neo4jBackup) error {
+	if backup.Spec.Storage.Type != "pvc" {
+		return nil
+	}
+	if backup.Spec.Storage.PVC == nil || backup.Spec.Storage.PVC.Name == "" {
+		return nil
+	}
+	if backup.Spec.Storage.PVC.Size == "" {
+		// User is referencing an externally-provisioned PVC; nothing for
+		// the operator to do.
+		return nil
+	}
+
+	pvcName := backup.Spec.Storage.PVC.Name
+	existing := &corev1.PersistentVolumeClaim{}
+	if err := r.Get(ctx, types.NamespacedName{Name: pvcName, Namespace: backup.Namespace}, existing); err == nil {
+		return nil // PVC already exists
+	} else if !errors.IsNotFound(err) {
+		return fmt.Errorf("failed to get backup PVC %s/%s: %w", backup.Namespace, pvcName, err)
+	}
+
+	pvc := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      pvcName,
+			Namespace: backup.Namespace,
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+			Resources: corev1.VolumeResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceStorage: resource.MustParse(backup.Spec.Storage.PVC.Size),
+				},
+			},
+		},
+	}
+	if backup.Spec.Storage.PVC.StorageClassName != "" {
+		pvc.Spec.StorageClassName = &backup.Spec.Storage.PVC.StorageClassName
+	}
+	if err := controllerutil.SetControllerReference(backup, pvc, r.Scheme); err != nil {
+		return fmt.Errorf("failed to set owner reference on backup PVC: %w", err)
+	}
+	return r.Create(ctx, pvc)
+}
+
+// errChainBusy is returned by waitForChainConcurrencyClear when another
+// Job belonging to the same chain is still active. Callers route to
+// Pending+requeue rather than failing.
+var errChainBusy = fmt.Errorf("another backup in this chain is still running")
+
+// validateChainParent enforces cross-CR consistency for a backup with
+// spec.chainFromBackup set:
+//   - the named parent CR must exist in the same namespace
+//   - both CRs must target the same cluster + database (a chain that
+//     pulled artifacts from a different DB would be incoherent)
+//   - both CRs must use the same storage backend so the directory
+//     actually overlaps (s3 + s3, same bucket + path, etc.)
+//
+// Returns a permanent error (caller routes to Failed) when the parent
+// is missing or fields diverge. Returns nil when chainFromBackup is
+// empty (non-chained CR — no checks needed).
+func (r *Neo4jBackupReconciler) validateChainParent(ctx context.Context, backup *neo4jv1beta1.Neo4jBackup) error {
+	if backup.Spec.ChainFromBackup == "" {
+		return nil
+	}
+	parent := &neo4jv1beta1.Neo4jBackup{}
+	key := types.NamespacedName{Name: backup.Spec.ChainFromBackup, Namespace: backup.Namespace}
+	if err := r.Get(ctx, key, parent); err != nil {
+		return fmt.Errorf("chainFromBackup %q not found in namespace %q: %w",
+			backup.Spec.ChainFromBackup, backup.Namespace, err)
+	}
+	if parent.Spec.Target.Kind != backup.Spec.Target.Kind ||
+		parent.Spec.Target.Name != backup.Spec.Target.Name ||
+		parent.Spec.Target.ClusterRef != backup.Spec.Target.ClusterRef {
+		return fmt.Errorf("chainFromBackup %q targets {kind=%q name=%q clusterRef=%q} but this backup targets {kind=%q name=%q clusterRef=%q}; chained backups must share the same target",
+			parent.Name, parent.Spec.Target.Kind, parent.Spec.Target.Name, parent.Spec.Target.ClusterRef,
+			backup.Spec.Target.Kind, backup.Spec.Target.Name, backup.Spec.Target.ClusterRef)
+	}
+	if parent.Spec.Storage.Type != backup.Spec.Storage.Type ||
+		parent.Spec.Storage.Bucket != backup.Spec.Storage.Bucket ||
+		parent.Spec.Storage.Path != backup.Spec.Storage.Path {
+		return fmt.Errorf("chainFromBackup %q uses storage {type=%q bucket=%q path=%q} but this backup uses {type=%q bucket=%q path=%q}; chained backups must share the same storage location",
+			parent.Name, parent.Spec.Storage.Type, parent.Spec.Storage.Bucket, parent.Spec.Storage.Path,
+			backup.Spec.Storage.Type, backup.Spec.Storage.Bucket, backup.Spec.Storage.Path)
+	}
+	return nil
+}
+
+// waitForChainConcurrencyClear lists Jobs in the namespace labeled
+// `app.kubernetes.io/part-of=<chain-root>` and reports errChainBusy if
+// any has status.active > 0. Used to coordinate concurrent runs across
+// chained CRs (e.g. daily FULL still running while hourly DIFF wants
+// to fire) — without this guard two backups can write to the same
+// directory simultaneously, which neo4j-admin's chain detection
+// doesn't tolerate.
+//
+// Single-CR concurrency is still handled by `CronJob.concurrencyPolicy:
+// Forbid` on the scheduled path; this helper covers the across-CR case
+// that Kubernetes doesn't natively coordinate.
+func (r *Neo4jBackupReconciler) waitForChainConcurrencyClear(ctx context.Context, backup *neo4jv1beta1.Neo4jBackup) error {
+	jobs := &batchv1.JobList{}
+	if err := r.List(ctx, jobs,
+		client.InNamespace(backup.Namespace),
+		client.MatchingLabels{
+			"app.kubernetes.io/managed-by": "neo4j-operator",
+			"app.kubernetes.io/component":  "backup",
+			"app.kubernetes.io/part-of":    chainRoot(backup),
+		},
+	); err != nil {
+		return fmt.Errorf("list chained backup Jobs: %w", err)
+	}
+	for i := range jobs.Items {
+		if jobs.Items[i].Status.Active > 0 {
+			return fmt.Errorf("Job %q (chain root %q): %w",
+				jobs.Items[i].Name, chainRoot(backup), errChainBusy)
+		}
+	}
+	return nil
+}
+
 func (r *Neo4jBackupReconciler) createBackupJob(ctx context.Context, backup *neo4jv1beta1.Neo4jBackup, cluster *neo4jv1beta1.Neo4jEnterpriseCluster) (*batchv1.Job, error) {
+	// Glob-safety check for sharded backups: refuse to submit a Job whose
+	// `{name}*` neo4j-admin glob would also pull in unrelated databases. No-op
+	// for non-sharded kinds.
+	if err := r.shardedPreflightGlobSafety(ctx, backup, cluster); err != nil {
+		return nil, err
+	}
+
+	// Cross-CR consistency check for chainFromBackup. Returns a permanent
+	// error when the parent CR is missing or target/storage diverges —
+	// caller routes to Failed.
+	if err := r.validateChainParent(ctx, backup); err != nil {
+		return nil, err
+	}
+
+	// Refuse to start while another Job in the same chain (parent or
+	// sibling chained CR) is still running. The caller routes
+	// errChainBusy to Pending+requeue.
+	if err := r.waitForChainConcurrencyClear(ctx, backup); err != nil {
+		return nil, err
+	}
+
 	// Create temp staging PVC if configured
 	if err := r.ensureTempStagingPVC(ctx, backup); err != nil {
 		return nil, fmt.Errorf("failed to create temp staging PVC: %w", err)
+	}
+
+	// Provision the destination backup PVC when storage.type=pvc and the
+	// user has specified `storage.pvc.size`. Skipped (no-op) when the PVC
+	// already exists or size is empty (user is referencing an external PVC).
+	if err := r.ensureBackupPVC(ctx, backup); err != nil {
+		return nil, fmt.Errorf("failed to create backup PVC: %w", err)
 	}
 
 	jobName := backup.Name + "-backup"
@@ -567,6 +822,7 @@ func (r *Neo4jBackupReconciler) createBackupJob(ctx context.Context, backup *neo
 							Env:             append([]corev1.EnvVar{backupRunIDEnvVar()}, r.buildCloudEnvVars(backup)...),
 							VolumeMounts:    r.buildVolumeMounts(backup),
 							SecurityContext: resources.DefaultNeo4jContainerSecurityContext(),
+							Resources:       resolveJobResources(backup.Spec.Options),
 						},
 					},
 					Volumes: r.buildVolumes(backup),
@@ -587,6 +843,15 @@ func (r *Neo4jBackupReconciler) createBackupJob(ctx context.Context, backup *neo
 func (r *Neo4jBackupReconciler) createBackupCronJob(ctx context.Context, backup *neo4jv1beta1.Neo4jBackup, cluster *neo4jv1beta1.Neo4jEnterpriseCluster) (*batchv1.CronJob, error) {
 	cronJobName := backup.Name + "-backup-cron"
 
+	// Glob-safety check for sharded backups, runs once at CronJob create/update
+	// time. Known limitation: a colliding database created AFTER the CronJob
+	// already exists will be silently included in future scheduled runs until
+	// the user touches the CR. Phase 1 accepts this gap; Phase 3 observability
+	// can surface it via neo4j-admin backup validate output.
+	if err := r.shardedPreflightGlobSafety(ctx, backup, cluster); err != nil {
+		return nil, err
+	}
+
 	// Temp staging PVC, if configured, must exist before the first
 	// scheduled run starts — otherwise the Pod hangs in
 	// ContainerCreating with "MountVolume.SetUp failed: PVC not found".
@@ -594,6 +859,11 @@ func (r *Neo4jBackupReconciler) createBackupCronJob(ctx context.Context, backup 
 	// scheduled path was skipping it (recheck bug #4).
 	if err := r.ensureTempStagingPVC(ctx, backup); err != nil {
 		return nil, fmt.Errorf("failed to create temp staging PVC: %w", err)
+	}
+	// Same for the destination backup PVC — provision before the CronJob's
+	// first scheduled run fires.
+	if err := r.ensureBackupPVC(ctx, backup); err != nil {
+		return nil, fmt.Errorf("failed to create backup PVC: %w", err)
 	}
 
 	backupCmd, err := r.buildBackupCommand(ctx, backup, cluster)
@@ -666,6 +936,7 @@ func (r *Neo4jBackupReconciler) createBackupCronJob(ctx context.Context, backup 
 								Env:             append([]corev1.EnvVar{backupRunIDEnvVar()}, r.buildCloudEnvVars(backup)...),
 								VolumeMounts:    r.buildVolumeMounts(backup),
 								SecurityContext: resources.DefaultNeo4jContainerSecurityContext(),
+								Resources:       resolveJobResources(backup.Spec.Options),
 							},
 						},
 						Volumes: r.buildVolumes(backup),
@@ -679,6 +950,19 @@ func (r *Neo4jBackupReconciler) createBackupCronJob(ctx context.Context, backup 
 		return nil, err
 	}
 	return cronJob, nil
+}
+
+// effectiveRemoteAddressResolution resolves Spec.Options.RemoteAddressResolution
+// to its effective bool value with defaulting applied. Explicit user values
+// (true or false) always win. When the field is unset (nil) AND target.Kind is
+// ShardedDatabase AND the Neo4j version supports the flag (2025.09+), default
+// to true — matches the canonical upstream sharded-backup invocation.
+func effectiveRemoteAddressResolution(backup *neo4jv1beta1.Neo4jBackup, version *neo4j.Version) bool {
+	if backup.Spec.Options != nil && backup.Spec.Options.RemoteAddressResolution != nil {
+		return *backup.Spec.Options.RemoteAddressResolution
+	}
+	return backup.Spec.Target.Kind == neo4jv1beta1.BackupTargetKindShardedDatabase &&
+		version != nil && version.SupportsRemoteAddressResolution()
 }
 
 func (r *Neo4jBackupReconciler) buildBackupCommand(ctx context.Context, backup *neo4jv1beta1.Neo4jBackup, cluster *neo4jv1beta1.Neo4jEnterpriseCluster) (string, error) {
@@ -697,12 +981,19 @@ func (r *Neo4jBackupReconciler) buildBackupCommand(ctx context.Context, backup *
 		version = &neo4j.Version{Major: 5, Minor: 26, Patch: 0}
 	}
 
+	// Resolve --remote-address-resolution with defaulting applied. For
+	// ShardedDatabase backups on Neo4j 2025.09+ the upstream canonical
+	// invocation includes this flag; the operator defaults it to true when
+	// the user hasn't set the field explicitly. Explicit values (true/false)
+	// always win.
+	remoteAddrRes := effectiveRemoteAddressResolution(backup, version)
+
 	// Validate version-gated flags individually.
 	if backup.Spec.Options != nil {
 		if backup.Spec.Options.ParallelDownload && !version.SupportsParallelDownload() {
 			return "", fmt.Errorf("--parallel-download requires CalVer 2025.11+ (image: %s)", cluster.Spec.Image.Tag)
 		}
-		if backup.Spec.Options.RemoteAddressResolution && !version.SupportsRemoteAddressResolution() {
+		if remoteAddrRes && !version.SupportsRemoteAddressResolution() {
 			return "", fmt.Errorf("--remote-address-resolution requires CalVer 2025.09+ (image: %s)", cluster.Spec.Image.Tag)
 		}
 		if backup.Spec.Options.SkipRecovery && !version.SupportsSkipRecovery() {
@@ -713,12 +1004,19 @@ func (r *Neo4jBackupReconciler) buildBackupCommand(ctx context.Context, backup *
 		}
 	}
 
-	// Append the per-run subfolder so every backup execution writes into
-	// its own directory (see backupRunIDEnvVar). The env var is set on the
-	// Pod via the downward API; the shell expands it at command-execution
-	// time. status.history.BackupsPath records the same Job name so each
-	// history entry deterministically points at its artifact directory.
-	toPath := r.buildToPath(backup) + "/${BACKUP_RUN_ID}"
+	// All runs for one Neo4jBackup CR share a single --to-path directory
+	// (NOT per-run subfolders). This is what neo4j-admin expects for
+	// `--type=DIFF` chaining — diff backups read the prior FULL artifact
+	// from the same directory to compute the delta. Per-run isolation is
+	// preserved at the FILENAME level: neo4j-admin embeds a timestamp in
+	// each artifact, and our F3 Pod-log parser captures it into
+	// BackupRun.ArtifactFilename / ShardArtifacts.Filename so restores
+	// can pin a specific run when needed. Trailing slash matters for
+	// cloud targets: neo4j-admin rejects "s3://bucket/path" with "The
+	// path … is not a directory - please add a terminal '/' to your
+	// path". Harmless for PVC targets — the local filesystem treats
+	// both forms identically.
+	toPath := r.buildToPath(backup) + "/"
 	// The --from FQDN differs between cluster and standalone targets;
 	// resolve the type from the live API so the FQDN matches reality.
 	// Falls back to the cluster shape on any lookup error so the
@@ -727,10 +1025,17 @@ func (r *Neo4jBackupReconciler) buildBackupCommand(ctx context.Context, backup *
 	if isStandalone, standalone, lookupErr := r.isStandaloneTarget(ctx, backup); lookupErr == nil && isStandalone && standalone != nil {
 		fromAddresses = resources.BuildStandaloneBackupFromAddress(standalone)
 	}
-	allDatabases := backup.Spec.Target.Kind == "Cluster"
+	allDatabases := backup.Spec.Target.Kind == neo4jv1beta1.BackupTargetKindCluster
 	dbName := ""
-	if !allDatabases {
+	switch backup.Spec.Target.Kind {
+	case neo4jv1beta1.BackupTargetKindDatabase:
 		dbName = backup.Spec.Target.Name
+	case neo4jv1beta1.BackupTargetKindShardedDatabase:
+		// Property-sharded DBs are backed up as a glob across all shards:
+		// {name}-g000 (graph) + {name}-p000…p{N-1} (property shards). The
+		// argument is wrapped in single quotes by GetBackupCommand so the
+		// shell doesn't expand "*" before reaching neo4j-admin.
+		dbName = backup.Spec.Target.Name + "*"
 	}
 
 	cmd := neo4j.GetBackupCommand(version, dbName, toPath, allDatabases, fromAddresses)
@@ -753,9 +1058,6 @@ func (r *Neo4jBackupReconciler) buildBackupCommand(ctx context.Context, backup *
 		if backup.Spec.Options.PreferDiffAsParent {
 			cmd += " --prefer-diff-as-parent"
 		}
-		if backup.Spec.Options.RemoteAddressResolution {
-			cmd += " --remote-address-resolution=true"
-		}
 		if backup.Spec.Options.ParallelDownload {
 			cmd += " --parallel-download=true"
 		}
@@ -776,6 +1078,44 @@ func (r *Neo4jBackupReconciler) buildBackupCommand(ctx context.Context, backup *
 		}
 	}
 
+	// --remote-address-resolution is emitted OUTSIDE the Options-nil guard
+	// because its effective value can be true even when the user did not set
+	// Spec.Options at all: the ShardedDatabase + 2025.09+ default fires for
+	// any backup whose target.kind is sharded, regardless of whether other
+	// BackupOptions fields were touched. Gating this on Options != nil would
+	// silently swallow the default for users who only set spec.target +
+	// spec.storage. Pinned at the unit-test layer by
+	// TestEffectiveRemoteAddressResolution and at the integration-test layer
+	// by TestPropertyShardingBackup_HappyPath.
+	if remoteAddrRes {
+		cmd += " --remote-address-resolution=true"
+	}
+
+	// F4: opt-in `neo4j-admin backup validate` step. Chained with `|| true`
+	// so a validate failure doesn't fail the Job — the backup itself
+	// succeeded, validate is informational. The operator parses the
+	// stdout into BackupRun.Validation after the Job completes (see the
+	// post-Job hook in recordOneShotBackupRun / reconcileScheduledHistory).
+	//
+	// **Sharded validate takes the LITERAL DB name, not the backup-side glob**:
+	// per the sharded admin-operations docs, `neo4j-admin backup validate
+	// --database="foo"` auto-discovers and validates every shard (foo-g000,
+	// foo-p000, …) under the parent name. Passing the `foo*` glob (which
+	// the backup command needs to capture all shards in one invocation)
+	// makes validate try to evaluate `foo*-g000` literally and emit
+	//   "Unable to find valid backup chain for database 'foo*-g000'"
+	// — unparseable. Strip the trailing `*` here so validate sees the
+	// canonical parent name.
+	if backup.Spec.Options != nil && backup.Spec.Options.Validate != nil && *backup.Spec.Options.Validate {
+		validateDBArg := dbName
+		if allDatabases {
+			validateDBArg = "*"
+		} else {
+			validateDBArg = strings.TrimSuffix(validateDBArg, "*")
+		}
+		cmd += fmt.Sprintf(` && (neo4j-admin backup validate --from-path=%s --database="%s" || true)`, toPath, validateDBArg)
+	}
+
 	if backup.Spec.Storage.Type == "pvc" {
 		cmd = fmt.Sprintf("mkdir -p %s && %s", toPath, cmd)
 	}
@@ -783,39 +1123,98 @@ func (r *Neo4jBackupReconciler) buildBackupCommand(ctx context.Context, backup *
 	return cmd, nil
 }
 
-// buildToPath returns the BASE --to-path value (storage root). The actual
-// --to-path passed to neo4j-admin appends a per-run subfolder
-// ("${BACKUP_RUN_ID}") at command-execution time, see buildBackupCommand and
-// backupRunIDEnvVar. Keeping each run in its own subfolder is what lets
-// status.history.BackupsPath unambiguously identify the artifacts a given
-// BackupRun produced — the previous flat layout had every scheduled run
-// dumping into the same directory with no way to map run-to-artifact (see
-// issue #129).
+// buildToPath returns the --to-path value passed to neo4j-admin. All runs
+// of a single Neo4jBackup CR share this directory — it's how neo4j-admin
+// chains `--type=DIFF` backups off the prior FULL. Per-run identity is
+// preserved via the timestamp neo4j-admin embeds in each artifact
+// filename; F3 Pod-log parsing captures that into
+// BackupRun.ArtifactFilename / ShardArtifacts.Filename so restores can
+// pin a specific run.
+//
+// The path embeds a per-chain segment (`<base>/<chain-root>/`). The
+// chain root is `spec.chainFromBackup` if set (so e.g. a daily-DIFF CR
+// can chain into a daily-FULL CR's directory), otherwise the CR's own
+// name. This is what supports mixed-cadence FULL+DIFF workflows: two
+// CRs intentionally sharing one directory via the chainFromBackup link.
+// Two unrelated CRs still stay isolated because they each get their own
+// chain-root segment.
 func (r *Neo4jBackupReconciler) buildToPath(backup *neo4jv1beta1.Neo4jBackup) string {
 	st := backup.Spec.Storage
 	p := st.Path
 	if p == "" {
 		p = "backups"
 	}
+	crSegment := chainRoot(backup)
 	switch st.Type {
 	case "s3":
-		return fmt.Sprintf("s3://%s/%s", st.Bucket, p)
+		return fmt.Sprintf("s3://%s/%s/%s", st.Bucket, p, crSegment)
 	case "gcs":
-		return fmt.Sprintf("gs://%s/%s", st.Bucket, p)
+		return fmt.Sprintf("gs://%s/%s/%s", st.Bucket, p, crSegment)
 	case "azure":
-		return fmt.Sprintf("azb://%s/%s", st.Bucket, p)
+		return fmt.Sprintf("azb://%s/%s/%s", st.Bucket, p, crSegment)
 	default: // pvc
-		return "/backup"
+		return fmt.Sprintf("/backup/%s", crSegment)
 	}
 }
 
+// defaultJobResources is the Burstable default applied to backup and
+// restore Job containers when the user doesn't supply
+// `spec.options.resources`. Memory floor (512Mi request) keeps the pod
+// out of BestEffort QoS so the kernel OOM-killer doesn't pick it under
+// node pressure; ceiling (2Gi limit) is generous for empty/small DBs
+// and CI-friendly (GitHub-hosted runner ~5Gi usable). Production users
+// with hundreds-of-GB databases should override via spec.options.resources.
+func defaultJobResources() corev1.ResourceRequirements {
+	return corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("100m"),
+			corev1.ResourceMemory: resource.MustParse("512Mi"),
+		},
+		Limits: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("1000m"),
+			corev1.ResourceMemory: resource.MustParse("2Gi"),
+		},
+	}
+}
+
+// resolveJobResources returns the user-supplied resources from
+// spec.options.resources, falling back to defaultJobResources().
+func resolveJobResources(opt *neo4jv1beta1.BackupOptions) corev1.ResourceRequirements {
+	if opt != nil && opt.Resources != nil {
+		return *opt.Resources
+	}
+	return defaultJobResources()
+}
+
+// resolveRestoreJobResources is the Neo4jRestore equivalent of
+// resolveJobResources. Same default policy.
+func resolveRestoreJobResources(opt *neo4jv1beta1.RestoreOptionsSpec) corev1.ResourceRequirements {
+	if opt != nil && opt.Resources != nil {
+		return *opt.Resources
+	}
+	return defaultJobResources()
+}
+
+// chainRoot returns the directory segment under spec.storage.path that
+// this backup writes into: the value of spec.chainFromBackup when set
+// (the parent CR's name), otherwise the CR's own name.
+//
+// All chained CRs of one chain return the same root, so they share a
+// `--to-path` directory and `neo4j-admin` can resolve the
+// full/diff chain across them at backup and restore time.
+func chainRoot(backup *neo4jv1beta1.Neo4jBackup) string {
+	if backup.Spec.ChainFromBackup != "" {
+		return backup.Spec.ChainFromBackup
+	}
+	return backup.Name
+}
+
 // backupRunIDEnvVar exposes the backing Job's name to the backup Pod as
-// BACKUP_RUN_ID via the downward API. The shell command in buildBackupCommand
-// appends "/${BACKUP_RUN_ID}/" to --to-path so every run isolates its
-// artifacts in its own subfolder. The operator records the same value in
-// BackupRun.BackupsPath when populating status.history, so each history
-// entry deterministically identifies its artifact directory without log
-// parsing or out-of-band coordination.
+// BACKUP_RUN_ID via the downward API. The value is retained for log
+// correlation (operator logs reference the Job name; Pod logs surface
+// the same name) and for status.history.BackupsPath audit reference,
+// even though --to-path no longer appends it as a subfolder (runs now
+// share a directory so neo4j-admin can chain `--type=DIFF` backups).
 //
 // For one-shot Neo4jBackup CRs the value is "<backup>-backup". For
 // CronJob-spawned scheduled runs Kubernetes names each child Job
@@ -982,11 +1381,11 @@ func (r *Neo4jBackupReconciler) getTargetCluster(ctx context.Context, backup *ne
 		targetNamespace = backup.Namespace
 	}
 
-	// For Kind=Database the Name is the database name; use ClusterRef for the cluster.
+	// For database-scoped kinds the Name is the database name; use ClusterRef for the cluster.
 	clusterName := backup.Spec.Target.Name
-	if backup.Spec.Target.Kind == "Database" {
+	if neo4jv1beta1.IsDatabaseScopedBackupKind(backup.Spec.Target.Kind) {
 		if backup.Spec.Target.ClusterRef == "" {
-			return nil, fmt.Errorf("clusterRef must be set when backup target Kind is Database")
+			return nil, fmt.Errorf("clusterRef must be set when backup target Kind is %s", backup.Spec.Target.Kind)
 		}
 		clusterName = backup.Spec.Target.ClusterRef
 	}
@@ -1016,7 +1415,7 @@ func (r *Neo4jBackupReconciler) isStandaloneTarget(ctx context.Context, backup *
 		targetNamespace = backup.Namespace
 	}
 	name := backup.Spec.Target.Name
-	if backup.Spec.Target.Kind == "Database" {
+	if neo4jv1beta1.IsDatabaseScopedBackupKind(backup.Spec.Target.Kind) {
 		name = backup.Spec.Target.ClusterRef
 	}
 	// Cluster CR wins if both exist (defensive; name collisions are rare).
@@ -1239,12 +1638,44 @@ func (r *Neo4jBackupReconciler) updateBackupStatus(ctx context.Context, backup *
 func (r *Neo4jBackupReconciler) recordOneShotBackupRun(ctx context.Context, backup *neo4jv1beta1.Neo4jBackup, job *batchv1.Job) {
 	logger := log.FromContext(ctx)
 
-	run, ok := jobToBackupRun(job)
+	run, ok := jobToBackupRun(job, chainRoot(backup))
 	if !ok {
 		// Job is neither Succeeded nor Failed — nothing terminal to record.
 		// handleExistingBackupJob only calls us once one branch is true, so
 		// reaching this is a programming error elsewhere, not user data.
 		return
+	}
+	// Phase 3: stamp the per-shard audit list onto the BackupRun. No-op for
+	// non-sharded kinds; failure to fetch the sharded DB CR is non-fatal.
+	// F3 / F4: augment with per-shard Filename / Size AND BackupValidationResult
+	// by parsing the backup Pod's neo4j-admin output. We fetch the Pod log
+	// once and feed it into both parsers — Pod logs are TTL-bound, so a
+	// single fetch is cheaper than separate calls. Non-fatal — log-fetch
+	// failures and parse misses leave the corresponding fields empty.
+	isStandardDB := backup.Spec.Target.Kind == neo4jv1beta1.BackupTargetKindDatabase
+	logContent := ""
+	if shouldFetchLog := r.expectedShardArtifactsForBackup(ctx, backup) != nil || isStandardDB ||
+		(backup.Spec.Options != nil && backup.Spec.Options.Validate != nil && *backup.Spec.Options.Validate); shouldFetchLog {
+		if got, logErr := r.fetchBackupPodLog(ctx, job.Name, job.Namespace); logErr != nil {
+			logger.Info("Failed to fetch backup pod log; ShardArtifacts/ArtifactFilename/Validation may be incomplete",
+				"error", logErr.Error(), "job", job.Name)
+		} else {
+			logContent = got
+		}
+	}
+	if artifacts := r.expectedShardArtifactsForBackup(ctx, backup); len(artifacts) > 0 {
+		if logContent != "" {
+			artifacts = mergeShardArtifactsFromLog(artifacts, parseShardArtifactsFromLog(logContent))
+		}
+		run.ShardArtifacts = artifacts
+	}
+	if isStandardDB && logContent != "" {
+		run.ArtifactFilename = parseStandardArtifactFromLog(logContent, backup.Spec.Target.Name)
+	}
+	if logContent != "" {
+		if validation := parseValidationFromLog(logContent); validation != nil {
+			run.Validation = validation
+		}
 	}
 	// Size, Throughput, FileCount are intentionally omitted from run.Stats:
 	// they require parsing neo4j-admin stdout from Job pod logs (future
@@ -1285,6 +1716,11 @@ func (r *Neo4jBackupReconciler) recordOneShotBackupRun(ctx context.Context, back
 	if err := retry.RetryOnConflict(retry.DefaultBackoff, update); err != nil {
 		logger.Error(err, "Failed to record one-shot backup run in history")
 	}
+
+	// Phase 3: reverse-lookup so the Neo4jShardedDatabase CR's
+	// status.lastBackup surfaces this run. No-op for non-sharded kinds and
+	// for non-Succeeded runs.
+	r.updateShardedDBLastBackup(ctx, backup, run)
 }
 
 // validateNeo4jVersion validates that the target cluster uses Neo4j 5.26+ or 2025.01+

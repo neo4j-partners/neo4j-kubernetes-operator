@@ -9,7 +9,7 @@ The Neo4j Enterprise Operator follows cloud-native best practices with a focus o
 - **Production Stability**: Optimized reconciliation frequency and efficient resource management
 - **Performance**: Intelligent rate limiting and status update optimization
 - **Server-Based Architecture**: Unified server deployments with self-organizing roles
-- **Resource Efficiency**: Centralized backup system (70% resource reduction)
+- **Resource Efficiency**: On-demand backup Jobs (no long-running backup pod or sidecar)
 - **Observability**: Comprehensive monitoring and operational insights
 - **Validation**: Proactive resource validation and recommendations
 
@@ -38,15 +38,11 @@ topology:
 # Pod: my-standalone-0
 ```
 
-### Centralized Backup System
+### Backup architecture
 
-**Major Efficiency Improvement**: Replaced expensive per-pod backup sidecars with centralized backup architecture:
+Backups are owned by the dedicated **`Neo4jBackup` CRD**: each CR (one-shot or scheduled via `spec.schedule`) spawns a Kubernetes `Job` (or `CronJob` → child Jobs) that runs `neo4j-admin database backup` from the same Neo4j Enterprise image as the cluster. No sidecar containers, no persistent backup pod. The Job connects to each `{cluster}-server-N` Pod on port 6362 (`server.backup.listen_address=0.0.0.0:6362`, configured automatically) and streams artifacts to the destination (PVC, S3, GCS, or Azure).
 
-- **Resource Efficiency**: 100m CPU/256Mi memory per cluster vs N×200m CPU/512Mi per sidecar
-- **Resource Savings**: ~70% reduction in backup-related resource usage
-- **Architecture**: Single `{cluster-name}-backup-0` StatefulSet per cluster
-- **Connectivity**: Connects to cluster via client service using Bolt protocol
-- **Neo4j 5.26+ Support**: Modern backup syntax with automated path creation
+All runs of a single Neo4jBackup CR share a `<base>/<cr-name>/` directory so `neo4j-admin` can chain `--type=DIFF` backups off the prior `FULL`. Per-run identity is preserved via the timestamp `neo4j-admin` embeds in each `.backup` filename.
 
 ## Custom Resource Definitions (CRDs)
 
@@ -121,10 +117,10 @@ type Neo4jDatabaseSpec struct {
 
 #### Neo4jBackup (`neo4jbackup_types.go`)
 - **Purpose**: Manages backup operations for both clusters and standalone deployments
-- **Centralized Architecture**: Uses single backup pod per cluster (not sidecars)
+- **Job-per-CR architecture**: Each `Neo4jBackup` (one-shot or scheduled) spawns a Kubernetes Job (or CronJob → child Jobs). No sidecar containers, no persistent backup pod.
 - **Target Support**: Cluster OR standalone (`spec.target.kind` resolves the type; the controller probes the cluster ref and routes to `BuildStandaloneBackupFromAddress` for standalones, `BuildBackupFromAddresses` for clusters)
 - **Neo4j 5.26+ Support**: Modern backup syntax with `--to-path` parameter
-- **Per-run subfolders**: Every Job writes into `<base>/${BACKUP_RUN_ID}/` where `BACKUP_RUN_ID` is the Job's name (injected via downward API). The same value is recorded in `status.history[].backupsPath` so each history entry deterministically identifies its artifact directory without log parsing. One-shot Job name = `<backup>-backup`; CronJob child Job name = `<cronjob>-<unix-seconds>`.
+- **Shared-directory layout**: All runs of a single CR write into `<base>/<cr-name>/` so `neo4j-admin` can chain differential backups off the prior full. Per-run identity is preserved via the ISO-8601 timestamp `neo4j-admin` embeds in each `.backup` filename (also captured into `status.history[].artifactFilename` / `shardArtifacts[].filename` via Pod-log parsing).
 
 #### Neo4jRestore (`neo4jrestore_types.go`)
 - **Purpose**: Manages database restoration from backups
@@ -207,9 +203,8 @@ type Neo4jDatabaseSpec struct {
 - **Plugin Sources**: Official, community, custom registries, direct URLs
 
 #### Backup Controller (`neo4jbackup_controller.go`)
-**Centralized backup management:**
-- **Architecture**: Single backup StatefulSet per cluster
-- **Resource Efficiency**: 70% reduction in backup resource usage
+**Backup management:**
+- **Architecture**: Job-per-`Neo4jBackup`-CR. No persistent backup pod or sidecars.
 - **Cross-Deployment Support**: Backs up both clusters and standalone deployments
 - **Modern Syntax**: Neo4j 5.26+ compatible backup commands
 
@@ -358,16 +353,16 @@ CREATE DATABASE name [IF NOT EXISTS]
 - **StandaloneBuilder** (`standalone.go`): Single-node deployment resources
 - **ConfigMapBuilder**: Unified configuration for both deployment types
 - **ServiceBuilder**: Client and discovery services
-- **BackupBuilder**: Centralized backup StatefulSet
+- **BackupBuilder**: per-`Neo4jBackup`-CR Kubernetes Job (no persistent backup pod, no sidecars)
 - **TruststoreBuilder** (`cluster.go:BuildTrustStoreInitContainer / BuildTrustStoreVolumes / CollectTrustedCASecrets`): emits the per-Secret volume mounts, the writable `/truststore` EmptyDir, and the `truststore-init` init container (seeds `/truststore/truststore.jks` from `$JAVA_HOME/lib/security/cacerts`, then `keytool -import` for each `spec.trustedCASecrets` entry using the Secret name as alias). Reused by both cluster (env var) and standalone (ConfigMap) wire-up paths via `CollectTrustedCASecrets`, which folds the legacy singular `spec.auth.trustStore` into the new plural list.
 
 #### Server-Based Resource Patterns:
 - **StatefulSet Naming**: `{cluster-name}-server` for clusters, `{standalone-name}` for standalone
 - **Pod Naming**: `{cluster-name}-server-0`, `{cluster-name}-server-1`, etc.
 - **Service Names**: `{cluster-name}-client`, `{cluster-name}-discovery`
-- **Backup Resources**: `{cluster-name}-backup-0` (centralized)
+- **Backup Resources**: per-CR Kubernetes Jobs spawned by the `Neo4jBackup` controller (one-shot: `<cr-name>-backup`; CronJob children: `<cr-name>-<unix-seconds>`). No persistent backup pod or sidecars.
 - **Truststore mount**: `/truststore/truststore.jks` (read-only, populated by the `truststore-init` init container; password is the JVM default `changeit`)
-- **User-supplied volumes**: `spec.extraVolumes` are appended to the pod spec verbatim; `spec.extraVolumeMounts` are appended to the Neo4j container's mounts after operator-managed mounts but before any backup-sidecar mounts. Operator-managed paths (`/data`, `/logs`, `/conf`, `/ssl`, `/plugins`, `/truststore`, `/truststore-ca`, `/var/lib/neo4j/...`) are off-limits and rejected by the validator.
+- **User-supplied volumes**: `spec.extraVolumes` are appended to the pod spec verbatim; `spec.extraVolumeMounts` are appended to the Neo4j container's mounts after operator-managed mounts. Operator-managed paths (`/data`, `/logs`, `/conf`, `/ssl`, `/plugins`, `/truststore`, `/truststore-ca`, `/var/lib/neo4j/...`) are off-limits and rejected by the validator.
 
 ### Performance Optimizations
 

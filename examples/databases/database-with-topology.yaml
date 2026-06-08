@@ -55,7 +55,7 @@ spec:
   initialData:
     source: cypher
     cypherStatements:
-      - "CREATE CONSTRAINT order_id_unique IF NOT EXISTS ON (o:Order) ASSERT o.orderId IS UNIQUE"
+      - "CREATE CONSTRAINT order_id_unique IF NOT EXISTS FOR (o:Order) REQUIRE o.orderId IS UNIQUE"
       - "CREATE INDEX order_date_index IF NOT EXISTS FOR (o:Order) ON (o.orderDate)"
 
 ---

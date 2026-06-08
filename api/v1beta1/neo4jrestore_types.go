@@ -132,6 +132,17 @@ type CompressionConfig struct {
 
 // RestoreOptionsSpec defines restore-specific options
 type RestoreOptionsSpec struct {
+	// Resources sets CPU/memory requests + limits on the restore Job's
+	// container. When unset, the operator applies a Burstable default
+	// (request 100m CPU / 512Mi memory, limit 1 CPU / 2Gi memory).
+	//
+	// NOTE: only applies to STANDALONE restores. Cluster Neo4jRestore
+	// targets use the Cypher path (`dbms.recreateDatabase` /
+	// `CREATE DATABASE OPTIONS{seedURI}`) which runs on the cluster's
+	// server pods — no Job is spawned, and this field is ignored.
+	// +optional
+	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
+
 	// Replace existing database
 	ReplaceExisting bool `json:"replaceExisting,omitempty"`
 

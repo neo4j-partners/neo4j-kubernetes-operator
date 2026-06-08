@@ -134,9 +134,9 @@ spec:
   initialData:
     source: cypher
     cypherStatements:
-      - "CREATE CONSTRAINT tenant_a_user_id IF NOT EXISTS ON (u:User) ASSERT u.userId IS UNIQUE"
-      - "CREATE CONSTRAINT tenant_a_product_sku IF NOT EXISTS ON (p:Product) ASSERT p.sku IS UNIQUE"
-      - "CREATE CONSTRAINT tenant_a_order_id IF NOT EXISTS ON (o:Order) ASSERT o.orderId IS UNIQUE"
+      - "CREATE CONSTRAINT tenant_a_user_id IF NOT EXISTS FOR (u:User) REQUIRE u.userId IS UNIQUE"
+      - "CREATE CONSTRAINT tenant_a_product_sku IF NOT EXISTS FOR (p:Product) REQUIRE p.sku IS UNIQUE"
+      - "CREATE CONSTRAINT tenant_a_order_id IF NOT EXISTS FOR (o:Order) REQUIRE o.orderId IS UNIQUE"
       - "CREATE INDEX tenant_a_user_email IF NOT EXISTS FOR (u:User) ON (u.email)"
       - "CREATE INDEX tenant_a_product_category IF NOT EXISTS FOR (p:Product) ON (p.category)"
 ---
@@ -189,8 +189,8 @@ spec:
   initialData:
     source: cypher
     cypherStatements:
-      - "CREATE CONSTRAINT tenant_b_user_id IF NOT EXISTS ON (u:Person) ASSERT u.personId IS UNIQUE"
-      - "CREATE CONSTRAINT tenant_b_post_id IF NOT EXISTS ON (p:Post) ASSERT p.postId IS UNIQUE"
+      - "CREATE CONSTRAINT tenant_b_user_id IF NOT EXISTS FOR (u:Person) REQUIRE u.personId IS UNIQUE"
+      - "CREATE CONSTRAINT tenant_b_post_id IF NOT EXISTS FOR (p:Post) REQUIRE p.postId IS UNIQUE"
       - "CREATE INDEX tenant_b_person_name IF NOT EXISTS FOR (p:Person) ON (p.name)"
       - "CREATE INDEX tenant_b_post_timestamp IF NOT EXISTS FOR (p:Post) ON (p.timestamp)"
       - "CREATE INDEX tenant_b_friendship IF NOT EXISTS FOR ()-[f:FRIENDS_WITH]-() ON (f.since)"
@@ -228,7 +228,7 @@ spec:
   initialData:
     source: cypher
     cypherStatements:
-      - "CREATE CONSTRAINT tenant_c_metric_id IF NOT EXISTS ON (m:Metric) ASSERT m.metricId IS UNIQUE"
+      - "CREATE CONSTRAINT tenant_c_metric_id IF NOT EXISTS FOR (m:Metric) REQUIRE m.metricId IS UNIQUE"
       - "CREATE INDEX tenant_c_metric_timestamp IF NOT EXISTS FOR (m:Metric) ON (m.timestamp)"
       - "CREATE INDEX tenant_c_metric_type IF NOT EXISTS FOR (m:Metric) ON (m.type)"
 ---

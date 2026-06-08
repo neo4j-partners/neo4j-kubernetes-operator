@@ -224,9 +224,6 @@ type Neo4jDatabaseStatus struct {
 	// Size shows the current database size
 	Size string `json:"size,omitempty"`
 
-	// LastBackupTime shows when the last backup was taken
-	LastBackupTime *metav1.Time `json:"lastBackupTime,omitempty"`
-
 	// Current state of the database (online, offline, started, stopped)
 	State string `json:"state,omitempty"`
 

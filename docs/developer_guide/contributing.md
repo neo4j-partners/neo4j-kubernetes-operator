@@ -116,7 +116,7 @@ Understand the current architecture before making changes:
 #### Server-Based Architecture
 - **Clusters**: Use `{cluster-name}-server` StatefulSet with self-organizing servers
 - **Standalone**: Use `{standalone-name}` StatefulSet (single replica)
-- **Centralized Backup**: Single `{cluster-name}-backup-0` StatefulSet per cluster
+- **Backup**: Job-per-`Neo4jBackup`-CR (no persistent backup pod, no sidecars).
 
 #### Dual Deployment Support
 - **Neo4jEnterpriseCluster**: High-availability clustered deployments (2+ servers)
