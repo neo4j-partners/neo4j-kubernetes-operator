@@ -3,14 +3,16 @@
 # Uses server-based architecture with 4 servers that self-organize
 # Suitable for on-premises or development environments
 
-apiVersion: v1
-kind: Secret
-metadata:
-  name: neo4j-admin-secret
-type: Opaque
-stringData:
-  username: neo4j
-  password: changeme123!  # CHANGE THIS IN PRODUCTION
+# ── Admin credentials Secret (create this BEFORE you apply this manifest) ──────
+# This Secret is intentionally NOT defined inline. If it were, `kubectl apply -f`
+# would re-apply it on every run and OVERWRITE the password with the placeholder,
+# silently clobbering a real credential you set earlier. Create it out-of-band:
+#
+#   kubectl create secret generic neo4j-admin-secret \
+#     --from-literal=username=neo4j \
+#     --from-literal=password='<your-secure-password>'
+#
+# The resource above references it via spec.auth.adminSecret: neo4j-admin-secret
 
 ---
 apiVersion: neo4j.neo4j.com/v1beta1

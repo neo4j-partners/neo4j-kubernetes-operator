@@ -1,15 +1,17 @@
 # Neo4j Enterprise Standalone with LDAP Authentication
 # Demonstrates LDAP + native auth on a standalone deployment
 
-apiVersion: v1
-kind: Secret
-metadata:
-  name: neo4j-admin-secret
-  namespace: default
-type: Opaque
-data:
-  username: bmVvNGo=        # neo4j
-  password: Y2hhbmdlbWUxMjM= # changeme123
+# ── Admin credentials Secret (create this BEFORE you apply this manifest) ──────
+# This Secret is intentionally NOT defined inline. If it were, `kubectl apply -f`
+# would re-apply it on every run and OVERWRITE the password with the placeholder,
+# silently clobbering a real credential you set earlier. Create it out-of-band:
+#
+#   kubectl create secret generic neo4j-admin-secret \
+#     --namespace default \
+#     --from-literal=username=neo4j \
+#     --from-literal=password='<your-secure-password>'
+#
+# The resource above references it via spec.auth.adminSecret: neo4j-admin-secret
 ---
 apiVersion: v1
 kind: Secret

@@ -14,16 +14,17 @@ metadata:
   labels:
     purpose: multi-tenancy
 ---
-# Admin credentials for cluster management
-apiVersion: v1
-kind: Secret
-metadata:
-  name: cluster-admin-secret
-  namespace: neo4j-multi-tenant
-type: Opaque
-stringData:
-  username: neo4j
-  password: secure-admin-password
+# ── Admin credentials Secret (create this BEFORE you apply this manifest) ──────
+# This Secret is intentionally NOT defined inline. If it were, `kubectl apply -f`
+# would re-apply it on every run and OVERWRITE the password with the placeholder,
+# silently clobbering a real credential you set earlier. Create it out-of-band:
+#
+#   kubectl create secret generic cluster-admin-secret \
+#     --namespace neo4j-multi-tenant \
+#     --from-literal=username=neo4j \
+#     --from-literal=password='<your-secure-password>'
+#
+# The resource above references it via spec.auth.adminSecret: cluster-admin-secret
 ---
 # Tenant credentials
 apiVersion: v1
