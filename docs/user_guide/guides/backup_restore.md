@@ -705,8 +705,9 @@ The operator picks the right restore method based on the target kind. The Neo4j 
 | `Neo4jEnterpriseStandalone` | Kubernetes Job | `neo4j-admin database restore --from-path=<latest-file-in-chain>` followed by `CREATE/START DATABASE` |
 | `Neo4jShardedDatabase` (sharded) | Rejected with actionable error | Use `Neo4jShardedDatabase.spec.replaceExisting: true` + `force: true` instead — see [Property Sharding](../property_sharding.md) |
 
-**Cluster path (Cypher)**:
-- The operator passes the backup directory URI (`s3://bucket/<path>/<backup-cr-name>/`) as `seedURI`. Neo4j's `CloudSeedProvider` scans the directory and applies the full + differential chain automatically.
+**Cluster path (Cypher)** — works with both cloud and PVC backups:
+- **Cloud-backed backup** (S3 / GCS / Azure): the operator passes the backup directory URI (`s3://bucket/<path>/<backup-cr-name>/`) as `seedURI`. Neo4j's `CloudSeedProvider` scans the directory and applies the full + differential chain automatically. The cluster's pods must have the cloud credentials Secret projected via `spec.extraEnvFrom` — the operator emits an actionable error if they don't, or auto-patches under annotation `neo4j.com/auto-inherit-seed-creds=true`.
+- **PVC-backed backup**: the operator spawns an in-cluster busybox httpd proxy (`backup-seed-proxy-<restore-name>`) mounting the backup PVC RO at `/backup`, then passes the per-run `.backup` file URL as `seedURI` (`http://backup-seed-proxy-<restore-name>:8080/<backup-cr-name>/<filename>`). Neo4j's `URLConnectionSeedProvider` fetches it. The proxy Deployment + Service are owned by the `Neo4jRestore` CR and GC'd when it's deleted. No credentials required.
 - `dbms.recreateDatabase` preserves user/role privileges on the existing database; no `DROP DATABASE` needed.
 - For new databases, the operator emits `CREATE DATABASE … OPTIONS { seedURI: '…' } WAIT`.
 - Both forms block until the new state is online — when the restore returns, the database is ready.
