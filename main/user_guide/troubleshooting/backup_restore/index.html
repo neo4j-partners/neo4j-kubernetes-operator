@@ -1120,63 +1120,6 @@
   
   
   
-    
-    
-      
-        
-      
-        
-      
-        
-      
-    
-    
-    
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_1" >
-        
-          
-          <label class="md-nav__link" for="__nav_5_1" id="__nav_5_1_label" tabindex="0">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Backup & Restore
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_1_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_1">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Backup & Restore
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
     <li class="md-nav__item">
       <a href="../../guides/backup_restore/" class="md-nav__link">
         
@@ -1185,7 +1128,7 @@
   <span class="md-ellipsis">
     
   
-    Overview
+    Backup & Restore
   
 
     
@@ -1194,70 +1137,6 @@
   
 
       </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../guides/backup-disk-management/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Disk Management
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../guides/backup-sidecar-requirements/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Sidecar Requirements
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
     </li>
   
 
@@ -2726,24 +2605,22 @@ kubectl get rolebinding neo4j-backup-rolebinding</p>
 </ol>
 <h4 id="symptom-backup-job-starts-but-fails-during-execution">Symptom: Backup job starts but fails during execution<a class="headerlink" href="#symptom-backup-job-starts-but-fails-during-execution" title="Anchor link to this section">&para;</a></h4>
 <p><strong>Diagnosis:</strong>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Check backup job logs</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>job/production-backup-<span class="k">$(</span>date<span class="w"> </span>+%Y%m%d<span class="k">)</span>-001
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># Check centralized backup pod logs (clusters)</span>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>production-cluster-backup-0<span class="w"> </span>-c<span class="w"> </span>backup
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="c1"># Check Neo4j server logs for backup-related errors</span>
-</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>production-cluster-server-0<span class="w"> </span>-c<span class="w"> </span>neo4j<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span>backup
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Check backup Job&#39;s Pod log (one-shot: &lt;neo4jbackup-name&gt;-backup;</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="c1"># CronJob child: &lt;neo4jbackup-name&gt;-&lt;unix-seconds&gt;).</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>&lt;ns&gt;<span class="w"> </span>job/&lt;job-name&gt;
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="c1"># Check Neo4j server logs for backup-related errors (which server</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="c1"># was the leader at backup time).</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>&lt;cluster&gt;-server-0<span class="w"> </span>-c<span class="w"> </span>neo4j<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span>backup
 </span></code></pre></div></p>
 <p><strong>Common Solutions:</strong></p>
 <ol>
 <li>
-<p><strong>Insufficient Disk Space</strong>:
-   <div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Check available storage</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>production-cluster-backup-0<span class="w"> </span>-c<span class="w"> </span>backup<span class="w"> </span>--<span class="w"> </span>df<span class="w"> </span>-h<span class="w"> </span>/backups
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1"># Solution: Increase backup storage or cleanup old backups</span>
-</span></code></pre></div></p>
+<p><strong>Insufficient Disk Space</strong> (PVC storage):
+   <div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># `kubectl exec` into any server pod to inspect the bound PVC.</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>&lt;cluster&gt;-server-0<span class="w"> </span>-c<span class="w"> </span>neo4j<span class="w"> </span>--<span class="w"> </span>df<span class="w"> </span>-h<span class="w"> </span>/data
+</span></code></pre></div>
+   Increase <code>Neo4jBackup.spec.storage.pvc.size</code> (only effective when the operator provisions the PVC — see <a href="../../guides/backup_restore/#pvc-ownership-auto-provision-vs-bring-your-own">bring-your-own PVC</a> otherwise) or set <code>retention.maxCount</code> / <code>retention.maxAge</code> to prune old runs.</p>
 </li>
 <li>
 <p><strong>Database Lock Issues</strong>:
@@ -2770,17 +2647,17 @@ kubectl get rolebinding neo4j-backup-rolebinding</p>
 </span></code></pre></div></p>
 <p><strong>Solutions:</strong>
 1. <strong>IAM Role Issues</strong>:
-   <div class="language-yaml highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Use IAM roles for service accounts (IRSA)</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span><span class="nt">backups</span><span class="p">:</span>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">    </span><span class="nt">cloud</span><span class="p">:</span>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">      </span><span class="nt">provider</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">aws</span>
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="w">      </span><span class="nt">identity</span><span class="p">:</span>
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="w">        </span><span class="nt">provider</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">aws</span>
-</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="w">        </span><span class="nt">autoCreate</span><span class="p">:</span>
-</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="w">          </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="w">          </span><span class="nt">annotations</span><span class="p">:</span>
-</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="w">            </span><span class="nt">eks.amazonaws.com/role-arn</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;arn:aws:iam::123456789:role/Neo4jBackupRole&quot;</span>
+   <div class="language-yaml highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Use IAM roles for service accounts (IRSA) on the Neo4jBackup CR</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1beta1</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Neo4jBackup</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="nt">spec</span><span class="p">:</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">  </span><span class="nt">cloud</span><span class="p">:</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="w">    </span><span class="nt">provider</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">aws</span>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="w">    </span><span class="nt">identity</span><span class="p">:</span>
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="w">      </span><span class="nt">autoCreate</span><span class="p">:</span>
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="w">        </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="w">        </span><span class="nt">annotations</span><span class="p">:</span>
+</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="w">          </span><span class="nt">eks.amazonaws.com/role-arn</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;arn:aws:iam::123456789:role/Neo4jBackupRole&quot;</span>
 </span></code></pre></div></p>
 <ol>
 <li><strong>Bucket Policy Problems</strong>:
@@ -2816,17 +2693,17 @@ kubectl get rolebinding neo4j-backup-rolebinding</p>
 </span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>kubectl<span class="w"> </span>run<span class="w"> </span>backup-auth-check<span class="w"> </span>--rm<span class="w"> </span>-it<span class="w"> </span>--image<span class="o">=</span>google/cloud-sdk:slim<span class="w"> </span>--serviceaccount<span class="o">=</span>&lt;backup-serviceaccount&gt;<span class="w"> </span>--<span class="w"> </span>gsutil<span class="w"> </span>ls<span class="w"> </span>gs://your-backup-bucket/
 </span></code></pre></div></p>
 <p><strong>Solutions:</strong>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Use Workload Identity</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">  </span><span class="nt">backups</span><span class="p">:</span>
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">    </span><span class="nt">cloud</span><span class="p">:</span>
-</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="w">      </span><span class="nt">provider</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gcp</span>
-</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="w">      </span><span class="nt">identity</span><span class="p">:</span>
-</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="w">        </span><span class="nt">provider</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gcp</span>
-</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="w">        </span><span class="nt">autoCreate</span><span class="p">:</span>
-</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="w">          </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="w">          </span><span class="nt">annotations</span><span class="p">:</span>
-</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a><span class="w">            </span><span class="nt">iam.gke.io/gcp-service-account</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;neo4j-backup@project.iam.gserviceaccount.com&quot;</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Use Workload Identity on the Neo4jBackup CR</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1beta1</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Neo4jBackup</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="nt">spec</span><span class="p">:</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="w">  </span><span class="nt">cloud</span><span class="p">:</span>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="w">    </span><span class="nt">provider</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gcp</span>
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="w">    </span><span class="nt">identity</span><span class="p">:</span>
+</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="w">      </span><span class="nt">autoCreate</span><span class="p">:</span>
+</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="w">        </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="w">        </span><span class="nt">annotations</span><span class="p">:</span>
+</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a><span class="w">          </span><span class="nt">iam.gke.io/gcp-service-account</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;neo4j-backup@project.iam.gserviceaccount.com&quot;</span>
 </span></code></pre></div></p>
 <h4 id="azure-blob-storage-issues">Azure Blob Storage Issues<a class="headerlink" href="#azure-blob-storage-issues" title="Anchor link to this section">&para;</a></h4>
 <p><strong>Authentication Problems:</strong>
@@ -2901,9 +2778,10 @@ kubectl get rolebinding neo4j-backup-rolebinding</p>
 </li>
 <li>
 <p><strong>Storage Access Problems</strong>:
-   <div class="language-bash highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># Test access to backup storage location</span>
-</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>target-cluster-backup-0<span class="w"> </span>-c<span class="w"> </span>backup<span class="w"> </span>--<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="w">  </span>aws<span class="w"> </span>s3<span class="w"> </span>ls<span class="w"> </span>s3://backup-bucket/path/to/backup/
+   <div class="language-bash highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># Run a transient pod to test S3 access from inside the cluster.</span>
+</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>kubectl<span class="w"> </span>run<span class="w"> </span>-it<span class="w"> </span>--rm<span class="w"> </span>s3-test<span class="w"> </span>--image<span class="o">=</span>amazon/aws-cli<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="w">  </span>--restart<span class="o">=</span>Never<span class="w"> </span>--env-from<span class="o">=</span>secretRef/aws-backup-creds<span class="w"> </span>--<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="w">  </span>s3<span class="w"> </span>ls<span class="w"> </span>s3://backup-bucket/path/to/backup/
 </span></code></pre></div></p>
 </li>
 </ol>
@@ -2941,63 +2819,79 @@ kubectl get rolebinding neo4j-backup-rolebinding</p>
 </span></code></pre></div></p>
 </li>
 </ol>
-<h4 id="symptom-restore-job-succeeds-but-data-isnt-visible-after-restore-multi-server-clusters">Symptom: Restore Job succeeds but data isn't visible after restore (multi-server clusters)<a class="headerlink" href="#symptom-restore-job-succeeds-but-data-isnt-visible-after-restore-multi-server-clusters" title="Anchor link to this section">&para;</a></h4>
-<p><strong>Cause:</strong> The restore Job writes to a single PVC (<code>data-{cluster}-server-0</code>). In a multi-server cluster, post-restart bootstrap can place the database's primary on any server. If the primary lands on a non-server-0 pod (which still has stale data), that server wins consensus and overwrites the restored data on re-sync.</p>
-<p>The operator's post-restore step calls <code>dbms.[cluster.]recreateDatabase</code> with server-0 as the seed to force every server to re-sync from the restored data. Verify this ran:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="c1"># Look for the re-seed event in the operator log</span>
-</span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>neo4j-operator-system<span class="w"> </span>deployment/neo4j-operator-controller-manager<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s2">&quot;Re-seeded restored database&quot;</span>
-</span><span id="__span-25-4"><a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a><span class="c1"># Expected log entry includes seedServerID (a UUID), seedHostname (e.g. mycluster-server-0),</span>
-</span><span id="__span-25-5"><a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a><span class="c1"># and procedure (dbms.cluster.recreateDatabase or dbms.recreateDatabase).</span>
+<h4 id="symptom-cluster-restore-reports-failed-with-cluster-missing-seed-credentials-projection">Symptom: Cluster restore reports <code>Failed</code> with "Cluster missing seed credentials projection"<a class="headerlink" href="#symptom-cluster-restore-reports-failed-with-cluster-missing-seed-credentials-projection" title="Anchor link to this section">&para;</a></h4>
+<p><strong>Cause:</strong> the cluster pods need the cloud credentials Secret projected via <code>spec.extraEnvFrom</code> so the JVM's AWS/GCP/Azure SDK can authenticate the <code>seedURI</code> fetch from <code>CloudSeedProvider</code>.</p>
+<p><strong>Fix:</strong></p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="c1"># On the Neo4jEnterpriseCluster CR:</span>
+</span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="nt">spec</span><span class="p">:</span>
+</span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a><span class="w">  </span><span class="nt">extraEnvFrom</span><span class="p">:</span>
+</span><span id="__span-25-4"><a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">secretRef</span><span class="p">:</span>
+</span><span id="__span-25-5"><a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a><span class="w">        </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;your-backup-creds-secret&gt;</span>
 </span></code></pre></div>
-<p><strong>If the re-seed entry is absent:</strong>
-- Check the Neo4j version. The procedure requires SemVer 5.24+ (including 5.26 LTS) or CalVer 2025.02+. Older versions skip the step and log <code>Skipping post-restore recreate</code>.
-- On unsupported versions, manually re-seed by running the recreate procedure yourself, or restore on a single-server cluster.</p>
-<p><strong>If the re-seed entry shows <code>seedServerID: ""</code>:</strong> the operator couldn't match <code>{cluster}-server-0</code> against <code>SHOW SERVERS YIELD address</code>. The cluster fell back to Neo4j's auto-select which may pick the wrong server. File an issue with the operator logs and <code>SHOW SERVERS</code> output from <code>kubectl exec {cluster}-server-0 -- cypher-shell -u neo4j -p &lt;pw&gt; 'SHOW SERVERS'</code>.</p>
-<p><strong>If the re-seed entry shows a <code>Failed to recreate restored database</code> Event:</strong> check the operator log for the underlying Cypher error. Most common causes are missing privileges (<code>CREATE DATABASE</code> + <code>DROP DATABASE</code> are required on the admin user) or the system DB being unavailable.</p>
+<p>Or, set the annotation <code>neo4j.com/auto-inherit-seed-creds=true</code> on the cluster CR — the operator will patch <code>extraEnvFrom</code> automatically (triggers a rolling restart so Neo4j picks up the env vars).</p>
+<h4 id="symptom-cluster-restore-stuck-in-running-no-job-created">Symptom: Cluster restore stuck in <code>Running</code>, no Job created<a class="headerlink" href="#symptom-cluster-restore-stuck-in-running-no-job-created" title="Anchor link to this section">&para;</a></h4>
+<p><strong>Expected.</strong> Cluster Neo4jRestore targets use the Cypher path (<code>dbms.recreateDatabase</code> or <code>CREATE DATABASE OPTIONS{seedURI}</code>) — no Job is spawned. Check the operator log:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>neo4j-operator-system<span class="w"> </span>deployment/neo4j-operator-controller-manager<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s2">&quot;Cluster Cypher restore|recreateDatabase|CREATE DATABASE&quot;</span>
+</span></code></pre></div>
+<p>If you see <code>No seed providers found to satisfy the provided uri 's3://...'</code>, the cluster doesn't have the cloud creds projected — see the section above.</p>
+<h4 id="symptom-sharded-db-restore-rejected-with-use-neo4jshardeddatabasespecreplaceexisting">Symptom: Sharded DB restore rejected with "use Neo4jShardedDatabase.spec.replaceExisting"<a class="headerlink" href="#symptom-sharded-db-restore-rejected-with-use-neo4jshardeddatabasespecreplaceexisting" title="Anchor link to this section">&para;</a></h4>
+<p><strong>Cause:</strong> <code>Neo4jRestore</code> doesn't support sharded databases — the Cypher shape (<code>SET GRAPH SHARD</code> / <code>SET PROPERTY SHARDS</code>) only fits <code>CREATE DATABASE</code>, not <code>dbms.recreateDatabase</code>.</p>
+<p><strong>Fix:</strong> restore via the <code>Neo4jShardedDatabase</code> CR's destructive-restore flow:</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1beta1</span>
+</span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Neo4jShardedDatabase</span>
+</span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a><span class="nt">metadata</span><span class="p">:</span>
+</span><span id="__span-27-4"><a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">products</span>
+</span><span id="__span-27-5"><a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a><span class="nt">spec</span><span class="p">:</span>
+</span><span id="__span-27-6"><a id="__codelineno-27-6" name="__codelineno-27-6" href="#__codelineno-27-6"></a><span class="w">  </span><span class="c1"># … existing sharding fields …</span>
+</span><span id="__span-27-7"><a id="__codelineno-27-7" name="__codelineno-27-7" href="#__codelineno-27-7"></a><span class="w">  </span><span class="nt">seedBackupRef</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">products-backup</span>
+</span><span id="__span-27-8"><a id="__codelineno-27-8" name="__codelineno-27-8" href="#__codelineno-27-8"></a><span class="w">  </span><span class="nt">replaceExisting</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-27-9"><a id="__codelineno-27-9" name="__codelineno-27-9" href="#__codelineno-27-9"></a><span class="w">  </span><span class="nt">force</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span></code></pre></div>
+<p>See <a href="../../property_sharding/">Property Sharding</a> for details.</p>
 <h3 id="point-in-time-recovery-pitr-issues">Point-in-Time Recovery (PITR) Issues<a class="headerlink" href="#point-in-time-recovery-pitr-issues" title="Anchor link to this section">&para;</a></h3>
 <h4 id="symptom-pitr-restore-fails-with-timestamp-errors">Symptom: PITR restore fails with timestamp errors<a class="headerlink" href="#symptom-pitr-restore-fails-with-timestamp-errors" title="Anchor link to this section">&para;</a></h4>
 <p><strong>Diagnosis:</strong>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="c1"># Check backup logs for transaction timestamps</span>
-</span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>job/production-backup-latest<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span><span class="s2">&quot;restore-until&quot;</span>
-</span><span id="__span-26-3"><a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a>
-</span><span id="__span-26-4"><a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a><span class="c1"># Verify PITR capability</span>
-</span><span id="__span-26-5"><a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>production-cluster-server-0<span class="w"> </span>--<span class="w"> </span>neo4j-admin<span class="w"> </span>database<span class="w"> </span>info<span class="w"> </span>system
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="c1"># Check backup logs for transaction timestamps</span>
+</span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>job/production-backup-latest<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span><span class="s2">&quot;restore-until&quot;</span>
+</span><span id="__span-28-3"><a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a>
+</span><span id="__span-28-4"><a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a><span class="c1"># Verify PITR capability</span>
+</span><span id="__span-28-5"><a id="__codelineno-28-5" name="__codelineno-28-5" href="#__codelineno-28-5"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>production-cluster-server-0<span class="w"> </span>--<span class="w"> </span>neo4j-admin<span class="w"> </span>database<span class="w"> </span>info<span class="w"> </span>system
 </span></code></pre></div></p>
 <p><strong>Solutions:</strong></p>
 <ol>
 <li>
 <p><strong>Invalid Timestamp Format</strong>:
-   <div class="language-yaml highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="c1"># Correct ISO 8601 format</span>
-</span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a><span class="w">  </span><span class="nt">restoreUntil</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;2025-01-15T14:30:00Z&quot;</span>
-</span><span id="__span-27-4"><a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a><span class="w">  </span><span class="c1"># NOT: &quot;2025-01-15 14:30:00&quot;</span>
+   <div class="language-yaml highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="c1"># Correct ISO 8601 format</span>
+</span><span id="__span-29-2"><a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="nt">spec</span><span class="p">:</span>
+</span><span id="__span-29-3"><a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a><span class="w">  </span><span class="nt">restoreUntil</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;2025-01-15T14:30:00Z&quot;</span>
+</span><span id="__span-29-4"><a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a><span class="w">  </span><span class="c1"># NOT: &quot;2025-01-15 14:30:00&quot;</span>
 </span></code></pre></div></p>
 </li>
 <li>
 <p><strong>Timestamp Outside Backup Range</strong>:
-   <div class="language-bash highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="c1"># Check backup time range</span>
-</span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>job/production-backup-20250115<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s2">&quot;(start|end).*time&quot;</span>
+   <div class="language-bash highlight"><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="c1"># Check backup time range</span>
+</span><span id="__span-30-2"><a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>job/production-backup-20250115<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s2">&quot;(start|end).*time&quot;</span>
 </span></code></pre></div></p>
 </li>
 <li>
 <p><strong>Neo4j Version Compatibility</strong>:
-   <div class="language-yaml highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="c1"># PITR only available in Neo4j 2025.x</span>
-</span><span id="__span-29-2"><a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-29-3"><a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a><span class="w">  </span><span class="nt">image</span><span class="p">:</span>
-</span><span id="__span-29-4"><a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a><span class="w">    </span><span class="nt">repo</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;neo4j&quot;</span>
-</span><span id="__span-29-5"><a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a><span class="w">    </span><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;2025.01.0-enterprise&quot;</span>
+   <div class="language-yaml highlight"><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="c1"># PITR only available in Neo4j 2025.x</span>
+</span><span id="__span-31-2"><a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a><span class="nt">spec</span><span class="p">:</span>
+</span><span id="__span-31-3"><a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a><span class="w">  </span><span class="nt">image</span><span class="p">:</span>
+</span><span id="__span-31-4"><a id="__codelineno-31-4" name="__codelineno-31-4" href="#__codelineno-31-4"></a><span class="w">    </span><span class="nt">repo</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;neo4j&quot;</span>
+</span><span id="__span-31-5"><a id="__codelineno-31-5" name="__codelineno-31-5" href="#__codelineno-31-5"></a><span class="w">    </span><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;2025.01.0-enterprise&quot;</span>
 </span></code></pre></div></p>
 </li>
 </ol>
 <h2 id="performance-issues">Performance Issues<a class="headerlink" href="#performance-issues" title="Anchor link to this section">&para;</a></h2>
 <h3 id="slow-backup-performance">Slow Backup Performance<a class="headerlink" href="#slow-backup-performance" title="Anchor link to this section">&para;</a></h3>
 <p><strong>Diagnosis:</strong>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="c1"># Monitor backup progress</span>
-</span><span id="__span-30-2"><a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>job/production-backup-latest<span class="w"> </span>-f
-</span><span id="__span-30-3"><a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a>
-</span><span id="__span-30-4"><a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a><span class="c1"># Check resource utilization during backup</span>
-</span><span id="__span-30-5"><a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a>kubectl<span class="w"> </span>top<span class="w"> </span>pod<span class="w"> </span>production-cluster-server-0
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-32-1"><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a><span class="c1"># Monitor backup progress</span>
+</span><span id="__span-32-2"><a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>job/production-backup-latest<span class="w"> </span>-f
+</span><span id="__span-32-3"><a id="__codelineno-32-3" name="__codelineno-32-3" href="#__codelineno-32-3"></a>
+</span><span id="__span-32-4"><a id="__codelineno-32-4" name="__codelineno-32-4" href="#__codelineno-32-4"></a><span class="c1"># Check resource utilization during backup</span>
+</span><span id="__span-32-5"><a id="__codelineno-32-5" name="__codelineno-32-5" href="#__codelineno-32-5"></a>kubectl<span class="w"> </span>top<span class="w"> </span>pod<span class="w"> </span>production-cluster-server-0
 </span></code></pre></div></p>
 <p><strong>Optimization Strategies:</strong></p>
 <ol>
@@ -3008,22 +2902,15 @@ kubectl get rolebinding neo4j-backup-rolebinding</p>
 <p><strong>Avoid overlapping backups</strong>: Stagger <code>Neo4jBackup</code> schedules so only one job runs per cluster at a time.</p>
 </li>
 <li>
-<p><strong>Storage Performance Tuning</strong>:
-   <div class="language-yaml highlight"><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="c1"># Use high-performance storage for backup staging</span>
-</span><span id="__span-31-2"><a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-31-3"><a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a><span class="w">  </span><span class="nt">storage</span><span class="p">:</span>
-</span><span id="__span-31-4"><a id="__codelineno-31-4" name="__codelineno-31-4" href="#__codelineno-31-4"></a><span class="w">    </span><span class="nt">backupStorage</span><span class="p">:</span>
-</span><span id="__span-31-5"><a id="__codelineno-31-5" name="__codelineno-31-5" href="#__codelineno-31-5"></a><span class="w">      </span><span class="nt">className</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;fast-ssd&quot;</span>
-</span><span id="__span-31-6"><a id="__codelineno-31-6" name="__codelineno-31-6" href="#__codelineno-31-6"></a><span class="w">      </span><span class="nt">size</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;100Gi&quot;</span>
-</span></code></pre></div></p>
+<p><strong>Storage Performance Tuning</strong>: Back the <code>Neo4jBackup</code> Job's destination PVC with a high-performance storage class (e.g. <code>fast-ssd</code>) for backup staging.</p>
 </li>
 <li>
 <p><strong>Network Optimization</strong>:
-   <div class="language-yaml highlight"><pre><span></span><code><span id="__span-32-1"><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-32-2"><a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a><span class="w">  </span><span class="nt">config</span><span class="p">:</span>
-</span><span id="__span-32-3"><a id="__codelineno-32-3" name="__codelineno-32-3" href="#__codelineno-32-3"></a><span class="w">    </span><span class="c1"># Increase buffer sizes for backup operations</span>
-</span><span id="__span-32-4"><a id="__codelineno-32-4" name="__codelineno-32-4" href="#__codelineno-32-4"></a><span class="w">    </span><span class="nt">server.memory.off_heap.max_size</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;2g&quot;</span>
-</span><span id="__span-32-5"><a id="__codelineno-32-5" name="__codelineno-32-5" href="#__codelineno-32-5"></a><span class="w">    </span><span class="nt">server.memory.pagecache.size</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;4g&quot;</span>
+   <div class="language-yaml highlight"><pre><span></span><code><span id="__span-33-1"><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a><span class="nt">spec</span><span class="p">:</span>
+</span><span id="__span-33-2"><a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a><span class="w">  </span><span class="nt">config</span><span class="p">:</span>
+</span><span id="__span-33-3"><a id="__codelineno-33-3" name="__codelineno-33-3" href="#__codelineno-33-3"></a><span class="w">    </span><span class="c1"># Increase buffer sizes for backup operations</span>
+</span><span id="__span-33-4"><a id="__codelineno-33-4" name="__codelineno-33-4" href="#__codelineno-33-4"></a><span class="w">    </span><span class="nt">server.memory.off_heap.max_size</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;2g&quot;</span>
+</span><span id="__span-33-5"><a id="__codelineno-33-5" name="__codelineno-33-5" href="#__codelineno-33-5"></a><span class="w">    </span><span class="nt">server.memory.pagecache.size</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;4g&quot;</span>
 </span></code></pre></div></p>
 </li>
 </ol>
@@ -3032,85 +2919,85 @@ kubectl get rolebinding neo4j-backup-rolebinding</p>
 <ol>
 <li>
 <p><strong>Target Cluster Resources</strong>:
-   <div class="language-yaml highlight"><pre><span></span><code><span id="__span-33-1"><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-33-2"><a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a><span class="w">  </span><span class="nt">resources</span><span class="p">:</span>
-</span><span id="__span-33-3"><a id="__codelineno-33-3" name="__codelineno-33-3" href="#__codelineno-33-3"></a><span class="w">    </span><span class="nt">requests</span><span class="p">:</span>
-</span><span id="__span-33-4"><a id="__codelineno-33-4" name="__codelineno-33-4" href="#__codelineno-33-4"></a><span class="w">      </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;8Gi&quot;</span>
-</span><span id="__span-33-5"><a id="__codelineno-33-5" name="__codelineno-33-5" href="#__codelineno-33-5"></a><span class="w">      </span><span class="nt">cpu</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;4&quot;</span>
-</span><span id="__span-33-6"><a id="__codelineno-33-6" name="__codelineno-33-6" href="#__codelineno-33-6"></a><span class="w">    </span><span class="nt">limits</span><span class="p">:</span>
-</span><span id="__span-33-7"><a id="__codelineno-33-7" name="__codelineno-33-7" href="#__codelineno-33-7"></a><span class="w">      </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;16Gi&quot;</span>
-</span><span id="__span-33-8"><a id="__codelineno-33-8" name="__codelineno-33-8" href="#__codelineno-33-8"></a><span class="w">      </span><span class="nt">cpu</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;8&quot;</span>
+   <div class="language-yaml highlight"><pre><span></span><code><span id="__span-34-1"><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a><span class="nt">spec</span><span class="p">:</span>
+</span><span id="__span-34-2"><a id="__codelineno-34-2" name="__codelineno-34-2" href="#__codelineno-34-2"></a><span class="w">  </span><span class="nt">resources</span><span class="p">:</span>
+</span><span id="__span-34-3"><a id="__codelineno-34-3" name="__codelineno-34-3" href="#__codelineno-34-3"></a><span class="w">    </span><span class="nt">requests</span><span class="p">:</span>
+</span><span id="__span-34-4"><a id="__codelineno-34-4" name="__codelineno-34-4" href="#__codelineno-34-4"></a><span class="w">      </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;8Gi&quot;</span>
+</span><span id="__span-34-5"><a id="__codelineno-34-5" name="__codelineno-34-5" href="#__codelineno-34-5"></a><span class="w">      </span><span class="nt">cpu</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;4&quot;</span>
+</span><span id="__span-34-6"><a id="__codelineno-34-6" name="__codelineno-34-6" href="#__codelineno-34-6"></a><span class="w">    </span><span class="nt">limits</span><span class="p">:</span>
+</span><span id="__span-34-7"><a id="__codelineno-34-7" name="__codelineno-34-7" href="#__codelineno-34-7"></a><span class="w">      </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;16Gi&quot;</span>
+</span><span id="__span-34-8"><a id="__codelineno-34-8" name="__codelineno-34-8" href="#__codelineno-34-8"></a><span class="w">      </span><span class="nt">cpu</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;8&quot;</span>
 </span></code></pre></div></p>
 </li>
 <li>
 <p><strong>Storage Configuration</strong>:
-   <div class="language-yaml highlight"><pre><span></span><code><span id="__span-34-1"><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-34-2"><a id="__codelineno-34-2" name="__codelineno-34-2" href="#__codelineno-34-2"></a><span class="w">  </span><span class="nt">storage</span><span class="p">:</span>
-</span><span id="__span-34-3"><a id="__codelineno-34-3" name="__codelineno-34-3" href="#__codelineno-34-3"></a><span class="w">    </span><span class="nt">className</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;fast-ssd&quot;</span>
-</span><span id="__span-34-4"><a id="__codelineno-34-4" name="__codelineno-34-4" href="#__codelineno-34-4"></a><span class="w">    </span><span class="nt">size</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;1Ti&quot;</span>
+   <div class="language-yaml highlight"><pre><span></span><code><span id="__span-35-1"><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a><span class="nt">spec</span><span class="p">:</span>
+</span><span id="__span-35-2"><a id="__codelineno-35-2" name="__codelineno-35-2" href="#__codelineno-35-2"></a><span class="w">  </span><span class="nt">storage</span><span class="p">:</span>
+</span><span id="__span-35-3"><a id="__codelineno-35-3" name="__codelineno-35-3" href="#__codelineno-35-3"></a><span class="w">    </span><span class="nt">className</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;fast-ssd&quot;</span>
+</span><span id="__span-35-4"><a id="__codelineno-35-4" name="__codelineno-35-4" href="#__codelineno-35-4"></a><span class="w">    </span><span class="nt">size</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;1Ti&quot;</span>
 </span></code></pre></div></p>
 </li>
 </ol>
 <h2 id="monitoring-and-alerting">Monitoring and Alerting<a class="headerlink" href="#monitoring-and-alerting" title="Anchor link to this section">&para;</a></h2>
 <h3 id="backup-health-monitoring">Backup Health Monitoring<a class="headerlink" href="#backup-health-monitoring" title="Anchor link to this section">&para;</a></h3>
 <p><strong>Prometheus Metrics:</strong>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-35-1"><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a><span class="c1"># Monitor backup success rate</span>
-</span><span id="__span-35-2"><a id="__codelineno-35-2" name="__codelineno-35-2" href="#__codelineno-35-2"></a><span class="l l-Scalar l-Scalar-Plain">neo4j_backup_success_total</span>
-</span><span id="__span-35-3"><a id="__codelineno-35-3" name="__codelineno-35-3" href="#__codelineno-35-3"></a><span class="l l-Scalar l-Scalar-Plain">neo4j_backup_failure_total</span>
-</span><span id="__span-35-4"><a id="__codelineno-35-4" name="__codelineno-35-4" href="#__codelineno-35-4"></a><span class="l l-Scalar l-Scalar-Plain">neo4j_backup_duration_seconds</span>
-</span><span id="__span-35-5"><a id="__codelineno-35-5" name="__codelineno-35-5" href="#__codelineno-35-5"></a>
-</span><span id="__span-35-6"><a id="__codelineno-35-6" name="__codelineno-35-6" href="#__codelineno-35-6"></a><span class="l l-Scalar l-Scalar-Plain"># Alert rules</span>
-</span><span id="__span-35-7"><a id="__codelineno-35-7" name="__codelineno-35-7" href="#__codelineno-35-7"></a><span class="l l-Scalar l-Scalar-Plain">groups</span><span class="p p-Indicator">:</span>
-</span><span id="__span-35-8"><a id="__codelineno-35-8" name="__codelineno-35-8" href="#__codelineno-35-8"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j-backup</span>
-</span><span id="__span-35-9"><a id="__codelineno-35-9" name="__codelineno-35-9" href="#__codelineno-35-9"></a><span class="w">  </span><span class="nt">rules</span><span class="p">:</span>
-</span><span id="__span-35-10"><a id="__codelineno-35-10" name="__codelineno-35-10" href="#__codelineno-35-10"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">alert</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">BackupFailure</span>
-</span><span id="__span-35-11"><a id="__codelineno-35-11" name="__codelineno-35-11" href="#__codelineno-35-11"></a><span class="w">    </span><span class="nt">expr</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">increase(neo4j_backup_failure_total[24h]) &gt; 0</span>
-</span><span id="__span-35-12"><a id="__codelineno-35-12" name="__codelineno-35-12" href="#__codelineno-35-12"></a><span class="w">    </span><span class="nt">labels</span><span class="p">:</span>
-</span><span id="__span-35-13"><a id="__codelineno-35-13" name="__codelineno-35-13" href="#__codelineno-35-13"></a><span class="w">      </span><span class="nt">severity</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">critical</span>
-</span><span id="__span-35-14"><a id="__codelineno-35-14" name="__codelineno-35-14" href="#__codelineno-35-14"></a><span class="w">    </span><span class="nt">annotations</span><span class="p">:</span>
-</span><span id="__span-35-15"><a id="__codelineno-35-15" name="__codelineno-35-15" href="#__codelineno-35-15"></a><span class="w">      </span><span class="nt">summary</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Neo4j</span><span class="nv"> </span><span class="s">backup</span><span class="nv"> </span><span class="s">failed&quot;</span>
-</span><span id="__span-35-16"><a id="__codelineno-35-16" name="__codelineno-35-16" href="#__codelineno-35-16"></a><span class="w">      </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Backup</span><span class="nv"> </span><span class="s">for</span><span class="nv"> </span><span class="s">cluster</span><span class="nv"> </span><span class="s">{{</span><span class="nv"> </span><span class="s">$labels.cluster</span><span class="nv"> </span><span class="s">}}</span><span class="nv"> </span><span class="s">failed&quot;</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-36-1"><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a><span class="c1"># Monitor backup success rate</span>
+</span><span id="__span-36-2"><a id="__codelineno-36-2" name="__codelineno-36-2" href="#__codelineno-36-2"></a><span class="l l-Scalar l-Scalar-Plain">neo4j_backup_success_total</span>
+</span><span id="__span-36-3"><a id="__codelineno-36-3" name="__codelineno-36-3" href="#__codelineno-36-3"></a><span class="l l-Scalar l-Scalar-Plain">neo4j_backup_failure_total</span>
+</span><span id="__span-36-4"><a id="__codelineno-36-4" name="__codelineno-36-4" href="#__codelineno-36-4"></a><span class="l l-Scalar l-Scalar-Plain">neo4j_backup_duration_seconds</span>
+</span><span id="__span-36-5"><a id="__codelineno-36-5" name="__codelineno-36-5" href="#__codelineno-36-5"></a>
+</span><span id="__span-36-6"><a id="__codelineno-36-6" name="__codelineno-36-6" href="#__codelineno-36-6"></a><span class="l l-Scalar l-Scalar-Plain"># Alert rules</span>
+</span><span id="__span-36-7"><a id="__codelineno-36-7" name="__codelineno-36-7" href="#__codelineno-36-7"></a><span class="l l-Scalar l-Scalar-Plain">groups</span><span class="p p-Indicator">:</span>
+</span><span id="__span-36-8"><a id="__codelineno-36-8" name="__codelineno-36-8" href="#__codelineno-36-8"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j-backup</span>
+</span><span id="__span-36-9"><a id="__codelineno-36-9" name="__codelineno-36-9" href="#__codelineno-36-9"></a><span class="w">  </span><span class="nt">rules</span><span class="p">:</span>
+</span><span id="__span-36-10"><a id="__codelineno-36-10" name="__codelineno-36-10" href="#__codelineno-36-10"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">alert</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">BackupFailure</span>
+</span><span id="__span-36-11"><a id="__codelineno-36-11" name="__codelineno-36-11" href="#__codelineno-36-11"></a><span class="w">    </span><span class="nt">expr</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">increase(neo4j_backup_failure_total[24h]) &gt; 0</span>
+</span><span id="__span-36-12"><a id="__codelineno-36-12" name="__codelineno-36-12" href="#__codelineno-36-12"></a><span class="w">    </span><span class="nt">labels</span><span class="p">:</span>
+</span><span id="__span-36-13"><a id="__codelineno-36-13" name="__codelineno-36-13" href="#__codelineno-36-13"></a><span class="w">      </span><span class="nt">severity</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">critical</span>
+</span><span id="__span-36-14"><a id="__codelineno-36-14" name="__codelineno-36-14" href="#__codelineno-36-14"></a><span class="w">    </span><span class="nt">annotations</span><span class="p">:</span>
+</span><span id="__span-36-15"><a id="__codelineno-36-15" name="__codelineno-36-15" href="#__codelineno-36-15"></a><span class="w">      </span><span class="nt">summary</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Neo4j</span><span class="nv"> </span><span class="s">backup</span><span class="nv"> </span><span class="s">failed&quot;</span>
+</span><span id="__span-36-16"><a id="__codelineno-36-16" name="__codelineno-36-16" href="#__codelineno-36-16"></a><span class="w">      </span><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;Backup</span><span class="nv"> </span><span class="s">for</span><span class="nv"> </span><span class="s">cluster</span><span class="nv"> </span><span class="s">{{</span><span class="nv"> </span><span class="s">$labels.cluster</span><span class="nv"> </span><span class="s">}}</span><span class="nv"> </span><span class="s">failed&quot;</span>
 </span></code></pre></div></p>
 <p><strong>Log Monitoring:</strong>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-36-1"><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a><span class="c1"># Monitor backup logs</span>
-</span><span id="__span-36-2"><a id="__codelineno-36-2" name="__codelineno-36-2" href="#__codelineno-36-2"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-f<span class="w"> </span>job/production-backup-latest<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s2">&quot;(ERROR|WARN|SUCCESS)&quot;</span>
-</span><span id="__span-36-3"><a id="__codelineno-36-3" name="__codelineno-36-3" href="#__codelineno-36-3"></a>
-</span><span id="__span-36-4"><a id="__codelineno-36-4" name="__codelineno-36-4" href="#__codelineno-36-4"></a><span class="c1"># Set up log alerts</span>
-</span><span id="__span-36-5"><a id="__codelineno-36-5" name="__codelineno-36-5" href="#__codelineno-36-5"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-f<span class="w"> </span>-n<span class="w"> </span>neo4j-operator-system<span class="w"> </span>deployment/neo4j-operator-controller-manager<span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-36-6"><a id="__codelineno-36-6" name="__codelineno-36-6" href="#__codelineno-36-6"></a><span class="w">  </span>grep<span class="w"> </span>-i<span class="w"> </span><span class="s2">&quot;backup.*failed&quot;</span><span class="w"> </span>--line-buffered<span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-36-7"><a id="__codelineno-36-7" name="__codelineno-36-7" href="#__codelineno-36-7"></a><span class="w">  </span><span class="k">while</span><span class="w"> </span><span class="nb">read</span><span class="w"> </span>line<span class="p">;</span><span class="w"> </span><span class="k">do</span>
-</span><span id="__span-36-8"><a id="__codelineno-36-8" name="__codelineno-36-8" href="#__codelineno-36-8"></a><span class="w">    </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;BACKUP ALERT: </span><span class="nv">$line</span><span class="s2">&quot;</span>
-</span><span id="__span-36-9"><a id="__codelineno-36-9" name="__codelineno-36-9" href="#__codelineno-36-9"></a><span class="w">    </span><span class="c1"># Send to alerting system</span>
-</span><span id="__span-36-10"><a id="__codelineno-36-10" name="__codelineno-36-10" href="#__codelineno-36-10"></a><span class="w">  </span><span class="k">done</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-37-1"><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a><span class="c1"># Monitor backup logs</span>
+</span><span id="__span-37-2"><a id="__codelineno-37-2" name="__codelineno-37-2" href="#__codelineno-37-2"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-f<span class="w"> </span>job/production-backup-latest<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s2">&quot;(ERROR|WARN|SUCCESS)&quot;</span>
+</span><span id="__span-37-3"><a id="__codelineno-37-3" name="__codelineno-37-3" href="#__codelineno-37-3"></a>
+</span><span id="__span-37-4"><a id="__codelineno-37-4" name="__codelineno-37-4" href="#__codelineno-37-4"></a><span class="c1"># Set up log alerts</span>
+</span><span id="__span-37-5"><a id="__codelineno-37-5" name="__codelineno-37-5" href="#__codelineno-37-5"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-f<span class="w"> </span>-n<span class="w"> </span>neo4j-operator-system<span class="w"> </span>deployment/neo4j-operator-controller-manager<span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-37-6"><a id="__codelineno-37-6" name="__codelineno-37-6" href="#__codelineno-37-6"></a><span class="w">  </span>grep<span class="w"> </span>-i<span class="w"> </span><span class="s2">&quot;backup.*failed&quot;</span><span class="w"> </span>--line-buffered<span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-37-7"><a id="__codelineno-37-7" name="__codelineno-37-7" href="#__codelineno-37-7"></a><span class="w">  </span><span class="k">while</span><span class="w"> </span><span class="nb">read</span><span class="w"> </span>line<span class="p">;</span><span class="w"> </span><span class="k">do</span>
+</span><span id="__span-37-8"><a id="__codelineno-37-8" name="__codelineno-37-8" href="#__codelineno-37-8"></a><span class="w">    </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;BACKUP ALERT: </span><span class="nv">$line</span><span class="s2">&quot;</span>
+</span><span id="__span-37-9"><a id="__codelineno-37-9" name="__codelineno-37-9" href="#__codelineno-37-9"></a><span class="w">    </span><span class="c1"># Send to alerting system</span>
+</span><span id="__span-37-10"><a id="__codelineno-37-10" name="__codelineno-37-10" href="#__codelineno-37-10"></a><span class="w">  </span><span class="k">done</span>
 </span></code></pre></div></p>
 <h3 id="backup-validation">Backup Validation<a class="headerlink" href="#backup-validation" title="Anchor link to this section">&para;</a></h3>
 <p><strong>Automated Validation Script:</strong>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-37-1"><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a><span class="ch">#!/bin/bash</span>
-</span><span id="__span-37-2"><a id="__codelineno-37-2" name="__codelineno-37-2" href="#__codelineno-37-2"></a><span class="c1"># Validate backup completeness</span>
-</span><span id="__span-37-3"><a id="__codelineno-37-3" name="__codelineno-37-3" href="#__codelineno-37-3"></a>
-</span><span id="__span-37-4"><a id="__codelineno-37-4" name="__codelineno-37-4" href="#__codelineno-37-4"></a><span class="nv">BACKUP_NAME</span><span class="o">=</span><span class="s2">&quot;production-backup&quot;</span>
-</span><span id="__span-37-5"><a id="__codelineno-37-5" name="__codelineno-37-5" href="#__codelineno-37-5"></a><span class="nv">NAMESPACE</span><span class="o">=</span><span class="s2">&quot;default&quot;</span>
-</span><span id="__span-37-6"><a id="__codelineno-37-6" name="__codelineno-37-6" href="#__codelineno-37-6"></a>
-</span><span id="__span-37-7"><a id="__codelineno-37-7" name="__codelineno-37-7" href="#__codelineno-37-7"></a>validate_backup<span class="o">()</span><span class="w"> </span><span class="o">{</span>
-</span><span id="__span-37-8"><a id="__codelineno-37-8" name="__codelineno-37-8" href="#__codelineno-37-8"></a><span class="w">  </span><span class="nb">local</span><span class="w"> </span><span class="nv">backup_status</span><span class="o">=</span><span class="k">$(</span>kubectl<span class="w"> </span>get<span class="w"> </span>neo4jbackup<span class="w"> </span><span class="nv">$BACKUP_NAME</span><span class="w"> </span>-n<span class="w"> </span><span class="nv">$NAMESPACE</span><span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.phase}&#39;</span><span class="k">)</span>
-</span><span id="__span-37-9"><a id="__codelineno-37-9" name="__codelineno-37-9" href="#__codelineno-37-9"></a>
-</span><span id="__span-37-10"><a id="__codelineno-37-10" name="__codelineno-37-10" href="#__codelineno-37-10"></a><span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="o">[</span><span class="w"> </span><span class="s2">&quot;</span><span class="nv">$backup_status</span><span class="s2">&quot;</span><span class="w"> </span>!<span class="o">=</span><span class="w"> </span><span class="s2">&quot;Succeeded&quot;</span><span class="w"> </span><span class="o">]</span><span class="p">;</span><span class="w"> </span><span class="k">then</span>
-</span><span id="__span-37-11"><a id="__codelineno-37-11" name="__codelineno-37-11" href="#__codelineno-37-11"></a><span class="w">    </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;❌ Backup failed or incomplete: </span><span class="nv">$backup_status</span><span class="s2">&quot;</span>
-</span><span id="__span-37-12"><a id="__codelineno-37-12" name="__codelineno-37-12" href="#__codelineno-37-12"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="m">1</span>
-</span><span id="__span-37-13"><a id="__codelineno-37-13" name="__codelineno-37-13" href="#__codelineno-37-13"></a><span class="w">  </span><span class="k">fi</span>
-</span><span id="__span-37-14"><a id="__codelineno-37-14" name="__codelineno-37-14" href="#__codelineno-37-14"></a>
-</span><span id="__span-37-15"><a id="__codelineno-37-15" name="__codelineno-37-15" href="#__codelineno-37-15"></a><span class="w">  </span><span class="c1"># Check backup size</span>
-</span><span id="__span-37-16"><a id="__codelineno-37-16" name="__codelineno-37-16" href="#__codelineno-37-16"></a><span class="w">  </span><span class="nb">local</span><span class="w"> </span><span class="nv">backup_size</span><span class="o">=</span><span class="k">$(</span>kubectl<span class="w"> </span>get<span class="w"> </span>neo4jbackup<span class="w"> </span><span class="nv">$BACKUP_NAME</span><span class="w"> </span>-n<span class="w"> </span><span class="nv">$NAMESPACE</span><span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.backupSize}&#39;</span><span class="k">)</span>
-</span><span id="__span-37-17"><a id="__codelineno-37-17" name="__codelineno-37-17" href="#__codelineno-37-17"></a><span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="o">[</span><span class="w"> </span><span class="s2">&quot;</span><span class="nv">$backup_size</span><span class="s2">&quot;</span><span class="w"> </span>-lt<span class="w"> </span><span class="m">1000000</span><span class="w"> </span><span class="o">]</span><span class="p">;</span><span class="w"> </span><span class="k">then</span><span class="w">  </span><span class="c1"># Less than 1MB</span>
-</span><span id="__span-37-18"><a id="__codelineno-37-18" name="__codelineno-37-18" href="#__codelineno-37-18"></a><span class="w">    </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;⚠️  Backup size suspiciously small: </span><span class="nv">$backup_size</span><span class="s2"> bytes&quot;</span>
-</span><span id="__span-37-19"><a id="__codelineno-37-19" name="__codelineno-37-19" href="#__codelineno-37-19"></a><span class="w">  </span><span class="k">fi</span>
-</span><span id="__span-37-20"><a id="__codelineno-37-20" name="__codelineno-37-20" href="#__codelineno-37-20"></a>
-</span><span id="__span-37-21"><a id="__codelineno-37-21" name="__codelineno-37-21" href="#__codelineno-37-21"></a><span class="w">  </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;✅ Backup validation passed&quot;</span>
-</span><span id="__span-37-22"><a id="__codelineno-37-22" name="__codelineno-37-22" href="#__codelineno-37-22"></a><span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="m">0</span>
-</span><span id="__span-37-23"><a id="__codelineno-37-23" name="__codelineno-37-23" href="#__codelineno-37-23"></a><span class="o">}</span>
-</span><span id="__span-37-24"><a id="__codelineno-37-24" name="__codelineno-37-24" href="#__codelineno-37-24"></a>
-</span><span id="__span-37-25"><a id="__codelineno-37-25" name="__codelineno-37-25" href="#__codelineno-37-25"></a><span class="c1"># Run validation</span>
-</span><span id="__span-37-26"><a id="__codelineno-37-26" name="__codelineno-37-26" href="#__codelineno-37-26"></a>validate_backup
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-38-1"><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a><span class="ch">#!/bin/bash</span>
+</span><span id="__span-38-2"><a id="__codelineno-38-2" name="__codelineno-38-2" href="#__codelineno-38-2"></a><span class="c1"># Validate backup completeness</span>
+</span><span id="__span-38-3"><a id="__codelineno-38-3" name="__codelineno-38-3" href="#__codelineno-38-3"></a>
+</span><span id="__span-38-4"><a id="__codelineno-38-4" name="__codelineno-38-4" href="#__codelineno-38-4"></a><span class="nv">BACKUP_NAME</span><span class="o">=</span><span class="s2">&quot;production-backup&quot;</span>
+</span><span id="__span-38-5"><a id="__codelineno-38-5" name="__codelineno-38-5" href="#__codelineno-38-5"></a><span class="nv">NAMESPACE</span><span class="o">=</span><span class="s2">&quot;default&quot;</span>
+</span><span id="__span-38-6"><a id="__codelineno-38-6" name="__codelineno-38-6" href="#__codelineno-38-6"></a>
+</span><span id="__span-38-7"><a id="__codelineno-38-7" name="__codelineno-38-7" href="#__codelineno-38-7"></a>validate_backup<span class="o">()</span><span class="w"> </span><span class="o">{</span>
+</span><span id="__span-38-8"><a id="__codelineno-38-8" name="__codelineno-38-8" href="#__codelineno-38-8"></a><span class="w">  </span><span class="nb">local</span><span class="w"> </span><span class="nv">backup_status</span><span class="o">=</span><span class="k">$(</span>kubectl<span class="w"> </span>get<span class="w"> </span>neo4jbackup<span class="w"> </span><span class="nv">$BACKUP_NAME</span><span class="w"> </span>-n<span class="w"> </span><span class="nv">$NAMESPACE</span><span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.phase}&#39;</span><span class="k">)</span>
+</span><span id="__span-38-9"><a id="__codelineno-38-9" name="__codelineno-38-9" href="#__codelineno-38-9"></a>
+</span><span id="__span-38-10"><a id="__codelineno-38-10" name="__codelineno-38-10" href="#__codelineno-38-10"></a><span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="o">[</span><span class="w"> </span><span class="s2">&quot;</span><span class="nv">$backup_status</span><span class="s2">&quot;</span><span class="w"> </span>!<span class="o">=</span><span class="w"> </span><span class="s2">&quot;Succeeded&quot;</span><span class="w"> </span><span class="o">]</span><span class="p">;</span><span class="w"> </span><span class="k">then</span>
+</span><span id="__span-38-11"><a id="__codelineno-38-11" name="__codelineno-38-11" href="#__codelineno-38-11"></a><span class="w">    </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;❌ Backup failed or incomplete: </span><span class="nv">$backup_status</span><span class="s2">&quot;</span>
+</span><span id="__span-38-12"><a id="__codelineno-38-12" name="__codelineno-38-12" href="#__codelineno-38-12"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="m">1</span>
+</span><span id="__span-38-13"><a id="__codelineno-38-13" name="__codelineno-38-13" href="#__codelineno-38-13"></a><span class="w">  </span><span class="k">fi</span>
+</span><span id="__span-38-14"><a id="__codelineno-38-14" name="__codelineno-38-14" href="#__codelineno-38-14"></a>
+</span><span id="__span-38-15"><a id="__codelineno-38-15" name="__codelineno-38-15" href="#__codelineno-38-15"></a><span class="w">  </span><span class="c1"># Check backup size</span>
+</span><span id="__span-38-16"><a id="__codelineno-38-16" name="__codelineno-38-16" href="#__codelineno-38-16"></a><span class="w">  </span><span class="nb">local</span><span class="w"> </span><span class="nv">backup_size</span><span class="o">=</span><span class="k">$(</span>kubectl<span class="w"> </span>get<span class="w"> </span>neo4jbackup<span class="w"> </span><span class="nv">$BACKUP_NAME</span><span class="w"> </span>-n<span class="w"> </span><span class="nv">$NAMESPACE</span><span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.backupSize}&#39;</span><span class="k">)</span>
+</span><span id="__span-38-17"><a id="__codelineno-38-17" name="__codelineno-38-17" href="#__codelineno-38-17"></a><span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="o">[</span><span class="w"> </span><span class="s2">&quot;</span><span class="nv">$backup_size</span><span class="s2">&quot;</span><span class="w"> </span>-lt<span class="w"> </span><span class="m">1000000</span><span class="w"> </span><span class="o">]</span><span class="p">;</span><span class="w"> </span><span class="k">then</span><span class="w">  </span><span class="c1"># Less than 1MB</span>
+</span><span id="__span-38-18"><a id="__codelineno-38-18" name="__codelineno-38-18" href="#__codelineno-38-18"></a><span class="w">    </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;⚠️  Backup size suspiciously small: </span><span class="nv">$backup_size</span><span class="s2"> bytes&quot;</span>
+</span><span id="__span-38-19"><a id="__codelineno-38-19" name="__codelineno-38-19" href="#__codelineno-38-19"></a><span class="w">  </span><span class="k">fi</span>
+</span><span id="__span-38-20"><a id="__codelineno-38-20" name="__codelineno-38-20" href="#__codelineno-38-20"></a>
+</span><span id="__span-38-21"><a id="__codelineno-38-21" name="__codelineno-38-21" href="#__codelineno-38-21"></a><span class="w">  </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;✅ Backup validation passed&quot;</span>
+</span><span id="__span-38-22"><a id="__codelineno-38-22" name="__codelineno-38-22" href="#__codelineno-38-22"></a><span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="m">0</span>
+</span><span id="__span-38-23"><a id="__codelineno-38-23" name="__codelineno-38-23" href="#__codelineno-38-23"></a><span class="o">}</span>
+</span><span id="__span-38-24"><a id="__codelineno-38-24" name="__codelineno-38-24" href="#__codelineno-38-24"></a>
+</span><span id="__span-38-25"><a id="__codelineno-38-25" name="__codelineno-38-25" href="#__codelineno-38-25"></a><span class="c1"># Run validation</span>
+</span><span id="__span-38-26"><a id="__codelineno-38-26" name="__codelineno-38-26" href="#__codelineno-38-26"></a>validate_backup
 </span></code></pre></div></p>
 <h2 id="emergency-recovery">Emergency Recovery<a class="headerlink" href="#emergency-recovery" title="Anchor link to this section">&para;</a></h2>
 <p>For full disaster recovery (corrupted primary, restore to a new cluster from latest backup), follow the standard restore flow in the <a href="../../guides/backup_restore/#restore-operations">Backup &amp; Restore guide § Restore Operations</a>. The normal <code>Neo4jRestore</code> CR with <code>source.type: backup</code> + <code>clusterRef</code> pointing at a fresh cluster IS the emergency procedure — there's no separate path. Use <code>force: true</code> to overwrite existing data, and <code>source.type: pitr</code> with <code>pointInTime</code> if you need to roll back to a specific timestamp before the corruption.</p>

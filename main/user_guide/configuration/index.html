@@ -1501,63 +1501,6 @@
   
   
   
-    
-    
-      
-        
-      
-        
-      
-        
-      
-    
-    
-    
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_1" >
-        
-          
-          <label class="md-nav__link" for="__nav_5_1" id="__nav_5_1_label" tabindex="0">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Backup & Restore
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_1_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_1">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Backup & Restore
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
     <li class="md-nav__item">
       <a href="../guides/backup_restore/" class="md-nav__link">
         
@@ -1566,7 +1509,7 @@
   <span class="md-ellipsis">
     
   
-    Overview
+    Backup & Restore
   
 
     
@@ -1575,70 +1518,6 @@
   
 
       </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../guides/backup-disk-management/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Disk Management
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../guides/backup-sidecar-requirements/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Sidecar Requirements
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
     </li>
   
 
@@ -3275,7 +3154,7 @@
 *   <code>spec.storage</code>: Configures the persistent storage for the cluster, including storage class, size, and <a href="#storage-and-pvc-retention">retention policy</a>.
 *   <code>spec.auth</code>: Manages authentication, allowing you to specify the provider (native, LDAP, etc.) and the secret containing credentials.
 *   <code>spec.resources</code>: Allows you to set specific CPU and memory requests and limits for the Neo4j pods, which is crucial for performance tuning.
-*   <code>spec.backups</code>: (Deprecated) Use the separate Neo4jBackup CRD for backup management. The operator now uses a centralized backup StatefulSet for resource efficiency.
+*   Backups: Use the separate <code>Neo4jBackup</code> CRD for backup management — see the <a href="../guides/backup_restore/">Backup and Restore guide</a>.
 *   <code>spec.monitoring</code>: Enable monitoring, Prometheus metrics exposure, and query logging.</p>
 <blockquote>
 <p><strong>Live Diagnostics:</strong> When <code>enabled: true</code> and the cluster is <code>Ready</code>, the operator

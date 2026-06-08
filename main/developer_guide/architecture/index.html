@@ -1120,63 +1120,6 @@
   
   
   
-    
-    
-      
-        
-      
-        
-      
-        
-      
-    
-    
-    
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_1" >
-        
-          
-          <label class="md-nav__link" for="__nav_5_1" id="__nav_5_1_label" tabindex="0">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Backup & Restore
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_1_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_1">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Backup & Restore
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
     <li class="md-nav__item">
       <a href="../../user_guide/guides/backup_restore/" class="md-nav__link">
         
@@ -1185,7 +1128,7 @@
   <span class="md-ellipsis">
     
   
-    Overview
+    Backup & Restore
   
 
     
@@ -1194,70 +1137,6 @@
   
 
       </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../user_guide/guides/backup-disk-management/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Disk Management
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../user_guide/guides/backup-sidecar-requirements/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Sidecar Requirements
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
     </li>
   
 
@@ -2463,10 +2342,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#centralized-backup-system" class="md-nav__link">
+  <a href="#backup-architecture" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Centralized Backup System
+        Backup architecture
       
     </span>
   </a>
@@ -3680,10 +3559,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#centralized-backup-system" class="md-nav__link">
+  <a href="#backup-architecture" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Centralized Backup System
+        Backup architecture
       
     </span>
   </a>
@@ -4713,7 +4592,7 @@
 <li><strong>Production Stability</strong>: Optimized reconciliation frequency and efficient resource management</li>
 <li><strong>Performance</strong>: Intelligent rate limiting and status update optimization</li>
 <li><strong>Server-Based Architecture</strong>: Unified server deployments with self-organizing roles</li>
-<li><strong>Resource Efficiency</strong>: Centralized backup system (70% resource reduction)</li>
+<li><strong>Resource Efficiency</strong>: On-demand backup Jobs (no long-running backup pod or sidecar)</li>
 <li><strong>Observability</strong>: Comprehensive monitoring and operational insights</li>
 <li><strong>Validation</strong>: Proactive resource validation and recommendations</li>
 </ul>
@@ -4736,15 +4615,9 @@
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1"># Creates: my-standalone StatefulSet (replicas: 1)</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="c1"># Pod: my-standalone-0</span>
 </span></code></pre></div>
-<h3 id="centralized-backup-system">Centralized Backup System<a class="headerlink" href="#centralized-backup-system" title="Anchor link to this section">&para;</a></h3>
-<p><strong>Major Efficiency Improvement</strong>: Replaced expensive per-pod backup sidecars with centralized backup architecture:</p>
-<ul>
-<li><strong>Resource Efficiency</strong>: 100m CPU/256Mi memory per cluster vs N×200m CPU/512Mi per sidecar</li>
-<li><strong>Resource Savings</strong>: ~70% reduction in backup-related resource usage</li>
-<li><strong>Architecture</strong>: Single <code>{cluster-name}-backup-0</code> StatefulSet per cluster</li>
-<li><strong>Connectivity</strong>: Connects to cluster via client service using Bolt protocol</li>
-<li><strong>Neo4j 5.26+ Support</strong>: Modern backup syntax with automated path creation</li>
-</ul>
+<h3 id="backup-architecture">Backup architecture<a class="headerlink" href="#backup-architecture" title="Anchor link to this section">&para;</a></h3>
+<p>Backups are owned by the dedicated <strong><code>Neo4jBackup</code> CRD</strong>: each CR (one-shot or scheduled via <code>spec.schedule</code>) spawns a Kubernetes <code>Job</code> (or <code>CronJob</code> → child Jobs) that runs <code>neo4j-admin database backup</code> from the same Neo4j Enterprise image as the cluster. No sidecar containers, no persistent backup pod. The Job connects to each <code>{cluster}-server-N</code> Pod on port 6362 (<code>server.backup.listen_address=0.0.0.0:6362</code>, configured automatically) and streams artifacts to the destination (PVC, S3, GCS, or Azure).</p>
+<p>All runs of a single Neo4jBackup CR share a <code>&lt;base&gt;/&lt;cr-name&gt;/</code> directory so <code>neo4j-admin</code> can chain <code>--type=DIFF</code> backups off the prior <code>FULL</code>. Per-run identity is preserved via the timestamp <code>neo4j-admin</code> embeds in each <code>.backup</code> filename.</p>
 <h2 id="custom-resource-definitions-crds">Custom Resource Definitions (CRDs)<a class="headerlink" href="#custom-resource-definitions-crds" title="Anchor link to this section">&para;</a></h2>
 <p>The operator defines six core CRDs located in <code>api/v1beta1/</code>:</p>
 <h3 id="core-deployment-crds">Core Deployment CRDs<a class="headerlink" href="#core-deployment-crds" title="Anchor link to this section">&para;</a></h3>
@@ -4814,10 +4687,10 @@
 <h4 id="neo4jbackup-neo4jbackup_typesgo">Neo4jBackup (<code>neo4jbackup_types.go</code>)<a class="headerlink" href="#neo4jbackup-neo4jbackup_typesgo" title="Anchor link to this section">&para;</a></h4>
 <ul>
 <li><strong>Purpose</strong>: Manages backup operations for both clusters and standalone deployments</li>
-<li><strong>Centralized Architecture</strong>: Uses single backup pod per cluster (not sidecars)</li>
+<li><strong>Job-per-CR architecture</strong>: Each <code>Neo4jBackup</code> (one-shot or scheduled) spawns a Kubernetes Job (or CronJob → child Jobs). No sidecar containers, no persistent backup pod.</li>
 <li><strong>Target Support</strong>: Cluster OR standalone (<code>spec.target.kind</code> resolves the type; the controller probes the cluster ref and routes to <code>BuildStandaloneBackupFromAddress</code> for standalones, <code>BuildBackupFromAddresses</code> for clusters)</li>
 <li><strong>Neo4j 5.26+ Support</strong>: Modern backup syntax with <code>--to-path</code> parameter</li>
-<li><strong>Per-run subfolders</strong>: Every Job writes into <code>&lt;base&gt;/${BACKUP_RUN_ID}/</code> where <code>BACKUP_RUN_ID</code> is the Job's name (injected via downward API). The same value is recorded in <code>status.history[].backupsPath</code> so each history entry deterministically identifies its artifact directory without log parsing. One-shot Job name = <code>&lt;backup&gt;-backup</code>; CronJob child Job name = <code>&lt;cronjob&gt;-&lt;unix-seconds&gt;</code>.</li>
+<li><strong>Shared-directory layout</strong>: All runs of a single CR write into <code>&lt;base&gt;/&lt;cr-name&gt;/</code> so <code>neo4j-admin</code> can chain differential backups off the prior full. Per-run identity is preserved via the ISO-8601 timestamp <code>neo4j-admin</code> embeds in each <code>.backup</code> filename (also captured into <code>status.history[].artifactFilename</code> / <code>shardArtifacts[].filename</code> via Pod-log parsing).</li>
 </ul>
 <h4 id="neo4jrestore-neo4jrestore_typesgo">Neo4jRestore (<code>neo4jrestore_types.go</code>)<a class="headerlink" href="#neo4jrestore-neo4jrestore_typesgo" title="Anchor link to this section">&para;</a></h4>
 <ul>
@@ -4895,9 +4768,8 @@
 - <strong>Pod Labels</strong>: Applies appropriate labels for each deployment type
 - <strong>Plugin Sources</strong>: Official, community, custom registries, direct URLs</p>
 <h4 id="backup-controller-neo4jbackup_controllergo">Backup Controller (<code>neo4jbackup_controller.go</code>)<a class="headerlink" href="#backup-controller-neo4jbackup_controllergo" title="Anchor link to this section">&para;</a></h4>
-<p><strong>Centralized backup management:</strong>
-- <strong>Architecture</strong>: Single backup StatefulSet per cluster
-- <strong>Resource Efficiency</strong>: 70% reduction in backup resource usage
+<p><strong>Backup management:</strong>
+- <strong>Architecture</strong>: Job-per-<code>Neo4jBackup</code>-CR. No persistent backup pod or sidecars.
 - <strong>Cross-Deployment Support</strong>: Backs up both clusters and standalone deployments
 - <strong>Modern Syntax</strong>: Neo4j 5.26+ compatible backup commands</p>
 <h4 id="restore-controller-neo4jrestore_controllergo">Restore Controller (<code>neo4jrestore_controller.go</code>)<a class="headerlink" href="#restore-controller-neo4jrestore_controllergo" title="Anchor link to this section">&para;</a></h4>
@@ -5091,7 +4963,7 @@ CalVer detection: <code>ParseVersion()</code> → <code>IsCalver</code> (<code>m
 <li><strong>StandaloneBuilder</strong> (<code>standalone.go</code>): Single-node deployment resources</li>
 <li><strong>ConfigMapBuilder</strong>: Unified configuration for both deployment types</li>
 <li><strong>ServiceBuilder</strong>: Client and discovery services</li>
-<li><strong>BackupBuilder</strong>: Centralized backup StatefulSet</li>
+<li><strong>BackupBuilder</strong>: per-<code>Neo4jBackup</code>-CR Kubernetes Job (no persistent backup pod, no sidecars)</li>
 <li><strong>TruststoreBuilder</strong> (<code>cluster.go:BuildTrustStoreInitContainer / BuildTrustStoreVolumes / CollectTrustedCASecrets</code>): emits the per-Secret volume mounts, the writable <code>/truststore</code> EmptyDir, and the <code>truststore-init</code> init container (seeds <code>/truststore/truststore.jks</code> from <code>$JAVA_HOME/lib/security/cacerts</code>, then <code>keytool -import</code> for each <code>spec.trustedCASecrets</code> entry using the Secret name as alias). Reused by both cluster (env var) and standalone (ConfigMap) wire-up paths via <code>CollectTrustedCASecrets</code>, which folds the legacy singular <code>spec.auth.trustStore</code> into the new plural list.</li>
 </ul>
 <h4 id="server-based-resource-patterns">Server-Based Resource Patterns:<a class="headerlink" href="#server-based-resource-patterns" title="Anchor link to this section">&para;</a></h4>
@@ -5099,9 +4971,9 @@ CalVer detection: <code>ParseVersion()</code> → <code>IsCalver</code> (<code>m
 <li><strong>StatefulSet Naming</strong>: <code>{cluster-name}-server</code> for clusters, <code>{standalone-name}</code> for standalone</li>
 <li><strong>Pod Naming</strong>: <code>{cluster-name}-server-0</code>, <code>{cluster-name}-server-1</code>, etc.</li>
 <li><strong>Service Names</strong>: <code>{cluster-name}-client</code>, <code>{cluster-name}-discovery</code></li>
-<li><strong>Backup Resources</strong>: <code>{cluster-name}-backup-0</code> (centralized)</li>
+<li><strong>Backup Resources</strong>: per-CR Kubernetes Jobs spawned by the <code>Neo4jBackup</code> controller (one-shot: <code>&lt;cr-name&gt;-backup</code>; CronJob children: <code>&lt;cr-name&gt;-&lt;unix-seconds&gt;</code>). No persistent backup pod or sidecars.</li>
 <li><strong>Truststore mount</strong>: <code>/truststore/truststore.jks</code> (read-only, populated by the <code>truststore-init</code> init container; password is the JVM default <code>changeit</code>)</li>
-<li><strong>User-supplied volumes</strong>: <code>spec.extraVolumes</code> are appended to the pod spec verbatim; <code>spec.extraVolumeMounts</code> are appended to the Neo4j container's mounts after operator-managed mounts but before any backup-sidecar mounts. Operator-managed paths (<code>/data</code>, <code>/logs</code>, <code>/conf</code>, <code>/ssl</code>, <code>/plugins</code>, <code>/truststore</code>, <code>/truststore-ca</code>, <code>/var/lib/neo4j/...</code>) are off-limits and rejected by the validator.</li>
+<li><strong>User-supplied volumes</strong>: <code>spec.extraVolumes</code> are appended to the pod spec verbatim; <code>spec.extraVolumeMounts</code> are appended to the Neo4j container's mounts after operator-managed mounts. Operator-managed paths (<code>/data</code>, <code>/logs</code>, <code>/conf</code>, <code>/ssl</code>, <code>/plugins</code>, <code>/truststore</code>, <code>/truststore-ca</code>, <code>/var/lib/neo4j/...</code>) are off-limits and rejected by the validator.</li>
 </ul>
 <h3 id="performance-optimizations">Performance Optimizations<a class="headerlink" href="#performance-optimizations" title="Anchor link to this section">&para;</a></h3>
 <h4 id="reconciliation-efficiency">Reconciliation Efficiency:<a class="headerlink" href="#reconciliation-efficiency" title="Anchor link to this section">&para;</a></h4>

@@ -1120,63 +1120,6 @@
   
   
   
-    
-    
-      
-        
-      
-        
-      
-        
-      
-    
-    
-    
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_1" >
-        
-          
-          <label class="md-nav__link" for="__nav_5_1" id="__nav_5_1_label" tabindex="0">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Backup & Restore
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_1_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_1">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Backup & Restore
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
     <li class="md-nav__item">
       <a href="../../user_guide/guides/backup_restore/" class="md-nav__link">
         
@@ -1185,7 +1128,7 @@
   <span class="md-ellipsis">
     
   
-    Overview
+    Backup & Restore
   
 
     
@@ -1194,70 +1137,6 @@
   
 
       </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../user_guide/guides/backup-disk-management/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Disk Management
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../user_guide/guides/backup-sidecar-requirements/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Sidecar Requirements
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
     </li>
   
 
@@ -3597,17 +3476,21 @@
 <li><strong>Kind</strong>: <code>Neo4jRestore</code></li>
 </ul>
 <h2 id="how-it-works">How it works<a class="headerlink" href="#how-it-works" title="Anchor link to this section">&para;</a></h2>
-<p>When a <code>Neo4jRestore</code> resource is created, the operator:</p>
-<ol>
-<li>Resolves the <code>clusterRef</code> — it accepts both <code>Neo4jEnterpriseCluster</code> and <code>Neo4jEnterpriseStandalone</code>. The controller detects the type automatically.</li>
-<li>Creates a restore Kubernetes Job that runs <code>neo4j-admin database restore</code> inside a container using the <strong>same Neo4j enterprise image</strong> as the target.</li>
-<li>If <code>stopCluster: true</code>, the operator scales down the cluster StatefulSet before starting the restore Job. When this flag is set, the operator mounts the actual server data PVC (<code>data-{cluster}-server-0</code>) directly into the restore Job container for offline restore access.</li>
-<li>After the restore Job succeeds, the operator automatically issues one of the following Cypher commands via the Bolt client:</li>
-<li><code>CREATE DATABASE &lt;dbname&gt;</code> — when the database did not exist before</li>
-<li><code>START DATABASE &lt;dbname&gt;</code> — when the database existed but was stopped for the restore</li>
-<li>For multi-server clusters (<code>spec.topology.servers &gt;= 2</code>), the operator then calls Neo4j's <code>dbms.[cluster.]recreateDatabase</code> procedure with <strong>server-0 as the explicit seed</strong>, forcing every other server to re-seed its store from server-0's restored data. This step is what makes cluster restores deterministic — without it, post-restart cluster bootstrap picks the primary non-deterministically, and a server with stale pre-restore data can win consensus and silently overwrite the restored data on re-sync. Skipped silently for standalone / single-server deployments and for Neo4j versions that don't expose the procedure (pre-5.24 SemVer, pre-2025.02 CalVer).</li>
-<li>Status fields and conditions are updated throughout the lifecycle.</li>
-</ol>
+<p>The operator picks the restore method based on the target kind referenced by <code>clusterRef</code>. The Neo4j docs flag <code>neo4j-admin database restore</code> as <strong>unsafe on clusters</strong>, so the two paths diverge:</p>
+<p><strong><code>Neo4jEnterpriseCluster</code> target</strong> — Cypher over Bolt, no Job:
+1. Resolves <code>source.backupRef</code> (or <code>source.storage</code>) into the exact <code>.backup</code> <strong>file</strong> URI of the latest successful run, e.g. <code>s3://bucket/path/&lt;cr-name&gt;/&lt;dbname&gt;-&lt;timestamp&gt;.backup</code>. Neo4j's <code>CloudSeedProvider</code> seeds a single database from one file (a directory URI fails with <code>Can't open seed file</code>); when that file is a differential, Neo4j resolves and applies the full + differential chain from the same directory automatically.
+   - <strong>Mixed-cadence chains (<code>spec.chainFromBackup</code>)</strong>: "latest successful run" is scoped to the <strong>referenced CR</strong>, not the shared chain directory. Reference the <strong>differential</strong> CR to restore the latest state; referencing the parent <strong>full</strong> CR seeds from its latest full snapshot — the newer diffs are <em>not</em> applied. Restoring via a chain-parent CR emits a <code>RestoreFromChainParent</code> Warning event naming the differential children, so a restore intending "latest" that references the full CR isn't a silent surprise. To pin an arbitrary run, use <code>source.type: storage</code> with <code>backupPath</code> set to the exact <code>.backup</code> file.
+2. Projects cloud credentials onto cluster pods via <code>spec.extraEnvFrom</code> (cluster CR) — required so the JVM's AWS/GCP/Azure SDK can authenticate. The operator emits an actionable error if the Secret isn't projected; set the cluster annotation <code>neo4j.com/auto-inherit-seed-creds=true</code> to auto-patch.
+3. Opens a Bolt session and runs <code>SHOW DATABASES</code> to detect whether the target database already exists.
+4. Existing database → <code>CALL dbms.[cluster.]recreateDatabase($db, {seedURI: $uri})</code>. Preserves user/role privileges, atomically swaps the database on every server, no <code>DROP</code> needed.
+5. New database → <code>CREATE DATABASE $db OPTIONS { seedURI: '&lt;file&gt;' } WAIT</code>.
+6. <code>CREATE … WAIT</code> blocks until online, but <code>dbms.recreateDatabase</code> is <strong>asynchronous</strong> — it returns once the recreate is scheduled. The operator therefore polls <code>SHOW DATABASE</code> until every allocation reports <code>online</code> before marking the restore <code>Completed</code>; if the seed fails the restore goes <code>Failed</code> with the database's <code>statusMessage</code>.</p>
+<p><strong><code>Neo4jEnterpriseStandalone</code> target</strong> — Kubernetes Job:
+1. Spawns a restore Job that runs <code>neo4j-admin database restore --from-path=$(ls &lt;dir&gt;/&lt;dbname&gt;-*.backup | tail -1) &lt;dbname&gt;</code>. The shell substitution picks the latest run in the chain by default.
+2. If <code>stopCluster: true</code>, the operator scales down the StatefulSet first and mounts <code>data-{name}-server-0</code> directly into the Job container for offline access.
+3. After the Job succeeds, automatically runs <code>CREATE DATABASE &lt;dbname&gt;</code> (new) or <code>START DATABASE &lt;dbname&gt;</code> (existed but stopped) via Bolt.</p>
+<p><strong><code>Neo4jShardedDatabase</code> target</strong> — rejected. Sharded restore is owned by the <code>Neo4jShardedDatabase</code> CRD; set <code>spec.replaceExisting: true</code> + <code>spec.force: true</code> on the target sharded DB and reference the backup via <code>spec.seedBackupRef</code>. The Neo4jRestore validator emits an actionable error pointing at this flow.</p>
+<p><strong>No manual post-restore Cypher is required</strong> for either path.</p>
 <h2 id="neo4jrestore-spec">Neo4jRestore Spec<a class="headerlink" href="#neo4jrestore-spec" title="Anchor link to this section">&para;</a></h2>
 <h3 id="top-level-fields">Top-Level Fields<a class="headerlink" href="#top-level-fields" title="Anchor link to this section">&para;</a></h3>
 <table>

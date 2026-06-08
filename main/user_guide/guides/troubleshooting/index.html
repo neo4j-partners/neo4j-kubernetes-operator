@@ -1120,63 +1120,6 @@
   
   
   
-    
-    
-      
-        
-      
-        
-      
-        
-      
-    
-    
-    
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_1" >
-        
-          
-          <label class="md-nav__link" for="__nav_5_1" id="__nav_5_1_label" tabindex="0">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Backup & Restore
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_1_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_1">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Backup & Restore
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
     <li class="md-nav__item">
       <a href="../backup_restore/" class="md-nav__link">
         
@@ -1185,7 +1128,7 @@
   <span class="md-ellipsis">
     
   
-    Overview
+    Backup & Restore
   
 
     
@@ -1194,70 +1137,6 @@
   
 
       </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../backup-disk-management/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Disk Management
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../backup-sidecar-requirements/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Sidecar Requirements
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
     </li>
   
 
@@ -4120,15 +3999,12 @@ kubectl get svc -l neo4j.com/cluster=&lt;cluster-name&gt; -o yaml | grep -A 3 -B
 - Roles with <code>pods/exec</code> and <code>pods/log</code> permissions
 - Role bindings for secure backup execution</p>
 <h4 id="problem-backup-path-not-found">Problem: Backup path not found<a class="headerlink" href="#problem-backup-path-not-found" title="Anchor link to this section">&para;</a></h4>
-<p>Neo4j 5.26+ requires backup destination path to exist.</p>
-<p><strong>Solution</strong>: The operator's backup pod (clusters) or backup sidecar (standalone) automatically creates paths. Check the backup container is running:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-43-1"><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a><span class="c1"># Cluster backup pod</span>
-</span><span id="__span-43-2"><a id="__codelineno-43-2" name="__codelineno-43-2" href="#__codelineno-43-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pod<span class="w"> </span>&lt;cluster&gt;-backup-0<span class="w"> </span>-o<span class="w"> </span>yaml<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>backup
-</span><span id="__span-43-3"><a id="__codelineno-43-3" name="__codelineno-43-3" href="#__codelineno-43-3"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>&lt;cluster&gt;-backup-0<span class="w"> </span>-c<span class="w"> </span>backup
-</span><span id="__span-43-4"><a id="__codelineno-43-4" name="__codelineno-43-4" href="#__codelineno-43-4"></a>
-</span><span id="__span-43-5"><a id="__codelineno-43-5" name="__codelineno-43-5" href="#__codelineno-43-5"></a><span class="c1"># Standalone backup sidecar</span>
-</span><span id="__span-43-6"><a id="__codelineno-43-6" name="__codelineno-43-6" href="#__codelineno-43-6"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>&lt;neo4j-pod&gt;<span class="w"> </span>-c<span class="w"> </span>backup-sidecar
-</span></code></pre></div></p>
+<p>Neo4j 5.26+ requires backup destination path to exist. The operator's backup Job creates the directory automatically (<code>mkdir -p</code> is prepended to the command for PVC targets; cloud targets get a trailing slash for directory semantics).</p>
+<p><strong>Solution</strong>: inspect the backup Job's Pod log:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-43-1"><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a><span class="c1"># The Job is named &quot;&lt;neo4jbackup-name&gt;-backup&quot; (one-shot) or</span>
+</span><span id="__span-43-2"><a id="__codelineno-43-2" name="__codelineno-43-2" href="#__codelineno-43-2"></a><span class="c1"># &quot;&lt;neo4jbackup-name&gt;-&lt;unix-seconds&gt;&quot; (CronJob child).</span>
+</span><span id="__span-43-3"><a id="__codelineno-43-3" name="__codelineno-43-3" href="#__codelineno-43-3"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>&lt;ns&gt;<span class="w"> </span>job/&lt;job-name&gt;
+</span></code></pre></div>
 <h3 id="9-security-issues">9. Security Issues<a class="headerlink" href="#9-security-issues" title="Anchor link to this section">&para;</a></h3>
 <h4 id="problem-authentication-failures">Problem: Authentication Failures<a class="headerlink" href="#problem-authentication-failures" title="Anchor link to this section">&para;</a></h4>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-44-1"><a id="__codelineno-44-1" name="__codelineno-44-1" href="#__codelineno-44-1"></a><span class="c1"># Check auth secret</span>

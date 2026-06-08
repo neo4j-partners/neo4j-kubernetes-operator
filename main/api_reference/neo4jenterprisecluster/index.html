@@ -1120,63 +1120,6 @@
   
   
   
-    
-    
-      
-        
-      
-        
-      
-        
-      
-    
-    
-    
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_1" >
-        
-          
-          <label class="md-nav__link" for="__nav_5_1" id="__nav_5_1_label" tabindex="0">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Backup & Restore
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_1_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_1">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Backup & Restore
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
     <li class="md-nav__item">
       <a href="../../user_guide/guides/backup_restore/" class="md-nav__link">
         
@@ -1185,7 +1128,7 @@
   <span class="md-ellipsis">
     
   
-    Overview
+    Backup & Restore
   
 
     
@@ -1194,70 +1137,6 @@
   
 
       </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../user_guide/guides/backup-disk-management/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Disk Management
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../user_guide/guides/backup-sidecar-requirements/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Sidecar Requirements
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
     </li>
   
 
@@ -2156,17 +2035,6 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#backupstoragespec" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        BackupStorageSpec
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#authspec" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2369,17 +2237,6 @@
     <span class="md-ellipsis">
       
         PropertyShardingSpec
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#backupsspec" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        BackupsSpec
       
     </span>
   </a>
@@ -2784,10 +2641,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#cluster-with-centralized-backup" class="md-nav__link">
+  <a href="#cluster-with-query-monitoring" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Cluster with Centralized Backup
+        Cluster with Query Monitoring
       
     </span>
   </a>
@@ -3706,17 +3563,6 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#backupstoragespec" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        BackupStorageSpec
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#authspec" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3919,17 +3765,6 @@
     <span class="md-ellipsis">
       
         PropertyShardingSpec
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#backupsspec" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        BackupsSpec
       
     </span>
   </a>
@@ -4334,10 +4169,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#cluster-with-centralized-backup" class="md-nav__link">
+  <a href="#cluster-with-query-monitoring" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Cluster with Centralized Backup
+        Cluster with Query Monitoring
       
     </span>
   </a>
@@ -4552,7 +4387,7 @@
 <li><strong>Single StatefulSet</strong>: <code>{cluster-name}-server</code> with configurable replica count</li>
 <li><strong>Server Pods</strong>: Named <code>{cluster-name}-server-0</code>, <code>{cluster-name}-server-1</code>, etc.</li>
 <li><strong>Self-Organization</strong>: Servers automatically organize into primary/secondary roles for databases</li>
-<li><strong>Centralized Backup</strong>: Optional <code>{cluster-name}-backup-0</code> pod for centralized backup operations</li>
+<li><strong>Backup</strong>: Use the <a href="../neo4jbackup/"><code>Neo4jBackup</code> CRD</a> — each CR spawns a Kubernetes Job. There is no persistent backup pod or sidecar.</li>
 <li><strong>Role Flexibility</strong>: Servers can host multiple databases with different roles</li>
 </ul>
 <p><strong>When to Use</strong>:</p>
@@ -4676,19 +4511,15 @@
 </thead>
 <tbody>
 <tr>
-<td><code>backups</code></td>
-<td><a href="#backupsspec"><code>BackupsSpec</code></a></td>
-<td>Backup configuration</td>
-</tr>
-<tr>
 <td><code>upgradeStrategy</code></td>
 <td><a href="#upgradestrategyspec"><code>UpgradeStrategySpec</code></a></td>
 <td>Upgrade strategy configuration</td>
 </tr>
 </tbody>
 </table>
-<p>To restore a cluster from a backup, create a separate <code>Neo4jRestore</code> CR after
-the cluster reaches <code>Ready</code> — see <a href="../neo4jrestore/"><code>Neo4jRestore</code></a>.</p>
+<p>To back up a cluster, create a separate <a href="../neo4jbackup/"><code>Neo4jBackup</code></a> CR. To
+restore a cluster from a backup, create a separate <code>Neo4jRestore</code> CR after the
+cluster reaches <code>Ready</code> — see <a href="../neo4jrestore/"><code>Neo4jRestore</code></a>.</p>
 <h3 id="networking">Networking<a class="headerlink" href="#networking" title="Anchor link to this section">&para;</a></h3>
 <table>
 <thead>
@@ -4902,33 +4733,6 @@ the cluster reaches <code>Ready</code> — see <a href="../neo4jrestore/"><code>
 <td><code>retentionPolicy</code></td>
 <td><code>string</code></td>
 <td>PVC retention policy: <code>"Delete"</code> (default) permanently removes PVCs on deletion; <code>"Retain"</code> preserves them. <strong>Use <code>Retain</code> for production to prevent data loss.</strong> See <a href="../../user_guide/configuration/#storage-and-pvc-retention">Storage and PVC Retention</a>.</td>
-</tr>
-<tr>
-<td><code>backupStorage</code></td>
-<td><a href="#backupstoragespec"><code>*BackupStorageSpec</code></a></td>
-<td>Additional storage for backups</td>
-</tr>
-</tbody>
-</table>
-<h3 id="backupstoragespec">BackupStorageSpec<a class="headerlink" href="#backupstoragespec" title="Anchor link to this section">&para;</a></h3>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Type</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>className</code></td>
-<td><code>string</code></td>
-<td>Storage class name for backup volumes</td>
-</tr>
-<tr>
-<td><code>size</code></td>
-<td><code>string</code></td>
-<td>Storage size for backup volumes. Supports the same automatic expansion as <code>spec.storage.size</code>.</td>
 </tr>
 </tbody>
 </table>
@@ -5757,28 +5561,6 @@ not parse policy config to wire up filesystem mounts automatically.</p>
 </tbody>
 </table>
 <p>For detailed configuration, see the <a href="../../user_guide/property_sharding/">Property Sharding Guide</a>.</p>
-<h3 id="backupsspec">BackupsSpec<a class="headerlink" href="#backupsspec" title="Anchor link to this section">&para;</a></h3>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Type</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>defaultStorage</code></td>
-<td><a href="#storagelocation"><code>*StorageLocation</code></a></td>
-<td>Default storage location for backups</td>
-</tr>
-<tr>
-<td><code>cloud</code></td>
-<td><a href="#cloudblock"><code>*CloudBlock</code></a></td>
-<td>Cloud provider configuration (credentials/identity)</td>
-</tr>
-</tbody>
-</table>
 <h3 id="storagelocation">StorageLocation<a class="headerlink" href="#storagelocation" title="Anchor link to this section">&para;</a></h3>
 <table>
 <thead>
@@ -7151,7 +6933,10 @@ visible via <code>kubectl get svc</code>.</p>
 </span><span id="__span-7-44"><a id="__codelineno-7-44" name="__codelineno-7-44" href="#__codelineno-7-44"></a><span class="w">  </span><span class="nt">auth</span><span class="p">:</span>
 </span><span id="__span-7-45"><a id="__codelineno-7-45" name="__codelineno-7-45" href="#__codelineno-7-45"></a><span class="w">    </span><span class="nt">adminSecret</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j-admin-secret</span>
 </span></code></pre></div>
-<h3 id="cluster-with-centralized-backup">Cluster with Centralized Backup<a class="headerlink" href="#cluster-with-centralized-backup" title="Anchor link to this section">&para;</a></h3>
+<h3 id="cluster-with-query-monitoring">Cluster with Query Monitoring<a class="headerlink" href="#cluster-with-query-monitoring" title="Anchor link to this section">&para;</a></h3>
+<blockquote>
+<p>Backups are configured separately via the <a href="../neo4jbackup/"><code>Neo4jBackup</code> CRD</a> — see the next example.</p>
+</blockquote>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1beta1</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Neo4jEnterpriseCluster</span>
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="nt">metadata</span><span class="p">:</span>
@@ -7167,29 +6952,18 @@ visible via <code>kubectl get svc</code>.</p>
 </span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="w">    </span><span class="nt">size</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">50Gi</span>
 </span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="w">  </span><span class="nt">auth</span><span class="p">:</span>
 </span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="w">    </span><span class="nt">adminSecret</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j-admin-secret</span>
-</span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a><span class="w">  </span><span class="c1"># Centralized backup configuration</span>
-</span><span id="__span-8-17"><a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a><span class="w">  </span><span class="nt">backups</span><span class="p">:</span>
-</span><span id="__span-8-18"><a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a><span class="w">    </span><span class="nt">defaultStorage</span><span class="p">:</span>
-</span><span id="__span-8-19"><a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a><span class="w">      </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">s3</span>
-</span><span id="__span-8-20"><a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a><span class="w">      </span><span class="nt">bucket</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j-backups</span>
-</span><span id="__span-8-21"><a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a><span class="w">      </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">production/</span>
-</span><span id="__span-8-22"><a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a><span class="w">    </span><span class="nt">cloud</span><span class="p">:</span>
-</span><span id="__span-8-23"><a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a><span class="w">      </span><span class="nt">provider</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">aws</span>
-</span><span id="__span-8-24"><a id="__codelineno-8-24" name="__codelineno-8-24" href="#__codelineno-8-24"></a><span class="w">      </span><span class="nt">identity</span><span class="p">:</span>
-</span><span id="__span-8-25"><a id="__codelineno-8-25" name="__codelineno-8-25" href="#__codelineno-8-25"></a><span class="w">        </span><span class="nt">provider</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">aws</span>
-</span><span id="__span-8-26"><a id="__codelineno-8-26" name="__codelineno-8-26" href="#__codelineno-8-26"></a><span class="w">        </span><span class="nt">serviceAccount</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j-backup-sa</span><span class="w">  </span><span class="c1"># Uses IAM roles for pods</span>
-</span><span id="__span-8-27"><a id="__codelineno-8-27" name="__codelineno-8-27" href="#__codelineno-8-27"></a><span class="w">  </span><span class="c1"># Enhanced query monitoring</span>
-</span><span id="__span-8-28"><a id="__codelineno-8-28" name="__codelineno-8-28" href="#__codelineno-8-28"></a><span class="w">  </span><span class="nt">monitoring</span><span class="p">:</span>
-</span><span id="__span-8-29"><a id="__codelineno-8-29" name="__codelineno-8-29" href="#__codelineno-8-29"></a><span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-8-30"><a id="__codelineno-8-30" name="__codelineno-8-30" href="#__codelineno-8-30"></a><span class="w">    </span><span class="nt">slowQueryThreshold</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;1s&quot;</span>
-</span><span id="__span-8-31"><a id="__codelineno-8-31" name="__codelineno-8-31" href="#__codelineno-8-31"></a><span class="w">    </span><span class="nt">queryLogLevel</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;INFO&quot;</span>
-</span><span id="__span-8-32"><a id="__codelineno-8-32" name="__codelineno-8-32" href="#__codelineno-8-32"></a><span class="w">    </span><span class="nt">obfuscateLiterals</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-8-33"><a id="__codelineno-8-33" name="__codelineno-8-33" href="#__codelineno-8-33"></a><span class="w">    </span><span class="nt">sampling</span><span class="p">:</span>
-</span><span id="__span-8-34"><a id="__codelineno-8-34" name="__codelineno-8-34" href="#__codelineno-8-34"></a><span class="w">      </span><span class="nt">rate</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;0.1&quot;</span>
-</span><span id="__span-8-35"><a id="__codelineno-8-35" name="__codelineno-8-35" href="#__codelineno-8-35"></a><span class="w">      </span><span class="nt">maxQueriesPerSecond</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">100</span>
-</span><span id="__span-8-36"><a id="__codelineno-8-36" name="__codelineno-8-36" href="#__codelineno-8-36"></a><span class="w">    </span><span class="nt">metricsExport</span><span class="p">:</span>
-</span><span id="__span-8-37"><a id="__codelineno-8-37" name="__codelineno-8-37" href="#__codelineno-8-37"></a><span class="w">      </span><span class="nt">prometheus</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-8-38"><a id="__codelineno-8-38" name="__codelineno-8-38" href="#__codelineno-8-38"></a><span class="w">      </span><span class="nt">interval</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;30s&quot;</span>
+</span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a><span class="w">  </span><span class="c1"># Enhanced query monitoring</span>
+</span><span id="__span-8-17"><a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a><span class="w">  </span><span class="nt">monitoring</span><span class="p">:</span>
+</span><span id="__span-8-18"><a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a><span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-8-19"><a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a><span class="w">    </span><span class="nt">slowQueryThreshold</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;1s&quot;</span>
+</span><span id="__span-8-20"><a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a><span class="w">    </span><span class="nt">queryLogLevel</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;INFO&quot;</span>
+</span><span id="__span-8-21"><a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a><span class="w">    </span><span class="nt">obfuscateLiterals</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-8-22"><a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a><span class="w">    </span><span class="nt">sampling</span><span class="p">:</span>
+</span><span id="__span-8-23"><a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a><span class="w">      </span><span class="nt">rate</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;0.1&quot;</span>
+</span><span id="__span-8-24"><a id="__codelineno-8-24" name="__codelineno-8-24" href="#__codelineno-8-24"></a><span class="w">      </span><span class="nt">maxQueriesPerSecond</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">100</span>
+</span><span id="__span-8-25"><a id="__codelineno-8-25" name="__codelineno-8-25" href="#__codelineno-8-25"></a><span class="w">    </span><span class="nt">metricsExport</span><span class="p">:</span>
+</span><span id="__span-8-26"><a id="__codelineno-8-26" name="__codelineno-8-26" href="#__codelineno-8-26"></a><span class="w">      </span><span class="nt">prometheus</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-8-27"><a id="__codelineno-8-27" name="__codelineno-8-27" href="#__codelineno-8-27"></a><span class="w">      </span><span class="nt">interval</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;30s&quot;</span>
 </span></code></pre></div>
 <h3 id="create-scheduled-backup-separate-resource">Create Scheduled Backup (Separate Resource)<a class="headerlink" href="#create-scheduled-backup-separate-resource" title="Anchor link to this section">&para;</a></h3>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Note: Backups are now managed via Neo4jBackup CRD</span>
@@ -7457,7 +7231,7 @@ visible via <code>kubectl get svc</code>.</p>
 <li><strong>Storage</strong>: Use fast SSD storage classes (<code>fast-ssd</code>, <code>premium-ssd</code>) for production workloads</li>
 <li><strong>Security</strong>: Always enable TLS and use strong password policies in production</li>
 <li><strong>Monitoring</strong>: Enable query monitoring and centralized logging for performance insights</li>
-<li><strong>Backup Strategy</strong>: Use centralized backup with appropriate retention policies</li>
+<li><strong>Backup Strategy</strong>: Define a <code>Neo4jBackup</code> CR per backup target (one-shot or scheduled via <code>spec.schedule</code>) with appropriate <code>retention</code> policies</li>
 <li><strong>Scaling</strong>: Plan for growth - scaling up is easier than scaling down</li>
 </ol>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Anchor link to this section">&para;</a></h2>

@@ -1120,63 +1120,6 @@
   
   
   
-    
-    
-      
-        
-      
-        
-      
-        
-      
-    
-    
-    
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_1" >
-        
-          
-          <label class="md-nav__link" for="__nav_5_1" id="__nav_5_1_label" tabindex="0">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Backup & Restore
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_1_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_1">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Backup & Restore
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
     <li class="md-nav__item">
       <a href="../../user_guide/guides/backup_restore/" class="md-nav__link">
         
@@ -1185,7 +1128,7 @@
   <span class="md-ellipsis">
     
   
-    Overview
+    Backup & Restore
   
 
     
@@ -1194,70 +1137,6 @@
   
 
       </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../user_guide/guides/backup-disk-management/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Disk Management
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../user_guide/guides/backup-sidecar-requirements/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Sidecar Requirements
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
     </li>
   
 
@@ -4092,7 +3971,7 @@ This project <strong>exclusively uses Kind</strong> for all development and test
 <ul>
 <li><strong>Neo4jEnterpriseCluster</strong>: Creates <code>{cluster-name}-server</code> StatefulSet</li>
 <li><strong>Neo4jEnterpriseStandalone</strong>: Creates <code>{standalone-name}</code> StatefulSet</li>
-<li><strong>Centralized Backup</strong>: Single <code>{cluster-name}-backup-0</code> per cluster</li>
+<li><strong>Backups</strong>: Job-per-<code>Neo4jBackup</code>-CR (no persistent backup pod, no sidecars)</li>
 <li><strong>Self-Organizing Servers</strong>: Neo4j servers automatically assign database roles</li>
 </ul>
 <h2 id="testing-during-development">Testing During Development<a class="headerlink" href="#testing-during-development" title="Anchor link to this section">&para;</a></h2>
@@ -4195,7 +4074,7 @@ tests against an already-configured cluster without rebuilding the environment.<
 </span><span id="__span-21-6"><a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-l<span class="w"> </span><span class="nv">app</span><span class="o">=</span>standalone-neo4j
 </span><span id="__span-21-7"><a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a>
 </span><span id="__span-21-8"><a id="__codelineno-21-8" name="__codelineno-21-8" href="#__codelineno-21-8"></a><span class="c1"># Test database creation</span>
-</span><span id="__span-21-9"><a id="__codelineno-21-9" name="__codelineno-21-9" href="#__codelineno-21-9"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>examples/database/database-standalone.yaml
+</span><span id="__span-21-9"><a id="__codelineno-21-9" name="__codelineno-21-9" href="#__codelineno-21-9"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>examples/databases/database-standalone.yaml
 </span></code></pre></div>
 <h4 id="test-plugin-installation">Test Plugin Installation<a class="headerlink" href="#test-plugin-installation" title="Anchor link to this section">&para;</a></h4>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># Install APOC plugin on cluster</span>

@@ -1224,63 +1224,6 @@
   
   
   
-    
-    
-      
-        
-      
-        
-      
-        
-      
-    
-    
-    
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_1" >
-        
-          
-          <label class="md-nav__link" for="__nav_5_1" id="__nav_5_1_label" tabindex="0">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Backup & Restore
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_1_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_1">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Backup & Restore
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
     <li class="md-nav__item">
       <a href="../backup_restore/" class="md-nav__link">
         
@@ -1289,7 +1232,7 @@
   <span class="md-ellipsis">
     
   
-    Overview
+    Backup & Restore
   
 
     
@@ -1298,70 +1241,6 @@
   
 
       </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../backup-disk-management/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Disk Management
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../backup-sidecar-requirements/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Sidecar Requirements
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
     </li>
   
 
@@ -2721,7 +2600,7 @@
 <h2 id="rbac">RBAC<a class="headerlink" href="#rbac" title="Anchor link to this section">&para;</a></h2>
 <p>The operator itself runs with a specific <code>ServiceAccount</code> that is bound to a <code>ClusterRole</code> with the minimum necessary permissions to do its job. For end-users, the operator also provides a set of <code>ClusterRoles</code> (<code>neo4j-viewer</code>, <code>neo4j-editor</code>) that administrators can bind to users or groups to grant them appropriate levels of access to the Neo4j custom resources.</p>
 <h2 id="pod-security-defaults">Pod Security Defaults<a class="headerlink" href="#pod-security-defaults" title="Anchor link to this section">&para;</a></h2>
-<p>The operator now hardens all Neo4j data-plane pods (servers, centralized backup, standalone, restore jobs, and hook jobs) with strict security contexts by default:</p>
+<p>The operator now hardens all Neo4j data-plane pods (servers, standalone, backup jobs, restore jobs, and hook jobs) with strict security contexts by default:</p>
 <ul>
 <li><code>runAsNonRoot: true</code> with UID/GID <code>7474</code> (Neo4j user) and matching <code>fsGroup</code>.</li>
 <li><code>allowPrivilegeEscalation: false</code>, <code>capabilities.drop: ["ALL"]</code>, <code>seccompProfile: RuntimeDefault</code>.</li>

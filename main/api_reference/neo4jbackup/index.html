@@ -1120,63 +1120,6 @@
   
   
   
-    
-    
-      
-        
-      
-        
-      
-        
-      
-    
-    
-    
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_1" >
-        
-          
-          <label class="md-nav__link" for="__nav_5_1" id="__nav_5_1_label" tabindex="0">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Backup & Restore
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_1_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_1">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Backup & Restore
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
     <li class="md-nav__item">
       <a href="../../user_guide/guides/backup_restore/" class="md-nav__link">
         
@@ -1185,7 +1128,7 @@
   <span class="md-ellipsis">
     
   
-    Overview
+    Backup & Restore
   
 
     
@@ -1194,70 +1137,6 @@
   
 
       </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../user_guide/guides/backup-disk-management/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Disk Management
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../user_guide/guides/backup-sidecar-requirements/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Sidecar Requirements
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
     </li>
   
 
@@ -3965,7 +3844,7 @@
 <tr>
 <td><code>backupsPath</code></td>
 <td><code>string</code></td>
-<td>Run-specific subfolder under <code>spec.storage.path</code> where this run's <code>.backup</code> artifact(s) were written. The subfolder name is the backing Job's name (for one-shot backups: <code>&lt;backup-name&gt;-backup</code>; for CronJob children: <code>&lt;cronjob-name&gt;-&lt;unix-seconds&gt;</code>). To restore from this run set <code>Neo4jRestore.spec.source.backupPath</code> to <code>&lt;spec.storage.path&gt;/&lt;backupsPath&gt;</code> — neo4j-admin auto-discovers <code>.backup</code> files inside directories. Older runs predating the per-run-subfolder change (issue #129) have an empty <code>backupsPath</code> and live flat in <code>spec.storage.path</code>.</td>
+<td>The shared per-CR directory under <code>spec.storage.path</code> where this run wrote its <code>.backup</code> artifact. <strong>Same value for every run of one CR</strong> — all runs accumulate in this directory so <code>neo4j-admin</code> can chain differential backups off the prior full. Value is the Neo4jBackup CR name. Use the <code>runID</code> field (Job UID) for per-run identity.</td>
 </tr>
 </tbody>
 </table>

@@ -1120,63 +1120,6 @@
   
   
   
-    
-    
-      
-        
-      
-        
-      
-        
-      
-    
-    
-    
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_1" >
-        
-          
-          <label class="md-nav__link" for="__nav_5_1" id="__nav_5_1_label" tabindex="0">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Backup & Restore
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_1_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_1">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Backup & Restore
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
     <li class="md-nav__item">
       <a href="../../user_guide/guides/backup_restore/" class="md-nav__link">
         
@@ -1185,7 +1128,7 @@
   <span class="md-ellipsis">
     
   
-    Overview
+    Backup & Restore
   
 
     
@@ -1194,70 +1137,6 @@
   
 
       </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../user_guide/guides/backup-disk-management/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Disk Management
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../user_guide/guides/backup-sidecar-requirements/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Sidecar Requirements
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
     </li>
   
 
@@ -2597,10 +2476,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#centralized-backup-testing" class="md-nav__link">
+  <a href="#backup-testing" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Centralized Backup Testing
+        Backup Testing
       
     </span>
   </a>
@@ -3512,10 +3391,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#centralized-backup-testing" class="md-nav__link">
+  <a href="#backup-testing" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Centralized Backup Testing
+        Backup Testing
       
     </span>
   </a>
@@ -4357,17 +4236,17 @@
 </span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="p">},</span><span class="w"> </span><span class="nx">timeout</span><span class="p">,</span><span class="w"> </span><span class="nx">interval</span><span class="p">).</span><span class="nx">Should</span><span class="p">(</span><span class="nx">Succeed</span><span class="p">())</span>
 </span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="nx">Expect</span><span class="p">(</span><span class="o">*</span><span class="nx">serverSts</span><span class="p">.</span><span class="nx">Spec</span><span class="p">.</span><span class="nx">Replicas</span><span class="p">).</span><span class="nx">To</span><span class="p">(</span><span class="nx">Equal</span><span class="p">(</span><span class="nb">int32</span><span class="p">(</span><span class="mi">2</span><span class="p">)))</span>
 </span></code></pre></div>
-<h4 id="centralized-backup-testing">Centralized Backup Testing<a class="headerlink" href="#centralized-backup-testing" title="Anchor link to this section">&para;</a></h4>
-<p>Tests verify centralized backup architecture:</p>
-<div class="language-go highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nx">By</span><span class="p">(</span><span class="s">&quot;Verifying centralized backup StatefulSet&quot;</span><span class="p">)</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="nx">backupSts</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="o">&amp;</span><span class="nx">appsv1</span><span class="p">.</span><span class="nx">StatefulSet</span><span class="p">{}</span>
+<h4 id="backup-testing">Backup Testing<a class="headerlink" href="#backup-testing" title="Anchor link to this section">&para;</a></h4>
+<p>Backups are Job-per-<code>Neo4jBackup</code>-CR — there is no persistent backup pod or
+sidecar. Tests verify the Job spawned by a <code>Neo4jBackup</code> CR:</p>
+<div class="language-go highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nx">By</span><span class="p">(</span><span class="s">&quot;Verifying the Neo4jBackup Job&quot;</span><span class="p">)</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="nx">backupJob</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="o">&amp;</span><span class="nx">batchv1</span><span class="p">.</span><span class="nx">Job</span><span class="p">{}</span>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="nx">Eventually</span><span class="p">(</span><span class="kd">func</span><span class="p">()</span><span class="w"> </span><span class="kt">error</span><span class="w"> </span><span class="p">{</span>
 </span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">k8sClient</span><span class="p">.</span><span class="nx">Get</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span><span class="w"> </span><span class="nx">types</span><span class="p">.</span><span class="nx">NamespacedName</span><span class="p">{</span>
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">        </span><span class="nx">Name</span><span class="p">:</span><span class="w">      </span><span class="nx">clusterName</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="s">&quot;-backup&quot;</span><span class="p">,</span><span class="w">  </span><span class="c1">// Centralized backup</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">        </span><span class="nx">Name</span><span class="p">:</span><span class="w">      </span><span class="nx">backupName</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="s">&quot;-backup&quot;</span><span class="p">,</span><span class="w">  </span><span class="c1">// one-shot Job</span>
 </span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">        </span><span class="nx">Namespace</span><span class="p">:</span><span class="w"> </span><span class="nx">namespace</span><span class="p">.</span><span class="nx">Name</span><span class="p">,</span>
-</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">    </span><span class="p">},</span><span class="w"> </span><span class="nx">backupSts</span><span class="p">)</span>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">    </span><span class="p">},</span><span class="w"> </span><span class="nx">backupJob</span><span class="p">)</span>
 </span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="p">},</span><span class="w"> </span><span class="nx">timeout</span><span class="p">,</span><span class="w"> </span><span class="nx">interval</span><span class="p">).</span><span class="nx">Should</span><span class="p">(</span><span class="nx">Succeed</span><span class="p">())</span>
-</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="nx">Expect</span><span class="p">(</span><span class="o">*</span><span class="nx">backupSts</span><span class="p">.</span><span class="nx">Spec</span><span class="p">.</span><span class="nx">Replicas</span><span class="p">).</span><span class="nx">To</span><span class="p">(</span><span class="nx">Equal</span><span class="p">(</span><span class="nb">int32</span><span class="p">(</span><span class="mi">1</span><span class="p">)))</span><span class="w">  </span><span class="c1">// Single backup pod</span>
 </span></code></pre></div>
 <h4 id="dual-deployment-support-testing">Dual Deployment Support Testing<a class="headerlink" href="#dual-deployment-support-testing" title="Anchor link to this section">&para;</a></h4>
 <p>Tests verify both cluster and standalone support:</p>
@@ -4547,9 +4426,8 @@
 </span></code></pre></div>
 <h3 id="resource-usage-tests">Resource Usage Tests<a class="headerlink" href="#resource-usage-tests" title="Anchor link to this section">&para;</a></h3>
 <div class="language-go highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="nx">It</span><span class="p">(</span><span class="s">&quot;Should use optimal resource patterns&quot;</span><span class="p">,</span><span class="w"> </span><span class="kd">func</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="w">    </span><span class="c1">// Verify centralized backup uses &lt;30% resources of sidecar approach</span>
-</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="w">    </span><span class="c1">// Check server-based StatefulSet efficiency</span>
-</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="p">})</span>
+</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="w">    </span><span class="c1">// Check server-based StatefulSet efficiency</span>
+</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="p">})</span>
 </span></code></pre></div>
 <h2 id="cicd-testing">CI/CD Testing<a class="headerlink" href="#cicd-testing" title="Anchor link to this section">&para;</a></h2>
 <h3 id="github-actions-integration">GitHub Actions Integration<a class="headerlink" href="#github-actions-integration" title="Anchor link to this section">&para;</a></h3>

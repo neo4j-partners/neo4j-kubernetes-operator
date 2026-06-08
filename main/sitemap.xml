@@ -137,14 +137,6 @@
          <lastmod>2026-06-08</lastmod>
     </url>
     <url>
-         <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/main/user_guide/guides/backup-disk-management/</loc>
-         <lastmod>2026-06-08</lastmod>
-    </url>
-    <url>
-         <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/main/user_guide/guides/backup-sidecar-requirements/</loc>
-         <lastmod>2026-06-08</lastmod>
-    </url>
-    <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/main/user_guide/guides/backup_restore/</loc>
          <lastmod>2026-06-08</lastmod>
     </url>
