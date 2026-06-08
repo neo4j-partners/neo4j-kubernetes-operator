@@ -1992,6 +1992,19 @@ func (r *Neo4jRestoreReconciler) startClusterCypherRestore(
 			r.updateRestoreStatus(ctx, restore, StatusFailed, err.Error())
 			return ctrl.Result{}, err
 		}
+		// Neo4j's CloudSeedProvider seeds a single database from the exact
+		// `.backup` FILE — it does NOT scan a directory. Pointing it at the
+		// per-CR directory makes it try to open the directory name as a file
+		// ("Can't open seed file: …/<chain-root>"). Append the captured
+		// artifact filename (same as the PVC path) so the URI is a file.
+		if restore.Spec.Source.Type == SourceTypeBackup {
+			fname, ferr := r.latestSucceededArtifactFilename(ctx, restore.Spec.Source.BackupRef, restore.Namespace)
+			if ferr != nil {
+				r.updateRestoreStatus(ctx, restore, StatusFailed, ferr.Error())
+				return ctrl.Result{}, ferr
+			}
+			seedURI = strings.TrimRight(seedURI, "/") + "/" + fname
+		}
 		// Project cloud credentials onto cluster pods (envFrom) so the JVM's
 		// SDK default credential chain can authenticate the seed fetch.
 		if storage.Cloud != nil && storage.Cloud.CredentialsSecretRef != "" {
@@ -2082,9 +2095,21 @@ func (r *Neo4jRestoreReconciler) startClusterCypherRestore(
 		}
 	}
 
-	// Both CREATE DATABASE … WAIT and dbms.recreateDatabase block until
-	// the new state is online; reaching this point means the restore
-	// succeeded. Mark Completed.
+	// CREATE DATABASE … WAIT blocks until online, but dbms.recreateDatabase
+	// is ASYNCHRONOUS — it returns as soon as the recreate is scheduled,
+	// before the per-server seed-from-URI finishes. Without an explicit wait
+	// we'd mark the restore Completed while the database is still offline (or
+	// has failed to seed), which is exactly the false-success seen in CI.
+	// Poll SHOW DATABASE until every allocation is online; surface the seed
+	// error (statusMessage) if it doesn't converge.
+	if waitErr := neo4jClient.WaitForDatabaseOnline(ctx, restore.Spec.DatabaseName, 5*time.Minute); waitErr != nil {
+		logger.Error(waitErr, "Database did not come online after cluster Cypher restore")
+		r.updateRestoreStatus(ctx, restore, StatusFailed,
+			fmt.Sprintf("Restore did not converge to online: %v", waitErr))
+		return ctrl.Result{RequeueAfter: r.RequeueAfter}, waitErr
+	}
+
+	// Database is online on every allocation; the restore succeeded. Mark Completed.
 	completion := metav1.Now()
 	restore.Status.CompletionTime = &completion
 	r.updateRestoreStatus(ctx, restore, StatusCompleted,
@@ -2183,6 +2208,25 @@ func (r *Neo4jRestoreReconciler) resolveClusterPVCRestoreURI(
 	}
 
 	return pvcSeedProxyURL(restore.Name, restore.Namespace, backupsPath, filename), ctrl.Result{}, nil
+}
+
+// latestSucceededArtifactFilename returns the captured `.backup` artifact
+// filename of a Neo4jBackup's most-recent Succeeded run (history is ordered
+// most-recent-first). Both the cloud and PVC cluster-restore paths need this:
+// Neo4j seeds a single database from the exact file, not a directory.
+func (r *Neo4jRestoreReconciler) latestSucceededArtifactFilename(ctx context.Context, backupRef, namespace string) (string, error) {
+	backup := &neo4jv1beta1.Neo4jBackup{}
+	if err := r.Get(ctx, types.NamespacedName{Name: backupRef, Namespace: namespace}, backup); err != nil {
+		return "", fmt.Errorf("re-fetch backup %q: %w", backupRef, err)
+	}
+	for i := range backup.Status.History {
+		if backup.Status.History[i].Status == "Succeeded" {
+			if fn := backup.Status.History[i].ArtifactFilename; fn != "" {
+				return fn, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("Neo4jBackup %q has no Succeeded run with a captured ArtifactFilename — re-run the backup with a recent operator version (Pod-log capture required for cluster restores), or copy the .backup file to storage and restore via type=storage with source.backupPath pointing at the file", backupRef)
 }
 
 func ternaryString(cond bool, ifTrue, ifFalse string) string {
