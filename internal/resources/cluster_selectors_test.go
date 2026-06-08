@@ -87,19 +87,6 @@ func TestServerPodSelector_DoesNotMatchWhenClusterNameSuffixed(t *testing.T) {
 		"historical buggy selector must NOT match server pods (regression guard for #68)")
 }
 
-// The backup StatefulSet pods must not be picked up by the server selector,
-// since controllers use it to stop/wait for the cluster proper.
-func TestServerPodSelector_DoesNotMatchBackupPods(t *testing.T) {
-	cluster := newTestCluster()
-	cluster.Spec.Backups = &neo4jv1beta1.BackupsSpec{}
-	backupSTS := resources.BuildBackupStatefulSet(cluster)
-	require.NotNil(t, backupSTS, "backup STS should be built when Backups is set")
-
-	selector := resources.ServerPodSelector(cluster.Name)
-	assertNotSubset(t, selector, backupSTS.Spec.Template.Labels,
-		"ServerPodSelector must NOT match backup pod labels")
-}
-
 func TestPVCSelectorByInstance_MatchesVolumeClaimTemplateLabels(t *testing.T) {
 	cluster := newTestCluster()
 	sts := resources.BuildServerStatefulSetForEnterprise(cluster)

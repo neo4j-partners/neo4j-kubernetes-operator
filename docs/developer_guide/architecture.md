@@ -44,8 +44,6 @@ Backups are owned by the dedicated **`Neo4jBackup` CRD**: each CR (one-shot or s
 
 All runs of a single Neo4jBackup CR share a `<base>/<cr-name>/` directory so `neo4j-admin` can chain `--type=DIFF` backups off the prior `FULL`. Per-run identity is preserved via the timestamp `neo4j-admin` embeds in each `.backup` filename.
 
-> **Legacy `Neo4jEnterpriseCluster.spec.backups`**: when set, the cluster controller also builds a `{cluster-name}-backup-0` StatefulSet (`BuildBackupStatefulSet` in `internal/resources/cluster.go`). This is a deprecated compat path retained for clusters that pre-date the Neo4jBackup CRD. New deployments should use Neo4jBackup directly.
-
 ## Custom Resource Definitions (CRDs)
 
 The operator defines six core CRDs located in `api/v1beta1/`:
@@ -209,7 +207,6 @@ type Neo4jDatabaseSpec struct {
 - **Architecture**: Job-per-`Neo4jBackup`-CR. No persistent backup pod or sidecars.
 - **Cross-Deployment Support**: Backs up both clusters and standalone deployments
 - **Modern Syntax**: Neo4j 5.26+ compatible backup commands
-- **Legacy path**: `Neo4jEnterpriseCluster.spec.backups` retains a centralized `{cluster}-backup-0` StatefulSet for back-compat. Deprecated — new deployments should use the Neo4jBackup CRD.
 
 #### Restore Controller (`neo4jrestore_controller.go`)
 **Database restoration management:**
@@ -356,14 +353,14 @@ CREATE DATABASE name [IF NOT EXISTS]
 - **StandaloneBuilder** (`standalone.go`): Single-node deployment resources
 - **ConfigMapBuilder**: Unified configuration for both deployment types
 - **ServiceBuilder**: Client and discovery services
-- **BackupBuilder**: Legacy centralized `{cluster}-backup-0` StatefulSet (only built when `spec.backups` is set; deprecated path)
+- **BackupBuilder**: per-`Neo4jBackup`-CR Kubernetes Job (no persistent backup pod, no sidecars)
 - **TruststoreBuilder** (`cluster.go:BuildTrustStoreInitContainer / BuildTrustStoreVolumes / CollectTrustedCASecrets`): emits the per-Secret volume mounts, the writable `/truststore` EmptyDir, and the `truststore-init` init container (seeds `/truststore/truststore.jks` from `$JAVA_HOME/lib/security/cacerts`, then `keytool -import` for each `spec.trustedCASecrets` entry using the Secret name as alias). Reused by both cluster (env var) and standalone (ConfigMap) wire-up paths via `CollectTrustedCASecrets`, which folds the legacy singular `spec.auth.trustStore` into the new plural list.
 
 #### Server-Based Resource Patterns:
 - **StatefulSet Naming**: `{cluster-name}-server` for clusters, `{standalone-name}` for standalone
 - **Pod Naming**: `{cluster-name}-server-0`, `{cluster-name}-server-1`, etc.
 - **Service Names**: `{cluster-name}-client`, `{cluster-name}-discovery`
-- **Backup Resources**: per-CR Kubernetes Jobs spawned by the `Neo4jBackup` controller (one-shot: `<cr-name>-backup`; CronJob children: `<cr-name>-<unix-seconds>`). Legacy `{cluster-name}-backup-0` StatefulSet only when `spec.backups` is set on the cluster CR (deprecated).
+- **Backup Resources**: per-CR Kubernetes Jobs spawned by the `Neo4jBackup` controller (one-shot: `<cr-name>-backup`; CronJob children: `<cr-name>-<unix-seconds>`). No persistent backup pod or sidecars.
 - **Truststore mount**: `/truststore/truststore.jks` (read-only, populated by the `truststore-init` init container; password is the JVM default `changeit`)
 - **User-supplied volumes**: `spec.extraVolumes` are appended to the pod spec verbatim; `spec.extraVolumeMounts` are appended to the Neo4j container's mounts after operator-managed mounts. Operator-managed paths (`/data`, `/logs`, `/conf`, `/ssl`, `/plugins`, `/truststore`, `/truststore-ca`, `/var/lib/neo4j/...`) are off-limits and rejected by the validator.
 

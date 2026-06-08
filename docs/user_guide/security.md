@@ -659,7 +659,7 @@ The emitted policy:
 | 6000  | pods labelled `neo4j.com/cluster: <cluster>`       | V2 discovery + tcp-tx — peers only |
 | 7000  | pods labelled `neo4j.com/cluster: <cluster>`       | RAFT — peers only |
 | 7688  | pods labelled `neo4j.com/cluster: <cluster>`       | Cluster routing — peers only |
-| 6362  | operator-managed backup pods only                  | Backup — only Neo4jBackup-spawned Jobs + the centralized backup STS |
+| 6362  | operator-managed backup pods only                  | Backup — only Neo4jBackup-spawned Jobs |
 
 Standalone deployments get the same shape minus the peer-only ports
 (single-server, no RAFT).

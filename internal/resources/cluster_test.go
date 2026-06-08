@@ -122,7 +122,7 @@ func TestBuildPodSpecForEnterprise_WithoutFeatures(t *testing.T) {
 	// Test that no init containers are added when no plugins
 	assert.Len(t, podSpec.InitContainers, 0, "should have no init containers when no plugins")
 
-	// Test that only main container is present when query monitoring is disabled (no backup sidecar due to centralized backup architecture)
+	// Test that only main container is present (backups are Job-per-Neo4jBackup-CR, never sidecars)
 	assert.Len(t, podSpec.Containers, 1, "should have only main container when query monitoring is disabled")
 	assert.Equal(t, "neo4j", podSpec.Containers[0].Name)
 }
@@ -161,7 +161,7 @@ func TestBuildStatefulSetForEnterprise_WithFeatures(t *testing.T) {
 	// Test that pod template has the features
 	podSpec := sts.Spec.Template.Spec
 	assert.Len(t, podSpec.InitContainers, 0, "should have no init containers as plugins are managed via Neo4jPlugin CRD")
-	assert.Len(t, podSpec.Containers, 1, "should have only main container (no backup sidecar)")
+	assert.Len(t, podSpec.Containers, 1, "should have only main container (backups are Job-per-CR, no sidecar)")
 
 	// Test pod management policy
 	assert.Equal(t, appsv1.ParallelPodManagement, sts.Spec.PodManagementPolicy, "should use parallel pod management")
@@ -992,71 +992,6 @@ func TestBuildStandaloneBackupFromAddress(t *testing.T) {
 	}
 	addr := resources.BuildStandaloneBackupFromAddress(standalone)
 	assert.Equal(t, "my-standalone-0.my-standalone-headless.ops.svc.cluster.local:6362", addr)
-}
-
-func TestBuildBackupStatefulSet_Structure(t *testing.T) {
-	cluster := &neo4jv1beta1.Neo4jEnterpriseCluster{
-		ObjectMeta: metav1.ObjectMeta{Name: "test-cluster", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jEnterpriseClusterSpec{
-			Image:    neo4jv1beta1.ImageSpec{Repo: "neo4j", Tag: "5.26.0-enterprise"},
-			Topology: neo4jv1beta1.TopologyConfiguration{Servers: 3},
-			Storage:  neo4jv1beta1.StorageSpec{ClassName: "standard", Size: "10Gi"},
-			Auth:     &neo4jv1beta1.AuthSpec{AdminSecret: "neo4j-admin-secret"},
-			Backups:  &neo4jv1beta1.BackupsSpec{},
-		},
-	}
-
-	sts := resources.BuildBackupStatefulSet(cluster)
-	require.NotNil(t, sts, "backup StatefulSet should be created when backups enabled")
-
-	// Replicas
-	require.NotNil(t, sts.Spec.Replicas)
-	assert.Equal(t, int32(1), *sts.Spec.Replicas, "backup should have 1 replica")
-
-	// Labels
-	assert.Equal(t, "test-cluster", sts.Labels["neo4j.com/cluster"])
-	assert.Equal(t, "backup", sts.Labels["neo4j.com/component"])
-
-	// Container
-	containers := sts.Spec.Template.Spec.Containers
-	require.Len(t, containers, 1, "should have exactly 1 container")
-	assert.Equal(t, "backup", containers[0].Name)
-
-	// Environment variables
-	envMap := make(map[string]string)
-	for _, env := range containers[0].Env {
-		if env.Value != "" {
-			envMap[env.Name] = env.Value
-		}
-	}
-	assert.Equal(t, "yes", envMap["NEO4J_ACCEPT_LICENSE_AGREEMENT"])
-	assert.Equal(t, "test-cluster", envMap["NEO4J_CLUSTER_NAME"])
-
-	// Volume mounts
-	mountMap := make(map[string]string)
-	for _, vm := range containers[0].VolumeMounts {
-		mountMap[vm.Name] = vm.MountPath
-	}
-	assert.Equal(t, "/backups", mountMap["backup-storage"], "should mount backup-storage at /backups")
-	assert.Equal(t, "/backup-requests", mountMap["backup-requests"], "should mount backup-requests at /backup-requests")
-
-	// VolumeClaimTemplates
-	require.Len(t, sts.Spec.VolumeClaimTemplates, 1, "should have 1 PVC template")
-	assert.Equal(t, "backup-storage", sts.Spec.VolumeClaimTemplates[0].Name)
-}
-
-func TestBuildBackupStatefulSet_NilWhenDisabled(t *testing.T) {
-	cluster := &neo4jv1beta1.Neo4jEnterpriseCluster{
-		ObjectMeta: metav1.ObjectMeta{Name: "test-cluster", Namespace: "default"},
-		Spec: neo4jv1beta1.Neo4jEnterpriseClusterSpec{
-			Image:    neo4jv1beta1.ImageSpec{Repo: "neo4j", Tag: "5.26.0-enterprise"},
-			Topology: neo4jv1beta1.TopologyConfiguration{Servers: 3},
-			Storage:  neo4jv1beta1.StorageSpec{ClassName: "standard", Size: "10Gi"},
-		},
-	}
-
-	sts := resources.BuildBackupStatefulSet(cluster)
-	assert.Nil(t, sts, "backup StatefulSet should be nil when backups not configured")
 }
 
 func TestBuildPodSpecForEnterprise_WithPullSecrets(t *testing.T) {

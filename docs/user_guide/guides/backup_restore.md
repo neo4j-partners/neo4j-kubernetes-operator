@@ -22,11 +22,7 @@ Watch for `status.phase: Completed`. Logs at `kubectl logs job/simple-backup-bac
 
 ## Migrating from legacy `spec.backups`
 
-If you have existing `Neo4jEnterpriseCluster` CRs with the legacy `spec.backups` field set, the operator still provisions the `{cluster}-backup-0` centralized StatefulSet for back-compat but emits a Warning Event `LegacyBackupsDeprecated` on every reconcile and stamps `status.conditions[type=LegacyBackupsInUse].status=True`. The field will be removed in a future release.
-
-**Migration**: replace `spec.backups: { … }` on the cluster with one or more `Neo4jBackup` CRs. The Neo4jBackup CRD covers every legacy capability plus more — one-shot or scheduled (`spec.schedule`) backups, native CronJob retention/suspend, status.history, sharded-DB targets, mixed-cadence chains via `chainFromBackup` (rule 78), and per-Job pod resource control (`spec.options.resources`).
-
-After migrating, remove `spec.backups` from the cluster CR. The centralized StatefulSet is deleted on the next reconcile.
+The legacy `spec.backups` field (and its centralized `{cluster}-backup-0` StatefulSet) has been **removed** — it no longer exists in the CRD schema. Use one or more `Neo4jBackup` CRs instead. The Neo4jBackup CRD covers every legacy capability plus more — one-shot or scheduled (`spec.schedule`) backups, native CronJob retention/suspend, status.history, sharded-DB targets, mixed-cadence chains via `chainFromBackup` (rule 78), and per-Job pod resource control (`spec.options.resources`).
 
 ## Backup Architecture
 

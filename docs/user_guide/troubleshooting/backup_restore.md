@@ -404,15 +404,7 @@ kubectl top pod production-cluster-server-0
 
 2. **Avoid overlapping backups**: Stagger `Neo4jBackup` schedules so only one job runs per cluster at a time.
 
-3. **Storage Performance Tuning**:
-   ```yaml
-   # Use high-performance storage for backup staging
-   spec:
-     storage:
-       backupStorage:
-         className: "fast-ssd"
-         size: "100Gi"
-   ```
+3. **Storage Performance Tuning**: Back the `Neo4jBackup` Job's destination PVC with a high-performance storage class (e.g. `fast-ssd`) for backup staging.
 
 4. **Network Optimization**:
    ```yaml

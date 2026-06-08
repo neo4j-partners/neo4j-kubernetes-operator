@@ -18,7 +18,7 @@ The `Neo4jEnterpriseCluster` Custom Resource Definition (CRD) manages Neo4j Ente
 - **Single StatefulSet**: `{cluster-name}-server` with configurable replica count
 - **Server Pods**: Named `{cluster-name}-server-0`, `{cluster-name}-server-1`, etc.
 - **Self-Organization**: Servers automatically organize into primary/secondary roles for databases
-- **Backup**: Use the [`Neo4jBackup` CRD](neo4jbackup.md) — each CR spawns a Kubernetes Job. The legacy `spec.backups` field still emits a `{cluster-name}-backup-0` StatefulSet for back-compat but is deprecated for new deployments.
+- **Backup**: Use the [`Neo4jBackup` CRD](neo4jbackup.md) — each CR spawns a Kubernetes Job. There is no persistent backup pod or sidecar.
 - **Role Flexibility**: Servers can host multiple databases with different roles
 
 **When to Use**:
@@ -73,11 +73,11 @@ The `Neo4jEnterpriseClusterSpec` defines the desired state of a Neo4j Enterprise
 
 | Field | Type | Description |
 |---|---|---|
-| `backups` | [`BackupsSpec`](#backupsspec) | Backup configuration |
 | `upgradeStrategy` | [`UpgradeStrategySpec`](#upgradestrategyspec) | Upgrade strategy configuration |
 
-To restore a cluster from a backup, create a separate `Neo4jRestore` CR after
-the cluster reaches `Ready` — see [`Neo4jRestore`](neo4jrestore.md).
+To back up a cluster, create a separate [`Neo4jBackup`](neo4jbackup.md) CR. To
+restore a cluster from a backup, create a separate `Neo4jRestore` CR after the
+cluster reaches `Ready` — see [`Neo4jRestore`](neo4jrestore.md).
 
 ### Networking
 
@@ -153,14 +153,6 @@ Specifies role constraints for individual servers.
 | `className` | `string` | Storage class name (immutable after creation) |
 | `size` | `string` | Storage size (e.g., `"10Gi"`). Can be increased after creation — the operator automatically expands PVCs and recreates the StatefulSet with zero downtime. **Cannot be decreased** (PVC shrink is not supported by Kubernetes). Requires the StorageClass to have `allowVolumeExpansion: true`. |
 | `retentionPolicy` | `string` | PVC retention policy: `"Delete"` (default) permanently removes PVCs on deletion; `"Retain"` preserves them. **Use `Retain` for production to prevent data loss.** See [Storage and PVC Retention](../user_guide/configuration.md#storage-and-pvc-retention). |
-| `backupStorage` | [`*BackupStorageSpec`](#backupstoragespec) | Additional storage for backups |
-
-### BackupStorageSpec
-
-| Field | Type | Description |
-|---|---|---|
-| `className` | `string` | Storage class name for backup volumes |
-| `size` | `string` | Storage size for backup volumes. Supports the same automatic expansion as `spec.storage.size`. |
 
 ### AuthSpec
 
@@ -505,13 +497,6 @@ resources:
 | `property sharding requires minimum 1 CPU core` | Insufficient CPU | Increase CPU to 2+ cores (recommended) |
 
 For detailed configuration, see the [Property Sharding Guide](../user_guide/property_sharding.md).
-
-### BackupsSpec
-
-| Field | Type | Description |
-|---|---|---|
-| `defaultStorage` | [`*StorageLocation`](#storagelocation) | Default storage location for backups |
-| `cloud` | [`*CloudBlock`](#cloudblock) | Cloud provider configuration (credentials/identity) |
 
 ### StorageLocation
 

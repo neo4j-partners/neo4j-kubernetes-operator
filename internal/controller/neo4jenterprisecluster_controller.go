@@ -526,28 +526,6 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 	}
 
-	// Legacy centralized backup StatefulSet (deprecated — use Neo4jBackup CRD).
-	// When spec.backups is set, emit a Warning Event + sticky condition
-	// pointing the user at the modern path. The STS itself still builds for
-	// back-compat until a future release removes the field. See rule 79.
-	//nolint:staticcheck // SA1019: legacy back-compat path; users get a Warning Event and a LegacyBackupsInUse condition.
-	if cluster.Spec.Backups != nil {
-		r.Recorder.Eventf(cluster, corev1.EventTypeWarning, "LegacyBackupsDeprecated",
-			"spec.backups is deprecated — use the Neo4jBackup CRD instead. The centralized %s-backup-0 StatefulSet will be removed in a future release. See docs/user_guide/guides/backup_restore.md.",
-			cluster.Name)
-		logger.Info("spec.backups is deprecated; use the Neo4jBackup CRD instead",
-			"cluster", cluster.Name,
-			"migration", "https://neo4j-partners.github.io/neo4j-kubernetes-operator/main/user_guide/guides/backup_restore/")
-		backupSts := resources.BuildBackupStatefulSet(cluster)
-		if backupSts != nil {
-			if err := r.createOrUpdateResource(ctx, backupSts, cluster); err != nil {
-				logger.Error(err, "Failed to create backup StatefulSet")
-				_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Failed to create backup StatefulSet: %v", err))
-				return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
-			}
-		}
-	}
-
 	// Handle Query Performance Monitoring
 	if cluster.Spec.Monitoring != nil && cluster.Spec.Monitoring.Enabled {
 		queryMonitor := NewQueryMonitor(r.Client, r.Scheme)
@@ -645,15 +623,6 @@ func (r *Neo4jEnterpriseClusterReconciler) handleDeletion(ctx context.Context, c
 			logger.Error(err, "Failed to delete server StatefulSet")
 		}
 	}
-	backupStsName := fmt.Sprintf("%s-backup", cluster.Name)
-	backupSts := &appsv1.StatefulSet{}
-	if err := r.Get(ctx, types.NamespacedName{Name: backupStsName, Namespace: cluster.Namespace}, backupSts); err == nil {
-		logger.Info("Deleting backup StatefulSet", "name", backupStsName)
-		if err := r.Delete(ctx, backupSts); err != nil {
-			logger.Error(err, "Failed to delete backup StatefulSet")
-		}
-	}
-
 	logger.Info("Removing finalizer from cluster", "finalizers", cluster.Finalizers, "deletionTimestamp", cluster.DeletionTimestamp)
 	controllerutil.RemoveFinalizer(cluster, ClusterFinalizer)
 	err := r.Update(ctx, cluster)

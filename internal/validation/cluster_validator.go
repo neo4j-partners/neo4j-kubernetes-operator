@@ -41,7 +41,6 @@ type ClusterValidator struct {
 	storageValidator  *StorageValidator
 	tlsValidator      *TLSValidator
 	authValidator     *AuthValidator
-	cloudValidator    *CloudValidator
 	upgradeValidator  *UpgradeValidator
 	memoryValidator   *MemoryValidator
 	resourceValidator *ResourceValidator
@@ -57,7 +56,6 @@ func NewClusterValidator(client client.Client) *ClusterValidator {
 		storageValidator:  NewStorageValidator(),
 		tlsValidator:      NewTLSValidator(),
 		authValidator:     NewAuthValidator(),
-		cloudValidator:    NewCloudValidator(),
 		upgradeValidator:  NewUpgradeValidator(),
 		memoryValidator:   NewMemoryValidator(),
 		resourceValidator: NewResourceValidator(client),
@@ -178,9 +176,6 @@ func (v *ClusterValidator) validateCluster(ctx context.Context, cluster *neo4jv1
 
 	// Memory validation (critical for preventing runtime failures)
 	allErrs = append(allErrs, v.memoryValidator.Validate(cluster)...)
-
-	// Cloud identity validation (least critical, do last)
-	allErrs = append(allErrs, v.cloudValidator.Validate(cluster)...)
 
 	// MCP server validation
 	allErrs = append(allErrs, validateMCPConfig(cluster.Spec.MCP, field.NewPath("spec", "mcp"))...)

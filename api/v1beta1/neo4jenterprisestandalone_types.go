@@ -71,8 +71,6 @@ type Neo4jEnterpriseStandaloneSpec struct {
 
 	Service *ServiceSpec `json:"service,omitempty"`
 
-	Backups *BackupsSpec `json:"backups,omitempty"`
-
 	// Plugin management configuration - DEPRECATED: Use Neo4jPlugin CRD instead
 
 	// Monitoring configuration (Prometheus metrics, query logging, diagnostics)
@@ -202,9 +200,6 @@ type StandaloneDatabaseStatus struct {
 
 	// DatabaseName shows the active database name
 	DatabaseName string `json:"databaseName,omitempty"`
-
-	// LastBackupTime shows when the last backup was completed
-	LastBackupTime *metav1.Time `json:"lastBackupTime,omitempty"`
 
 	// StorageSize shows the current storage usage
 	StorageSize string `json:"storageSize,omitempty"`

@@ -52,11 +52,9 @@ const standalonePodAppLabel = "app"
 //     7688.
 //
 //  3. Backup port (6362) — restricted to operator-managed backup pods.
-//     Three matched selectors cover all backup pod shapes:
+//     Two matched selectors cover both backup pod shapes:
 //     - app.kubernetes.io/component=backup       (one-shot Neo4jBackup Job)
 //     - app.kubernetes.io/component=backup-cron  (CronJob children)
-//     - neo4j.com/component=backup               (centralized backup STS,
-//     built by buildCentralizedBackupStatefulSet)
 //
 // NetworkPolicy enforcement depends on the cluster's CNI plugin —
 // Calico/Cilium/Antrea/Weave enforce, flannel does not. Enabling this on a
@@ -172,7 +170,7 @@ func BuildNetworkPolicyForEnterprise(cluster *neo4jv1beta1.Neo4jEnterpriseCluste
 				// The OR semantics across multiple From peers means a Pod
 				// matching ANY of these selectors can connect on 6362.
 				{
-					From: backupPodPeers(cluster.Name),
+					From: backupPodPeers(),
 					Ports: []networkingv1.NetworkPolicyPort{
 						{Protocol: tcp, Port: &backupPort},
 					},
@@ -237,7 +235,7 @@ func BuildNetworkPolicyForStandalone(standalone *neo4jv1beta1.Neo4jEnterpriseSta
 				// the standalone backup workflow uses the same Neo4jBackup
 				// CR shape, so the same Pod labels apply.
 				{
-					From: backupPodPeers(standalone.Name),
+					From: backupPodPeers(),
 					Ports: []networkingv1.NetworkPolicyPort{
 						{Protocol: tcp, Port: &backupPort},
 					},
@@ -257,16 +255,10 @@ func BuildNetworkPolicyForStandalone(standalone *neo4jv1beta1.Neo4jEnterpriseSta
 //     `app.kubernetes.io/component=backup` +
 //     `app.kubernetes.io/managed-by=neo4j-operator`
 //   - CronJob child Job: same labels with component=backup-cron
-//   - centralized backup StatefulSet (cluster only):
-//     `buildCentralizedBackupStatefulSet` in cluster.go → produces
-//     `neo4j.com/component=backup` + `neo4j.com/cluster=<name>`
 //
-// `workloadName` is the Neo4jBackup CR's spec.target.name — for centralized
-// backup STS pods this matches the cluster name (so the
-// neo4j.com/cluster=<name> selector is targeted), and for Neo4jBackup Jobs
-// the `app.kubernetes.io/managed-by` selector covers both cluster and
-// standalone targets uniformly.
-func backupPodPeers(workloadName string) []networkingv1.NetworkPolicyPeer {
+// Both Neo4jBackup Job shapes carry `app.kubernetes.io/managed-by=neo4j-operator`,
+// so the selectors cover cluster and standalone targets uniformly.
+func backupPodPeers() []networkingv1.NetworkPolicyPeer {
 	return []networkingv1.NetworkPolicyPeer{
 		// One-shot Neo4jBackup Job pods.
 		{PodSelector: &metav1.LabelSelector{
@@ -280,15 +272,6 @@ func backupPodPeers(workloadName string) []networkingv1.NetworkPolicyPeer {
 			MatchLabels: map[string]string{
 				"app.kubernetes.io/managed-by": "neo4j-operator",
 				"app.kubernetes.io/component":  "backup-cron",
-			},
-		}},
-		// Centralized backup StatefulSet pods (cluster only — standalone
-		// has none, but matching with the cluster name in a standalone
-		// policy is harmless because nothing will carry that label).
-		{PodSelector: &metav1.LabelSelector{
-			MatchLabels: map[string]string{
-				"neo4j.com/cluster":   workloadName,
-				"neo4j.com/component": "backup",
 			},
 		}},
 	}

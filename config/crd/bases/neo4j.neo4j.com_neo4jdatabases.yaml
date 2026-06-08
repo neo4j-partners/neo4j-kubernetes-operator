@@ -392,10 +392,6 @@ spec:
                 description: DataImported indicates whether initial data has been
                   imported
                 type: boolean
-              lastBackupTime:
-                description: LastBackupTime shows when the last backup was taken
-                format: date-time
-                type: string
               message:
                 description: Message provides additional information about the current
                   state

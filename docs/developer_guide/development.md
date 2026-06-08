@@ -269,7 +269,7 @@ The operator implements a **server-based architecture**:
 
 - **Neo4jEnterpriseCluster**: Creates `{cluster-name}-server` StatefulSet
 - **Neo4jEnterpriseStandalone**: Creates `{standalone-name}` StatefulSet
-- **Centralized Backup**: Single `{cluster-name}-backup-0` per cluster
+- **Backups**: Job-per-`Neo4jBackup`-CR (no persistent backup pod, no sidecars)
 - **Self-Organizing Servers**: Neo4j servers automatically assign database roles
 
 ## Testing During Development

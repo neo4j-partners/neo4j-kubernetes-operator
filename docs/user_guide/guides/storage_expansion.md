@@ -64,16 +64,6 @@ kubectl patch neo4jenterprisestandalone my-standalone \
 
 The operator expands the single PVC and recreates the StatefulSet with zero downtime.
 
-## Expanding Backup Storage
-
-If you have backup storage configured, expand it the same way:
-
-```bash
-kubectl patch neo4jenterprisecluster my-cluster \
-  --type=merge \
-  -p '{"spec":{"storage":{"backupStorage":{"size":"200Gi"}}}}'
-```
-
 ## Monitoring Expansion
 
 ### Events
