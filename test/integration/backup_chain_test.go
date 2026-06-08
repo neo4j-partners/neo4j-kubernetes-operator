@@ -19,7 +19,6 @@ import (
 	. "github.com/onsi/gomega"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -138,20 +137,11 @@ var _ = Describe("Backup Chain Integration Tests", Serial, func() {
 		cluster = &neo4jv1beta1.Neo4jEnterpriseCluster{
 			ObjectMeta: metav1.ObjectMeta{Name: "chain-cluster", Namespace: testNamespace},
 			Spec: neo4jv1beta1.Neo4jEnterpriseClusterSpec{
-				Image:    neo4jv1beta1.ImageSpec{Repo: "neo4j", Tag: getNeo4jImageTag()},
-				Auth:     &neo4jv1beta1.AuthSpec{AdminSecret: "neo4j-admin-secret"},
-				Topology: neo4jv1beta1.TopologyConfiguration{Servers: 3},
-				Storage:  neo4jv1beta1.StorageSpec{Size: "1Gi", ClassName: "standard"},
-				Resources: &corev1.ResourceRequirements{
-					Requests: corev1.ResourceList{
-						corev1.ResourceMemory: resource.MustParse("3Gi"),
-						corev1.ResourceCPU:    resource.MustParse("1000m"),
-					},
-					Limits: corev1.ResourceList{
-						corev1.ResourceMemory: resource.MustParse("6Gi"),
-						corev1.ResourceCPU:    resource.MustParse("2000m"),
-					},
-				},
+				Image:     neo4jv1beta1.ImageSpec{Repo: "neo4j", Tag: getNeo4jImageTag()},
+				Auth:      &neo4jv1beta1.AuthSpec{AdminSecret: "neo4j-admin-secret"},
+				Topology:  neo4jv1beta1.TopologyConfiguration{Servers: 3},
+				Storage:   neo4jv1beta1.StorageSpec{Size: "1Gi", ClassName: "standard"},
+				Resources: getCIAppropriateResourceRequirements(),
 				Env: []corev1.EnvVar{
 					{Name: "JAVA_TOOL_OPTIONS", Value: "-Daws.s3.forcePathStyle=true"},
 				},
@@ -160,6 +150,7 @@ var _ = Describe("Backup Chain Integration Tests", Serial, func() {
 				},
 			},
 		}
+		applyCIOptimizations(cluster)
 		Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
 		Eventually(func() string {
 			_ = k8sClient.Get(ctx, client.ObjectKeyFromObject(cluster), cluster)
