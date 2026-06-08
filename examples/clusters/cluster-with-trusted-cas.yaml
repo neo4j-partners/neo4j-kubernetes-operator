@@ -13,6 +13,12 @@
 #   4. spec.extraVolumes + spec.extraVolumeMounts mount any other content the
 #      Neo4j pod needs at a specific path — used here for a per-policy
 #      truststore that a custom dbms.ssl.policy.* references via truststore_path.
+#
+# Prerequisites (create BEFORE applying — this manifest does NOT create them):
+#   kubectl create namespace neo4j-prod
+#   kubectl create secret generic neo4j-admin-secret --namespace neo4j-prod \
+#     --from-literal=username=neo4j --from-literal=password='<your-secure-password>'
+# Also requires the corp-ca-cluster-issuer ClusterIssuer referenced below to exist.
 ---
 # A separate Issuer/ClusterIssuer is assumed to exist; this Certificate just
 # produces the Secret the operator references.
@@ -31,15 +37,15 @@ spec:
   dnsNames:
     - idp.corp.example.com
 ---
-apiVersion: v1
-kind: Secret
-metadata:
-  name: replica-cluster-truststore
-  namespace: neo4j-prod
-type: Opaque
-data:
-  # base64-encoded PEM of the peer cluster's CA. Replace with your real value.
-  ca.crt: PLACEHOLDER==
+# ── Peer-cluster CA truststore Secret (create this BEFORE you apply) ───────────
+# Holds the peer cluster's CA as ca.crt. Create it out-of-band from your real
+# PEM file (kubectl base64-encodes it):
+#
+#   kubectl create secret generic replica-cluster-truststore \
+#     --namespace neo4j-prod \
+#     --from-file=ca.crt=peer-ca.pem
+#
+# Referenced via spec.trustedCASecrets below.
 ---
 apiVersion: neo4j.neo4j.com/v1beta1
 kind: Neo4jEnterpriseCluster
@@ -59,12 +65,13 @@ spec:
     adminSecret: neo4j-admin-secret
     authenticationProviders: [native, oidc-corp]
     authorizationProviders: [native, oidc-corp]
-    oidcProviders:
-      - name: corp
+    # oidc is a map keyed by provider name (referenced as oidc-<name> in the
+    # authentication/authorizationProviders lists above).
+    oidc:
+      corp:
         displayName: "Corporate SSO"
         wellKnownDiscoveryURI: https://idp.corp.example.com/.well-known/openid-configuration
-        audience: neo4j
-        clientID: neo4j-cluster
+        audience: neo4j-cluster   # audience = your OIDC client ID
 
   # ─── 1. Declarative multi-CA trust ────────────────────────────────────────
   # Neo4j's JVM truststore is augmented with each Secret's ca.crt entry. The

@@ -1,19 +1,17 @@
 # Neo4j Enterprise Cluster - Authentication Examples
 # Demonstrates native, LDAP, and OIDC/SSO configurations
 
-# ============================================================
-# Prerequisites: Admin secret (required for all configurations)
-# ============================================================
-apiVersion: v1
-kind: Secret
-metadata:
-  name: neo4j-admin-secret
-  namespace: default
-type: Opaque
-data:
-  # username: neo4j, password: changeme123
-  username: bmVvNGo=
-  password: Y2hhbmdlbWUxMjM=
+# ── Admin credentials Secret (create this BEFORE you apply this manifest) ──────
+# This Secret is intentionally NOT defined inline. If it were, `kubectl apply -f`
+# would re-apply it on every run and OVERWRITE the password with the placeholder,
+# silently clobbering a real credential you set earlier. Create it out-of-band:
+#
+#   kubectl create secret generic neo4j-admin-secret \
+#     --namespace default \
+#     --from-literal=username=neo4j \
+#     --from-literal=password='<your-secure-password>'
+#
+# The resource above references it via spec.auth.adminSecret: neo4j-admin-secret
 
 ---
 # ============================================================
@@ -50,18 +48,17 @@ spec:
 # ============================================================
 # Example 2: LDAP + native (Active Directory)
 # ============================================================
-# LDAP system account secret (for authorization lookups)
-apiVersion: v1
-kind: Secret
-metadata:
-  name: ldap-system-account
-  namespace: default
-type: Opaque
-data:
-  # username: cn=neo4j-svc,cn=Users,dc=corp,dc=example,dc=com
-  username: Y249bmVvNGotc3ZjLGNuPVVzZXJzLGRjPWNvcnAsZGM9ZXhhbXBsZSxkYz1jb20=
-  # password: LdapServicePassword123
-  password: TGRhcFNlcnZpY2VQYXNzd29yZDEyMw==
+# ── LDAP system-account Secret (create this BEFORE you apply this manifest) ────
+# Not defined inline: `kubectl apply -f` would re-apply it every run and OVERWRITE
+# the values with the placeholders, clobbering real credentials. Create it
+# out-of-band:
+#
+#   kubectl create secret generic ldap-system-account \
+#     --namespace default \
+#     --from-literal=username='cn=neo4j-svc,cn=Users,dc=corp,dc=example,dc=com' \
+#     --from-literal=password='<ldap-service-password>'
+#
+# Referenced via spec.auth.ldap.authorization.systemAccountSecretRef: ldap-system-account
 ---
 apiVersion: neo4j.neo4j.com/v1beta1
 kind: Neo4jEnterpriseCluster

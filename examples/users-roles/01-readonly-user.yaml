@@ -5,14 +5,16 @@
 # lands; if you apply it before the cluster is Ready, it enters Pending
 # until the cluster transitions.
 
-apiVersion: v1
-kind: Secret
-metadata:
-  name: app-reader-creds
-  namespace: prod
-type: Opaque
-stringData:
-  password: "ChangeMe123!"
+# ── App-user password Secret (create this BEFORE you apply this manifest) ──────
+# Not defined inline: `kubectl apply -f` would re-apply it every run and OVERWRITE
+# the password with the placeholder. Create it out-of-band, in the same namespace
+# as the Neo4jUser below:
+#
+#   kubectl create namespace prod   # if it doesn't exist yet
+#   kubectl create secret generic app-reader-creds --namespace prod \
+#     --from-literal=password='<app-reader-password>'
+#
+# Referenced via the Neo4jUser's spec.passwordSecretRef.name: app-reader-creds
 ---
 apiVersion: neo4j.neo4j.com/v1beta1
 kind: Neo4jUser

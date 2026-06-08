@@ -16,7 +16,8 @@ spec:
     route:
       enabled: true
       host: route-standalone.apps.example.com
-      termination: edge
+      tls:
+        termination: edge   # edge | reencrypt | passthrough
   securityContext:
     podSecurityContext:
       runAsNonRoot: true

@@ -3,6 +3,12 @@
 #
 # Same pattern as examples/clusters/cluster-with-trusted-cas.yaml but for
 # the simpler standalone case.
+#
+# Prerequisites (create BEFORE applying — this manifest does NOT create them):
+#   kubectl create namespace neo4j-dev
+#   kubectl create secret generic neo4j-admin-secret --namespace neo4j-dev \
+#     --from-literal=username=neo4j --from-literal=password='<your-secure-password>'
+# Also requires the ClusterIssuer referenced below to already exist.
 ---
 apiVersion: cert-manager.io/v1
 kind: Certificate
@@ -35,12 +41,13 @@ spec:
     adminSecret: neo4j-admin-secret
     authenticationProviders: [native, oidc-corp]
     authorizationProviders: [native, oidc-corp]
-    oidcProviders:
-      - name: corp
+    # oidc is a map keyed by provider name (referenced as oidc-<name> in the
+    # authentication/authorizationProviders lists above).
+    oidc:
+      corp:
         displayName: "Corporate SSO"
         wellKnownDiscoveryURI: https://idp.corp.example.com/.well-known/openid-configuration
-        audience: neo4j
-        clientID: neo4j-standalone
+        audience: neo4j-standalone   # audience = your OIDC client ID
 
   # Neo4j's JVM truststore is augmented with this Secret's ca.crt entry so
   # the well_known_discovery_uri fetch above succeeds. The JDK default cacerts

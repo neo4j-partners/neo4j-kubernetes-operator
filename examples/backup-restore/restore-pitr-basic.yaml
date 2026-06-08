@@ -1,3 +1,17 @@
+# Point-in-Time Recovery (PITR) with Neo4jRestore.
+#
+# IMPORTANT — target type matters:
+#   • Neo4jRestore `source.type: pitr` drives `neo4j-admin database restore
+#     --restore-until`, which the operator runs as a Job. This path applies ONLY
+#     to a Neo4jEnterpriseStandalone target (clusterRef → a standalone).
+#   • For a CLUSTER, point-in-time recovery is done the cluster-native way:
+#     create a Neo4jDatabase with spec.seedConfig.restoreUntil (the operator
+#     rejects source.type=pitr against a cluster target with an actionable error).
+#     See examples/databases/database-from-s3-seed.yaml for seedConfig.restoreUntil.
+#
+# PITR restores from a base backup and rolls forward to a point in time using
+# transaction logs in spec.source.pitr.logStorage.
+
 apiVersion: neo4j.neo4j.com/v1beta1
 kind: Neo4jRestore
 metadata:
@@ -6,11 +20,12 @@ metadata:
     environment: production
     restore-type: pitr
 spec:
-  clusterRef: recovery-cluster
+  # Must reference a Neo4jEnterpriseStandalone (PITR is standalone-only).
+  clusterRef: recovery-standalone
   databaseName: production-db
   source:
     type: pitr
-    pointInTime: "2025-01-04T12:30:00Z"
+    pointInTime: "2025-01-04T12:30:00Z"  # roll forward to this instant
     pitr:
       baseBackup:
         type: backup
@@ -21,14 +36,6 @@ spec:
         path: production/logs
         cloud:
           provider: aws
-          region: us-east-1
-      logRetention: "7d"
-      recoveryPointObjective: "5m"
-      validateLogIntegrity: true
-      compression:
-        enabled: true
-        algorithm: gzip
-        level: 6
   options:
     verifyBackup: true
     replaceExisting: true
@@ -45,7 +52,8 @@ spec:
   timeout: "3h"
 
 ---
-# Advanced PITR with encryption and storage-based base backup
+# Advanced PITR using a storage-based base backup (no Neo4jBackup CR — point
+# directly at a base backup in object storage).
 apiVersion: neo4j.neo4j.com/v1beta1
 kind: Neo4jRestore
 metadata:
@@ -54,7 +62,8 @@ metadata:
     environment: production
     restore-type: pitr-advanced
 spec:
-  clusterRef: disaster-recovery
+  # Must reference a Neo4jEnterpriseStandalone (PITR is standalone-only).
+  clusterRef: dr-standalone
   databaseName: critical-app
   source:
     type: pitr
@@ -68,7 +77,6 @@ spec:
           path: production/base-backup-20250104
           cloud:
             provider: aws
-            region: us-east-1
         backupPath: /backup/base-backup-20250104
       logStorage:
         type: s3
@@ -76,18 +84,6 @@ spec:
         path: production/logs
         cloud:
           provider: aws
-          region: us-east-1
-      logRetention: "14d"
-      recoveryPointObjective: "1m"
-      validateLogIntegrity: true
-      compression:
-        enabled: true
-        algorithm: zstd
-        level: 3
-      encryption:
-        enabled: true
-        keySecret: log-encryption-key
-        algorithm: AES256
   options:
     verifyBackup: true
     replaceExisting: true
@@ -101,7 +97,7 @@ spec:
               - "-c"
               - |
                 echo "Preparing disaster recovery environment..."
-                echo "Validating target cluster readiness..."
+                echo "Validating target readiness..."
                 echo "Pre-restore preparation completed"
         timeout: "5m"
     postRestore:
@@ -128,18 +124,9 @@ spec:
               - name: NEO4J_PASSWORD
                 valueFrom:
                   secretKeyRef:
-                    name: disaster-recovery-admin-secret
+                    name: dr-standalone-admin-secret
                     key: password
         timeout: "15m"
   force: true
   stopCluster: true
   timeout: "4h"
-
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: log-encryption-key
-type: Opaque
-data:
-  key: <base64-encoded-encryption-key-for-transaction-logs>

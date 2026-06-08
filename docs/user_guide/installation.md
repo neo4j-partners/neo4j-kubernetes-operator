@@ -255,7 +255,7 @@ kubectl get neo4jenterprisestandalone
 kubectl get pods
 
 # Access Neo4j Browser
-kubectl port-forward svc/standalone-neo4j-service 7474:7474
+kubectl port-forward svc/standalone-neo4j-service 7474:7474 7687:7687
 ```
 
 ### Option 2: Using Examples from Cloned Repository
@@ -276,7 +276,7 @@ kubectl get neo4jenterprisestandalone
 kubectl get pods
 
 # Access Neo4j Browser
-kubectl port-forward svc/standalone-neo4j-service 7474:7474
+kubectl port-forward svc/standalone-neo4j-service 7474:7474 7687:7687
 ```
 
 ## Uninstalling the Operator

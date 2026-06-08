@@ -116,7 +116,7 @@ spec:
                   provisioning) by the time the cluster is Ready. If absent, the binding
                   enters the UserNotFound condition and reconciles when the user appears.
                 maxLength: 65
-                pattern: ^[a-zA-Z][a-zA-Z0-9_.\-]*$
+                pattern: ^[a-zA-Z][a-zA-Z0-9_.@\-]*$
                 type: string
             required:
             - clusterRef

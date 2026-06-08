@@ -16,16 +16,18 @@ metadata:
   labels:
     environment: development
 ---
-# Simple admin credentials for dev
-apiVersion: v1
-kind: Secret
-metadata:
-  name: dev-admin-secret
-  namespace: neo4j-dev
-type: Opaque
-stringData:
-  username: neo4j
-  password: developer123
+# ── Admin credentials Secret (create this BEFORE you apply this manifest) ──────
+# This Secret is intentionally NOT defined inline. If it were, `kubectl apply -f`
+# would re-apply it on every run and OVERWRITE the password with the placeholder,
+# silently clobbering a real credential you set earlier. Create it out-of-band:
+#
+#   kubectl create namespace neo4j-dev   # this manifest also defines it; create it first
+#   kubectl create secret generic dev-admin-secret \
+#     --namespace neo4j-dev \
+#     --from-literal=username=neo4j \
+#     --from-literal=password='<your-secure-password>'
+#
+# The resource above references it via spec.auth.adminSecret: dev-admin-secret
 ---
 # Lightweight standalone instance for development
 apiVersion: neo4j.neo4j.com/v1beta1
@@ -179,7 +181,7 @@ spec:
               EOF
 
               echo "Sample data loaded successfully"
-          restartPolicy: Never
+      restartPolicy: Never
 ---
 # STEP 4: Database Migration Example
 ---
@@ -232,7 +234,7 @@ spec:
               EOF
 
               echo "Migration completed successfully"
-          restartPolicy: Never
+      restartPolicy: Never
 ---
 # STEP 5: Integration Test Database
 ---
@@ -371,7 +373,7 @@ spec:
               time cypher-shell -a bolt://dev-instance-neo4j-service:7687 \
                 -u $NEO4J_USERNAME -p $NEO4J_PASSWORD --database=devdb \
                 "MATCH (u:User)-[:VIEWED]->(p:Product) WITH u, count(p) as views WHERE views > 5 RETURN count(u)"
-          restartPolicy: Never
+      restartPolicy: Never
 ---
 # STEP 8: Development Tools Service
 ---

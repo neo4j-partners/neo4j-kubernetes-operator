@@ -141,9 +141,6 @@ type BackupOptions struct {
 	// +kubebuilder:default=true
 	Compress bool `json:"compress,omitempty"`
 
-	// Encryption configuration
-	Encryption *EncryptionSpec `json:"encryption,omitempty"`
-
 	// Verify backup integrity after creation
 	Verify bool `json:"verify,omitempty"`
 
@@ -215,24 +212,6 @@ type BackupOptions struct {
 
 	// KeepFailed preserves failed backup artifacts for debugging instead of deleting them.
 	KeepFailed bool `json:"keepFailed,omitempty"`
-}
-
-// EncryptionSpec defines encryption configuration for backup and restore operations
-type EncryptionSpec struct {
-	// Enable encryption
-	Enabled bool `json:"enabled,omitempty"`
-
-	// Secret containing encryption key
-	KeySecret string `json:"keySecret,omitempty"`
-
-	// Key within the secret containing the encryption key
-	// +kubebuilder:default=key
-	KeySecretKey string `json:"keySecretKey,omitempty"`
-
-	// Encryption algorithm
-	// +kubebuilder:validation:Enum=AES256;ChaCha20Poly1305
-	// +kubebuilder:default=AES256
-	Algorithm string `json:"algorithm,omitempty"`
 }
 
 // TempStorageSpec provisions temporary staging storage for cloud backup/restore.

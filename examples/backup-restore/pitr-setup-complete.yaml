@@ -1,9 +1,15 @@
 # Complete Point-in-Time Recovery Setup
 # This file demonstrates a complete PITR environment setup including:
-# - Base backup configuration
-# - Transaction log storage setup
-# - Secrets for encryption
-# - Example PITR restore configuration
+# - Base backup configuration (Neo4jBackup)
+# - Transaction log storage setup (conceptual ConfigMap)
+# - A PITR restore (Neo4jRestore) against a STANDALONE target
+#
+# NOTE on PITR target type:
+#   Neo4jRestore `source.type: pitr` uses `neo4j-admin database restore
+#   --restore-until` (a Job) and applies ONLY to a Neo4jEnterpriseStandalone.
+#   For a CLUSTER, do point-in-time recovery by creating a Neo4jDatabase with
+#   spec.seedConfig.restoreUntil instead — the operator rejects source.type=pitr
+#   against a cluster target. See examples/databases/database-from-s3-seed.yaml.
 
 ---
 # Base backup for PITR
@@ -26,7 +32,7 @@ spec:
     path: production/base
     cloud:
       provider: aws
-      region: us-east-1
+      credentialsSecretRef: pitr-aws-credentials
   retention:
     maxAge: "30d"
     maxCount: 30
@@ -34,17 +40,15 @@ spec:
   options:
     compress: true
     verify: true
-    encryption:
-      enabled: true
-      keySecret: pitr-encryption-key
-      algorithm: AES256
-    additionalArgs:
-      - "--parallel-recovery"
-      - "--include-metadata"
+    # Include users/roles metadata in the backup (all|none|users|roles).
+    includeMetadata: all
+    # Multi-threaded transaction application during backup.
+    parallelRecovery: true
 
 ---
-# Transaction log backup (conceptual - would be handled by Neo4j configuration)
-# This shows the expected configuration for transaction log storage
+# Transaction log backup (conceptual - would be handled by Neo4j configuration).
+# These keys are illustrative of the intended log-archival setup, not operator-
+# managed configuration.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -55,36 +59,20 @@ data:
     dbms.tx_log.rotation.retention_policy=7d
     dbms.tx_log.rotation.size=250M
 
-    # Archive transaction logs to cloud storage
-    dbms.backup.archive_transaction_logs=true
-    dbms.backup.transaction_log_archive.path=s3://transaction-logs/production/logs/
-    dbms.backup.transaction_log_archive.compression=true
-    dbms.backup.transaction_log_archive.encryption=true
+# ── PITR AWS credentials Secret (create this BEFORE you apply this manifest) ───
+# Not defined inline: `kubectl apply -f` would re-apply it every run and OVERWRITE
+# the values with the placeholders, clobbering real credentials. Create it
+# out-of-band:
+#
+#   kubectl create secret generic pitr-aws-credentials \
+#     --from-literal=AWS_ACCESS_KEY_ID='<your-access-key-id>' \
+#     --from-literal=AWS_SECRET_ACCESS_KEY='<your-secret-access-key>' \
+#     --from-literal=AWS_REGION='us-east-1'   # required: read as a non-optional env var
+#
+# Referenced via the Neo4jBackup's spec.storage.cloud.credentialsSecretRef.
 
 ---
-# Encryption key for PITR backups and transaction logs
-apiVersion: v1
-kind: Secret
-metadata:
-  name: pitr-encryption-key
-type: Opaque
-data:
-  # Generate with: openssl rand -base64 32
-  key: <base64-encoded-32-byte-encryption-key>
-
----
-# AWS credentials for PITR storage access
-apiVersion: v1
-kind: Secret
-metadata:
-  name: pitr-aws-credentials
-type: Opaque
-data:
-  AWS_ACCESS_KEY_ID: <base64-encoded-access-key>
-  AWS_SECRET_ACCESS_KEY: <base64-encoded-secret-key>
-
----
-# Example PITR restore configuration
+# Example PITR restore configuration (STANDALONE target — see note at top).
 apiVersion: neo4j.neo4j.com/v1beta1
 kind: Neo4jRestore
 metadata:
@@ -93,7 +81,8 @@ metadata:
     environment: disaster-recovery
     restore-type: pitr-example
 spec:
-  clusterRef: recovery-cluster
+  # Must reference a Neo4jEnterpriseStandalone (PITR is standalone-only).
+  clusterRef: recovery-standalone
   databaseName: production-db
   source:
     type: pitr
@@ -108,24 +97,11 @@ spec:
         path: production/logs
         cloud:
           provider: aws
-          region: us-east-1
-      logRetention: "7d"
-      recoveryPointObjective: "5m"
-      validateLogIntegrity: true
-      compression:
-        enabled: true
-        algorithm: gzip
-        level: 6
-      encryption:
-        enabled: true
-        keySecret: pitr-encryption-key
-        algorithm: AES256
   options:
     verifyBackup: true
     replaceExisting: true
     preRestore:
       cypherStatements:
-        - "CALL dbms.backup.prepare()"
         - "CALL db.checkpoint()"
       job:
         template:
@@ -136,11 +112,8 @@ spec:
               - "-c"
               - |
                 echo "=== PITR Pre-Restore Preparation ==="
-                echo "Target cluster: recovery-cluster"
-                echo "Database: production-db"
                 echo "Recovery point: 2025-01-04T12:00:00Z"
                 echo "Validating recovery environment..."
-                sleep 5
                 echo "Pre-restore preparation completed"
         timeout: "10m"
     postRestore:
@@ -153,7 +126,6 @@ spec:
           SET log.timestamp = datetime(),
               log.recovery_type = 'PITR',
               log.recovery_point = '2025-01-04T12:00:00Z',
-              log.target_cluster = 'recovery-cluster',
               log.source_backup = 'pitr-base-backup'
       job:
         template:
@@ -164,45 +136,32 @@ spec:
               - "-c"
               - |
                 echo "=== PITR Post-Restore Validation ==="
-                echo "Connecting to restored database..."
-
-                # Basic connectivity test
                 cypher-shell -u neo4j -p $NEO4J_PASSWORD -d production-db \
                   "CALL db.ping() YIELD success RETURN success"
-
-                # Data validation
-                echo "Validating data integrity..."
                 cypher-shell -u neo4j -p $NEO4J_PASSWORD -d production-db \
                   "MATCH (n) RETURN labels(n)[0] as label, count(n) as count ORDER BY label"
-
-                # Check recovery log
-                echo "Verifying recovery log..."
-                cypher-shell -u neo4j -p $NEO4J_PASSWORD -d production-db \
-                  "MATCH (log:RecoveryLog) WHERE log.recovery_type = 'PITR'
-                   RETURN log ORDER BY log.timestamp DESC LIMIT 1"
-
                 echo "PITR validation completed successfully"
             env:
               - name: NEO4J_PASSWORD
                 valueFrom:
                   secretKeyRef:
-                    name: recovery-cluster-admin-secret
+                    name: recovery-standalone-admin-secret
                     key: password
         timeout: "20m"
   force: true
   stopCluster: true
   timeout: "4h"
 
----
-# Recovery cluster admin secret (create this for your recovery environment)
-apiVersion: v1
-kind: Secret
-metadata:
-  name: recovery-cluster-admin-secret
-type: Opaque
-data:
-  username: bmVvNGo=  # neo4j
-  password: <base64-encoded-admin-password>
+# ── Recovery standalone admin credentials Secret (create BEFORE applying) ──────
+# Not defined inline: `kubectl apply -f` would re-apply it every run and OVERWRITE
+# the password with the placeholder, clobbering a real credential. Create it
+# out-of-band (this is also the admin Secret of the recovery-standalone target):
+#
+#   kubectl create secret generic recovery-standalone-admin-secret \
+#     --from-literal=username='neo4j' \
+#     --from-literal=password='<your-secure-password>'
+#
+# Referenced via the postRestore job's NEO4J_PASSWORD secretKeyRef.
 
 ---
 # Service account for PITR operations with appropriate permissions

@@ -166,28 +166,6 @@ spec:
                     default: true
                     description: 'Compress the backup (default: true)'
                     type: boolean
-                  encryption:
-                    description: Encryption configuration
-                    properties:
-                      algorithm:
-                        default: AES256
-                        description: Encryption algorithm
-                        enum:
-                        - AES256
-                        - ChaCha20Poly1305
-                        type: string
-                      enabled:
-                        description: Enable encryption
-                        type: boolean
-                      keySecret:
-                        description: Secret containing encryption key
-                        type: string
-                      keySecretKey:
-                        default: key
-                        description: Key within the secret containing the encryption
-                          key
-                        type: string
-                    type: object
                   includeMetadata:
                     description: |-
                       IncludeMetadata controls which metadata (users, roles) is included in the backup.

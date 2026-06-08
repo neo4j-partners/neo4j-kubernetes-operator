@@ -34,16 +34,16 @@ spec:
     maxAge: "30d"
     maxCount: 30
 
----
-# AWS credentials secret
-apiVersion: v1
-kind: Secret
-metadata:
-  name: aws-backup-credentials
-type: Opaque
-stringData:
-  AWS_ACCESS_KEY_ID: <your-access-key-id>
-  AWS_SECRET_ACCESS_KEY: <your-secret-access-key>
+# ── AWS backup credentials Secret (create this BEFORE you apply this manifest) ─
+# Not defined inline: `kubectl apply -f` would re-apply it every run and OVERWRITE
+# the values with the placeholders, clobbering real credentials. Create it
+# out-of-band:
+#
+#   kubectl create secret generic aws-backup-credentials \
+#     --from-literal=AWS_ACCESS_KEY_ID='<your-access-key-id>' \
+#     --from-literal=AWS_SECRET_ACCESS_KEY='<your-secret-access-key>'
+#
+# Referenced via spec.storage.cloud.credentialsSecretRef: aws-backup-credentials
 
 ---
 # ============================================================
@@ -70,6 +70,7 @@ spec:
     cloud:
       provider: aws
       identity:
+        provider: aws
         autoCreate:
           annotations:
             # Annotate the ServiceAccount with your IAM role ARN for IRSA

@@ -1,26 +1,28 @@
 # Example: Creating a Neo4j database from Azure Blob Storage using seed URI
 # This example shows both storage key and SAS token authentication methods
-apiVersion: v1
-kind: Secret
-metadata:
-  name: azure-backup-credentials-key
-  namespace: default
-type: Opaque
-data:
-  # Base64 encoded Azure storage account and key
-  AZURE_STORAGE_ACCOUNT: bXlzdG9yYWdlYWNjb3VudA== # mystorageaccount
-  AZURE_STORAGE_KEY: YWJjZGVmZ2hpams=   # EXAMPLE ONLY - Replace with real credentials# abcdefghijk (base64 of storage account key)
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: azure-backup-credentials-sas
-  namespace: default
-type: Opaque
-data:
-  # Base64 encoded Azure storage account and SAS token
-  AZURE_STORAGE_ACCOUNT: bXlzdG9yYWdlYWNjb3VudA== # mystorageaccount
-  AZURE_STORAGE_SAS_TOKEN: c3Y9MjAyNS0wMS0xNQ==   # EXAMPLE ONLY - Replace with real credentials# sv=2025-01-15... (SAS token)
+# ── Azure (storage key) credentials Secret (create this BEFORE you apply this manifest) ─
+# Not defined inline: `kubectl apply -f` would re-apply it every run and OVERWRITE
+# the values with the placeholders, clobbering real credentials. Create it
+# out-of-band:
+#
+#   kubectl create secret generic azure-backup-credentials-key \
+#     --namespace default \
+#     --from-literal=AZURE_STORAGE_ACCOUNT='mystorageaccount' \
+#     --from-literal=AZURE_STORAGE_KEY='<your-storage-account-key>'
+#
+# Referenced via spec.seedCredentials.secretRef: azure-backup-credentials-key
+
+# ── Azure (SAS token) credentials Secret (create this BEFORE you apply this manifest) ─
+# Not defined inline: `kubectl apply -f` would re-apply it every run and OVERWRITE
+# the values with the placeholders, clobbering real credentials. Create it
+# out-of-band:
+#
+#   kubectl create secret generic azure-backup-credentials-sas \
+#     --namespace default \
+#     --from-literal=AZURE_STORAGE_ACCOUNT='mystorageaccount' \
+#     --from-literal=AZURE_STORAGE_SAS_TOKEN='<your-sas-token>'
+#
+# Referenced via spec.seedCredentials.secretRef: azure-backup-credentials-sas
 ---
 # Database using storage account key authentication
 apiVersion: neo4j.neo4j.com/v1beta1

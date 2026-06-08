@@ -110,17 +110,9 @@ spec:
     propertyShardTopology:
       replicas: 2      # Redundant replicas
 
-    # Advanced property sharding configuration
-    config:
-      # Hash ring configuration
-      internal.dbms.sharded_property_database.hash_ring_size: "1024"
-
-      # Replication settings
-      internal.dbms.sharded_property_database.replication_factor: "2"
-
-      # Performance tuning
-      internal.dbms.sharded_property_database.batch_size: "1000"
-      internal.dbms.sharded_property_database.flush_interval: "1s"
+  # Cluster-wide property-sharding tuning (hash ring, replication factor, etc.)
+  # lives on the Neo4jEnterpriseCluster's spec.propertySharding.config — not on
+  # the Neo4jShardedDatabase. See the cluster above.
 
   # Seed from backups (shard-suffixed artifacts required in the bucket)
   seedURI: "s3://ecommerce-backups/sharded/"
@@ -130,27 +122,26 @@ spec:
   seedCredentials:
     secretRef: "s3-credentials"
 
----
-# Secret for seed URI access
-apiVersion: v1
-kind: Secret
-metadata:
-  name: s3-credentials
-  namespace: default
-type: Opaque
-data:
-  # Base64 encoded credentials
-  access-key-id: <base64-encoded-access-key>
-  secret-access-key: <base64-encoded-secret-key>
+# ── S3 backup credentials Secret (create this BEFORE you apply this manifest) ──
+# Not defined inline: `kubectl apply -f` would re-apply it every run and OVERWRITE
+# the values with the placeholders, clobbering real credentials. Create it
+# out-of-band:
+#
+#   kubectl create secret generic s3-credentials \
+#     --namespace default \
+#     --from-literal=access-key-id='<your-access-key>' \
+#     --from-literal=secret-access-key='<your-secret-key>'
+#
+# Referenced via spec.seedCredentials.secretRef: s3-credentials
 
----
-# Admin secret for Neo4j authentication
-apiVersion: v1
-kind: Secret
-metadata:
-  name: neo4j-admin-secret
-  namespace: default
-type: Opaque
-data:
-  username: bmVvNGo=        # neo4j
-  password: cHJvZHVjdGlvbjEyMw==  # production123
+# ── Admin credentials Secret (create this BEFORE you apply this manifest) ──────
+# This Secret is intentionally NOT defined inline. If it were, `kubectl apply -f`
+# would re-apply it on every run and OVERWRITE the password with the placeholder,
+# silently clobbering a real credential you set earlier. Create it out-of-band:
+#
+#   kubectl create secret generic neo4j-admin-secret \
+#     --namespace default \
+#     --from-literal=username=neo4j \
+#     --from-literal=password='<your-secure-password>'
+#
+# The resource above references it via spec.auth.adminSecret: neo4j-admin-secret

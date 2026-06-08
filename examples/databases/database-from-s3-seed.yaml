@@ -1,17 +1,17 @@
 # Example: Creating a Neo4j database from an S3 backup using seed URI
 # This example demonstrates using explicit credentials stored in a Kubernetes secret
-apiVersion: v1
-kind: Secret
-metadata:
-  name: s3-backup-credentials
-  namespace: default
-type: Opaque
-data:
-  # Base64 encoded credentials - replace with your actual values
-  AWS_ACCESS_KEY_ID: dGVzdC1hY2Nlc3Mta2V5   # EXAMPLE ONLY - Replace with real credentials# test-access-key
-  AWS_SECRET_ACCESS_KEY: dGVzdC1zZWNyZXQta2V5   # EXAMPLE ONLY - Replace with real credentials# test-secret-key
-  AWS_REGION: dXMtd2VzdC0y # us-west-2
-  # Optional: AWS_SESSION_TOKEN for temporary credentials
+# ── S3 backup credentials Secret (create this BEFORE you apply this manifest) ──
+# Not defined inline: `kubectl apply -f` would re-apply it every run and OVERWRITE
+# the values with the placeholders, clobbering real credentials. Create it
+# out-of-band:
+#
+#   kubectl create secret generic s3-backup-credentials \
+#     --namespace default \
+#     --from-literal=AWS_ACCESS_KEY_ID='<your-access-key>' \
+#     --from-literal=AWS_SECRET_ACCESS_KEY='<your-secret-key>' \
+#     --from-literal=AWS_REGION='us-west-2'
+#
+# Referenced via spec.seedCredentials.secretRef: s3-backup-credentials
 ---
 apiVersion: neo4j.neo4j.com/v1beta1
 kind: Neo4jDatabase

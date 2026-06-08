@@ -12,28 +12,32 @@ kind: Namespace
 metadata:
   name: neo4j-production
 ---
-# Admin credentials secret
-apiVersion: v1
-kind: Secret
-metadata:
-  name: neo4j-admin-secret
-  namespace: neo4j-production
-type: Opaque
-stringData:
-  username: neo4j
-  password: changeme-to-secure-password
+# ── Admin credentials Secret (create this BEFORE you apply this manifest) ──────
+# This Secret is intentionally NOT defined inline. If it were, `kubectl apply -f`
+# would re-apply it on every run and OVERWRITE the password with the placeholder,
+# silently clobbering a real credential you set earlier. Create it out-of-band:
+#
+#   kubectl create namespace neo4j-production   # this manifest also defines it; create it first
+#   kubectl create secret generic neo4j-admin-secret \
+#     --namespace neo4j-production \
+#     --from-literal=username=neo4j \
+#     --from-literal=password='<your-secure-password>'
+#
+# The resource above references it via spec.auth.adminSecret: neo4j-admin-secret
 ---
-# Backup credentials for S3
-apiVersion: v1
-kind: Secret
-metadata:
-  name: s3-backup-credentials
-  namespace: neo4j-production
-type: Opaque
-stringData:
-  AWS_ACCESS_KEY_ID: your-access-key
-  AWS_SECRET_ACCESS_KEY: your-secret-key
-  AWS_REGION: us-east-1
+# ── S3 backup credentials Secret (create this BEFORE you apply this manifest) ──
+# Not defined inline: `kubectl apply -f` would re-apply it every run and OVERWRITE
+# the values with the placeholders, clobbering real credentials. Create it
+# out-of-band:
+#
+#   kubectl create namespace neo4j-production   # this manifest also defines it; create it first
+#   kubectl create secret generic s3-backup-credentials \
+#     --namespace neo4j-production \
+#     --from-literal=AWS_ACCESS_KEY_ID='<your-access-key>' \
+#     --from-literal=AWS_SECRET_ACCESS_KEY='<your-secret-key>' \
+#     --from-literal=AWS_REGION='us-east-1'
+#
+# Referenced via the Neo4jBackup's spec.storage.cloud.credentialsSecretRef
 ---
 # Neo4j Enterprise Cluster
 apiVersion: neo4j.neo4j.com/v1beta1
@@ -50,8 +54,11 @@ spec:
   topology:
     servers: 5  # 5 servers will self-organize into primary/secondary roles
     placement:
-      topologyKey: topology.kubernetes.io/zone
-      mode: preferred
+      # Spread servers across zones via pod anti-affinity.
+      antiAffinity:
+        enabled: true
+        topologyKey: topology.kubernetes.io/zone
+        type: preferred   # "preferred" or "required"
     availabilityZones:
       - us-east-1a
       - us-east-1b
@@ -98,15 +105,11 @@ spec:
     # Password policy
     dbms.security.auth_minimum_password_length: "12"
 
-  # Monitoring
+  # Monitoring — enabling this turns on Prometheus metrics (port 2004); the
+  # operator creates the metrics Service. A ServiceMonitor is included as a
+  # separate resource at the end of this file.
   monitoring:
     enabled: true
-    endpoints:
-      metrics: true
-      logs: true
-    serviceMonitor:
-      enabled: true
-      interval: 30s
 ---
 # Create main database with topology constraints
 apiVersion: neo4j.neo4j.com/v1beta1
@@ -177,8 +180,7 @@ spec:
     bucket: my-neo4j-backups
     path: "production/daily"
     cloud:
-      credentialsSecret: s3-backup-credentials
-      region: us-east-1
+      credentialsSecretRef: s3-backup-credentials
 
   # Backup options
   options:
@@ -212,8 +214,7 @@ spec:
     bucket: my-neo4j-backups
     path: "production/weekly"
     cloud:
-      credentialsSecret: s3-backup-credentials
-      region: us-east-1
+      credentialsSecretRef: s3-backup-credentials
 
   options:
     backupType: "FULL"  # Force full backup

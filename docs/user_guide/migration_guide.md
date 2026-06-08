@@ -381,14 +381,6 @@ spec:
       host: neo4j.apps.example.com
 ```
 
-### Encryption algorithm rename
-
-If you use backup encryption with ChaCha20, update the algorithm name:
-
-| Old Value | New Value |
-|-----------|-----------|
-| `ChaCha20` | `ChaCha20Poly1305` |
-
 ### Unified secret reference type
 
 `TrustStoreSpec`, `AuraTokenSecretRef`, and `KerberosKeytabSpec` have been replaced by a single `SecretKeyRef` type with `name` and `key` fields. The JSON structure for `AuraFleetManagement.tokenSecretRef` is unchanged (fields were already `name`/`key`). For `trustStore` and `kerberos.keytab`, the `secretRef` field is now `name`.
@@ -401,8 +393,7 @@ If you use backup encryption with ChaCha20, update the algorithm name:
 4. Search standalone manifests for `spec.persistence:` and move retention policy to `spec.storage.retentionPolicy:`
 5. Search for `trustStore.secretRef:` and rename to `trustStore.name:`
 6. Search for `kerberos.keytab.secretRef:` and rename to `kerberos.keytab.name:`
-7. If using `algorithm: ChaCha20` in backup encryption, change to `algorithm: ChaCha20Poly1305`
-8. Apply updated CRDs before deploying the new operator version
+7. Apply updated CRDs before deploying the new operator version
 
 ## What's Next
 

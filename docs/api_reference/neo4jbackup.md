@@ -219,7 +219,6 @@ Fine-grained backup execution options.
 | `tempPath` | `string` | ❌ | Local directory path for temporary files during backup. When `tempStorage` is configured, this is set automatically. Only set manually if you are mounting your own volume. Maps to `--temp-path`. |
 | `tempStorage` | [`*TempStorageSpec`](#tempstoragespec) | ❌ | Provisions a PVC for temporary staging files during cloud backups. The operator mounts this PVC and passes `--temp-path` automatically. Recommended for large databases to avoid filling ephemeral disk. |
 | `pageCache` | `string` | ❌ | Page cache size hint (e.g., `"4G"`). Must match pattern `^[0-9]+[KMG]?$` |
-| `encryption` | [`*EncryptionSpec`](#encryptionspec) | ❌ | Backup encryption configuration |
 | `verify` | `bool` | ❌ | Verify backup integrity after creation |
 | `parallelDownload` | `bool` | ❌ | Enable parallel download for remote backups |
 | `remoteAddressResolution` | `bool` | ❌ | Resolve remote addresses during backup |
@@ -239,17 +238,6 @@ Provisions temporary staging storage for cloud backup/restore. The operator crea
 |-------|------|----------|-------------|
 | `size` | `string` | ✅ | Size of the temporary PVC (e.g., `"50Gi"`). Should be at least as large as the expected backup artifact. Must match pattern `^[0-9]+(Ki\|Mi\|Gi\|Ti)?$` |
 | `storageClassName` | `string` | ❌ | StorageClass for the temporary PVC. If empty, uses the cluster default. |
-
-### EncryptionSpec
-
-Backup encryption configuration.
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `enabled` | `bool` | ❌ | Enable backup encryption |
-| `keySecret` | `string` | ❌ | Name of a Kubernetes Secret containing the encryption key |
-| `keySecretKey` | `string` | ❌ | Key within the Secret containing the encryption key (default: `"key"`) |
-| `algorithm` | `string` | ❌ | Encryption algorithm: `"AES256"` (default) or `"ChaCha20Poly1305"` |
 
 ## Status
 
@@ -328,9 +316,6 @@ spec:
     backupType: FULL
     tempStorage:
       size: "50Gi"
-    encryption:
-      enabled: true
-      keySecret: backup-encryption-key
 ```
 
 ### Scheduled S3 Backup with Static Credentials

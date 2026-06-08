@@ -20,14 +20,16 @@ spec:
     - "GRANT MATCH {*} ON GRAPH analytics NODES * TO analytics-reader"
     - "DENY WRITE ON GRAPH analytics TO analytics-reader"
 ---
-apiVersion: v1
-kind: Secret
-metadata:
-  name: analytics-reader-creds
-  namespace: prod
-type: Opaque
-stringData:
-  password: "AnotherStrongOne!"
+# ── App-user password Secret (create this BEFORE you apply this manifest) ──────
+# Not defined inline: `kubectl apply -f` would re-apply it every run and OVERWRITE
+# the password with the placeholder. Create it out-of-band, in the same namespace
+# as the Neo4jUser below:
+#
+#   kubectl create namespace prod   # if it doesn't exist yet
+#   kubectl create secret generic analytics-reader-creds --namespace prod \
+#     --from-literal=password='<analytics-reader-password>'
+#
+# Referenced via the Neo4jUser's spec.passwordSecretRef.name: analytics-reader-creds
 ---
 apiVersion: neo4j.neo4j.com/v1beta1
 kind: Neo4jUser

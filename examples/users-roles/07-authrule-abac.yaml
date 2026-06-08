@@ -20,9 +20,9 @@ apiVersion: neo4j.neo4j.com/v1beta1
 kind: Neo4jAuthRule
 metadata:
   name: analytics-team
-  namespace: default
+  namespace: prod
 spec:
-  clusterRef: production
+  clusterRef: prod-cluster
   name: analytics_team
   condition: abac.oidc.user_attribute('department') = 'analytics'
   grantedRoles:
@@ -35,9 +35,9 @@ apiVersion: neo4j.neo4j.com/v1beta1
 kind: Neo4jAuthRule
 metadata:
   name: engineering-uk
-  namespace: default
+  namespace: prod
 spec:
-  clusterRef: production
+  clusterRef: prod-cluster
   name: engineering_uk
   condition: |
     abac.oidc.user_attribute('department') = 'engineering'
@@ -51,9 +51,9 @@ apiVersion: neo4j.neo4j.com/v1beta1
 kind: Neo4jAuthRule
 metadata:
   name: country-access
-  namespace: default
+  namespace: prod
 spec:
-  clusterRef: production
+  clusterRef: prod-cluster
   name: country_access
   condition: |
     any(country IN abac.oidc.user_attribute('citizenshipCountries')
@@ -67,9 +67,9 @@ apiVersion: neo4j.neo4j.com/v1beta1
 kind: Neo4jAuthRule
 metadata:
   name: emea-business-hours
-  namespace: default
+  namespace: prod
 spec:
-  clusterRef: production
+  clusterRef: prod-cluster
   name: emea_business_hours
   condition: |
     abac.oidc.user_attribute('region') = 'EMEA'

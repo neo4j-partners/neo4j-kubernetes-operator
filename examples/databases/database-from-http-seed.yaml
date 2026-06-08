@@ -1,19 +1,18 @@
 # Example: Creating a Neo4j database from HTTP/HTTPS/FTP using seed URI
 # This example demonstrates various HTTP-based seed sources
 
-# Optional: HTTP basic authentication credentials
-apiVersion: v1
-kind: Secret
-metadata:
-  name: http-backup-credentials
-  namespace: default
-type: Opaque
-data:
-  # Base64 encoded HTTP credentials
-  USERNAME: YWRtaW4=   # EXAMPLE ONLY# admin
-  PASSWORD: cGFzc3dvcmQ=   # EXAMPLE ONLY# password
-  # Optional: Custom authentication header
-  AUTH_HEADER: QmVhcmVyIG15LXRva2Vu   # EXAMPLE ONLY - Replace with real credentials# Bearer my-token
+# ── HTTP backup credentials Secret (create this BEFORE you apply this manifest) ─
+# Not defined inline: `kubectl apply -f` would re-apply it every run and OVERWRITE
+# the values with the placeholders, clobbering real credentials. Create it
+# out-of-band:
+#
+#   kubectl create secret generic http-backup-credentials \
+#     --namespace default \
+#     --from-literal=USERNAME='admin' \
+#     --from-literal=PASSWORD='<password>' \
+#     --from-literal=AUTH_HEADER='Bearer <my-token>'
+#
+# Referenced via spec.seedCredentials.secretRef: http-backup-credentials
 ---
 # Database from HTTPS URL with authentication
 apiVersion: neo4j.neo4j.com/v1beta1

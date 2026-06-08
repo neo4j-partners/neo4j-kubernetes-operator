@@ -8,7 +8,8 @@
 # Create the AWS credentials secret first:
 #   kubectl create secret generic aws-backup-credentials \
 #     --from-literal=AWS_ACCESS_KEY_ID=<your-access-key-id> \
-#     --from-literal=AWS_SECRET_ACCESS_KEY=<your-secret-access-key>
+#     --from-literal=AWS_SECRET_ACCESS_KEY=<your-secret-access-key> \
+#     --from-literal=AWS_REGION=us-east-1
 # ============================================================
 apiVersion: neo4j.neo4j.com/v1beta1
 kind: Neo4jBackup
@@ -41,14 +42,17 @@ spec:
     maxAge: "3d"
     maxCount: 12  # Keep last 12 incremental backups
 
----
-# AWS credentials secret
-apiVersion: v1
-kind: Secret
-metadata:
-  name: aws-backup-credentials
-  namespace: default
-type: Opaque
-stringData:
-  AWS_ACCESS_KEY_ID: <your-access-key-id>
-  AWS_SECRET_ACCESS_KEY: <your-secret-access-key>
+# ── AWS backup credentials Secret (create this BEFORE you apply this manifest) ─
+# Not defined inline: `kubectl apply -f` would re-apply it every run and OVERWRITE
+# the values with the placeholders, clobbering real credentials. Create it
+# out-of-band:
+#
+#   kubectl create secret generic aws-backup-credentials \
+#     --namespace default \
+#     --from-literal=AWS_ACCESS_KEY_ID='<your-access-key-id>' \
+#     --from-literal=AWS_SECRET_ACCESS_KEY='<your-secret-access-key>' \
+#     --from-literal=AWS_REGION='us-east-1'
+#
+# AWS_REGION is required: the backup Job reads it from this Secret (the operator
+# wires it as a non-optional env var), so omit it and the Job pod won't start.
+# Referenced via spec.storage.cloud.credentialsSecretRef: aws-backup-credentials

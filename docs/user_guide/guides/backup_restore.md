@@ -95,6 +95,8 @@ kubectl create secret generic aws-backup-creds \
   --from-literal=AWS_REGION=us-east-1
 ```
 
+> The region lives in this Secret as `AWS_REGION` — there is no `spec.cloud.region` field. For `credentialsSecretRef` backups all three keys (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`) are required; a missing key fails the backup Job pod. With IRSA/Workload Identity (no Secret) the SDK resolves the region ambiently.
+
 Reference the Secret in your `Neo4jBackup`:
 
 ```yaml
@@ -516,10 +518,6 @@ spec:
     verify: true
     tempStorage:
       size: "50Gi"
-    encryption:
-      enabled: true
-      keySecret: backup-encryption-key
-      algorithm: AES256
 ```
 
 #### Database Backup to S3
@@ -716,9 +714,6 @@ spec:
     verify: true
     tempStorage:
       size: "50Gi"
-    encryption:
-      enabled: true
-      keySecret: backup-encryption-key
   retention:
     maxAge: "90d"
     maxCount: 12
@@ -871,6 +866,8 @@ spec:
 
 PITR restores your database to a specific point in time using a base backup combined with transaction logs.
 
+> **Note:** `source.type: pitr` (the `--restore-until` path) applies only to a `Neo4jEnterpriseStandalone` target. For cluster point-in-time recovery, create a `Neo4jDatabase` with `spec.seedConfig.restoreUntil`. The operator rejects `source.type: pitr` against a cluster target with an actionable error.
+
 #### PITR Configuration
 
 ```yaml
@@ -895,17 +892,6 @@ spec:
         cloud:
           provider: aws
           credentialsSecretRef: aws-backup-creds
-      logRetention: "168h"
-      recoveryPointObjective: "5m"
-      validateLogIntegrity: true
-      compression:
-        enabled: true
-        algorithm: gzip
-        level: 6
-      encryption:
-        enabled: true
-        keySecret: log-encryption-key
-        algorithm: AES256
   options:
     verifyBackup: true
     replaceExisting: true
@@ -947,7 +933,6 @@ spec:
         cloud:
           provider: gcp
           credentialsSecretRef: gcs-backup-creds
-      validateLogIntegrity: true
   options:
     verifyBackup: true
   force: true
@@ -1184,12 +1169,6 @@ options:
 
   # Preserve failed backup artifacts for debugging
   keepFailed: false
-
-  # Encryption at rest
-  encryption:
-    enabled: true
-    keySecret: backup-encryption-key
-    algorithm: AES256
 
   # Pass additional flags directly to neo4j-admin database backup
   additionalArgs:

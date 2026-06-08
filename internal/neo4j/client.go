@@ -1100,7 +1100,7 @@ func (c *Client) GrantRoleToUser(ctx context.Context, roleName, username string)
 	})
 	defer session.Close(ctx)
 
-	query := fmt.Sprintf("GRANT ROLE `%s` TO `%s`", roleName, username)
+	query := fmt.Sprintf("GRANT ROLE `%s` TO `%s`", escapeBackticks(roleName), escapeBackticks(username))
 	_, err := session.Run(ctx, query, nil)
 	if err != nil {
 		return fmt.Errorf("failed to grant role %s to user %s: %w", roleName, username, err)
@@ -1117,7 +1117,7 @@ func (c *Client) RevokeRoleFromUser(ctx context.Context, roleName, username stri
 	})
 	defer session.Close(ctx)
 
-	query := fmt.Sprintf("REVOKE ROLE `%s` FROM `%s`", roleName, username)
+	query := fmt.Sprintf("REVOKE ROLE `%s` FROM `%s`", escapeBackticks(roleName), escapeBackticks(username))
 	_, err := session.Run(ctx, query, nil)
 	if err != nil {
 		return fmt.Errorf("failed to revoke role %s from user %s: %w", roleName, username, err)
@@ -2851,7 +2851,6 @@ type BackupOptions struct {
 	RemoteAddressResolution bool
 	SkipRecovery            bool
 	AdditionalArgs          []string
-	Encryption              *EncryptionOptions
 }
 
 // RestoreOptions defines options for restore operations
@@ -2859,13 +2858,6 @@ type RestoreOptions struct {
 	Force           bool
 	ReplaceExisting bool
 	AdditionalArgs  []string
-}
-
-// EncryptionOptions defines encryption options for backups
-type EncryptionOptions struct {
-	Enabled   bool
-	KeySecret string
-	Algorithm string
 }
 
 // BackupValidationResult represents the result of backup validation

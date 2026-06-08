@@ -518,11 +518,6 @@ func (v *BackupValidator) validateBackupOptions(options *neo4jv1beta1.BackupOpti
 	var allErrs field.ErrorList
 	optionsPath := field.NewPath("spec", "options")
 
-	// Validate encryption configuration if specified
-	if options.Encryption != nil {
-		allErrs = append(allErrs, v.validateEncryptionConfiguration(options.Encryption)...)
-	}
-
 	// Validate additional args for Neo4j 5.26+ compatibility
 	if len(options.AdditionalArgs) > 0 {
 		for i, arg := range options.AdditionalArgs {
@@ -531,44 +526,6 @@ func (v *BackupValidator) validateBackupOptions(options *neo4jv1beta1.BackupOpti
 					optionsPath.Child("additionalArgs").Index(i),
 					arg,
 					err.Error(),
-				))
-			}
-		}
-	}
-
-	return allErrs
-}
-
-// validateEncryptionConfiguration validates backup encryption for Neo4j 5.26+
-func (v *BackupValidator) validateEncryptionConfiguration(encryption *neo4jv1beta1.EncryptionSpec) field.ErrorList {
-	var allErrs field.ErrorList
-	encryptionPath := field.NewPath("spec", "options", "encryption")
-
-	// If encryption is enabled, validate configuration
-	if encryption.Enabled {
-		// Validate key secret
-		if encryption.KeySecret == "" {
-			allErrs = append(allErrs, field.Required(
-				encryptionPath.Child("keySecret"),
-				"encryption key secret must be specified when encryption is enabled",
-			))
-		}
-
-		// Validate algorithm
-		if encryption.Algorithm != "" {
-			validAlgorithms := []string{"AES256", "ChaCha20"}
-			valid := false
-			for _, alg := range validAlgorithms {
-				if encryption.Algorithm == alg {
-					valid = true
-					break
-				}
-			}
-			if !valid {
-				allErrs = append(allErrs, field.NotSupported(
-					encryptionPath.Child("algorithm"),
-					encryption.Algorithm,
-					validAlgorithms,
 				))
 			}
 		}

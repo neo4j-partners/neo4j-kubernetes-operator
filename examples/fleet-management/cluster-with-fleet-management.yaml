@@ -29,6 +29,7 @@ spec:
     servers: 3
 
   storage:
+    className: standard   # your cluster's storage class
     size: 10Gi
 
   resources:

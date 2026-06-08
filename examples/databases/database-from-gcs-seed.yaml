@@ -47,18 +47,25 @@ spec:
   defaultCypherLanguage: "25"
 
 ---
-# Optional: Example of providing explicit GCS credentials via secret
-apiVersion: v1
-kind: Secret
-metadata:
-  name: gcs-backup-credentials
-  namespace: default
-type: Opaque
-data:
-  # Service account key file (JSON) base64 encoded
-  GOOGLE_APPLICATION_CREDENTIALS: ewogICJ0eXBlIjogInNlcnZpY2VfYWNjb3VudCIsCiAgInByb2plY3RfaWQiOiAibXktcHJvamVjdCIKfQ==   # EXAMPLE ONLY - Replace with real credentials# {"type": "service_account", "project_id": "my-project"}
-  # Optional: Explicitly specify project
-  GOOGLE_CLOUD_PROJECT: bXktcHJvamVjdA== # my-project
+# ── GCS backup credentials Secret (create this BEFORE you apply this manifest) ─
+# Not defined inline: `kubectl apply -f` would re-apply it every run and OVERWRITE
+# the values with the placeholders, clobbering real credentials. Create it
+# out-of-band. GOOGLE_APPLICATION_CREDENTIALS is the JSON service-account key file
+# contents — prefer --from-file to load it straight from disk:
+#
+#   kubectl create secret generic gcs-backup-credentials \
+#     --namespace default \
+#     --from-file=GOOGLE_APPLICATION_CREDENTIALS=sa.json \
+#     --from-literal=GOOGLE_CLOUD_PROJECT='my-project'
+#
+# Or pass the JSON inline:
+#
+#   kubectl create secret generic gcs-backup-credentials \
+#     --namespace default \
+#     --from-literal=GOOGLE_APPLICATION_CREDENTIALS='<service-account-json>' \
+#     --from-literal=GOOGLE_CLOUD_PROJECT='my-project'
+#
+# Referenced via spec.seedCredentials.secretRef: gcs-backup-credentials
 ---
 # Alternative configuration using explicit credentials
 apiVersion: neo4j.neo4j.com/v1beta1

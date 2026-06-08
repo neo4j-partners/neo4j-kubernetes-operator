@@ -619,6 +619,15 @@ func (r *Neo4jRestoreReconciler) validateRestore(ctx context.Context, restore *n
 		if restore.Spec.Source.PITR.BaseBackup == nil && restore.Spec.Source.PointInTime == nil {
 			return fmt.Errorf("pitr requires baseBackup configuration or pointInTime (or both)")
 		}
+		// PITR via Neo4jRestore is the neo4j-admin `--restore-until` path, which
+		// only runs against a Neo4jEnterpriseStandalone target. Cluster restores
+		// route to the in-place Cypher path (rule 75), which has no
+		// point-in-time mechanism — so a cluster PITR would silently misbehave.
+		// Reject it up front with an actionable pointer to the cluster-native
+		// path (Neo4jDatabase.spec.seedConfig.restoreUntil).
+		if isCluster, _, terr := r.isRestoreTargetTrueCluster(ctx, restore); terr == nil && isCluster {
+			return fmt.Errorf("source.type=pitr is not supported for cluster targets (clusterRef %q resolves to a Neo4jEnterpriseCluster); Neo4jRestore PITR applies to Neo4jEnterpriseStandalone targets only. For cluster point-in-time recovery, create a Neo4jDatabase with spec.seedConfig.restoreUntil instead", restore.Spec.ClusterRef)
+		}
 
 	default:
 		return fmt.Errorf("invalid source type %q: must be one of: backup, storage, s3, gcs, azure, pitr", restore.Spec.Source.Type)

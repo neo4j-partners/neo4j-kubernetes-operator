@@ -273,7 +273,7 @@ func TestBackupValidator_Validate(t *testing.T) {
 			expectedErrorContains: []string{"cron schedule"},
 		},
 		{
-			name: "valid backup with encryption",
+			name: "valid backup with compress and verify",
 			backup: &neo4jv1beta1.Neo4jBackup{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-backup",
@@ -293,11 +293,6 @@ func TestBackupValidator_Validate(t *testing.T) {
 					Options: &neo4jv1beta1.BackupOptions{
 						Compress: true,
 						Verify:   true,
-						Encryption: &neo4jv1beta1.EncryptionSpec{
-							Enabled:   true,
-							KeySecret: "encryption-key",
-							Algorithm: "AES256",
-						},
 					},
 				},
 			},

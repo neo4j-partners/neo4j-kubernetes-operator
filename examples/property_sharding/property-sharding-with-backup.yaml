@@ -74,62 +74,54 @@ metadata:
   name: manual-sharded-backup
   namespace: default
 spec:
-  clusterRef: backup-sharding-cluster
+  # Target the Neo4jShardedDatabase. A single Neo4jBackup captures ALL shards
+  # consistently — the operator backs up the whole `{name}*` shard set in one
+  # neo4j-admin invocation (graph shard + every property shard). There is no
+  # per-shard list.
+  target:
+    kind: ShardedDatabase
+    name: backed-up-sharded-db
 
-  # Multi-database backup for all shards
-  databases:
-    - name: "userdata-g000"    # Graph shard
-      type: "full+differential"
-      schedule: "0 3 * * *"
-    - name: "userdata-p000"    # Property shards (full backups only)
-      type: "full"
-      schedule: "0 3 * * *"
-    - name: "userdata-p001"
-      type: "full"
-      schedule: "0 3 * * *"
-    - name: "userdata-p002"
-      type: "full"
-      schedule: "0 3 * * *"
-    - name: "userdata-p003"
-      type: "full"
-      schedule: "0 3 * * *"
-
-  # Coordinated backup settings
-  consistency: "cross-database"  # Ensure consistent point across all shards
-  parallelism: 2                # Backup shards in parallel for speed
+  schedule: "0 3 * * *"   # daily at 03:00
 
   storage:
-    type: "s3"
-    location: "s3://neo4j-backups/manual-sharded/"
-    credentials:
-      secretRef: "backup-credentials"
+    type: s3
+    bucket: neo4j-backups
+    path: manual-sharded
+    cloud:
+      credentialsSecretRef: backup-credentials
+
+  options:
+    backupType: AUTO       # FULL or DIFF chosen automatically
+    compress: true
+    # Sharded backups default remoteAddressResolution=true on Neo4j 2025.09+;
+    # set explicitly only to override.
 
   retention:
-    daily: 7     # Keep daily backups for 7 days
-    weekly: 4    # Keep weekly backups for 4 weeks
-    monthly: 6   # Keep monthly backups for 6 months
+    maxAge: "7d"
+    maxCount: 7
+    deletePolicy: Delete
 
----
-# Backup credentials
-apiVersion: v1
-kind: Secret
-metadata:
-  name: backup-credentials
-  namespace: default
-type: Opaque
-data:
-  # Replace with actual base64-encoded credentials
-  access-key-id: QUNFRVNTX0tFWV9JRA==
-  secret-access-key: U0VDUkVUX0FDQ0VTU19LRVk=
+# ── Backup credentials Secret (create this BEFORE you apply this manifest) ─────
+# Not defined inline: `kubectl apply -f` would re-apply it every run and OVERWRITE
+# the values with the placeholders, clobbering real credentials. Create it
+# out-of-band:
+#
+#   kubectl create secret generic backup-credentials \
+#     --namespace default \
+#     --from-literal=access-key-id='<your-access-key>' \
+#     --from-literal=secret-access-key='<your-secret-key>'
+#
+# Referenced via spec.storage.credentials.secretRef: backup-credentials
 
----
-# Neo4j admin credentials
-apiVersion: v1
-kind: Secret
-metadata:
-  name: neo4j-admin-secret
-  namespace: default
-type: Opaque
-stringData:
-  username: "neo4j"
-  password: "backup-cluster-123"
+# ── Admin credentials Secret (create this BEFORE you apply this manifest) ──────
+# This Secret is intentionally NOT defined inline. If it were, `kubectl apply -f`
+# would re-apply it on every run and OVERWRITE the password with the placeholder,
+# silently clobbering a real credential you set earlier. Create it out-of-band:
+#
+#   kubectl create secret generic neo4j-admin-secret \
+#     --namespace default \
+#     --from-literal=username=neo4j \
+#     --from-literal=password='<your-secure-password>'
+#
+# The resource above references it via spec.auth.adminSecret: neo4j-admin-secret

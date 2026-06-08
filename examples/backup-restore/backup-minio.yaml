@@ -27,19 +27,17 @@
 #
 # ============================================================
 
-# MinIO credentials Secret
-apiVersion: v1
-kind: Secret
-metadata:
-  name: minio-backup-credentials
-type: Opaque
-stringData:
-  # MinIO access key (set when deploying MinIO)
-  AWS_ACCESS_KEY_ID: minioadmin
-  # MinIO secret key (set when deploying MinIO)
-  AWS_SECRET_ACCESS_KEY: minioadmin
-  # Region is required by the AWS SDK but ignored by MinIO — any value works
-  AWS_REGION: us-east-1
+# ── MinIO backup credentials Secret (create this BEFORE you apply this manifest) ─
+# Not defined inline: `kubectl apply -f` would re-apply it every run and OVERWRITE
+# the values with the placeholders, clobbering real credentials. Create it
+# out-of-band:
+#
+#   kubectl create secret generic minio-backup-credentials \
+#     --from-literal=AWS_ACCESS_KEY_ID='minioadmin' \
+#     --from-literal=AWS_SECRET_ACCESS_KEY='minioadmin' \
+#     --from-literal=AWS_REGION='us-east-1'
+#
+# Referenced via spec.storage.cloud.credentialsSecretRef: minio-backup-credentials
 
 ---
 # ============================================================
@@ -108,7 +106,7 @@ spec:
       forcePathStyle: true
 
   options:
-    backupType: DIFFERENTIAL
+    backupType: DIFF
     compress: true
     # preferDiffAsParent chains diff backups without needing a new FULL each time.
     # Requires Neo4j CalVer 2025.04+. Remove this field for 5.26.x.

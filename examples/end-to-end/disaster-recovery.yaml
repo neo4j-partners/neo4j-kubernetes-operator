@@ -1,119 +1,94 @@
-# Disaster Recovery Example
-# This example demonstrates:
-# - Taking a backup before maintenance
-# - Performing a full restore
-# - Point-in-time recovery
-# - Cross-region restore
+# Disaster Recovery Examples
+#
+# Demonstrates DR patterns against a Neo4jEnterpriseCluster using ONLY fields the
+# operator actually honors. A few conventions to keep in mind:
+#
+#   • Cluster restores use the in-place Cypher seed path: spec = clusterRef +
+#     databaseName + source + force. Job-only options (preRestore/postRestore
+#     hooks, additionalArgs, verifyBackup, stopCluster, tempStorage) apply to
+#     Neo4jEnterpriseStandalone targets, not clusters — they're omitted here.
+#   • One Neo4jRestore restores ONE database (there is no "*"/all-databases
+#     restore). Restore each database with its own Neo4jRestore.
+#   • Point-in-time recovery on a CLUSTER is done with a Neo4jDatabase carrying
+#     spec.seedConfig.restoreUntil (see Scenario 3) — Neo4jRestore source.type=pitr
+#     is standalone-only and is rejected against a cluster target.
+#
+# Credentials Secrets (s3-dr-credentials, admin secrets) are created out-of-band;
+# see other examples for the `kubectl create secret generic …` commands.
 
 ---
-# SCENARIO 1: Pre-maintenance Backup
----
-# Take a manual backup before maintenance window
+# ─────────────────────────────────────────────────────────────────────────────
+# SCENARIO 1: Pre-maintenance manual backup (one-shot, to a PVC)
+# ─────────────────────────────────────────────────────────────────────────────
 apiVersion: neo4j.neo4j.com/v1beta1
 kind: Neo4jBackup
 metadata:
   name: pre-maintenance-backup
   namespace: neo4j-production
+  labels:
+    purpose: maintenance
+  annotations:
+    description: "Pre-maintenance backup before Neo4j upgrade"
 spec:
   target:
     kind: Cluster
     name: production-cluster
     namespace: neo4j-production
-
-  # One-time backup (no schedule)
+  # One-time backup (no schedule).
   storage:
     type: pvc
     pvc:
       name: maintenance-backup-pvc
       size: 50Gi
       storageClassName: fast-ssd
-
   options:
-    backupType: "FULL"
+    backupType: FULL
     compress: true
-    verifyBackup: true  # Verify integrity after backup
+    verify: true  # verify backup integrity after creation
 
-  # Add metadata for tracking
-  metadata:
-    labels:
-      purpose: maintenance
-      timestamp: "2025-01-20-1400"
-    annotations:
-      description: "Pre-maintenance backup before Neo4j upgrade"
-      operator: "admin@company.com"
 ---
-# SCENARIO 2: Full Database Restore
----
-# Restore entire cluster from backup
+# ─────────────────────────────────────────────────────────────────────────────
+# SCENARIO 2: Full restore from that backup (one Neo4jRestore per database)
+# ─────────────────────────────────────────────────────────────────────────────
 apiVersion: neo4j.neo4j.com/v1beta1
 kind: Neo4jRestore
 metadata:
-  name: full-cluster-restore
+  name: restore-neo4j-db
   namespace: neo4j-production
 spec:
   clusterRef: production-cluster
-
-  # Restore all databases
-  databaseName: "*"
-
+  databaseName: neo4j           # restore one database; repeat for others
   source:
     type: backup
     backupRef: pre-maintenance-backup
+  force: true                   # overwrite the existing database
 
-  # Force overwrite existing data
-  force: true
-
-  options:
-    verifyBackup: true
-    additionalArgs:
-      - "--expand-commands"  # Show detailed progress
-
-  # Pre-restore validation
-  preRestoreHooks:
-    - type: script
-      script: |
-        #!/bin/bash
-        echo "Starting full cluster restore..."
-        echo "Target cluster: production-cluster"
-        echo "Source backup: pre-maintenance-backup"
-
-        # Verify cluster is ready for restore
-        kubectl get neo4jenterprisecluster production-cluster -n neo4j-production
 ---
-# SCENARIO 3: Point-in-Time Recovery
----
-# Restore to specific point in time
+# ─────────────────────────────────────────────────────────────────────────────
+# SCENARIO 3: Point-in-time recovery (CLUSTER-native, via Neo4jDatabase)
+# Recreate a database from a backup chain and roll forward to a timestamp.
+# ─────────────────────────────────────────────────────────────────────────────
 apiVersion: neo4j.neo4j.com/v1beta1
-kind: Neo4jRestore
+kind: Neo4jDatabase
 metadata:
-  name: pitr-restore
+  name: maindb-pitr-recovery
   namespace: neo4j-production
 spec:
   clusterRef: production-cluster
-  databaseName: maindb
+  name: maindb_pitr_recovery     # recover into a NEW database for comparison
+  seedURI: "s3://neo4j-dr-backups/us-east-1/production/maindb-2025-01-19.backup"
+  seedConfig:
+    restoreUntil: "2025-01-19T14:30:00Z"   # Neo4j 2025.x+; CloudSeedProvider
+  seedCredentials:
+    secretRef: s3-dr-credentials
+  topology:
+    primaries: 3
+  wait: true
 
-  source:
-    type: backup
-    backupRef: daily-backup-20250119
-    # Restore to specific timestamp
-    pointInTime: "2025-01-19T14:30:00Z"
-
-  # Create as new database to compare
-  options:
-    targetDatabaseName: "maindb_pitr_recovery"
-    verifyBackup: true
-
-  postRestoreHooks:
-    - type: script
-      script: |
-        echo "PITR restore completed"
-        echo "Original database: maindb"
-        echo "Recovered database: maindb_pitr_recovery"
-        echo "Point in time: 2025-01-19T14:30:00Z"
 ---
-# SCENARIO 4: Cross-Region Disaster Recovery
----
-# Source region backup configuration
+# ─────────────────────────────────────────────────────────────────────────────
+# SCENARIO 4: Cross-region DR — scheduled S3 backup + restore to a DR cluster
+# ─────────────────────────────────────────────────────────────────────────────
 apiVersion: neo4j.neo4j.com/v1beta1
 kind: Neo4jBackup
 metadata:
@@ -124,126 +99,91 @@ spec:
     kind: Cluster
     name: production-cluster
     namespace: neo4j-production
-
-  # Backup to S3 with cross-region replication
+  schedule: "0 */4 * * *"  # every 4 hours
   storage:
     type: s3
     bucket: neo4j-dr-backups
     path: "us-east-1/production"
     cloud:
-      credentialsSecret: s3-dr-credentials
-      region: us-east-1
-
-  schedule: "0 */4 * * *"  # Every 4 hours
-
+      credentialsSecretRef: s3-dr-credentials
   options:
-    backupType: "AUTO"
+    backupType: AUTO
     compress: true
-    encryption:
-      enabled: true
-      kmsKeyId: "arn:aws:kms:us-east-1:123456789:key/xxxxx"
+
 ---
-# Target region restore configuration
 apiVersion: neo4j.neo4j.com/v1beta1
 kind: Neo4jRestore
 metadata:
   name: cross-region-restore
   namespace: neo4j-dr
 spec:
-  # Restore to DR cluster in different region
-  clusterRef: dr-cluster
-  databaseName: "*"
-
+  clusterRef: dr-cluster        # DR cluster in a different region
+  databaseName: neo4j
   source:
-    type: s3
-    bucket: neo4j-dr-backups
-    path: "us-east-1/production/backup-20250120-0800"
-    cloud:
-      credentialsSecret: s3-dr-credentials
-      region: us-west-2  # DR region
-
+    # Cluster restores read cloud storage via source.type=storage (with
+    # storage.type=s3); backupPath is the exact .backup object key.
+    type: storage
+    backupPath: "production/neo4j-2025-01-20-0800.backup"
+    storage:
+      type: s3
+      bucket: neo4j-dr-backups
+      path: "us-east-1"
+      cloud:
+        credentialsSecretRef: s3-dr-credentials
   force: true
 
-  options:
-    verifyBackup: true
-    parallelRestore: true  # Speed up large restores
-
-  postRestoreHooks:
-    - type: script
-      script: |
-        echo "Cross-region restore completed"
-        echo "Source region: us-east-1"
-        echo "Target region: us-west-2"
-
-        # Verify databases are online
-        kubectl exec -n neo4j-dr dr-cluster-0 -- cypher-shell \
-          -u neo4j -p $NEO4J_PASSWORD \
-          "SHOW DATABASES"
 ---
-# SCENARIO 5: Selective Database Restore
----
-# Restore only specific database
+# ─────────────────────────────────────────────────────────────────────────────
+# SCENARIO 5: Selective restore into a NEW database name (non-destructive)
+# Set databaseName to the target name; the source backup supplies the data.
+# ─────────────────────────────────────────────────────────────────────────────
 apiVersion: neo4j.neo4j.com/v1beta1
 kind: Neo4jRestore
 metadata:
-  name: selective-restore
+  name: analytics-restored
   namespace: neo4j-production
 spec:
   clusterRef: production-cluster
-
-  # Restore only analytics database
-  databaseName: analytics
-
+  databaseName: analytics_restored    # restored alongside the live `analytics`
   source:
     type: backup
     backupRef: weekly-full-backup-20250114
+  force: false                         # do not overwrite an existing database
 
-  # Don't overwrite, create as new
-  force: false
-  options:
-    targetDatabaseName: "analytics_restored"
-
-  # Validation queries after restore
-  postRestoreHooks:
-    - type: cypher
-      database: analytics_restored
-      queries:
-        - "MATCH (n) RETURN count(n) as nodeCount"
-        - "MATCH ()-[r]->() RETURN count(r) as relationshipCount"
 ---
-# SCENARIO 6: Backup Validation Job
----
-# Regular backup validation to ensure recoverability
+# ─────────────────────────────────────────────────────────────────────────────
+# SCENARIO 6: Weekly backup-validation CronJob (ops automation)
+# Lists recent backups and spins up a throwaway validation restore.
+# ─────────────────────────────────────────────────────────────────────────────
 apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: backup-validation
   namespace: neo4j-production
 spec:
-  schedule: "0 6 * * 1"  # Weekly on Monday at 6 AM
+  schedule: "0 6 * * 1"  # weekly, Monday 06:00
   jobTemplate:
     spec:
       template:
         spec:
+          serviceAccountName: backup-validator
+          restartPolicy: OnFailure
           containers:
             - name: validator
-              image: neo4j/neo4j-admin:5.26.0-enterprise
+              image: bitnami/kubectl:1.32.0
               command:
                 - /bin/bash
                 - -c
                 - |
-                  # List recent backups
-                  echo "=== Recent Backups ==="
+                  set -euo pipefail
+                  echo "=== Recent backups ==="
                   kubectl get neo4jbackup -n neo4j-production
 
-                  # Get latest backup
                   LATEST_BACKUP=$(kubectl get neo4jbackup -n neo4j-production \
-                    -o jsonpath='{.items[?(@.status.phase=="Completed")].metadata.name}' | \
-                    awk '{print $NF}')
+                    -o jsonpath='{.items[?(@.status.phase=="Completed")].metadata.name}' \
+                    | tr ' ' '\n' | tail -1)
+                  echo "Validating latest backup: $LATEST_BACKUP"
 
-                  echo "Latest backup: $LATEST_BACKUP"
-
-                  # Create test restore
                   cat <<EOF | kubectl apply -f -
                   apiVersion: neo4j.neo4j.com/v1beta1
                   kind: Neo4jRestore
@@ -252,19 +192,18 @@ spec:
                     namespace: neo4j-production
                   spec:
                     clusterRef: test-restore-cluster
-                    databaseName: "*"
+                    databaseName: neo4j
                     source:
                       type: backup
                       backupRef: $LATEST_BACKUP
-                    options:
-                      verifyBackup: true
-                      dryRun: true  # Validation only
+                    force: true
                   EOF
-          restartPolicy: OnFailure
+
 ---
-# SCENARIO 7: Automated Failover Configuration
----
-# Configure automatic failover with backup/restore
+# ─────────────────────────────────────────────────────────────────────────────
+# SCENARIO 7: Failover automation (ConfigMap script)
+# Detects an unhealthy primary and restores the latest backup to the DR cluster.
+# ─────────────────────────────────────────────────────────────────────────────
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -273,25 +212,21 @@ metadata:
 data:
   failover.sh: |
     #!/bin/bash
-    # Automated failover script
-
+    set -euo pipefail
     PRIMARY_CLUSTER="production-cluster"
     DR_CLUSTER="dr-cluster"
     NAMESPACE="neo4j-production"
 
-    # Check primary cluster health
-    PRIMARY_READY=$(kubectl get neo4jenterprisecluster $PRIMARY_CLUSTER \
-      -n $NAMESPACE -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}')
+    PRIMARY_READY=$(kubectl get neo4jenterprisecluster "$PRIMARY_CLUSTER" \
+      -n "$NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}')
 
     if [ "$PRIMARY_READY" != "True" ]; then
       echo "Primary cluster unhealthy, initiating failover..."
 
-      # Find latest backup
-      LATEST_BACKUP=$(kubectl get neo4jbackup -n $NAMESPACE \
+      LATEST_BACKUP=$(kubectl get neo4jbackup -n "$NAMESPACE" \
         --sort-by=.metadata.creationTimestamp \
-        -o jsonpath='{.items[-1].metadata.name}')
+        -o jsonpath='{.items[-1:].metadata.name}')
 
-      # Create restore to DR cluster
       kubectl apply -f - <<EOF
       apiVersion: neo4j.neo4j.com/v1beta1
       kind: Neo4jRestore
@@ -300,17 +235,12 @@ data:
         namespace: $NAMESPACE
       spec:
         clusterRef: $DR_CLUSTER
-        databaseName: "*"
+        databaseName: neo4j
         source:
           type: backup
           backupRef: $LATEST_BACKUP
         force: true
-        options:
-          priority: high
     EOF
 
-      # Update DNS/Load balancer to point to DR
-      # ... DNS update logic ...
-
-      echo "Failover initiated to DR cluster"
+      echo "Failover restore submitted to $DR_CLUSTER (update DNS/LB separately)"
     fi
