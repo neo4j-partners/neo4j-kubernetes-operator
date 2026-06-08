@@ -2171,10 +2171,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#backups" class="md-nav__link">
+  <a href="#backups-and-restore" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Backups
+        Backups and Restore
       
     </span>
   </a>
@@ -3117,10 +3117,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#backups" class="md-nav__link">
+  <a href="#backups-and-restore" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Backups
+        Backups and Restore
       
     </span>
   </a>
@@ -3547,13 +3547,16 @@
 </span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="w">  </span><span class="nt">defaultCypherLanguage</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">string</span><span class="w">                  </span><span class="c1"># Required: &quot;25&quot;</span>
 </span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="w">  </span><span class="nt">propertySharding</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">PropertyShardingConfiguration</span><span class="w">  </span><span class="c1"># Required</span>
 </span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="w">  </span><span class="nt">wait</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">boolean</span><span class="w">                                  </span><span class="c1"># Optional: true</span>
-</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="w">  </span><span class="nt">ifNotExists</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">boolean</span><span class="w">                          </span><span class="c1"># Optional: true</span>
-</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="w">  </span><span class="nt">seedURI</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">string</span><span class="w">                               </span><span class="c1"># Optional</span>
-</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="w">  </span><span class="nt">seedURIs</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">map[string]string</span><span class="w">                   </span><span class="c1"># Optional</span>
-</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="w">  </span><span class="nt">seedSourceDatabase</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">string</span><span class="w">                    </span><span class="c1"># Optional</span>
-</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="w">  </span><span class="nt">seedConfig</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SeedConfiguration</span><span class="w">                 </span><span class="c1"># Optional</span>
-</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="w">  </span><span class="nt">seedCredentials</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SeedCredentials</span><span class="w">              </span><span class="c1"># Optional</span>
-</span><span id="__span-6-17"><a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="w">  </span><span class="nt">txLogEnrichment</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">string</span><span class="w">                       </span><span class="c1"># Optional</span>
+</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="w">  </span><span class="nt">ifNotExists</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">boolean</span><span class="w">                          </span><span class="c1"># Optional: *bool, default true</span>
+</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="w">  </span><span class="nt">replaceExisting</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">boolean</span><span class="w">                      </span><span class="c1"># Optional: destructive recreate</span>
+</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="w">  </span><span class="nt">force</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">boolean</span><span class="w">                                </span><span class="c1"># Optional: confirms replaceExisting</span>
+</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="w">  </span><span class="nt">seedURI</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">string</span><span class="w">                               </span><span class="c1"># Optional</span>
+</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="w">  </span><span class="nt">seedURIs</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">map[string]string</span><span class="w">                   </span><span class="c1"># Optional</span>
+</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="w">  </span><span class="nt">seedBackupRef</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">string</span><span class="w">                         </span><span class="c1"># Optional</span>
+</span><span id="__span-6-17"><a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="w">  </span><span class="nt">seedSourceDatabase</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">string</span><span class="w">                    </span><span class="c1"># Optional</span>
+</span><span id="__span-6-18"><a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a><span class="w">  </span><span class="nt">seedConfig</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SeedConfiguration</span><span class="w">                 </span><span class="c1"># Optional</span>
+</span><span id="__span-6-19"><a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a><span class="w">  </span><span class="nt">seedCredentials</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SeedCredentials</span><span class="w">              </span><span class="c1"># Optional</span>
+</span><span id="__span-6-20"><a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a><span class="w">  </span><span class="nt">txLogEnrichment</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">string</span><span class="w">                       </span><span class="c1"># Optional</span>
 </span></code></pre></div>
 <h4 id="fields_1">Fields<a class="headerlink" href="#fields_1" title="Anchor link to this section">&para;</a></h4>
 <table>
@@ -3604,10 +3607,24 @@
 </tr>
 <tr>
 <td><code>ifNotExists</code></td>
-<td><code>boolean</code></td>
+<td><code>*boolean</code></td>
 <td>No</td>
 <td>true</td>
-<td>Create database only if it doesn't exist</td>
+<td>Pointer type. When unset (nil) or <code>true</code>, creation is idempotent (<code>CREATE DATABASE ... IF NOT EXISTS</code>). Set explicitly to <code>false</code> to omit the <code>IF NOT EXISTS</code> clause — required when paired with <code>replaceExisting: true</code>. Use <code>ifNotExistsEffective()</code>; never dereference directly</td>
+</tr>
+<tr>
+<td><code>replaceExisting</code></td>
+<td><code>boolean</code></td>
+<td>No</td>
+<td>false</td>
+<td><strong>Destructive.</strong> Drops and recreates the sharded database from the seed (typically <code>seedBackupRef</code>). Runs <code>DROP DATABASE {name} DESTROY DATA WAIT</code> before CREATE — all existing data is lost. Requires <code>force: true</code>; mutually exclusive with <code>ifNotExists: true</code>; requires a seed source</td>
+</tr>
+<tr>
+<td><code>force</code></td>
+<td><code>boolean</code></td>
+<td>No</td>
+<td>false</td>
+<td>Confirms the destructive <code>replaceExisting</code> operation. The validator rejects <code>replaceExisting: true</code> without <code>force: true</code> so an accidental flip can't destroy data</td>
 </tr>
 <tr>
 <td><code>seedURI</code></td>
@@ -3622,6 +3639,13 @@
 <td>No</td>
 <td>-</td>
 <td>Seed URIs keyed by shard name</td>
+</tr>
+<tr>
+<td><code>seedBackupRef</code></td>
+<td><code>string</code></td>
+<td>No</td>
+<td>-</td>
+<td>Names a <code>Neo4jBackup</code> CR (same namespace) whose most-recent Succeeded run seeds this database. Resolved to a concrete seed URI at reconcile time. Mutually exclusive with <code>seedURI</code> and <code>seedURIs</code>. If the referenced backup has no Succeeded run yet, the database stays in <code>Pending</code> and the reconciler requeues</td>
 </tr>
 <tr>
 <td><code>seedSourceDatabase</code></td>
@@ -3656,6 +3680,7 @@
 <p><strong>Seed URI Notes</strong>:
 - <code>seedURI</code> is for a single backup location (expects shard-suffixed artifacts).
 - <code>seedURIs</code> is for per-shard URIs (e.g., dump files or multi-location backups).
+- <code>seedBackupRef</code> is mutually exclusive with both <code>seedURI</code> and <code>seedURIs</code>; the operator materialises it into a seed URI at reconcile time.
 - <code>seedConfig.restoreUntil</code> maps to the <code>seedRestoreUntil</code> CREATE DATABASE option for sharded databases.</p>
 <h3 id="propertyshardingconfiguration">PropertyShardingConfiguration<a class="headerlink" href="#propertyshardingconfiguration" title="Anchor link to this section">&para;</a></h3>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nt">propertySharding</span><span class="p">:</span>
@@ -3700,8 +3725,8 @@
 </table>
 <h3 id="databasetopology">DatabaseTopology<a class="headerlink" href="#databasetopology" title="Anchor link to this section">&para;</a></h3>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nt">topology</span><span class="p">:</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span><span class="nt">primaries</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">int32</span><span class="w">     </span><span class="c1"># Required: Number of primary replicas</span>
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span><span class="nt">secondaries</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">int32</span><span class="w">   </span><span class="c1"># Required: Number of secondary replicas</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span><span class="nt">primaries</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">int32</span><span class="w">     </span><span class="c1"># Optional: Number of primary replicas</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span><span class="nt">secondaries</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">int32</span><span class="w">   </span><span class="c1"># Optional: Number of secondary replicas</span>
 </span></code></pre></div>
 <table>
 <thead>
@@ -3716,20 +3741,20 @@
 <tr>
 <td><code>primaries</code></td>
 <td><code>int32</code></td>
-<td>Yes</td>
-<td>Number of primary replicas</td>
+<td>No</td>
+<td>Number of primary replicas (at least 1 required to host the database)</td>
 </tr>
 <tr>
 <td><code>secondaries</code></td>
 <td><code>int32</code></td>
-<td>Yes</td>
-<td>Number of secondary replicas</td>
+<td>No</td>
+<td>Number of secondary replicas (read-only scaling)</td>
 </tr>
 </tbody>
 </table>
 <h3 id="propertyshardtopology">PropertyShardTopology<a class="headerlink" href="#propertyshardtopology" title="Anchor link to this section">&para;</a></h3>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="nt">propertyShardTopology</span><span class="p">:</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">  </span><span class="nt">replicas</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">int32</span><span class="w">   </span><span class="c1"># Required: Number of replicas per property shard</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">  </span><span class="nt">replicas</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">int32</span><span class="w">   </span><span class="c1"># Optional: Number of replicas per property shard (default 1)</span>
 </span></code></pre></div>
 <table>
 <thead>
@@ -3737,6 +3762,7 @@
 <th>Field</th>
 <th>Type</th>
 <th>Required</th>
+<th>Default</th>
 <th>Description</th>
 </tr>
 </thead>
@@ -3744,7 +3770,8 @@
 <tr>
 <td><code>replicas</code></td>
 <td><code>int32</code></td>
-<td>Yes</td>
+<td>No</td>
+<td>1</td>
 <td>Number of replicas per property shard</td>
 </tr>
 </tbody>
@@ -3756,9 +3783,13 @@
 <p><strong>Property Shards</strong> (store properties):
 - Recommended: 2+ replicas for fault tolerance
 - Uses replica-based replication</p>
-<h3 id="backups">Backups<a class="headerlink" href="#backups" title="Anchor link to this section">&para;</a></h3>
-<p>There is <strong>no first-class backup/restore support for sharded databases</strong>. The <code>Neo4jBackup</code> CRD's <code>target.kind</code> only accepts <code>Cluster</code> or <code>Database</code>, not <code>ShardedDatabase</code>, and neither the backup nor restore controller has any sharded-aware code paths.</p>
-<p>You can back up the underlying per-shard databases individually by creating one <code>Neo4jBackup</code> resource per shard (<code>{name}-g000</code> for the graph shard, <code>{name}-p000</code>, <code>{name}-p001</code>, … for the property shards), but <strong>the operator does not coordinate these</strong> — backups will run independently without cross-shard point-in-time consistency. Coordinated sharded-database backup is a future enhancement; track via <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/issues">GitHub issues</a>.</p>
+<h3 id="backups-and-restore">Backups and Restore<a class="headerlink" href="#backups-and-restore" title="Anchor link to this section">&para;</a></h3>
+<p>Sharded databases are a first-class backup/restore target. The <code>Neo4jBackup</code> CRD's <code>target.kind</code> accepts <code>ShardedDatabase</code> (alongside <code>Cluster</code> and <code>Database</code>); a single backup run captures every shard consistently using a <code>{name}*</code> glob, with per-shard artifacts tracked in <code>status.history[].shardArtifacts</code>.</p>
+<p>Restore is performed by re-creating the sharded database from a backup rather than via a restore Job:</p>
+<ul>
+<li>Seed a fresh sharded database from a backup with <code>spec.seedBackupRef</code> (resolves the named <code>Neo4jBackup</code>'s latest Succeeded run into a seed URI).</li>
+<li>Recover an existing sharded database destructively with <code>spec.replaceExisting: true</code> + <code>spec.force: true</code>, which drops and recreates the database from the seed (<code>Neo4jRestore</code> rejects sharded targets and points here).</li>
+</ul>
 <h3 id="neo4jshardeddatabasestatus">Neo4jShardedDatabaseStatus<a class="headerlink" href="#neo4jshardeddatabasestatus" title="Anchor link to this section">&para;</a></h3>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nt">status</span><span class="p">:</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">  </span><span class="nt">conditions</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[]</span><span class="l l-Scalar l-Scalar-Plain">metav1.Condition</span><span class="w">         </span><span class="c1"># Standard conditions</span>
@@ -3771,7 +3802,10 @@
 </span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="w">  </span><span class="nt">propertyShards</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[]</span><span class="l l-Scalar l-Scalar-Plain">ShardStatus</span><span class="w">          </span><span class="c1"># Property shard statuses</span>
 </span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="w">  </span><span class="nt">virtualDatabase</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">VirtualDatabaseStatus</span><span class="w">  </span><span class="c1"># Virtual database status</span>
 </span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="w">  </span><span class="nt">totalSize</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">string</span><span class="w">                      </span><span class="c1"># Total size across shards</span>
+</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="w">  </span><span class="nt">lastBackup</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">object</span><span class="w">                     </span><span class="c1"># Reverse-lookup of most recent Succeeded backup</span>
+</span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a><span class="w">  </span><span class="nt">lastDestructiveRestoreGeneration</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">int64</span><span class="w">  </span><span class="c1"># Generation at which the last replaceExisting recreate completed</span>
 </span></code></pre></div>
+<p><code>lastDestructiveRestoreGeneration</code> gates the destructive <code>replaceExisting</code> path: the controller only runs the <code>DROP ... DESTROY DATA</code> + recreate cycle when <code>lastDestructiveRestoreGeneration &lt; metadata.generation</code>, stamping it on success so subsequent reconciles fall through to a no-op. Re-trigger by mutating the spec (which bumps the generation). <code>lastBackup</code> is a non-authoritative observability shortcut populated from the owning <code>Neo4jBackup</code> history; the source of truth remains <code>Neo4jBackup.status.history</code>.</p>
 <h4 id="phase-values">Phase Values<a class="headerlink" href="#phase-values" title="Anchor link to this section">&para;</a></h4>
 <table>
 <thead>
@@ -3784,6 +3818,10 @@
 <tr>
 <td><code>Initializing</code></td>
 <td>Creating and configuring shards</td>
+</tr>
+<tr>
+<td><code>Pending</code></td>
+<td>Waiting on a <code>seedBackupRef</code> whose backup has no Succeeded run yet (reconciler requeues)</td>
 </tr>
 <tr>
 <td><code>Ready</code></td>
@@ -3922,7 +3960,10 @@
 <li><code>propertyShards</code> must be 1-1000</li>
 <li><code>propertyShardTopology.replicas</code> must be &gt;= 1</li>
 <li><code>seedURI</code> and <code>seedURIs</code> cannot both be set</li>
+<li><code>seedBackupRef</code> is mutually exclusive with <code>seedURI</code> and <code>seedURIs</code></li>
 <li><code>seedSourceDatabase</code>, <code>seedConfig</code>, and <code>seedCredentials</code> require <code>seedURI</code> or <code>seedURIs</code></li>
+<li><code>replaceExisting: true</code> requires <code>force: true</code> (destructive <code>DROP ... DESTROY DATA</code>)</li>
+<li><code>replaceExisting: true</code> is mutually exclusive with <code>ifNotExists: true</code> and requires a seed source (<code>seedURI</code>, <code>seedURIs</code>, or <code>seedBackupRef</code>)</li>
 <li>Target cluster must be in "Ready" phase with <code>propertyShardingReady: true</code></li>
 <li><code>graphShard.primaries</code> should be &gt;= 3 for high availability</li>
 </ul>

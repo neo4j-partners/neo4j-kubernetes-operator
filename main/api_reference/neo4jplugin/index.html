@@ -2193,6 +2193,28 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#pluginregistry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PluginRegistry
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#registrytlsconfig" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RegistryTLSConfig
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#plugindependency" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3213,6 +3235,28 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#pluginregistry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PluginRegistry
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#registrytlsconfig" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RegistryTLSConfig
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#plugindependency" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3954,12 +3998,7 @@
 <tr>
 <td><code>type</code></td>
 <td><code>string</code></td>
-<td>Source type: "official", "community", "custom", "url"</td>
-</tr>
-<tr>
-<td><code>registry</code></td>
-<td><code>PluginRegistry</code></td>
-<td>Registry configuration for custom sources</td>
+<td>Source type: "official", "community", "custom", "url" (default: <code>official</code>)</td>
 </tr>
 <tr>
 <td><code>url</code></td>
@@ -3969,12 +4008,70 @@
 <tr>
 <td><code>checksum</code></td>
 <td><code>string</code></td>
-<td><strong>Required</strong> for <code>type: url</code> and <code>type: custom</code>. Must match <code>^(sha256:[a-f0-9]{64}\|sha512:[a-f0-9]{128})$</code>. SHA1 and MD5 are rejected. See <a href="#supply-chain">Supply-chain</a>.</td>
+<td>Checksum for verification. <strong>Required</strong> by the controller-side validator for <code>type: url</code> and <code>type: custom</code>. Must match <code>^(sha256:[a-f0-9]{64}\|sha512:[a-f0-9]{128})$</code>. SHA1 and MD5 are rejected. See <a href="#supply-chain">Supply-chain</a>.</td>
 </tr>
 <tr>
 <td><code>authSecret</code></td>
 <td><code>string</code></td>
-<td>Secret containing auth for private registries/URLs</td>
+<td>Secret containing auth for private repositories/URLs</td>
+</tr>
+<tr>
+<td><code>registry</code></td>
+<td><a href="#pluginregistry"><code>PluginRegistry</code></a></td>
+<td>Registry configuration for custom sources</td>
+</tr>
+</tbody>
+</table>
+<h3 id="pluginregistry">PluginRegistry<a class="headerlink" href="#pluginregistry" title="Anchor link to this section">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>url</code></td>
+<td><code>string</code></td>
+<td>✅</td>
+<td>Registry URL</td>
+</tr>
+<tr>
+<td><code>authSecret</code></td>
+<td><code>string</code></td>
+<td>❌</td>
+<td>Authentication secret</td>
+</tr>
+<tr>
+<td><code>tls</code></td>
+<td><code>RegistryTLSConfig</code></td>
+<td>❌</td>
+<td>TLS configuration</td>
+</tr>
+</tbody>
+</table>
+<h3 id="registrytlsconfig">RegistryTLSConfig<a class="headerlink" href="#registrytlsconfig" title="Anchor link to this section">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>insecureSkipVerify</code></td>
+<td><code>boolean</code></td>
+<td>Skip TLS verification</td>
+</tr>
+<tr>
+<td><code>caSecret</code></td>
+<td><code>string</code></td>
+<td>CA certificate secret</td>
 </tr>
 </tbody>
 </table>
@@ -4403,14 +4500,13 @@ the unwanted CR. The surviving CR reconciles on its next watch event
 </span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">custom</span>
 </span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="w">    </span><span class="nt">registry</span><span class="p">:</span>
 </span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="w">      </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;https://my-registry.example.com&quot;</span>
-</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="w">      </span><span class="nt">authentication</span><span class="p">:</span>
-</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a><span class="w">        </span><span class="nt">secret</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">registry-credentials</span>
-</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a>
-</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="w">  </span><span class="c1"># Security settings</span>
-</span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a><span class="w">  </span><span class="nt">security</span><span class="p">:</span>
-</span><span id="__span-7-20"><a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a><span class="w">    </span><span class="nt">allowedProcedures</span><span class="p">:</span>
-</span><span id="__span-7-21"><a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;custom.*&quot;</span>
-</span><span id="__span-7-22"><a id="__codelineno-7-22" name="__codelineno-7-22" href="#__codelineno-7-22"></a><span class="w">    </span><span class="nt">sandbox</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="w">      </span><span class="nt">authSecret</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">registry-credentials</span>
+</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a>
+</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a><span class="w">  </span><span class="c1"># Security settings</span>
+</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="w">  </span><span class="nt">security</span><span class="p">:</span>
+</span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a><span class="w">    </span><span class="nt">allowedProcedures</span><span class="p">:</span>
+</span><span id="__span-7-20"><a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;custom.*&quot;</span>
+</span><span id="__span-7-21"><a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a><span class="w">    </span><span class="nt">sandbox</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </span></code></pre></div>
 <h3 id="url-plugin-example">URL Plugin Example<a class="headerlink" href="#url-plugin-example" title="Anchor link to this section">&para;</a></h3>
 <p>Install a plugin directly from a URL:</p>

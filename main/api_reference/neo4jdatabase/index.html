@@ -3557,8 +3557,8 @@
 </tr>
 <tr>
 <td><code>defaultCypherLanguage</code></td>
-<td><code>string</code></td>
-<td>Default Cypher version for Neo4j 2025.x: <code>"5"</code>, <code>"25"</code></td>
+<td><code>string</code> (enum: <code>"5"</code>, <code>"25"</code>)</td>
+<td>Default Cypher version for Neo4j 2025.x</td>
 </tr>
 <tr>
 <td><code>options</code></td>
@@ -3601,12 +3601,12 @@
 <tr>
 <td><code>primaries</code></td>
 <td><code>int32</code></td>
-<td><strong>Required for clusters</strong>. Number of primary servers (minimum: 1)</td>
+<td>Number of primary servers. Optional; when set, minimum is <code>1</code></td>
 </tr>
 <tr>
 <td><code>secondaries</code></td>
 <td><code>int32</code></td>
-<td>Number of secondary servers (minimum: 0, default: 0)</td>
+<td>Number of secondary servers (minimum: <code>0</code>)</td>
 </tr>
 </tbody>
 </table>
@@ -3738,8 +3738,8 @@
 <tbody>
 <tr>
 <td><code>type</code></td>
-<td><code>string</code></td>
-<td>Storage type: <code>"s3"</code>, <code>"gcs"</code>, <code>"azure"</code>, <code>"pvc"</code></td>
+<td><code>string</code> (enum: <code>"s3"</code>, <code>"gcs"</code>, <code>"azure"</code>, <code>"pvc"</code>)</td>
+<td><strong>Required</strong>. Storage type</td>
 </tr>
 <tr>
 <td><code>bucket</code></td>
@@ -3802,13 +3802,28 @@
 <tbody>
 <tr>
 <td><code>provider</code></td>
-<td><code>string</code></td>
-<td>Cloud provider: <code>"aws"</code>, <code>"gcp"</code>, <code>"azure"</code></td>
+<td><code>string</code> (enum: <code>"aws"</code>, <code>"gcp"</code>, <code>"azure"</code>)</td>
+<td>Cloud provider</td>
 </tr>
 <tr>
 <td><code>identity</code></td>
 <td><a href="#cloudidentity"><code>*CloudIdentity</code></a></td>
 <td>Cloud identity configuration</td>
+</tr>
+<tr>
+<td><code>credentialsSecretRef</code></td>
+<td><code>string</code></td>
+<td>Name of a Kubernetes Secret with cloud provider credentials as env vars. Optional when using workload identity / IAM instance profiles</td>
+</tr>
+<tr>
+<td><code>endpointURL</code></td>
+<td><code>string</code></td>
+<td>Overrides the S3 API endpoint URL to target S3-compatible stores (MinIO, Ceph RGW, Cloudflare R2). Only applies to the <code>aws</code> provider</td>
+</tr>
+<tr>
+<td><code>forcePathStyle</code></td>
+<td><code>boolean</code></td>
+<td>Forces S3 path-style addressing (bucket in URL path). Required for MinIO and most self-hosted S3-compatible stores. Only effective when <code>endpointURL</code> is set</td>
 </tr>
 </tbody>
 </table>
@@ -3824,8 +3839,8 @@
 <tbody>
 <tr>
 <td><code>provider</code></td>
-<td><code>string</code></td>
-<td>Identity provider: <code>"aws"</code>, <code>"gcp"</code>, <code>"azure"</code></td>
+<td><code>string</code> (enum: <code>"aws"</code>, <code>"gcp"</code>, <code>"azure"</code>)</td>
+<td><strong>Required</strong>. Identity provider</td>
 </tr>
 <tr>
 <td><code>serviceAccount</code></td>
@@ -3909,7 +3924,7 @@
 </tr>
 <tr>
 <td><code>dataImported</code></td>
-<td><code>boolean</code></td>
+<td><code>*bool</code></td>
 <td>Whether initial data has been imported</td>
 </tr>
 <tr>
@@ -3923,14 +3938,9 @@
 <td>Database size</td>
 </tr>
 <tr>
-<td><code>lastBackupTime</code></td>
-<td><code>*metav1.Time</code></td>
-<td>Last backup time</td>
-</tr>
-<tr>
 <td><code>state</code></td>
 <td><code>string</code></td>
-<td>Current database state: <code>"online"</code>, <code>"offline"</code>, <code>"starting"</code>, <code>"stopping"</code></td>
+<td>Current database state: <code>"online"</code>, <code>"offline"</code>, <code>"started"</code>, <code>"stopped"</code></td>
 </tr>
 <tr>
 <td><code>servers</code></td>

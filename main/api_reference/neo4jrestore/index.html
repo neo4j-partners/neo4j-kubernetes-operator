@@ -2232,6 +2232,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#tempstoragespec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TempStorageSpec
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#restorehooks" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3006,6 +3017,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#tempstoragespec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TempStorageSpec
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#restorehooks" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3710,6 +3732,24 @@
 <td>Additional arguments passed verbatim to <code>neo4j-admin database restore</code></td>
 </tr>
 <tr>
+<td><code>tempPath</code></td>
+<td><code>string</code></td>
+<td>❌</td>
+<td>Local directory for temporary files during restore. When <code>tempStorage</code> is configured this is set automatically to the mount path; only set manually if you mount your own volume by other means.</td>
+</tr>
+<tr>
+<td><code>tempStorage</code></td>
+<td><a href="#tempstoragespec"><code>TempStorageSpec</code></a></td>
+<td>❌</td>
+<td>Provisions a PVC for temporary staging files during cloud restores. Without it, cloud restores use the container's ephemeral disk (may be too small for large databases). The operator mounts the PVC and passes <code>--temp-path</code> automatically.</td>
+</tr>
+<tr>
+<td><code>resources</code></td>
+<td><code>corev1.ResourceRequirements</code></td>
+<td>❌</td>
+<td>CPU/memory requests + limits on the restore Job's container. When unset, the operator applies a Burstable default (request 100m CPU / 512Mi memory, limit 1 CPU / 2Gi memory). <strong>Standalone restores only</strong> — cluster targets use the Cypher path (no Job) and ignore this field.</td>
+</tr>
+<tr>
 <td><code>preRestore</code></td>
 <td><a href="#restorehooks"><code>RestoreHooks</code></a></td>
 <td>❌</td>
@@ -3720,6 +3760,32 @@
 <td><a href="#restorehooks"><code>RestoreHooks</code></a></td>
 <td>❌</td>
 <td>Hooks executed after the restore Job completes successfully</td>
+</tr>
+</tbody>
+</table>
+<h3 id="tempstoragespec">TempStorageSpec<a class="headerlink" href="#tempstoragespec" title="Anchor link to this section">&para;</a></h3>
+<p>Provisions a temporary PVC for staging files during cloud restores.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>size</code></td>
+<td><code>string</code></td>
+<td>✅</td>
+<td>Size of the temporary PVC (e.g., <code>"50Gi"</code>). Should be at least as large as the expected backup/restore artifact.</td>
+</tr>
+<tr>
+<td><code>storageClassName</code></td>
+<td><code>string</code></td>
+<td>❌</td>
+<td>StorageClassName for the temporary PVC. If empty, uses the cluster default.</td>
 </tr>
 </tbody>
 </table>
@@ -3934,6 +4000,18 @@
 <td><code>string</code></td>
 <td>❌</td>
 <td>Name of a Kubernetes Secret containing cloud credentials as environment variables. When absent, ambient workload identity is used.</td>
+</tr>
+<tr>
+<td><code>endpointURL</code></td>
+<td><code>string</code></td>
+<td>❌</td>
+<td>Overrides the S3 API endpoint URL. Use to target S3-compatible stores such as MinIO, Ceph RGW, or Cloudflare R2.</td>
+</tr>
+<tr>
+<td><code>forcePathStyle</code></td>
+<td><code>bool</code></td>
+<td>❌</td>
+<td>Forces S3 path-style addressing (bucket name in the URL path rather than as a subdomain). Typically required for S3-compatible stores.</td>
 </tr>
 <tr>
 <td><code>identity</code></td>

@@ -2914,7 +2914,7 @@
 <tr>
 <td><code>username</code></td>
 <td><code>string</code></td>
-<td>Username in Neo4j. Defaults to <code>metadata.name</code>. Pattern <code>^[a-zA-Z][a-zA-Z0-9_.\-]*$</code>, max 65 characters.</td>
+<td>Username in Neo4j. Defaults to <code>metadata.name</code>. Pattern <code>^[a-zA-Z][a-zA-Z0-9_.@\-]*$</code> (the at-sign supports email-style SSO/LDAP usernames), max 65 characters.</td>
 </tr>
 <tr>
 <td><code>passwordSecretRef</code></td>
@@ -2971,7 +2971,7 @@
 <tr>
 <td><code>key</code></td>
 <td><code>string</code></td>
-<td>Key inside the Secret's data. Defaults to <code>password</code>. Empty values are rejected.</td>
+<td>Key inside the Secret's data. There is no schema-level default; the controller falls back to <code>password</code> when this is empty. Empty values at the resolved key are rejected.</td>
 </tr>
 </tbody>
 </table>
@@ -3085,7 +3085,7 @@
 <h2 id="validation-rules">Validation rules<a class="headerlink" href="#validation-rules" title="Anchor link to this section">&para;</a></h2>
 <ul>
 <li><code>clusterRef</code> must resolve to a <code>Neo4jEnterpriseCluster</code> or <code>Neo4jEnterpriseStandalone</code> in the same namespace.</li>
-<li><code>username</code> (or <code>metadata.name</code> fallback) matches <code>^[a-zA-Z][a-zA-Z0-9_.\-]*$</code>, max 65 characters.</li>
+<li><code>username</code> (or <code>metadata.name</code> fallback) matches <code>^[a-zA-Z][a-zA-Z0-9_.@\-]*$</code> (the at-sign supports email-style SSO/LDAP usernames), max 65 characters.</li>
 <li>The reserved name <code>system</code> is rejected.</li>
 <li>At least one of <code>passwordSecretRef</code> or <code>externalAuth</code> must be set (Neo4j requires ≥1 auth provider per user).</li>
 <li><code>passwordSecretRef</code>: the Secret must exist and contain a non-empty value at the named key. Values shorter than 8 characters produce a warning (Neo4j's default minimum is 8).</li>

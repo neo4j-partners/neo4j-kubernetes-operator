@@ -1908,10 +1908,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#core-configuration-required" class="md-nav__link">
+  <a href="#core-configuration" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Core Configuration (Required)
+        Core Configuration
       
     </span>
   </a>
@@ -2237,61 +2237,6 @@
     <span class="md-ellipsis">
       
         PropertyShardingSpec
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#storagelocation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        StorageLocation
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#pvcspec" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        PVCSpec
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#cloudblock" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        CloudBlock
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#cloudidentity" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        CloudIdentity
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#autocreatespec" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        AutoCreateSpec
       
     </span>
   </a>
@@ -3436,10 +3381,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#core-configuration-required" class="md-nav__link">
+  <a href="#core-configuration" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Core Configuration (Required)
+        Core Configuration
       
     </span>
   </a>
@@ -3765,61 +3710,6 @@
     <span class="md-ellipsis">
       
         PropertyShardingSpec
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#storagelocation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        StorageLocation
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#pvcspec" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        PVCSpec
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#cloudblock" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        CloudBlock
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#cloudidentity" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        CloudIdentity
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#autocreatespec" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        AutoCreateSpec
       
     </span>
   </a>
@@ -4409,12 +4299,13 @@
 </ul>
 <h2 id="spec">Spec<a class="headerlink" href="#spec" title="Anchor link to this section">&para;</a></h2>
 <p>The <code>Neo4jEnterpriseClusterSpec</code> defines the desired state of a Neo4j Enterprise cluster.</p>
-<h3 id="core-configuration-required">Core Configuration (Required)<a class="headerlink" href="#core-configuration-required" title="Anchor link to this section">&para;</a></h3>
+<h3 id="core-configuration">Core Configuration<a class="headerlink" href="#core-configuration" title="Anchor link to this section">&para;</a></h3>
 <table>
 <thead>
 <tr>
 <th>Field</th>
 <th>Type</th>
+<th>Required</th>
 <th>Description</th>
 </tr>
 </thead>
@@ -4422,21 +4313,25 @@
 <tr>
 <td><code>image</code></td>
 <td><a href="#imagespec"><code>ImageSpec</code></a></td>
+<td><strong>Required</strong></td>
 <td>The Neo4j Docker image configuration</td>
 </tr>
 <tr>
 <td><code>topology</code></td>
 <td><a href="#topologyconfiguration"><code>TopologyConfiguration</code></a></td>
+<td><strong>Required</strong></td>
 <td>Cluster topology (number of servers)</td>
 </tr>
 <tr>
 <td><code>storage</code></td>
 <td><a href="#storagespec"><code>StorageSpec</code></a></td>
+<td><strong>Required</strong></td>
 <td>Storage configuration for data persistence</td>
 </tr>
 <tr>
 <td><code>auth</code></td>
 <td><a href="#authspec"><code>AuthSpec</code></a></td>
+<td>Optional</td>
 <td>Authentication configuration</td>
 </tr>
 </tbody>
@@ -4597,6 +4492,11 @@ cluster reaches <code>Ready</code> — see <a href="../neo4jrestore/"><code>Neo4
 <td><code>[]corev1.VolumeMount</code></td>
 <td>Mount points for <code>extraVolumes</code> (or, rarely, operator-managed volumes); operator-managed paths are rejected by the validator</td>
 </tr>
+<tr>
+<td><code>extraEnvFrom</code></td>
+<td><code>[]corev1.EnvFromSource</code></td>
+<td>Standard Kubernetes pass-through. Projects entire Secrets or ConfigMaps as environment variables onto the Neo4j container. Intended for credential bundles (e.g. cloud seed credentials for <code>seedURI</code>-based restores).</td>
+</tr>
 </tbody>
 </table>
 <h2 id="type-definitions">Type Definitions<a class="headerlink" href="#type-definitions" title="Anchor link to this section">&para;</a></h2>
@@ -4613,17 +4513,17 @@ cluster reaches <code>Ready</code> — see <a href="../neo4jrestore/"><code>Neo4
 <tr>
 <td><code>repo</code></td>
 <td><code>string</code></td>
-<td>Image repository (default: <code>"neo4j"</code>)</td>
+<td><strong>Required.</strong> Image repository (e.g. <code>"neo4j"</code>)</td>
 </tr>
 <tr>
 <td><code>tag</code></td>
 <td><code>string</code></td>
-<td>Image tag</td>
+<td><strong>Required.</strong> Image tag</td>
 </tr>
 <tr>
 <td><code>pullPolicy</code></td>
 <td><code>string</code></td>
-<td>Pull policy: <code>"Always"</code>, <code>"IfNotPresent"</code>, <code>"Never"</code></td>
+<td>Pull policy: <code>"Always"</code>, <code>"IfNotPresent"</code>, <code>"Never"</code> (default: <code>"IfNotPresent"</code>)</td>
 </tr>
 <tr>
 <td><code>pullSecrets</code></td>
@@ -4722,12 +4622,12 @@ cluster reaches <code>Ready</code> — see <a href="../neo4jrestore/"><code>Neo4
 <tr>
 <td><code>className</code></td>
 <td><code>string</code></td>
-<td>Storage class name (immutable after creation)</td>
+<td>Storage class for the data PVCs. <strong>Optional</strong> — if omitted, the PVCs inherit the cluster's default StorageClass. When set, the named class must exist: the operator reports an explicit error (a <code>StorageClassNotFound</code> event and <code>Failed</code> status) rather than leaving server pods <code>Pending</code>. Immutable after creation.</td>
 </tr>
 <tr>
 <td><code>size</code></td>
 <td><code>string</code></td>
-<td>Storage size (e.g., <code>"10Gi"</code>). Can be increased after creation — the operator automatically expands PVCs and recreates the StatefulSet with zero downtime. <strong>Cannot be decreased</strong> (PVC shrink is not supported by Kubernetes). Requires the StorageClass to have <code>allowVolumeExpansion: true</code>.</td>
+<td><strong>Required.</strong> Storage size (e.g., <code>"10Gi"</code>). Can be increased after creation — the operator automatically expands PVCs and recreates the StatefulSet with zero downtime. <strong>Cannot be decreased</strong> (PVC shrink is not supported by Kubernetes). Requires the StorageClass to have <code>allowVolumeExpansion: true</code>.</td>
 </tr>
 <tr>
 <td><code>retentionPolicy</code></td>
@@ -5561,141 +5461,6 @@ not parse policy config to wire up filesystem mounts automatically.</p>
 </tbody>
 </table>
 <p>For detailed configuration, see the <a href="../../user_guide/property_sharding/">Property Sharding Guide</a>.</p>
-<h3 id="storagelocation">StorageLocation<a class="headerlink" href="#storagelocation" title="Anchor link to this section">&para;</a></h3>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Type</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>type</code></td>
-<td><code>string</code></td>
-<td>Storage type: <code>"s3"</code>, <code>"gcs"</code>, <code>"azure"</code>, <code>"pvc"</code></td>
-</tr>
-<tr>
-<td><code>bucket</code></td>
-<td><code>string</code></td>
-<td>Bucket name (for cloud storage)</td>
-</tr>
-<tr>
-<td><code>path</code></td>
-<td><code>string</code></td>
-<td>Path within bucket or PVC</td>
-</tr>
-<tr>
-<td><code>pvc</code></td>
-<td><a href="#pvcspec"><code>*PVCSpec</code></a></td>
-<td>PVC configuration (for <code>pvc</code> type)</td>
-</tr>
-<tr>
-<td><code>cloud</code></td>
-<td><a href="#cloudblock"><code>*CloudBlock</code></a></td>
-<td>Cloud provider configuration</td>
-</tr>
-</tbody>
-</table>
-<h3 id="pvcspec">PVCSpec<a class="headerlink" href="#pvcspec" title="Anchor link to this section">&para;</a></h3>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Type</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>name</code></td>
-<td><code>string</code></td>
-<td>Name of existing PVC to use</td>
-</tr>
-<tr>
-<td><code>storageClassName</code></td>
-<td><code>string</code></td>
-<td>Storage class name</td>
-</tr>
-<tr>
-<td><code>size</code></td>
-<td><code>string</code></td>
-<td>Size for new PVC (e.g., <code>"100Gi"</code>)</td>
-</tr>
-</tbody>
-</table>
-<h3 id="cloudblock">CloudBlock<a class="headerlink" href="#cloudblock" title="Anchor link to this section">&para;</a></h3>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Type</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>provider</code></td>
-<td><code>string</code></td>
-<td>Cloud provider: <code>"aws"</code>, <code>"gcp"</code>, <code>"azure"</code></td>
-</tr>
-<tr>
-<td><code>identity</code></td>
-<td><a href="#cloudidentity"><code>*CloudIdentity</code></a></td>
-<td>Cloud identity configuration</td>
-</tr>
-</tbody>
-</table>
-<h3 id="cloudidentity">CloudIdentity<a class="headerlink" href="#cloudidentity" title="Anchor link to this section">&para;</a></h3>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Type</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>provider</code></td>
-<td><code>string</code></td>
-<td>Identity provider: <code>"aws"</code>, <code>"gcp"</code>, <code>"azure"</code></td>
-</tr>
-<tr>
-<td><code>serviceAccount</code></td>
-<td><code>string</code></td>
-<td>Service account name for cloud identity</td>
-</tr>
-<tr>
-<td><code>autoCreate</code></td>
-<td><a href="#autocreatespec"><code>*AutoCreateSpec</code></a></td>
-<td>Auto-create service account and annotations</td>
-</tr>
-</tbody>
-</table>
-<h3 id="autocreatespec">AutoCreateSpec<a class="headerlink" href="#autocreatespec" title="Anchor link to this section">&para;</a></h3>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Type</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>enabled</code></td>
-<td><code>bool</code></td>
-<td>Enable auto-creation of service account (default: <code>true</code>)</td>
-</tr>
-<tr>
-<td><code>annotations</code></td>
-<td><code>map[string]string</code></td>
-<td>Annotations to apply to auto-created service account</td>
-</tr>
-</tbody>
-</table>
 <h3 id="monitoringspec">MonitoringSpec<a class="headerlink" href="#monitoringspec" title="Anchor link to this section">&para;</a></h3>
 <p>Query performance monitoring and analytics configuration.</p>
 <table>
