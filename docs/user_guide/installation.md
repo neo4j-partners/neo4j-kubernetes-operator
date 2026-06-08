@@ -11,17 +11,17 @@ This guide provides detailed instructions for installing the Neo4j Enterprise Op
 > updated automatically on every operator release.
 
 ```bash
-helm repo add neo4j https://neo4j-partners.github.io/neo4j-kubernetes-operator/charts
+helm repo add neo4j-operator https://neo4j-partners.github.io/neo4j-kubernetes-operator/charts
 helm repo update
 
-helm install neo4j-operator neo4j/neo4j-operator \
+helm install neo4j-operator neo4j-operator/neo4j-operator \
   --namespace neo4j-operator-system \
   --create-namespace
 ```
 
 **Pin to a specific version**:
 ```bash
-helm install neo4j-operator neo4j/neo4j-operator \
+helm install neo4j-operator neo4j-operator/neo4j-operator \
   --version 1.8.0 \
   --namespace neo4j-operator-system \
   --create-namespace
@@ -30,9 +30,9 @@ helm install neo4j-operator neo4j/neo4j-operator \
 **Customise installation values**:
 ```bash
 # View available configuration options
-helm show values neo4j/neo4j-operator
+helm show values neo4j-operator/neo4j-operator
 
-helm install neo4j-operator neo4j/neo4j-operator \
+helm install neo4j-operator neo4j-operator/neo4j-operator \
   --namespace neo4j-operator-system \
   --create-namespace \
   --set resources.limits.memory=512Mi
@@ -41,7 +41,7 @@ helm install neo4j-operator neo4j/neo4j-operator \
 **Upgrade**:
 ```bash
 helm repo update
-helm upgrade neo4j-operator neo4j/neo4j-operator \
+helm upgrade neo4j-operator neo4j-operator/neo4j-operator \
   --namespace neo4j-operator-system
 ```
 
@@ -378,8 +378,14 @@ gh release list --repo neo4j-partners/neo4j-kubernetes-operator
 
 - **Kubernetes**: Version 1.32 or higher
 - **Neo4j**: Version 5.26 LTS (the final SemVer release) or any CalVer release (2025.x, 2026.x, and onward)
-- **cert-manager**: Version 1.20+ (optional, only required for TLS-enabled Neo4j deployments)
+- **cert-manager**: Version 1.20+ (optional, only required for Neo4j deployments that use cert-manager TLS, i.e. `spec.tls.mode: cert-manager`)
 - **Permissions**: Cluster-admin access for CRD and RBAC installation
+
+> **cert-manager install order**: The operator installs and runs fine without cert-manager. It only watches cert-manager `Certificate` resources when the cert-manager CRDs are present *at operator startup*. If you install cert-manager **after** the operator, restart the operator so the watch becomes active:
+> ```
+> kubectl rollout restart deployment/neo4j-operator-controller-manager -n neo4j-operator-system
+> ```
+> If you know you'll use cert-manager TLS, install cert-manager **before** the operator to avoid the restart.
 
 > **OpenShift note**: Clusters enforcing SCCs with allocated UID/FSGroup ranges should disable the chart’s pod security context so SCC can inject IDs, then bind an appropriate SCC (e.g., `restricted`) to the operator service account:
 > ```

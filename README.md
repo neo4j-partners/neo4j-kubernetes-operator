@@ -23,9 +23,9 @@ A Kubernetes operator for Neo4j Enterprise — declarative clusters, databases, 
 Install the operator via Helm:
 
 ```bash
-helm repo add neo4j https://neo4j-partners.github.io/neo4j-kubernetes-operator/charts
+helm repo add neo4j-operator https://neo4j-partners.github.io/neo4j-kubernetes-operator/charts
 helm repo update
-helm install neo4j-operator neo4j/neo4j-operator \
+helm install neo4j-operator neo4j-operator/neo4j-operator \
   --namespace neo4j-operator-system --create-namespace
 ```
 

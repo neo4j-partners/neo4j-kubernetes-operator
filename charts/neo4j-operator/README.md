@@ -8,17 +8,19 @@ This Helm chart deploys the Neo4j Enterprise Operator for Kubernetes, which mana
 - Helm 3.8+
 - kubectl configured to access your cluster
 - (Optional) cert-manager for TLS certificate management
-- (Optional) Prometheus Operator for metrics collection
+- (Optional) Prometheus Operator for metrics collection (required only if you set `metrics.serviceMonitor.enabled=true`)
+
+> **cert-manager install order**: The operator runs without cert-manager and only needs it for clusters using cert-manager TLS (`spec.tls.mode: cert-manager`). It picks up the cert-manager CRDs at startup, so if you install cert-manager *after* the operator, restart it (`kubectl rollout restart deployment/neo4j-operator-controller-manager -n <ns>`) to activate the Certificate watch.
 
 ## Installation
 
 ### From the Helm chart repository (recommended, available from v1.8.0 onwards)
 
 ```bash
-helm repo add neo4j https://neo4j-partners.github.io/neo4j-kubernetes-operator/charts
+helm repo add neo4j-operator https://neo4j-partners.github.io/neo4j-kubernetes-operator/charts
 helm repo update
 
-helm install neo4j-operator neo4j/neo4j-operator \
+helm install neo4j-operator neo4j-operator/neo4j-operator \
   --namespace neo4j-operator-system \
   --create-namespace
 ```

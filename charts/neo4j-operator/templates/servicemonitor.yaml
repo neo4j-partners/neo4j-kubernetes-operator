@@ -1,4 +1,7 @@
 {{- if and .Values.metrics.enabled .Values.metrics.serviceMonitor.enabled -}}
+{{- if not (.Capabilities.APIVersions.Has "monitoring.coreos.com/v1") -}}
+{{- fail "metrics.serviceMonitor.enabled=true but the Prometheus Operator CRD (monitoring.coreos.com/v1) is not installed in this cluster. Install the Prometheus Operator first, or set metrics.serviceMonitor.enabled=false." -}}
+{{- end -}}
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:

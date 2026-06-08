@@ -284,7 +284,11 @@ extraManifests: []
 #   data:
 #     key: value
 
-# Pre-install checks — validates prerequisites before deploying the operator
+# Pre-install checks — validates prerequisites before deploying the operator.
+# Image needs a shell (the check runs `/bin/sh -c`) + kubectl. Pinned to a
+# specific version for reproducibility/air-gap; alpine/k8s is alpine-based (has
+# a shell), unlike the distroless registry.k8s.io/kubectl and rancher/kubectl.
+# (bitnami/kubectl was dropped — its versioned tags are no longer published.)
 preInstallChecks:
   enabled: true
-  image: bitnami/kubectl:latest
+  image: alpine/k8s:1.32.0
