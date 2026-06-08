@@ -318,7 +318,7 @@ Numbered rules below are not duplicated elsewhere — read in full.
 4. **Name length validation**: cluster ≤ 56 chars (DNS label 63 minus `-server`); standalone ≤ 63; database ≤ 65 and must match `^[a-zA-Z][a-zA-Z0-9.\-]*$`.
 5. **Standalone `UpgradeStrategy`**: pre-upgrade health check via `VerifyConnectivity`; `autoPauseOnFailure` blocks upgrade on failure; STS update strategy comes from spec.
 6. **Standalone health probes**: readiness/liveness/startup via `/conf/health.sh` (process + HTTP 7474). ConfigMap includes `health.sh` alongside `neo4j.conf` with `DefaultMode: 0755`.
-7. **Deprecated config keys**: validator warns on `dbms.logs.query.enabled` (use `db.logs.query.enabled`); always use `db.*` namespace for Neo4j 5.x+.
+7. **Deprecated config keys**: validator *rejects* (`field.Invalid`, not a warning) deprecated `spec.config` keys — `dbms.logs.query.enabled` (use `db.logs.query.enabled`), `dbms.default_database`, `db.format` (standard/high_limit), `dbms.integrations.cloud_storage.s3.region`. Always use `db.*` namespace for Neo4j 5.x+.
 8. **Storage expansion**: orphan-delete STS (not regular delete); compare spec vs actual PVC sizes (not old vs new spec); `retry.RetryOnConflict` on PVC patches; validate `allowVolumeExpansion` before patching; never shrink PVCs.
 
 **TLS / Bolt client:**
