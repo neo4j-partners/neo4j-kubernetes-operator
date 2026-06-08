@@ -43,14 +43,14 @@ The `Neo4jEnterpriseCluster` Custom Resource Definition (CRD) manages Neo4j Ente
 
 The `Neo4jEnterpriseClusterSpec` defines the desired state of a Neo4j Enterprise cluster.
 
-### Core Configuration (Required)
+### Core Configuration
 
-| Field | Type | Description |
-|---|---|---|
-| `image` | [`ImageSpec`](#imagespec) | The Neo4j Docker image configuration |
-| `topology` | [`TopologyConfiguration`](#topologyconfiguration) | Cluster topology (number of servers) |
-| `storage` | [`StorageSpec`](#storagespec) | Storage configuration for data persistence |
-| `auth` | [`AuthSpec`](#authspec) | Authentication configuration |
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `image` | [`ImageSpec`](#imagespec) | **Required** | The Neo4j Docker image configuration |
+| `topology` | [`TopologyConfiguration`](#topologyconfiguration) | **Required** | Cluster topology (number of servers) |
+| `storage` | [`StorageSpec`](#storagespec) | **Required** | Storage configuration for data persistence |
+| `auth` | [`AuthSpec`](#authspec) | Optional | Authentication configuration |
 
 ### Kubernetes Integration
 
@@ -99,6 +99,7 @@ cluster reaches `Ready` — see [`Neo4jRestore`](neo4jrestore.md).
 | `trustedCASecrets` | `[]`[`TrustedCASecret`](#trustedcasecret) | CA bundles to add to Neo4j's JVM truststore (OIDC, LDAPS, plugin downloads, peer-cluster replication) |
 | `extraVolumes` | `[]corev1.Volume` | Arbitrary pod volumes mounted into the Neo4j pod; reference them via `extraVolumeMounts` |
 | `extraVolumeMounts` | `[]corev1.VolumeMount` | Mount points for `extraVolumes` (or, rarely, operator-managed volumes); operator-managed paths are rejected by the validator |
+| `extraEnvFrom` | `[]corev1.EnvFromSource` | Standard Kubernetes pass-through. Projects entire Secrets or ConfigMaps as environment variables onto the Neo4j container. Intended for credential bundles (e.g. cloud seed credentials for `seedURI`-based restores). |
 
 ## Type Definitions
 
@@ -106,9 +107,9 @@ cluster reaches `Ready` — see [`Neo4jRestore`](neo4jrestore.md).
 
 | Field | Type | Description |
 |---|---|---|
-| `repo` | `string` | Image repository (default: `"neo4j"`) |
-| `tag` | `string` | Image tag |
-| `pullPolicy` | `string` | Pull policy: `"Always"`, `"IfNotPresent"`, `"Never"` |
+| `repo` | `string` | **Required.** Image repository (e.g. `"neo4j"`) |
+| `tag` | `string` | **Required.** Image tag |
+| `pullPolicy` | `string` | Pull policy: `"Always"`, `"IfNotPresent"`, `"Never"` (default: `"IfNotPresent"`) |
 | `pullSecrets` | `[]string` | Image pull secrets |
 
 ### TopologyConfiguration
@@ -150,8 +151,8 @@ Specifies role constraints for individual servers.
 
 | Field | Type | Description |
 |---|---|---|
-| `className` | `string` | Storage class name (immutable after creation) |
-| `size` | `string` | Storage size (e.g., `"10Gi"`). Can be increased after creation — the operator automatically expands PVCs and recreates the StatefulSet with zero downtime. **Cannot be decreased** (PVC shrink is not supported by Kubernetes). Requires the StorageClass to have `allowVolumeExpansion: true`. |
+| `className` | `string` | Storage class for the data PVCs. **Optional** — if omitted, the PVCs inherit the cluster's default StorageClass. When set, the named class must exist: the operator reports an explicit error (a `StorageClassNotFound` event and `Failed` status) rather than leaving server pods `Pending`. Immutable after creation. |
+| `size` | `string` | **Required.** Storage size (e.g., `"10Gi"`). Can be increased after creation — the operator automatically expands PVCs and recreates the StatefulSet with zero downtime. **Cannot be decreased** (PVC shrink is not supported by Kubernetes). Requires the StorageClass to have `allowVolumeExpansion: true`. |
 | `retentionPolicy` | `string` | PVC retention policy: `"Delete"` (default) permanently removes PVCs on deletion; `"Retain"` preserves them. **Use `Retain` for production to prevent data loss.** See [Storage and PVC Retention](../user_guide/configuration.md#storage-and-pvc-retention). |
 
 ### AuthSpec
@@ -497,46 +498,6 @@ resources:
 | `property sharding requires minimum 1 CPU core` | Insufficient CPU | Increase CPU to 2+ cores (recommended) |
 
 For detailed configuration, see the [Property Sharding Guide](../user_guide/property_sharding.md).
-
-### StorageLocation
-
-| Field | Type | Description |
-|---|---|---|
-| `type` | `string` | Storage type: `"s3"`, `"gcs"`, `"azure"`, `"pvc"` |
-| `bucket` | `string` | Bucket name (for cloud storage) |
-| `path` | `string` | Path within bucket or PVC |
-| `pvc` | [`*PVCSpec`](#pvcspec) | PVC configuration (for `pvc` type) |
-| `cloud` | [`*CloudBlock`](#cloudblock) | Cloud provider configuration |
-
-### PVCSpec
-
-| Field | Type | Description |
-|---|---|---|
-| `name` | `string` | Name of existing PVC to use |
-| `storageClassName` | `string` | Storage class name |
-| `size` | `string` | Size for new PVC (e.g., `"100Gi"`) |
-
-### CloudBlock
-
-| Field | Type | Description |
-|---|---|---|
-| `provider` | `string` | Cloud provider: `"aws"`, `"gcp"`, `"azure"` |
-| `identity` | [`*CloudIdentity`](#cloudidentity) | Cloud identity configuration |
-
-### CloudIdentity
-
-| Field | Type | Description |
-|---|---|---|
-| `provider` | `string` | Identity provider: `"aws"`, `"gcp"`, `"azure"` |
-| `serviceAccount` | `string` | Service account name for cloud identity |
-| `autoCreate` | [`*AutoCreateSpec`](#autocreatespec) | Auto-create service account and annotations |
-
-### AutoCreateSpec
-
-| Field | Type | Description |
-|---|---|---|
-| `enabled` | `bool` | Enable auto-creation of service account (default: `true`) |
-| `annotations` | `map[string]string` | Annotations to apply to auto-created service account |
 
 ### MonitoringSpec
 

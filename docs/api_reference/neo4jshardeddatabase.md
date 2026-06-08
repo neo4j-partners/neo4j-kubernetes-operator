@@ -132,9 +132,12 @@ spec:
   defaultCypherLanguage: string                  # Required: "25"
   propertySharding: PropertyShardingConfiguration  # Required
   wait: boolean                                  # Optional: true
-  ifNotExists: boolean                          # Optional: true
+  ifNotExists: boolean                          # Optional: *bool, default true
+  replaceExisting: boolean                      # Optional: destructive recreate
+  force: boolean                                # Optional: confirms replaceExisting
   seedURI: string                               # Optional
   seedURIs: map[string]string                   # Optional
+  seedBackupRef: string                         # Optional
   seedSourceDatabase: string                    # Optional
   seedConfig: SeedConfiguration                 # Optional
   seedCredentials: SeedCredentials              # Optional
@@ -150,9 +153,12 @@ spec:
 | `defaultCypherLanguage` | `string` | Yes | - | Must be "25" for property sharding |
 | `propertySharding` | `PropertyShardingConfiguration` | Yes | - | Property sharding configuration |
 | `wait` | `boolean` | No | true | Wait for database creation to complete |
-| `ifNotExists` | `boolean` | No | true | Create database only if it doesn't exist |
+| `ifNotExists` | `*boolean` | No | true | Pointer type. When unset (nil) or `true`, creation is idempotent (`CREATE DATABASE ... IF NOT EXISTS`). Set explicitly to `false` to omit the `IF NOT EXISTS` clause — required when paired with `replaceExisting: true`. Use `ifNotExistsEffective()`; never dereference directly |
+| `replaceExisting` | `boolean` | No | false | **Destructive.** Drops and recreates the sharded database from the seed (typically `seedBackupRef`). Runs `DROP DATABASE {name} DESTROY DATA WAIT` before CREATE — all existing data is lost. Requires `force: true`; mutually exclusive with `ifNotExists: true`; requires a seed source |
+| `force` | `boolean` | No | false | Confirms the destructive `replaceExisting` operation. The validator rejects `replaceExisting: true` without `force: true` so an accidental flip can't destroy data |
 | `seedURI` | `string` | No | - | Seed URI for creating the sharded database |
 | `seedURIs` | `map[string]string` | No | - | Seed URIs keyed by shard name |
+| `seedBackupRef` | `string` | No | - | Names a `Neo4jBackup` CR (same namespace) whose most-recent Succeeded run seeds this database. Resolved to a concrete seed URI at reconcile time. Mutually exclusive with `seedURI` and `seedURIs`. If the referenced backup has no Succeeded run yet, the database stays in `Pending` and the reconciler requeues |
 | `seedSourceDatabase` | `string` | No | - | Seed source database name for metadata lookup |
 | `seedConfig` | `SeedConfiguration` | No | - | Seed configuration for initialization |
 | `seedCredentials` | `SeedCredentials` | No | - | Credentials for seed URI access |
@@ -161,6 +167,7 @@ spec:
 **Seed URI Notes**:
 - `seedURI` is for a single backup location (expects shard-suffixed artifacts).
 - `seedURIs` is for per-shard URIs (e.g., dump files or multi-location backups).
+- `seedBackupRef` is mutually exclusive with both `seedURI` and `seedURIs`; the operator materialises it into a seed URI at reconcile time.
 - `seedConfig.restoreUntil` maps to the `seedRestoreUntil` CREATE DATABASE option for sharded databases.
 
 ### PropertyShardingConfiguration
@@ -184,25 +191,25 @@ propertySharding:
 
 ```yaml
 topology:
-  primaries: int32     # Required: Number of primary replicas
-  secondaries: int32   # Required: Number of secondary replicas
+  primaries: int32     # Optional: Number of primary replicas
+  secondaries: int32   # Optional: Number of secondary replicas
 ```
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `primaries` | `int32` | Yes | Number of primary replicas |
-| `secondaries` | `int32` | Yes | Number of secondary replicas |
+| `primaries` | `int32` | No | Number of primary replicas (at least 1 required to host the database) |
+| `secondaries` | `int32` | No | Number of secondary replicas (read-only scaling) |
 
 ### PropertyShardTopology
 
 ```yaml
 propertyShardTopology:
-  replicas: int32   # Required: Number of replicas per property shard
+  replicas: int32   # Optional: Number of replicas per property shard (default 1)
 ```
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `replicas` | `int32` | Yes | Number of replicas per property shard |
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `replicas` | `int32` | No | 1 | Number of replicas per property shard |
 
 #### Topology Guidelines
 
@@ -214,11 +221,14 @@ propertyShardTopology:
 - Recommended: 2+ replicas for fault tolerance
 - Uses replica-based replication
 
-### Backups
+### Backups and Restore
 
-There is **no first-class backup/restore support for sharded databases**. The `Neo4jBackup` CRD's `target.kind` only accepts `Cluster` or `Database`, not `ShardedDatabase`, and neither the backup nor restore controller has any sharded-aware code paths.
+Sharded databases are a first-class backup/restore target. The `Neo4jBackup` CRD's `target.kind` accepts `ShardedDatabase` (alongside `Cluster` and `Database`); a single backup run captures every shard consistently using a `{name}*` glob, with per-shard artifacts tracked in `status.history[].shardArtifacts`.
 
-You can back up the underlying per-shard databases individually by creating one `Neo4jBackup` resource per shard (`{name}-g000` for the graph shard, `{name}-p000`, `{name}-p001`, … for the property shards), but **the operator does not coordinate these** — backups will run independently without cross-shard point-in-time consistency. Coordinated sharded-database backup is a future enhancement; track via [GitHub issues](https://github.com/neo4j-partners/neo4j-kubernetes-operator/issues).
+Restore is performed by re-creating the sharded database from a backup rather than via a restore Job:
+
+- Seed a fresh sharded database from a backup with `spec.seedBackupRef` (resolves the named `Neo4jBackup`'s latest Succeeded run into a seed URI).
+- Recover an existing sharded database destructively with `spec.replaceExisting: true` + `spec.force: true`, which drops and recreates the database from the seed (`Neo4jRestore` rejects sharded targets and points here).
 
 ### Neo4jShardedDatabaseStatus
 
@@ -234,13 +244,18 @@ status:
   propertyShards: []ShardStatus          # Property shard statuses
   virtualDatabase: VirtualDatabaseStatus  # Virtual database status
   totalSize: string                      # Total size across shards
+  lastBackup: object                     # Reverse-lookup of most recent Succeeded backup
+  lastDestructiveRestoreGeneration: int64  # Generation at which the last replaceExisting recreate completed
 ```
+
+`lastDestructiveRestoreGeneration` gates the destructive `replaceExisting` path: the controller only runs the `DROP ... DESTROY DATA` + recreate cycle when `lastDestructiveRestoreGeneration < metadata.generation`, stamping it on success so subsequent reconciles fall through to a no-op. Re-trigger by mutating the spec (which bumps the generation). `lastBackup` is a non-authoritative observability shortcut populated from the owning `Neo4jBackup` history; the source of truth remains `Neo4jBackup.status.history`.
 
 #### Phase Values
 
 | Phase | Description |
 |-------|-------------|
 | `Initializing` | Creating and configuring shards |
+| `Pending` | Waiting on a `seedBackupRef` whose backup has no Succeeded run yet (reconciler requeues) |
 | `Ready` | All shards operational |
 | `Failed` | Error in shard creation or operation |
 | `Mixed` | Some shards operational, others not |
@@ -334,7 +349,10 @@ queryMetrics:
 - `propertyShards` must be 1-1000
 - `propertyShardTopology.replicas` must be >= 1
 - `seedURI` and `seedURIs` cannot both be set
+- `seedBackupRef` is mutually exclusive with `seedURI` and `seedURIs`
 - `seedSourceDatabase`, `seedConfig`, and `seedCredentials` require `seedURI` or `seedURIs`
+- `replaceExisting: true` requires `force: true` (destructive `DROP ... DESTROY DATA`)
+- `replaceExisting: true` is mutually exclusive with `ifNotExists: true` and requires a seed source (`seedURI`, `seedURIs`, or `seedBackupRef`)
 - Target cluster must be in "Ready" phase with `propertyShardingReady: true`
 - `graphShard.primaries` should be >= 3 for high availability
 

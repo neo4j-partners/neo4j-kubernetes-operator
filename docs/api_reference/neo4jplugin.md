@@ -96,11 +96,26 @@ kind: Neo4jPlugin
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `type` | `string` | Source type: "official", "community", "custom", "url" |
-| `registry` | `PluginRegistry` | Registry configuration for custom sources |
+| `type` | `string` | Source type: "official", "community", "custom", "url" (default: `official`) |
 | `url` | `string` | Direct URL for "url" source type |
-| `checksum` | `string` | **Required** for `type: url` and `type: custom`. Must match `^(sha256:[a-f0-9]{64}\|sha512:[a-f0-9]{128})$`. SHA1 and MD5 are rejected. See [Supply-chain](#supply-chain). |
-| `authSecret` | `string` | Secret containing auth for private registries/URLs |
+| `checksum` | `string` | Checksum for verification. **Required** by the controller-side validator for `type: url` and `type: custom`. Must match `^(sha256:[a-f0-9]{64}\|sha512:[a-f0-9]{128})$`. SHA1 and MD5 are rejected. See [Supply-chain](#supply-chain). |
+| `authSecret` | `string` | Secret containing auth for private repositories/URLs |
+| `registry` | [`PluginRegistry`](#pluginregistry) | Registry configuration for custom sources |
+
+### PluginRegistry
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `url` | `string` | ✅ | Registry URL |
+| `authSecret` | `string` | ❌ | Authentication secret |
+| `tls` | `RegistryTLSConfig` | ❌ | TLS configuration |
+
+### RegistryTLSConfig
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `insecureSkipVerify` | `boolean` | Skip TLS verification |
+| `caSecret` | `string` | CA certificate secret |
 
 ### PluginDependency
 
@@ -418,8 +433,7 @@ spec:
     type: custom
     registry:
       url: "https://my-registry.example.com"
-      authentication:
-        secret: registry-credentials
+      authSecret: registry-credentials
 
   # Security settings
   security:

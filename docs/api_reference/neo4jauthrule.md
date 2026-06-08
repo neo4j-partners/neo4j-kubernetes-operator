@@ -31,7 +31,7 @@ Before applying a `Neo4jAuthRule`:
 | `clusterRef` | `string` | **Required.** Name of the `Neo4jEnterpriseCluster` or `Neo4jEnterpriseStandalone` in the same namespace. |
 | `name` | `string` | Auth rule name as it appears in `SHOW AUTH RULES`. Defaults to `metadata.name`. Must match `^[a-zA-Z][a-zA-Z0-9_-]*$` and be ≤ 65 characters. |
 | `condition` | `string` | **Required.** Cypher expression evaluated against the user's OIDC token at authentication time. Must be a pure expression — DDL keywords (`CREATE`, `DROP`, `ALTER`, `GRANT`, `DENY`, `REVOKE`, `SHOW`, `RENAME`) and statement separators (`;`) are rejected by the validator. |
-| `enabled` | `*bool` | Whether the rule actively grants roles. Defaults to `true`. Setting `false` preserves the rule but disables it. |
+| `enabled` | `boolean` | Whether the rule actively grants roles. Defaults to `true`. Setting `false` preserves the rule but disables it. |
 | `grantedRoles` | `[]string` | **Required.** Roles to grant when the condition evaluates true. Must contain at least one role. |
 | `enforceRoles` | `boolean` | Reconcile drift on the rule's role list. Defaults to `true`. When `false`, the controller adds missing roles but never revokes anything attached out-of-band. |
 | `deletionPolicy` | `string` | `Drop` (default) executes `DROP AUTH RULE` on CR deletion; `Retain` leaves the rule in Neo4j and only releases the finalizer. |
@@ -44,7 +44,7 @@ Before applying a `Neo4jAuthRule`:
 | `message` | `string` | Short human-readable explanation of `phase`. |
 | `observedGeneration` | `int64` | `metadata.generation` observed at the last successful reconcile. |
 | `appliedRoles` | `[]string` | Roles last observed as granted via `SHOW AUTH RULES`. Sorted ascending. |
-| `appliedEnabled` | `*bool` | Enabled flag observed on the rule. |
+| `appliedEnabled` | `boolean` | Enabled flag observed on the rule. |
 | `conditions[]` | `metav1.Condition` | See below. |
 
 ### Conditions

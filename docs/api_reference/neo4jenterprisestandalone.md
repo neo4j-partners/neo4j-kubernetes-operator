@@ -51,7 +51,7 @@ Specifies the Neo4j Docker image to use.
 
 | Field | Type | Description |
 |---|---|---|
-| `repo` | `string` | **Required**. Docker repository (default: `"neo4j"`) |
+| `repo` | `string` | **Required**. Docker repository (no schema default; typically `"neo4j"`) |
 | `tag` | `string` | **Required**. Neo4j version tag — 5.26 LTS or any CalVer release (2025.x, 2026.x, and onward) |
 | `pullPolicy` | `string` | Image pull policy: `"Always"`, `"IfNotPresent"` (default), `"Never"` |
 | `pullSecrets` | `[]string` | Image pull secrets for private registries |
@@ -69,7 +69,7 @@ Defines storage configuration for the Neo4j data volume.
 
 | Field | Type | Description |
 |---|---|---|
-| `className` | `string` | **Required**. Storage class name (immutable after creation) |
+| `className` | `string` | Storage class for the data PVC. **Optional** — if omitted, the PVC inherits the cluster's default StorageClass. When set, the named class must exist: the operator reports an explicit error (a `StorageClassNotFound` event and `Failed` status) rather than leaving the pod `Pending`. Immutable after creation. |
 | `size` | `string` | **Required**. Storage size (e.g., `"10Gi"`). Can be increased after creation — the operator automatically expands the PVC and recreates the StatefulSet with zero downtime. **Cannot be decreased.** Requires `allowVolumeExpansion: true` on the StorageClass. |
 | `retentionPolicy` | `string` | PVC retention policy: `"Delete"` (default) permanently removes PVCs on deletion; `"Retain"` preserves them. **Use `Retain` for production to prevent data loss.** See [Storage and PVC Retention](../user_guide/configuration.md#storage-and-pvc-retention). |
 
@@ -180,7 +180,15 @@ service:
     className: nginx
     host: neo4j.example.com
     tlsSecretName: neo4j-tls
+  route:                           # OpenShift Route exposure (OpenShift only)
+    enabled: true
+    host: neo4j.apps.example.com
+    targetPort: 7474               # defaults to HTTP port 7474
+    tls:
+      termination: edge            # edge, reencrypt, or passthrough
 ```
+
+`service.type` defaults to `ClusterIP`. The `route` block is OpenShift-only.
 
 #### `mcp` (MCPServerSpec)
 Optional MCP server deployment using the official [`mcp/neo4j`](https://hub.docker.com/r/mcp/neo4j) image ([github.com/neo4j/mcp](https://github.com/neo4j/mcp)). Requires the APOC plugin for the `get-schema` tool.
@@ -231,10 +239,10 @@ upgradeStrategy:
 
 For the full type definition see [`UpgradeStrategySpec`](neo4jenterprisecluster.md#upgradestrategyspec).
 
-#### `plugins` ([]PluginSpec) - DEPRECATED
-**DEPRECATED:** Use the Neo4jPlugin CRD instead for plugin management.
-
-The embedded plugin configuration is deprecated. Use separate Neo4jPlugin resources:
+#### Plugin management (no embedded `plugins` field)
+There is **no** `spec.plugins` field on `Neo4jEnterpriseStandalone` — the embedded
+plugin configuration was removed. Use separate Neo4jPlugin resources for all
+plugin management:
 
 ```yaml
 # Instead of embedded plugins, use Neo4jPlugin CRD
@@ -341,6 +349,47 @@ extraVolumeMounts:
     readOnly: true
 ```
 
+#### `extraEnvFrom` ([]EnvFromSource)
+
+Standard Kubernetes pass-through. Projects entire Secrets or ConfigMaps as
+environment variables onto the Neo4j container (`envFrom`). Same semantics as
+[`Neo4jEnterpriseCluster.spec.extraEnvFrom`](neo4jenterprisecluster.md) — commonly used to
+project cloud credentials for backup seed URIs, plugin tokens, or any
+Secret-projected env. Document only the top-level field; nested sub-fields are
+the standard core/v1 `EnvFromSource` shape.
+
+```yaml
+extraEnvFrom:
+  - secretRef:
+      name: aws-backup-creds
+```
+
+#### Pod scheduling and security (standard Kubernetes pass-throughs)
+
+These top-level fields are passed through unchanged to the Neo4j pod spec.
+Only the top-level field is documented here; their nested sub-fields follow the
+standard core/v1 shapes.
+
+| Field | Type | Description |
+|---|---|---|
+| `affinity` | `*corev1.Affinity` | Affinity rules for pod scheduling (node/pod affinity and anti-affinity). |
+| `nodeSelector` | `map[string]string` | Node selector for pod scheduling. |
+| `tolerations` | `[]corev1.Toleration` | Tolerations for pod scheduling. |
+| `securityContext` | `*SecurityContextSpec` | Overrides pod/container security settings (e.g. for OpenShift SCC compatibility). |
+
+```yaml
+nodeSelector:
+  disktype: ssd
+tolerations:
+  - key: "dedicated"
+    operator: "Equal"
+    value: "neo4j"
+    effect: "NoSchedule"
+affinity:
+  nodeAffinity: {}
+securityContext: {}
+```
+
 ## Status Fields
 
 The `Neo4jEnterpriseStandalone` status provides information about the current state of the deployment.
@@ -414,9 +463,8 @@ Information about the Neo4j database.
 
 | Field | Type | Description |
 |---|---|---|
-| `databaseMode` | `string` | Database mode (should show unified infrastructure mode) |
+| `databaseMode` | `string` | Database mode (single-node) |
 | `databaseName` | `string` | Active database name (usually `"neo4j"`) |
-| `lastBackupTime` | `*metav1.Time` | When the last backup was completed |
 | `storageSize` | `string` | Current storage usage |
 | `connectionCount` | `int32` | Number of active connections |
 | `lastHealthCheck` | `*metav1.Time` | When the last health check was performed |
@@ -424,7 +472,7 @@ Information about the Neo4j database.
 
 ```yaml
 databaseStatus:
-  databaseMode: "UNIFIED"  # Reflects unified clustering infrastructure
+  databaseMode: "SINGLE"   # Single-node deployment
   databaseName: "neo4j"
   storageSize: "2.5Gi"
   connectionCount: 5
@@ -574,7 +622,6 @@ spec:
       enabled: true
       className: nginx
       host: neo4j.example.com
-      tlsEnabled: true
       tlsSecretName: neo4j-tls
       annotations:
         cert-manager.io/cluster-issuer: letsencrypt-prod

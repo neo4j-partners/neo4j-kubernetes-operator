@@ -40,7 +40,7 @@ The `Neo4jDatabase` Custom Resource Definition (CRD) provides declarative databa
 | `wait` | `boolean` | Wait for database creation to complete (default: `true`) |
 | `ifNotExists` | `boolean` | Create only if database doesn't exist - prevents reconciliation errors (default: `true`) |
 | `topology` | [`DatabaseTopology`](#databasetopology) | Database distribution topology (cluster only) |
-| `defaultCypherLanguage` | `string` | Default Cypher version for Neo4j 2025.x: `"5"`, `"25"` |
+| `defaultCypherLanguage` | `string` (enum: `"5"`, `"25"`) | Default Cypher version for Neo4j 2025.x |
 | `options` | `map[string]string` | Additional database options (e.g., `txLogEnrichment`) |
 | `initialData` | [`InitialDataSpec`](#initialdataspec) | Initial data import (**mutually exclusive with `seedURI`**) |
 | `seedURI` | `string` | Backup URI for database creation (**mutually exclusive with `initialData`**) |
@@ -53,8 +53,8 @@ The `Neo4jDatabase` Custom Resource Definition (CRD) provides declarative databa
 
 | Field | Type | Description |
 |---|---|---|
-| `primaries` | `int32` | **Required for clusters**. Number of primary servers (minimum: 1) |
-| `secondaries` | `int32` | Number of secondary servers (minimum: 0, default: 0) |
+| `primaries` | `int32` | Number of primary servers. Optional; when set, minimum is `1` |
+| `secondaries` | `int32` | Number of secondary servers (minimum: `0`) |
 
 **Validation**:
 - `primaries + secondaries` must not exceed cluster's `spec.topology.servers`
@@ -108,7 +108,7 @@ Advanced configuration for creating databases from seed URIs using Neo4j's Cloud
 
 | Field | Type | Description |
 |---|---|---|
-| `type` | `string` | Storage type: `"s3"`, `"gcs"`, `"azure"`, `"pvc"` |
+| `type` | `string` (enum: `"s3"`, `"gcs"`, `"azure"`, `"pvc"`) | **Required**. Storage type |
 | `bucket` | `string` | Bucket name (for cloud storage) |
 | `path` | `string` | Path within bucket or PVC |
 | `pvc` | [`*PVCSpec`](#pvcspec) | PVC configuration (for `pvc` type) |
@@ -126,14 +126,17 @@ Advanced configuration for creating databases from seed URIs using Neo4j's Cloud
 
 | Field | Type | Description |
 |---|---|---|
-| `provider` | `string` | Cloud provider: `"aws"`, `"gcp"`, `"azure"` |
+| `provider` | `string` (enum: `"aws"`, `"gcp"`, `"azure"`) | Cloud provider |
 | `identity` | [`*CloudIdentity`](#cloudidentity) | Cloud identity configuration |
+| `credentialsSecretRef` | `string` | Name of a Kubernetes Secret with cloud provider credentials as env vars. Optional when using workload identity / IAM instance profiles |
+| `endpointURL` | `string` | Overrides the S3 API endpoint URL to target S3-compatible stores (MinIO, Ceph RGW, Cloudflare R2). Only applies to the `aws` provider |
+| `forcePathStyle` | `boolean` | Forces S3 path-style addressing (bucket in URL path). Required for MinIO and most self-hosted S3-compatible stores. Only effective when `endpointURL` is set |
 
 ### CloudIdentity
 
 | Field | Type | Description |
 |---|---|---|
-| `provider` | `string` | Identity provider: `"aws"`, `"gcp"`, `"azure"` |
+| `provider` | `string` (enum: `"aws"`, `"gcp"`, `"azure"`) | **Required**. Identity provider |
 | `serviceAccount` | `string` | Service account name for cloud identity |
 | `autoCreate` | [`*AutoCreateSpec`](#autocreatespec) | Auto-create service account and annotations |
 
@@ -173,11 +176,10 @@ Advanced configuration for creating databases from seed URIs using Neo4j's Cloud
 | `phase` | `string` | Current phase of the database |
 | `message` | `string` | Human-readable status message |
 | `observedGeneration` | `int64` | Generation observed by the controller |
-| `dataImported` | `boolean` | Whether initial data has been imported |
+| `dataImported` | `*bool` | Whether initial data has been imported |
 | `creationTime` | `*metav1.Time` | When the database was created |
 | `size` | `string` | Database size |
-| `lastBackupTime` | `*metav1.Time` | Last backup time |
-| `state` | `string` | Current database state: `"online"`, `"offline"`, `"starting"`, `"stopping"` |
+| `state` | `string` | Current database state: `"online"`, `"offline"`, `"started"`, `"stopped"` |
 | `servers` | `[]string` | Servers hosting the database |
 
 ## Examples

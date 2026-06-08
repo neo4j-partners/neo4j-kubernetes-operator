@@ -36,6 +36,7 @@ The `Neo4jBackupSpec` defines the desired state of a Neo4j backup configuration.
 | `retention` | [`*RetentionPolicy`](#retentionpolicy) | ❌ | Backup retention policy |
 | `options` | [`*BackupOptions`](#backupoptions) | ❌ | Backup-specific options |
 | `suspend` | `bool` | ❌ | Suspend the backup schedule without deleting the resource |
+| `chainFromBackup` | `string` | ❌ | Names another `Neo4jBackup` CR in the **same namespace** whose `<base>/<cr-name>/` directory this CR should write into instead of its own. Used to compose mixed-cadence workflows (e.g. a daily `FULL` CR plus an hourly `DIFF` CR that chains off the daily's artifacts). See [Chaining mixed-cadence backups](#chaining-mixed-cadence-backups). |
 
 ## Type Definitions
 
@@ -45,9 +46,9 @@ Defines what to back up. The `kind` field controls how `name` and `clusterRef` a
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `kind` | `string` | ✅ | Type of resource to back up: `"Cluster"` or `"Database"` |
-| `name` | `string` | ✅ | When `kind=Cluster`: name of the `Neo4jEnterpriseCluster` or `Neo4jEnterpriseStandalone`. When `kind=Database`: name of the Neo4j database (e.g., `"neo4j"`, `"mydb"`) |
-| `clusterRef` | `string` | ✅ when `kind=Database` | Name of the `Neo4jEnterpriseCluster` or `Neo4jEnterpriseStandalone` that owns the database. Unused when `kind=Cluster`. |
+| `kind` | `string` | ✅ | Type of resource to back up: `"Cluster"`, `"Database"`, or `"ShardedDatabase"` |
+| `name` | `string` | ✅ | When `kind=Cluster`: name of the `Neo4jEnterpriseCluster` or `Neo4jEnterpriseStandalone`. When `kind=Database`: name of the Neo4j database (e.g., `"neo4j"`, `"mydb"`). When `kind=ShardedDatabase`: the logical sharded-database name (e.g. `"products"`); the operator backs up all shards (`products-g000`, `products-p000`, …) in one `neo4j-admin` invocation via a glob. |
+| `clusterRef` | `string` | ✅ when `kind=Database` or `kind=ShardedDatabase` | Name of the `Neo4jEnterpriseCluster` or `Neo4jEnterpriseStandalone` that owns the database. Unused when `kind=Cluster`. |
 | `namespace` | `string` | ❌ | Namespace of the target resource (defaults to the backup namespace) |
 
 > **Important**: In earlier releases, when `kind=Database` the `name` field was incorrectly used for cluster lookup. This has been corrected: `name` is always the database name and `clusterRef` is the cluster name. Both are required when `kind=Database`.
@@ -213,6 +214,7 @@ Fine-grained backup execution options.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `resources` | [`*corev1.ResourceRequirements`](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/) | ❌ | CPU/memory requests + limits on the backup Job's container. When unset, the operator applies a Burstable default (request 100m CPU / 512Mi memory, limit 1 CPU / 2Gi memory) sized for small databases and CI. Tune upward for large production databases. |
 | `compress` | `bool` | ❌ | Compress the backup (default: `true`) |
 | `backupType` | `string` | ❌ | Backup type: `"FULL"`, `"DIFF"`, `"AUTO"` (default) |
 | `preferDiffAsParent` | `bool` | ❌ | Use the latest differential backup as the parent when creating a new differential backup (default: `false`). Maps to `--prefer-diff-as-parent`. **Requires CalVer 2025.04+** — an error is returned at runtime if the target version does not support this flag. |
@@ -220,8 +222,9 @@ Fine-grained backup execution options.
 | `tempStorage` | [`*TempStorageSpec`](#tempstoragespec) | ❌ | Provisions a PVC for temporary staging files during cloud backups. The operator mounts this PVC and passes `--temp-path` automatically. Recommended for large databases to avoid filling ephemeral disk. |
 | `pageCache` | `string` | ❌ | Page cache size hint (e.g., `"4G"`). Must match pattern `^[0-9]+[KMG]?$` |
 | `verify` | `bool` | ❌ | Verify backup integrity after creation |
+| `validate` | `*bool` | ❌ | When `true`, runs `neo4j-admin backup validate` against the artifacts **after** the backup succeeds, recording per-shard recoverability into `status.history[].validation`. Appended with `\|\| true` so validate failures don't fail the Job (the backup already succeeded). Pointer type preserves an explicit `true` or `false` across updates; nil (default) skips validate. |
 | `parallelDownload` | `bool` | ❌ | Enable parallel download for remote backups |
-| `remoteAddressResolution` | `bool` | ❌ | Resolve remote addresses during backup |
+| `remoteAddressResolution` | `*bool` | ❌ | Resolve remote addresses via the cluster discovery service (useful in multi-homed environments). Pointer type: when unset and `target.kind=ShardedDatabase` on Neo4j 2025.09+, the operator defaults this to `true` to match the canonical upstream sharded-backup invocation; otherwise unset. Set explicitly (`true` or `false`) to override in either direction. |
 | `skipRecovery` | `bool` | ❌ | Skip the recovery step after backup |
 | `includeMetadata` | `string` | ❌ | Controls which metadata is included in the backup. Values: `"all"` (default), `"none"`, `"users"`, `"roles"`. Requires Neo4j 5.26+. |
 | `parallelRecovery` | `bool` | ❌ | Enable multi-threaded transaction application during backup |
@@ -275,7 +278,100 @@ Represents a single backup Job execution.
 | `status` | `string` | Run status: `"Running"`, `"Succeeded"`, `"Failed"` |
 | `error` | `string` | Error message if the backup failed |
 | `stats` | [`*BackupStats`](#backupstats) | Backup statistics for this run |
-| `backupsPath` | `string` | The shared per-CR directory under `spec.storage.path` where this run wrote its `.backup` artifact. **Same value for every run of one CR** — all runs accumulate in this directory so `neo4j-admin` can chain differential backups off the prior full. Value is the Neo4jBackup CR name. Use the `runID` field (Job UID) for per-run identity. |
+| `backupsPath` | `string` | The shared per-CR directory under `spec.storage.path` where this run wrote its `.backup` artifact. **Same value for every run of one CR** — all runs accumulate in this directory so `neo4j-admin` can chain differential backups off the prior full. Value is the Neo4jBackup CR name (or the `chainFromBackup` chain-root name when set). Use the `runID` field (Job UID) for per-run identity. |
+| `artifactFilename` | `string` | Filename of the `.backup` artifact produced by this standard-DB run (e.g. `"neo4j-2026-06-08T01-18-06.backup"`). Populated by parsing the Job's Pod log after completion; empty when logs couldn't be fetched or the pattern didn't match. Used by the cluster PVC-restore path to build a per-restore seed URL. |
+| `shardArtifacts` | [`[]ShardArtifact`](#shardartifact) | Per-shard `.backup` files produced by a sharded backup run (`target.kind=ShardedDatabase`). Empty for non-sharded runs. |
+| `validation` | [`*BackupValidationResult`](#backupvalidationresult) | Per-shard outcome of the optional `neo4j-admin backup validate` step (only when `options.validate=true` and the operator could parse the output). |
+
+### ShardArtifact
+
+Identifies one `.backup` file produced by a sharded backup.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `shardName` | `string` | Per-shard database name (e.g. `"products-g000"`, `"products-p000"`). Derived by stripping the timestamp suffix from the neo4j-admin output filename. |
+| `filename` | `string` | On-disk filename as written by neo4j-admin (e.g. `"products-g000-2025-06-11T21-04-42.backup"`). |
+| `size` | `int64` | Artifact size in bytes as reported by `ls -la`. Zero if not parseable. |
+
+### BackupValidationResult
+
+Captures the output of `neo4j-admin backup validate` run after a backup, surfacing per-shard recoverability.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `overallStatus` | `string` | `"OK"` if every shard's chain is recoverable to the same transaction or higher; `"Degraded"` if any shard is ahead/behind beyond the lenient consistency window; `"Unknown"` if validate failed or its output couldn't be parsed. |
+| `perShard` | [`[]ShardValidationStatus`](#shardvalidationstatus) | The validate command's status report for each shard. |
+| `rawOutput` | `string` | Truncated stdout of `neo4j-admin backup validate`, kept for debugging when the parser couldn't classify a per-shard line. Capped at 2 KiB. |
+
+### ShardValidationStatus
+
+One row of validate output.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `shardName` | `string` | Per-shard database name. |
+| `status` | `string` | One of `"OK"`, `"Ahead"`, `"Behind"`, `"Unknown"`. |
+| `message` | `string` | Human-readable detail for this shard's status. |
+
+## Chaining mixed-cadence backups
+
+`spec.chainFromBackup` lets a higher-frequency differential backup share artifact storage with a lower-frequency full backup, so `neo4j-admin database backup --type=DIFF` can auto-detect and chain off the prior full/diff in the shared directory.
+
+A typical setup is a daily `FULL` backup CR plus an hourly `DIFF` backup CR that points `chainFromBackup` at the daily CR. Both write into `<base>/<daily-cr-name>/`.
+
+**Constraints** (enforced by the validator):
+
+- Must reference a CR in the **same namespace**.
+- Cannot self-reference (`chainFromBackup: <this-cr-name>` is rejected).
+- Target (cluster + database) must match the referenced CR.
+- Storage backend (type + bucket/path) must match.
+
+**Runtime safety**: the operator labels every backup Job with `app.kubernetes.io/part-of: <chain-root-name>` and refuses to submit a new Job while another Job sharing the same `part-of` label is still active — preventing the daily FULL and hourly DIFF from racing against the same artifact directory.
+
+When empty (default), the CR writes to its own per-name directory.
+
+```yaml
+# Daily FULL backup (the chain root)
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jBackup
+metadata:
+  name: daily-full
+  namespace: neo4j
+spec:
+  target:
+    kind: Cluster
+    name: production-cluster
+  storage:
+    type: s3
+    bucket: neo4j-backups
+    path: prod/
+    cloud:
+      provider: aws
+  schedule: "0 2 * * *"
+  options:
+    backupType: FULL
+---
+# Hourly DIFF backup chaining off the daily full
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jBackup
+metadata:
+  name: hourly-diff
+  namespace: neo4j
+spec:
+  target:
+    kind: Cluster
+    name: production-cluster
+  storage:
+    type: s3
+    bucket: neo4j-backups
+    path: prod/
+    cloud:
+      provider: aws
+  schedule: "0 * * * *"
+  chainFromBackup: daily-full   # share daily-full's artifact directory
+  options:
+    backupType: DIFF
+```
 
 ## Examples
 

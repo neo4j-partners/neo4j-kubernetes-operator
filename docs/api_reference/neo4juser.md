@@ -31,7 +31,7 @@ The `Neo4jUser` Custom Resource Definition (CRD) provides declarative management
 | Field | Type | Description |
 |---|---|---|
 | `clusterRef` | `string` | **Required**. Name of the `Neo4jEnterpriseCluster` or `Neo4jEnterpriseStandalone` in the same namespace. |
-| `username` | `string` | Username in Neo4j. Defaults to `metadata.name`. Pattern `^[a-zA-Z][a-zA-Z0-9_.\-]*$`, max 65 characters. |
+| `username` | `string` | Username in Neo4j. Defaults to `metadata.name`. Pattern `^[a-zA-Z][a-zA-Z0-9_.@\-]*$` (the at-sign supports email-style SSO/LDAP usernames), max 65 characters. |
 | `passwordSecretRef` | [`SecretKeyRef`](#secretkeyref) | References a Secret holding the native-auth password. Required unless one or more `externalAuth` entries are provided. |
 | `requirePasswordChange` | `boolean` | Force password change on next login (`SET PASSWORD CHANGE REQUIRED`). Default `false`. |
 | `accountStatus` | `string` | One of `active` (default), `suspended`. Maps to `SET STATUS ACTIVE|SUSPENDED`. Suspending a native user revokes role assignments client-side; reactivating restores them. |
@@ -45,7 +45,7 @@ The `Neo4jUser` Custom Resource Definition (CRD) provides declarative management
 | Field | Type | Description |
 |---|---|---|
 | `name` | `string` | **Required**. Name of a `Secret` in the same namespace. |
-| `key` | `string` | Key inside the Secret's data. Defaults to `password`. Empty values are rejected. |
+| `key` | `string` | Key inside the Secret's data. There is no schema-level default; the controller falls back to `password` when this is empty. Empty values at the resolved key are rejected. |
 
 ### ExternalAuthProvider
 
@@ -81,7 +81,7 @@ Configures a single non-native authentication provider for the user. The provide
 ## Validation rules
 
 - `clusterRef` must resolve to a `Neo4jEnterpriseCluster` or `Neo4jEnterpriseStandalone` in the same namespace.
-- `username` (or `metadata.name` fallback) matches `^[a-zA-Z][a-zA-Z0-9_.\-]*$`, max 65 characters.
+- `username` (or `metadata.name` fallback) matches `^[a-zA-Z][a-zA-Z0-9_.@\-]*$` (the at-sign supports email-style SSO/LDAP usernames), max 65 characters.
 - The reserved name `system` is rejected.
 - At least one of `passwordSecretRef` or `externalAuth` must be set (Neo4j requires ≥1 auth provider per user).
 - `passwordSecretRef`: the Secret must exist and contain a non-empty value at the named key. Values shorter than 8 characters produce a warning (Neo4j's default minimum is 8).

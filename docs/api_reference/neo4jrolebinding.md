@@ -32,7 +32,7 @@ The validator rejects a `Neo4jRoleBinding` whose `spec.username` overlaps with a
 | Field | Type | Description |
 |---|---|---|
 | `clusterRef` | `string` | **Required**. Name of the `Neo4jEnterpriseCluster` or `Neo4jEnterpriseStandalone` in the same namespace. |
-| `username` | `string` | **Required**. Username in Neo4j to manage role grants for. Must already exist when the binding reconciles (it enters `UserNotFound` and waits otherwise). Pattern `^[a-zA-Z][a-zA-Z0-9_.\-]*$`, max 65 chars. |
+| `username` | `string` | **Required**. Username in Neo4j to manage role grants for. Must already exist when the binding reconciles (it enters `UserNotFound` and waits otherwise). Pattern `^[a-zA-Z][a-zA-Z0-9_.@\-]*$`, max 65 chars. |
 | `roles` | `[]string` | **Required**, MinItems=1. Role names to grant. Mix built-ins and custom names (the latter must correspond to existing `Neo4jRole` CRs or roles created out-of-band). PUBLIC is implicit. |
 | `enforceExclusive` | `boolean` | Default `false`. When true, `.spec.roles` is authoritative for the user's full role set: roles granted out-of-band and not listed here are revoked on every reconcile. When false, the binding only adds and removes the roles it knows about; extra grants from other sources are tolerated. |
 | `deletionPolicy` | `string` | One of `Revoke` (default) or `Retain`. With `Revoke`, deleting the CR revokes every role this binding granted. With `Retain`, the finalizer is released without revoking. |
@@ -60,7 +60,7 @@ The validator rejects a `Neo4jRoleBinding` whose `spec.username` overlaps with a
 ## Validation rules
 
 - `clusterRef` must resolve to a cluster or standalone in the same namespace.
-- `username` matches `^[a-zA-Z][a-zA-Z0-9_.\-]*$`, max 65 characters; reserved names rejected.
+- `username` matches `^[a-zA-Z][a-zA-Z0-9_.@\-]*$`, max 65 characters; reserved names rejected.
 - `roles` must be non-empty (kubebuilder MinItems=1) and contain no empty strings.
 - A `Neo4jUser` in the same namespace targeting the same `clusterRef` and `username` is rejected at validate-time. (Manage role grants there instead.)
 

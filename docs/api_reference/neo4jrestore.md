@@ -138,8 +138,20 @@ Additional restore execution options.
 | `replaceExisting` | `bool` | ❌ | Replace an existing database (default: `false`) |
 | `verifyBackup` | `bool` | ❌ | Verify the backup before attempting restore (default: `false`) |
 | `additionalArgs` | `[]string` | ❌ | Additional arguments passed verbatim to `neo4j-admin database restore` |
+| `tempPath` | `string` | ❌ | Local directory for temporary files during restore. When `tempStorage` is configured this is set automatically to the mount path; only set manually if you mount your own volume by other means. |
+| `tempStorage` | [`TempStorageSpec`](#tempstoragespec) | ❌ | Provisions a PVC for temporary staging files during cloud restores. Without it, cloud restores use the container's ephemeral disk (may be too small for large databases). The operator mounts the PVC and passes `--temp-path` automatically. |
+| `resources` | `corev1.ResourceRequirements` | ❌ | CPU/memory requests + limits on the restore Job's container. When unset, the operator applies a Burstable default (request 100m CPU / 512Mi memory, limit 1 CPU / 2Gi memory). **Standalone restores only** — cluster targets use the Cypher path (no Job) and ignore this field. |
 | `preRestore` | [`RestoreHooks`](#restorehooks) | ❌ | Hooks executed before the restore Job starts |
 | `postRestore` | [`RestoreHooks`](#restorehooks) | ❌ | Hooks executed after the restore Job completes successfully |
+
+### TempStorageSpec
+
+Provisions a temporary PVC for staging files during cloud restores.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `size` | `string` | ✅ | Size of the temporary PVC (e.g., `"50Gi"`). Should be at least as large as the expected backup/restore artifact. |
+| `storageClassName` | `string` | ❌ | StorageClassName for the temporary PVC. If empty, uses the cluster default. |
 
 ### RestoreHooks
 
@@ -201,6 +213,8 @@ Storage backend configuration (shared with `Neo4jBackup`).
 |-------|------|----------|-------------|
 | `provider` | `string` | ❌ | Cloud provider: `"aws"`, `"gcp"`, `"azure"` |
 | `credentialsSecretRef` | `string` | ❌ | Name of a Kubernetes Secret containing cloud credentials as environment variables. When absent, ambient workload identity is used. |
+| `endpointURL` | `string` | ❌ | Overrides the S3 API endpoint URL. Use to target S3-compatible stores such as MinIO, Ceph RGW, or Cloudflare R2. |
+| `forcePathStyle` | `bool` | ❌ | Forces S3 path-style addressing (bucket name in the URL path rather than as a subdomain). Typically required for S3-compatible stores. |
 | `identity` | [`*CloudIdentity`](#cloudidentity) | ❌ | Cloud identity configuration |
 
 ### CloudIdentity
