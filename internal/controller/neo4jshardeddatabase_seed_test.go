@@ -173,16 +173,47 @@ func TestResolveShardedSeed_Matrix(t *testing.T) {
 			wantErrSubstr: "failed to get Neo4jBackup",
 		},
 		{
-			name:          "PVC backup is rejected (no cloud URI)",
+			name:          "PVC backup without storage.PVC.Name → permanent error",
 			seedBackupRef: "products-backup",
 			seedObjects: []runtime.Object{
 				mkBackup("products-backup",
-					neo4jv1beta1.StorageLocation{Type: "pvc"},
+					neo4jv1beta1.StorageLocation{Type: "pvc"}, // PVC.Name missing
 					[]neo4jv1beta1.BackupRun{
 						{RunID: "uid-1", Status: "Succeeded", BackupsPath: "products-backup", CompletionTime: &completionTime},
 					}),
 			},
-			wantErrSubstr: "requires cloud-backed",
+			wantErrSubstr: "PVC-backed seedBackupRef requires the backup's storage.pvc.name",
+		},
+		{
+			name:          "PVC backup without shardArtifacts metadata → permanent error",
+			seedBackupRef: "products-backup",
+			seedObjects: []runtime.Object{
+				mkBackup("products-backup",
+					neo4jv1beta1.StorageLocation{Type: "pvc", PVC: &neo4jv1beta1.PVCSpec{Name: "backup-pvc"}},
+					[]neo4jv1beta1.BackupRun{
+						{RunID: "uid-1", Status: "Succeeded", BackupsPath: "products-backup", CompletionTime: &completionTime},
+					}),
+			},
+			wantErrSubstr: "no shardArtifacts metadata",
+		},
+		{
+			name:          "PVC backup with shardArtifacts but empty Filenames → permanent error",
+			seedBackupRef: "products-backup",
+			seedObjects: []runtime.Object{
+				mkBackup("products-backup",
+					neo4jv1beta1.StorageLocation{Type: "pvc", PVC: &neo4jv1beta1.PVCSpec{Name: "backup-pvc"}},
+					[]neo4jv1beta1.BackupRun{
+						{
+							RunID: "uid-1", Status: "Succeeded",
+							BackupsPath:    "products-backup",
+							CompletionTime: &completionTime,
+							ShardArtifacts: []neo4jv1beta1.ShardArtifact{
+								{ShardName: "products-g000"}, // no Filename
+							},
+						},
+					}),
+			},
+			wantErrSubstr: "have empty Filename",
 		},
 	}
 
@@ -197,7 +228,11 @@ func TestResolveShardedSeed_Matrix(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Name: "products", Namespace: "default"},
 				Spec:       neo4jv1beta1.Neo4jShardedDatabaseSpec{SeedBackupRef: tc.seedBackupRef},
 			}
-			uri, _, err := r.resolveShardedSeed(context.Background(), shardedDB)
+			resolved, err := r.resolveShardedSeed(context.Background(), shardedDB)
+			uri := ""
+			if resolved != nil {
+				uri = resolved.URI
+			}
 			if tc.wantErrIs != nil {
 				if err == nil || !stderrors.Is(err, tc.wantErrIs) {
 					t.Fatalf("err=%v, want errors.Is(%v)", err, tc.wantErrIs)

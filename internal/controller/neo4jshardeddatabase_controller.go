@@ -85,6 +85,12 @@ type Neo4jShardedDatabaseReconciler struct {
 // +kubebuilder:rbac:groups=neo4j.neo4j.com,resources=neo4jshardeddatabases,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=neo4j.neo4j.com,resources=neo4jshardeddatabases/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=neo4j.neo4j.com,resources=neo4jshardeddatabases/finalizers,verbs=update
+// PVC seed proxy resources (F5): the operator creates a busybox httpd
+// Deployment + ClusterIP Service per Neo4jShardedDatabase whose seedBackupRef
+// resolves to a PVC-backed backup. Owner reference on the sharded DB CR
+// handles GC on delete, so no explicit delete verb is needed.
+// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch
+// +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -176,8 +182,8 @@ func (r *Neo4jShardedDatabaseReconciler) Reconcile(ctx context.Context, req ctrl
 	//     for the restore controller.
 	//   - Anything else (missing CR, PVC storage, unsupported type) →
 	//     permanent; route to Failed.
-	seedURI, seedCredsSecret, seedErr := r.resolveShardedSeed(ctx, &shardedDatabase)
-	if seedURI != "" || seedErr != nil {
+	resolved, seedErr := r.resolveShardedSeed(ctx, &shardedDatabase)
+	if resolved != nil || seedErr != nil {
 		if seedErr != nil {
 			if stderrors.Is(seedErr, ErrBackupNotReady) {
 				logger.Info("seedBackupRef target has no Succeeded run yet, requeuing",
@@ -199,40 +205,59 @@ func (r *Neo4jShardedDatabaseReconciler) Reconcile(ctx context.Context, req ctrl
 			return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
 		}
 		// Populate the in-memory spec so downstream Cypher builders use the
-		// resolved URI without needing to know about SeedBackupRef. The CR is
-		// not Updated — only the in-memory copy is mutated for this reconcile.
-		shardedDatabase.Spec.SeedURI = seedURI
-		logger.Info("Resolved seedBackupRef to seedURI",
-			"seedBackupRef", shardedDatabase.Spec.SeedBackupRef, "seedURI", seedURI)
+		// resolved URI(s) without needing to know about SeedBackupRef. The
+		// CR is NOT Updated — only the in-memory copy is mutated for this
+		// reconcile. URI vs PerShardURIs is mutually exclusive: cloud
+		// backups populate the single URI; PVC backups populate the
+		// per-shard map served by the operator-managed seed proxy.
+		switch {
+		case resolved.URI != "":
+			shardedDatabase.Spec.SeedURI = resolved.URI
+			logger.Info("Resolved seedBackupRef to cloud seedURI",
+				"seedBackupRef", shardedDatabase.Spec.SeedBackupRef, "seedURI", resolved.URI)
+		case len(resolved.PerShardURIs) > 0:
+			if !resolved.ProxyAvailable {
+				logger.Info("PVC seed proxy not yet Ready; requeuing",
+					"seedBackupRef", shardedDatabase.Spec.SeedBackupRef)
+				r.Recorder.Event(&shardedDatabase, corev1.EventTypeNormal, "SeedProxyStarting",
+					"Waiting for backup-seed-proxy Deployment to become Ready")
+				if statusErr := r.updateStatus(ctx, &shardedDatabase, "Pending",
+					"Waiting for PVC seed proxy to become Ready", nil); statusErr != nil {
+					logger.Error(statusErr, "Failed to update status to Pending")
+				}
+				return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
+			}
+			shardedDatabase.Spec.SeedURIs = resolved.PerShardURIs
+			// Clear SeedURI so the Cypher options builder uses seedURIs map.
+			shardedDatabase.Spec.SeedURI = ""
+			logger.Info("Resolved seedBackupRef to PVC per-shard URIs",
+				"seedBackupRef", shardedDatabase.Spec.SeedBackupRef, "shardCount", len(resolved.PerShardURIs))
+		}
 
 		// Phase 2b: ensure the referenced cluster has the backup's
-		// credentials Secret projected onto its server pods, so the
-		// CloudSeedProvider can authenticate when CREATE DATABASE runs the
-		// seed fetch. Three branches:
-		//   - already configured (no-op),
-		//   - auto-inherit annotation set (operator patches, requeues to
-		//     wait for rolling restart),
-		//   - not configured + no annotation (Failed with copy-pasteable
-		//     remediation snippet).
-		autoInherited, credsErr := EnsureClusterHasSeedCreds(ctx, r.Client, cluster, seedCredsSecret)
-		if credsErr != nil {
-			logger.Error(credsErr, "Cluster missing seed credentials projection")
-			r.Recorder.Event(&shardedDatabase, corev1.EventTypeWarning, "SeedCredsMissing", credsErr.Error())
-			if statusErr := r.updateStatus(ctx, &shardedDatabase, "Failed", credsErr.Error(), nil); statusErr != nil {
-				logger.Error(statusErr, "Failed to update status to Failed")
+		// credentials Secret projected onto its server pods (cloud only;
+		// PVC seed uses in-cluster HTTP, no creds needed).
+		if resolved.CredsSecretName != "" {
+			autoInherited, credsErr := EnsureClusterHasSeedCreds(ctx, r.Client, cluster, resolved.CredsSecretName)
+			if credsErr != nil {
+				logger.Error(credsErr, "Cluster missing seed credentials projection")
+				r.Recorder.Event(&shardedDatabase, corev1.EventTypeWarning, "SeedCredsMissing", credsErr.Error())
+				if statusErr := r.updateStatus(ctx, &shardedDatabase, "Failed", credsErr.Error(), nil); statusErr != nil {
+					logger.Error(statusErr, "Failed to update status to Failed")
+				}
+				return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
 			}
-			return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
-		}
-		if autoInherited {
-			logger.Info("Auto-inherited seed credentials onto cluster; waiting for rolling restart",
-				"cluster", cluster.Name, "credentialsSecret", seedCredsSecret)
-			r.Recorder.Event(&shardedDatabase, corev1.EventTypeNormal, "SeedCredsAutoInherited",
-				fmt.Sprintf("Patched cluster %q spec.extraEnvFrom with %q; waiting for rolling restart", cluster.Name, seedCredsSecret))
-			if statusErr := r.updateStatus(ctx, &shardedDatabase, "Pending",
-				fmt.Sprintf("Auto-inherited seed credentials Secret %q onto cluster %q; waiting for cluster pods to restart", seedCredsSecret, cluster.Name), nil); statusErr != nil {
-				logger.Error(statusErr, "Failed to update status to Pending")
+			if autoInherited {
+				logger.Info("Auto-inherited seed credentials onto cluster; waiting for rolling restart",
+					"cluster", cluster.Name, "credentialsSecret", resolved.CredsSecretName)
+				r.Recorder.Event(&shardedDatabase, corev1.EventTypeNormal, "SeedCredsAutoInherited",
+					fmt.Sprintf("Patched cluster %q spec.extraEnvFrom with %q; waiting for rolling restart", cluster.Name, resolved.CredsSecretName))
+				if statusErr := r.updateStatus(ctx, &shardedDatabase, "Pending",
+					fmt.Sprintf("Auto-inherited seed credentials Secret %q onto cluster %q; waiting for cluster pods to restart", resolved.CredsSecretName, cluster.Name), nil); statusErr != nil {
+					logger.Error(statusErr, "Failed to update status to Pending")
+				}
+				return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
 			}
-			return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
 		}
 	}
 
