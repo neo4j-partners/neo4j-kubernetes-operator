@@ -6208,12 +6208,12 @@ for details.</p>
 <tr>
 <td><code>phase</code></td>
 <td><code>string</code></td>
-<td>Cluster phase: <code>"Initializing"</code>, <code>"Running"</code>, <code>"Failed"</code>, <code>"Upgrading"</code>, <code>"Scaling"</code></td>
+<td>Cluster phase: <code>"Initializing"</code>, <code>"Forming"</code>, <code>"Ready"</code>, <code>"Paused"</code>, <code>"Failed"</code></td>
 </tr>
 <tr>
 <td><code>ready</code></td>
 <td><code>bool</code></td>
-<td>Whether the cluster is ready</td>
+<td>Whether the cluster is ready for connections</td>
 </tr>
 <tr>
 <td><code>message</code></td>
@@ -6223,17 +6223,12 @@ for details.</p>
 <tr>
 <td><code>conditions</code></td>
 <td><code>[]metav1.Condition</code></td>
-<td>Cluster conditions</td>
+<td>Cluster conditions (e.g. <code>Ready</code>, <code>ServersHealthy</code>, <code>DatabasesHealthy</code>)</td>
 </tr>
 <tr>
 <td><code>replicas</code></td>
 <td><code>map[string]ReplicaStatus</code></td>
 <td>Status of each replica (servers / ready counts)</td>
-</tr>
-<tr>
-<td><code>clusterID</code></td>
-<td><code>string</code></td>
-<td>Neo4j cluster ID</td>
 </tr>
 <tr>
 <td><code>endpoints</code></td>
@@ -6248,12 +6243,22 @@ for details.</p>
 <tr>
 <td><code>upgradeStatus</code></td>
 <td><a href="#upgradestatus"><code>*UpgradeStatus</code></a></td>
-<td>Upgrade status</td>
+<td>Detailed upgrade progress information</td>
 </tr>
 <tr>
-<td><code>lastBackup</code></td>
+<td><code>lastUpgradeTime</code></td>
 <td><code>*metav1.Time</code></td>
-<td>Last backup timestamp</td>
+<td>When the last upgrade was performed</td>
+</tr>
+<tr>
+<td><code>propertyShardingReady</code></td>
+<td><code>bool</code></td>
+<td>Whether property sharding is configured and ready (Neo4j 2025.12+)</td>
+</tr>
+<tr>
+<td><code>auraFleetManagement</code></td>
+<td><code>object</code></td>
+<td>State of the Aura Fleet Management integration (when <code>spec.auraFleetManagement.enabled=true</code>)</td>
 </tr>
 <tr>
 <td><code>observedGeneration</code></td>

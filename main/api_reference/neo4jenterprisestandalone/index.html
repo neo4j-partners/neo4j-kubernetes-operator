@@ -2241,6 +2241,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#laststarttime-metav1time" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        lastStartTime (*metav1.Time)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#conditions-condition" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3573,6 +3584,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#laststarttime-metav1time" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        lastStartTime (*metav1.Time)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#conditions-condition" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4417,11 +4439,13 @@ standard core/v1 shapes.</p>
 <h4 id="phase-string"><code>phase</code> (string)<a class="headerlink" href="#phase-string" title="Anchor link to this section">&para;</a></h4>
 <p>Current deployment phase:
 - <code>Pending</code>: Deployment is being created
-- <code>Running</code>: Deployment is running and ready
+- <code>Ready</code>: Deployment is running and ready for connections
 - <code>Failed</code>: Deployment has failed
 - <code>ValidationFailed</code>: Spec validation failed</p>
 <h4 id="ready-boolean"><code>ready</code> (boolean)<a class="headerlink" href="#ready-boolean" title="Anchor link to this section">&para;</a></h4>
 <p>Indicates if the standalone deployment is ready for connections.</p>
+<h4 id="laststarttime-metav1time"><code>lastStartTime</code> (*metav1.Time)<a class="headerlink" href="#laststarttime-metav1time" title="Anchor link to this section">&para;</a></h4>
+<p>Timestamp of when the standalone deployment was last started.</p>
 <h4 id="conditions-condition"><code>conditions</code> ([]Condition)<a class="headerlink" href="#conditions-condition" title="Anchor link to this section">&para;</a></h4>
 <p>Detailed conditions about the deployment state.</p>
 <h4 id="endpoints-endpointstatus"><code>endpoints</code> (EndpointStatus)<a class="headerlink" href="#endpoints-endpointstatus" title="Anchor link to this section">&para;</a></h4>
