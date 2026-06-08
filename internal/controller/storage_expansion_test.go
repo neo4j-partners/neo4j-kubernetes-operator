@@ -117,6 +117,31 @@ func makeStatefulSet(name, namespace string) *appsv1.StatefulSet {
 	}
 }
 
+func TestStorageClassExists(t *testing.T) {
+	scheme := newStorageTestScheme()
+	existing := makeStorageClass("managed-csi", true)
+	c := fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(existing).Build()
+
+	t.Run("empty name is treated as the cluster default (exists)", func(t *testing.T) {
+		ok, err := storageClassExists(context.Background(), c, "")
+		require.NoError(t, err)
+		assert.True(t, ok)
+	})
+
+	t.Run("named class that exists", func(t *testing.T) {
+		ok, err := storageClassExists(context.Background(), c, "managed-csi")
+		require.NoError(t, err)
+		assert.True(t, ok)
+	})
+
+	t.Run("named class that does not exist", func(t *testing.T) {
+		// e.g. "standard" requested on AKS, which doesn't ship one.
+		ok, err := storageClassExists(context.Background(), c, "standard")
+		require.NoError(t, err)
+		assert.False(t, ok)
+	})
+}
+
 func TestFindPVCsForStatefulSet_LabelBased(t *testing.T) {
 	scheme := newStorageTestScheme()
 	pvc0 := makePVC("my-cluster", "default", "my-cluster-server", "data", "ssd", "100Gi", 0, true)

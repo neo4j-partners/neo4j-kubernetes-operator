@@ -37,12 +37,10 @@ func (v *StorageValidator) Validate(cluster *neo4jv1beta1.Neo4jEnterpriseCluster
 	var allErrs field.ErrorList
 	storagePath := field.NewPath("spec", "storage")
 
-	if cluster.Spec.Storage.ClassName == "" {
-		allErrs = append(allErrs, field.Required(
-			storagePath.Child("className"),
-			"storage class name must be specified",
-		))
-	}
+	// An empty className is intentionally allowed: the PVC then inherits the
+	// cluster's default StorageClass (see resources.StorageClassNamePtr). When a
+	// className IS given, the reconciler verifies it exists at apply time and
+	// surfaces an explicit error rather than leaving pods Pending indefinitely.
 
 	if cluster.Spec.Storage.Size == "" {
 		allErrs = append(allErrs, field.Required(

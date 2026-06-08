@@ -1477,6 +1477,18 @@ func ImagePullSecretsFromNames(names []string) []corev1.LocalObjectReference {
 	return refs
 }
 
+// StorageClassNamePtr returns a pointer to the given storage class name, or nil
+// when the name is empty. A nil StorageClassName makes the PVC inherit the
+// cluster's default StorageClass; a pointer to "" would instead DISABLE dynamic
+// provisioning (bind only to a pre-existing class-less PV), which is almost
+// never what a user blanking the field intends.
+func StorageClassNamePtr(className string) *string {
+	if className == "" {
+		return nil
+	}
+	return &className
+}
+
 func buildVolumeClaimTemplatesForEnterprise(cluster *neo4jv1beta1.Neo4jEnterpriseCluster) []corev1.PersistentVolumeClaim {
 	return []corev1.PersistentVolumeClaim{
 		{
@@ -1488,7 +1500,7 @@ func buildVolumeClaimTemplatesForEnterprise(cluster *neo4jv1beta1.Neo4jEnterpris
 				AccessModes: []corev1.PersistentVolumeAccessMode{
 					corev1.ReadWriteOnce,
 				},
-				StorageClassName: &cluster.Spec.Storage.ClassName,
+				StorageClassName: StorageClassNamePtr(cluster.Spec.Storage.ClassName),
 				Resources: corev1.VolumeResourceRequirements{
 					Requests: corev1.ResourceList{
 						corev1.ResourceStorage: resource.MustParse(cluster.Spec.Storage.Size),

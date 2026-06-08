@@ -275,6 +275,21 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 		}
 	}
 
+	// Verify the requested StorageClass exists before creating the StatefulSet.
+	// A misnamed class (e.g. "standard" on AKS, which ships "managed-csi") would
+	// otherwise leave every server pod Pending indefinitely with no operator-level
+	// signal. An empty className is allowed and inherits the cluster default.
+	if exists, err := storageClassExists(ctx, r.Client, cluster.Spec.Storage.ClassName); err != nil {
+		logger.Error(err, "Failed to look up StorageClass", "storageClass", cluster.Spec.Storage.ClassName)
+		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
+	} else if !exists {
+		msg := fmt.Sprintf("StorageClass %q not found; create it or set spec.storage.className to an existing class (or leave it empty to use the cluster default)", cluster.Spec.Storage.ClassName)
+		logger.Error(fmt.Errorf("storage class not found"), msg)
+		r.Recorder.Event(cluster, corev1.EventTypeWarning, EventReasonStorageClassNotFound, msg)
+		_ = r.updateClusterStatus(ctx, cluster, "Failed", msg)
+		return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
+	}
+
 	// Add finalizer if not present
 	if !controllerutil.ContainsFinalizer(cluster, ClusterFinalizer) {
 		controllerutil.AddFinalizer(cluster, ClusterFinalizer)

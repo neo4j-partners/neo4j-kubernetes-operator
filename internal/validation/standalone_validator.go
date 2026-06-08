@@ -170,12 +170,10 @@ func (v *StandaloneValidator) validateStorage(standalone *neo4jv1beta1.Neo4jEnte
 	var allErrs field.ErrorList
 	storagePath := field.NewPath("spec", "storage")
 
-	if standalone.Spec.Storage.ClassName == "" {
-		allErrs = append(allErrs, field.Required(
-			storagePath.Child("className"),
-			"storage class name is required",
-		))
-	}
+	// An empty className is intentionally allowed: the PVC then inherits the
+	// cluster's default StorageClass (see resources.StorageClassNamePtr). When a
+	// className IS given, the reconciler verifies it exists at apply time and
+	// surfaces an explicit error rather than leaving the pod Pending indefinitely.
 
 	if standalone.Spec.Storage.Size == "" {
 		allErrs = append(allErrs, field.Required(

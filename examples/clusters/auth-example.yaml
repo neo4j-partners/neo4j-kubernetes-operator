@@ -29,7 +29,10 @@ spec:
   topology:
     servers: 3
   storage:
-    className: standard
+    # className omitted -> PVCs inherit the cluster default StorageClass (portable).
+    # To pin one, set a class that EXISTS on your cluster (AKS: managed-csi, EKS: gp3, GKE: standard-rwo, Kind: standard);
+    # the operator rejects a non-existent class instead of leaving pods Pending.
+    # className: managed-csi
     size: "10Gi"
   resources:
     requests:
@@ -72,7 +75,10 @@ spec:
   topology:
     servers: 3
   storage:
-    className: standard
+    # className omitted -> PVCs inherit the cluster default StorageClass (portable).
+    # To pin one, set a class that EXISTS on your cluster (AKS: managed-csi, EKS: gp3, GKE: standard-rwo, Kind: standard);
+    # the operator rejects a non-existent class instead of leaving pods Pending.
+    # className: managed-csi
     size: "10Gi"
   resources:
     requests:
@@ -129,7 +135,10 @@ spec:
   topology:
     servers: 3
   storage:
-    className: standard
+    # className omitted -> PVCs inherit the cluster default StorageClass (portable).
+    # To pin one, set a class that EXISTS on your cluster (AKS: managed-csi, EKS: gp3, GKE: standard-rwo, Kind: standard);
+    # the operator rejects a non-existent class instead of leaving pods Pending.
+    # className: managed-csi
     size: "10Gi"
   resources:
     requests:
@@ -178,7 +187,10 @@ spec:
   topology:
     servers: 3
   storage:
-    className: standard
+    # className omitted -> PVCs inherit the cluster default StorageClass (portable).
+    # To pin one, set a class that EXISTS on your cluster (AKS: managed-csi, EKS: gp3, GKE: standard-rwo, Kind: standard);
+    # the operator rejects a non-existent class instead of leaving pods Pending.
+    # className: managed-csi
     size: "10Gi"
   resources:
     requests:

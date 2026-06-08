@@ -22,7 +22,10 @@ spec:
 
   storage:
     size: 20Gi
-    className: standard  # Storage class must be specified
+    # className omitted -> PVCs inherit the cluster default StorageClass (portable).
+    # To pin one, set a class that EXISTS on your cluster (AKS: managed-csi, EKS: gp3, GKE: standard-rwo, Kind: standard);
+    # the operator rejects a non-existent class instead of leaving pods Pending.
+    # className: managed-csi
 
   resources:
     requests:

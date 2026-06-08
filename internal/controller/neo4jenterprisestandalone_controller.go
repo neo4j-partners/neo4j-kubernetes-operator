@@ -151,6 +151,26 @@ func (r *Neo4jEnterpriseStandaloneReconciler) Reconcile(ctx context.Context, req
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
 	}
 
+	// Verify the requested StorageClass exists before creating the StatefulSet.
+	// A misnamed class (e.g. "standard" on a cluster that doesn't ship one) would
+	// otherwise leave the pod Pending indefinitely with no operator-level signal.
+	// An empty className is allowed and inherits the cluster default.
+	if exists, scErr := storageClassExists(ctx, r.Client, standalone.Spec.Storage.ClassName); scErr != nil {
+		logger.Error(scErr, "Failed to look up StorageClass", "storageClass", standalone.Spec.Storage.ClassName)
+		return ctrl.Result{RequeueAfter: r.RequeueAfter}, scErr
+	} else if !exists {
+		msg := fmt.Sprintf("StorageClass %q not found; create it or set spec.storage.className to an existing class (or leave it empty to use the cluster default)", standalone.Spec.Storage.ClassName)
+		logger.Error(fmt.Errorf("storage class not found"), msg)
+		r.Recorder.Event(standalone, corev1.EventTypeWarning, EventReasonStorageClassNotFound, msg)
+		standalone.Status.Phase = "Failed"
+		standalone.Status.Message = msg
+		standalone.Status.Ready = false
+		if statusErr := r.Status().Update(ctx, standalone); statusErr != nil {
+			logger.Error(statusErr, "Failed to update status")
+		}
+		return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
+	}
+
 	// Reconcile the standalone deployment
 	result, err := r.reconcileStandalone(ctx, standalone)
 	if err != nil {
@@ -1131,7 +1151,7 @@ func (r *Neo4jEnterpriseStandaloneReconciler) createStatefulSet(standalone *neo4
 						AccessModes: []corev1.PersistentVolumeAccessMode{
 							corev1.ReadWriteOnce,
 						},
-						StorageClassName: &standalone.Spec.Storage.ClassName,
+						StorageClassName: resources.StorageClassNamePtr(standalone.Spec.Storage.ClassName),
 						Resources: corev1.VolumeResourceRequirements{
 							Requests: corev1.ResourceList{
 								corev1.ResourceStorage: resource.MustParse(standalone.Spec.Storage.Size),

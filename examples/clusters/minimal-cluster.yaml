@@ -25,7 +25,12 @@ spec:
 
   # Storage configuration
   storage:
-    className: standard  # Use your cluster's default storage class
+    # className is intentionally omitted so the PVCs inherit your cluster's
+    # DEFAULT StorageClass — portable across Kind, AKS, EKS, GKE, etc.
+    # To pin a specific class, uncomment and set one that EXISTS on your cluster
+    # (the operator rejects a non-existent class instead of leaving pods Pending):
+    #   Kind/minikube: standard   AKS: managed-csi   EKS: gp3   GKE: standard-rwo
+    # className: managed-csi
     size: "10Gi"        # Adjust based on your data needs
 
   # Resource allocation

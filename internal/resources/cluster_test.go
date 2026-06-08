@@ -16,6 +16,42 @@ import (
 	"github.com/priyolahiri/neo4j-kubernetes-operator/internal/resources"
 )
 
+func TestStorageClassNamePtr(t *testing.T) {
+	assert.Nil(t, resources.StorageClassNamePtr(""),
+		"empty className must map to nil so the PVC inherits the cluster default StorageClass")
+
+	got := resources.StorageClassNamePtr("managed-csi")
+	require.NotNil(t, got)
+	assert.Equal(t, "managed-csi", *got)
+}
+
+func TestBuildServerStatefulSetForEnterprise_EmptyStorageClassUsesDefault(t *testing.T) {
+	base := func(className string) *neo4jv1beta1.Neo4jEnterpriseCluster {
+		return &neo4jv1beta1.Neo4jEnterpriseCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: "c", Namespace: "default"},
+			Spec: neo4jv1beta1.Neo4jEnterpriseClusterSpec{
+				Image:    neo4jv1beta1.ImageSpec{Repo: "neo4j", Tag: "5.26-enterprise"},
+				Topology: neo4jv1beta1.TopologyConfiguration{Servers: 3},
+				Storage:  neo4jv1beta1.StorageSpec{ClassName: className, Size: "10Gi"},
+			},
+		}
+	}
+
+	t.Run("empty className → nil StorageClassName", func(t *testing.T) {
+		sts := resources.BuildServerStatefulSetForEnterprise(base(""))
+		require.Len(t, sts.Spec.VolumeClaimTemplates, 1)
+		assert.Nil(t, sts.Spec.VolumeClaimTemplates[0].Spec.StorageClassName)
+	})
+
+	t.Run("explicit className → pointer to value", func(t *testing.T) {
+		sts := resources.BuildServerStatefulSetForEnterprise(base("managed-csi"))
+		require.Len(t, sts.Spec.VolumeClaimTemplates, 1)
+		got := sts.Spec.VolumeClaimTemplates[0].Spec.StorageClassName
+		require.NotNil(t, got)
+		assert.Equal(t, "managed-csi", *got)
+	})
+}
+
 func TestBuildPodSpecForEnterprise_WithPlugins(t *testing.T) {
 	cluster := &neo4jv1beta1.Neo4jEnterpriseCluster{
 		Spec: neo4jv1beta1.Neo4jEnterpriseClusterSpec{

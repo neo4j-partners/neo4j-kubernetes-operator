@@ -199,8 +199,12 @@ type ImageSpec struct {
 
 // StorageSpec defines storage configuration
 type StorageSpec struct {
-	// +kubebuilder:validation:Required
-	ClassName string `json:"className"`
+	// ClassName is the StorageClass for the data PVCs. If omitted (or empty),
+	// the PVCs inherit the cluster's default StorageClass. When set, the named
+	// class must exist — the operator verifies this at apply time and reports an
+	// explicit error rather than leaving pods Pending indefinitely.
+	// +optional
+	ClassName string `json:"className,omitempty"`
 
 	// +kubebuilder:validation:Required
 	Size string `json:"size"`

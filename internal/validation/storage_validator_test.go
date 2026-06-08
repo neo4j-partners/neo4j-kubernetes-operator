@@ -54,7 +54,10 @@ func TestStorageValidator_Validate(t *testing.T) {
 			wantErrors: false,
 		},
 		{
-			name: "missing storage class name",
+			// An empty className is valid: the PVC inherits the cluster's default
+			// StorageClass. Existence of a named class is checked at apply time by
+			// the reconciler, not here.
+			name: "empty storage class name uses cluster default",
 			cluster: &neo4jv1beta1.Neo4jEnterpriseCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-cluster",
@@ -66,8 +69,7 @@ func TestStorageValidator_Validate(t *testing.T) {
 					},
 				},
 			},
-			wantErrors: true,
-			errorCount: 1,
+			wantErrors: false,
 		},
 		{
 			name: "missing storage size",
@@ -86,7 +88,7 @@ func TestStorageValidator_Validate(t *testing.T) {
 			errorCount: 1,
 		},
 		{
-			name: "missing both class name and size",
+			name: "missing size (empty class name is allowed)",
 			cluster: &neo4jv1beta1.Neo4jEnterpriseCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-cluster",
@@ -97,7 +99,7 @@ func TestStorageValidator_Validate(t *testing.T) {
 				},
 			},
 			wantErrors: true,
-			errorCount: 2,
+			errorCount: 1,
 		},
 		{
 			name: "invalid storage size format",

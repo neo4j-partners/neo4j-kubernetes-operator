@@ -26,7 +26,10 @@ spec:
     pullPolicy: IfNotPresent
 
   storage:
-    className: standard
+    # className omitted -> inherits the cluster's default StorageClass (portable).
+    # To pin one, set a class that EXISTS on your cluster (AKS: managed-csi, EKS: gp3, GKE: standard-rwo, Kind: standard);
+    # the operator rejects a non-existent class instead of leaving the pod Pending.
+    # className: managed-csi
     size: "10Gi"
 
   resources:

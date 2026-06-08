@@ -41,6 +41,8 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	storagev1 "k8s.io/api/storage/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -118,6 +120,16 @@ var _ = BeforeSuite(func() {
 	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
 	Expect(err).NotTo(HaveOccurred())
 	Expect(k8sClient).NotTo(BeNil())
+
+	// The cluster/standalone reconcilers verify that a named spec.storage.className
+	// actually exists before creating the StatefulSet (so a misnamed class surfaces
+	// an explicit error instead of leaving pods Pending). Test fixtures reference
+	// "standard", so create it here — mirroring the default StorageClass every real
+	// cluster ships.
+	Expect(k8sClient.Create(context.Background(), &storagev1.StorageClass{
+		ObjectMeta:  metav1.ObjectMeta{Name: "standard"},
+		Provisioner: "kubernetes.io/no-provisioner",
+	})).To(Succeed())
 
 	// Set up the controller manager
 	By("setting up controller manager")

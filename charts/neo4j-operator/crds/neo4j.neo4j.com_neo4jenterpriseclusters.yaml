@@ -5237,6 +5237,11 @@ spec:
                 description: StorageSpec defines storage configuration
                 properties:
                   className:
+                    description: |-
+                      ClassName is the StorageClass for the data PVCs. If omitted (or empty),
+                      the PVCs inherit the cluster's default StorageClass. When set, the named
+                      class must exist — the operator verifies this at apply time and reports an
+                      explicit error rather than leaving pods Pending indefinitely.
                     type: string
                   retentionPolicy:
                     default: Delete
@@ -5248,7 +5253,6 @@ spec:
                   size:
                     type: string
                 required:
-                - className
                 - size
                 type: object
               tls:

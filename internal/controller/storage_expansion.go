@@ -257,6 +257,25 @@ func (r *Neo4jEnterpriseClusterReconciler) findPVCsForStatefulSet(ctx context.Co
 	return matched, nil
 }
 
+// storageClassExists reports whether a StorageClass with the given name exists.
+// An empty name returns (true, nil): the PVC will inherit the cluster's default
+// StorageClass, so there is nothing to verify. Shared by the cluster and
+// standalone reconcilers to fail fast on a misnamed class (e.g. "standard" on a
+// cluster that doesn't ship one) instead of leaving pods Pending indefinitely.
+func storageClassExists(ctx context.Context, c client.Reader, name string) (bool, error) {
+	if name == "" {
+		return true, nil
+	}
+	sc := &storagev1.StorageClass{}
+	if err := c.Get(ctx, types.NamespacedName{Name: name}, sc); err != nil {
+		if errors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
 // validateStorageClassExpandable checks that the StorageClass allows volume expansion.
 func (r *Neo4jEnterpriseClusterReconciler) validateStorageClassExpandable(ctx context.Context, pvc corev1.PersistentVolumeClaim) error {
 	if pvc.Spec.StorageClassName == nil || *pvc.Spec.StorageClassName == "" {

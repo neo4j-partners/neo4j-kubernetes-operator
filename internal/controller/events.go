@@ -87,6 +87,11 @@ const (
 	EventReasonStorageExpansionFailed    = "StorageExpansionFailed"
 )
 
+// Storage configuration events
+const (
+	EventReasonStorageClassNotFound = "StorageClassNotFound"
+)
+
 // Sharded database events
 const (
 	EventReasonShardedDatabaseReady = "ShardedDatabaseReady"

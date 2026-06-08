@@ -73,10 +73,12 @@ func TestStandaloneValidator_ValidateCreate(t *testing.T) {
 			errField: "spec.image.tag",
 		},
 		{
-			name:     "missing storage.className",
+			// Empty className is valid: the PVC inherits the cluster's default
+			// StorageClass. A named class's existence is checked by the reconciler
+			// at apply time, not here.
+			name:     "empty storage.className uses cluster default",
 			mutate:   func(s *neo4jv1beta1.Neo4jEnterpriseStandalone) { s.Spec.Storage.ClassName = "" },
-			wantErrs: 1,
-			errField: "spec.storage.className",
+			wantErrs: 0,
 		},
 		{
 			name:     "missing storage.size",
