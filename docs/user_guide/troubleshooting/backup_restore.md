@@ -110,17 +110,17 @@ kubectl run backup-auth-check --rm -it --image=amazon/aws-cli --serviceaccount=<
 **Solutions:**
 1. **IAM Role Issues**:
    ```yaml
-   # Use IAM roles for service accounts (IRSA)
+   # Use IAM roles for service accounts (IRSA) on the Neo4jBackup CR
+   apiVersion: neo4j.neo4j.com/v1beta1
+   kind: Neo4jBackup
    spec:
-     backups:
-       cloud:
-         provider: aws
-         identity:
-           provider: aws
-           autoCreate:
-             enabled: true
-             annotations:
-               eks.amazonaws.com/role-arn: "arn:aws:iam::123456789:role/Neo4jBackupRole"
+     cloud:
+       provider: aws
+       identity:
+         autoCreate:
+           enabled: true
+           annotations:
+             eks.amazonaws.com/role-arn: "arn:aws:iam::123456789:role/Neo4jBackupRole"
    ```
 
 2. **Bucket Policy Problems**:
@@ -161,17 +161,17 @@ kubectl run backup-auth-check --rm -it --image=google/cloud-sdk:slim --serviceac
 
 **Solutions:**
 ```yaml
-# Use Workload Identity
+# Use Workload Identity on the Neo4jBackup CR
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jBackup
 spec:
-  backups:
-    cloud:
-      provider: gcp
-      identity:
-        provider: gcp
-        autoCreate:
-          enabled: true
-          annotations:
-            iam.gke.io/gcp-service-account: "neo4j-backup@project.iam.gserviceaccount.com"
+  cloud:
+    provider: gcp
+    identity:
+      autoCreate:
+        enabled: true
+        annotations:
+          iam.gke.io/gcp-service-account: "neo4j-backup@project.iam.gserviceaccount.com"
 ```
 
 #### Azure Blob Storage Issues

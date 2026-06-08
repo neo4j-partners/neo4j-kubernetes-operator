@@ -22,7 +22,7 @@ Watch for `status.phase: Completed`. Logs at `kubectl logs job/simple-backup-bac
 
 ## Migrating from legacy `spec.backups`
 
-The legacy `spec.backups` field (and its centralized `{cluster}-backup-0` StatefulSet) has been **removed** — it no longer exists in the CRD schema. Use one or more `Neo4jBackup` CRs instead. The Neo4jBackup CRD covers every legacy capability plus more — one-shot or scheduled (`spec.schedule`) backups, native CronJob retention/suspend, status.history, sharded-DB targets, mixed-cadence chains via `chainFromBackup` (rule 78), and per-Job pod resource control (`spec.options.resources`).
+The legacy `spec.backups` field (and its centralized `{cluster}-backup-0` StatefulSet), and the standalone backup sidecar, have been **removed** — `spec.backups` no longer exists in the CRD schema. Use one or more `Neo4jBackup` CRs instead. The Neo4jBackup CRD covers every legacy capability plus more — one-shot or scheduled (`spec.schedule`) backups, native CronJob retention/suspend, `status.history`, sharded-DB targets, mixed-cadence FULL+DIFF chains via `spec.chainFromBackup`, and per-Job pod resource control (`spec.options.resources`). See the [Migration Guide](../migration_guide.md#6-specbackups-and-the-backup-sidecar-are-removed) for upgrade steps.
 
 ## Backup Architecture
 

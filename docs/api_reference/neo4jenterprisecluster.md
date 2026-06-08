@@ -992,7 +992,9 @@ spec:
     adminSecret: neo4j-admin-secret
 ```
 
-### Cluster with Centralized Backup
+### Cluster with Query Monitoring
+
+> Backups are configured separately via the [`Neo4jBackup` CRD](neo4jbackup.md) — see the next example.
 
 ```yaml
 apiVersion: neo4j.neo4j.com/v1beta1
@@ -1010,17 +1012,6 @@ spec:
     size: 50Gi
   auth:
     adminSecret: neo4j-admin-secret
-  # Centralized backup configuration
-  backups:
-    defaultStorage:
-      type: s3
-      bucket: neo4j-backups
-      path: production/
-    cloud:
-      provider: aws
-      identity:
-        provider: aws
-        serviceAccount: neo4j-backup-sa  # Uses IAM roles for pods
   # Enhanced query monitoring
   monitoring:
     enabled: true

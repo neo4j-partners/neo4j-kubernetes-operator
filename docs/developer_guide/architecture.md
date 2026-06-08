@@ -9,7 +9,7 @@ The Neo4j Enterprise Operator follows cloud-native best practices with a focus o
 - **Production Stability**: Optimized reconciliation frequency and efficient resource management
 - **Performance**: Intelligent rate limiting and status update optimization
 - **Server-Based Architecture**: Unified server deployments with self-organizing roles
-- **Resource Efficiency**: Centralized backup system (70% resource reduction)
+- **Resource Efficiency**: On-demand backup Jobs (no long-running backup pod or sidecar)
 - **Observability**: Comprehensive monitoring and operational insights
 - **Validation**: Proactive resource validation and recommendations
 
