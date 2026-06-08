@@ -747,16 +747,17 @@ The `Neo4jEnterpriseClusterStatus` represents the observed state of the cluster.
 
 | Field | Type | Description |
 |---|---|---|
-| `phase` | `string` | Cluster phase: `"Initializing"`, `"Running"`, `"Failed"`, `"Upgrading"`, `"Scaling"` |
-| `ready` | `bool` | Whether the cluster is ready |
+| `phase` | `string` | Cluster phase: `"Initializing"`, `"Forming"`, `"Ready"`, `"Paused"`, `"Failed"` |
+| `ready` | `bool` | Whether the cluster is ready for connections |
 | `message` | `string` | Human-readable status message |
-| `conditions` | `[]metav1.Condition` | Cluster conditions |
+| `conditions` | `[]metav1.Condition` | Cluster conditions (e.g. `Ready`, `ServersHealthy`, `DatabasesHealthy`) |
 | `replicas` | `map[string]ReplicaStatus` | Status of each replica (servers / ready counts) |
-| `clusterID` | `string` | Neo4j cluster ID |
 | `endpoints` | [`EndpointStatus`](#endpointstatus) | Service endpoints |
 | `version` | `string` | Current Neo4j version |
-| `upgradeStatus` | [`*UpgradeStatus`](#upgradestatus) | Upgrade status |
-| `lastBackup` | `*metav1.Time` | Last backup timestamp |
+| `upgradeStatus` | [`*UpgradeStatus`](#upgradestatus) | Detailed upgrade progress information |
+| `lastUpgradeTime` | `*metav1.Time` | When the last upgrade was performed |
+| `propertyShardingReady` | `bool` | Whether property sharding is configured and ready (Neo4j 2025.12+) |
+| `auraFleetManagement` | `object` | State of the Aura Fleet Management integration (when `spec.auraFleetManagement.enabled=true`) |
 | `observedGeneration` | `int64` | Last observed generation |
 | `diagnostics` | [`*DiagnosticsStatus`](#diagnosticsstatus) | Live diagnostics collected when `spec.monitoring.enabled=true` and cluster is `Ready`. |
 

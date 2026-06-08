@@ -251,6 +251,7 @@ The `Neo4jBackupStatus` represents the observed state of the backup.
 | `conditions` | `[]metav1.Condition` | Current backup conditions |
 | `phase` | `string` | Current backup phase |
 | `message` | `string` | Human-readable message about the current state |
+| `observedGeneration` | `int64` | The `.metadata.generation` most recently observed by the controller |
 | `lastRunTime` | `*metav1.Time` | When the last backup Job started |
 | `lastSuccessTime` | `*metav1.Time` | When the last successful backup completed |
 | `nextRunTime` | `*metav1.Time` | When the next scheduled backup will run |

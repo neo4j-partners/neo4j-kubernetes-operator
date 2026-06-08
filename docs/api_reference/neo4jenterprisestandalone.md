@@ -399,12 +399,15 @@ The `Neo4jEnterpriseStandalone` status provides information about the current st
 #### `phase` (string)
 Current deployment phase:
 - `Pending`: Deployment is being created
-- `Running`: Deployment is running and ready
+- `Ready`: Deployment is running and ready for connections
 - `Failed`: Deployment has failed
 - `ValidationFailed`: Spec validation failed
 
 #### `ready` (boolean)
 Indicates if the standalone deployment is ready for connections.
+
+#### `lastStartTime` (*metav1.Time)
+Timestamp of when the standalone deployment was last started.
 
 #### `conditions` ([]Condition)
 Detailed conditions about the deployment state.
