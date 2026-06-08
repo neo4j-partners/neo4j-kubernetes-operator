@@ -4619,7 +4619,7 @@
 <p>Backups are owned by the dedicated <strong><code>Neo4jBackup</code> CRD</strong>: each CR (one-shot or scheduled via <code>spec.schedule</code>) spawns a Kubernetes <code>Job</code> (or <code>CronJob</code> → child Jobs) that runs <code>neo4j-admin database backup</code> from the same Neo4j Enterprise image as the cluster. No sidecar containers, no persistent backup pod. The Job connects to each <code>{cluster}-server-N</code> Pod on port 6362 (<code>server.backup.listen_address=0.0.0.0:6362</code>, configured automatically) and streams artifacts to the destination (PVC, S3, GCS, or Azure).</p>
 <p>All runs of a single Neo4jBackup CR share a <code>&lt;base&gt;/&lt;cr-name&gt;/</code> directory so <code>neo4j-admin</code> can chain <code>--type=DIFF</code> backups off the prior <code>FULL</code>. Per-run identity is preserved via the timestamp <code>neo4j-admin</code> embeds in each <code>.backup</code> filename.</p>
 <h2 id="custom-resource-definitions-crds">Custom Resource Definitions (CRDs)<a class="headerlink" href="#custom-resource-definitions-crds" title="Anchor link to this section">&para;</a></h2>
-<p>The operator defines six core CRDs located in <code>api/v1beta1/</code>:</p>
+<p>The operator defines eleven CRDs located in <code>api/v1beta1/</code>:</p>
 <h3 id="core-deployment-crds">Core Deployment CRDs<a class="headerlink" href="#core-deployment-crds" title="Anchor link to this section">&para;</a></h3>
 <h4 id="neo4jenterprisecluster-neo4jenterprisecluster_typesgo">Neo4jEnterpriseCluster (<code>neo4jenterprisecluster_types.go</code>)<a class="headerlink" href="#neo4jenterprisecluster-neo4jenterprisecluster_typesgo" title="Anchor link to this section">&para;</a></h4>
 <ul>
@@ -4777,32 +4777,41 @@
 - <strong>Point-in-Time Recovery</strong>: Supports precise timestamp restoration via <code>--restore-until</code>
 - <strong>Flexible Targets</strong>: Cluster OR standalone (auto-detected through <code>getClusterRef</code>; standalone is converted into a synthetic cluster representation with <code>Topology.Servers=1</code> via <code>standaloneAsCluster</code>)
 - <strong>Validation</strong>: Ensures target deployment compatibility</p>
-<p><strong>Restore lifecycle</strong> (post-Job-success path):</p>
+<p><strong>Two restore paths.</strong> <code>startRestore</code> branches on <code>isRestoreTargetTrueCluster</code>:
+true clusters take a <strong>Cypher path</strong> (no Job — <code>neo4j-admin restore</code>'s
+<code>--overwrite-destination</code> is documented as unsafe on a cluster); standalone
+targets take the <strong>Job path</strong> below.</p>
+<p><strong>Cluster Cypher restore</strong> (<code>startClusterCypherRestore</code>, clusters only): no
+Job, no <code>stopCluster</code>/scale-down. The controller seeds each server from a
+single backup-file URI — <code>RecreateDatabaseWithSeedURI</code> when the database
+already exists, <code>CreateDatabaseWithSeedURIOptions</code> when it doesn't. Because
+<code>dbms.recreateDatabase</code> is async, the controller then polls
+<code>SHOW DATABASE</code> online-state across requeues via <code>pollClusterRestoreOnline</code>
+before marking the restore <code>Completed</code>.</p>
+<p><strong>Standalone restore lifecycle</strong> (Job path, post-Job-success):</p>
 <ol>
 <li>
-<p><strong>Restore Job</strong> — <code>neo4j-admin database restore</code> runs in a Pod that mounts <code>data-{cluster}-server-0</code> PVC (the only PVC the operator writes restored data to). <code>--from-path</code> is resolved at Pod startup via shell substitution <code>$(ls /backup/&lt;run&gt;/&lt;dbname&gt;-*.backup | head -1)</code> so a single artifact file is passed even when the directory holds multiple <code>.backup</code> files (cluster-target backups write one per database). <code>--temp-path=/tmp/restore-tmp</code> is defaulted for PVC sources because the backup PVC is mounted ReadOnly.</p>
+<p><strong>Restore Job</strong> — <code>neo4j-admin database restore</code> runs in a Pod that mounts the server-0 data PVC (<code>neo4j-data-{name}-0</code> for standalone, <code>data-{name}-server-0</code> for the synthetic cluster representation — the only PVC the operator writes restored data to). <code>--from-path</code> is resolved at Pod startup via shell substitution <code>$(ls /backup/&lt;run&gt;/&lt;dbname&gt;-*.backup | tail -1)</code> (<code>tail -1</code> picks the LATEST timestamped artifact) so a single artifact file is passed even when the directory holds multiple <code>.backup</code> files. Both the path and database name go through <code>shellQuote()</code>. <code>--temp-path=/tmp/restore-tmp</code> is defaulted for PVC sources because the backup PVC is mounted ReadOnly.</p>
 </li>
 <li>
-<p><strong>Cluster scale-up</strong> — <code>startCluster</code> reads the <code>neo4j.neo4j.com/original-replicas</code> annotation off the StatefulSet and scales it back. The annotation is deleted on first successful scale-up; the second concurrent reconcile finds it missing and treats this as idempotent success (avoids a regression where a race terminal-failed the restore on a benign empty-annotation).</p>
+<p><strong>Scale-up</strong> — <code>startCluster</code> reads the <code>neo4j.neo4j.com/original-replicas</code> annotation off the StatefulSet and scales it back. The annotation is deleted on first successful scale-up; the second concurrent reconcile finds it missing and treats this as idempotent success (avoids a regression where a race terminal-failed the restore on a benign empty-annotation).</p>
 </li>
 <li>
-<p><strong>Wait for cluster Ready</strong> — <code>waitForClusterReady</code> polls cluster status until <code>Phase=Ready</code>.</p>
+<p><strong>Wait for Ready</strong> — <code>waitForClusterReady</code> polls status until <code>Phase=Ready</code>.</p>
 </li>
 <li>
 <p><strong>Database bring-up</strong> — <code>createOrStartDatabase</code> issues <code>CREATE DATABASE</code> (if absent) or <code>START DATABASE</code> (if it existed and was stopped) via the Bolt client against the system DB.</p>
 </li>
 <li>
-<p><strong>Multi-server re-seed</strong> <em>(clusters with <code>topology.servers &gt;= 2</code> only)</em> — <code>recreateRestoredDatabaseOnCluster</code> calls <code>dbms.[cluster.]recreateDatabase($db, {seedingServers: [$server0Id]})</code> to force every server to re-sync from server-0's restored data. Server-0 is resolved via <code>SHOW SERVERS YIELD ... address</code>, matched by <code>cluster.Name + "-server-0"</code>. The procedure name is version-gated by <code>version.RecreateDatabaseProcedure()</code>:</p>
+<p><strong>Multi-server re-seed</strong> <em>(<code>recreateRestoredDatabaseOnCluster</code>, gated on <code>Topology.Servers &gt;= 2</code>)</em> — calls <code>dbms.[cluster.]recreateDatabase($db, {seedingServers: [$server0Id]})</code> to force every server to re-sync from server-0's restored data. Server-0 is resolved via <code>SHOW SERVERS YIELD ... address</code>, matched by <code>cluster.Name + "-server-0"</code>. The procedure name is version-gated by <code>version.RecreateDatabaseProcedure()</code>:</p>
 </li>
 <li><strong><code>dbms.cluster.recreateDatabase</code></strong> — SemVer 5.24+ (incl. 5.26 LTS), CalVer 2025.02–2025.03</li>
 <li><strong><code>dbms.recreateDatabase</code></strong> — CalVer 2025.04+ and 2026.x+ (the <code>cluster.*</code> form was deprecated in 2025.04)</li>
-<li><strong>Empty string</strong> (skipped silently) — pre-5.24 SemVer / pre-2025.02 CalVer; multi-server restores on those versions are best-effort</li>
+<li><strong>Empty string</strong> (skipped silently) — pre-5.24 SemVer / pre-2025.02 CalVer</li>
 </ol>
-<p>The step is non-fatal — restore still transitions to <code>Completed</code> if the procedure fails, but emits a Warning event.</p>
-<ol>
-<li><strong>Skipped for standalone</strong> — <code>Topology.Servers &lt; 2</code> makes step 5 a no-op. Standalone has a single PVC, a single server, and no re-seed semantics. The standalone restore flow is otherwise identical (steps 1–4). <code>getClusterRef</code> accepts a standalone name and returns a synthetic <code>Neo4jEnterpriseCluster</code> via <code>standaloneAsCluster</code> (with <code>Spec.Topology.Servers=1</code>) so every downstream builder (command, env vars, volumes) works without a separate code path.</li>
-</ol>
-<p><strong>Standalone backup</strong>: <code>neo4jbackup_controller.go::isStandaloneTarget</code> detects when <code>spec.target</code> references a <code>Neo4jEnterpriseStandalone</code>. The <code>--from</code> address resolution switches from <code>BuildBackupFromAddresses</code> (cluster: comma-separated FQDNs) to <code>BuildStandaloneBackupFromAddress</code> (single FQDN). The rest of the backup flow — Job spec, PVC/cloud storage, per-run subfolder, history population — is identical.</p>
+<p>The step is non-fatal — restore still transitions to <code>Completed</code> if the procedure fails, but emits a Warning event. In the Job path a standalone target has <code>Topology.Servers=1</code>, so this step is a no-op there; it survives for the synthetic-cluster representation only.</p>
+<p>Standalone targets are auto-detected: <code>getClusterRef</code> accepts a standalone name and returns a synthetic <code>Neo4jEnterpriseCluster</code> via <code>standaloneAsCluster</code> (with <code>Spec.Topology.Servers=1</code>) so every downstream builder (command, env vars, volumes) works without a separate code path.</p>
+<p><strong>Standalone backup</strong>: <code>neo4jbackup_controller.go::isStandaloneTarget</code> detects when <code>spec.target</code> references a <code>Neo4jEnterpriseStandalone</code>. The <code>--from</code> address resolution switches from <code>BuildBackupFromAddresses</code> (cluster: comma-separated FQDNs) to <code>BuildStandaloneBackupFromAddress</code> (single FQDN). The rest of the backup flow — Job spec, PVC/cloud storage, shared <code>&lt;base&gt;/&lt;chain-root&gt;/</code> directory, history population — is identical.</p>
 <p><strong>Integration test coverage caveat</strong>: the <code>test/integration</code> suite covers backup and restore of clusters only. Standalone backup/restore is exercised by unit tests in <code>internal/controller/*_test.go</code> and manual smoke tests. End-to-end Ginkgo coverage for the standalone path is a known follow-up — the code paths are the same so failures would surface in the cluster specs, but a dedicated standalone round-trip would harden the contract.</p>
 <p><strong>Race-tolerance</strong>: AlreadyExists on Job creation is treated as "another reconcile got there first" rather than terminal-failure. Concurrent reconciles during the stopCluster cycle (10s scale-down delay queues a fresh reconcile before the original finishes) are common; without this tolerance the loser would flip the restore to <code>Failed</code> and the "Restore previously failed" guard would pin it permanently.</p>
 <h4 id="neo4juser-neo4jrole-neo4jrolebinding-controllers-neo4juser_controllergo-neo4jrole_controllergo-neo4jrolebinding_controllergo">Neo4jUser / Neo4jRole / Neo4jRoleBinding Controllers (<code>neo4juser_controller.go</code>, <code>neo4jrole_controller.go</code>, <code>neo4jrolebinding_controller.go</code>)<a class="headerlink" href="#neo4juser-neo4jrole-neo4jrolebinding-controllers-neo4juser_controllergo-neo4jrole_controllergo-neo4jrolebinding_controllergo" title="Anchor link to this section">&para;</a></h4>
@@ -4958,14 +4967,11 @@ CalVer detection: <code>ParseVersion()</code> → <code>IsCalver</code> (<code>m
 <h2 id="resource-management-architecture">Resource Management Architecture<a class="headerlink" href="#resource-management-architecture" title="Anchor link to this section">&para;</a></h2>
 <h3 id="intelligent-resource-handling">Intelligent Resource Handling<a class="headerlink" href="#intelligent-resource-handling" title="Anchor link to this section">&para;</a></h3>
 <h4 id="resource-builders-internalresources">Resource Builders (<code>internal/resources/</code>):<a class="headerlink" href="#resource-builders-internalresources" title="Anchor link to this section">&para;</a></h4>
-<ul>
-<li><strong>ClusterBuilder</strong> (<code>cluster.go</code>): Server-based StatefulSet creation</li>
-<li><strong>StandaloneBuilder</strong> (<code>standalone.go</code>): Single-node deployment resources</li>
-<li><strong>ConfigMapBuilder</strong>: Unified configuration for both deployment types</li>
-<li><strong>ServiceBuilder</strong>: Client and discovery services</li>
-<li><strong>BackupBuilder</strong>: per-<code>Neo4jBackup</code>-CR Kubernetes Job (no persistent backup pod, no sidecars)</li>
-<li><strong>TruststoreBuilder</strong> (<code>cluster.go:BuildTrustStoreInitContainer / BuildTrustStoreVolumes / CollectTrustedCASecrets</code>): emits the per-Secret volume mounts, the writable <code>/truststore</code> EmptyDir, and the <code>truststore-init</code> init container (seeds <code>/truststore/truststore.jks</code> from <code>$JAVA_HOME/lib/security/cacerts</code>, then <code>keytool -import</code> for each <code>spec.trustedCASecrets</code> entry using the Secret name as alias). Reused by both cluster (env var) and standalone (ConfigMap) wire-up paths via <code>CollectTrustedCASecrets</code>, which folds the legacy singular <code>spec.auth.trustStore</code> into the new plural list.</li>
-</ul>
+<p>These are free <code>Build*ForEnterprise</code> / <code>Build*ForStandalone</code> functions, not stateful builder types. The standalone path reuses the <code>cluster.go</code> builders (StatefulSet, ConfigMap, Services) via the <code>standaloneAsCluster</code> synthetic representation rather than a dedicated <code>standalone.go</code> file.
+- <strong>StatefulSet / Services / ConfigMap</strong> (<code>cluster.go</code>): <code>BuildServerStatefulSetForEnterprise</code>, <code>BuildClientServiceForEnterprise</code>, <code>BuildDiscoveryServiceForEnterprise</code>, <code>BuildConfigMapForEnterprise</code> — server-based resources for both clusters and (via the synthetic cluster) standalone.
+- <strong>NetworkPolicy / Route / MCP</strong> (<code>networkpolicy.go</code>, <code>route.go</code>, <code>mcp.go</code>): include <code>*ForStandalone</code> variants for standalone-specific wiring.
+- <strong>Backup Job</strong>: built inline by <code>neo4jbackup_controller.go</code> (per-<code>Neo4jBackup</code>-CR Kubernetes Job — no persistent backup pod, no sidecars, no dedicated <code>resources/</code> builder).
+- <strong>TruststoreBuilder</strong> (<code>cluster.go:BuildTrustStoreInitContainer / BuildTrustStoreVolumes / CollectTrustedCASecrets</code>): emits the per-Secret volume mounts, the writable <code>/truststore</code> EmptyDir, and the <code>truststore-init</code> init container (seeds <code>/truststore/truststore.jks</code> from <code>$JAVA_HOME/lib/security/cacerts</code>, then <code>keytool -import</code> for each <code>spec.trustedCASecrets</code> entry using the Secret name as alias). Reused by both cluster (env var) and standalone (ConfigMap) wire-up paths via <code>CollectTrustedCASecrets</code>, which folds the legacy singular <code>spec.auth.trustStore</code> into the new plural list.</p>
 <h4 id="server-based-resource-patterns">Server-Based Resource Patterns:<a class="headerlink" href="#server-based-resource-patterns" title="Anchor link to this section">&para;</a></h4>
 <ul>
 <li><strong>StatefulSet Naming</strong>: <code>{cluster-name}-server</code> for clusters, <code>{standalone-name}</code> for standalone</li>
@@ -5018,7 +5024,7 @@ with one structural difference noted at the end.</p>
 </span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">      </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ClusterIssuer</span>
 </span></code></pre></div>
 <p>Validation (<code>internal/validation/tls_validator.go</code>) runs inline during
-reconciliation — no admission webhooks are used (CLAUDE.md rule #26). When
+reconciliation — no admission webhooks are used (CLAUDE.md "NO WEBHOOKS" hard constraint). When
 <code>mode: disabled</code>, the entire TLS path is skipped and the deployment uses plain
 <code>bolt://</code> and <code>http://</code>.</p>
 <h4 id="2-certificate-creation">2. Certificate creation<a class="headerlink" href="#2-certificate-creation" title="Anchor link to this section">&para;</a></h4>
@@ -5036,7 +5042,7 @@ material into a Secret named <code>{resource-name}-tls-secret</code> (<code>tls.
 <code>ca.crt</code>). cert-manager owns rotation; the operator never touches expiry.</p>
 <h4 id="3-mounting-into-neo4j-pods">3. Mounting into Neo4j pods<a class="headerlink" href="#3-mounting-into-neo4j-pods" title="Anchor link to this section">&para;</a></h4>
 <p>The StatefulSet builder mounts the Secret read-only at <code>/ssl/</code>
-(<code>internal/resources/cluster.go:~1349</code>). Neo4j is then pointed at this directory
+(<code>internal/resources/cluster.go:~1208</code>). Neo4j is then pointed at this directory
 via <code>server.directories.certificates=/ssl</code> along with three SSL policies that
 share the same key/cert/CA bundle:</p>
 <ul>
@@ -5063,7 +5069,7 @@ share the same key/cert/CA bundle:</p>
   configuration.</li>
 </ul>
 <p>When TLS is enabled, <code>server.bolt.tls_level=REQUIRED</code> is also set — plain
-<code>bolt://</code> connections are rejected (regression checklist item #16).</p>
+<code>bolt://</code> connections are rejected (regression checklist items #9–#13, TLS / Bolt client).</p>
 <h4 id="4-operator-side-bolt-connection-outgoing">4. Operator-side Bolt connection (outgoing)<a class="headerlink" href="#4-operator-side-bolt-connection-outgoing" title="Anchor link to this section">&para;</a></h4>
 <p>The operator reconciles the cluster by issuing Cypher commands over Bolt.
 Two separate concerns layer here: which scheme the URI uses (routing vs
@@ -5097,7 +5103,7 @@ wherever K8s steered them via the <code>{cluster}-client</code> ClusterIP. The
 operator's Bolt clients used to use <code>bolt://</code>, which produced
 <code>Neo.ClientError.Cluster.NotALeader</code> on N-1 of every N reconciles and
 visible Ready ↔ Failed status flicker on the role/user/auth-rule
-controllers. See checklist item #62.</p>
+controllers. See checklist item #11.</p>
 <p>The <strong>single legitimate <code>bolt://</code> consumer</strong> is
 <code>internal/controller/splitbrain_detector.go:createPodSpecificNeo4jClient</code>,
 which intentionally bypasses the routing layer to query each pod's RAFT
@@ -5115,7 +5121,7 @@ behavior is equivalent to direct connection.</p>
 <p>These values are deliberately tight: an unreachable cluster fails fast
 instead of stalling the controller's reconcile queue behind hung Bolt
 calls. Healthy clusters complete the routing handshake in well under one
-second. See checklist item #63.</p>
+second. See checklist item #12.</p>
 <p><strong>TLS.</strong> <code>buildTLSConfig</code> (<code>internal/neo4j/client.go</code>) governs which CA the
 client trusts:</p>
 <ol>
@@ -5126,13 +5132,13 @@ client trusts:</p>
    Secret (e.g. when bringing their own CA outside cert-manager).</li>
 <li><strong>Fallback</strong>: <code>InsecureSkipVerify</code> is used only during the brief window
    before the Secret has been populated by cert-manager (regression
-   checklist item #27).</li>
+   checklist item #9).</li>
 </ol>
 <p>All three Bolt entry points — <code>NewClientForEnterprise</code>,
 <code>NewClientForEnterpriseStandalone</code>, and <code>NewClientForPod</code> (split-brain
 detector) — go through <code>buildTLSConfig</code>, so the scheme switches
 dynamically between TLS-enabled and plain variants based on <code>spec.tls.mode</code>
-(checklist item #28).</p>
+(checklist item #10).</p>
 <h4 id="5-standalone-differences">5. Standalone differences<a class="headerlink" href="#5-standalone-differences" title="Anchor link to this section">&para;</a></h4>
 <p><code>Neo4jEnterpriseStandalone</code> follows the same flow with two structural
 differences:</p>
@@ -5140,7 +5146,7 @@ differences:</p>
 <li>A single pod, so <code>dnsNames</code> is shorter (one server FQDN + the client service).</li>
 <li>Neo4j configuration is delivered via a ConfigMap rather than StatefulSet env
   vars; the <code>health.sh</code> probe (mounted alongside <code>neo4j.conf</code> with mode <code>0755</code>)
-  also lives in this ConfigMap (checklist item #34).</li>
+  also lives in this ConfigMap (checklist item #6).</li>
 </ul>
 <h4 id="6-outbound-trust-spectrustedcasecrets-specextravolumes">6. Outbound trust — <code>spec.trustedCASecrets</code> &amp; <code>spec.extraVolumes</code><a class="headerlink" href="#6-outbound-trust-spectrustedcasecrets-specextravolumes" title="Anchor link to this section">&para;</a></h4>
 <p>The cert-manager flow above governs Neo4j-the-server's <em>inbound</em> TLS (Bolt,
@@ -5244,7 +5250,7 @@ references a per-policy <code>truststore_path</code>.</p>
 </tr>
 <tr>
 <td><code>/ssl/</code> mount + SSL policies</td>
-<td><code>internal/resources/cluster.go</code> (~line 1349, ~line 1672)</td>
+<td><code>internal/resources/cluster.go</code> (~line 1208, ~line 1594)</td>
 </tr>
 <tr>
 <td>Operator outgoing Bolt TLS</td>
@@ -5264,7 +5270,7 @@ references a per-policy <code>truststore_path</code>.</p>
 </tr>
 <tr>
 <td>Regression invariants</td>
-<td>CLAUDE.md checklist items #16, #27, #28, #34</td>
+<td>CLAUDE.md checklist items #6, #9, #10, #11, #12, #13</td>
 </tr>
 </tbody>
 </table>

@@ -1562,10 +1562,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#even-number-of-primaries" class="md-nav__link">
+  <a href="#even-number-of-servers" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Even Number of Primaries
+        Even Number of Servers
       
     </span>
   </a>
@@ -1573,10 +1573,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#two-primary-nodes" class="md-nav__link">
+  <a href="#two-servers" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Two Primary Nodes
+        Two Servers
       
     </span>
   </a>
@@ -1584,10 +1584,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#excessive-primary-nodes" class="md-nav__link">
+  <a href="#excessive-servers" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Excessive Primary Nodes
+        Excessive Servers
       
     </span>
   </a>
@@ -3162,10 +3162,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#even-number-of-primaries" class="md-nav__link">
+  <a href="#even-number-of-servers" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Even Number of Primaries
+        Even Number of Servers
       
     </span>
   </a>
@@ -3173,10 +3173,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#two-primary-nodes" class="md-nav__link">
+  <a href="#two-servers" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Two Primary Nodes
+        Two Servers
       
     </span>
   </a>
@@ -3184,10 +3184,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#excessive-primary-nodes" class="md-nav__link">
+  <a href="#excessive-servers" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Excessive Primary Nodes
+        Excessive Servers
       
     </span>
   </a>
@@ -3585,21 +3585,15 @@
 </span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="w">  </span><span class="nt">expr</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">up{job=&quot;neo4j&quot;} == 0</span>
 </span></code></pre></div>
 <h2 id="operator-warnings">Operator Warnings<a class="headerlink" href="#operator-warnings" title="Anchor link to this section">&para;</a></h2>
-<p>The Neo4j Kubernetes Operator will emit warnings for suboptimal configurations:</p>
-<h3 id="even-number-of-primaries">Even Number of Primaries<a class="headerlink" href="#even-number-of-primaries" title="Anchor link to this section">&para;</a></h3>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>Warning: Even number of primary nodes (4) reduces fault tolerance.
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>In a split-brain scenario, the cluster may become unavailable.
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>Consider using an odd number (3, 5, or 7) for optimal fault tolerance.
+<p>The Neo4j Kubernetes Operator will emit warnings for suboptimal <code>spec.topology.servers</code> configurations (warnings apply to server count, not database-level primary count):</p>
+<h3 id="even-number-of-servers">Even Number of Servers<a class="headerlink" href="#even-number-of-servers" title="Anchor link to this section">&para;</a></h3>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>Even number of servers (4) may reduce fault tolerance when databases specify odd-numbered server allocations. Consider using an odd number of servers for optimal fault tolerance.
 </span></code></pre></div>
-<h3 id="two-primary-nodes">Two Primary Nodes<a class="headerlink" href="#two-primary-nodes" title="Anchor link to this section">&para;</a></h3>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>Warning: 2 primary nodes provide limited fault tolerance.
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>If one node fails, the remaining node cannot form quorum.
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>Consider using 3 primary nodes for production deployments.
+<h3 id="two-servers">Two Servers<a class="headerlink" href="#two-servers" title="Anchor link to this section">&para;</a></h3>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>2 servers provide limited fault tolerance. If one server fails, databases may lose quorum. Consider using 3 or more servers for production deployments.
 </span></code></pre></div>
-<h3 id="excessive-primary-nodes">Excessive Primary Nodes<a class="headerlink" href="#excessive-primary-nodes" title="Anchor link to this section">&para;</a></h3>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>Warning: More than 7 primary nodes (9) may impact cluster performance
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>due to increased consensus overhead.
-</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>Consider using read replicas instead for scaling read capacity.
+<h3 id="excessive-servers">Excessive Servers<a class="headerlink" href="#excessive-servers" title="Anchor link to this section">&para;</a></h3>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>More than 10 servers (12) may impact cluster performance due to increased coordination overhead. Consider the actual database topology needs when scaling servers.
 </span></code></pre></div>
 <h2 id="migration-strategies">Migration Strategies<a class="headerlink" href="#migration-strategies" title="Anchor link to this section">&para;</a></h2>
 <h3 id="scaling-from-2-to-3-primaries">Scaling from 2 to 3 Primaries<a class="headerlink" href="#scaling-from-2-to-3-primaries" title="Anchor link to this section">&para;</a></h3>
@@ -3616,14 +3610,18 @@
 </ol>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Anchor link to this section">&para;</a></h2>
 <h3 id="split-brain-scenarios">Split-Brain Scenarios<a class="headerlink" href="#split-brain-scenarios" title="Anchor link to this section">&para;</a></h3>
+<p>Once a cluster has reached <code>Ready</code>, the operator automatically detects split-brain: it connects to each <code>my-cluster-server-N</code> pod over Bolt, compares each pod's view of the cluster (<code>SHOW SERVERS</code>), and restarts pods stranded in a minority partition so the StatefulSet recreates them and they rejoin the majority. Detection is skipped during initial formation (before the cluster is <code>Ready</code>) and for single-server clusters.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Check cluster status</span>
 </span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>neo4jenterprisecluster<span class="w"> </span>my-cluster
 </span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>
-</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="c1"># Check individual node logs</span>
-</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>my-cluster-server-0
+</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="c1"># See split-brain detection/repair events emitted by the operator</span>
+</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>kubectl<span class="w"> </span>get<span class="w"> </span>events<span class="w"> </span>--field-selector<span class="w"> </span><span class="nv">reason</span><span class="o">=</span>SplitBrainDetected<span class="w"> </span>-A
 </span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a>
-</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="c1"># Verify database consistency</span>
-</span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-it<span class="w"> </span>my-cluster-server-0<span class="w"> </span>--<span class="w"> </span>neo4j-admin<span class="w"> </span>check-consistency
+</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="c1"># Check individual node logs</span>
+</span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>my-cluster-server-0
+</span><span id="__span-17-9"><a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a>
+</span><span id="__span-17-10"><a id="__codelineno-17-10" name="__codelineno-17-10" href="#__codelineno-17-10"></a><span class="c1"># Verify database consistency</span>
+</span><span id="__span-17-11"><a id="__codelineno-17-11" name="__codelineno-17-11" href="#__codelineno-17-11"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-it<span class="w"> </span>my-cluster-server-0<span class="w"> </span>--<span class="w"> </span>neo4j-admin<span class="w"> </span>check-consistency
 </span></code></pre></div>
 <h3 id="recovery-procedures">Recovery Procedures<a class="headerlink" href="#recovery-procedures" title="Anchor link to this section">&para;</a></h3>
 <ol>

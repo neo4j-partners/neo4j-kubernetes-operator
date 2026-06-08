@@ -3245,8 +3245,8 @@
 <li>Binds it to <code>0.0.0.0:2004</code> (safe in Kubernetes — pod network isolation prevents external access).</li>
 <li>Exposes port <code>2004</code> on the Neo4j container.</li>
 <li>Adds <code>prometheus.io/*</code> annotations for scrape-based setups.</li>
-<li>Disables CSV metrics export (<code>server.metrics.csv.enabled=false</code>) to avoid unnecessary disk usage.</li>
 </ul>
+<p>Independently of <code>spec.monitoring</code>, the operator always disables the JMX and CSV metrics reporters (<code>server.metrics.jmx.enabled=false</code>, <code>server.metrics.csv.enabled=false</code>) on every Neo4j deployment — JMX is an unauthenticated management surface and CSV writes one file per metric into the pod's ephemeral filesystem. These hardening defaults are emitted regardless of whether monitoring is enabled; re-enable via <code>spec.config</code> if you genuinely need them.</p>
 <h3 id="cluster-example">Cluster example<a class="headerlink" href="#cluster-example" title="Anchor link to this section">&para;</a></h3>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">spec</span><span class="p">:</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">monitoring</span><span class="p">:</span>
@@ -3769,6 +3769,31 @@ on every reconcile cycle.</p>
 <td><code>status.diagnostics.databases[].role</code></td>
 <td>string</td>
 <td>Role on last-contacted server: <code>primary</code>, <code>secondary</code></td>
+</tr>
+<tr>
+<td><code>status.diagnostics.databases[].default</code></td>
+<td>bool</td>
+<td>True for the default database</td>
+</tr>
+<tr>
+<td><code>status.diagnostics.users[]</code></td>
+<td>Array</td>
+<td>Bounded summary of users from <code>SHOW USERS</code> (user, roles, suspended, homeDatabase)</td>
+</tr>
+<tr>
+<td><code>status.diagnostics.userCount</code></td>
+<td>int</td>
+<td>Total users observed, even when the <code>users</code> list is truncated</td>
+</tr>
+<tr>
+<td><code>status.diagnostics.roles[]</code></td>
+<td>Array</td>
+<td>Bounded summary of roles from <code>SHOW ROLES</code> (role, immutable)</td>
+</tr>
+<tr>
+<td><code>status.diagnostics.roleCount</code></td>
+<td>int</td>
+<td>Total roles observed, even when the <code>roles</code> list is truncated</td>
 </tr>
 <tr>
 <td><code>status.diagnostics.lastCollected</code></td>

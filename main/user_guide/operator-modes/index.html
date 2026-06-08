@@ -3034,7 +3034,7 @@
 </span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>--cache-strategy<span class="o">=</span>standard<span class="p">|</span>lazy<span class="p">|</span>selective<span class="p">|</span>on-demand<span class="p">|</span>none
 </span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>--ultra-fast
 </span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>--skip-cache-wait
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>--controllers<span class="o">=</span>cluster,standalone,database,backup,restore,plugin,shardeddatabase,authrule
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>--controllers<span class="o">=</span>cluster,standalone,database,backup,restore,plugin,shardeddatabase,user,role,rolebinding,authrule
 </span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>--zap-log-level<span class="o">=</span>debug<span class="p">|</span>info<span class="p">|</span>warn<span class="p">|</span>error<span class="p">|</span>dpanic<span class="p">|</span>panic<span class="p">|</span>fatal
 </span></code></pre></div>
 <h3 id="helm-shortcuts">Helm shortcuts<a class="headerlink" href="#helm-shortcuts" title="Anchor link to this section">&para;</a></h3>
@@ -3106,7 +3106,7 @@ Explicit flags and Helm values always override the mode defaults.</p>
 - <strong>Health bind</strong>: <code>:8081</code> (unless overridden)
 - <strong>Cache strategy</strong>: <code>on-demand</code> (unless overridden)
 - <strong>Leader election</strong>: off by default (recommended for HA)
-- <strong>Controllers loaded</strong>: cluster, standalone, database, backup, restore, plugin, shardeddatabase</p>
+- <strong>Controllers loaded</strong>: all controllers — cluster, standalone, database, backup, restore, plugin, shardeddatabase, user, role, rolebinding, authrule</p>
 <p><strong>Helm defaults that matter:</strong>
 - <code>leaderElection.enabled: true</code> (passes <code>--leader-elect=true</code>)
 - <code>logLevel: info</code>
@@ -3123,7 +3123,7 @@ Explicit flags and Helm values always override the mode defaults.</p>
 - <strong>Cache strategy</strong>: <code>on-demand</code> (or <code>none</code> if <code>--ultra-fast</code>)
 - <strong>skip-cache-wait</strong>: auto-enabled if not explicitly set
 - <strong>API rate limits</strong>: QPS 100, Burst 200
-- <strong>Controllers loaded</strong>: cluster, standalone, database, backup, restore, plugin, shardeddatabase</p>
+- <strong>Controllers loaded</strong>: defaults to all controllers (cluster, standalone, database, backup, restore, plugin, shardeddatabase, user, role, rolebinding, authrule); narrow with <code>--controllers</code></p>
 <p>Helm always sets <code>--metrics-bind-address</code> and <code>--health-probe-bind-address</code>, so the dev-mode defaults above only apply when you run the binary directly or override those values.</p>
 <p><strong>In-cluster dev workflow (Kind only):</strong>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>make<span class="w"> </span>dev-cluster
@@ -3279,8 +3279,12 @@ Explicit flags and Helm values always override the mode defaults.</p>
 - <code>backup</code>
 - <code>restore</code>
 - <code>plugin</code>
-- <code>shardeddatabase</code></p>
-<p>The default dev list includes <code>shardeddatabase</code>; override with <code>--controllers</code> to narrow scope.</p>
+- <code>shardeddatabase</code>
+- <code>user</code>
+- <code>role</code>
+- <code>rolebinding</code>
+- <code>authrule</code></p>
+<p>The default dev <code>--controllers</code> value is the full list above; override with <code>--controllers</code> to narrow scope.</p>
 <h2 id="logging-and-metrics">Logging and Metrics<a class="headerlink" href="#logging-and-metrics" title="Anchor link to this section">&para;</a></h2>
 <p><strong>Logging (zap):</strong>
 - <code>--zap-log-level=debug|info|warn|error|dpanic|panic|fatal</code>

@@ -2932,6 +2932,11 @@ and alerting systems.</p>
 <td>Restore operation failed</td>
 </tr>
 <tr>
+<td><code>RestoreFromChainParent</code></td>
+<td>Warning</td>
+<td><code>source.backupRef</code> points at a FULL+DIFF chain parent; the restore seeds from its latest full snapshot, not the latest chain state</td>
+</tr>
+<tr>
 <td><code>DatabaseCreateFailed</code></td>
 <td>Warning</td>
 <td>Database creation failed during a restore operation</td>
@@ -3120,6 +3125,11 @@ and alerting systems.</p>
 <td><code>StorageExpansionFailed</code></td>
 <td>Warning</td>
 <td>Expansion failed (non-expandable StorageClass, shrink attempt, or patch error)</td>
+</tr>
+<tr>
+<td><code>StorageClassNotFound</code></td>
+<td>Warning</td>
+<td><code>spec.storage.className</code> references a StorageClass that does not exist in the cluster</td>
 </tr>
 </tbody>
 </table>

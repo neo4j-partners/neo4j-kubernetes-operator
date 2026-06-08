@@ -2778,9 +2778,9 @@
 <p>The Neo4j Enterprise Operator has been optimized for production environments with several key performance improvements:</p>
 <h3 id="reconciliation-efficiency">Reconciliation Efficiency<a class="headerlink" href="#reconciliation-efficiency" title="Anchor link to this section">&para;</a></h3>
 <ul>
-<li><strong>Optimized Rate Limiting</strong>: The controller uses intelligent rate limiting to prevent excessive API calls (~34 reconciliations per minute vs. 18,000+)</li>
+<li><strong>Optimized Rate Limiting</strong>: The cluster controller caps reconciliations at roughly 10 per minute (a token-bucket limiter of one token every 6 seconds with a burst of 10), backed by exponential backoff from 5 seconds up to 30 seconds, to prevent excessive API calls</li>
 <li><strong>Status Update Optimization</strong>: Status updates only occur when cluster state actually changes, reducing unnecessary API server load</li>
-<li><strong>ConfigMap Debouncing</strong>: 2-minute debounce mechanism prevents restart loops from configuration changes</li>
+<li><strong>ConfigMap Debouncing</strong>: A short debounce interval coalesces rapid successive configuration changes, preventing restart loops</li>
 </ul>
 <h3 id="resource-management">Resource Management<a class="headerlink" href="#resource-management" title="Anchor link to this section">&para;</a></h3>
 <ul>

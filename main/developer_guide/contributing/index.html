@@ -3587,7 +3587,7 @@
 <h2 id="quick-start-for-contributors">🚀 Quick Start for Contributors<a class="headerlink" href="#quick-start-for-contributors" title="Anchor link to this section">&para;</a></h2>
 <h3 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Anchor link to this section">&para;</a></h3>
 <ul>
-<li><strong>Go</strong>: Version 1.24+ for development</li>
+<li><strong>Go</strong>: Version 1.26+ for development (CI builds against Go 1.26)</li>
 <li><strong>Docker</strong>: Container runtime for building images</li>
 <li><strong>kubectl</strong>: Kubernetes CLI tool</li>
 <li><strong>kind</strong>: Kubernetes in Docker for local clusters</li>
@@ -3614,11 +3614,11 @@
 </span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="c1"># Deploy the operator to development cluster (REQUIRED - in-cluster only)</span>
 </span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>make<span class="w"> </span>operator-setup
 </span></code></pre></div>
-<p><strong>Benefits of this setup</strong>:
-- <strong>Fast iteration</strong>: No container rebuilds needed
-- <strong>Debug support</strong>: Full debugger capabilities
-- <strong>Live reloading</strong>: Operator restarts when code changes
-- <strong>Direct logs</strong>: Console output for immediate feedback</p>
+<p>The operator always runs <strong>in-cluster</strong> — never <code>make dev-run</code> (DNS resolution fails when the operator runs outside the cluster). For a fast inner loop after code changes:
+- <strong><code>make deploy-dev-local</code></strong>: Rebuild image + redeploy to Kind (~60s).
+- <strong><code>make dev-watch</code></strong>: Auto-rebuild and redeploy on file changes.
+- <strong><code>tilt up</code></strong>: Live reload (~5s, requires Tilt).
+- <strong>Direct logs</strong>: <code>make operator-logs</code> or <code>kubectl logs -n neo4j-operator-dev deployment/neo4j-operator-controller-manager -f</code>.</p>
 <h3 id="3-make-your-changes">3. Make Your Changes<a class="headerlink" href="#3-make-your-changes" title="Anchor link to this section">&para;</a></h3>
 <p>The operator follows a well-defined architecture. Key areas for contributions:</p>
 <p><strong>Controllers</strong> (<code>internal/controller/</code>):
@@ -3811,7 +3811,7 @@
 </span></code></pre></div>
 <h4 id="review-process">Review Process<a class="headerlink" href="#review-process" title="Anchor link to this section">&para;</a></h4>
 <ol>
-<li><strong>Automated Checks</strong>: CI/CD runs automated tests and linting</li>
+<li><strong>Automated Checks</strong>: CI runs <code>check-drift</code> (regenerate + fail on stale artifacts) and <code>test-unit</code> (which includes <code>fmt</code> and <code>vet</code>). <code>golangci-lint</code> is not run in CI — run <code>make lint</code> locally before pushing.</li>
 <li><strong>Code Review</strong>: Maintainers review code for quality and design</li>
 <li><strong>Integration Testing</strong>: Changes tested against integration suite</li>
 <li><strong>Documentation Review</strong>: Documentation changes reviewed for accuracy</li>

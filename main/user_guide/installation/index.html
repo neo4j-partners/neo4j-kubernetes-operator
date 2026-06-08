@@ -3108,7 +3108,7 @@ updated automatically on every operator release.</p>
 </span></code></pre></div>
 <p><strong>Pin to a specific version</strong>:
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>helm<span class="w"> </span>install<span class="w"> </span>neo4j-operator<span class="w"> </span>neo4j-operator/neo4j-operator<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span>--version<span class="w"> </span><span class="m">1</span>.8.0<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span>--version<span class="w"> </span><span class="m">1</span>.10.2<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span>--namespace<span class="w"> </span>neo4j-operator-system<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span>--create-namespace
 </span></code></pre></div></p>
@@ -3132,14 +3132,14 @@ updated automatically on every operator release.</p>
 <h3 id="method-2-oci-registry">Method 2: OCI Registry<a class="headerlink" href="#method-2-oci-registry" title="Anchor link to this section">&para;</a></h3>
 <p>Available for all releases (including pre-v1.8.0). Helm 3.8 or later is required for OCI support.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>helm<span class="w"> </span>install<span class="w"> </span>neo4j-operator<span class="w"> </span>oci://ghcr.io/neo4j-partners/charts/neo4j-operator<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span>--version<span class="w"> </span><span class="m">1</span>.8.0<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span>--version<span class="w"> </span><span class="m">1</span>.10.2<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span>--namespace<span class="w"> </span>neo4j-operator-system<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">  </span>--create-namespace
 </span></code></pre></div>
-<p>Use the chart version without the <code>v</code> prefix (for example, <code>1.8.0</code>).</p>
+<p>Use the chart version without the <code>v</code> prefix (for example, <code>1.10.2</code>).</p>
 <h3 id="method-3-quick-install-from-github-release">Method 3: Quick Install from GitHub Release<a class="headerlink" href="#method-3-quick-install-from-github-release" title="Anchor link to this section">&para;</a></h3>
 <p>For environments where running <code>helm</code> is inconvenient, every release also publishes a single kubectl-applyable YAML bundle:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nv">RELEASE_VERSION</span><span class="o">=</span>v1.8.0<span class="w">  </span><span class="c1"># Replace with desired version</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nv">RELEASE_VERSION</span><span class="o">=</span>v1.10.2<span class="w">  </span><span class="c1"># Replace with desired version</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases/download/<span class="si">${</span><span class="nv">RELEASE_VERSION</span><span class="si">}</span>/neo4j-kubernetes-operator-complete.yaml
 </span></code></pre></div>
@@ -3264,10 +3264,6 @@ updated automatically on every operator release.</p>
 <td>Deploy with development configuration</td>
 </tr>
 <tr>
-<td><code>make deploy-prod</code></td>
-<td>Deploy with production configuration</td>
-</tr>
-<tr>
 <td><code>make undeploy-prod/undeploy-dev</code></td>
 <td>Remove operator deployment</td>
 </tr>
@@ -3292,11 +3288,7 @@ updated automatically on every operator release.</p>
 </tr>
 <tr>
 <td><code>make operator-setup</code></td>
-<td>Deploy operator in-cluster (required for proper DNS)</td>
-</tr>
-<tr>
-<td><code>make operator-setup</code></td>
-<td>Deploy operator to existing cluster</td>
+<td>Deploy operator in-cluster to an existing Kind cluster (required for proper DNS)</td>
 </tr>
 <tr>
 <td><code>make test-unit</code></td>
@@ -3400,7 +3392,7 @@ file URL at a release tag (no download or extract step needed):</p>
 </span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>helm<span class="w"> </span>uninstall<span class="w"> </span>neo4j-operator<span class="w"> </span>--namespace<span class="w"> </span>neo4j-operator-system
 </span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>
 </span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="c1"># kubectl-apply install — Method 3</span>
-</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>-f<span class="w"> </span>https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases/download/v1.10.0/neo4j-kubernetes-operator-complete.yaml
+</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>-f<span class="w"> </span>https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases/download/v1.10.2/neo4j-kubernetes-operator-complete.yaml
 </span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a>
 </span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="c1"># git-clone + make install — Method 5</span>
 </span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a>make<span class="w"> </span>undeploy-prod<span class="w">   </span><span class="c1"># or undeploy-dev</span>

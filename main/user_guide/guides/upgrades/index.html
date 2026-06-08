@@ -2609,9 +2609,14 @@
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">spec</span><span class="p">:</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="nt">upgradeStrategy</span><span class="p">:</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">    </span><span class="nt">strategy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">RollingUpgrade</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">    </span><span class="nt">upgradeTimeout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30m</span><span class="w">      </span><span class="c1"># per-pod Kubernetes readiness timeout (default 30m)</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">    </span><span class="nt">healthCheckTimeout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5m</span><span class="w">   </span><span class="c1"># per-pod Neo4j cluster-membership timeout (default 5m)</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">    </span><span class="nt">preUpgradeHealthCheck</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">   </span><span class="c1"># validate cluster health before upgrading (default true)</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">    </span><span class="nt">autoPauseOnFailure</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">      </span><span class="c1"># pause the upgrade for manual intervention if a check fails (default true)</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">    </span><span class="nt">upgradeTimeout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30m</span><span class="w">           </span><span class="c1"># per-pod Kubernetes readiness timeout (default 30m)</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">    </span><span class="nt">healthCheckTimeout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5m</span><span class="w">        </span><span class="c1"># per-pod Neo4j cluster-membership timeout (default 5m)</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">    </span><span class="nt">stabilizationTimeout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3m</span><span class="w">      </span><span class="c1"># post-upgrade cluster-stabilization wait (default 3m)</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">    </span><span class="nt">postUpgradeHealthCheck</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">  </span><span class="c1"># validate cluster health after upgrade (default true)</span>
 </span></code></pre></div>
+<p>When <code>preUpgradeHealthCheck</code> is enabled, the operator verifies connectivity to Neo4j before changing the image. If the check fails and <code>autoPauseOnFailure</code> is <code>true</code>, the upgrade is blocked until you intervene rather than proceeding against an unhealthy deployment.</p>
 <p>For the full field reference see the <a href="../../../api_reference/neo4jenterprisecluster/">API Reference</a>.</p>
 <h2 id="supported-upgrade-paths">Supported Upgrade Paths<a class="headerlink" href="#supported-upgrade-paths" title="Anchor link to this section">&para;</a></h2>
 <table>
@@ -2629,13 +2634,13 @@
 <td>✅</td>
 </tr>
 <tr>
-<td>SemVer 5.x</td>
-<td>CalVer 2025.y</td>
-<td>✅</td>
+<td>SemVer 5.26.x</td>
+<td>CalVer 2025.y / 2026.y</td>
+<td>✅ (only 5.26.x — the last SemVer LTS — may cross to CalVer)</td>
 </tr>
 <tr>
 <td>CalVer 2025.x</td>
-<td>CalVer 2025.y (y &gt; x)</td>
+<td>CalVer 2025.y / 2026.y (newer minor, patch, or year)</td>
 <td>✅</td>
 </tr>
 <tr>

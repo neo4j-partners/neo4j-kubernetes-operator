@@ -3118,8 +3118,8 @@
 </tr>
 </tbody>
 </table>
-<p><strong>Two CRDs, one design rule:</strong> privileges live on <code>Neo4jRole</code>, not on <code>Neo4jUser</code>. Putting privileges on users would re-implement Neo4j's RBAC inside-out and create merge conflicts when two CRs touch the same role. Always model "what can be done" as a role and "who can do it" as a user-to-role binding.</p>
-<p>Both CRDs are <strong>namespace-scoped</strong> and reference their target Neo4j cluster via <code>spec.clusterRef</code> (must be in the same namespace). See <a href="#cluster-vs-namespace-scope">Cluster vs namespace scope</a> below for the design rationale.</p>
+<p><strong>Three CRDs, one design rule:</strong> privileges live on <code>Neo4jRole</code>, not on <code>Neo4jUser</code> or <code>Neo4jRoleBinding</code>. Putting privileges on users would re-implement Neo4j's RBAC inside-out and create merge conflicts when two CRs touch the same role. Always model "what can be done" as a role and "who can do it" as a user-to-role binding.</p>
+<p>All three CRDs are <strong>namespace-scoped</strong> and reference their target Neo4j cluster via <code>spec.clusterRef</code> (must be in the same namespace). See <a href="#cluster-vs-namespace-scope">Cluster vs namespace scope</a> below for the design rationale.</p>
 <h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Anchor link to this section">&para;</a></h2>
 <ul>
 <li>A <code>Neo4jEnterpriseCluster</code> or <code>Neo4jEnterpriseStandalone</code> in <code>Ready</code> phase.</li>
@@ -3217,7 +3217,7 @@
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">spec</span><span class="p">:</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="nt">accountStatus</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">suspended</span>
 </span></code></pre></div>
-<p>For native users this revokes all role assignments client-side; reactivating restores them.</p>
+<p>The operator issues <code>ALTER USER ... SET STATUS SUSPENDED</code>; the user can no longer authenticate. Role grants in <code>spec.roles</code> continue to be reconciled (they are not revoked). Setting <code>accountStatus: active</code> issues <code>SET STATUS ACTIVE</code> and the user can authenticate again.</p>
 <h3 id="setting-a-home-database">Setting a home database<a class="headerlink" href="#setting-a-home-database" title="Anchor link to this section">&para;</a></h3>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">spec</span><span class="p">:</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">homeDatabase</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">analytics</span>
@@ -3473,7 +3473,7 @@
 </table>
 <p>The user controller watches <code>Neo4jRole</code> resources and re-reconciles bound users when a role is created or updated. You don't need to apply CRs in any particular order — the operator converges.</p>
 <h2 id="cluster-vs-namespace-scope">Cluster vs namespace scope<a class="headerlink" href="#cluster-vs-namespace-scope" title="Anchor link to this section">&para;</a></h2>
-<p>Both CRDs are <strong>namespace-scoped</strong> with same-namespace <code>clusterRef</code> only. This matches the existing pattern of <code>Neo4jDatabase</code>, <code>Neo4jBackup</code>, <code>Neo4jPlugin</code>. It means:</p>
+<p>All three CRDs are <strong>namespace-scoped</strong> with same-namespace <code>clusterRef</code> only. This matches the existing pattern of <code>Neo4jDatabase</code>, <code>Neo4jBackup</code>, <code>Neo4jPlugin</code>. It means:</p>
 <ul>
 <li>A team that owns a namespace owns its Neo4j cluster, users, and roles.</li>
 <li>Standard <code>Role</code> + <code>RoleBinding</code> patterns apply — no <code>ClusterRole</code> required.</li>

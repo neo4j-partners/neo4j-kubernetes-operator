@@ -4037,21 +4037,21 @@
 
 
 <h1 id="testing-guide">Testing Guide<a class="headerlink" href="#testing-guide" title="Anchor link to this section">&para;</a></h1>
-<p>This guide explains the comprehensive testing strategy for the Neo4j Enterprise Operator, covering unit tests, integration tests, and end-to-end testing practices.</p>
+<p>This guide explains the comprehensive testing strategy for the Neo4j Enterprise Operator, covering unit tests and integration tests.</p>
 <h2 id="testing-strategy-overview">Testing Strategy Overview<a class="headerlink" href="#testing-strategy-overview" title="Anchor link to this section">&para;</a></h2>
 <p>The operator uses a multi-layered testing approach:</p>
 <ul>
-<li><strong>Unit Tests</strong>: Fast tests for individual functions and components</li>
-<li><strong>Integration Tests</strong>: Full workflow testing with Kubernetes API server</li>
-<li><strong>End-to-End Tests</strong>: Real cluster testing with Kind clusters</li>
+<li><strong>Unit Tests</strong>: Fast tests for individual functions and components (envtest for the controller suite, no cluster otherwise)</li>
+<li><strong>Integration Tests</strong>: Full workflow testing against a real Kind cluster with the operator deployed</li>
 <li><strong>Performance Tests</strong>: Reconciliation efficiency and resource usage validation</li>
 </ul>
+<p>(There is no separate end-to-end suite — the dedicated E2E targets were removed; integration tests against Kind cover real-cluster behavior.)</p>
 <h2 id="test-infrastructure">Test Infrastructure<a class="headerlink" href="#test-infrastructure" title="Anchor link to this section">&para;</a></h2>
 <h3 id="testing-framework">Testing Framework<a class="headerlink" href="#testing-framework" title="Anchor link to this section">&para;</a></h3>
 <ul>
 <li><strong>Ginkgo/Gomega</strong>: BDD-style testing framework for integration tests</li>
-<li><strong>Envtest</strong>: Kubernetes API server for integration testing</li>
-<li><strong>Kind</strong>: Kubernetes in Docker for real cluster testing</li>
+<li><strong>Envtest</strong>: Kubernetes API server for the unit-level controller suite (<code>internal/controller/</code>)</li>
+<li><strong>Kind</strong>: Kubernetes in Docker — the only supported cluster for integration tests (no minikube/k3s)</li>
 <li><strong>Go Testing</strong>: Standard Go testing for unit tests</li>
 </ul>
 <h3 id="test-environments">Test Environments<a class="headerlink" href="#test-environments" title="Anchor link to this section">&para;</a></h3>
@@ -4118,7 +4118,7 @@
 </span><span id="__span-2-26"><a id="__codelineno-2-26" name="__codelineno-2-26" href="#__codelineno-2-26"></a><span class="p">}</span>
 </span></code></pre></div>
 <h2 id="integration-tests">Integration Tests<a class="headerlink" href="#integration-tests" title="Anchor link to this section">&para;</a></h2>
-<p>Integration tests use envtest to provide a real Kubernetes API server without requiring a full cluster.</p>
+<p>Integration tests run against a real Kind cluster with the operator deployed. The suite connects to an existing cluster (<code>ctrl.GetConfig()</code>) rather than spinning up envtest — <code>make test-integration</code> creates the <code>neo4j-operator-test</code> cluster, builds and loads the operator image, and deploys it in production mode to <code>neo4j-operator-system</code> before running the Ginkgo suite. (Envtest is used only by the unit-level controller suite under <code>internal/controller/</code>.)</p>
 <h3 id="test-cluster-management">Test Cluster Management<a class="headerlink" href="#test-cluster-management" title="Anchor link to this section">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Create test cluster (includes cert-manager for TLS tests)</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>make<span class="w"> </span>test-cluster
@@ -4363,13 +4363,14 @@ sidecar. Tests verify the Job spawned by a <code>Neo4jBackup</code> CR:</p>
 <div class="language-go highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1">// Cluster naming</span>
 </span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="nx">clusterName</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="s">&quot;test-cluster-&quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nx">unique</span><span class="o">-</span><span class="nx">suffix</span>
 </span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>
-</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="c1">// Expected StatefulSet names (server-based architecture)</span>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="c1">// Expected StatefulSet name (server-based architecture)</span>
 </span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="nx">expectedServerSts</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">clusterName</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="s">&quot;-server&quot;</span>
-</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="nx">expectedBackupSts</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">clusterName</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="s">&quot;-backup&quot;</span>
-</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a>
-</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="c1">// Standalone naming</span>
-</span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a><span class="nx">standaloneName</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="s">&quot;test-standalone-&quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nx">unique</span><span class="o">-</span><span class="nx">suffix</span>
-</span><span id="__span-16-10"><a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a><span class="nx">expectedStandaloneSts</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">standaloneName</span><span class="w">  </span><span class="c1">// No suffix for standalone</span>
+</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="c1">// NOTE: there is no centralized backup StatefulSet — backups are Job-per-Neo4jBackup-CR</span>
+</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="c1">// (one-shot Job name = &lt;backup&gt;-backup). The legacy &lt;cluster&gt;-backup StatefulSet was removed.</span>
+</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a>
+</span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a><span class="c1">// Standalone naming</span>
+</span><span id="__span-16-10"><a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a><span class="nx">standaloneName</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="s">&quot;test-standalone-&quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nx">unique</span><span class="o">-</span><span class="nx">suffix</span>
+</span><span id="__span-16-11"><a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a><span class="nx">expectedStandaloneSts</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">standaloneName</span><span class="w">  </span><span class="c1">// No suffix for standalone</span>
 </span></code></pre></div>
 <h3 id="memory-requirements">Memory Requirements<a class="headerlink" href="#memory-requirements" title="Anchor link to this section">&para;</a></h3>
 <p><strong>Critical for Neo4j Enterprise</strong>: Tests must allocate sufficient memory:</p>
@@ -4522,7 +4523,6 @@ sidecar. Tests verify the Job spawned by a <code>Neo4jBackup</code> CR:</p>
 <ul>
 <li><strong>Unit Tests</strong>: &gt;80% coverage for controller logic</li>
 <li><strong>Integration Tests</strong>: All major workflows covered</li>
-<li><strong>E2E Tests</strong>: Critical user journeys verified</li>
 </ul>
 <h3 id="quality-checks">Quality Checks<a class="headerlink" href="#quality-checks" title="Anchor link to this section">&para;</a></h3>
 <p>Integration tests should verify:

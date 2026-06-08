@@ -3379,30 +3379,32 @@
 <p>The operator includes comprehensive split-brain detection that runs automatically during cluster health checks.</p>
 <h3 id="detection-process">Detection Process<a class="headerlink" href="#detection-process" title="Anchor link to this section">&para;</a></h3>
 <ol>
-<li><strong>Multi-Pod Analysis</strong>: Connects to each server pod individually</li>
+<li><strong>Multi-Pod Analysis</strong>: Connects to each server pod individually over Bolt and runs <code>SHOW SERVERS</code></li>
 <li><strong>Cluster View Comparison</strong>: Compares each server's view of cluster membership</li>
-<li><strong>Inconsistency Detection</strong>: Identifies servers with conflicting cluster views</li>
-<li><strong>Automatic Repair</strong>: Restarts orphaned pods to rejoin the main cluster</li>
+<li><strong>Inconsistency Detection</strong>: Identifies pods that see servers outside the majority (largest) view</li>
+<li><strong>Automatic Repair</strong>: Restarts those orphaned/minority pods to rejoin the main cluster</li>
 </ol>
+<p>Detection is <strong>skipped</strong> for single-server clusters (a single node cannot split-brain) and while the cluster has not yet reached <code>status.phase=Ready</code> (divergent views during initial formation are expected, not split-brain).</p>
 <h3 id="detection-logs">Detection Logs<a class="headerlink" href="#detection-logs" title="Anchor link to this section">&para;</a></h3>
 <p>Monitor operator logs for split-brain detection:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Check for split-brain detection logs</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>neo4j-operator-system<span class="w"> </span>deployment/neo4j-operator-controller-manager<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span><span class="s2">&quot;split.*brain&quot;</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="c1"># Expected detection logs:</span>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="c1"># Starting split-brain detection for cluster production-cluster, expectedServers: 3</span>
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="c1"># Split-brain analysis results: isSplitBrain: true, orphanedPods: 1, repairAction: RestartPods</span>
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="c1"># Split-brain automatically repaired by restarting orphaned pods: [production-cluster-server-2]</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="c1"># Starting split-brain detection   cluster=production-cluster expectedServers=3</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="c1"># Split-brain analysis complete    isSplitBrain=true repairAction=restart_pods orphanedPods=1</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="c1"># Restarting orphaned pods to repair split-brain   pods=[production-cluster-server-2]</span>
 </span></code></pre></div>
 <h3 id="kubernetes-events">Kubernetes Events<a class="headerlink" href="#kubernetes-events" title="Anchor link to this section">&para;</a></h3>
 <p>The operator generates events for split-brain scenarios:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Check for split-brain events</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>events<span class="w"> </span>--field-selector<span class="w"> </span><span class="nv">reason</span><span class="o">=</span>SplitBrainDetected
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>kubectl<span class="w"> </span>get<span class="w"> </span>events<span class="w"> </span>--field-selector<span class="w"> </span><span class="nv">reason</span><span class="o">=</span>SplitBrainRepaired
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="c1"># Example events:</span>
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="c1"># Warning   SplitBrainDetected   Neo4jEnterpriseCluster/production-cluster   Split-brain detected: 1 orphaned servers</span>
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="c1"># Normal    SplitBrainRepaired   Neo4jEnterpriseCluster/production-cluster   Split-brain repaired: restarted orphaned pods</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>kubectl<span class="w"> </span>get<span class="w"> </span>events<span class="w"> </span>--field-selector<span class="w"> </span><span class="nv">reason</span><span class="o">=</span>SplitBrainRepairFailed<span class="w">   </span><span class="c1"># manual intervention needed</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="c1"># Example events:</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="c1"># Warning   SplitBrainDetected   Neo4jEnterpriseCluster/production-cluster   Split-brain detected: 2 cluster groups found, 1 orphaned pods</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="c1"># Normal    SplitBrainRepaired   Neo4jEnterpriseCluster/production-cluster   Split-brain automatically repaired by restarting orphaned pods</span>
 </span></code></pre></div>
 <h2 id="manual-split-brain-detection">Manual Split-Brain Detection<a class="headerlink" href="#manual-split-brain-detection" title="Anchor link to this section">&para;</a></h2>
 <h3 id="verify-cluster-health">Verify Cluster Health<a class="headerlink" href="#verify-cluster-health" title="Anchor link to this section">&para;</a></h3>

@@ -2606,7 +2606,7 @@ kubectl get rolebinding neo4j-backup-rolebinding</p>
 <h4 id="symptom-backup-job-starts-but-fails-during-execution">Symptom: Backup job starts but fails during execution<a class="headerlink" href="#symptom-backup-job-starts-but-fails-during-execution" title="Anchor link to this section">&para;</a></h4>
 <p><strong>Diagnosis:</strong>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Check backup Job&#39;s Pod log (one-shot: &lt;neo4jbackup-name&gt;-backup;</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="c1"># CronJob child: &lt;neo4jbackup-name&gt;-&lt;unix-seconds&gt;).</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="c1"># CronJob child: &lt;neo4jbackup-name&gt;-backup-cron-&lt;unix-seconds&gt;).</span>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>&lt;ns&gt;<span class="w"> </span>job/&lt;job-name&gt;
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
 </span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="c1"># Check Neo4j server logs for backup-related errors (which server</span>
@@ -2787,8 +2787,8 @@ kubectl get rolebinding neo4j-backup-rolebinding</p>
 </ol>
 <h4 id="symptom-restore-job-fails-during-execution">Symptom: Restore job fails during execution<a class="headerlink" href="#symptom-restore-job-fails-during-execution" title="Anchor link to this section">&para;</a></h4>
 <p><strong>Diagnosis:</strong>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># Check restore job logs</span>
-</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>job/production-restore-<span class="k">$(</span>date<span class="w"> </span>+%Y%m%d<span class="k">)</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># Check restore job logs (standalone restore Job name: &lt;neo4jrestore-name&gt;-restore)</span>
+</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>job/production-restore-restore
 </span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>
 </span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a><span class="c1"># Check target cluster logs during restore</span>
 </span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>target-cluster-server-0<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span>restore
@@ -2805,10 +2805,12 @@ kubectl get rolebinding neo4j-backup-rolebinding</p>
 </li>
 <li>
 <p><strong>Database Already Exists</strong>:
-   <div class="language-yaml highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="c1"># Use force option to overwrite</span>
-</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="w">  </span><span class="nt">options</span><span class="p">:</span>
-</span><span id="__span-23-4"><a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a><span class="w">    </span><span class="nt">force</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+   <div class="language-yaml highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="c1"># Overwrite the existing same-named database. Use either the</span>
+</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="c1"># option-level replaceExisting flag or the top-level force flag.</span>
+</span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="nt">spec</span><span class="p">:</span>
+</span><span id="__span-23-4"><a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a><span class="w">  </span><span class="nt">force</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">              </span><span class="c1"># top-level; adds --overwrite-destination=true</span>
+</span><span id="__span-23-5"><a id="__codelineno-23-5" name="__codelineno-23-5" href="#__codelineno-23-5"></a><span class="w">  </span><span class="nt">options</span><span class="p">:</span>
+</span><span id="__span-23-6"><a id="__codelineno-23-6" name="__codelineno-23-6" href="#__codelineno-23-6"></a><span class="w">    </span><span class="nt">replaceExisting</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">  </span><span class="c1"># equivalent option-level flag</span>
 </span></code></pre></div></p>
 </li>
 <li>
@@ -2850,23 +2852,27 @@ kubectl get rolebinding neo4j-backup-rolebinding</p>
 </span></code></pre></div>
 <p>See <a href="../../property_sharding/">Property Sharding</a> for details.</p>
 <h3 id="point-in-time-recovery-pitr-issues">Point-in-Time Recovery (PITR) Issues<a class="headerlink" href="#point-in-time-recovery-pitr-issues" title="Anchor link to this section">&para;</a></h3>
+<p>PITR via <code>Neo4jRestore</code> (<code>source.type: pitr</code>) runs the <code>neo4j-admin database restore --restore-until=…</code> Job and is supported <strong>only for <code>Neo4jEnterpriseStandalone</code> targets</strong>. For cluster point-in-time recovery, create a <code>Neo4jDatabase</code> with <code>spec.seedConfig.restoreUntil</code> instead — a <code>Neo4jRestore</code> with <code>source.type: pitr</code> pointing at a cluster <code>clusterRef</code> is rejected by the validator.</p>
+<h4 id="symptom-pitr-restore-rejected-for-a-cluster-target">Symptom: PITR restore rejected for a cluster target<a class="headerlink" href="#symptom-pitr-restore-rejected-for-a-cluster-target" title="Anchor link to this section">&para;</a></h4>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a>source.type=pitr is not supported for cluster targets … For cluster
+</span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a>point-in-time recovery, create a Neo4jDatabase with spec.seedConfig.restoreUntil instead
+</span></code></pre></div>
+<p><strong>Fix:</strong> use the <code>Neo4jDatabase</code> seed-config path for clusters; reserve <code>Neo4jRestore</code> PITR for standalone.</p>
 <h4 id="symptom-pitr-restore-fails-with-timestamp-errors">Symptom: PITR restore fails with timestamp errors<a class="headerlink" href="#symptom-pitr-restore-fails-with-timestamp-errors" title="Anchor link to this section">&para;</a></h4>
-<p><strong>Diagnosis:</strong>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="c1"># Check backup logs for transaction timestamps</span>
-</span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>job/production-backup-latest<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span><span class="s2">&quot;restore-until&quot;</span>
-</span><span id="__span-28-3"><a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a>
-</span><span id="__span-28-4"><a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a><span class="c1"># Verify PITR capability</span>
-</span><span id="__span-28-5"><a id="__codelineno-28-5" name="__codelineno-28-5" href="#__codelineno-28-5"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>production-cluster-server-0<span class="w"> </span>--<span class="w"> </span>neo4j-admin<span class="w"> </span>database<span class="w"> </span>info<span class="w"> </span>system
-</span></code></pre></div></p>
 <p><strong>Solutions:</strong></p>
 <ol>
 <li>
-<p><strong>Invalid Timestamp Format</strong>:
-   <div class="language-yaml highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="c1"># Correct ISO 8601 format</span>
-</span><span id="__span-29-2"><a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-29-3"><a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a><span class="w">  </span><span class="nt">restoreUntil</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;2025-01-15T14:30:00Z&quot;</span>
-</span><span id="__span-29-4"><a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a><span class="w">  </span><span class="c1"># NOT: &quot;2025-01-15 14:30:00&quot;</span>
-</span></code></pre></div></p>
+<p><strong>Missing PITR source config</strong>: <code>source.type: pitr</code> requires <code>source.pitr.baseBackup</code> or <code>source.pointInTime</code> (or both):
+   <div class="language-yaml highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="nt">spec</span><span class="p">:</span>
+</span><span id="__span-29-2"><a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="w">  </span><span class="nt">source</span><span class="p">:</span>
+</span><span id="__span-29-3"><a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pitr</span>
+</span><span id="__span-29-4"><a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a><span class="w">    </span><span class="nt">pointInTime</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;2025-01-15T14:30:00Z&quot;</span><span class="w">   </span><span class="c1"># ISO 8601 (metav1.Time)</span>
+</span><span id="__span-29-5"><a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a><span class="w">    </span><span class="nt">pitr</span><span class="p">:</span>
+</span><span id="__span-29-6"><a id="__codelineno-29-6" name="__codelineno-29-6" href="#__codelineno-29-6"></a><span class="w">      </span><span class="nt">baseBackup</span><span class="p">:</span>
+</span><span id="__span-29-7"><a id="__codelineno-29-7" name="__codelineno-29-7" href="#__codelineno-29-7"></a><span class="w">        </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">backup</span>
+</span><span id="__span-29-8"><a id="__codelineno-29-8" name="__codelineno-29-8" href="#__codelineno-29-8"></a><span class="w">        </span><span class="nt">backupRef</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">production-backup</span>
+</span></code></pre></div>
+   The operator renders <code>pointInTime</code> into <code>neo4j-admin database restore --restore-until="2025-01-15 14:30:00"</code>.</p>
 </li>
 <li>
 <p><strong>Timestamp Outside Backup Range</strong>:
@@ -3000,7 +3006,7 @@ kubectl get rolebinding neo4j-backup-rolebinding</p>
 </span><span id="__span-38-26"><a id="__codelineno-38-26" name="__codelineno-38-26" href="#__codelineno-38-26"></a>validate_backup
 </span></code></pre></div></p>
 <h2 id="emergency-recovery">Emergency Recovery<a class="headerlink" href="#emergency-recovery" title="Anchor link to this section">&para;</a></h2>
-<p>For full disaster recovery (corrupted primary, restore to a new cluster from latest backup), follow the standard restore flow in the <a href="../../guides/backup_restore/#restore-operations">Backup &amp; Restore guide § Restore Operations</a>. The normal <code>Neo4jRestore</code> CR with <code>source.type: backup</code> + <code>clusterRef</code> pointing at a fresh cluster IS the emergency procedure — there's no separate path. Use <code>force: true</code> to overwrite existing data, and <code>source.type: pitr</code> with <code>pointInTime</code> if you need to roll back to a specific timestamp before the corruption.</p>
+<p>For full disaster recovery (corrupted primary, restore to a new cluster from latest backup), follow the standard restore flow in the <a href="../../guides/backup_restore/#restore-operations">Backup &amp; Restore guide § Restore Operations</a>. The normal <code>Neo4jRestore</code> CR with <code>source.type: backup</code> + <code>clusterRef</code> pointing at a fresh cluster IS the emergency procedure — there's no separate path. Use <code>spec.force: true</code> (top-level) to overwrite existing data. To roll back to a specific timestamp before the corruption: on a standalone target use <code>Neo4jRestore</code> with <code>source.type: pitr</code> and <code>source.pointInTime</code>; on a cluster target use a <code>Neo4jDatabase</code> with <code>spec.seedConfig.restoreUntil</code> (cluster <code>Neo4jRestore</code> PITR is rejected — see <a href="#point-in-time-recovery-pitr-issues">PITR Issues</a>).</p>
 <h2 id="see-also">See Also<a class="headerlink" href="#see-also" title="Anchor link to this section">&para;</a></h2>
 <ul>
 <li><a href="../../guides/backup_restore/">Backup &amp; Restore Guide</a></li>

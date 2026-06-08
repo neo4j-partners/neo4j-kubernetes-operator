@@ -4736,9 +4736,14 @@ gap #2 (backup port exposure) without hand-rolled YAML:</p>
 <td>Bolt — application clients</td>
 </tr>
 <tr>
+<td>2004</td>
+<td>any pod</td>
+<td>Prometheus metrics — scrapers</td>
+</tr>
+<tr>
 <td>6000</td>
 <td>pods labelled <code>neo4j.com/cluster: &lt;cluster&gt;</code></td>
-<td>V2 discovery + tcp-tx — peers only</td>
+<td>V2 discovery — peers only</td>
 </tr>
 <tr>
 <td>7000</td>
@@ -4749,6 +4754,11 @@ gap #2 (backup port exposure) without hand-rolled YAML:</p>
 <td>7688</td>
 <td>pods labelled <code>neo4j.com/cluster: &lt;cluster&gt;</code></td>
 <td>Cluster routing — peers only</td>
+</tr>
+<tr>
+<td>7689</td>
+<td>pods labelled <code>neo4j.com/cluster: &lt;cluster&gt;</code></td>
+<td>Transaction streaming / catchup — peers only</td>
 </tr>
 <tr>
 <td>6362</td>
@@ -5260,7 +5270,7 @@ Prometheus + Grafana stack.</p>
 <li><strong>Retention</strong> — <code>db.transaction.logs.rotation.retention_policy</code> and <code>db.logs.query.*</code> via <code>spec.config</code>. Backup retention is governed by <code>Neo4jBackup.spec.retention</code>.</li>
 </ul>
 <blockquote>
-<p><strong>TLS version pinning is not user-configurable.</strong> The operator owns the <code>dbms.ssl.policy.*</code> surface end-to-end (the validator rejects any <code>dbms.ssl.policy.*</code> key in <code>spec.config</code>). The cluster policy is emitted with <code>tls_versions=TLSv1.3,TLSv1.2</code>; bolt/https policies inherit Neo4j defaults. For TLS 1.3-only or custom cipher allowlists, file an issue — there is no override today.</p>
+<p><strong>TLS version pinning is not user-configurable.</strong> The operator owns the <code>dbms.ssl.policy.*</code> surface end-to-end (the validator rejects any <code>dbms.ssl.policy.*</code> key in <code>spec.config</code>). All three policies (bolt, https, cluster) are emitted with <code>tls_versions=TLSv1.3,TLSv1.2</code>. For TLS 1.3-only or custom cipher allowlists, file an issue — there is no override today.</p>
 </blockquote>
 <h2 id="conformance-policies-kyverno">Conformance Policies (Kyverno)<a class="headerlink" href="#conformance-policies-kyverno" title="Anchor link to this section">&para;</a></h2>
 <p>A starter pack of <a href="https://kyverno.io/">Kyverno</a> ClusterPolicies that
