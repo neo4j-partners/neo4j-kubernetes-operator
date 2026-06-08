@@ -1876,9 +1876,16 @@ func (r *Neo4jEnterpriseStandaloneReconciler) SetupWithManager(mgr ctrl.Manager)
 		Owns(&corev1.ConfigMap{}).
 		Owns(&networkingv1.Ingress{})
 
-	// Only watch Certificate resources if cert-manager is available
-	// This allows tests to run without cert-manager CRDs
-	if mgr.GetScheme().Recognizes(certmanagerv1.SchemeGroupVersion.WithKind("Certificate")) {
+	// Only watch Certificate resources if cert-manager is actually installed
+	// in the cluster. We check the REST mapper (real CRD presence) rather than
+	// the scheme — the cert-manager types are always registered in the scheme
+	// (cmd/main.go), so a scheme check (`Recognizes`) is always true and would
+	// start a Certificate informer even when the CRD is absent, crashing the
+	// manager at cache-sync. This makes cert-manager an OPTIONAL dependency,
+	// required only for clusters that use cert-manager TLS. Mirrors the Route
+	// guard below.
+	certGVK := certmanagerv1.SchemeGroupVersion.WithKind("Certificate")
+	if _, err := mgr.GetRESTMapper().RESTMapping(certGVK.GroupKind(), certGVK.Version); err == nil {
 		builder = builder.Owns(&certmanagerv1.Certificate{})
 	}
 
