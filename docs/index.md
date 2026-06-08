@@ -109,10 +109,10 @@ For a step-by-step walkthrough, see [Getting Started](user_guide/getting_started
 
 ## Project Status
 
-This operator is alpha software, maintained in a personal capacity by a single
-contributor at Neo4j. It is not an official Neo4j product and is not supported
-by Neo4j, Inc. APIs and behaviour may change between releases. Independent
-validation is required before production use.
+Development of this operator is LLM-driven, not merely LLM-assisted, so expect
+bugs — including subtle, non-obvious ones. Independent validation is required
+before production use. APIs and behaviour may change between releases.
 
-Issues and contributions are welcome at
+Contributors are welcome — real-world usage is what will carry the project
+forward to an acceptable maturity level. Issues and contributions:
 [github.com/priyolahiri/neo4j-kubernetes-operator](https://github.com/priyolahiri/neo4j-kubernetes-operator/issues).

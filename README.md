@@ -10,7 +10,7 @@ A Kubernetes operator for Neo4j Enterprise — declarative clusters, databases, 
 > 📖 **Documentation site**: [priyolahiri.github.io/neo4j-kubernetes-operator](https://priyolahiri.github.io/neo4j-kubernetes-operator/) — searchable, versioned, with a release dropdown. Every link in this README also resolves on the docs site.
 
 > [!WARNING]
-> **Alpha software.** Maintained by a single Neo4j employee in a personal capacity (not an official Neo4j product, not supported by Neo4j Inc.). LLM-assisted development means subtle bugs are possible. Not recommended for production without independent validation. APIs may change between releases. Issues and PRs are best-effort via [GitHub Issues](https://github.com/priyolahiri/neo4j-kubernetes-operator/issues).
+> Development is LLM-driven, not merely LLM-assisted, so expect bugs — including subtle, non-obvious ones. **Independent validation is required before production use.** APIs may change between releases. Contributors are welcome — real-world usage is what will carry the project forward to an acceptable maturity level. Issues and PRs are handled best-effort via [GitHub Issues](https://github.com/priyolahiri/neo4j-kubernetes-operator/issues).
 
 ## Requirements
 
