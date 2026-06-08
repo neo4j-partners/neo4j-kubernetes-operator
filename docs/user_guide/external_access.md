@@ -157,7 +157,7 @@ For **SSO into Neo4j Browser** (login button → IdP redirect), configure one or
 |---|---|
 | `bolt+s://<host>:7687` | Production. CA-signed certificate; the client validates the server cert against the system trust store. |
 | `bolt+ssc://<host>:7687` | Development. Self-signed certificate; the client trusts any presented cert. **Never use in production** — vulnerable to MITM. |
-| `neo4j+s://<host>:7687` | Routing scheme for clusters with CA-signed certificates. The driver discovers cluster members via `dbms.routing.getRoutingTable` and routes writes to the leader. The operator itself uses this scheme internally for admin calls (CLAUDE.md rule 62). |
+| `neo4j+s://<host>:7687` | Routing scheme for clusters with CA-signed certificates. The driver discovers cluster members via `dbms.routing.getRoutingTable` and routes writes to the leader. The operator itself uses this scheme internally for admin calls (CLAUDE.md rule 11). |
 | `neo4j+ssc://<host>:7687` | Routing scheme with self-signed certs. Dev only. |
 
 Plain `bolt://` (no TLS) is **rejected** by Neo4j when the operator has TLS enabled — the connector is configured with `server.bolt.tls_level=REQUIRED`.

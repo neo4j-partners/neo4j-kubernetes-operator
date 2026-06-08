@@ -233,7 +233,7 @@ Don't use `dbms.memory.*` — those keys have been deprecated since Neo4j 5.0.
 
 ### Query log
 
-Neo4j 5.x+ uses the `db.logs.query.*` namespace; the validator warns on the legacy `dbms.logs.query.*` form:
+Neo4j 5.x+ uses the `db.logs.query.*` namespace; the validator rejects the legacy `dbms.logs.query.enabled` form at apply time:
 
 ```yaml
 config:
@@ -250,7 +250,7 @@ TLS is configured via `spec.tls`, not `spec.config`. Setting any of the followin
 - `dbms.ssl.policy.{bolt,https,cluster}.*` (full SSL policy block is operator-managed)
 - `server.directories.certificates`
 
-The pre-5.x `dbms.connector.{https,bolt}.*` keys are also rejected (`spec.tls` replaces them). Reason: Neo4j runs with `server.config.strict_validation.enabled=false`, so duplicate keys silently override each other; the validator blocks user values that would shadow operator-managed ones. See the [TLS certificates guide](tls_configuration.md) for the full TLS surface.
+The pre-5.x `dbms.connector.{https,bolt}.*` keys are deprecated and superseded by the `server.*` namespace (`spec.tls` replaces the TLS-related ones). Reason for rejecting the keys above: Neo4j runs with `server.config.strict_validation.enabled=false`, so duplicate keys silently override each other; the validator blocks user values that would shadow operator-managed ones. See the [TLS certificates guide](tls_configuration.md) for the full TLS surface.
 
 ### Cluster discovery — operator-managed, off-limits in `spec.config`
 

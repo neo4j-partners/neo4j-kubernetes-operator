@@ -222,6 +222,40 @@ Neo4j does not provide a way to prevent the default `neo4j` database from being 
 
 ## Advanced Configuration
 
+### Server Role Constraints
+
+By default every server can host databases in either primary or secondary mode (`NONE`). You can optionally constrain server roles to influence how Neo4j allocates database instances — for example, dedicating some servers to secondary (read-replica) duty.
+
+**Cluster-wide constraint** — `spec.topology.serverModeConstraint` applies to all servers. Valid values: `NONE` (default), `PRIMARY`, `SECONDARY`.
+
+```yaml
+spec:
+  topology:
+    servers: 3
+    serverModeConstraint: PRIMARY  # all servers only host primaries
+```
+
+**Per-server constraints** — `spec.topology.serverRoles[]` overrides `serverModeConstraint` for the named servers. Each entry has a `serverIndex` (0-based) and a `modeConstraint` (`NONE`, `PRIMARY`, or `SECONDARY`):
+
+```yaml
+spec:
+  topology:
+    servers: 3
+    serverModeConstraint: NONE
+    serverRoles:
+      - serverIndex: 0
+        modeConstraint: PRIMARY    # server-0 only hosts primaries
+      - serverIndex: 1
+        modeConstraint: SECONDARY  # server-1 only hosts secondaries
+      - serverIndex: 2
+        modeConstraint: NONE       # server-2 can host either mode
+```
+
+**Validation rules** (enforced by the controller, not a webhook):
+- `servers` must be between 2 and 100 (the 100 cap is an operator safety rail, not a Neo4j limit; realistic deployments rarely exceed ~10).
+- Each `serverRoles[].serverIndex` must be in the range `[0, servers-1]`.
+- `serverRoles[].serverIndex` values must be unique (no duplicates).
+- You cannot constrain **all** servers to `SECONDARY` — at least one server must be able to host primaries.
 
 ### Multi-Zone Deployment
 

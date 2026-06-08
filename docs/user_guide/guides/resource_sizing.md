@@ -59,7 +59,7 @@ spec:
 
 ### How the Operator Uses Resources
 
-1. **Validation**: Ensures minimum 1Gi memory for Neo4j Enterprise
+1. **Validation**: Ensures minimum 1Gi memory for Neo4j Enterprise (clusters over 3 servers require at least 2Gi/server)
 2. **Auto-calculation**: Divides memory between heap, page cache, and OS
 3. **Recommendations**: Suggests optimal settings based on cluster size
 4. **Prevention**: Blocks configurations that would cause OOM errors
@@ -101,7 +101,7 @@ spec:
       memory: "1Gi"    # Same as requests
       cpu: "1"         # Allow CPU burst
 
-  # Neo4j auto-configures: ~400MB heap, ~400MB cache
+  # Neo4j auto-configures: ~512MB heap (50%), ~256MB cache (25%), 256MB reserved
 ```
 
 ### Small Production (< 100GB data, < 100 concurrent users)
@@ -125,7 +125,7 @@ spec:
       memory: "4Gi"    # No overcommit
       cpu: "2"         # 2x burst capacity
 
-  # Neo4j auto-configures: ~2GB heap, ~1.5GB cache
+  # Neo4j auto-configures (>=4Gi): ~2.4GB heap (60%), ~1.2GB cache (30%), 512MB reserved
 ```
 
 ### Medium Production (100GB-1TB data, 100-1000 users)
@@ -184,7 +184,7 @@ spec:
     server.memory.pagecache.size: "6G"
 
     # Performance tuning (Neo4j 5.26+ settings)
-    server.memory.transaction.total.max: "2G"
+    dbms.memory.transaction.total.max: "2G"
     server.bolt.thread_pool_max_size: "400"
 ```
 
@@ -219,7 +219,7 @@ spec:
     # Leaves 1GB (8%) for OS
 
     # Transaction memory limits (Neo4j recommended)
-    server.memory.transaction.total.max: "1G"        # Global transaction memory limit
+    dbms.memory.transaction.total.max: "1G"        # Global transaction memory limit
     db.memory.transaction.total.max: "512M"        # Per-database limit
     db.memory.transaction.max: "256M"              # Per-transaction limit
 
@@ -305,7 +305,7 @@ spec:
     # Query optimization
     dbms.cypher.runtime: "pipelined"
     dbms.cypher.planner: "cost"
-    server.memory.transaction.total.max: "4G"
+    dbms.memory.transaction.total.max: "4G"
 
     # Parallelism
     dbms.threads.worker_count: "16"
@@ -338,14 +338,14 @@ spec:
     server.memory.heap.max_size: "6G"      # 37% for processing
     server.memory.pagecache.size: "9G"     # 56% for write caching
 
-    # Write optimization
-    dbms.checkpoint.interval.time: "30m"
-    dbms.checkpoint.interval.tx: "1000000"
-    dbms.checkpoint.interval.volume: "1GB"
+    # Write optimization (Neo4j 5.x+ uses the db.* namespace)
+    db.checkpoint.interval.time: "30m"
+    db.checkpoint.interval.tx: "1000000"
+    db.checkpoint.interval.volume: "1GB"
 
     # Transaction log
-    dbms.tx_log.rotation.retention_policy: "1G size"
-    dbms.tx_log.rotation.size: "256M"
+    db.tx_log.rotation.retention_policy: "1G size"
+    db.tx_log.rotation.size: "256M"
 ```
 
 ### Vector Index Workloads (Neo4j 2025.x)
@@ -375,7 +375,7 @@ spec:
     # Leaves 6GB for OS-managed vector index memory
 
     # Transaction memory for complex vector queries
-    server.memory.transaction.total.max: "2G"
+    dbms.memory.transaction.total.max: "2G"
 
     # Vector-specific optimizations
     dbms.cypher.runtime: "parallel"  # For vector operations
@@ -495,11 +495,10 @@ config:
 
 **8Gi Container Memory:**
 ```yaml
-# Automatic calculation:
-System Reserved: 1Gi (12.5%)
-Available: 7Gi
-├── Heap: 3.85Gi (55% of available)
-└── Page Cache: 3.15Gi (45% of available)
+# Automatic calculation (containers >= 4Gi use the 5.26+ high-memory split):
+System Reserved: 512MB
+├── Heap: 4.8Gi (60% of container memory)
+└── Page Cache: 2.4Gi (30% of container memory)
 
 # Manual override:
 config:
@@ -782,7 +781,7 @@ The operator enforces these rules:
 | Heap Size | 256MB | 2Gi+ | 31Gi (JVM limit) |
 | Page Cache | 128MB | 1Gi+ | Container - heap - 1Gi |
 | CPU | 100m | 1 core+ | Node capacity |
-| Servers (cluster) | 2 | 3+ | 20 |
+| Servers (cluster) | 2 | 3+ | 100 |
 
 ## Advanced Topics
 
