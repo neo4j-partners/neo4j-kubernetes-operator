@@ -2258,17 +2258,6 @@
   
 </li>
         
-          <li class="md-nav__item">
-  <a href="#encryptionspec" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        EncryptionSpec
-      
-    </span>
-  </a>
-  
-</li>
-        
       </ul>
     </nav>
   
@@ -2899,17 +2888,6 @@
     <span class="md-ellipsis">
       
         TempStorageSpec
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#encryptionspec" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        EncryptionSpec
       
     </span>
   </a>
@@ -3593,12 +3571,6 @@
 <td>Page cache size hint (e.g., <code>"4G"</code>). Must match pattern <code>^[0-9]+[KMG]?$</code></td>
 </tr>
 <tr>
-<td><code>encryption</code></td>
-<td><a href="#encryptionspec"><code>*EncryptionSpec</code></a></td>
-<td>❌</td>
-<td>Backup encryption configuration</td>
-</tr>
-<tr>
 <td><code>verify</code></td>
 <td><code>bool</code></td>
 <td>❌</td>
@@ -3674,44 +3646,6 @@
 <td><code>string</code></td>
 <td>❌</td>
 <td>StorageClass for the temporary PVC. If empty, uses the cluster default.</td>
-</tr>
-</tbody>
-</table>
-<h3 id="encryptionspec">EncryptionSpec<a class="headerlink" href="#encryptionspec" title="Anchor link to this section">&para;</a></h3>
-<p>Backup encryption configuration.</p>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Type</th>
-<th>Required</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>enabled</code></td>
-<td><code>bool</code></td>
-<td>❌</td>
-<td>Enable backup encryption</td>
-</tr>
-<tr>
-<td><code>keySecret</code></td>
-<td><code>string</code></td>
-<td>❌</td>
-<td>Name of a Kubernetes Secret containing the encryption key</td>
-</tr>
-<tr>
-<td><code>keySecretKey</code></td>
-<td><code>string</code></td>
-<td>❌</td>
-<td>Key within the Secret containing the encryption key (default: <code>"key"</code>)</td>
-</tr>
-<tr>
-<td><code>algorithm</code></td>
-<td><code>string</code></td>
-<td>❌</td>
-<td>Encryption algorithm: <code>"AES256"</code> (default) or <code>"ChaCha20Poly1305"</code></td>
 </tr>
 </tbody>
 </table>
@@ -3883,9 +3817,6 @@
 </span><span id="__span-4-30"><a id="__codelineno-4-30" name="__codelineno-4-30" href="#__codelineno-4-30"></a><span class="w">    </span><span class="nt">backupType</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">FULL</span>
 </span><span id="__span-4-31"><a id="__codelineno-4-31" name="__codelineno-4-31" href="#__codelineno-4-31"></a><span class="w">    </span><span class="nt">tempStorage</span><span class="p">:</span>
 </span><span id="__span-4-32"><a id="__codelineno-4-32" name="__codelineno-4-32" href="#__codelineno-4-32"></a><span class="w">      </span><span class="nt">size</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;50Gi&quot;</span>
-</span><span id="__span-4-33"><a id="__codelineno-4-33" name="__codelineno-4-33" href="#__codelineno-4-33"></a><span class="w">    </span><span class="nt">encryption</span><span class="p">:</span>
-</span><span id="__span-4-34"><a id="__codelineno-4-34" name="__codelineno-4-34" href="#__codelineno-4-34"></a><span class="w">      </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-4-35"><a id="__codelineno-4-35" name="__codelineno-4-35" href="#__codelineno-4-35"></a><span class="w">      </span><span class="nt">keySecret</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">backup-encryption-key</span>
 </span></code></pre></div>
 <h3 id="scheduled-s3-backup-with-static-credentials">Scheduled S3 Backup with Static Credentials<a class="headerlink" href="#scheduled-s3-backup-with-static-credentials" title="Anchor link to this section">&para;</a></h3>
 <p>Uses an explicit Kubernetes Secret for AWS credentials instead of IRSA.</p>

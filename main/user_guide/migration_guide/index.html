@@ -820,17 +820,6 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#encryption-algorithm-rename" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Encryption algorithm rename
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#unified-secret-reference-type" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2983,17 +2972,6 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#encryption-algorithm-rename" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Encryption algorithm rename
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#unified-secret-reference-type" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3443,22 +3421,6 @@
 </span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="w">      </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="w">      </span><span class="nt">host</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.apps.example.com</span>
 </span></code></pre></div></p>
-<h3 id="encryption-algorithm-rename">Encryption algorithm rename<a class="headerlink" href="#encryption-algorithm-rename" title="Anchor link to this section">&para;</a></h3>
-<p>If you use backup encryption with ChaCha20, update the algorithm name:</p>
-<table>
-<thead>
-<tr>
-<th>Old Value</th>
-<th>New Value</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>ChaCha20</code></td>
-<td><code>ChaCha20Poly1305</code></td>
-</tr>
-</tbody>
-</table>
 <h3 id="unified-secret-reference-type">Unified secret reference type<a class="headerlink" href="#unified-secret-reference-type" title="Anchor link to this section">&para;</a></h3>
 <p><code>TrustStoreSpec</code>, <code>AuraTokenSecretRef</code>, and <code>KerberosKeytabSpec</code> have been replaced by a single <code>SecretKeyRef</code> type with <code>name</code> and <code>key</code> fields. The JSON structure for <code>AuraFleetManagement.tokenSecretRef</code> is unchanged (fields were already <code>name</code>/<code>key</code>). For <code>trustStore</code> and <code>kerberos.keytab</code>, the <code>secretRef</code> field is now <code>name</code>.</p>
 <h3 id="quick-upgrade-checklist_2">Quick upgrade checklist<a class="headerlink" href="#quick-upgrade-checklist_2" title="Anchor link to this section">&para;</a></h3>
@@ -3469,7 +3431,6 @@
 <li>Search standalone manifests for <code>spec.persistence:</code> and move retention policy to <code>spec.storage.retentionPolicy:</code></li>
 <li>Search for <code>trustStore.secretRef:</code> and rename to <code>trustStore.name:</code></li>
 <li>Search for <code>kerberos.keytab.secretRef:</code> and rename to <code>kerberos.keytab.name:</code></li>
-<li>If using <code>algorithm: ChaCha20</code> in backup encryption, change to <code>algorithm: ChaCha20Poly1305</code></li>
 <li>Apply updated CRDs before deploying the new operator version</li>
 </ol>
 <h2 id="whats-next">What's Next<a class="headerlink" href="#whats-next" title="Anchor link to this section">&para;</a></h2>
