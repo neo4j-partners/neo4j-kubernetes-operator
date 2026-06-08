@@ -181,8 +181,7 @@ spec:
     bucket: my-neo4j-backups
     path: "production/daily"
     cloud:
-      credentialsSecret: s3-backup-credentials
-      region: us-east-1
+      credentialsSecretRef: s3-backup-credentials
 
   # Backup options
   options:
@@ -216,8 +215,7 @@ spec:
     bucket: my-neo4j-backups
     path: "production/weekly"
     cloud:
-      credentialsSecret: s3-backup-credentials
-      region: us-east-1
+      credentialsSecretRef: s3-backup-credentials
 
   options:
     backupType: "FULL"  # Force full backup

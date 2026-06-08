@@ -32,7 +32,6 @@ spec:
     path: production/base
     cloud:
       provider: aws
-      region: us-east-1
       credentialsSecretRef: pitr-aws-credentials
   retention:
     maxAge: "30d"
@@ -97,7 +96,6 @@ spec:
         path: production/logs
         cloud:
           provider: aws
-          region: us-east-1
   options:
     verifyBackup: true
     replaceExisting: true

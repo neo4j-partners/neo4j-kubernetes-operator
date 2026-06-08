@@ -36,7 +36,6 @@ spec:
         path: production/logs
         cloud:
           provider: aws
-          region: us-east-1
   options:
     verifyBackup: true
     replaceExisting: true
@@ -78,7 +77,6 @@ spec:
           path: production/base-backup-20250104
           cloud:
             provider: aws
-            region: us-east-1
         backupPath: /backup/base-backup-20250104
       logStorage:
         type: s3
@@ -86,7 +84,6 @@ spec:
         path: production/logs
         cloud:
           provider: aws
-          region: us-east-1
   options:
     verifyBackup: true
     replaceExisting: true
