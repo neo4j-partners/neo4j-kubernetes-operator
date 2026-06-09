@@ -9,7 +9,7 @@ detailed descriptions in the docs page to avoid drift.
 |---|---|---|
 | **CI** | `ci.yml` | push/PR to `main`/`develop`, manual dispatch |
 | **Integration Tests** | `integration.yml` | PR + push to `main` on runtime paths (core subset, 5.26 + CalVer) |
-| **Extended Integration Tests** | `integration-tests.yml` | nightly; PRs touching cluster/restore/backup controllers or `test/integration/**`; manual dispatch |
+| **Extended Integration Tests** | `integration-tests.yml` | nightly (full); `run-extended` label on a PR (extended-only); manual dispatch (full) |
 | **Release** | `release.yml` | push of a `vX.Y.Z` tag; manual dispatch |
 | **Pages — Docs** | `pages-docs.yml` | push to `main`; push of a `v*` tag; manual dispatch |
 | **Pages — Helm Repo** | `pages-helm.yml` | push of a `v*` tag; manual dispatch |

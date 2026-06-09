@@ -25,21 +25,15 @@ on:
   # established — the tag is too late to be the gate (it IS the release trigger).
   schedule:
     - cron: '0 3 * * *'  # 03:00 UTC daily
-  # Also auto-run on PRs that touch the coordination-critical controllers or the
-  # suite itself. The core "Integration Tests" lane runs on every PR but only the
-  # `core` subset — it does NOT include backup/restore/coordination specs, so a
-  # PR to these files still needs the full suite. These are the exact paths whose
-  # bugs (#117, #129) slipped past unit coverage and were only caught after
-  # release. Narrow on purpose: the full suite is multi-hour on CalVer.
+  # Opt-in per-PR run: apply the `run-extended` label to a PR to run the EXTENDED
+  # specs (backup/restore/sharding/multi-node) against it. PRs do NOT auto-run
+  # Extended — by design, the default PR signal is the fast core lane (Integration
+  # Tests, 5.26 ∥ CalVer), keeping the dev cycle short. On the PR event we run
+  # `extended`-only (the core lane already covers core on that PR — see the
+  # label-filter in the run step), so there's no redundant core re-run. Labels are
+  # maintainer-only, which also keeps untrusted fork PRs from triggering it.
   pull_request:
-    paths:
-      - 'internal/controller/neo4jrestore_controller.go'
-      - 'internal/controller/neo4jrestore_coordination*.go'
-      - 'internal/controller/neo4jbackup_controller.go'
-      - 'internal/controller/neo4jenterprisecluster_controller.go'
-      - 'internal/controller/neo4jenterprisestandalone_controller.go'
-      - 'test/integration/**'
-      - '.github/workflows/integration-tests.yml'
+    types: [labeled]
 
 # Cancel a PR's in-flight run when a new commit is pushed to the same PR — the
 # extended suite is multi-hour on CalVer, so leaving the superseded run going
@@ -57,6 +51,11 @@ env:
 jobs:
   extended-integration-tests:
     name: Extended Integration Tests
+    # Run on schedule/dispatch always; on a PR only when the `run-extended` label
+    # is the one just applied (other labels added to the PR are ignored).
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.label.name == 'run-extended'
     runs-on: ubuntu-latest
     # Fixed safety backstop, well above the Ginkgo --timeout below (the real gate,
     # driven by the timeout-minutes input; default 150 for the CalVer full suite).
@@ -194,14 +193,18 @@ jobs:
         make ginkgo
 
         set -o pipefail
-        # Honor the dispatch input (was hardcoded 90m, which ignored the input and
-        # truncated the suite on slower CalVer images). Defaults to 150m for
-        # PR-triggered / scheduled runs (no inputs) on the CalVer full suite.
+        # Event-aware scope: schedule/dispatch run the FULL suite (core+extended);
+        # a label-gated PR run does EXTENDED-only, because the core lane already
+        # covers core on that PR and re-running it here would be a redundant
+        # CalVer-core run.
+        LABEL_FILTER="core || extended"
+        [ "${{ github.event_name }}" = "pull_request" ] && LABEL_FILTER="extended"
+        echo "📊 label-filter: ${LABEL_FILTER}"
         # --procs=1: the suite shares ONE Kind cluster + operator — must run
-        # serially (Ginkgo's default, explicit here to guard the shared-cluster
-        # contract against an accidental -p).
+        # serially (Ginkgo's default, explicit here to guard against an accidental -p).
         # --json-report feeds the per-spec failure/timing summary below.
         ./bin/ginkgo run -v --timeout="${GINKGO_TIMEOUT_MIN}m" --procs=1 \
+          --label-filter="${LABEL_FILTER}" \
           --json-report=ginkgo-report.json \
           ./test/integration/... | tee integration-test-output.log
       env:
@@ -256,7 +259,11 @@ jobs:
     runs-on: ubuntu-latest
     permissions: {}
     needs: [extended-integration-tests]
-    if: always()
+    # Mirror the main job's gate so we don't post a summary when Extended was
+    # skipped (a non-`run-extended` label added to a PR).
+    if: >-
+      always() &&
+      (github.event_name != 'pull_request' || github.event.label.name == 'run-extended')
 
     steps:
     - name: Extended Integration Test Summary

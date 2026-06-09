@@ -8,7 +8,7 @@ in-repo `.github/workflows/README.md` is a short pointer back here.
 |---|---|---|
 | [CI](#ci) | `ci.yml` | push/PR to `main`/`develop`, manual dispatch |
 | [Integration Tests](#integration-tests) | `integration.yml` | PR + push to `main` on runtime paths |
-| [Extended Integration Tests](#extended-integration-tests) | `integration-tests.yml` | nightly; PRs touching coordination-critical controllers/suite; manual dispatch |
+| [Extended Integration Tests](#extended-integration-tests) | `integration-tests.yml` | nightly (full); `run-extended` label on a PR (extended-only); manual dispatch (full) |
 | [Release](#release) | `release.yml` | push of a `vX.Y.Z` tag, manual dispatch |
 | [Pages — Docs](#pages-docs) | `pages-docs.yml` | push to `main`, push of a `v*` tag, manual dispatch |
 | [Pages — Helm Repo](#pages-helm-repo) | `pages-helm.yml` | push of a `v*` tag, manual dispatch |
@@ -107,27 +107,28 @@ contracts they touched, on the versions users actually run.
 against a real Kind cluster, on the pinned CalVer track.** This is the
 release-readiness and deep-coverage run.
 
-Triggers:
+**Extended does NOT auto-run on PRs** — by design, the default PR signal is the
+fast core lane, keeping the dev cycle short. Extended runs:
 
-- **Nightly** (`cron: 0 3 * * *`) on `main` — keeps `main` continuously
-  known-good on the CalVer track, so a regression is caught the day it merges
-  and a release tag ships a commit whose CalVer health is already established
-  (the tag is the release trigger — too late to be the gate itself).
-- **PRs** touching the coordination-critical controllers or the suite, since the
-  core lane does *not* include backup/restore/coordination specs:
-  - `internal/controller/neo4jrestore_controller.go`, `neo4jrestore_coordination*.go`
-  - `internal/controller/neo4jbackup_controller.go`
-  - `internal/controller/neo4jenterprisecluster_controller.go`, `neo4jenterprisestandalone_controller.go`
-  - `test/integration/**`, `.github/workflows/integration-tests.yml`
-- **Manual dispatch** (Actions tab) with inputs:
+- **Nightly** (`cron: 0 3 * * *`) on `main`, **full suite** — keeps `main`
+  continuously known-good on the CalVer track, so a regression is caught the day
+  it merges and a release tag ships a commit whose CalVer health is already
+  established (the tag is the release trigger — too late to be the gate itself).
+  This is also the only *scheduled* check, so it must exercise everything,
+  including `core`.
+- **Per-PR opt-in** — apply the **`run-extended`** label to a PR to run it against
+  that PR. On the PR event it runs **`extended`-only** (the core lane already
+  covers `core` on that PR, so re-running it would be redundant). Labels are
+  maintainer-only, which also keeps fork PRs from triggering it. Use this for
+  backup/restore/sharding/coordination changes that the `core` subset doesn't
+  exercise.
+- **Manual dispatch** (Actions tab), **full suite**, with inputs:
   - `neo4j-version` — image tag (default the pinned CalVer; pass `5.26-enterprise`
-    to verify the LTS floor on the full suite, or `2025.12-enterprise+` for the
-    property-sharding paths). **To run the full suite against your branch before
-    merging a backup/restore/sharding change, dispatch this workflow on your
-    branch.**
+    to verify the LTS floor, or `2025.12-enterprise+` for the property-sharding
+    paths). Dispatch against your branch to run the full suite before merging.
   - `timeout-minutes` — default `150` (CalVer is ~2× slower per spec).
 
-It builds and deploys the operator, runs the full suite, uploads
+It builds and deploys the operator, runs the selected scope, uploads
 logs/cluster-state artifacts, and tears the cluster down.
 
 > **Not everything labelled `extended` runs in this lane.** The tier label only
