@@ -34,7 +34,7 @@ import (
 	neo4jv1beta1 "github.com/neo4j-partners/neo4j-kubernetes-operator/api/v1beta1"
 )
 
-var _ = Describe("Neo4jPlugin Integration Tests", func() {
+var _ = Describe("Neo4jPlugin Integration Tests", Label("core"), func() {
 	const (
 		timeout  = time.Second * 300 // 5 minutes for initial resource creation / cluster ready
 		interval = time.Second * 5
@@ -195,8 +195,11 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 					Source: &neo4jv1beta1.PluginSource{
 						Type: "official",
 					},
-					// APOC configuration in Neo4j 5.26+ is handled via environment variables only
-					// These settings will be converted to NEO4J_APOC_EXPORT_FILE_ENABLED and NEO4J_APOC_IMPORT_FILE_ENABLED
+					// APOC configuration in Neo4j 5.26+ is handled via environment variables only.
+					// Per the Neo4j Docker env-var convention (case PRESERVED, dots→_,
+					// literal _→__), these become NEO4J_apoc_export_file_enabled and
+					// NEO4J_apoc_import_file_enabled — lowercase. An UPPER-cased name maps to
+					// the setting APOC.EXPORT.FILE.ENABLED, which Neo4j does NOT honor.
 					Config: map[string]string{
 						"apoc.export.file.enabled": "true",
 						"apoc.import.file.enabled": "true",
@@ -263,10 +266,10 @@ var _ = Describe("Neo4jPlugin Integration Tests", func() {
 						hasExportEnabled := false
 						hasImportEnabled := false
 						for _, env := range container.Env {
-							if env.Name == "NEO4J_APOC_EXPORT_FILE_ENABLED" && env.Value == "true" {
+							if env.Name == "NEO4J_apoc_export_file_enabled" && env.Value == "true" {
 								hasExportEnabled = true
 							}
-							if env.Name == "NEO4J_APOC_IMPORT_FILE_ENABLED" && env.Value == "true" {
+							if env.Name == "NEO4J_apoc_import_file_enabled" && env.Value == "true" {
 								hasImportEnabled = true
 							}
 						}

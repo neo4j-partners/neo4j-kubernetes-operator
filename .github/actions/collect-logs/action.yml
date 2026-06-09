@@ -21,6 +21,22 @@ runs:
         echo "=== Operator Logs ===" >> cluster-debug.log
         kubectl logs -n neo4j-operator-system deployment/neo4j-operator-controller-manager >> cluster-debug.log 2>&1 || true
 
+        # Neo4j pod describe + logs (current AND previous) — the OOMKilled /
+        # "declared multiple times" / exit-137 crash signal lives here, not in the
+        # operator logs. Skip system namespaces; bound output with --tail.
+        echo "=== Neo4j Pod Describe + Logs ===" >> cluster-debug.log
+        for ns in $(kubectl get ns -o jsonpath='{.items[*].metadata.name}' 2>/dev/null); do
+          case "$ns" in kube-system|kube-public|kube-node-lease|local-path-storage|cert-manager) continue;; esac
+          for pod in $(kubectl get pods -n "$ns" -o jsonpath='{.items[*].metadata.name}' 2>/dev/null); do
+            echo "--- describe $ns/$pod ---" >> cluster-debug.log
+            kubectl describe pod -n "$ns" "$pod" >> cluster-debug.log 2>&1 || true
+            echo "--- logs $ns/$pod (current) ---" >> cluster-debug.log
+            kubectl logs -n "$ns" "$pod" --all-containers --tail=200 >> cluster-debug.log 2>&1 || true
+            echo "--- logs $ns/$pod (previous/crashed) ---" >> cluster-debug.log
+            kubectl logs -n "$ns" "$pod" --all-containers --previous --tail=200 >> cluster-debug.log 2>&1 || true
+          done
+        done
+
         echo "=== CRD Status ===" >> cluster-debug.log
         kubectl get crd | grep neo4j >> cluster-debug.log 2>&1 || true
 

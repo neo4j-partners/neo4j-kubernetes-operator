@@ -8,7 +8,8 @@ detailed descriptions in the docs page to avoid drift.
 | Workflow | File | Triggers |
 |---|---|---|
 | **CI** | `ci.yml` | push/PR to `main`/`develop`, manual dispatch |
-| **Extended Integration Tests** | `integration-tests.yml` | PRs touching cluster/restore/backup controllers or `test/integration/**`; manual dispatch |
+| **Integration Tests** | `integration.yml` | PR + push to `main` on runtime paths (core subset, 5.26 + CalVer) |
+| **Extended Integration Tests** | `integration-tests.yml` | nightly (full); `run-extended` label on a PR (extended-only); manual dispatch (full) |
 | **Release** | `release.yml` | push of a `vX.Y.Z` tag; manual dispatch |
 | **Pages — Docs** | `pages-docs.yml` | push to `main`; push of a `v*` tag; manual dispatch |
 | **Pages — Helm Repo** | `pages-helm.yml` | push of a `v*` tag; manual dispatch |
@@ -19,8 +20,11 @@ Shared steps live in composite actions under `.github/actions/`
 ## Common tasks
 
 ```bash
-# Run the Extended Integration Tests on a PR:
-gh pr edit --add-label "run-integration-tests"      # or include [run-integration] in a commit
+# The fast "Integration Tests" lane (core subset, 5.26 + CalVer) runs
+# automatically on any runtime-path PR — no opt-in needed.
+
+# Run the full Extended suite against your branch (e.g. for a backup/restore change):
+gh workflow run "Extended Integration Tests" --ref "$(git branch --show-current)"
 
 # Cut a release (fans out to images, GitHub release, docs, and Helm repo):
 git tag v1.2.3 && git push origin v1.2.3

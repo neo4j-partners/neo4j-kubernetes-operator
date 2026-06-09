@@ -76,7 +76,7 @@ func quiesceBackupJob(ctx context.Context, c client.Client, key types.Namespaced
 			"terminal-state guard would make our patch a no-op")
 }
 
-var _ = Describe("Backup Integration Tests", Ordered, func() {
+var _ = Describe("Backup Integration Tests", Label("extended"), Ordered, func() {
 	const (
 		backupTimeout  = time.Second * 600
 		backupInterval = time.Second * 2

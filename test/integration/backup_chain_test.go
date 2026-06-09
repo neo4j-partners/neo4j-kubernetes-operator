@@ -43,7 +43,7 @@ import (
 //     scans the shared directory and applies the chain. Expect the
 //     restored DB to contain BOTH the pre-FULL and post-FULL data
 //     (proving the chain was applied — not just the FULL).
-var _ = Describe("Backup Chain Integration Tests", Serial, func() {
+var _ = Describe("Backup Chain Integration Tests", Label("extended"), Serial, func() {
 	const (
 		clusterReadyTimeout = 10 * time.Minute
 		dbReadyTimeout      = 5 * time.Minute

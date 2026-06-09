@@ -193,6 +193,11 @@ var _ = AfterSuite(func() {
 	// Monitor resource usage before cleanup
 	monitorResourceUsage("AFTERSUITE_START")
 
+	// Tear down the shared RBAC cluster (no-op if it was never provisioned) before
+	// the context is cancelled, so its namespace can be cleaned up below. Uses a
+	// fresh context since the suite ctx is about to be cancelled.
+	teardownSharedNativeCluster(context.Background())
+
 	// Cancel context
 	if cancel != nil {
 		cancel()

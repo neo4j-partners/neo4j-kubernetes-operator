@@ -52,7 +52,7 @@ import (
 // Run locally:
 //
 //	NEO4J_VERSION=2025.12-enterprise ginkgo run -focus "Standard Database Restore" ./test/integration
-var _ = Describe("Standard Database Restore (MinIO) Integration Tests", Serial, func() {
+var _ = Describe("Standard Database Restore (MinIO) Integration Tests", Label("extended"), Serial, func() {
 	const (
 		clusterReadyTimeout = 10 * time.Minute
 		dbReadyTimeout      = 5 * time.Minute

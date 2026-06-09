@@ -37,7 +37,7 @@ import (
 	neo4jv1beta1 "github.com/neo4j-partners/neo4j-kubernetes-operator/api/v1beta1"
 )
 
-var _ = Describe("MCP Integration Tests", func() {
+var _ = Describe("MCP Integration Tests", Label("extended"), func() {
 	var (
 		ctx            context.Context
 		namespace      *corev1.Namespace

@@ -64,7 +64,7 @@ import (
 // the controller.
 const restoreInProgressAnnotation = "neo4j.com/restore-in-progress"
 
-var _ = Describe("Restore Integration Tests", Ordered, func() {
+var _ = Describe("Restore Integration Tests", Label("extended"), Ordered, func() {
 	const (
 		restoreTimeout  = time.Second * 600
 		restoreInterval = time.Second * 3

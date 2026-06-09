@@ -28,7 +28,7 @@ import (
 	neo4jv1beta1 "github.com/neo4j-partners/neo4j-kubernetes-operator/api/v1beta1"
 )
 
-var _ = Describe("Neo4jDatabase Seed URI Integration Tests", Ordered, func() {
+var _ = Describe("Neo4jDatabase Seed URI Integration Tests", Label("extended"), Ordered, func() {
 
 	var (
 		testNamespace string

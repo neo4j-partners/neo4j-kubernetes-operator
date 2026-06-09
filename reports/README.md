@@ -48,6 +48,10 @@ All report files use the format: `YYYY-MM-DD-descriptive-name.md`
 
 - **[2026-01-19-neo4j-operator-comprehensive-audit-report.md](2026-01-19-neo4j-operator-comprehensive-audit-report.md)** — Most recent comprehensive operator audit (January 2026).
 
+### 🤖 CI / Infrastructure
+
+- **[2026-06-09-self-hosted-ci-runners-arc-plan.md](2026-06-09-self-hosted-ci-runners-arc-plan.md)** — Plan for self-hosted CI runners (ARC on EKS, dind): EKS/Karpenter sizing, scale-set scaling, setup path, the fork-PR security model, how it composes with the PR #147 caching, expected gains, and the `TestClient` unit-suite bottleneck.
+
 ## Guidelines
 
 ### When to Create a Report
@@ -75,4 +79,4 @@ Do NOT create a report for:
 5. **Solution**: What was implemented
 6. **Results**: Outcomes and impact
 
-Last Updated: 2026-01-21
+Last Updated: 2026-06-09

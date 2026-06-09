@@ -1,0 +1,226 @@
+name: Integration Tests
+
+# The contributor-facing integration lane: the `core` subset of the suite
+# (reconcile contracts a routine change is most likely to break — standalone
+# Ready, cluster formation, DB/user/role CRUD, config rendering, plugin install,
+# TLS) run against BOTH supported Neo4j tracks in parallel:
+#   - 5.26-enterprise  — the last SemVer LTS; exercises the SemVer-only operator
+#                        paths (V2_ONLY discovery, system_bootstrapping_strategy).
+#   - <CalVer>         — the track new users deploy; catches the strict-mode
+#                        fatals (duplicate conf keys, Cypher-25 defaults) that are
+#                        tolerated on 5.26.
+# Fast because it's the core subset and the two cells run in parallel. The full
+# matrix (backup/restore, sharding, multi-node, MinIO) lives in the Extended
+# Integration Tests workflow, which runs nightly + on release prep.
+on:
+  pull_request:
+    paths:
+      - 'internal/**'
+      - 'api/**'
+      - 'cmd/**'
+      - 'test/integration/**'
+      - 'config/**'        # the lane deploys from config/ (ci-temp overlay over config/default)
+      - 'Dockerfile'       # the lane builds the operator image the tests run against
+      - 'Makefile'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/integration.yml'
+  push:
+    branches: [ main ]
+    paths:
+      - 'internal/**'
+      - 'api/**'
+      - 'cmd/**'
+      - 'test/integration/**'
+      - 'config/**'
+      - 'Dockerfile'
+      - 'Makefile'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/integration.yml'
+
+# A new push to a PR cancels that PR's in-flight run (both matrix cells). Manual/
+# main runs fall back to the unique run_id so they never cancel one another.
+concurrency:
+  group: integration-core-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: '1.26'
+  KIND_VERSION: 'v0.27.0'
+
+jobs:
+  core-integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        # SOURCE OF TRUTH for the core lane's Neo4j versions. This list is the pin
+        # (deliberate, not floating) — GitHub does not allow the `env` context in
+        # a matrix, so the tags are inline here rather than in a shared var.
+        # 5.26 is the LTS floor (exercises the SemVer-only operator paths); the
+        # CalVer tag is the strict ceiling new users run. Cells run in parallel,
+        # so wall-clock ≈ the slower (CalVer) cell, not the sum.
+        # When bumping CalVer, update BOTH this list AND the `neo4j-version`
+        # default in integration-tests.yml (the Extended lane) in the same PR.
+        neo4j-version: ['5.26-enterprise', '2026.04-enterprise']
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v6
+
+    - name: Setup Go environment
+      uses: ./.github/actions/setup-go
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Setup Kubernetes environment
+      uses: ./.github/actions/setup-k8s
+      with:
+        kind-version: ${{ env.KIND_VERSION }}
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v4
+
+    # Build the operator image with a GitHub Actions layer cache so unchanged
+    # layers (base image, go mod download) are reused; only changed Go code
+    # rebuilds. load:true puts it in the daemon for the kind load below.
+    - name: Build operator image (gha layer cache)
+      uses: docker/build-push-action@v7
+      with:
+        context: .
+        load: true
+        tags: neo4j-operator:integration-test
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        build-args: |
+          VERSION=integration-test
+          BUILD_DATE=ci
+          VCS_REF=${{ github.sha }}
+
+    # Cache the Neo4j Enterprise image as a tarball, keyed on the tag. On a hit we
+    # skip the Docker Hub pull entirely (faster + dodges anonymous rate limits)
+    # and import the tarball straight into kind's containerd.
+    - name: Cache Neo4j image tarball
+      uses: actions/cache@v5
+      with:
+        path: /tmp/neo4j-image.tar
+        key: neo4j-image-${{ matrix.neo4j-version }}
+
+    - name: Create cluster and deploy operator
+      run: |
+        NEO4J_VERSION="${{ matrix.neo4j-version }}"
+
+        echo "▶ Creating test cluster..."
+        make test-cluster
+
+        echo "▶ Installing CRDs..."
+        make manifests install
+
+        echo "▶ Loading pre-built operator image into Kind..."
+        kind load docker-image neo4j-operator:integration-test --name neo4j-operator-test
+
+        echo "▶ Deploying operator to neo4j-operator-system..."
+        make kustomize
+        mkdir -p config/overlays/ci-temp
+        cat > config/overlays/ci-temp/kustomization.yaml <<EOF
+        apiVersion: kustomize.config.k8s.io/v1beta1
+        kind: Kustomization
+        namespace: neo4j-operator-system
+        resources:
+        - ../../default
+        images:
+        - name: ghcr.io/neo4j-partners/neo4j-kubernetes-operator
+          newName: neo4j-operator
+          newTag: integration-test
+        EOF
+        ./bin/kustomize build config/overlays/ci-temp | kubectl apply -f -
+
+        echo "▶ Waiting for operator to be ready..."
+        kubectl wait --for=condition=available --timeout=120s \
+          deployment/neo4j-operator-controller-manager -n neo4j-operator-system
+
+        echo "▶ Loading Neo4j image: neo4j:${NEO4J_VERSION}"
+        # Use the cached tarball when present (cache hit); otherwise pull once and
+        # save it for the cache to persist. Either way, import straight into kind's
+        # containerd via ctr WITHOUT --all-platforms (the multi-arch index would
+        # fail on absent foreign-platform blobs). See the Extended workflow notes.
+        if [ ! -f /tmp/neo4j-image.tar ]; then
+          echo "cache miss — pulling neo4j:${NEO4J_VERSION}"
+          if ! docker pull --platform linux/amd64 neo4j:${NEO4J_VERSION}; then
+            echo "❌ Failed to pull neo4j:${NEO4J_VERSION} — image is required for tests"
+            exit 1
+          fi
+          docker save neo4j:${NEO4J_VERSION} -o /tmp/neo4j-image.tar
+        else
+          echo "cache hit — using /tmp/neo4j-image.tar"
+        fi
+        docker exec --privileged -i neo4j-operator-test-control-plane \
+          ctr --namespace=k8s.io images import --snapshotter=overlayfs - < /tmp/neo4j-image.tar
+        echo "✅ neo4j:${NEO4J_VERSION} loaded into Kind"
+
+    - name: Run core integration tests
+      run: |
+        export FORCE_COLOR=1
+        echo "📊 Neo4j version: ${{ matrix.neo4j-version }} | label-filter: core"
+
+        make ginkgo
+
+        set -o pipefail
+        # Core is the small subset; 60m is ample even on the slower CalVer cell.
+        # --procs=1: the suite shares ONE Kind cluster + operator, so it must run
+        # serially (Ginkgo's default, made explicit here as a guard against anyone
+        # adding -p, which would race on the shared cluster). Matches the
+        # `make test-integration` invocation this lane replaced.
+        # --json-report feeds the per-spec failure/timing summary below.
+        ./bin/ginkgo run -v --timeout=60m --procs=1 --label-filter='core' \
+          --json-report=ginkgo-report.json \
+          ./test/integration/... | tee integration-test-output.log
+      env:
+        KUBECONFIG: /home/runner/.kube/config
+        NEO4J_VERSION: ${{ matrix.neo4j-version }}
+        FORCE_COLOR: 1
+        # Bound the test binary to 1 CPU so it doesn't contend with Neo4j/Kind/the
+        # operator on the 2-vCPU runner — parity with the replaced CI job.
+        GOMAXPROCS: 1
+
+    - name: Ginkgo report summary (failed specs + timings)
+      if: always()
+      run: ./scripts/ginkgo-report-summary.sh ginkgo-report.json 30 || true
+
+    - name: Collect cluster state
+      if: always()
+      run: |
+        echo "=== All Pods ==="
+        kubectl get pods --all-namespaces || true
+        echo "=== Neo4j Resources ==="
+        kubectl get neo4jenterpriseclusters,neo4jenterprisestandalones,neo4jdatabases,neo4jplugins --all-namespaces || true
+        echo "=== Recent Events ==="
+        kubectl get events --all-namespaces --sort-by='.lastTimestamp' | tail -50 || true
+
+    - name: Collect cluster logs
+      uses: ./.github/actions/collect-logs
+      if: always()
+      with:
+        artifact-name: integration-test-logs-${{ matrix.neo4j-version }}
+
+    - name: Archive test results
+      uses: actions/upload-artifact@v7
+      if: always()
+      with:
+        name: integration-test-results-${{ matrix.neo4j-version }}
+        path: |
+          coverage/
+          *.out
+          integration-test-output.log
+          ginkgo-report.json
+        if-no-files-found: warn
+
+    - name: Cleanup test cluster
+      if: always()
+      run: make test-cluster-delete || true

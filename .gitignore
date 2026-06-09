@@ -101,3 +101,7 @@ update-alm-examples
 
 # MkDocs build output
 /site/
+
+# gotestsum CI outputs
+unit-tests.json
+unit-junit.xml

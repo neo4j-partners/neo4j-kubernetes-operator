@@ -44,7 +44,7 @@ import (
 //   - NO restore Job is created (Cypher path)
 //   - Restore reaches Completed
 //   - Restored data matches pre-backup state
-var _ = Describe("Standard Database PVC Restore Integration Tests", Serial, func() {
+var _ = Describe("Standard Database PVC Restore Integration Tests", Label("extended"), Serial, func() {
 	const (
 		clusterReadyTimeout = 10 * time.Minute
 		dbReadyTimeout      = 5 * time.Minute

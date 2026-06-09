@@ -33,7 +33,7 @@ import (
 	neo4jv1beta1 "github.com/neo4j-partners/neo4j-kubernetes-operator/api/v1beta1"
 )
 
-var _ = Describe("Cluster Lifecycle Integration Tests", func() {
+var _ = Describe("Cluster Lifecycle Integration Tests", Label("core"), func() {
 	var (
 		namespace   *corev1.Namespace
 		cluster     *neo4jv1beta1.Neo4jEnterpriseCluster

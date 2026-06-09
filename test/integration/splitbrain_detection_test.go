@@ -30,7 +30,7 @@ import (
 	neo4jv1beta1 "github.com/neo4j-partners/neo4j-kubernetes-operator/api/v1beta1"
 )
 
-var _ = Describe("Split-Brain Detection Integration Tests", func() {
+var _ = Describe("Split-Brain Detection Integration Tests", Label("extended"), func() {
 	// Use dynamic timeout and interval based on environment
 	var (
 		timeout  time.Duration

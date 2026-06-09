@@ -34,7 +34,7 @@ import (
 	neo4jv1beta1 "github.com/neo4j-partners/neo4j-kubernetes-operator/api/v1beta1"
 )
 
-var _ = Describe("Neo4jEnterpriseStandalone Integration Tests", func() {
+var _ = Describe("Neo4jEnterpriseStandalone Integration Tests", Label("core"), func() {
 
 	// ── Behavior tests: share one standalone that waits for Ready ──
 	Context("Standalone Behavior (Pod Ready)", Ordered, func() {
