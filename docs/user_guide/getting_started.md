@@ -6,9 +6,16 @@ This guide will walk you through the process of deploying your first Neo4j Enter
 
 *   A Kubernetes cluster (v1.32+)
 *   `kubectl` installed and configured
-*   Neo4j Enterprise Edition (evaluation license acceptable for testing)
+*   Neo4j Enterprise Edition — **5.26 LTS or any CalVer release** (2025.x, 2026.x, …); evaluation license acceptable for testing
 *   Go 1.26+ (for building from source)
 *   cert-manager 1.20+ (optional, for TLS-enabled deployments)
+
+> **Neo4j version:** the examples below pin `5.26.0-enterprise`, but every one
+> works on a CalVer release too — just change the image `tag` (e.g.
+> `2026.04-enterprise`). The operator auto-detects CalVer (discovery mode,
+> Cypher 25, etc.); nothing else in the manifest changes. For the CalVer-only
+> default Cypher 25 language on a database, see
+> [`examples/databases/database-2025x.yaml`](https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/databases/database-2025x.yaml).
 
 ## Installation
 
