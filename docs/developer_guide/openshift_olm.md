@@ -49,7 +49,12 @@ oc apply -f config/samples/olm/subscription.yaml
 
 Default bundle channels can be set via `CHANNELS`/`DEFAULT_CHANNEL` when running `make bundle`.
 
-## CI/OpenShift smoke (proposed)
+## OpenShift smoke testing (manual)
 
-- See `.github/workflows/openshift-olm-smoke.yml` for a self-hosted GitHub Actions job that uses OpenShift Local (crc): it starts CRC (requires `CRC_PULL_SECRET`, `CRC_KUBEADMIN_PASSWORD` secrets), builds/pushes the bundle and catalog to GHCR, and installs via the sample CatalogSource/Subscription. Runner must support virtualization (self-hosted).
-- If you have a remote OpenShift, set `OCP_API`/`OCP_TOKEN` and reuse the same bundle+catalog steps without CRC.
+OLM/OperatorHub is a supported **manual** install path; it is not exercised in
+CI (a smoke test needs an OpenShift cluster, which standard GitHub runners can't
+provide). To validate the bundle on OpenShift, build and push the bundle and
+catalog (`make bundle bundle-build bundle-push catalog-build catalog-push`),
+then install via the sample `CatalogSource`/`Subscription` under
+`config/samples/olm/`. OpenShift Local (CRC) works for a local check on a
+virtualization-capable host; a remote OpenShift cluster works equally well.

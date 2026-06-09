@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Neo4j Community
+    url: https://community.neo4j.com/
+    about: General Neo4j questions (not operator bugs/features) are best asked here.
+  - name: Documentation
+    url: https://priyolahiri.github.io/neo4j-kubernetes-operator/
+    about: Check the docs before filing — many questions are answered there.
