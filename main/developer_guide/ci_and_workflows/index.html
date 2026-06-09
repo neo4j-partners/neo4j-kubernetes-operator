@@ -2856,14 +2856,25 @@ so a single tag publishes images, the release, the docs version, and the chart.<
 so their pushes serialize instead of racing. Both authenticate with the
 built-in <code>GITHUB_TOKEN</code> — no extra secrets.</p>
 <h3 id="pages-docs">Pages — Docs<a class="headerlink" href="#pages-docs" title="Anchor link to this section">&para;</a></h3>
-<p><strong><code>pages-docs.yml</code></strong> publishes the MkDocs site as <strong>versioned</strong> docs using
-<a href="https://github.com/jimporter/mike"><code>mike</code></a>:</p>
+<p><strong><code>pages-docs.yml</code></strong> publishes the MkDocs (Material) site as <strong>versioned</strong> docs
+using <a href="https://github.com/jimporter/mike"><code>mike</code></a>. It first runs
+<code>mkdocs build --strict</code>, so a broken internal link or a nav entry pointing at a
+missing page <strong>fails the publish</strong> — treat it as a docs gate on <code>main</code> and tags.</p>
+<p>What gets published where:</p>
 <ul>
-<li><strong>Push to <code>main</code></strong> → publishes the <code>/main/</code> alias (rolling preview).</li>
-<li><strong>Push of a <code>v*</code> tag</strong> → publishes <code>/vX.Y/</code> and updates the <code>/latest/</code> alias.</li>
+<li><strong>Push to <code>main</code></strong> → the <code>/main/</code> alias, a rolling preview of unreleased docs.
+  Does not touch <code>latest</code>.</li>
+<li><strong>Push of a <code>vX.Y.Z</code> tag</strong> → published as <code>/vX.Y/</code> (the patch is dropped, so a
+  later <code>vX.Y.Z+1</code> overwrites the same <code>/vX.Y/</code>), and <code>/latest/</code> is moved to it.
+  <code>mike set-default latest</code> also points the site <strong>root</strong> at <code>/latest/</code>.</li>
 <li><strong>Manual dispatch</strong> → publish under an arbitrary <code>version-alias</code>, optionally
   updating <code>latest</code>.</li>
 </ul>
+<p>For readers: the site <strong>root redirects to <code>/latest/</code></strong> (newest release), and the
+<strong>version dropdown</strong> at the top of every page (<code>extra.version.provider: mike</code> in
+<code>mkdocs.yml</code>) switches between <code>latest</code>, each released <code>/vX.Y/</code>, and the <code>/main/</code>
+preview. A page added on <code>main</code> appears under <code>/main/</code> immediately and lands in
+<code>/vX.Y/</code> + <code>/latest/</code> automatically on the next release tag — no manual step.</p>
 <p>(The rolling-preview alias was historically called <code>dev</code>; it is now <code>main</code>.)</p>
 <h3 id="pages-helm-repo">Pages — Helm Repo<a class="headerlink" href="#pages-helm-repo" title="Anchor link to this section">&para;</a></h3>
 <p><strong><code>pages-helm.yml</code></strong> packages the chart in <code>charts/neo4j-operator</code> and appends it
