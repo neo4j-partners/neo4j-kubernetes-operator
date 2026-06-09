@@ -43,7 +43,7 @@ manifest updates required since the release you're currently running.
 
 ## Requirements
 
-- Kubernetes 1.30+
+- Kubernetes 1.32+
 - Neo4j Enterprise 5.26+ or CalVer 2025.01.0+
 - cert-manager v1.20+ (for TLS)
 
