@@ -12,13 +12,13 @@
         <meta name="author" content="Neo4j Partners">
       
       
-        <link rel="canonical" href="https://neo4j-partners.github.io/neo4j-kubernetes-operator/main/api_reference/neo4jrolebinding/">
+        <link rel="canonical" href="https://neo4j-partners.github.io/neo4j-kubernetes-operator/main/developer_guide/ci_and_workflows/">
       
       
-        <link rel="prev" href="../neo4jrole/">
+        <link rel="prev" href="../collaboration/">
       
       
-        <link rel="next" href="../neo4jauthrule/">
+        <link rel="next" href="../architecture/">
       
       
         
@@ -29,7 +29,7 @@
     
     
       
-        <title>Neo4jRoleBinding - Neo4j Kubernetes Operator</title>
+        <title>CI/CD & Workflows - Neo4j Kubernetes Operator</title>
       
     
     
@@ -82,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#neo4jrolebinding-api-reference" class="md-skip">
+        <a href="#cicd-workflows" class="md-skip">
           Skip to content
         </a>
       
@@ -122,7 +122,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Neo4jRoleBinding
+              CI/CD & Workflows
             
           </span>
         </div>
@@ -1656,8 +1656,6 @@
       
   
   
-    
-  
   
   
     
@@ -1678,11 +1676,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -1710,7 +1708,7 @@
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_7">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1725,10 +1723,8 @@
                 
   
   
-    
   
   
-  
     
     
       
@@ -1760,11 +1756,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_1" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_1" >
         
           
           <label class="md-nav__link" for="__nav_7_1" id="__nav_7_1_label" tabindex="0">
@@ -1785,7 +1781,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_1_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_1_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_7_1">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1803,7 +1799,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../neo4jenterprisecluster/" class="md-nav__link">
+      <a href="../../api_reference/neo4jenterprisecluster/" class="md-nav__link">
         
   
   
@@ -1831,7 +1827,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../neo4jenterprisestandalone/" class="md-nav__link">
+      <a href="../../api_reference/neo4jenterprisestandalone/" class="md-nav__link">
         
   
   
@@ -1859,7 +1855,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../neo4jdatabase/" class="md-nav__link">
+      <a href="../../api_reference/neo4jdatabase/" class="md-nav__link">
         
   
   
@@ -1887,7 +1883,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../neo4jshardeddatabase/" class="md-nav__link">
+      <a href="../../api_reference/neo4jshardeddatabase/" class="md-nav__link">
         
   
   
@@ -1915,7 +1911,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../neo4juser/" class="md-nav__link">
+      <a href="../../api_reference/neo4juser/" class="md-nav__link">
         
   
   
@@ -1943,7 +1939,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../neo4jrole/" class="md-nav__link">
+      <a href="../../api_reference/neo4jrole/" class="md-nav__link">
         
   
   
@@ -1968,37 +1964,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Neo4jRoleBinding
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../api_reference/neo4jrolebinding/" class="md-nav__link">
         
   
   
@@ -2014,192 +1983,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#overview" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Overview
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#when-to-use-this-vs-neo4juser" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        When to use this vs. Neo4jUser
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#related-resources" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Related Resources
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#spec" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Spec
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#status" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Status
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Status">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#conditions" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Conditions
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#validation-rules" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Validation rules
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#lifecycle" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Lifecycle
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#examples" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Examples
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Examples">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#bind-an-sso-user-to-the-editor-role" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Bind an SSO user to the editor role
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#multiple-roles-exclusive-enforcement" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Multiple roles, exclusive enforcement
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#combine-with-a-custom-neo4jrole" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Combine with a custom Neo4jRole
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#troubleshooting" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Troubleshooting
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#see-also" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        See also
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -2212,7 +1995,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../neo4jauthrule/" class="md-nav__link">
+      <a href="../../api_reference/neo4jauthrule/" class="md-nav__link">
         
   
   
@@ -2240,7 +2023,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../neo4jplugin/" class="md-nav__link">
+      <a href="../../api_reference/neo4jplugin/" class="md-nav__link">
         
   
   
@@ -2268,7 +2051,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../neo4jbackup/" class="md-nav__link">
+      <a href="../../api_reference/neo4jbackup/" class="md-nav__link">
         
   
   
@@ -2296,7 +2079,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../neo4jrestore/" class="md-nav__link">
+      <a href="../../api_reference/neo4jrestore/" class="md-nav__link">
         
   
   
@@ -2338,8 +2121,10 @@
       
   
   
+    
   
   
+  
     
     
       
@@ -2368,11 +2153,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
         
           
           <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
@@ -2393,7 +2178,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
@@ -2411,7 +2196,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../developer_guide/development/" class="md-nav__link">
+      <a href="../development/" class="md-nav__link">
         
   
   
@@ -2439,7 +2224,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../developer_guide/contributing/" class="md-nav__link">
+      <a href="../contributing/" class="md-nav__link">
         
   
   
@@ -2467,7 +2252,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../developer_guide/collaboration/" class="md-nav__link">
+      <a href="../collaboration/" class="md-nav__link">
         
   
   
@@ -2492,10 +2277,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../developer_guide/ci_and_workflows/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CI/CD & Workflows
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -2511,6 +2323,120 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#ci" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CI
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#extended-integration-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Extended Integration Tests
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Release
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#publishing-to-github-pages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Publishing to GitHub Pages
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Publishing to GitHub Pages">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pages-docs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pages — Docs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pages-helm-repo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pages — Helm Repo
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#openshift-olm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OpenShift / OLM
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#secrets-permissions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Secrets &amp; permissions
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -2523,7 +2449,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../developer_guide/architecture/" class="md-nav__link">
+      <a href="../architecture/" class="md-nav__link">
         
   
   
@@ -2551,7 +2477,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../developer_guide/testing/" class="md-nav__link">
+      <a href="../testing/" class="md-nav__link">
         
   
   
@@ -2579,7 +2505,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../developer_guide/makefile_reference/" class="md-nav__link">
+      <a href="../makefile_reference/" class="md-nav__link">
         
   
   
@@ -2607,7 +2533,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../developer_guide/openshift_olm/" class="md-nav__link">
+      <a href="../openshift_olm/" class="md-nav__link">
         
   
   
@@ -2662,10 +2588,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#overview" class="md-nav__link">
+  <a href="#ci" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Overview
+        CI
       
     </span>
   </a>
@@ -2673,10 +2599,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#when-to-use-this-vs-neo4juser" class="md-nav__link">
+  <a href="#extended-integration-tests" class="md-nav__link">
     <span class="md-ellipsis">
       
-        When to use this vs. Neo4jUser
+        Extended Integration Tests
       
     </span>
   </a>
@@ -2684,10 +2610,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#related-resources" class="md-nav__link">
+  <a href="#release" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Related Resources
+        Release
       
     </span>
   </a>
@@ -2695,33 +2621,33 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#spec" class="md-nav__link">
+  <a href="#publishing-to-github-pages" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Spec
+        Publishing to GitHub Pages
       
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#status" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Status
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Status">
+    <nav class="md-nav" aria-label="Publishing to GitHub Pages">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#conditions" class="md-nav__link">
+  <a href="#pages-docs" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Conditions
+        Pages — Docs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pages-helm-repo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pages — Helm Repo
       
     </span>
   </a>
@@ -2734,10 +2660,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#validation-rules" class="md-nav__link">
+  <a href="#openshift-olm" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Validation rules
+        OpenShift / OLM
       
     </span>
   </a>
@@ -2745,82 +2671,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#lifecycle" class="md-nav__link">
+  <a href="#secrets-permissions" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Lifecycle
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#examples" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Examples
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Examples">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#bind-an-sso-user-to-the-editor-role" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Bind an SSO user to the editor role
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#multiple-roles-exclusive-enforcement" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Multiple roles, exclusive enforcement
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#combine-with-a-custom-neo4jrole" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Combine with a custom Neo4jRole
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#troubleshooting" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Troubleshooting
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#see-also" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        See also
+        Secrets &amp; permissions
       
     </span>
   </a>
@@ -2844,7 +2698,7 @@
 
 
   
-    <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/edit/main/docs/api_reference/neo4jrolebinding.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+    <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/edit/main/docs/developer_guide/ci_and_workflows.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
     </a>
@@ -2852,266 +2706,137 @@
   
 
 
-<h1 id="neo4jrolebinding-api-reference">Neo4jRoleBinding API Reference<a class="headerlink" href="#neo4jrolebinding-api-reference" title="Anchor link to this section">&para;</a></h1>
-<p>The <code>Neo4jRoleBinding</code> Custom Resource Definition (CRD) declaratively manages role grants for users the operator does NOT own as a <code>Neo4jUser</code>. Use this for SSO/LDAP/OIDC users that are provisioned by Neo4j itself on first login (or by an external pipeline) — the operator keeps their Neo4j role assignments in sync with <code>spec.roles</code> without ever creating, dropping, or otherwise managing the user record.</p>
-<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Anchor link to this section">&para;</a></h2>
+<h1 id="cicd-workflows">CI/CD &amp; Workflows<a class="headerlink" href="#cicd-workflows" title="Anchor link to this section">&para;</a></h1>
+<p>All automation lives in <code>.github/workflows/</code>. This page is the source of truth
+for what each workflow does, when it runs, and how to invoke it manually. The
+in-repo <code>.github/workflows/README.md</code> is a short pointer back here.</p>
+<table>
+<thead>
+<tr>
+<th>Workflow</th>
+<th>File</th>
+<th>Triggers</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="#ci">CI</a></td>
+<td><code>ci.yml</code></td>
+<td>push/PR to <code>main</code>/<code>develop</code>, manual dispatch</td>
+</tr>
+<tr>
+<td><a href="#extended-integration-tests">Extended Integration Tests</a></td>
+<td><code>integration-tests.yml</code></td>
+<td>PRs touching key controllers/suite, manual dispatch</td>
+</tr>
+<tr>
+<td><a href="#release">Release</a></td>
+<td><code>release.yml</code></td>
+<td>push of a <code>vX.Y.Z</code> tag, manual dispatch</td>
+</tr>
+<tr>
+<td><a href="#pages-docs">Pages — Docs</a></td>
+<td><code>pages-docs.yml</code></td>
+<td>push to <code>main</code>, push of a <code>v*</code> tag, manual dispatch</td>
+</tr>
+<tr>
+<td><a href="#pages-helm-repo">Pages — Helm Repo</a></td>
+<td><code>pages-helm.yml</code></td>
+<td>push of a <code>v*</code> tag, manual dispatch</td>
+</tr>
+</tbody>
+</table>
+<p>Shared Go setup/caching lives in the composite action <code>.github/actions/setup-go</code>.</p>
+<h2 id="ci">CI<a class="headerlink" href="#ci" title="Anchor link to this section">&para;</a></h2>
+<p><strong><code>ci.yml</code> — runs on every push and PR to <code>main</code>/<code>develop</code>.</strong> Fast feedback; the
+gate that blocks merge. Jobs:</p>
+<ol>
+<li><strong>Generated Artifacts In Sync (<code>check-drift</code>)</strong> — runs <code>make check-drift</code>
+   (<code>sync-all</code> + <code>bundle</code>, then <code>git diff --exit-code</code>). Fails if any committed
+   CRD, RBAC, deepcopy, Helm CRD, or OLM bundle file is stale. Fix locally with
+   <code>make sync-all</code> and commit the result.</li>
+<li><strong>Unit Tests</strong> — <code>make test-unit</code> (race-enabled, envtest-backed controller
+   suite + plain unit tests). No external cluster required.</li>
+<li><strong>Integration Tests</strong> — the standard integration suite, but <strong>only</strong> when
+   opted in: a <code>run-integration-tests</code> PR label, <code>[run-integration]</code> in the
+   commit message, or manual dispatch with the toggle on. When skipped, the
+   <code>integration-tests-info</code> job prints how to enable it.</li>
+</ol>
+<h2 id="extended-integration-tests">Extended Integration Tests<a class="headerlink" href="#extended-integration-tests" title="Anchor link to this section">&para;</a></h2>
+<p><strong><code>integration-tests.yml</code> — the long (≈90-minute) suite against a real Kind
+cluster with the operator deployed.</strong> Distinct from CI's opt-in integration job:
+this is the comprehensive run.</p>
+<p><strong>Runs automatically on PRs</strong> that touch the controllers most likely to silently
+break cluster coordination, or the suite itself:</p>
 <ul>
-<li><strong>API Version</strong>: <code>neo4j.neo4j.com/v1beta1</code></li>
-<li><strong>Kind</strong>: <code>Neo4jRoleBinding</code></li>
-<li><strong>Scope</strong>: Namespaced</li>
-<li><strong>Short names</strong>: <code>n4jrb</code>, <code>n4jrolebindings</code></li>
-<li><strong>Categories</strong>: <code>neo4j</code></li>
-<li><strong>Supported Neo4j Versions</strong>: 5.26 LTS and any CalVer release (2025.x, 2026.x, and onward) — Enterprise edition</li>
-<li><strong>Reconciliation</strong>: Role grants/revokes via <code>GRANT/REVOKE ROLE</code>, with optional exclusive enforcement of the user's full role set</li>
+<li><code>internal/controller/neo4jrestore_controller.go</code>, <code>neo4jrestore_coordination*.go</code></li>
+<li><code>internal/controller/neo4jbackup_controller.go</code></li>
+<li><code>internal/controller/neo4jenterprisecluster_controller.go</code>, <code>neo4jenterprisestandalone_controller.go</code></li>
+<li><code>test/integration/**</code></li>
+<li><code>.github/workflows/integration-tests.yml</code></li>
 </ul>
-<h2 id="when-to-use-this-vs-neo4juser">When to use this vs. Neo4jUser<a class="headerlink" href="#when-to-use-this-vs-neo4juser" title="Anchor link to this section">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>You want to manage…</th>
-<th>Use</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Identity, password, status, home DB, role grants for a user the operator owns</td>
-<td><code>Neo4jUser</code></td>
-</tr>
-<tr>
-<td>Role grants for a user that already exists in Neo4j (created by SSO/LDAP first-login or by another tool)</td>
-<td><code>Neo4jRoleBinding</code></td>
-</tr>
-</tbody>
-</table>
-<p>The validator rejects a <code>Neo4jRoleBinding</code> whose <code>spec.username</code> overlaps with a <code>Neo4jUser</code> in the same namespace targeting the same <code>clusterRef</code>. Pick one.</p>
-<h2 id="related-resources">Related Resources<a class="headerlink" href="#related-resources" title="Anchor link to this section">&para;</a></h2>
+<p><strong>Manual dispatch</strong> (Actions tab) accepts inputs:</p>
 <ul>
-<li><a href="../neo4juser/"><code>Neo4jUser</code></a> — Manages users + their role grants</li>
-<li><a href="../neo4jrole/"><code>Neo4jRole</code></a> — Manages roles + their privileges</li>
-<li><a href="../../user_guide/user_role_management/">User &amp; Role Management Guide</a></li>
+<li><code>neo4j-version</code> — image tag to test against (default <code>5.26-enterprise</code>). Use a
+  <code>2025.12-enterprise+</code> tag to exercise the property-sharding CI smoke path.</li>
+<li><code>timeout-minutes</code> — default <code>90</code>.</li>
 </ul>
-<h2 id="spec">Spec<a class="headerlink" href="#spec" title="Anchor link to this section">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Type</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>clusterRef</code></td>
-<td><code>string</code></td>
-<td><strong>Required</strong>. Name of the <code>Neo4jEnterpriseCluster</code> or <code>Neo4jEnterpriseStandalone</code> in the same namespace.</td>
-</tr>
-<tr>
-<td><code>username</code></td>
-<td><code>string</code></td>
-<td><strong>Required</strong>. Username in Neo4j to manage role grants for. Must already exist when the binding reconciles (it enters <code>UserNotFound</code> and waits otherwise). Pattern <code>^[a-zA-Z][a-zA-Z0-9_.@\-]*$</code>, max 65 chars.</td>
-</tr>
-<tr>
-<td><code>roles</code></td>
-<td><code>[]string</code></td>
-<td><strong>Required</strong>, MinItems=1. Role names to grant. Mix built-ins and custom names (the latter must correspond to existing <code>Neo4jRole</code> CRs or roles created out-of-band). PUBLIC is implicit.</td>
-</tr>
-<tr>
-<td><code>enforceExclusive</code></td>
-<td><code>boolean</code></td>
-<td>Default <code>false</code>. When true, <code>.spec.roles</code> is authoritative for the user's full role set: roles granted out-of-band and not listed here are revoked on every reconcile. When false, the binding only adds and removes the roles it knows about; extra grants from other sources are tolerated.</td>
-</tr>
-<tr>
-<td><code>deletionPolicy</code></td>
-<td><code>string</code></td>
-<td>One of <code>Revoke</code> (default) or <code>Retain</code>. With <code>Revoke</code>, deleting the CR revokes every role this binding granted. With <code>Retain</code>, the finalizer is released without revoking.</td>
-</tr>
-</tbody>
-</table>
-<h2 id="status">Status<a class="headerlink" href="#status" title="Anchor link to this section">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Type</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>phase</code></td>
-<td><code>string</code></td>
-<td>One of <code>Pending</code>, <code>Ready</code>, <code>Failed</code>.</td>
-</tr>
-<tr>
-<td><code>message</code></td>
-<td><code>string</code></td>
-<td>Short summary of the current phase.</td>
-</tr>
-<tr>
-<td><code>observedGeneration</code></td>
-<td><code>int64</code></td>
-<td><code>metadata.generation</code> last reconciled.</td>
-</tr>
-<tr>
-<td><code>grantedRoles</code></td>
-<td><code>[]string</code></td>
-<td>Subset of <code>.spec.roles</code> actually granted (and observed via <code>SHOW USERS YIELD roles</code>). On CR deletion this list dictates what to revoke (so we never strip grants we did not add, except when <code>enforceExclusive: true</code>).</td>
-</tr>
-<tr>
-<td><code>conditions</code></td>
-<td><code>[]Condition</code></td>
-<td>See <a href="#conditions">Conditions</a>.</td>
-</tr>
-</tbody>
-</table>
-<h3 id="conditions">Conditions<a class="headerlink" href="#conditions" title="Anchor link to this section">&para;</a></h3>
-<table>
-<thead>
-<tr>
-<th>Type</th>
-<th>Reasons</th>
-<th>Meaning</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>Ready</code></td>
-<td><code>BindingReady</code>, <code>RolesPending</code>, <code>UserNotFound</code>, <code>ClusterNotReady</code>, <code>ConnectionFailed</code>, <code>BindingFailed</code>, <code>ValidationFailed</code></td>
-<td>True when the user exists and all desired roles are granted.</td>
-</tr>
-<tr>
-<td><code>RolesSynced</code></td>
-<td><code>RolesMatch</code>, <code>RolesPending</code></td>
-<td>True when <code>grantedRoles</code> covers <code>.spec.roles</code>.</td>
-</tr>
-<tr>
-<td><code>PendingDependencies</code></td>
-<td><code>RolesPending</code>, <code>AllDependenciesPresent</code></td>
-<td>True when one or more <code>.spec.roles</code> correspond to a Neo4jRole CR that does not yet exist.</td>
-</tr>
-<tr>
-<td><code>UserNotFound</code></td>
-<td><code>UserNotFound</code>, <code>UserPresent</code></td>
-<td>True when the user named by <code>.spec.username</code> is absent from Neo4j.</td>
-</tr>
-<tr>
-<td><code>ClusterNotReady</code></td>
-<td><code>ClusterNotReady</code>, <code>ClusterReady</code></td>
-<td>Mirrors the readiness of the referenced cluster.</td>
-</tr>
-</tbody>
-</table>
-<h2 id="validation-rules">Validation rules<a class="headerlink" href="#validation-rules" title="Anchor link to this section">&para;</a></h2>
+<p>It builds and deploys the operator, runs <code>ginkgo ./test/integration/...</code>,
+uploads logs/cluster-state artifacts, and tears the cluster down.</p>
+<h2 id="release">Release<a class="headerlink" href="#release" title="Anchor link to this section">&para;</a></h2>
+<p><strong><code>release.yml</code> — tag-driven release pipeline.</strong> Push a <code>vX.Y.Z</code> tag (or dispatch
+with a tag input). Jobs:</p>
+<ol>
+<li><strong>determine-tag / validate-release</strong> — resolve the tag and run build/test
+   validation.</li>
+<li><strong>build-and-push</strong> — multi-arch (<code>linux/amd64,linux/arm64</code>) image to
+   <code>ghcr.io/neo4j-partners/neo4j-kubernetes-operator</code>, <strong>signed with Sigstore
+   Cosign keyless</strong> (<code>id-token: write</code> OIDC — no long-lived secrets).</li>
+<li><strong>create-release</strong> — assembles the kubectl-applyable bundles
+   (<code>neo4j-kubernetes-operator-complete.yaml</code>, <code>…operator.yaml</code>), stamps the OLM
+   CSV via <code>make bundle-release</code> (with a guard that refuses to publish if
+   <code>createdAt:</code> is still the dev placeholder), renders the release body from
+   <code>.github/release-notes-template.md</code>, and publishes the GitHub release.</li>
+</ol>
+<p>Pushing the tag also fires <strong>Pages — Docs</strong> and <strong>Pages — Helm Repo</strong> (below),
+so a single tag publishes images, the release, the docs version, and the chart.</p>
+<h2 id="publishing-to-github-pages">Publishing to GitHub Pages<a class="headerlink" href="#publishing-to-github-pages" title="Anchor link to this section">&para;</a></h2>
+<p>Both Pages workflows write to the <strong><code>gh-pages</code></strong> branch and share a <code>gh-pages</code>
+<a href="https://docs.github.com/actions/using-jobs/using-concurrency">concurrency group</a>
+so their pushes serialize instead of racing. Both authenticate with the
+built-in <code>GITHUB_TOKEN</code> — no extra secrets.</p>
+<h3 id="pages-docs">Pages — Docs<a class="headerlink" href="#pages-docs" title="Anchor link to this section">&para;</a></h3>
+<p><strong><code>pages-docs.yml</code></strong> publishes the MkDocs site as <strong>versioned</strong> docs using
+<a href="https://github.com/jimporter/mike"><code>mike</code></a>:</p>
 <ul>
-<li><code>clusterRef</code> must resolve to a cluster or standalone in the same namespace.</li>
-<li><code>username</code> matches <code>^[a-zA-Z][a-zA-Z0-9_.@\-]*$</code>, max 65 characters; reserved names rejected.</li>
-<li><code>roles</code> must be non-empty (kubebuilder MinItems=1) and contain no empty strings.</li>
-<li>A <code>Neo4jUser</code> in the same namespace targeting the same <code>clusterRef</code> and <code>username</code> is rejected at validate-time. (Manage role grants there instead.)</li>
+<li><strong>Push to <code>main</code></strong> → publishes the <code>/main/</code> alias (rolling preview).</li>
+<li><strong>Push of a <code>v*</code> tag</strong> → publishes <code>/vX.Y/</code> and updates the <code>/latest/</code> alias.</li>
+<li><strong>Manual dispatch</strong> → publish under an arbitrary <code>version-alias</code>, optionally
+  updating <code>latest</code>.</li>
 </ul>
-<h2 id="lifecycle">Lifecycle<a class="headerlink" href="#lifecycle" title="Anchor link to this section">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>CR Event</th>
-<th>Cypher Issued</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Create</td>
-<td><code>GRANT ROLE r TO username</code> for each role in <code>.spec.roles</code> (skipping built-ins not yet listed in current grants is fine; PUBLIC is always skipped)</td>
-</tr>
-<tr>
-<td>Update (<code>.spec.roles</code> changes)</td>
-<td><code>GRANT</code> for additions; <code>REVOKE</code> for removals from <code>.spec.roles</code> <em>and</em> roles previously listed in <code>status.grantedRoles</code></td>
-</tr>
-<tr>
-<td>Update (<code>enforceExclusive: true</code>)</td>
-<td>Same as above + revoke any extra roles on the user that are not in <code>.spec.roles</code></td>
-</tr>
-<tr>
-<td>Delete (<code>Revoke</code> policy)</td>
-<td><code>REVOKE ROLE r FROM username</code> for each role in <code>status.grantedRoles</code>, then remove finalizer</td>
-</tr>
-<tr>
-<td>Delete (<code>Retain</code> policy)</td>
-<td>Remove finalizer only</td>
-</tr>
-<tr>
-<td>User absent</td>
-<td>No-op; <code>UserNotFound</code> condition; reconcile every 30s until the user appears</td>
-</tr>
-<tr>
-<td>Cluster not Ready</td>
-<td>No-op; <code>ClusterNotReady</code> condition; reconcile every 30s</td>
-</tr>
-<tr>
-<td>Missing custom role</td>
-<td>Skip the grant for that role; <code>PendingDependencies</code> condition; the binding controller watches <code>Neo4jRole</code> and re-reconciles when the role lands</td>
-</tr>
-</tbody>
-</table>
-<h2 id="examples">Examples<a class="headerlink" href="#examples" title="Anchor link to this section">&para;</a></h2>
-<h3 id="bind-an-sso-user-to-the-editor-role">Bind an SSO user to the editor role<a class="headerlink" href="#bind-an-sso-user-to-the-editor-role" title="Anchor link to this section">&para;</a></h3>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1beta1</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Neo4jRoleBinding</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="nt">metadata</span><span class="p">:</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">alice-editor</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prod</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">  </span><span class="nt">clusterRef</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prod-cluster</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">  </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">alice@example.com</span><span class="w">   </span><span class="c1"># provisioned by Neo4j on first OIDC login</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">  </span><span class="nt">roles</span><span class="p">:</span>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">editor</span>
+<p>(The rolling-preview alias was historically called <code>dev</code>; it is now <code>main</code>.)</p>
+<h3 id="pages-helm-repo">Pages — Helm Repo<a class="headerlink" href="#pages-helm-repo" title="Anchor link to this section">&para;</a></h3>
+<p><strong><code>pages-helm.yml</code></strong> packages the chart in <code>charts/neo4j-operator</code> and appends it
+to the Helm repository index under <code>/charts/</code> on <code>gh-pages</code>, so:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>helm<span class="w"> </span>repo<span class="w"> </span>add<span class="w"> </span>neo4j-operator<span class="w"> </span>https://neo4j-partners.github.io/neo4j-kubernetes-operator/charts
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>helm<span class="w"> </span>repo<span class="w"> </span>update
 </span></code></pre></div>
-<h3 id="multiple-roles-exclusive-enforcement">Multiple roles, exclusive enforcement<a class="headerlink" href="#multiple-roles-exclusive-enforcement" title="Anchor link to this section">&para;</a></h3>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1beta1</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Neo4jRoleBinding</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="nt">metadata</span><span class="p">:</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">alice-baseline</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prod</span>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">  </span><span class="nt">clusterRef</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prod-cluster</span>
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">  </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">alice@example.com</span>
-</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">  </span><span class="nt">enforceExclusive</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">       </span><span class="c1"># revoke any role not listed below</span>
-</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">  </span><span class="nt">roles</span><span class="p">:</span>
-</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">editor</span>
-</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">analytics_reader</span>
-</span></code></pre></div>
-<p>With <code>enforceExclusive: true</code>, if someone grants <code>admin</code> to <code>alice</code> directly via Cypher, the next reconcile will revoke it.</p>
-<h3 id="combine-with-a-custom-neo4jrole">Combine with a custom Neo4jRole<a class="headerlink" href="#combine-with-a-custom-neo4jrole" title="Anchor link to this section">&para;</a></h3>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1beta1</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Neo4jRole</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="nt">metadata</span><span class="p">:</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">analytics-reader</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prod</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">  </span><span class="nt">clusterRef</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prod-cluster</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">  </span><span class="nt">privileges</span><span class="p">:</span>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;GRANT</span><span class="nv"> </span><span class="s">ACCESS</span><span class="nv"> </span><span class="s">ON</span><span class="nv"> </span><span class="s">DATABASE</span><span class="nv"> </span><span class="s">analytics</span><span class="nv"> </span><span class="s">TO</span><span class="nv"> </span><span class="s">analytics-reader&quot;</span>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;GRANT</span><span class="nv"> </span><span class="s">MATCH</span><span class="nv"> </span><span class="s">{*}</span><span class="nv"> </span><span class="s">ON</span><span class="nv"> </span><span class="s">GRAPH</span><span class="nv"> </span><span class="s">analytics</span><span class="nv"> </span><span class="s">NODES</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">TO</span><span class="nv"> </span><span class="s">analytics-reader&quot;</span>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="nn">---</span>
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1beta1</span>
-</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Neo4jRoleBinding</span>
-</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="nt">metadata</span><span class="p">:</span>
-</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">alice-analytics</span>
-</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prod</span>
-</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="w">  </span><span class="nt">clusterRef</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prod-cluster</span>
-</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="w">  </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">alice@example.com</span>
-</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="w">  </span><span class="nt">roles</span><span class="p">:</span>
-</span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">analytics-reader</span>
-</span></code></pre></div>
-<p>Apply order doesn't matter — the binding waits in <code>PendingDependencies</code> until the role lands.</p>
-<h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Anchor link to this section">&para;</a></h2>
-<p><strong><code>UserNotFound=True</code></strong>: the named user doesn't exist in Neo4j yet. With external auth providers (LDAP/OIDC), users are typically provisioned on first login. Either wait for the user to log in, or pre-create them via Neo4j Cypher / a <code>Neo4jUser</code> CR (in which case use <code>Neo4jUser</code> for the role grants).</p>
-<p><strong>Bound roles are revoked unexpectedly</strong>: check whether <code>enforceExclusive: true</code> is set. With exclusive mode, any role not in <code>.spec.roles</code> is revoked on every reconcile, even if added by a different process.</p>
-<p><strong>Cannot delete the CR — finalizer hangs</strong>: the controller is trying to revoke roles but cannot reach the cluster. Check the cluster's Ready phase; if the cluster is permanently gone, edit the CR to set <code>deletionPolicy: Retain</code> (or remove the finalizer manually only as a last resort).</p>
-<h2 id="see-also">See also<a class="headerlink" href="#see-also" title="Anchor link to this section">&para;</a></h2>
 <ul>
-<li><a href="../../user_guide/user_role_management/">User &amp; Role Management Guide</a></li>
-<li><a href="../neo4juser/"><code>Neo4jUser</code></a></li>
-<li><a href="../neo4jrole/"><code>Neo4jRole</code></a></li>
+<li><strong>Push of a <code>v*</code> tag</strong> → packages and publishes that version.</li>
+<li><strong>Manual dispatch</strong> → package a specific existing tag.</li>
+</ul>
+<h2 id="openshift-olm">OpenShift / OLM<a class="headerlink" href="#openshift-olm" title="Anchor link to this section">&para;</a></h2>
+<p>OLM/OperatorHub is a <strong>supported manual install path</strong> but is <strong>not</strong> covered by
+CI — a smoke test needs an OpenShift cluster, which standard GitHub runners can't
+provide. Build and validate the bundle locally per
+<a href="../openshift_olm/">OpenShift OLM</a>.</p>
+<h2 id="secrets-permissions">Secrets &amp; permissions<a class="headerlink" href="#secrets-permissions" title="Anchor link to this section">&para;</a></h2>
+<ul>
+<li><strong>CI / Extended Integration Tests:</strong> none beyond the default <code>GITHUB_TOKEN</code>.</li>
+<li><strong>Release:</strong> <code>id-token: write</code> (Cosign keyless OIDC) and <code>packages: write</code>
+  (push to GHCR). No stored signing keys.</li>
+<li><strong>Pages (Docs + Helm):</strong> <code>contents: write</code> to push to <code>gh-pages</code>; the built-in
+  <code>GITHUB_TOKEN</code>.</li>
 </ul>
 
 
@@ -3150,7 +2875,7 @@
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../neo4jrole/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Neo4jRole">
+          <a href="../collaboration/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Collaboration">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -3160,20 +2885,20 @@
                 Previous
               </span>
               <div class="md-ellipsis">
-                Neo4jRole
+                Collaboration
               </div>
             </div>
           </a>
         
         
           
-          <a href="../neo4jauthrule/" class="md-footer__link md-footer__link--next" aria-label="Next: Neo4jAuthRule">
+          <a href="../architecture/" class="md-footer__link md-footer__link--next" aria-label="Next: Architecture">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Neo4jAuthRule
+                Architecture
               </div>
             </div>
             <div class="md-footer__button md-icon">
