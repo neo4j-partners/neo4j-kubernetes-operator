@@ -3918,13 +3918,11 @@
 </span><span id="__span-8-20"><a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a><span class="w">    </span><span class="nt">server.memory.pagecache.size</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;10G&quot;</span><span class="w">    </span><span class="c1"># 31% for data access</span>
 </span><span id="__span-8-21"><a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a>
 </span><span id="__span-8-22"><a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a><span class="w">    </span><span class="c1"># Query optimization</span>
-</span><span id="__span-8-23"><a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a><span class="w">    </span><span class="nt">dbms.cypher.runtime</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;pipelined&quot;</span>
-</span><span id="__span-8-24"><a id="__codelineno-8-24" name="__codelineno-8-24" href="#__codelineno-8-24"></a><span class="w">    </span><span class="nt">dbms.cypher.planner</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;cost&quot;</span>
-</span><span id="__span-8-25"><a id="__codelineno-8-25" name="__codelineno-8-25" href="#__codelineno-8-25"></a><span class="w">    </span><span class="nt">dbms.memory.transaction.total.max</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;4G&quot;</span>
-</span><span id="__span-8-26"><a id="__codelineno-8-26" name="__codelineno-8-26" href="#__codelineno-8-26"></a>
-</span><span id="__span-8-27"><a id="__codelineno-8-27" name="__codelineno-8-27" href="#__codelineno-8-27"></a><span class="w">    </span><span class="c1"># Parallelism</span>
-</span><span id="__span-8-28"><a id="__codelineno-8-28" name="__codelineno-8-28" href="#__codelineno-8-28"></a><span class="w">    </span><span class="nt">dbms.threads.worker_count</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;16&quot;</span>
-</span><span id="__span-8-29"><a id="__codelineno-8-29" name="__codelineno-8-29" href="#__codelineno-8-29"></a><span class="w">    </span><span class="nt">internal.dbms.executors.parallel.enabled</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
+</span><span id="__span-8-23"><a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a><span class="w">    </span><span class="nt">dbms.cypher.planner</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;cost&quot;</span>
+</span><span id="__span-8-24"><a id="__codelineno-8-24" name="__codelineno-8-24" href="#__codelineno-8-24"></a><span class="w">    </span><span class="nt">dbms.memory.transaction.total.max</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;4G&quot;</span>
+</span><span id="__span-8-25"><a id="__codelineno-8-25" name="__codelineno-8-25" href="#__codelineno-8-25"></a>
+</span><span id="__span-8-26"><a id="__codelineno-8-26" name="__codelineno-8-26" href="#__codelineno-8-26"></a><span class="w">    </span><span class="c1"># Parallelism</span>
+</span><span id="__span-8-27"><a id="__codelineno-8-27" name="__codelineno-8-27" href="#__codelineno-8-27"></a><span class="w">    </span><span class="nt">server.threads.worker_count</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;16&quot;</span>
 </span></code></pre></div>
 <h3 id="write-heavy-workloads">Write-Heavy Workloads<a class="headerlink" href="#write-heavy-workloads" title="Anchor link to this section">&para;</a></h3>
 <p>Optimize for high-throughput data ingestion:</p>
@@ -3985,8 +3983,7 @@
 </span><span id="__span-10-23"><a id="__codelineno-10-23" name="__codelineno-10-23" href="#__codelineno-10-23"></a><span class="w">    </span><span class="nt">dbms.memory.transaction.total.max</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;2G&quot;</span>
 </span><span id="__span-10-24"><a id="__codelineno-10-24" name="__codelineno-10-24" href="#__codelineno-10-24"></a>
 </span><span id="__span-10-25"><a id="__codelineno-10-25" name="__codelineno-10-25" href="#__codelineno-10-25"></a><span class="w">    </span><span class="c1"># Vector-specific optimizations</span>
-</span><span id="__span-10-26"><a id="__codelineno-10-26" name="__codelineno-10-26" href="#__codelineno-10-26"></a><span class="w">    </span><span class="nt">dbms.cypher.runtime</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;parallel&quot;</span><span class="w">  </span><span class="c1"># For vector operations</span>
-</span><span id="__span-10-27"><a id="__codelineno-10-27" name="__codelineno-10-27" href="#__codelineno-10-27"></a><span class="w">    </span><span class="nt">dbms.threads.worker_count</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;16&quot;</span>
+</span><span id="__span-10-26"><a id="__codelineno-10-26" name="__codelineno-10-26" href="#__codelineno-10-26"></a><span class="w">    </span><span class="nt">server.threads.worker_count</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;16&quot;</span>
 </span></code></pre></div>
 <p><strong>Vector Index Memory Calculation Example:</strong>
 - 10M vectors with 1536 dimensions (float32)

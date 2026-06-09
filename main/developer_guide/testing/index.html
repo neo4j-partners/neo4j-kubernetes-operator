@@ -2591,6 +2591,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#example-test-coverage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example ↔ test coverage
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#shared-vs-per-spec-clusters" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3550,6 +3561,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#example-test-coverage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example ↔ test coverage
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#shared-vs-per-spec-clusters" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4482,6 +4504,80 @@ node) that can satisfy the 4Gi-per-server floor:</p>
 should be validated locally with these suites before merge</strong> — the nightly
 Extended lane only covers the minimal CI smoke path, not F3/F4/F5 or sharded
 backup/restore.</p>
+<h3 id="example-test-coverage">Example ↔ test coverage<a class="headerlink" href="#example-test-coverage" title="Anchor link to this section">&para;</a></h3>
+<p>Which <code>examples/</code> paths are backed by an integration test vs example-only. A path
+with <strong>no test</strong> is either <em>testable-but-uncovered</em> (a real gap — file an issue
+and add a spec) or <em>untested by nature</em> (needs infra a Kind CI runner can't
+provide — validate it in your own environment; these carry a header note in the
+example file).</p>
+<table>
+<thead>
+<tr>
+<th>Example path</th>
+<th>Test-backed?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>clusters/</code> (minimal, three-node-*, multi-server), <code>standalone/single-node</code></td>
+<td>✅ core</td>
+</tr>
+<tr>
+<td>TLS clusters (<code>tls-cluster</code>, <code>three-node-cluster</code>, <code>multi-server</code>)</td>
+<td>✅ core (<code>tls_cluster_lifecycle</code>)</td>
+</tr>
+<tr>
+<td><code>databases/*</code> (incl. seed URI)</td>
+<td>✅ core / extended</td>
+</tr>
+<tr>
+<td><code>property_sharding/*</code></td>
+<td>✅ extended</td>
+</tr>
+<tr>
+<td>backup / restore — PVC, S3 (via MinIO)</td>
+<td>✅ extended</td>
+</tr>
+<tr>
+<td><code>users-roles/01–06</code>; <code>07</code> (authrule)</td>
+<td>✅ core; ✅ extended</td>
+</tr>
+<tr>
+<td><code>plugins/</code> — apoc, gds, bloom, cluster, standalone</td>
+<td>✅ core (<code>plugin</code>)</td>
+</tr>
+<tr>
+<td><code>clusters/topology-placement</code> (<code>serverRoles</code>)</td>
+<td>❌ <strong>gap — Kind-testable, see GitHub issue</strong></td>
+</tr>
+<tr>
+<td><code>plugins/genai</code></td>
+<td>❌ untested (plugin download needs egress)</td>
+</tr>
+<tr>
+<td>exposure: <code>nodeport</code>/<code>loadbalancer</code>/<code>ingress</code>/<code>route-cluster</code></td>
+<td>❌ example-only (need a real LB / Ingress / OpenShift)</td>
+</tr>
+<tr>
+<td><code>databases/database-from-{gcs,azure}-seed</code>, cloud backup to GCS/Azure</td>
+<td>❌ example-only (S3/MinIO carry the coverage)</td>
+</tr>
+<tr>
+<td><code>fleet-management/*</code></td>
+<td>❌ example-only (needs Aura)</td>
+</tr>
+<tr>
+<td><code>auth-example</code> LDAP/OIDC variants</td>
+<td>❌ example-only (needs a real IdP; native auth <strong>is</strong> tested)</td>
+</tr>
+<tr>
+<td><code>clusters/storage-expansion</code></td>
+<td>❌ untested (Kind's local-path provisioner can't expand PVCs)</td>
+</tr>
+</tbody>
+</table>
+<p>When adding an example, add a test if the feature is Kind-testable; otherwise add
+the example-only header note (see any ❌-"by nature" example for the wording).</p>
 <h3 id="shared-vs-per-spec-clusters">Shared vs per-spec clusters<a class="headerlink" href="#shared-vs-per-spec-clusters" title="Anchor link to this section">&para;</a></h3>
 <p>Cluster formation is the dominant cost of the integration suite (minutes each,
 ~2× on CalVer), so specs that need the <strong>same</strong> cluster share one instead of each
