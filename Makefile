@@ -168,11 +168,18 @@ test-cleanup: ## Clean up test environment
 	@rm -f test-output.log coverage-*.out coverage-*.html
 
 # Unit Tests
+# GO_TEST_CMD is the test runner. Defaults to plain `go test` (local dev). CI
+# overrides it with gotestsum to get a JUnit report + a failed-test/slowest-test
+# summary, e.g.:
+#   make test-unit GO_TEST_CMD="./bin/gotestsum --format=testname \
+#     --junitfile=unit-junit.xml --jsonfile=unit-tests.json --"
+# The trailing `--` is required so the packages/flags below go to `go test`.
+GO_TEST_CMD ?= go test
 .PHONY: test-unit
 test-unit: manifests generate fmt vet envtest ## Run unit tests (no cluster required)
 	@echo "🧪 Running unit tests..."
 	@mkdir -p coverage
-	@./scripts/run-tests-clean.sh env KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -v /e2e | grep -v /integration | grep -v "/test/webhooks" | grep -v "/test/utils" | grep -v "/test/testutil" | grep -v "/cmd") -coverprofile coverage/coverage-unit.out -race -v
+	@./scripts/run-tests-clean.sh env KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" $(GO_TEST_CMD) $$(go list ./... | grep -v /e2e | grep -v /integration | grep -v "/test/webhooks" | grep -v "/test/utils" | grep -v "/test/testutil" | grep -v "/cmd") -coverprofile coverage/coverage-unit.out -race -v
 
 # Webhook tests removed - webhooks migrated to client-side validation
 
@@ -571,6 +578,7 @@ ENVTEST ?= $(LOCALBIN)/setup-envtest
 GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
 GINKGO = $(LOCALBIN)/ginkgo
 YQ ?= $(LOCALBIN)/yq
+GOTESTSUM ?= $(LOCALBIN)/gotestsum
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.4.3
@@ -579,6 +587,7 @@ ENVTEST_VERSION ?= release-0.19
 GOLANGCI_LINT_VERSION ?= v1.64.8
 GINKGO_VERSION ?= v2.29.0
 YQ_VERSION ?= v4.45.1
+GOTESTSUM_VERSION ?= v1.13.0
 
 .PHONY: kustomize
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
@@ -599,6 +608,11 @@ $(ENVTEST): $(LOCALBIN)
 golangci-lint: $(GOLANGCI_LINT) ## Download golangci-lint locally if necessary.
 $(GOLANGCI_LINT): $(LOCALBIN)
 	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint,$(GOLANGCI_LINT_VERSION))
+
+.PHONY: gotestsum
+gotestsum: $(GOTESTSUM) ## Download gotestsum locally if necessary (CI unit-test reporter).
+$(GOTESTSUM): $(LOCALBIN)
+	$(call go-install-tool,$(GOTESTSUM),gotest.tools/gotestsum,$(GOTESTSUM_VERSION))
 
 .PHONY: ginkgo
 ginkgo: $(GINKGO) ## Download ginkgo locally if necessary.

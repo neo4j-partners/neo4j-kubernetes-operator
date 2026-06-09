@@ -46,7 +46,7 @@ import (
 //
 // Gated identically to the rest of the property-sharding suite (CI-skipped,
 // Neo4j 2025.12+ only).
-var _ = Describe("Property Sharding PVC Seed (F5) Integration Tests", Serial, func() {
+var _ = Describe("Property Sharding PVC Seed (F5) Integration Tests", Label("extended"), Serial, func() {
 	const (
 		clusterReadyTimeout   = 10 * time.Minute
 		shardedDBReadyTimeout = 10 * time.Minute

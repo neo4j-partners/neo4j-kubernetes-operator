@@ -51,7 +51,7 @@ func envImageIsCalver() bool {
 	return v.IsCalver
 }
 
-var _ = Describe("Multi-Node Cluster Formation Integration Tests", func() {
+var _ = Describe("Multi-Node Cluster Formation Integration Tests", Label("extended"), func() {
 	var (
 		ctx         context.Context
 		namespace   *corev1.Namespace

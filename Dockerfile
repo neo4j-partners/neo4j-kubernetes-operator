@@ -39,6 +39,14 @@ FROM gcr.io/distroless/static:nonroot
 # Add documentation (if files exist)
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
+# Re-declare the build args in this stage so the image-metadata LABELs below
+# actually interpolate them — ARGs declared before the first FROM do not cross
+# stage boundaries. Without this the version/created/revision labels are empty
+# and buildx emits an UndefinedVar warning.
+ARG VERSION=dev
+ARG BUILD_DATE
+ARG VCS_REF
+
 # Add metadata
 LABEL org.opencontainers.image.title="Neo4j Enterprise Operator"
 LABEL org.opencontainers.image.description="Kubernetes operator for Neo4j Enterprise clusters (5.26+)"

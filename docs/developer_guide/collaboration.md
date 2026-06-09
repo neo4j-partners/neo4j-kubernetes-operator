@@ -30,6 +30,14 @@ Every change lands through a PR. Keep PRs focused — one logical change per PR.
    Address feedback by pushing follow-up commits.
 6. Merge once required checks pass and the PR is approved.
 
+> **Pushing cancels in-flight test runs.** The integration lanes use per-PR
+> concurrency with `cancel-in-progress`, so a new push **terminates the currently
+> running integration run** and restarts it on the new head — the old run is
+> marked "cancelled", not failed. If you're waiting on a green integration
+> result, let the run finish before pushing again (or batch fixes into one
+> push) rather than pushing on top of an in-flight run. See
+> [CI/CD & Workflows → Integration Tests](ci_and_workflows.md#integration-tests).
+
 ### Commit messages
 
 Use [Conventional Commits](https://www.conventionalcommits.org/): `feat:`,
@@ -45,20 +53,29 @@ These run automatically on every PR (see [CI/CD & Workflows](ci_and_workflows.md
 |---|---|
 | **Generated Artifacts In Sync** (`check-drift`) | CRDs, RBAC, deepcopy, Helm CRDs, and the OLM bundle match the source. |
 | **Unit Tests** | `make test-unit` (race-enabled) passes. |
-| **Extended Integration Tests** | Runs automatically only when the PR touches the cluster/restore/backup controllers or the integration suite; otherwise on-demand (see below). |
+| **Integration Tests** | The `core` subset on 5.26 + CalVer (parallel). Runs automatically when the PR touches runtime paths (`internal/**`, `api/**`, `cmd/**`, `test/integration/**`, `Makefile`, `go.{mod,sum}`). |
+| **Extended Integration Tests** | The full suite on CalVer. Runs nightly; **does not auto-run on PRs** — opt a PR in with the `run-extended` label (runs extended-only) or dispatch manually (see below). |
 
 Lint (`golangci-lint`, `staticcheck`) runs via the pre-commit hooks locally; run
 `make lint` before pushing.
 
+See [CI/CD & Workflows → Test tiers](ci_and_workflows.md#test-tiers-core-vs-extended)
+for the `core` vs `extended` label convention and how to run each tier locally.
+
 ### Running the Extended Integration Tests on demand
 
-The 90-minute suite doesn't run on every PR. Trigger it when your change could
-affect cluster coordination:
+The full (~90–150 min) CalVer suite doesn't run on every PR. Trigger it when your
+change could affect cluster coordination, backup/restore, or sharding:
 
-- **PR label:** add `run-integration-tests`, or
-- **Commit message:** include `[run-integration]`, or
+- **On a PR:** apply the **`run-extended`** label. The workflow then runs the
+  `extended` specs against that PR (the `core` lane already covers `core`, so it
+  isn't re-run). Labels are maintainer-only.
 - **Manually:** run the *Extended Integration Tests* workflow from the Actions
-  tab (lets you pick the Neo4j version).
+  tab **against your branch** (lets you pick the Neo4j version) — runs the full
+  suite.
+
+The fast `core` lane (*Integration Tests*) runs automatically on any
+runtime-path PR — no opt-in needed.
 
 ## Code owners and review
 

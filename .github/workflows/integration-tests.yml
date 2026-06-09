@@ -4,34 +4,36 @@ on:
   workflow_dispatch:
     inputs:
       neo4j-version:
-        description: 'Neo4j version to test against'
+        description: 'Neo4j image tag to test against. Defaults to the pinned
+          CalVer track — the strict ceiling new users run. Pass 5.26-enterprise
+          to verify the LTS floor on the full suite.'
         required: false
-        default: '5.26-enterprise'
+        # Pinned CalVer default. Keep in sync with the neo4j-version matrix list
+        # in integration.yml (the core lane) — bump both in the same PR.
+        default: '2026.04-enterprise'
         type: string
       timeout-minutes:
-        description: 'Ginkgo suite timeout in minutes. CalVer (2026.x) images are
-          ~2x slower per spec than 5.26, so the full suite needs more headroom —
-          bump this (e.g. 150) when dispatching against a 2026.x version.'
+        description: 'Ginkgo suite timeout in minutes. CalVer images are ~2x
+          slower per spec than 5.26, so the full suite needs ~150 of headroom.'
         required: false
-        default: '120'
+        default: '150'
         type: string
-  # Auto-run on PRs that touch the restore or cluster controllers, or
-  # the integration suite itself. These are the code paths whose bugs
-  # (issue #117, #129) silently slipped past unit-test coverage and
-  # were only caught after release. Path filter is intentionally
-  # narrow — running the full (multi-hour on CalVer) suite on every PR would slow
-  # delivery; running it on the specific controllers most likely to
-  # silently break the cluster-coordination contract is the cheap
-  # signal that catches the bug-shaped regressions.
+  # Nightly run on main against the pinned CalVer track. This is what keeps main
+  # continuously known-good on the version users actually deploy, so a regression
+  # is caught the day it merges (cheap, attributable) rather than at release time.
+  # It also means tagging a release ships a commit whose CalVer health is already
+  # established — the tag is too late to be the gate (it IS the release trigger).
+  schedule:
+    - cron: '0 3 * * *'  # 03:00 UTC daily
+  # Opt-in per-PR run: apply the `run-extended` label to a PR to run the EXTENDED
+  # specs (backup/restore/sharding/multi-node) against it. PRs do NOT auto-run
+  # Extended — by design, the default PR signal is the fast core lane (Integration
+  # Tests, 5.26 ∥ CalVer), keeping the dev cycle short. On the PR event we run
+  # `extended`-only (the core lane already covers core on that PR — see the
+  # label-filter in the run step), so there's no redundant core re-run. Labels are
+  # maintainer-only, which also keeps untrusted fork PRs from triggering it.
   pull_request:
-    paths:
-      - 'internal/controller/neo4jrestore_controller.go'
-      - 'internal/controller/neo4jrestore_coordination*.go'
-      - 'internal/controller/neo4jbackup_controller.go'
-      - 'internal/controller/neo4jenterprisecluster_controller.go'
-      - 'internal/controller/neo4jenterprisestandalone_controller.go'
-      - 'test/integration/**'
-      - '.github/workflows/integration-tests.yml'
+    types: [labeled]
 
 # Cancel a PR's in-flight run when a new commit is pushed to the same PR — the
 # extended suite is multi-hour on CalVer, so leaving the superseded run going
@@ -49,9 +51,14 @@ env:
 jobs:
   extended-integration-tests:
     name: Extended Integration Tests
+    # Run on schedule/dispatch always; on a PR only when the `run-extended` label
+    # is the one just applied (other labels added to the PR are ignored).
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.label.name == 'run-extended'
     runs-on: ubuntu-latest
     # Fixed safety backstop, well above the Ginkgo --timeout below (the real gate,
-    # driven by the timeout-minutes input; default 120, bump to ~150 for 2026.x).
+    # driven by the timeout-minutes input; default 150 for the CalVer full suite).
     # GitHub expressions can't do arithmetic, so this is a generous constant rather
     # than input+buffer: Ginkgo self-terminates at its own timeout first and exits
     # gracefully (writes the report + uploads artifacts); this only kills a wedged
@@ -75,9 +82,37 @@ jobs:
       with:
         kind-version: ${{ env.KIND_VERSION }}
 
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v4
+
+    # Build the operator image with a GitHub Actions layer cache so unchanged
+    # layers (base image, go mod download) are reused; only changed Go code
+    # rebuilds. load:true puts it in the daemon for the kind load below.
+    - name: Build operator image (gha layer cache)
+      uses: docker/build-push-action@v7
+      with:
+        context: .
+        load: true
+        tags: neo4j-operator:integration-test
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        build-args: |
+          VERSION=integration-test
+          BUILD_DATE=ci
+          VCS_REF=${{ github.sha }}
+
+    # Cache the Neo4j Enterprise image as a tarball, keyed on the tag. On a hit we
+    # skip the Docker Hub pull entirely (faster + dodges anonymous rate limits)
+    # and import the tarball straight into kind's containerd.
+    - name: Cache Neo4j image tarball
+      uses: actions/cache@v5
+      with:
+        path: /tmp/neo4j-image.tar
+        key: neo4j-image-${{ github.event.inputs.neo4j-version || '2026.04-enterprise' }}
+
     - name: Create cluster and deploy operator
       run: |
-        NEO4J_VERSION="${{ github.event.inputs.neo4j-version || '5.26-enterprise' }}"
+        NEO4J_VERSION="${{ github.event.inputs.neo4j-version || '2026.04-enterprise' }}"
 
         echo "▶ Creating test cluster..."
         make test-cluster
@@ -85,8 +120,7 @@ jobs:
         echo "▶ Installing CRDs..."
         make manifests install
 
-        echo "▶ Building operator image..."
-        make docker-build IMG=neo4j-operator:integration-test
+        echo "▶ Loading pre-built operator image into Kind..."
         kind load docker-image neo4j-operator:integration-test --name neo4j-operator-test
 
         echo "▶ Deploying operator to neo4j-operator-system..."
@@ -125,48 +159,63 @@ jobs:
         kubectl describe deployment neo4j-operator-controller-manager \
           -n neo4j-operator-system | grep -A2 "Image:" || true
 
-        echo "▶ Pre-loading Neo4j image: neo4j:${NEO4J_VERSION}"
-        # Both `kind load docker-image` and `kind load image-archive` pipe
-        # docker save output to `ctr images import --all-platforms`, which
-        # chases every digest in the OCI manifest index and fails on blobs for
-        # other platforms not downloaded locally.
+        echo "▶ Loading Neo4j image: neo4j:${NEO4J_VERSION}"
+        # Use the cached tarball when present (cache hit); otherwise pull once and
+        # save it for the cache to persist.
         #
-        # Docker 27+ uses the containerd image store by default, which stores
-        # the full OCI manifest index even for a `--platform linux/amd64` pull,
-        # so the `docker save` archive always contains the multi-platform index.
-        #
-        # Fix: bypass Kind's loader entirely and run `ctr import` directly
-        # WITHOUT `--all-platforms`. Containerd then imports only the manifest
-        # that matches the Kind node's platform (linux/amd64) and ignores the
-        # others whose blobs are absent.
-        if ! docker pull --platform linux/amd64 neo4j:${NEO4J_VERSION}; then
-          echo "❌ Failed to pull neo4j:${NEO4J_VERSION} — image is required for tests"
-          exit 1
+        # Import goes straight into kind's containerd via `ctr` WITHOUT
+        # --all-platforms: both `kind load` paths pipe to `ctr import
+        # --all-platforms`, which chases every digest in the multi-arch OCI index
+        # (Docker 27+ stores the full index even for a --platform pull) and fails
+        # on blobs for platforms not downloaded locally. Bypassing kind's loader
+        # imports only the linux/amd64 manifest.
+        if [ ! -f /tmp/neo4j-image.tar ]; then
+          echo "cache miss — pulling neo4j:${NEO4J_VERSION}"
+          if ! docker pull --platform linux/amd64 neo4j:${NEO4J_VERSION}; then
+            echo "❌ Failed to pull neo4j:${NEO4J_VERSION} — image is required for tests"
+            exit 1
+          fi
+          docker save neo4j:${NEO4J_VERSION} -o /tmp/neo4j-image.tar
+        else
+          echo "cache hit — using /tmp/neo4j-image.tar"
         fi
-        docker save neo4j:${NEO4J_VERSION} | \
-          docker exec --privileged -i neo4j-operator-test-control-plane \
-          ctr --namespace=k8s.io images import --snapshotter=overlayfs -
+        docker exec --privileged -i neo4j-operator-test-control-plane \
+          ctr --namespace=k8s.io images import --snapshotter=overlayfs - < /tmp/neo4j-image.tar
         echo "✅ neo4j:${NEO4J_VERSION} loaded into Kind"
 
     - name: Run extended integration tests
       run: |
         export FORCE_COLOR=1
-        echo "📊 Neo4j version: ${{ github.event.inputs.neo4j-version || '5.26-enterprise' }}"
+        echo "📊 Neo4j version: ${{ github.event.inputs.neo4j-version || '2026.04-enterprise' }}"
         echo "🔗 Running full integration test suite..."
 
         # Use the project-pinned ginkgo binary (make ginkgo downloads to ./bin/ginkgo)
         make ginkgo
 
         set -o pipefail
-        # Honor the dispatch input (was hardcoded 90m, which ignored the input and
-        # truncated the suite on slower CalVer images). Defaults to 120m for PR-
-        # triggered runs (no inputs).
-        ./bin/ginkgo run -v --timeout="${GINKGO_TIMEOUT_MIN}m" ./test/integration/... | tee integration-test-output.log
+        # Event-aware scope: schedule/dispatch run the FULL suite (core+extended);
+        # a label-gated PR run does EXTENDED-only, because the core lane already
+        # covers core on that PR and re-running it here would be a redundant
+        # CalVer-core run.
+        LABEL_FILTER="core || extended"
+        [ "${{ github.event_name }}" = "pull_request" ] && LABEL_FILTER="extended"
+        echo "📊 label-filter: ${LABEL_FILTER}"
+        # --procs=1: the suite shares ONE Kind cluster + operator — must run
+        # serially (Ginkgo's default, explicit here to guard against an accidental -p).
+        # --json-report feeds the per-spec failure/timing summary below.
+        ./bin/ginkgo run -v --timeout="${GINKGO_TIMEOUT_MIN}m" --procs=1 \
+          --label-filter="${LABEL_FILTER}" \
+          --json-report=ginkgo-report.json \
+          ./test/integration/... | tee integration-test-output.log
       env:
         KUBECONFIG: /home/runner/.kube/config
-        NEO4J_VERSION: ${{ github.event.inputs.neo4j-version || '5.26-enterprise' }}
-        GINKGO_TIMEOUT_MIN: ${{ github.event.inputs.timeout-minutes || '120' }}
+        NEO4J_VERSION: ${{ github.event.inputs.neo4j-version || '2026.04-enterprise' }}
+        GINKGO_TIMEOUT_MIN: ${{ github.event.inputs.timeout-minutes || '150' }}
         FORCE_COLOR: 1
+
+    - name: Ginkgo report summary (failed specs + timings)
+      if: always()
+      run: ./scripts/ginkgo-report-summary.sh ginkgo-report.json 30 || true
 
     - name: Collect cluster state
       if: always()
@@ -198,15 +247,7 @@ jobs:
           coverage/
           *.out
           integration-test-output.log
-        if-no-files-found: warn
-
-    - name: Archive cluster state dump
-      uses: actions/upload-artifact@v7
-      if: always()
-      with:
-        name: cluster-state-dump
-        path: |
-          /tmp/cluster-logs/
+          ginkgo-report.json
         if-no-files-found: warn
 
     - name: Cleanup test cluster
@@ -218,7 +259,11 @@ jobs:
     runs-on: ubuntu-latest
     permissions: {}
     needs: [extended-integration-tests]
-    if: always()
+    # Mirror the main job's gate so we don't post a summary when Extended was
+    # skipped (a non-`run-extended` label added to a PR).
+    if: >-
+      always() &&
+      (github.event_name != 'pull_request' || github.event.label.name == 'run-extended')
 
     steps:
     - name: Extended Integration Test Summary
@@ -244,8 +289,8 @@ jobs:
 
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### Test Configuration:" >> $GITHUB_STEP_SUMMARY
-        echo "- **Neo4j Version**: ${{ github.event.inputs.neo4j-version || '5.26-enterprise' }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Timeout**: ${{ github.event.inputs.timeout-minutes || '120' }} minutes" >> $GITHUB_STEP_SUMMARY
+        echo "- **Neo4j Version**: ${{ github.event.inputs.neo4j-version || '2026.04-enterprise' }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Timeout**: ${{ github.event.inputs.timeout-minutes || '150' }} minutes" >> $GITHUB_STEP_SUMMARY
         echo "- **Test Suite**: Full integration suite with custom Neo4j version" >> $GITHUB_STEP_SUMMARY
 
         echo "" >> $GITHUB_STEP_SUMMARY

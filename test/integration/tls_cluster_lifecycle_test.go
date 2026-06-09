@@ -137,7 +137,7 @@ func dumpTLSDiagnostics(ctx SpecContext, clientset *kubernetes.Clientset, namesp
 	fmt.Fprintln(w, "\n========== End TLS diagnostics ==========")
 }
 
-var _ = Describe("TLS Cluster Lifecycle (strict peer validation, default)", func() {
+var _ = Describe("TLS Cluster Lifecycle (strict peer validation, default)", Label("core"), func() {
 	var (
 		namespaceName string
 		clusterName   string

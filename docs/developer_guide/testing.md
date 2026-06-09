@@ -50,6 +50,40 @@ go test ./internal/controller -run TestGetStatefulSetName -v
 go test ./internal/validation -run TestTopologyValidator -v
 ```
 
+### Reporting, gotchas & guards
+
+Unit tests aren't tiered or version-gated like the integration suite (they all run
+on every push, no cluster), so there's no coverage matrix — but a few things are
+worth knowing in the same spirit:
+
+- **CI reporting (gotestsum).** The CI unit job runs `make test-unit` through
+  **gotestsum** (`GO_TEST_CMD` override), which emits a **failed-test list** and a
+  **slowest-test** breakdown to the job summary, plus JUnit + JSON artifacts. Local
+  `make test-unit` uses plain `go test` (the `GO_TEST_CMD` default) — unchanged.
+- **envtest seam.** Only the `internal/controller` suite needs a real API server
+  (`KUBEBUILDER_ASSETS`, via setup-envtest); `make test-unit` provisions it. Other
+  packages (`internal/validation`, `internal/resources`, `api/...`) are pure and
+  need no cluster.
+- **Wall-clock mental model.** `go test` runs packages **in parallel**, so the
+  unit suite's wall-clock ≈ the **slowest package** — currently the envtest
+  `TestControllers` (~37s). Within a package, Ginkgo specs run serially.
+- **Gotcha — bound network-touching unit specs with a context deadline.** Specs
+  that exercise the Bolt client against a non-existent endpoint (e.g.
+  `internal/neo4j` `TestClient`) must use a **short-deadline context**, not
+  `context.Background()` — otherwise each "expected to fail" call waits out the
+  driver's real retry windows (`ConnectionAcquisitionTimeout` 10s /
+  `MaxTransactionRetryTime` 15s). That mistake once made `TestClient` ~160s and
+  gated the whole suite; a 2s deadline cut it to ~13s. The production timeouts in
+  `client.go` are load-bearing (pinned by `uri_test.go`) — never relax those to
+  speed a test; bound the **test's** context instead.
+- **Config-assembly invariants.** `TestStandaloneCreateConfigMap_NoDuplicateKeys`
+  and `TestBuildConfigMapForEnterprise_NoDuplicateKeys` render the real conf
+  builders across realistic layerings (monitoring + audit + auth + user overrides)
+  and assert **no neo4j.conf key is declared twice** — the duplicate-key class that
+  CrashLoops CalVer Neo4j (NEO3-16). When you add config layering, these catch
+  collisions at unit speed, at every version. Keep them green rather than relying
+  on an integration boot to surface a duplicate key.
+
 ### Unit Test Structure
 
 Unit tests are located alongside the code they test:
@@ -128,6 +162,11 @@ make test-cluster         # Create test cluster
 make test-integration     # Run tests (uses existing cluster)
 make test-cluster-delete  # Clean up cluster
 
+# Run by tier label (matches what CI selects — see below)
+ginkgo run --label-filter='core'     ./test/integration/...  # fast contributor subset
+ginkgo run --label-filter='extended' ./test/integration/...  # heavy / release subset
+ginkgo run --label-filter='core || extended' ./test/integration/...  # everything
+
 # Run specific test suites
 ginkgo run -focus "Neo4jEnterpriseCluster" ./test/integration
 ginkgo run -focus "should create backup" ./test/integration
@@ -138,12 +177,107 @@ make test-integration-ci     # Assumes cluster and operator already deployed
 make test-integration-ci-full # Full suite in CI environment
 ```
 
+### Tier labels (`core` / `extended`)
+
+Each spec's top-level `Describe` carries a Ginkgo `Label`:
+
+- **`core`** — reconcile contracts a routine change is most likely to break
+  (standalone Ready, cluster formation, DB/user/role CRUD, config rendering,
+  plugin install, basic TLS). The *Integration Tests* CI lane runs this subset
+  on both 5.26 and CalVer on every runtime-path PR.
+- **`extended`** — multi-node, split-brain, rolling upgrade, backup/restore,
+  sharding, MinIO, MCP, ABAC. The *Extended Integration Tests* workflow runs the
+  full suite on CalVer nightly + on release prep.
+
+**When you add a spec file, label its `Describe`** (`Label("core")` or
+`Label("extended")`) — an unlabeled spec runs in neither CI lane. See
+[CI/CD & Workflows](ci_and_workflows.md#test-tiers-core-vs-extended).
+
+### Two gates: the label selects the lane, a runtime `Skip` decides if it can run there
+
+A spec's **tier label** only decides which CI lane *selects* it. Whether it
+actually *executes* in that lane is a second, independent gate — a `Skip(...)`
+evaluated at run time:
+
+- **Operator present** — most suites `Skip` unless the operator is deployed
+  in-cluster (`isOperatorRunning()`). Always true in CI; false if you run the
+  suite against a bare cluster locally.
+- **Neo4j version** — version-gated features self-skip on older images
+  (`isPropertyShardingCompatible()` needs 2025.12+; ABAC needs 2026.03+). On the
+  CalVer lane these pass; on the 5.26 cell they skip.
+- **Resources** — the resource-heavy specs `Skip` when `isRunningInCI()` is true,
+  because a GitHub-hosted runner can't give them the production floor.
+
+So **`Label("extended")` does *not* mean "runs in the Extended CI lane."** It
+means "the Extended lane is the only lane that will *consider* it" — a runtime
+`Skip` may still exclude it there.
+
+### What runs where (coverage map)
+
+| Suite(s) | Verifies | Tier | Where it actually runs |
+|---|---|---|---|
+| `standalone_deployment`, `cluster_lifecycle`, `neo4j{user,role,rolebinding}`, `database_neo4j_verification`, `enterprise_features`, `plugin`, `tls_cluster_lifecycle` | Core reconcile contracts: Ready, formation, RBAC/DB CRUD, config rendering, plugin install, TLS | `core` | **Integration Tests** lane — both 5.26 + CalVer, every runtime-path PR |
+| `multi_node_cluster`, `splitbrain_detection`, `rolling_upgrade`, `backup_*`, `restore_*`, `standard_database_*_restore`, `database_seed_uri`, `mcp_integration` | Multi-node, coordination, backup/restore matrix, MCP | `extended` | **Extended** lane — CalVer, nightly + coordination-critical PRs + dispatch |
+| `neo4jauthrule` | ABAC / OIDC | `extended` | Extended lane, **CalVer only** (self-skips < 2026.03) |
+| `property_sharding_ci_smoke` | One minimal sharded DB (1 graph + 1 property shard) | `extended` | Extended lane on CalVer, **via `NEO4J_SHARDING_RELAX_MEMORY_MIN`** (the integration-test overlay relaxes the 4Gi floor to fit a runner) |
+| `property_sharding`, `property_sharding_backup`, `property_sharding_minio_restore`, `property_sharding_pvc_seed` | Full sharding: F3/F4/F5, multi-property-shard topology, sharded backup/restore | `extended` | **Local only** — `Skip` in CI (`isRunningInCI()`). They need the production **4Gi/server** floor a hosted runner can't provide |
+
+#### Running the local-only sharding suites
+
+The richer property-sharding suites are the one block of coverage **no CI lane
+exercises** — they self-skip in CI and run only on a machine (or larger Kind
+node) that can satisfy the 4Gi-per-server floor:
+
+```bash
+# Local run on a host with enough RAM (no isRunningInCI()/CI env set):
+make test-cluster && make operator-setup
+NEO4J_VERSION=2026.04-enterprise \
+  ginkgo run --label-filter='extended' -focus "Property Sharding" ./test/integration/...
+```
+
+Because they don't run in CI, **a change to the sharding controllers/builders
+should be validated locally with these suites before merge** — the nightly
+Extended lane only covers the minimal CI smoke path, not F3/F4/F5 or sharded
+backup/restore.
+
+### Shared vs per-spec clusters
+
+Cluster formation is the dominant cost of the integration suite (minutes each,
+~2× on CalVer), so specs that need the **same** cluster share one instead of each
+forming its own:
+
+- **Shared.** The `Neo4jUser` / `Neo4jRole` / `Neo4jRoleBinding` / `Neo4jDatabase`
+  e2e specs all need an identical vanilla cluster (native auth, TLS off, 2 servers)
+  and only operate on the system/user databases. They reuse a single cluster via
+  **`useSharedNativeCluster`** (`shared_cluster_test.go`, `sync.Once`), formed once
+  and torn down in `AfterSuite`. This collapsed ~5 formations → 1 and removed the
+  per-spec "form a cluster within the SpecTimeout" gamble that was timing out on
+  CalVer.
+- **Per-spec (own cluster).** Specs whose cluster config **diverges** (TLS/
+  cert-manager, OIDC/ABAC, property sharding, non-default topology, image upgrade)
+  or that **mutate/destroy** cluster state (plugin install → rolling restart,
+  split-brain pod kills, destructive restore) keep their own cluster — sharing
+  would conflict with their required config.
+
+**When you add a spec:** if it needs a plain native cluster and only touches the
+system/user DBs, **reuse `useSharedNativeCluster`** — don't create a new cluster.
+Then:
+- give your CRs **unique names** (the shared system DB is sequential state across
+  specs);
+- in `AfterEach`, delete **only your own** CRs — never the shared cluster, and
+  never `cleanupCustomResourcesInNamespace` on the shared namespace (it would nuke
+  other specs' resources).
+
+This is safe only because the suite runs **serially** (`--procs=1`): specs mutate
+the shared system DB one at a time. Reusing the cluster is incompatible with
+Ginkgo `-p` for that reason.
+
 ### Integration Test Structure
 
 Integration tests are located in `test/integration/` and follow consistent patterns:
 
 ```go
-var _ = Describe("Neo4jPlugin Integration Tests", func() {
+var _ = Describe("Neo4jPlugin Integration Tests", Label("core"), func() {
     const (
         timeout  = time.Second * 300  // 5-minute timeout for CI
         interval = time.Second * 5

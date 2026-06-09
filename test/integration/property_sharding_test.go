@@ -71,7 +71,7 @@ func isPropertyShardingCompatible() bool {
 // Or:
 //
 //	NEO4J_VERSION=2025.12-enterprise ginkgo run -focus "Property Sharding" ./test/integration
-var _ = Describe("Property Sharding Integration Tests", Serial, func() {
+var _ = Describe("Property Sharding Integration Tests", Label("extended"), Serial, func() {
 	const shardedDBReadyTimeout = 10 * time.Minute
 	const shardedDBPollInterval = 5 * time.Second
 

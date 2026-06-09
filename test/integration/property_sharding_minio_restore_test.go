@@ -49,7 +49,7 @@ import (
 // Run locally:
 //
 //	NEO4J_VERSION=2025.12-enterprise ginkgo run -focus "Property Sharding Restore" ./test/integration
-var _ = Describe("Property Sharding Restore (MinIO) Integration Tests", Serial, func() {
+var _ = Describe("Property Sharding Restore (MinIO) Integration Tests", Label("extended"), Serial, func() {
 	const (
 		clusterReadyTimeout   = 10 * time.Minute
 		shardedDBReadyTimeout = 10 * time.Minute

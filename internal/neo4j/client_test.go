@@ -19,6 +19,7 @@ package neo4j_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -48,7 +49,19 @@ var _ = Describe("Neo4j Client", func() {
 	)
 
 	BeforeEach(func() {
-		ctx = context.Background()
+		// These specs deliberately exercise operations against a cluster with no
+		// real Neo4j — every connectivity/DDL call is expected to error. Without a
+		// deadline each one waits out the driver's retry windows
+		// (ConnectionAcquisitionTimeout 10s / MaxTransactionRetryTime 15s — the
+		// load-bearing production values pinned by uri_test.go, NOT to be changed
+		// here), and the circuit-breaker spec loops 5×, which made TestClient ~160s
+		// and gated the whole unit suite's wall-clock. The driver honours context
+		// deadlines, so a short per-spec deadline bounds each failing call to ~2s
+		// without touching production timeouts. The assertions only require that an
+		// error occurs — a deadline-exceeded error satisfies them just as well.
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(context.Background(), 2*time.Second)
+		DeferCleanup(cancel)
 		scheme = runtime.NewScheme()
 		Expect(clientgoscheme.AddToScheme(scheme)).To(Succeed())
 		Expect(neo4jv1beta1.AddToScheme(scheme)).To(Succeed())

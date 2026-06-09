@@ -57,7 +57,7 @@ const (
 // OIDCProviderConfigured precondition passes; we don't actually
 // authenticate any users.
 
-var _ = Describe("Neo4jAuthRule end-to-end", func() {
+var _ = Describe("Neo4jAuthRule end-to-end", Label("extended"), func() {
 	// Each spec creates a fresh 2-server cluster on Neo4j 2026.04, then
 	// patches the cluster's spec.config to add the ABAC provider key
 	// (which forces a rolling restart). 15 minutes is the realistic

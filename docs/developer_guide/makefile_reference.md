@@ -248,6 +248,11 @@ make lint-lenient
 **Usage**: `make test-unit`
 **Dependencies**: `manifests`, `generate`, `fmt`, `vet`, `envtest`
 **Duration**: ~30 seconds
+**Test runner override**: the recipe runs `$(GO_TEST_CMD)` (default `go test`). CI swaps in [gotestsum](#make-gotestsum) for richer reporting:
+```bash
+make gotestsum
+make test-unit GO_TEST_CMD="./bin/gotestsum --format=testname --junitfile=unit-junit.xml --jsonfile=unit-tests.json --"
+```
 **Example**:
 ```bash
 make test-unit
@@ -964,6 +969,11 @@ make catalog-push CATALOG_IMG=ghcr.io/my-org/catalog:v1.0
 **Description**: Download Operator SDK for bundle management
 **Version**: v1.39.1
 **Location**: `bin/operator-sdk`
+
+#### `make gotestsum`
+**Description**: Download [gotestsum](https://github.com/gotestyourself/gotestsum), a `go test` wrapper that prints a readable summary and emits JUnit XML + test2json reports. CI uses it for the Unit Tests job (see [`test-unit`](#make-test-unit) and the [CI workflow](ci_and_workflows.md#ci)).
+**Version**: v1.13.0 (v1.12.0 won't compile under Go 1.26)
+**Location**: `bin/gotestsum`
 
 ## Code Quality
 

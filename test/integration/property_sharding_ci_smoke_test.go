@@ -54,7 +54,7 @@ import (
 //
 // Operator must be deployed with `NEO4J_SHARDING_RELAX_MEMORY_MIN=true` —
 // applied via the integration-test kustomize overlay.
-var _ = Describe("Property Sharding CI Smoke Test", Serial, func() {
+var _ = Describe("Property Sharding CI Smoke Test", Label("extended"), Serial, func() {
 	const (
 		clusterReadyTimeout = 10 * time.Minute
 		shardedReadyTimeout = 5 * time.Minute
