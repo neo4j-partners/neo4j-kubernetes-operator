@@ -3167,8 +3167,21 @@ updated automatically on every operator release.</p>
 </span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>
 </span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>helm<span class="w"> </span>install<span class="w"> </span>neo4j-operator<span class="w"> </span>./charts/neo4j-operator<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="w">  </span>--namespace<span class="w"> </span>neo4j-operator-system<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="w">  </span>--create-namespace
+</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="w">  </span>--create-namespace<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="w">  </span>--set<span class="w"> </span>image.tag<span class="o">=</span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">LATEST_TAG</span><span class="p">#v</span><span class="si">}</span><span class="s2">&quot;</span><span class="w">   </span><span class="c1"># e.g. 1.11.0 — see note below</span>
 </span></code></pre></div>
+<blockquote>
+<p><strong>You must set <code>image.tag</code> for a from-clone install.</strong> In the repository,
+<code>Chart.yaml</code>'s <code>version</code>/<code>appVersion</code> are a <code>0.0.1</code> placeholder that the
+release pipeline stamps from the git tag at publish time. Without
+<code>--set image.tag</code>, the chart resolves the image to
+<code>ghcr.io/neo4j-partners/neo4j-kubernetes-operator:0.0.1</code>, which doesn't exist
+(<code>ImagePullBackOff</code>). Set it to a released version (the <code>LATEST_TAG</code> above with
+the <code>v</code> stripped), or build and load a local image and point <code>image.repository</code>
+/ <code>image.tag</code> at it — see the <a href="../../developer_guide/development/">developer guide</a>.
+(Installing the <em>published</em> chart via Methods 1–2 doesn't need this — the
+released chart already carries the real version.)</p>
+</blockquote>
 <h3 id="method-5-git-clone-with-make-targets">Method 5: Git Clone with Make Targets<a class="headerlink" href="#method-5-git-clone-with-make-targets" title="Anchor link to this section">&para;</a></h3>
 <p>For development, customization, or when you need to build from source:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Clone the repository</span>
