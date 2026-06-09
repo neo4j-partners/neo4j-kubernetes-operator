@@ -333,23 +333,68 @@ func (r *Neo4jEnterpriseStandaloneReconciler) reconcileStandalone(ctx context.Co
 	return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
 }
 
-// reconcileConfigMap reconciles the ConfigMap for the standalone deployment
+// ownedStandaloneConfKeysAnnotation records the neo4j.conf setting keys the
+// standalone controller rendered on the last reconcile. On the next reconcile it
+// lets the controller enforce REMOVALS (keys the user deleted from spec.config)
+// while preserving FOREIGN keys merged into the same ConfigMap by other
+// controllers — notably a Neo4jPlugin, whose settings the plugin controller
+// upserts into this standalone's neo4j.conf. Mirrors the cluster controller's
+// env-var ownership annotation (neo4j.com/cluster-controller-env-vars).
+const ownedStandaloneConfKeysAnnotation = "neo4j.com/standalone-controller-conf-keys"
+
+// reconcileConfigMap reconciles the ConfigMap for the standalone deployment.
 func (r *Neo4jEnterpriseStandaloneReconciler) reconcileConfigMap(ctx context.Context, standalone *neo4jv1beta1.Neo4jEnterpriseStandalone) error {
 	logger := log.FromContext(ctx)
 
-	// Create ConfigMap using the standalone configuration
-	configMap := r.createConfigMap(standalone)
+	// Fully re-render the operator-owned config from spec each reconcile.
+	desired := r.createConfigMap(standalone)
+	desiredConf := desired.Data["neo4j.conf"]
+	desiredKeys := resources.Neo4jConfSettings(desiredConf) // operator-owned keys this reconcile
 
-	// Set owner reference
-	if err := controllerutil.SetControllerReference(standalone, configMap, r.Scheme); err != nil {
-		return fmt.Errorf("failed to set owner reference: %w", err)
+	configMap := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{Name: desired.Name, Namespace: desired.Namespace},
 	}
 
-	// Create or update ConfigMap with retry logic to handle resource version conflicts
+	// Create or update ConfigMap with retry logic to handle resource version conflicts.
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		_, err := controllerutil.CreateOrUpdate(ctx, r.Client, configMap, func() error {
-			// ConfigMap updates for standalone deployments
-			return nil
+			// controllerutil.CreateOrUpdate's Get overwrites configMap with the
+			// EXISTING object, so the desired state MUST be (re)applied here in the
+			// mutate fn — an empty mutate would silently write the stale data back
+			// (the cause of stale spec.config keys never clearing on update).
+			prevOwned := splitCSVSet(configMap.Annotations[ownedStandaloneConfKeysAnnotation])
+
+			// Preserve foreign keys (e.g. a Neo4jPlugin's), but drop operator keys
+			// the user removed: a key the operator owned last time and no longer
+			// renders must not be resurrected from the existing ConfigMap.
+			mergeBack := make(map[string]string)
+			for k, v := range resources.Neo4jConfSettings(configMap.Data["neo4j.conf"]) {
+				if _, wasOwned := prevOwned[k]; wasOwned {
+					if _, stillDesired := desiredKeys[k]; !stillDesired {
+						continue // operator key the user deleted — let it go
+					}
+				}
+				mergeBack[k] = v
+			}
+			// Start from the freshly-rendered operator conf, then merge the
+			// preserved keys back: additive keys union (so plugin tokens survive),
+			// scalars add-if-absent (so the operator's re-rendered value wins).
+			// Idempotent → no ConfigMap churn and no tug-of-war with the plugin
+			// controller (it sees its settings already present and makes no change).
+			merged := resources.DedupeNeo4jConf(resources.UpsertNeo4jConfSettings(desiredConf, mergeBack))
+
+			if configMap.Data == nil {
+				configMap.Data = make(map[string]string)
+			}
+			configMap.Data["neo4j.conf"] = merged
+			configMap.Data["health.sh"] = desired.Data["health.sh"]
+
+			if configMap.Annotations == nil {
+				configMap.Annotations = make(map[string]string)
+			}
+			configMap.Annotations[ownedStandaloneConfKeysAnnotation] = joinSortedKeys(desiredKeys)
+
+			return controllerutil.SetControllerReference(standalone, configMap, r.Scheme)
 		})
 		return err
 	})
@@ -359,6 +404,28 @@ func (r *Neo4jEnterpriseStandaloneReconciler) reconcileConfigMap(ctx context.Con
 	logger.Info("Successfully created or updated ConfigMap", "name", configMap.Name)
 
 	return nil
+}
+
+// splitCSVSet parses a comma-separated annotation value into a set.
+func splitCSVSet(s string) map[string]struct{} {
+	set := make(map[string]struct{})
+	for _, k := range strings.Split(s, ",") {
+		if k = strings.TrimSpace(k); k != "" {
+			set[k] = struct{}{}
+		}
+	}
+	return set
+}
+
+// joinSortedKeys returns the map's keys sorted and comma-joined (deterministic
+// so the annotation value doesn't churn the ConfigMap between reconciles).
+func joinSortedKeys(m map[string]string) string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return strings.Join(keys, ",")
 }
 
 // reconcileService reconciles the client-facing Service and the headless

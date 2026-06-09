@@ -1927,6 +1927,32 @@ func UpsertNeo4jConfSettings(conf string, settings map[string]string) string {
 	return strings.Join(lines, "\n")
 }
 
+// Neo4jConfSettings parses a rendered neo4j.conf into a key→value map. Comment
+// and blank lines are skipped, as are the repeatable jvm.additional keys (which
+// have no single value). It is the read-side counterpart to
+// UpsertNeo4jConfSettings / DedupeNeo4jConf and is used to track which setting
+// keys the operator owns (so removals propagate) while leaving foreign keys —
+// e.g. a Neo4jPlugin's contributions to a standalone's ConfigMap — untouched.
+func Neo4jConfSettings(conf string) map[string]string {
+	out := make(map[string]string)
+	for _, line := range strings.Split(conf, "\n") {
+		t := strings.TrimSpace(line)
+		if t == "" || strings.HasPrefix(t, "#") {
+			continue
+		}
+		eq := strings.IndexByte(t, '=')
+		if eq <= 0 {
+			continue
+		}
+		k := strings.TrimSpace(t[:eq])
+		if k == "server.jvm.additional" || k == "dbms.jvm.additional" {
+			continue // repeatable — not a single-valued setting
+		}
+		out[k] = strings.TrimSpace(t[eq+1:])
+	}
+	return out
+}
+
 // unionCSV returns the comma-separated union of a and b, de-duplicated and in
 // first-seen order (a's tokens first, then b's new tokens).
 func unionCSV(a, b string) string {
