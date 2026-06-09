@@ -67,6 +67,22 @@ func (v *ConfigValidator) Validate(cluster *neo4jv1beta1.Neo4jEnterpriseCluster)
 		"dbms.kubernetes.discovery.service_port_name": "Kubernetes service-list discovery is not used; operator uses LIST discovery with pod FQDNs",
 	}
 
+	// Per-pod / topology values the operator writes into neo4j.conf at startup
+	// (advertised addresses use each pod's FQDN; mode constraint and the initial
+	// primaries count come from spec.topology). A user value in spec.config would
+	// be appended to the static conf and then DECLARED AGAIN at runtime → CalVer
+	// Neo4j refuses to start with "<key> declared multiple times". The static-conf
+	// de-duplication can't catch this because the second declaration is appended
+	// at pod startup, so reject these at apply time.
+	operatorRuntimeManagedSettings := map[string]string{
+		"server.default_advertised_address":                   "advertised addresses are set per-pod (FQDN) by the operator at runtime — do not set in spec.config",
+		"server.cluster.advertised_address":                   "advertised addresses are set per-pod (FQDN) by the operator at runtime — do not set in spec.config",
+		"server.routing.advertised_address":                   "advertised addresses are set per-pod (FQDN) by the operator at runtime — do not set in spec.config",
+		"server.cluster.raft.advertised_address":              "advertised addresses are set per-pod (FQDN) by the operator at runtime — do not set in spec.config",
+		"initial.server.mode_constraint":                      "use spec.topology.serverModeConstraint / serverRoles — the operator sets initial.server.mode_constraint at runtime",
+		"dbms.cluster.minimum_initial_system_primaries_count": "managed by the operator (derived from spec.topology) — do not override",
+	}
+
 	for configKey, configValue := range cluster.Spec.Config {
 		// Special handling for dbms.cluster.discovery.version.
 		// In 5.26.x this setting controls the discovery protocol (V1 vs V2); the operator
@@ -98,6 +114,16 @@ func (v *ConfigValidator) Validate(cluster *neo4jv1beta1.Neo4jEnterpriseCluster)
 			allErrs = append(allErrs, field.Forbidden(
 				configPath.Child(configKey),
 				"unsupported configuration: "+unsupportedMsg,
+			))
+		}
+
+		// Check for operator runtime-managed settings (advertised addresses,
+		// topology). These would collide at startup with the operator's own
+		// runtime-appended declaration.
+		if runtimeMsg, isManaged := operatorRuntimeManagedSettings[configKey]; isManaged {
+			allErrs = append(allErrs, field.Forbidden(
+				configPath.Child(configKey),
+				"operator-managed configuration: "+runtimeMsg,
 			))
 		}
 

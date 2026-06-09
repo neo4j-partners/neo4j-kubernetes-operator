@@ -215,6 +215,42 @@ func TestConfigValidator_RejectsManagedSSLKeys(t *testing.T) {
 	}
 }
 
+func TestConfigValidator_RejectsRuntimeManagedKeys(t *testing.T) {
+	validator := NewConfigValidator()
+
+	// Keys the operator writes into neo4j.conf at pod startup (per-pod FQDN
+	// advertised addresses, topology). A user value collides at runtime →
+	// "declared multiple times" on CalVer, which the static-conf de-dup can't
+	// catch — so reject at apply time.
+	keys := []string{
+		"server.default_advertised_address",
+		"server.cluster.advertised_address",
+		"server.routing.advertised_address",
+		"server.cluster.raft.advertised_address",
+		"initial.server.mode_constraint",
+		"dbms.cluster.minimum_initial_system_primaries_count",
+	}
+
+	for _, key := range keys {
+		t.Run(key, func(t *testing.T) {
+			cluster := &neo4jv1beta1.Neo4jEnterpriseCluster{
+				Spec: neo4jv1beta1.Neo4jEnterpriseClusterSpec{
+					Config: map[string]string{key: "some-value"},
+				},
+			}
+			errors := validator.Validate(cluster)
+			found := false
+			for _, err := range errors {
+				if err.Type == field.ErrorTypeForbidden && err.Field == "spec.config."+key {
+					found = true
+					break
+				}
+			}
+			assert.True(t, found, "expected %s to be Forbidden — got %v", key, errors)
+		})
+	}
+}
+
 func TestConfigValidator_DeprecatedKeys(t *testing.T) {
 	validator := NewConfigValidator()
 

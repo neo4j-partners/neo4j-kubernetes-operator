@@ -27,6 +27,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	neo4jv1beta1 "github.com/neo4j-partners/neo4j-kubernetes-operator/api/v1beta1"
+	"github.com/neo4j-partners/neo4j-kubernetes-operator/internal/resources"
 )
 
 // newPluginTestReconciler builds a Neo4jPluginReconciler backed by a fake
@@ -110,7 +111,9 @@ func TestInstallPluginViaEnvironment_Managed(t *testing.T) {
 	assert.Contains(t, pluginsVal, "graph-data-science")
 
 	// GDS triggers automatic security settings — verify one landed.
-	unrestricted, ok := findEnv(c, "NEO4J_DBMS_SECURITY_PROCEDURES_UNRESTRICTED")
+	// Neo4j env-var convention preserves case: dots→underscores, no upper-casing
+	// (see resources.Neo4jSettingEnvVarName).
+	unrestricted, ok := findEnv(c, "NEO4J_dbms_security_procedures_unrestricted")
 	require.True(t, ok, "Managed mode must write the GDS unrestricted security env var")
 	assert.Contains(t, unrestricted, "gds.*")
 }
@@ -147,9 +150,52 @@ func TestInstallPluginViaEnvironment_PreBaked(t *testing.T) {
 
 	// Configuration path must still run — security env vars are why a user
 	// keeps the CR around when they bake the JAR into the image.
-	unrestricted, ok := findEnv(c, "NEO4J_DBMS_SECURITY_PROCEDURES_UNRESTRICTED")
+	unrestricted, ok := findEnv(c, "NEO4J_dbms_security_procedures_unrestricted")
 	require.True(t, ok, "PreBaked mode must still write the GDS unrestricted security env var")
 	assert.Contains(t, unrestricted, "gds.*")
+}
+
+// TestUninstallPlugin_PrunesSecurityEnvForAllModes guards that uninstall removes
+// the plugin's security tokens (e.g. gds.*) regardless of install mode. The
+// install path unions these into the StatefulSet env for EVERY mode (the
+// PreBaked/VerifiedDownload guards only skip the NEO4J_PLUGINS list), so a
+// mode-specific prune would orphan them: PreBaked and VerifiedDownload uninstall
+// return before the Managed JAR-removal path that used to own the prune.
+func TestUninstallPlugin_PrunesSecurityEnvForAllModes(t *testing.T) {
+	const ns = "default"
+	const clusterName = "c1"
+	unrestricted := resources.Neo4jSettingEnvVarName("dbms.security.procedures.unrestricted")
+
+	for _, mode := range []string{PluginInstallModePreBaked, PluginInstallModeVerifiedDownload} {
+		t.Run(mode, func(t *testing.T) {
+			// STS carries the tokens the install path would have merged in.
+			sts := pluginTestSTS(clusterName, ns)
+			sts.Spec.Template.Spec.Containers[0].Env = []corev1.EnvVar{
+				{Name: unrestricted, Value: "gds.*,apoc.load.*"},
+			}
+			cluster := &neo4jv1beta1.Neo4jEnterpriseCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: ns},
+			}
+			r := newPluginTestReconciler(t, sts, cluster)
+
+			plugin := &neo4jv1beta1.Neo4jPlugin{
+				ObjectMeta: metav1.ObjectMeta{Name: "gds", Namespace: ns},
+				Spec: neo4jv1beta1.Neo4jPluginSpec{
+					ClusterRef:  clusterName,
+					Name:        "graph-data-science",
+					Version:     "2.13.0",
+					InstallMode: mode,
+				},
+			}
+
+			require.NoError(t, r.uninstallPlugin(context.Background(), plugin))
+
+			got := &appsv1.StatefulSet{}
+			require.NoError(t, r.Get(context.Background(), types.NamespacedName{Name: clusterName + "-server", Namespace: ns}, got))
+			_, has := findEnv(&got.Spec.Template.Spec.Containers[0], unrestricted)
+			assert.False(t, has, "%s uninstall must prune the plugin's security env tokens", mode)
+		})
+	}
 }
 
 // TestInstallPluginViaEnvironment_PreBaked_PreservesExistingPluginsEnv asserts

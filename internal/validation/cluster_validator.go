@@ -44,6 +44,7 @@ type ClusterValidator struct {
 	upgradeValidator  *UpgradeValidator
 	memoryValidator   *MemoryValidator
 	resourceValidator *ResourceValidator
+	configValidator   *ConfigValidator
 }
 
 // NewClusterValidator creates a new cluster validator
@@ -59,6 +60,7 @@ func NewClusterValidator(client client.Client) *ClusterValidator {
 		upgradeValidator:  NewUpgradeValidator(),
 		memoryValidator:   NewMemoryValidator(),
 		resourceValidator: NewResourceValidator(client),
+		configValidator:   NewConfigValidator(),
 	}
 }
 
@@ -170,6 +172,12 @@ func (v *ClusterValidator) validateCluster(ctx context.Context, cluster *neo4jv1
 	allErrs = append(allErrs, v.storageValidator.Validate(cluster)...)
 	allErrs = append(allErrs, v.tlsValidator.Validate(cluster)...)
 	allErrs = append(allErrs, v.authValidator.Validate(cluster)...)
+
+	// spec.config validation — rejects deprecated keys, operator-managed
+	// discovery/SSL keys, and per-pod runtime-managed keys (advertised
+	// addresses, topology) that would collide with the operator's own
+	// startup-appended values. Previously this validator was never wired in.
+	allErrs = append(allErrs, v.configValidator.Validate(cluster)...)
 
 	// Property sharding validation (version requirements)
 	allErrs = append(allErrs, v.validatePropertySharding(cluster)...)

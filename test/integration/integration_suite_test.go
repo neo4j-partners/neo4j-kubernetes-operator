@@ -36,6 +36,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -302,6 +303,59 @@ func waitForOperatorReady() {
 	time.Sleep(2 * time.Second)
 
 	By("Operator is ready")
+}
+
+// crashLoopError returns a descriptive error — including the offending
+// container's recent log tail — if any pod in the namespace is in
+// CrashLoopBackOff, or has a container that already terminated with a non-zero
+// exit and restarted (e.g. Neo4j refusing to boot on a fatal neo4j.conf error
+// such as a duplicate key on CalVer). Returns nil when nothing is crash-looping.
+//
+// Readiness waits use this to FAIL FAST with a specific, actionable signal
+// instead of timing out after minutes with an opaque "not yet ready" — a
+// CrashLoopBackOff will never recover on its own, so polling it to the deadline
+// only delays and obscures the failure.
+func crashLoopError(ctx context.Context, namespace string) error {
+	podList := &corev1.PodList{}
+	if err := k8sClient.List(ctx, podList, client.InNamespace(namespace)); err != nil {
+		// Transient list failure — let the normal readiness poll handle it.
+		return nil
+	}
+	for i := range podList.Items {
+		pod := &podList.Items[i]
+		for _, cs := range pod.Status.ContainerStatuses {
+			w := cs.State.Waiting
+			crashLooping := w != nil && w.Reason == "CrashLoopBackOff"
+			fatalExit := cs.LastTerminationState.Terminated != nil &&
+				cs.LastTerminationState.Terminated.ExitCode != 0 &&
+				cs.RestartCount > 0
+			if !crashLooping && !fatalExit {
+				continue
+			}
+			return fmt.Errorf("pod %s/%s container %q is crash-looping (restarts=%d)\n--- log tail ---\n%s",
+				namespace, pod.Name, cs.Name, cs.RestartCount, podLogTail(ctx, namespace, pod.Name, cs.Name))
+		}
+	}
+	return nil
+}
+
+// podLogTail returns the last ~40 lines of a container's log, preferring the
+// previous (crashed) instance so the fatal startup line is visible. Best-effort.
+func podLogTail(ctx context.Context, namespace, pod, container string) string {
+	clientset, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		return "(could not build clientset for logs)"
+	}
+	tail := int64(40)
+	for _, previous := range []bool{true, false} {
+		data, err := clientset.CoreV1().Pods(namespace).GetLogs(pod, &corev1.PodLogOptions{
+			Container: container, Previous: previous, TailLines: &tail,
+		}).DoRaw(ctx)
+		if err == nil && len(data) > 0 {
+			return string(data)
+		}
+	}
+	return "(no logs available)"
 }
 
 // cleanupTestNamespaces removes all test namespaces

@@ -2,6 +2,7 @@ package resources_test
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -365,4 +366,95 @@ func TestBuildConfigMapForEnterprise_HealthScript(t *testing.T) {
 		"health script should handle cluster formation waiting period")
 	assert.Contains(t, healthScript, "cluster formation barrier",
 		"health script should recognize cluster formation barrier logs")
+}
+
+// duplicateConfKeys returns any neo4j.conf key declared more than once. CalVer
+// Neo4j (2025.x+) treats a repeated key as fatal ("<key> declared multiple
+// times") and refuses to start. server.jvm.additional / dbms.jvm.additional are
+// legitimately repeatable and excluded.
+func duplicateConfKeys(conf string) []string {
+	counts := map[string]int{}
+	for _, line := range strings.Split(conf, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		eq := strings.IndexByte(line, '=')
+		if eq < 0 {
+			continue
+		}
+		key := strings.TrimSpace(line[:eq])
+		if key == "server.jvm.additional" || key == "dbms.jvm.additional" {
+			continue
+		}
+		counts[key]++
+	}
+	var dups []string
+	for k, n := range counts {
+		if n > 1 {
+			dups = append(dups, k)
+		}
+	}
+	return dups
+}
+
+// TestBuildConfigMapForEnterprise_NoDuplicateKeys is the cluster counterpart to
+// the standalone invariant: across realistic config layerings (monitoring +
+// audit + auth + user spec.config overrides on shared keys), the static rendered
+// neo4j.conf must never declare a key twice, or CalVer Neo4j refuses to boot.
+// (Discovery/advertised-address keys are appended at runtime by startup.sh and
+// are out of scope here — this guards the static ConfigMap surface.)
+func TestBuildConfigMapForEnterprise_NoDuplicateKeys(t *testing.T) {
+	calver := neo4jv1beta1.ImageSpec{Repo: "neo4j", Tag: "2026.04-enterprise"}
+	obfuscate := true
+	param := true
+
+	cases := []struct {
+		name string
+		spec neo4jv1beta1.Neo4jEnterpriseClusterSpec
+	}{
+		{
+			name: "minimal",
+			spec: neo4jv1beta1.Neo4jEnterpriseClusterSpec{
+				Image:    calver,
+				Topology: neo4jv1beta1.TopologyConfiguration{Servers: 3},
+			},
+		},
+		{
+			name: "monitoring + audit (both touch db.logs.query.obfuscate_literals)",
+			spec: neo4jv1beta1.Neo4jEnterpriseClusterSpec{
+				Image:      calver,
+				Topology:   neo4jv1beta1.TopologyConfiguration{Servers: 3},
+				Monitoring: &neo4jv1beta1.MonitoringSpec{Enabled: true, SlowQueryThreshold: "5s", QueryLogLevel: "INFO"},
+				Audit:      &neo4jv1beta1.AuditSpec{Enabled: true, ObfuscateQueryLiterals: &obfuscate, ParameterLogging: &param},
+			},
+		},
+		{
+			name: "monitoring + audit + user overrides on shared keys",
+			spec: neo4jv1beta1.Neo4jEnterpriseClusterSpec{
+				Image:      calver,
+				Topology:   neo4jv1beta1.TopologyConfiguration{Servers: 3},
+				Monitoring: &neo4jv1beta1.MonitoringSpec{Enabled: true, SlowQueryThreshold: "5s", QueryLogLevel: "VERBOSE"},
+				Audit:      &neo4jv1beta1.AuditSpec{Enabled: true},
+				Config: map[string]string{
+					"db.logs.query.enabled":            "true",
+					"db.logs.query.threshold":          "1s",
+					"db.logs.query.obfuscate_literals": "true",
+					"server.memory.heap.max_size":      "2G",
+				},
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cluster := &neo4jv1beta1.Neo4jEnterpriseCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "c", Namespace: "default"},
+				Spec:       tc.spec,
+			}
+			conf := resources.BuildConfigMapForEnterprise(cluster).Data["neo4j.conf"]
+			assert.Empty(t, duplicateConfKeys(conf),
+				"rendered neo4j.conf must not declare any key twice (CalVer Neo4j fails to start otherwise)")
+		})
+	}
 }

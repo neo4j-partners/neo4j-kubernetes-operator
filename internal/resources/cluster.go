@@ -1742,7 +1742,207 @@ server.metrics.csv.enabled=false
 		}
 	}
 
-	return config
+	return DedupeNeo4jConf(config)
+}
+
+// Additive list keys: the operator emits these for plugins (GDS/Bloom/APOC) and
+// Aura Fleet Management, and the user may also set them in spec.config. A plain
+// last-wins dedupe would DROP the operator's contribution (e.g. Aura's
+// fleetManagement.* lost when the user sets gds.*,apoc.*), so DedupeNeo4jConf
+// MERGES all occurrences into the union of their comma-separated tokens instead.
+var additiveConfKeys = map[string]bool{
+	"dbms.security.procedures.unrestricted": true,
+	"dbms.security.procedures.allowlist":    true,
+	"dbms.security.procedures.denylist":     true,
+	"dbms.security.http_auth_allowlist":     true,
+	"server.unmanaged_extension_classes":    true,
+}
+
+// Neo4jSettingEnvVarName converts a neo4j.conf setting key to its Neo4j Docker
+// environment-variable form: the NEO4J_ prefix, a literal '_' doubled to '__',
+// then '.' replaced with '_', with case preserved. E.g.
+// dbms.security.procedures.unrestricted -> NEO4J_dbms_security_procedures_unrestricted
+// and dbms.security.http_auth_allowlist  -> NEO4J_dbms_security_http__auth__allowlist.
+// The Neo4j entrypoint reverses this ('__' -> '_', then '_' -> '.'), so the casing
+// and underscore escaping both matter — an upper-cased name maps to an invalid
+// (upper-cased) setting and is silently ignored. Matches the convention the
+// operator already uses for the LDAP system-account env vars.
+func Neo4jSettingEnvVarName(key string) string {
+	return "NEO4J_" + strings.ReplaceAll(strings.ReplaceAll(key, "_", "__"), ".", "_")
+}
+
+// IsAdditiveConfKey reports whether a neo4j.conf setting is an additive,
+// comma-separated list (e.g. dbms.security.procedures.unrestricted) whose values
+// from multiple sources (operator, user, several plugins) must be unioned rather
+// than overwritten — overwriting silently drops the other sources' entries.
+func IsAdditiveConfKey(key string) bool { return additiveConfKeys[key] }
+
+// MergeConfListValues returns the comma-separated union of two list values,
+// de-duplicated and in first-seen order (a's tokens first, then b's new tokens).
+// Used for additive keys both in neo4j.conf and in NEO4J_*-style env vars.
+func MergeConfListValues(a, b string) string { return unionCSV(a, b) }
+
+// DedupeNeo4jConf collapses duplicate setting keys in a rendered neo4j.conf so
+// the same key is never declared twice. The operator assembles the conf from
+// several sections (base → monitoring → audit → auth → user spec.config), and a
+// key emitted by more than one section (classically db.logs.query.enabled /
+// db.logs.query.threshold, from monitoring AND user spec.config) would appear
+// twice. Neo4j 5.26 tolerated that (last wins); CalVer (2025.x+) FAILS to start
+// with "<key> declared multiple times".
+//
+// Resolution rules (so operator-set config is never silently lost):
+//   - Scalar keys: keep the LAST occurrence — matching the documented precedence
+//     (audit over monitoring; user spec.config over operator defaults) and the
+//     old 5.26 last-wins behavior. An operator key with no user duplicate is
+//     never dropped (it has no later occurrence).
+//   - Additive list keys (additiveConfKeys): MERGE the union of all occurrences'
+//     tokens, so the operator's allowlist isn't lost to a user override.
+//   - server.jvm.additional / dbms.jvm.additional: left untouched — Neo4j
+//     intentionally accepts repeated occurrences and concatenates them.
+//
+// Comment and blank lines are preserved in place.
+func DedupeNeo4jConf(conf string) string {
+	lines := strings.Split(conf, "\n")
+
+	settingKV := func(line string) (key, value string, ok bool) {
+		t := strings.TrimSpace(line)
+		if t == "" || strings.HasPrefix(t, "#") {
+			return "", "", false
+		}
+		eq := strings.IndexByte(t, '=')
+		if eq <= 0 {
+			return "", "", false
+		}
+		k := strings.TrimSpace(t[:eq])
+		if k == "server.jvm.additional" || k == "dbms.jvm.additional" {
+			return "", "", false // repeatable — never dedupe
+		}
+		return k, strings.TrimSpace(t[eq+1:]), true
+	}
+
+	lastIdx := make(map[string]int)
+	mergedTokens := make(map[string][]string)
+	seenToken := make(map[string]map[string]bool)
+	for i, line := range lines {
+		k, v, ok := settingKV(line)
+		if !ok {
+			continue
+		}
+		lastIdx[k] = i
+		if additiveConfKeys[k] {
+			if seenToken[k] == nil {
+				seenToken[k] = map[string]bool{}
+			}
+			for _, tok := range strings.Split(v, ",") {
+				tok = strings.TrimSpace(tok)
+				if tok == "" || seenToken[k][tok] {
+					continue
+				}
+				seenToken[k][tok] = true
+				mergedTokens[k] = append(mergedTokens[k], tok)
+			}
+		}
+	}
+
+	out := lines[:0:0]
+	for i, line := range lines {
+		k, _, ok := settingKV(line)
+		if !ok {
+			out = append(out, line)
+			continue
+		}
+		if lastIdx[k] != i {
+			continue // earlier occurrence of a key resolved later — drop it
+		}
+		if additiveConfKeys[k] {
+			out = append(out, fmt.Sprintf("%s=%s", k, strings.Join(mergedTokens[k], ",")))
+		} else {
+			out = append(out, line)
+		}
+	}
+	return strings.Join(out, "\n")
+}
+
+// UpsertNeo4jConfSettings merges externally-provided settings (e.g. a
+// Neo4jPlugin's required security settings) into an already-rendered neo4j.conf
+// WITHOUT creating duplicate keys — CalVer Neo4j refuses to start on a duplicate
+// declaration. It is idempotent (re-applying the same settings yields identical
+// output) so it doesn't churn the ConfigMap:
+//
+//   - Additive list keys (additiveConfKeys, e.g. dbms.security.procedures.*):
+//     the setting's tokens are unioned into the existing line in place, so the
+//     operator/user allowlist is preserved and the plugin's entries are added;
+//     appended if the key is absent.
+//   - Other (scalar) keys: added only if absent, so an operator/user value is
+//     never clobbered (matching the plugin path's "add if not present" intent).
+//
+// Keys are processed in sorted order for deterministic output.
+func UpsertNeo4jConfSettings(conf string, settings map[string]string) string {
+	if len(settings) == 0 {
+		return conf
+	}
+	lines := strings.Split(conf, "\n")
+
+	keyIdx := make(map[string]int)
+	keyVal := make(map[string]string)
+	for i, line := range lines {
+		t := strings.TrimSpace(line)
+		if t == "" || strings.HasPrefix(t, "#") {
+			continue
+		}
+		eq := strings.IndexByte(t, '=')
+		if eq <= 0 {
+			continue
+		}
+		k := strings.TrimSpace(t[:eq])
+		if k == "server.jvm.additional" || k == "dbms.jvm.additional" {
+			continue // repeatable — leave untouched
+		}
+		keyIdx[k] = i
+		keyVal[k] = strings.TrimSpace(t[eq+1:])
+	}
+
+	keys := make([]string, 0, len(settings))
+	for k := range settings {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, k := range keys {
+		v := settings[k]
+		idx, present := keyIdx[k]
+		switch {
+		case additiveConfKeys[k] && present:
+			merged := unionCSV(keyVal[k], v)
+			lines[idx] = fmt.Sprintf("%s=%s", k, merged)
+			keyVal[k] = merged
+		case !present:
+			lines = append(lines, fmt.Sprintf("%s=%s", k, v))
+			keyIdx[k] = len(lines) - 1
+			keyVal[k] = v
+		default:
+			// scalar key already present — preserve the existing value
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+// unionCSV returns the comma-separated union of a and b, de-duplicated and in
+// first-seen order (a's tokens first, then b's new tokens).
+func unionCSV(a, b string) string {
+	seen := make(map[string]bool)
+	var toks []string
+	for _, s := range []string{a, b} {
+		for _, tok := range strings.Split(s, ",") {
+			tok = strings.TrimSpace(tok)
+			if tok == "" || seen[tok] {
+				continue
+			}
+			seen[tok] = true
+			toks = append(toks, tok)
+		}
+	}
+	return strings.Join(toks, ",")
 }
 
 // BuildMonitoringConfig generates Neo4j config lines for monitoring, metrics exposure, and query logging.

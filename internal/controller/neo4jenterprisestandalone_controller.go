@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"sort"
 	"strings"
 	"time"
 
@@ -814,7 +815,15 @@ func (r *Neo4jEnterpriseStandaloneReconciler) createConfigMap(standalone *neo4jv
 	// server.config.strict_validation.enabled=false elsewhere lets Neo4j
 	// silently honour a duplicate-key override, we must not append user
 	// values here even if the validator was bypassed somehow.
-	for key, value := range standalone.Spec.Config {
+	// Sort keys for deterministic conf ordering (the cluster path does the same):
+	// the ConfigMap is hash-compared, so an unsorted map iteration would reorder
+	// lines between reconciles and trigger spurious rolling restarts.
+	userConfigKeys := make([]string, 0, len(standalone.Spec.Config))
+	for key := range standalone.Spec.Config {
+		userConfigKeys = append(userConfigKeys, key)
+	}
+	sort.Strings(userConfigKeys)
+	for _, key := range userConfigKeys {
 		if authGeneratedKeys != nil && authGeneratedKeys[key] {
 			continue
 		}
@@ -823,7 +832,7 @@ func (r *Neo4jEnterpriseStandaloneReconciler) createConfigMap(standalone *neo4jv
 			key == "server.directories.certificates" {
 			continue
 		}
-		configLines = append(configLines, fmt.Sprintf("%s=%s", key, value))
+		configLines = append(configLines, fmt.Sprintf("%s=%s", key, standalone.Spec.Config[key]))
 	}
 
 	// Trusted-CA truststore JVM args (legacy spec.auth.trustStore + new
@@ -841,8 +850,11 @@ func (r *Neo4jEnterpriseStandaloneReconciler) createConfigMap(standalone *neo4jv
 		)
 	}
 
-	// Join all lines
-	neo4jConf := strings.Join(configLines, "\n")
+	// Join all lines, then de-duplicate setting keys (keep last occurrence).
+	// Without this, a key emitted by both monitoring and user spec.config
+	// (e.g. db.logs.query.threshold) appears twice and CalVer Neo4j refuses to
+	// start ("declared multiple times"). See resources.DedupeNeo4jConf.
+	neo4jConf := resources.DedupeNeo4jConf(strings.Join(configLines, "\n"))
 
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{

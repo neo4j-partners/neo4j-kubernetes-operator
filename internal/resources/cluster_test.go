@@ -16,6 +16,103 @@ import (
 	"github.com/neo4j-partners/neo4j-kubernetes-operator/internal/resources"
 )
 
+func TestDedupeNeo4jConf(t *testing.T) {
+	in := strings.Join([]string{
+		"# Query Monitoring",
+		"db.logs.query.enabled=true",
+		"db.logs.query.threshold=5s", // from monitoring
+		"",
+		"server.jvm.additional=-Done=1",
+		"server.jvm.additional=-Dtwo=2", // repeatable — must survive
+		"# user spec.config",
+		"db.logs.query.threshold=1s", // user override (appended last)
+		"db.logs.query.enabled=true",
+	}, "\n")
+
+	out := resources.DedupeNeo4jConf(in)
+
+	// Each non-repeatable key appears exactly once, with the LAST (user) value.
+	assert.Equal(t, 1, strings.Count(out, "db.logs.query.threshold="), "threshold must be de-duplicated")
+	assert.Contains(t, out, "db.logs.query.threshold=1s", "last (user) value wins")
+	assert.NotContains(t, out, "db.logs.query.threshold=5s", "earlier monitoring value dropped")
+	assert.Equal(t, 1, strings.Count(out, "db.logs.query.enabled="))
+	// Repeatable JVM key keeps every occurrence.
+	assert.Equal(t, 2, strings.Count(out, "server.jvm.additional="))
+	// Comments/blank lines preserved.
+	assert.Contains(t, out, "# Query Monitoring")
+	assert.Contains(t, out, "# user spec.config")
+}
+
+func TestDedupeNeo4jConf_NoDuplicatesUnchanged(t *testing.T) {
+	in := "# c\nserver.bolt.listen_address=0.0.0.0:7687\ndb.logs.query.enabled=true\n"
+	assert.Equal(t, in, resources.DedupeNeo4jConf(in))
+}
+
+// Additive list keys must MERGE, not last-wins, so operator-set procedure
+// allowlists (plugins / Aura Fleet Management) aren't lost to a user override.
+func TestDedupeNeo4jConf_MergesAdditiveKeys(t *testing.T) {
+	in := strings.Join([]string{
+		"dbms.security.procedures.unrestricted=fleetManagement.*", // operator (Aura)
+		"dbms.security.procedures.allowlist=fleetManagement.*",
+		"dbms.security.procedures.unrestricted=gds.*,apoc.*", // user spec.config
+		"dbms.security.procedures.allowlist=gds.*,apoc.*",
+	}, "\n")
+
+	out := resources.DedupeNeo4jConf(in)
+
+	assert.Equal(t, 1, strings.Count(out, "dbms.security.procedures.unrestricted="), "declared once")
+	assert.Equal(t, 1, strings.Count(out, "dbms.security.procedures.allowlist="), "declared once")
+	// Union of operator + user — nothing lost.
+	for _, want := range []string{"fleetManagement.*", "gds.*", "apoc.*"} {
+		assert.Contains(t, out, want)
+	}
+	// Deterministic union order (operator tokens first, then user).
+	assert.Contains(t, out, "dbms.security.procedures.unrestricted=fleetManagement.*,gds.*,apoc.*")
+}
+
+func TestNeo4jSettingEnvVarName(t *testing.T) {
+	// Dots -> underscores, case preserved (NOT upper-cased).
+	assert.Equal(t, "NEO4J_dbms_security_procedures_unrestricted",
+		resources.Neo4jSettingEnvVarName("dbms.security.procedures.unrestricted"))
+	// Literal underscores must be doubled so Neo4j's entrypoint maps them back
+	// to a single underscore rather than a dot.
+	assert.Equal(t, "NEO4J_dbms_security_http__auth__allowlist",
+		resources.Neo4jSettingEnvVarName("dbms.security.http_auth_allowlist"))
+	assert.Equal(t, "NEO4J_server_unmanaged__extension__classes",
+		resources.Neo4jSettingEnvVarName("server.unmanaged_extension_classes"))
+}
+
+func TestUpsertNeo4jConfSettings(t *testing.T) {
+	conf := strings.Join([]string{
+		"# base",
+		"server.bolt.listen_address=:7687",
+		"dbms.security.procedures.unrestricted=gds.*", // operator/user already set
+	}, "\n")
+
+	// Plugin (e.g. APOC) needs apoc.* unrestricted + a scalar setting.
+	out := resources.UpsertNeo4jConfSettings(conf, map[string]string{
+		"dbms.security.procedures.unrestricted": "apoc.*",
+		"apoc.export.file.enabled":              "true",
+	})
+
+	// Additive key is MERGED in place — no duplicate, nothing lost.
+	assert.Equal(t, 1, strings.Count(out, "dbms.security.procedures.unrestricted="))
+	assert.Contains(t, out, "dbms.security.procedures.unrestricted=gds.*,apoc.*")
+	// New scalar key appended.
+	assert.Contains(t, out, "apoc.export.file.enabled=true")
+
+	// Idempotent: re-applying the same settings yields identical output (no churn).
+	assert.Equal(t, out, resources.UpsertNeo4jConfSettings(out, map[string]string{
+		"dbms.security.procedures.unrestricted": "apoc.*",
+		"apoc.export.file.enabled":              "true",
+	}))
+
+	// Scalar key already present is NOT clobbered.
+	out2 := resources.UpsertNeo4jConfSettings(conf, map[string]string{"server.bolt.listen_address": ":9999"})
+	assert.Contains(t, out2, "server.bolt.listen_address=:7687")
+	assert.NotContains(t, out2, ":9999")
+}
+
 func TestStorageClassNamePtr(t *testing.T) {
 	assert.Nil(t, resources.StorageClassNamePtr(""),
 		"empty className must map to nil so the PVC inherits the cluster default StorageClass")

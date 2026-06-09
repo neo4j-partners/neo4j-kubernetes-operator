@@ -29,6 +29,46 @@ import (
 	neo4jv1beta1 "github.com/neo4j-partners/neo4j-kubernetes-operator/api/v1beta1"
 )
 
+// TestClusterValidator_WiresConfigValidation proves ConfigValidator actually
+// runs as part of the cluster validation flow the reconciler uses
+// (ValidateCreate → validateCluster). Regression for the wiring gap where
+// ConfigValidator existed but was never invoked, so its rejections (discovery,
+// SSL, deprecated, and the runtime-managed advertised/topology keys) silently
+// did nothing in production.
+func TestClusterValidator_WiresConfigValidation(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = clientgoscheme.AddToScheme(scheme)
+	validator := NewClusterValidator(fake.NewClientBuilder().WithScheme(scheme).Build())
+
+	base := func() *neo4jv1beta1.Neo4jEnterpriseCluster {
+		return &neo4jv1beta1.Neo4jEnterpriseCluster{
+			Spec: neo4jv1beta1.Neo4jEnterpriseClusterSpec{
+				Image:    neo4jv1beta1.ImageSpec{Repo: "neo4j", Tag: "5.26.0", PullPolicy: "IfNotPresent"},
+				Storage:  neo4jv1beta1.StorageSpec{ClassName: "fast-ssd", Size: "100Gi"},
+				Topology: neo4jv1beta1.TopologyConfiguration{Servers: 3},
+			},
+		}
+	}
+
+	// Sanity: base cluster is valid, so a rejection below is attributable to config.
+	if err := validator.ValidateCreate(context.Background(), base()); err != nil {
+		t.Fatalf("base cluster should validate, got: %v", err)
+	}
+
+	// Each of these is rejected only if ConfigValidator runs.
+	for _, key := range []string{
+		"server.cluster.advertised_address", // runtime-managed (per-pod FQDN)
+		"dbms.cluster.endpoints",            // operator-managed discovery
+		"dbms.ssl.policy.bolt.client_auth",  // operator-managed SSL
+	} {
+		c := base()
+		c.Spec.Config = map[string]string{key: "x"}
+		if err := validator.ValidateCreate(context.Background(), c); err == nil {
+			t.Errorf("ValidateCreate accepted spec.config[%q]; ConfigValidator not wired?", key)
+		}
+	}
+}
+
 func TestClusterValidator_ValidateCreate(t *testing.T) {
 	scheme := runtime.NewScheme()
 	_ = clientgoscheme.AddToScheme(scheme)
