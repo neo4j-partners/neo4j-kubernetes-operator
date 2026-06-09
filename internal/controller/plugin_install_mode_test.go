@@ -110,7 +110,9 @@ func TestInstallPluginViaEnvironment_Managed(t *testing.T) {
 	assert.Contains(t, pluginsVal, "graph-data-science")
 
 	// GDS triggers automatic security settings — verify one landed.
-	unrestricted, ok := findEnv(c, "NEO4J_DBMS_SECURITY_PROCEDURES_UNRESTRICTED")
+	// Neo4j env-var convention preserves case: dots→underscores, no upper-casing
+	// (see resources.Neo4jSettingEnvVarName).
+	unrestricted, ok := findEnv(c, "NEO4J_dbms_security_procedures_unrestricted")
 	require.True(t, ok, "Managed mode must write the GDS unrestricted security env var")
 	assert.Contains(t, unrestricted, "gds.*")
 }
@@ -147,7 +149,7 @@ func TestInstallPluginViaEnvironment_PreBaked(t *testing.T) {
 
 	// Configuration path must still run — security env vars are why a user
 	// keeps the CR around when they bake the JAR into the image.
-	unrestricted, ok := findEnv(c, "NEO4J_DBMS_SECURITY_PROCEDURES_UNRESTRICTED")
+	unrestricted, ok := findEnv(c, "NEO4J_dbms_security_procedures_unrestricted")
 	require.True(t, ok, "PreBaked mode must still write the GDS unrestricted security env var")
 	assert.Contains(t, unrestricted, "gds.*")
 }
