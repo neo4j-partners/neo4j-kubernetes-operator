@@ -1,3 +1,5 @@
+# NOTE: the GenAI plugin is not covered by integration tests (plugin download needs
+# internet egress) — validate in your own environment.
 # GenAI Plugin Example - AI Provider Integration
 # GenAI plugin enables vector embeddings and AI integrations
 

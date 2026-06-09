@@ -108,9 +108,29 @@ spec:
   # - server.unmanaged_extension_classes=com.neo4j.bloom.server=/bloom
 ```
 
+### GenAI Plugin (Neo4j Config)
+```yaml
+# genai-plugin-example.yaml
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jPlugin
+metadata:
+  name: genai-plugin
+spec:
+  clusterRef: my-cluster
+  name: genai
+  version: "1.0.0"
+  source:
+    type: official
+  config:
+    genai.vector.enabled: "true"
+    genai.embeddings.enabled: "true"
+  # Automatically configured by operator:
+  # - dbms.security.procedures.unrestricted=genai.*
+```
+
 ### Plugin with Dependencies
 ```yaml
-# gds-with-apoc-example.yaml
+# (inline example — GDS with an APOC dependency; not a standalone file)
 apiVersion: neo4j.neo4j.com/v1beta1
 kind: Neo4jPlugin
 metadata:

@@ -1,3 +1,6 @@
+# NOTE: external access via LoadBalancer/NodePort/Ingress/OpenShift Route is not
+# covered by the operator's integration tests (it needs real cluster networking) —
+# validate this exposure path in your own environment.
 apiVersion: neo4j.neo4j.com/v1beta1
 kind: Neo4jEnterpriseCluster
 metadata:

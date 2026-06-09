@@ -1,3 +1,5 @@
+# NOTE: Aura Fleet Management is not covered by integration tests (it needs a real
+# Aura tenant/token) — validate in your own environment.
 # Neo4jEnterpriseStandalone with Aura Fleet Management
 #
 # This example shows a single-node deployment registered with Neo4j Aura Fleet Management.

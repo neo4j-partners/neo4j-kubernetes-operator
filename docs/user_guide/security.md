@@ -822,17 +822,23 @@ If you're running Istio/Linkerd, target the operator-managed `Service`s (e.g. `{
 
 ### Encryption at Rest
 
+The portable way to encrypt Neo4j data at rest on Kubernetes is to back the
+data PVC with an encrypted `StorageClass` (e.g. a CSI driver with encryption
+enabled, or a cloud encrypted disk type):
+
 ```yaml
 spec:
   storage:
-    className: "encrypted-ssd"   # Use encrypted storage class
+    className: "encrypted-ssd"   # StorageClass backed by encrypted volumes
     size: "500Gi"
-
-  config:
-    # Enable transparent data encryption (Neo4j Enterprise)
-    dbms.security.transparent_data_encryption.enabled: "true"
-    dbms.security.transparent_data_encryption.keystore: "/encryption/keystore"
 ```
+
+> Neo4j Enterprise also offers native Transparent Data Encryption (TDE). It is
+> configured with encryption keys and `neo4j-admin`/`dbms.security.keys.*`
+> settings per the
+> [Neo4j TDE documentation](https://neo4j.com/docs/operations-manual/current/security/encryption/),
+> not via a single `spec.config` toggle. Add the relevant keys to `spec.config`
+> only after following that setup.
 
 ### Backup Security
 

@@ -1,3 +1,5 @@
+# NOTE: Aura Fleet Management is not covered by integration tests (it needs a real
+# Aura tenant/token) — validate in your own environment.
 # Neo4jEnterpriseCluster with Aura Fleet Management
 #
 # This example shows a 3-server cluster registered with Neo4j Aura Fleet Management

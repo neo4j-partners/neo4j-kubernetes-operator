@@ -1,3 +1,6 @@
+# NOTE: external access via LoadBalancer/NodePort/Ingress/OpenShift Route is not
+# covered by the operator's integration tests (it needs real cluster networking) —
+# validate this exposure path in your own environment.
 # Ingress Example for Neo4j Enterprise Cluster
 # This example shows how to expose Neo4j Browser via Ingress
 # Uses server-based architecture with 5 servers that self-organize

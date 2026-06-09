@@ -243,11 +243,7 @@ spec:
 ```yaml
 spec:
   config:
-    # Optimize discovery resolution timeout (operator uses LIST discovery with static pod FQDNs)
-    dbms.cluster.discovery.resolution_timeout: "30s"
-
     # Cluster communication resilience (Neo4j 5.26+)
-    dbms.cluster.raft.election_timeout: "7s"
     dbms.cluster.raft.leader_failure_detection_window: "30s"
 ```
 

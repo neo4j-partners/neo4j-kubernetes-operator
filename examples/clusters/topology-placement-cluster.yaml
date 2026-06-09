@@ -88,10 +88,12 @@ spec:
     initial.dbms.automatically_enable_free_servers: "true"
 
     # Security
-    server.security.auth_enabled: "true"
+    # Auth is enabled by default in Neo4j Enterprise; the operator sets the
+    # initial admin credentials via NEO4J_AUTH from spec.auth.adminSecret.
 
     # Monitoring
-    db.logs.query.enabled: "true"
+    # db.logs.query.enabled is an enum: OFF | INFO | VERBOSE (not a boolean).
+    db.logs.query.enabled: "INFO"
     db.logs.query.threshold: "1s"
 
 ---

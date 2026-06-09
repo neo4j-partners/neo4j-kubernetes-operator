@@ -114,8 +114,8 @@ config:
   server.memory.heap.max_size: "2G"
   server.memory.pagecache.size: "1G"
   dbms.security.procedures.unrestricted: "gds.*,apoc.*"
-  db.logs.query.enabled: "true"
-  dbms.logs.query.threshold: "1s"
+  db.logs.query.enabled: "INFO"   # enum: OFF | INFO | VERBOSE (not a boolean)
+  db.logs.query.threshold: "1s"
   # Neo4j 5.26+ configuration syntax
   server.default_listen_address: "0.0.0.0"
   server.discovery.advertised_address: "$(hostname -f)"
@@ -589,8 +589,8 @@ spec:
     server.memory.heap.initial_size: "3G"
     server.memory.heap.max_size: "6G"
     server.memory.pagecache.size: "2G"
-    db.logs.query.enabled: "true"
-    dbms.logs.query.threshold: "1s"
+    db.logs.query.enabled: "INFO"   # enum: OFF | INFO | VERBOSE (not a boolean)
+    db.logs.query.threshold: "1s"
     # Password policy via Neo4j config keys
     dbms.security.auth_minimum_password_length: "12"
 ```
@@ -689,8 +689,8 @@ spec:
     server.memory.heap.initial_size: "3G"
     server.memory.heap.max_size: "6G"
     server.memory.pagecache.size: "2G"
-    db.logs.query.enabled: "true"
-    dbms.logs.query.threshold: "500ms"
+    db.logs.query.enabled: "INFO"   # enum: OFF | INFO | VERBOSE (not a boolean)
+    db.logs.query.threshold: "500ms"
     dbms.security.auth_minimum_password_length: "12"
 
   env:
@@ -944,8 +944,8 @@ storage:
 
 # For high IOPS workloads
 config:
-  dbms.checkpoint.interval.time: "15s"
-  dbms.checkpoint.interval.tx: "100000"
+  db.checkpoint.interval.time: "15s"
+  db.checkpoint.interval.tx: "100000"
 ```
 
 ## Best Practices

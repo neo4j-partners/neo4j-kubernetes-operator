@@ -370,7 +370,7 @@ kubectl port-forward svc/<cluster-name>-metrics 2004:2004
    ```yaml
    spec:
      config:
-       db.logs.query.enabled: "true"
+       db.logs.query.enabled: "INFO"   # enum: OFF | INFO | VERBOSE (not a boolean)
        db.logs.query.threshold: "1s"
    ```
 
@@ -522,16 +522,11 @@ kubectl logs -n cert-manager deployment/cert-manager
    kubectl exec <cluster>-server-1 -- cypher-shell -u neo4j -p <password> "SHOW SERVERS"
    ```
 
-   **Prevention:**
-   ```yaml
-   spec:
-     config:
-       # Increase discovery timeouts for TLS clusters
-       dbms.cluster.discovery.v2.initial_timeout: "10s"
-       dbms.cluster.discovery.v2.retry_timeout: "20s"
-       # Note: Do NOT override dbms.cluster.raft.membership.join_timeout
-       # The operator sets it to 10m which is optimal
-   ```
+   **Prevention:** The operator already configures discovery and RAFT
+   membership timeouts with values tuned for in-cluster formation (including
+   the longer windows TLS clusters need) — there are no `spec.config` knobs you
+   need to set for this, and overriding the operator-managed cluster settings is
+   not supported.
 
    See [Split-Brain Recovery Guide](../troubleshooting/split-brain-recovery.md) for detailed recovery procedures.
 

@@ -61,14 +61,15 @@ spec:
 
     # Transaction settings
     db.transaction.timeout: "5m"
-    dbms.lock.acquisition.timeout: "2m"
+    db.lock.acquisition.timeout: "2m"
 
     # Checkpoint tuning for write performance
-    dbms.checkpoint.interval.time: "15m"
-    dbms.checkpoint.interval.tx: "100000"
+    db.checkpoint.interval.time: "15m"
+    db.checkpoint.interval.tx: "100000"
 
     # Security settings
-    server.security.auth_enabled: "true"
+    # Auth is enabled by default in Neo4j Enterprise; the operator sets the
+    # initial admin credentials via NEO4J_AUTH from spec.auth.adminSecret.
     dbms.security.procedures.unrestricted: "gds.*,apoc.*"
 
   # Environment variables

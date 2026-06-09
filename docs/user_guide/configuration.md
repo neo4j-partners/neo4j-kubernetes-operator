@@ -299,12 +299,12 @@ spec:
     db.logs.query.parameter_logging_enabled: "true"
 
     # Transactions
-    dbms.transaction.timeout: "5m"
-    dbms.lock.acquisition.timeout: "2m"
+    db.transaction.timeout: "5m"
+    db.lock.acquisition.timeout: "2m"
 
     # Checkpointing
-    dbms.checkpoint.interval.time: "15m"
-    dbms.checkpoint.interval.tx: "100000"
+    db.checkpoint.interval.time: "15m"
+    db.checkpoint.interval.tx: "100000"
 ```
 
 ### Sample development standalone config
@@ -320,7 +320,7 @@ spec:
     server.memory.heap.max_size: "2G"
     server.memory.pagecache.size: "512M"
 
-    db.logs.query.enabled: "true"
+    db.logs.query.enabled: "INFO"   # enum: OFF | INFO | VERBOSE (not a boolean)
     dbms.security.procedures.unrestricted: "gds.*,apoc.*"
     dbms.security.allow_csv_import_from_file_urls: "true"
 ```

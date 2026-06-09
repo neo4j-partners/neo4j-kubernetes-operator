@@ -37,29 +37,39 @@ kubectl create secret generic neo4j-admin-secret \
 Choose an example and deploy:
 
 ```bash
-# Minimal cluster (2 servers for high availability)
+# ── Basic topologies ──
+# Minimal cluster (2 servers — minimum for HA)
 kubectl apply -f examples/clusters/minimal-cluster.yaml
-
-# Three-server cluster for production (with TLS)
-kubectl apply -f examples/clusters/three-node-cluster.yaml
-
-# Three-server cluster for testing (TLS disabled)
+# Three servers, TLS disabled (simplest for local testing)
 kubectl apply -f examples/clusters/three-node-simple.yaml
 
-# Multi-server cluster for production (with TLS and advanced features)
+# ── TLS (cert-manager) ──
+# Two-server TLS
+kubectl apply -f examples/clusters/tls-cluster.yaml
+# Three-server TLS
+kubectl apply -f examples/clusters/three-node-cluster.yaml
+# Five-server TLS + LoadBalancer (production)
 kubectl apply -f examples/clusters/multi-server-cluster.yaml
+# Production-tuned (resources + monitoring)
+kubectl apply -f examples/clusters/production-optimized-cluster.yaml
 
-# Multi-zone deployment with topology placement
+# ── External access (Service types) ──
+kubectl apply -f examples/clusters/loadbalancer-cluster.yaml   # LoadBalancer
+kubectl apply -f examples/clusters/nodeport-cluster.yaml       # NodePort
+kubectl apply -f examples/clusters/ingress-cluster.yaml        # Ingress
+kubectl apply -f examples/clusters/route-cluster.yaml          # OpenShift Route
+
+# ── Placement, auth & advanced ──
+# Multi-zone / per-server role placement
 kubectl apply -f examples/clusters/topology-placement-cluster.yaml
-
-# Six-server cluster for large deployments
-kubectl apply -f examples/clusters/six-server-cluster.yaml
-
-# Two-server cluster (minimum for high availability)
-kubectl apply -f examples/clusters/two-server-cluster.yaml
-
-# Expose via OpenShift Route
-kubectl apply -f examples/clusters/route-cluster.yaml
+# Native + LDAP/OIDC auth providers
+kubectl apply -f examples/clusters/auth-example.yaml
+# Secondary (read-replica) servers
+kubectl apply -f examples/clusters/cluster-with-read-replicas.yaml
+# Trust internal CAs (trustedCASecrets + OIDC)
+kubectl apply -f examples/clusters/cluster-with-trusted-cas.yaml
+# Online storage expansion
+kubectl apply -f examples/clusters/storage-expansion.yaml
 ```
 
 ### 3. Access Neo4j
@@ -254,7 +264,7 @@ Add Neo4j-specific settings:
 config:
   db.logs.query.enabled: "INFO"
   db.transaction.timeout: "60s"
-  metrics.enabled: "true"
+  server.metrics.enabled: "true"
 ```
 
 ## Topology Guidelines
@@ -327,7 +337,6 @@ kubectl logs -n neo4j-operator-system deployment/neo4j-operator-controller-manag
 - **`security/`** - NetworkPolicy and policy-as-code examples
 - **`users-roles/`** - Declarative user, role, and privilege management via the `Neo4jUser` and `Neo4jRole` CRDs
 - **`end-to-end/`** - Complete deployment scenarios for production use
-- **`testing/`** - Test configurations used for operator development and validation
 
 ## Support
 

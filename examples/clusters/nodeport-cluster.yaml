@@ -1,3 +1,6 @@
+# NOTE: external access via LoadBalancer/NodePort/Ingress/OpenShift Route is not
+# covered by the operator's integration tests (it needs real cluster networking) —
+# validate this exposure path in your own environment.
 # NodePort Service Example for Neo4j Enterprise Cluster
 # This example shows how to expose a Neo4j cluster using NodePort services
 # Uses server-based architecture with 4 servers that self-organize
@@ -71,9 +74,9 @@ spec:
     server.memory.heap.max_size: "2G"
     server.memory.pagecache.size: "512m"
 
-    # Enable metrics
-    metrics.enabled: "true"
-    metrics.neo4j.enabled: "true"
+    # Enable metrics (the operator also exposes Prometheus metrics automatically
+    # when spec.monitoring.enabled: true)
+    server.metrics.enabled: "true"
 
     # Query logging
     db.logs.query.enabled: "INFO"

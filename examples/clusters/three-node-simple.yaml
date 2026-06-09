@@ -59,7 +59,7 @@ spec:
     # Increase transaction timeout for long operations
     db.transaction.timeout: "60s"
     # Enable metrics collection
-    metrics.enabled: "true"
+    server.metrics.enabled: "true"
 
 ---
 # Deployment Notes:

@@ -1,3 +1,6 @@
+# NOTE: online storage expansion is not exercised by integration tests (Kind's
+# local-path provisioner can't expand PVCs) — validate on a StorageClass with
+# allowVolumeExpansion: true.
 # Storage Expansion Example
 #
 # This example demonstrates how to expand storage on a running Neo4j cluster.

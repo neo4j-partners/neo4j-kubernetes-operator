@@ -1,26 +1,22 @@
-# Neo4j Enterprise Cluster - Authentication Examples
-# Demonstrates native, LDAP, and OIDC/SSO configurations
-
-# ── Admin credentials Secret (create this BEFORE you apply this manifest) ──────
-# This Secret is intentionally NOT defined inline. If it were, `kubectl apply -f`
-# would re-apply it on every run and OVERWRITE the password with the placeholder,
-# silently clobbering a real credential you set earlier. Create it out-of-band:
+# Neo4j Enterprise Cluster — Authentication Examples
 #
+# This deploys ONE cluster using native authentication. LDAP and OIDC/SSO
+# variants are shown as commented `auth:` blocks below — to use one, replace the
+# `auth:` section in the cluster spec with the variant you want (and create any
+# Secrets it references first). Keeping it to a single cluster means a plain
+# `kubectl apply -f` doesn't spin up four clusters at once.
+#
+# ── Admin credentials Secret (create this BEFORE you apply) ────────────────────
 #   kubectl create secret generic neo4j-admin-secret \
 #     --namespace default \
 #     --from-literal=username=neo4j \
 #     --from-literal=password='<your-secure-password>'
-#
-# The resource above references it via spec.auth.adminSecret: neo4j-admin-secret
-
+# Referenced via spec.auth.adminSecret: neo4j-admin-secret
 ---
-# ============================================================
-# Example 1: Native authentication (default)
-# ============================================================
 apiVersion: neo4j.neo4j.com/v1beta1
 kind: Neo4jEnterpriseCluster
 metadata:
-  name: native-auth-cluster
+  name: auth-example
   namespace: default
 spec:
   image:
@@ -30,8 +26,6 @@ spec:
     servers: 3
   storage:
     # className omitted -> PVCs inherit the cluster default StorageClass (portable).
-    # To pin one, set a class that EXISTS on your cluster (AKS: managed-csi, EKS: gp3, GKE: standard-rwo, Kind: standard);
-    # the operator rejects a non-existent class instead of leaving pods Pending.
     # className: managed-csi
     size: "10Gi"
   resources:
@@ -41,195 +35,84 @@ spec:
     limits:
       memory: "4Gi"
       cpu: "2"
-  auth:
-    # When authenticationProviders is omitted, defaults to ["native"]
-    adminSecret: neo4j-admin-secret
   tls:
     mode: disabled
 
----
-# ============================================================
-# Example 2: LDAP + native (Active Directory)
-# ============================================================
-# ── LDAP system-account Secret (create this BEFORE you apply this manifest) ────
-# Not defined inline: `kubectl apply -f` would re-apply it every run and OVERWRITE
-# the values with the placeholders, clobbering real credentials. Create it
-# out-of-band:
+  # ── Active: native authentication (the default) ──
+  # When authenticationProviders is omitted, it defaults to ["native"].
+  auth:
+    adminSecret: neo4j-admin-secret
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ALTERNATIVE auth: blocks — replace the `auth:` above with ONE of the following.
+# NOTE: native auth (above) is integration-tested; the LDAP and OIDC variants need
+# a real directory / identity provider and are NOT covered by integration tests —
+# validate them against your own IdP.
+# ─────────────────────────────────────────────────────────────────────────────
 #
-#   kubectl create secret generic ldap-system-account \
-#     --namespace default \
+# ── Option B: LDAP + native fallback (e.g. Active Directory) ──
+# First create the LDAP system-account Secret:
+#   kubectl create secret generic ldap-system-account --namespace default \
 #     --from-literal=username='cn=neo4j-svc,cn=Users,dc=corp,dc=example,dc=com' \
 #     --from-literal=password='<ldap-service-password>'
 #
-# Referenced via spec.auth.ldap.authorization.systemAccountSecretRef: ldap-system-account
----
-apiVersion: neo4j.neo4j.com/v1beta1
-kind: Neo4jEnterpriseCluster
-metadata:
-  name: ldap-cluster
-  namespace: default
-spec:
-  image:
-    repo: neo4j
-    tag: "5.26.0-enterprise"
-  topology:
-    servers: 3
-  storage:
-    # className omitted -> PVCs inherit the cluster default StorageClass (portable).
-    # To pin one, set a class that EXISTS on your cluster (AKS: managed-csi, EKS: gp3, GKE: standard-rwo, Kind: standard);
-    # the operator rejects a non-existent class instead of leaving pods Pending.
-    # className: managed-csi
-    size: "10Gi"
-  resources:
-    requests:
-      memory: "2Gi"
-      cpu: "500m"
-    limits:
-      memory: "4Gi"
-      cpu: "2"
-  auth:
-    # LDAP is tried first, then native as fallback for the initial admin user
-    authenticationProviders:
-      - ldap
-      - native
-    authorizationProviders:
-      - ldap
-      - native
-    adminSecret: neo4j-admin-secret
-    ldap:
-      host: "ldaps://ad.corp.example.com:636"
-      authentication:
-        userDNTemplate: "{0}@corp.example.com"
-        cacheEnabled: true
-      authorization:
-        userSearchBase: "dc=corp,dc=example,dc=com"
-        userSearchFilter: "(&(objectClass=user)(sAMAccountName={0}))"
-        groupMembershipAttributes:
-          - memberOf
-        groupToRoleMapping:
-          "cn=Neo4j Admins,ou=Groups,dc=corp,dc=example,dc=com": "admin"
-          "cn=Neo4j Developers,ou=Groups,dc=corp,dc=example,dc=com": "editor,publisher"
-          "cn=Neo4j Readers,ou=Groups,dc=corp,dc=example,dc=com": "reader"
-        accessPermittedGroup: "cn=Neo4j Users,ou=Groups,dc=corp,dc=example,dc=com"
-        useSystemAccount: true
-        systemAccountSecretRef: ldap-system-account
-    # TrustStore for LDAPS with internal CA
-    trustStore:
-      name: corp-ca-cert  # Secret with key "ca.crt" containing the corporate CA
-  tls:
-    mode: disabled
-
----
-# ============================================================
-# Example 3: OIDC/SSO with Okta
-# ============================================================
-apiVersion: neo4j.neo4j.com/v1beta1
-kind: Neo4jEnterpriseCluster
-metadata:
-  name: oidc-cluster
-  namespace: default
-spec:
-  image:
-    repo: neo4j
-    tag: "5.26.0-enterprise"
-  topology:
-    servers: 3
-  storage:
-    # className omitted -> PVCs inherit the cluster default StorageClass (portable).
-    # To pin one, set a class that EXISTS on your cluster (AKS: managed-csi, EKS: gp3, GKE: standard-rwo, Kind: standard);
-    # the operator rejects a non-existent class instead of leaving pods Pending.
-    # className: managed-csi
-    size: "10Gi"
-  resources:
-    requests:
-      memory: "2Gi"
-      cpu: "500m"
-    limits:
-      memory: "4Gi"
-      cpu: "2"
-  auth:
-    authenticationProviders:
-      - oidc-okta
-      - native
-    authorizationProviders:
-      - oidc-okta
-      - native
-    adminSecret: neo4j-admin-secret
-    oidc:
-      okta:
-        displayName: "Okta SSO"
-        wellKnownDiscoveryURI: "https://dev-123456.okta.com/.well-known/openid-configuration"
-        audience: "0oaXXXXXXXXXXXXXX"
-        authFlow: pkce
-        claims:
-          username: email
-          groups: groups
-        groupToRoleMapping:
-          "neo4j-admins": "admin,architect"
-          "neo4j-developers": "editor,publisher"
-          "neo4j-readers": "reader"
-  tls:
-    mode: disabled
-
----
-# ============================================================
-# Example 4: Multiple OIDC providers (Okta + Azure AD)
-# ============================================================
-apiVersion: neo4j.neo4j.com/v1beta1
-kind: Neo4jEnterpriseCluster
-metadata:
-  name: multi-oidc-cluster
-  namespace: default
-spec:
-  image:
-    repo: neo4j
-    tag: "5.26.0-enterprise"
-  topology:
-    servers: 3
-  storage:
-    # className omitted -> PVCs inherit the cluster default StorageClass (portable).
-    # To pin one, set a class that EXISTS on your cluster (AKS: managed-csi, EKS: gp3, GKE: standard-rwo, Kind: standard);
-    # the operator rejects a non-existent class instead of leaving pods Pending.
-    # className: managed-csi
-    size: "10Gi"
-  resources:
-    requests:
-      memory: "2Gi"
-      cpu: "500m"
-    limits:
-      memory: "4Gi"
-      cpu: "2"
-  auth:
-    authenticationProviders:
-      - oidc-okta
-      - oidc-azure
-      - native
-    authorizationProviders:
-      - oidc-okta
-      - oidc-azure
-      - native
-    adminSecret: neo4j-admin-secret
-    authCacheTTL: "5m"
-    oidc:
-      okta:
-        displayName: "Okta SSO"
-        wellKnownDiscoveryURI: "https://dev-123456.okta.com/.well-known/openid-configuration"
-        audience: "0oaXXXXXXXXXXXXXX"
-        claims:
-          username: email
-          groups: groups
-        groupToRoleMapping:
-          "neo4j-admins": "admin"
-      azure:
-        displayName: "Azure AD"
-        wellKnownDiscoveryURI: "https://login.microsoftonline.com/TENANT_ID/v2.0/.well-known/openid-configuration"
-        audience: "api://neo4j-app"
-        claims:
-          username: preferred_username
-          groups: roles
-        getGroupsFromUserInfo: true
-        groupToRoleMapping:
-          "neo4j-admins": "admin"
-          "neo4j-users": "reader"
-  tls:
-    mode: disabled
+#   auth:
+#     authenticationProviders: [ldap, native]   # LDAP first, native fallback for the initial admin
+#     authorizationProviders:  [ldap, native]
+#     adminSecret: neo4j-admin-secret
+#     ldap:
+#       host: "ldaps://ad.corp.example.com:636"
+#       authentication:
+#         userDNTemplate: "{0}@corp.example.com"
+#         cacheEnabled: true
+#       authorization:
+#         userSearchBase: "dc=corp,dc=example,dc=com"
+#         userSearchFilter: "(&(objectClass=user)(sAMAccountName={0}))"
+#         groupMembershipAttributes: [memberOf]
+#         groupToRoleMapping:
+#           "cn=Neo4j Admins,ou=Groups,dc=corp,dc=example,dc=com": "admin"
+#           "cn=Neo4j Developers,ou=Groups,dc=corp,dc=example,dc=com": "editor,publisher"
+#           "cn=Neo4j Readers,ou=Groups,dc=corp,dc=example,dc=com": "reader"
+#         accessPermittedGroup: "cn=Neo4j Users,ou=Groups,dc=corp,dc=example,dc=com"
+#         useSystemAccount: true
+#         systemAccountSecretRef: ldap-system-account
+#     trustStore:
+#       name: corp-ca-cert   # Secret with key "ca.crt" (corporate CA) — for LDAPS with an internal CA
+#
+# ── Option C: OIDC / SSO + native fallback (e.g. Okta) ──
+#   auth:
+#     authenticationProviders: [oidc-okta, native]
+#     authorizationProviders:  [oidc-okta, native]
+#     adminSecret: neo4j-admin-secret
+#     oidc:
+#       okta:                                    # provider key -> referenced as oidc-okta above
+#         displayName: "Okta SSO"
+#         wellKnownDiscoveryURI: "https://dev-123456.okta.com/.well-known/openid-configuration"
+#         audience: "0oaXXXXXXXXXXXXXX"
+#         authFlow: pkce
+#         claims: { username: email, groups: groups }
+#         groupToRoleMapping:
+#           "neo4j-admins": "admin,architect"
+#           "neo4j-developers": "editor,publisher"
+#           "neo4j-readers": "reader"
+#
+# ── Option D: Multiple OIDC providers (Okta + Azure AD) + native ──
+#   auth:
+#     authenticationProviders: [oidc-okta, oidc-azure, native]
+#     authorizationProviders:  [oidc-okta, oidc-azure, native]
+#     adminSecret: neo4j-admin-secret
+#     authCacheTTL: "5m"
+#     oidc:
+#       okta:
+#         displayName: "Okta SSO"
+#         wellKnownDiscoveryURI: "https://dev-123456.okta.com/.well-known/openid-configuration"
+#         audience: "0oaXXXXXXXXXXXXXX"
+#         claims: { username: email, groups: groups }
+#         groupToRoleMapping: { "neo4j-admins": "admin" }
+#       azure:
+#         displayName: "Azure AD"
+#         wellKnownDiscoveryURI: "https://login.microsoftonline.com/TENANT_ID/v2.0/.well-known/openid-configuration"
+#         audience: "api://neo4j-app"
+#         claims: { username: preferred_username, groups: roles }
+#         getGroupsFromUserInfo: true
+#         groupToRoleMapping: { "neo4j-admins": "admin", "neo4j-users": "reader" }

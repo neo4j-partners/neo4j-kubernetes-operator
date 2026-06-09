@@ -58,9 +58,9 @@ See also: **[User & Role Management Guide](user_guide/user_role_management.md)**
 Complete deployment examples demonstrating real-world scenarios:
 
 *   **[Complete Production Deployment](../examples/end-to-end/complete-deployment.yaml)** - Full production setup with TLS, monitoring, and automated backups
-*   **[Disaster Recovery](../examples/end-to-end/disaster-recovery.yaml)** - Backup strategies, PITR, and cross-region recovery
-*   **[Development Workflow](../examples/end-to-end/development-workflow.yaml)** - Local development, migrations, and CI/CD integration
-*   **[Multi-Tenancy](../examples/end-to-end/multi-tenancy.yaml)** - Shared clusters with tenant isolation
+*   **[Disaster Recovery](../examples/end-to-end/disaster-recovery.yaml)** - Proactive off-site scheduled backup, with restore/PITR/cross-region recovery shown as recovery-time snippets
+*   **[Development Workflow](../examples/end-to-end/development-workflow.yaml)** - Lightweight standalone with dev/test databases (data loading, migrations, and CI via cypher-shell)
+*   **[Multi-Tenancy](../examples/end-to-end/multi-tenancy.yaml)** - One cluster with a database per tenant (logical/access isolation, per-tenant backups)
 *   **[Property Sharding](../examples/property_sharding/)** - Horizontal scaling with property sharding for large datasets
 
 ## 🆕 What's New

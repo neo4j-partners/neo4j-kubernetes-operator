@@ -134,7 +134,7 @@ spec:
 spec:
   config:
     # Cluster communication timeouts (Neo4j 5.26+)
-    dbms.cluster.raft.election_timeout: "7s"
+    dbms.cluster.raft.leader_failure_detection_window: "7s"
     dbms.cluster.raft.leader_failure_detection_window: "30s"
 ```
 
@@ -193,7 +193,7 @@ spec:
     server.memory.query_cache.per_db_cache_num_entries: "1000"
 
     # Transaction timeout (kills long-running transactions)
-    dbms.transaction.timeout: "120s"
+    db.transaction.timeout: "120s"
 ```
 
 ## Monitoring and Performance Analysis

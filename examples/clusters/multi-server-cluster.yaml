@@ -57,35 +57,8 @@ spec:
     annotations:
       service.beta.kubernetes.io/aws-load-balancer-type: nlb
 
-  # Pod anti-affinity for high availability
-  affinity:
-    podAntiAffinity:
-      requiredDuringSchedulingIgnoredDuringExecution:
-        - labelSelector:
-            matchLabels:
-              neo4j.com/cluster: multi-primary-cluster
-          topologyKey: kubernetes.io/hostname
-
-  # Custom Neo4j configuration for production
-  config:
-    # Memory settings
-    server.memory.heap.initial_size: "2G"
-    server.memory.heap.max_size: "4G"
-    server.memory.pagecache.size: "2G"
-
-    # Security settings
-    server.security.auth_enabled: "true"
-    dbms.security.procedures.unrestricted: "gds.*,apoc.*"
-
-    # Logging settings
-    db.logs.query.enabled: "true"
-    db.logs.query.threshold: "500ms"
-
-    # Performance settings
-    db.transaction.timeout: "60s"
-    server.bolt.thread_pool_max_size: "200"
-
-  # Query monitoring
+  # Query monitoring (the operator auto-tunes heap/pagecache from the
+  # resource limits above, so no manual server.memory.* config is needed)
   monitoring:
     enabled: true
     slowQueryThreshold: "1s"

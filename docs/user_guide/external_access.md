@@ -28,6 +28,20 @@ Access Neo4j Browser at: http://localhost:7474
 
 ## Service Configuration
 
+Ready-to-apply manifests for each exposure type (set `spec.service.type` /
+Ingress / Route accordingly):
+
+| Exposure | Example |
+|---|---|
+| LoadBalancer | [`examples/clusters/loadbalancer-cluster.yaml`](https://github.com/priyolahiri/neo4j-kubernetes-operator/blob/main/examples/clusters/loadbalancer-cluster.yaml) |
+| NodePort | [`examples/clusters/nodeport-cluster.yaml`](https://github.com/priyolahiri/neo4j-kubernetes-operator/blob/main/examples/clusters/nodeport-cluster.yaml) |
+| Ingress | [`examples/clusters/ingress-cluster.yaml`](https://github.com/priyolahiri/neo4j-kubernetes-operator/blob/main/examples/clusters/ingress-cluster.yaml) |
+| OpenShift Route | [`examples/clusters/route-cluster.yaml`](https://github.com/priyolahiri/neo4j-kubernetes-operator/blob/main/examples/clusters/route-cluster.yaml) |
+
+> These exposure paths aren't covered by the operator's integration tests (they
+> need a real cloud LB / Ingress controller / OpenShift), so validate them in
+> your own environment.
+
 ### LoadBalancer (Recommended for Cloud)
 
 ```yaml

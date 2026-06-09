@@ -1,9 +1,20 @@
-# Multi-Tenancy Example
-# This example demonstrates:
-# - Multiple databases per cluster for different tenants
-# - Resource isolation and quotas
-# - Tenant-specific backups
-# - Access control and security
+# Multi-Tenancy Example (database-per-tenant on a shared cluster)
+#
+# This demonstrates LOGICAL multi-tenancy: one cluster hosting a separate
+# Neo4jDatabase per tenant, each with its own topology and its own backup
+# schedule. Isolation here is at the DATABASE / access-control level.
+#
+# What this gives you:
+#   - Multiple databases per cluster, one (or more) per tenant
+#   - Per-tenant backup cadence (daily / hourly / weekly below)
+#   - Access isolation via per-tenant users/roles/privileges — see
+#     ../users-roles/ (grant each tenant's users access only to their database)
+#
+# What it does NOT give you (tenants share the same Neo4j pods):
+#   - Hard CPU/memory isolation, or network isolation between tenants.
+#     A per-namespace ResourceQuota would cap the whole cluster, not one tenant,
+#     and a NetworkPolicy can't separate tenants that share pods. For hard
+#     resource/network isolation, run a SEPARATE cluster per tenant instead.
 
 ---
 # Shared infrastructure namespace
@@ -81,11 +92,9 @@ spec:
     server.memory.heap.initial_size: "8G"
     server.memory.heap.max_size: "8G"
     server.memory.pagecache.size: "16G"
-    # Transaction isolation
-    db.transaction.timeout: "120s"
+    # Transaction management
+    db.transaction.timeout: "300s"
     db.transaction.concurrent.maximum: "1000"
-    # Query management
-    db.query.timeout: "300s"
     dbms.routing_ttl: "300s"
     # Enable database management
     dbms.max_databases: "50"
@@ -169,8 +178,8 @@ spec:
 
   options:
     # Optimized for graph traversals
-    server.memory.transaction.max: "2g"
-    server.memory.transaction.global_max: "4g"
+    db.memory.transaction.max: "2g"
+    dbms.memory.transaction.total.max: "4g"
 
   # Social network schema
   initialData:
@@ -208,8 +217,8 @@ spec:
 
   options:
     # Analytics optimizations
-    db.query.timeout: "3600s"  # 1 hour for complex analytics
-    dbms.query.cache_size: "2000"
+    db.transaction.timeout: "3600s"  # 1 hour for complex analytics
+    server.memory.query_cache.per_db_cache_num_entries: "2000"
 
   # Analytics schema
   initialData:
@@ -309,177 +318,12 @@ spec:
   retention:
     maxAge: "90d"
     maxCount: 12
----
-# Resource Quotas per Tenant
----
-apiVersion: v1
-kind: ResourceQuota
-metadata:
-  name: tenant-a-quota
-  namespace: neo4j-multi-tenant
-spec:
-  hard:
-    requests.cpu: "4"
-    requests.memory: "16Gi"
-    persistentvolumeclaims: "5"
----
-apiVersion: v1
-kind: ResourceQuota
-metadata:
-  name: tenant-b-quota
-  namespace: neo4j-multi-tenant
-spec:
-  hard:
-    requests.cpu: "6"
-    requests.memory: "24Gi"
-    persistentvolumeclaims: "8"
----
-apiVersion: v1
-kind: ResourceQuota
-metadata:
-  name: tenant-c-quota
-  namespace: neo4j-multi-tenant
-spec:
-  hard:
-    requests.cpu: "8"
-    requests.memory: "32Gi"
-    persistentvolumeclaims: "10"
----
-# Monitoring per Tenant
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: tenant-metrics
-  namespace: neo4j-multi-tenant
-  labels:
-    app: neo4j
-    monitoring: prometheus
-spec:
-  selector:
-    neo4j.com/cluster: multi-tenant-cluster
-  ports:
-    - name: metrics
-      port: 2004
-      targetPort: 2004
----
-# ServiceMonitor with tenant labels
-apiVersion: monitoring.coreos.com/v1
-kind: ServiceMonitor
-metadata:
-  name: multi-tenant-monitor
-  namespace: neo4j-multi-tenant
-spec:
-  selector:
-    matchLabels:
-      app: neo4j
-  endpoints:
-    - port: metrics
-      interval: 30s
-      path: /metrics
-      relabelings:
-        - sourceLabels: [__meta_kubernetes_pod_label_tenant]
-          targetLabel: tenant
-        - sourceLabels: [__meta_kubernetes_pod_label_database]
-          targetLabel: database
----
-# Network Policies for Tenant Isolation
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: tenant-a-network-policy
-  namespace: neo4j-multi-tenant
-spec:
-  podSelector:
-    matchLabels:
-      tenant: tenant-a
-  policyTypes:
-    - Ingress
-    - Egress
-  ingress:
-    - from:
-        - podSelector:
-            matchLabels:
-              tenant: tenant-a
-        - namespaceSelector:
-            matchLabels:
-              name: tenant-a-apps
-  egress:
-    - to:
-        - podSelector:
-            matchLabels:
-              app: neo4j
-    - to:
-        - namespaceSelector: {}
-      ports:
-        - protocol: TCP
-          port: 53  # DNS
----
-# Tenant Management Scripts
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: tenant-management
-  namespace: neo4j-multi-tenant
-data:
-  create-tenant.sh: |
-    #!/bin/bash
-    # Script to onboard new tenant
 
-    TENANT_ID=$1
-    TENANT_NAME=$2
-    DB_SIZE=$3  # small, medium, large
-
-    # Determine topology based on size
-    case $DB_SIZE in
-      small)
-        PRIMARIES=1
-        SECONDARIES=1
-        ;;
-      medium)
-        PRIMARIES=2
-        SECONDARIES=1
-        ;;
-      large)
-        PRIMARIES=3
-        SECONDARIES=2
-        ;;
-    esac
-
-    # Create tenant database
-    kubectl apply -f - <<EOF
-    apiVersion: neo4j.neo4j.com/v1beta1
-    kind: Neo4jDatabase
-    metadata:
-      name: ${TENANT_ID}-database
-      namespace: neo4j-multi-tenant
-      labels:
-        tenant: ${TENANT_ID}
-    spec:
-      clusterRef: multi-tenant-cluster
-      name: ${TENANT_ID}_db
-      wait: true
-      ifNotExists: true
-      topology:
-        primaries: ${PRIMARIES}
-        secondaries: ${SECONDARIES}
-    EOF
-
-    echo "Tenant ${TENANT_NAME} (${TENANT_ID}) created with ${DB_SIZE} configuration"
-
-  monitor-tenants.sh: |
-    #!/bin/bash
-    # Monitor tenant resource usage
-
-    echo "=== Tenant Database Status ==="
-    kubectl get neo4jdatabase -n neo4j-multi-tenant -L tenant
-
-    echo -e "\n=== Tenant Resource Usage ==="
-    for tenant in tenant-a tenant-b tenant-c; do
-      echo "Tenant: $tenant"
-      kubectl exec -n neo4j-multi-tenant multi-tenant-cluster-0 -- \
-        cypher-shell -u neo4j -p $ADMIN_PASSWORD \
-        "SHOW DATABASE ${tenant}_* YIELD name, currentStatus, store"
-    done
+# ── Per-tenant access isolation (recommended) ────────────────────────────────
+# Grant each tenant's users access only to their own database with Neo4jUser /
+# Neo4jRole / Neo4jRoleBinding. See ../users-roles/ for ready-to-adapt examples.
+#
+# ── Hard resource / network isolation ────────────────────────────────────────
+# Database-per-tenant on a shared cluster does NOT isolate CPU/memory or network
+# between tenants (they share the same pods). If you need that, run a separate
+# Neo4jEnterpriseCluster per tenant (one per namespace) instead of databases.

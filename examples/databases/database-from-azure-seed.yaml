@@ -1,3 +1,5 @@
+# NOTE: cloud (GCS/Azure) seeding is not covered by integration tests — S3/MinIO
+# carries that coverage. Validate against your own bucket and credentials.
 # Example: Creating a Neo4j database from Azure Blob Storage using seed URI
 # This example shows both storage key and SAS token authentication methods
 # ── Azure (storage key) credentials Secret (create this BEFORE you apply this manifest) ─

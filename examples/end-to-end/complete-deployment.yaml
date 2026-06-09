@@ -96,11 +96,10 @@ spec:
     server.memory.heap.initial_size: "4G"
     server.memory.heap.max_size: "4G"
     server.memory.pagecache.size: "8G"
-    # Query performance
-    db.query.timeout: "300s"
+    # Query / transaction timeout
     db.transaction.timeout: "300s"
-    # Clustering settings
-    dbms.cluster.minimum_initial_system_primaries_count: "2"
+    # Clustering settings (minimum_initial_system_primaries_count is derived
+    # from spec.topology by the operator — do not set it here)
     dbms.cluster.discovery.log_level: "INFO"
     # Password policy
     dbms.security.auth_minimum_password_length: "12"

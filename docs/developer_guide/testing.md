@@ -240,6 +240,34 @@ should be validated locally with these suites before merge** — the nightly
 Extended lane only covers the minimal CI smoke path, not F3/F4/F5 or sharded
 backup/restore.
 
+### Example ↔ test coverage
+
+Which `examples/` paths are backed by an integration test vs example-only. A path
+with **no test** is either *testable-but-uncovered* (a real gap — file an issue
+and add a spec) or *untested by nature* (needs infra a Kind CI runner can't
+provide — validate it in your own environment; these carry a header note in the
+example file).
+
+| Example path | Test-backed? |
+|---|---|
+| `clusters/` (minimal, three-node-*, multi-server), `standalone/single-node` | ✅ core |
+| TLS clusters (`tls-cluster`, `three-node-cluster`, `multi-server`) | ✅ core (`tls_cluster_lifecycle`) |
+| `databases/*` (incl. seed URI) | ✅ core / extended |
+| `property_sharding/*` | ✅ extended |
+| backup / restore — PVC, S3 (via MinIO) | ✅ extended |
+| `users-roles/01–06`; `07` (authrule) | ✅ core; ✅ extended |
+| `plugins/` — apoc, gds, bloom, cluster, standalone | ✅ core (`plugin`) |
+| `clusters/topology-placement` (`serverRoles`) | ❌ **gap — Kind-testable, see GitHub issue** |
+| `plugins/genai` | ❌ untested (plugin download needs egress) |
+| exposure: `nodeport`/`loadbalancer`/`ingress`/`route-cluster` | ❌ example-only (need a real LB / Ingress / OpenShift) |
+| `databases/database-from-{gcs,azure}-seed`, cloud backup to GCS/Azure | ❌ example-only (S3/MinIO carry the coverage) |
+| `fleet-management/*` | ❌ example-only (needs Aura) |
+| `auth-example` LDAP/OIDC variants | ❌ example-only (needs a real IdP; native auth **is** tested) |
+| `clusters/storage-expansion` | ❌ untested (Kind's local-path provisioner can't expand PVCs) |
+
+When adding an example, add a test if the feature is Kind-testable; otherwise add
+the example-only header note (see any ❌-"by nature" example for the wording).
+
 ### Shared vs per-spec clusters
 
 Cluster formation is the dominant cost of the integration suite (minutes each,

@@ -303,13 +303,11 @@ spec:
     server.memory.pagecache.size: "10G"    # 31% for data access
 
     # Query optimization
-    dbms.cypher.runtime: "pipelined"
     dbms.cypher.planner: "cost"
     dbms.memory.transaction.total.max: "4G"
 
     # Parallelism
-    dbms.threads.worker_count: "16"
-    internal.dbms.executors.parallel.enabled: "true"
+    server.threads.worker_count: "16"
 ```
 
 ### Write-Heavy Workloads
@@ -378,8 +376,7 @@ spec:
     dbms.memory.transaction.total.max: "2G"
 
     # Vector-specific optimizations
-    dbms.cypher.runtime: "parallel"  # For vector operations
-    dbms.threads.worker_count: "16"
+    server.threads.worker_count: "16"
 ```
 
 **Vector Index Memory Calculation Example:**

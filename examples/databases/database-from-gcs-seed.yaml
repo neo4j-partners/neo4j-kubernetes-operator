@@ -1,3 +1,5 @@
+# NOTE: cloud (GCS/Azure) seeding is not covered by integration tests — S3/MinIO
+# carries that coverage. Validate against your own bucket and credentials.
 # Example: Creating a Neo4j database from Google Cloud Storage using seed URI
 # This example demonstrates using system-wide authentication (workload identity)
 apiVersion: neo4j.neo4j.com/v1beta1
