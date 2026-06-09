@@ -757,7 +757,7 @@ func (r *Neo4jPluginReconciler) prunePluginSecurityEnv(ctx context.Context, plug
 			if c.Name != "neo4j" {
 				continue
 			}
-			pruned := removePluginSecurityEnv(c.Env, r.pluginSecuritySettings(plugin))
+			pruned := removePluginSecurityEnv(c.Env, r.pluginSecurityRemovalSettings(plugin))
 			if len(pruned) == len(c.Env) {
 				// Recompute equality cheaply: lengths match AND values unchanged?
 				// removePluginSecurityEnv only ever shrinks or rewrites values, so
@@ -1075,6 +1075,36 @@ func (r *Neo4jPluginReconciler) pluginSecuritySettings(plugin *neo4jv1beta1.Neo4
 		}
 	}
 	return settings
+}
+
+// pluginSecurityRemovalSettings returns the additive-key token set to subtract on
+// uninstall: the UNION of the plugin's automatic per-name defaults and its
+// current spec.security override. The merge path (mergePluginSecurityEnv) unions
+// every reconcile's pluginSecuritySettings into the env, but pluginSecuritySettings
+// *replaces* unrestricted/allowlist with the custom list when allowedProcedures is
+// set — so a plugin installed with defaults and later given an override leaves the
+// automatic tokens (e.g. gds.*,apoc.load.*) accumulated in env that the current
+// spec no longer mentions. Always subtracting the automatic defaults too means
+// they can never be orphaned, regardless of spec toggling.
+//
+// This closes the common orphaned-defaults case. The fully general gap — a plugin
+// whose custom allowedProcedures was changed to several *different* values over its
+// lifetime — still needs per-plugin token ownership tracking, deferred to #146,
+// because only the current custom value is knowable here.
+func (r *Neo4jPluginReconciler) pluginSecurityRemovalSettings(plugin *neo4jv1beta1.Neo4jPlugin) map[string]string {
+	auto := r.getAutomaticSecuritySettings(plugin.Spec.Name)
+	out := make(map[string]string, len(auto))
+	for k, v := range auto {
+		out[k] = v
+	}
+	for k, v := range r.pluginSecuritySettings(plugin) {
+		if existing, ok := out[k]; ok && resources.IsAdditiveConfKey(k) {
+			out[k] = resources.MergeConfListValues(existing, v)
+		} else {
+			out[k] = v
+		}
+	}
+	return out
 }
 
 // removePluginSecurityEnv reverses mergePluginSecurityEnv for a single plugin on
