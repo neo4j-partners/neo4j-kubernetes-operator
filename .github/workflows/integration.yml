@@ -169,14 +169,21 @@ jobs:
 
         set -o pipefail
         # Core is the small subset; 60m is ample even on the slower CalVer cell.
+        # --procs=1: the suite shares ONE Kind cluster + operator, so it must run
+        # serially (Ginkgo's default, made explicit here as a guard against anyone
+        # adding -p, which would race on the shared cluster). Matches the
+        # `make test-integration` invocation this lane replaced.
         # --json-report feeds the per-spec failure/timing summary below.
-        ./bin/ginkgo run -v --timeout=60m --label-filter='core' \
+        ./bin/ginkgo run -v --timeout=60m --procs=1 --label-filter='core' \
           --json-report=ginkgo-report.json \
           ./test/integration/... | tee integration-test-output.log
       env:
         KUBECONFIG: /home/runner/.kube/config
         NEO4J_VERSION: ${{ matrix.neo4j-version }}
         FORCE_COLOR: 1
+        # Bound the test binary to 1 CPU so it doesn't contend with Neo4j/Kind/the
+        # operator on the 2-vCPU runner — parity with the replaced CI job.
+        GOMAXPROCS: 1
 
     - name: Ginkgo report summary (failed specs + timings)
       if: always()

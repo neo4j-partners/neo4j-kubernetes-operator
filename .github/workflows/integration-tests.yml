@@ -197,8 +197,11 @@ jobs:
         # Honor the dispatch input (was hardcoded 90m, which ignored the input and
         # truncated the suite on slower CalVer images). Defaults to 150m for
         # PR-triggered / scheduled runs (no inputs) on the CalVer full suite.
+        # --procs=1: the suite shares ONE Kind cluster + operator — must run
+        # serially (Ginkgo's default, explicit here to guard the shared-cluster
+        # contract against an accidental -p).
         # --json-report feeds the per-spec failure/timing summary below.
-        ./bin/ginkgo run -v --timeout="${GINKGO_TIMEOUT_MIN}m" \
+        ./bin/ginkgo run -v --timeout="${GINKGO_TIMEOUT_MIN}m" --procs=1 \
           --json-report=ginkgo-report.json \
           ./test/integration/... | tee integration-test-output.log
       env:
