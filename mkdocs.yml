@@ -162,8 +162,10 @@ nav:
 
   - Contribute:
       - Development: developer_guide/development.md
+      - Contributing: developer_guide/contributing.md
+      - Collaboration: developer_guide/collaboration.md
+      - CI/CD & Workflows: developer_guide/ci_and_workflows.md
       - Architecture: developer_guide/architecture.md
       - Testing: developer_guide/testing.md
-      - Contributing: developer_guide/contributing.md
       - Makefile Reference: developer_guide/makefile_reference.md
       - OpenShift OLM: developer_guide/openshift_olm.md

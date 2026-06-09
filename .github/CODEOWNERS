@@ -1,0 +1,9 @@
+# Code owners — GitHub auto-requests review from the matching owner(s) on every PR.
+# Last match wins, so put path-scoped rules BELOW the catch-all as the team grows.
+#
+# Example of future path-scoping:
+#   /internal/controller/  @neo4j-partners/operator-controllers
+#   /docs/                  @neo4j-partners/operator-docs
+
+# Catch-all: the maintainer owns everything until ownership is split out.
+*   @priyolahiri
