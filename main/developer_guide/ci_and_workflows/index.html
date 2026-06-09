@@ -2381,6 +2381,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Release">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cutting-a-release-runbook" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cutting a release (runbook)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2640,6 +2657,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Release">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cutting-a-release-runbook" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cutting a release (runbook)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2850,6 +2884,41 @@ with a tag input). Jobs:</p>
 </ol>
 <p>Pushing the tag also fires <strong>Pages — Docs</strong> and <strong>Pages — Helm Repo</strong> (below),
 so a single tag publishes images, the release, the docs version, and the chart.</p>
+<h3 id="cutting-a-release-runbook">Cutting a release (runbook)<a class="headerlink" href="#cutting-a-release-runbook" title="Anchor link to this section">&para;</a></h3>
+<p>Releases are tag-driven. <strong>Do not bump <code>Chart.yaml</code></strong> — <code>version</code>/<code>appVersion</code>
+are the <code>0.0.1</code> placeholder in the repo and the workflows stamp the real value
+from the tag.</p>
+<p><strong>Before tagging</strong> (on an up-to-date, green <code>main</code>):</p>
+<ol>
+<li><code>make ship-prep</code> — regenerates everything, builds the bundle, and runs
+   <code>helm-lint</code> + <code>check-csv-coverage</code> (more than CI's drift gate). Review
+   <code>git status</code> and commit anything regenerated.</li>
+<li>If there are breaking changes or notable upgrade steps, add/extend the
+   <code>Upgrading from vX to vY</code> section in
+   <a href="../../user_guide/migration_guide/"><code>migration_guide.md</code></a>.</li>
+<li>Draft the <strong>What's Changed</strong> notes — <code>git log &lt;last-tag&gt;..HEAD --pretty=oneline</code>
+   is a good starting point. (The release workflow renders only the
+   boilerplate from <code>.github/release-notes-template.md</code>; the changelog is
+   hand-written.)</li>
+</ol>
+<p><strong>Tag and push</strong> from <code>main</code>:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>git<span class="w"> </span>tag<span class="w"> </span>v1.12.0<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>v1.12.0
+</span></code></pre></div>
+<p>This fans out to <strong>Release</strong> (multi-arch signed images + GitHub release +
+kubectl bundles + OLM CSV), <strong>Pages — Docs</strong> (<code>/v1.12/</code> + <code>/latest/</code>), and
+<strong>Pages — Helm Repo</strong> (<code>/charts/</code>).</p>
+<p><strong>After the workflows finish:</strong></p>
+<ol>
+<li>Paste the <strong>What's Changed</strong> section into the GitHub release body (above the
+   generated boilerplate).</li>
+<li>Verify:</li>
+<li><code>gh run list</code> — Release, Pages — Docs, Pages — Helm Repo all green.</li>
+<li><code>gh release view v1.12.0</code> — has <code>…-complete.yaml</code> and <code>…operator.yaml</code> assets.</li>
+<li><code>helm repo update &amp;&amp; helm search repo neo4j-operator/neo4j-operator --versions</code> — new version listed.</li>
+<li>Docs <code>/latest/</code> and <code>/v1.12/</code> load and the version dropdown shows the release.</li>
+<li><code>cosign verify ghcr.io/neo4j-partners/neo4j-kubernetes-operator:v1.12.0 …</code> succeeds.</li>
+<li>(Optional, highest-confidence) <code>helm install</code> the published chart on a fresh Kind cluster.</li>
+</ol>
 <h2 id="publishing-to-github-pages">Publishing to GitHub Pages<a class="headerlink" href="#publishing-to-github-pages" title="Anchor link to this section">&para;</a></h2>
 <p>Both Pages workflows write to the <strong><code>gh-pages</code></strong> branch and share a <code>gh-pages</code>
 <a href="https://docs.github.com/actions/using-jobs/using-concurrency">concurrency group</a>
@@ -2879,8 +2948,8 @@ preview. A page added on <code>main</code> appears under <code>/main/</code> imm
 <h3 id="pages-helm-repo">Pages — Helm Repo<a class="headerlink" href="#pages-helm-repo" title="Anchor link to this section">&para;</a></h3>
 <p><strong><code>pages-helm.yml</code></strong> packages the chart in <code>charts/neo4j-operator</code> and appends it
 to the Helm repository index under <code>/charts/</code> on <code>gh-pages</code>, so:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>helm<span class="w"> </span>repo<span class="w"> </span>add<span class="w"> </span>neo4j-operator<span class="w"> </span>https://neo4j-partners.github.io/neo4j-kubernetes-operator/charts
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>helm<span class="w"> </span>repo<span class="w"> </span>update
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>helm<span class="w"> </span>repo<span class="w"> </span>add<span class="w"> </span>neo4j-operator<span class="w"> </span>https://neo4j-partners.github.io/neo4j-kubernetes-operator/charts
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>helm<span class="w"> </span>repo<span class="w"> </span>update
 </span></code></pre></div>
 <ul>
 <li><strong>Push of a <code>v*</code> tag</strong> → packages and publishes that version.</li>
