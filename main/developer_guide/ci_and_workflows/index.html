@@ -2351,6 +2351,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#branch-protection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Branch protection
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#extended-integration-tests" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2599,6 +2610,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#branch-protection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Branch protection
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#extended-integration-tests" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2762,6 +2784,34 @@ gate that blocks merge. Jobs:</p>
    commit message, or manual dispatch with the toggle on. When skipped, the
    <code>integration-tests-info</code> job prints how to enable it.</li>
 </ol>
+<h2 id="branch-protection">Branch protection<a class="headerlink" href="#branch-protection" title="Anchor link to this section">&para;</a></h2>
+<p><code>main</code> is a protected branch. The rules enforce the gates above:</p>
+<ul>
+<li><strong>No direct pushes</strong> — all changes land via pull request.</li>
+<li><strong>1 approval, from a <a href="../collaboration/#code-owners-and-review">CODEOWNER</a></strong>;
+  stale approvals are dismissed on new commits; review threads must be resolved.</li>
+<li><strong>Required status checks</strong> (strict / branch must be up to date), matching the
+  CI job display names exactly:</li>
+<li><code>Generated Artifacts In Sync</code></li>
+<li><code>Unit Tests</code></li>
+<li><strong>Linear history</strong> (squash/rebase merges); force-pushes and deletion blocked.</li>
+</ul>
+<p>Two things to know:</p>
+<ul>
+<li><strong>The integration checks are intentionally <em>not</em> required.</strong> <code>Integration
+  Tests</code> (CI) and the Extended Integration Tests workflow run conditionally; a
+  required check that doesn't run on a given PR would leave it stuck at
+  "Expected — waiting for status." Reviewers gate on them manually for
+  controller changes.</li>
+<li><strong><code>enforce_admins</code> is currently off</strong> so the maintainer can merge during the
+  solo→team transition (GitHub forbids approving your own PR, and the sole
+  CODEOWNER would otherwise be unable to merge anything). Turn it on once a
+  second reviewer is onboarded:
+  <div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>gh<span class="w"> </span>api<span class="w"> </span>-X<span class="w"> </span>PUT<span class="w"> </span>repos/neo4j-partners/neo4j-kubernetes-operator/branches/main/protection/enforce_admins
+</span></code></pre></div></li>
+</ul>
+<p>If you rename a required CI job in <code>ci.yml</code>, update the protection contexts to
+match or every merge will block.</p>
 <h2 id="extended-integration-tests">Extended Integration Tests<a class="headerlink" href="#extended-integration-tests" title="Anchor link to this section">&para;</a></h2>
 <p><strong><code>integration-tests.yml</code> — the long (≈90-minute) suite against a real Kind
 cluster with the operator deployed.</strong> Distinct from CI's opt-in integration job:
@@ -2818,8 +2868,8 @@ built-in <code>GITHUB_TOKEN</code> — no extra secrets.</p>
 <h3 id="pages-helm-repo">Pages — Helm Repo<a class="headerlink" href="#pages-helm-repo" title="Anchor link to this section">&para;</a></h3>
 <p><strong><code>pages-helm.yml</code></strong> packages the chart in <code>charts/neo4j-operator</code> and appends it
 to the Helm repository index under <code>/charts/</code> on <code>gh-pages</code>, so:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>helm<span class="w"> </span>repo<span class="w"> </span>add<span class="w"> </span>neo4j-operator<span class="w"> </span>https://neo4j-partners.github.io/neo4j-kubernetes-operator/charts
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>helm<span class="w"> </span>repo<span class="w"> </span>update
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>helm<span class="w"> </span>repo<span class="w"> </span>add<span class="w"> </span>neo4j-operator<span class="w"> </span>https://neo4j-partners.github.io/neo4j-kubernetes-operator/charts
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>helm<span class="w"> </span>repo<span class="w"> </span>update
 </span></code></pre></div>
 <ul>
 <li><strong>Push of a <code>v*</code> tag</strong> → packages and publishes that version.</li>
