@@ -129,7 +129,7 @@ spec:
 
   # Database options
   options:
-    txLogEnrichment: "FULL"
+    txLogEnrichment: "DIFF"
 
   # Initial schema and indexes
   initialData:

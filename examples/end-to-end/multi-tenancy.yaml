@@ -122,9 +122,7 @@ spec:
     secondaries: 1
 
   options:
-    # Transaction log retention for compliance
-    txLogEnrichment: "FULL"
-    txLogRetention: "7 days"
+    txLogEnrichment: "DIFF"
 
   # E-commerce schema
   initialData:
@@ -176,11 +174,6 @@ spec:
     primaries: 2
     secondaries: 2  # More secondaries for read-heavy workload
 
-  options:
-    # Optimized for graph traversals
-    db.memory.transaction.max: "2g"
-    dbms.memory.transaction.total.max: "4g"
-
   # Social network schema
   initialData:
     source: cypher
@@ -214,11 +207,6 @@ spec:
   topology:
     primaries: 3  # More primaries for parallel analytics
     secondaries: 1
-
-  options:
-    # Analytics optimizations
-    db.transaction.timeout: "3600s"  # 1 hour for complex analytics
-    server.memory.query_cache.per_db_cache_num_entries: "2000"
 
   # Analytics schema
   initialData:

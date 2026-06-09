@@ -38,11 +38,6 @@ spec:
   #   iam.gke.io/gcp-service-account: neo4j-backup-reader@my-project.iam.gserviceaccount.com
 
   # Database options optimized for analytics
-  options:
-    "server.memory.heap.initial_size": "1g"
-    "server.memory.heap.max_size": "2g"
-    "server.memory.pagecache.size": "1g"
-
   # Wait for database to be ready
   wait: true
   ifNotExists: true

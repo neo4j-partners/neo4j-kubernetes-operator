@@ -49,10 +49,6 @@ spec:
     secretRef: s3-backup-credentials
 
   # Database options
-  options:
-    "server.memory.heap.initial_size": "512m"
-    "server.memory.heap.max_size": "1g"
-
   # Wait for database to be online before considering creation complete
   wait: true
 

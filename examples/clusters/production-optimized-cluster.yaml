@@ -151,11 +151,6 @@ spec:
     primaries: 2
     secondaries: 1
 
-  # Database-specific options
-  options:
-    "db.transaction.timeout": "10s"
-    "db.transaction.concurrent.maximum": "100"
-
   wait: true
   ifNotExists: true
 

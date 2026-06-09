@@ -58,10 +58,6 @@ spec:
       validation: "strict"
       bufferSize: "128MB"
 
-  options:
-    "server.memory.heap.initial_size": "1g"
-    "server.memory.heap.max_size": "4g"
-
   wait: true
   ifNotExists: true
   defaultCypherLanguage: "25"

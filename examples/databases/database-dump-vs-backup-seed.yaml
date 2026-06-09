@@ -67,12 +67,6 @@ spec:
       bufferSize: "128MB"
 
   # Production-grade resource allocation
-  options:
-    "server.memory.heap.initial_size": "2g"
-    "server.memory.heap.max_size": "8g"
-    "server.memory.pagecache.size": "4g"
-    "server.memory.transaction.total.max": "2g"
-
   wait: true
   ifNotExists: true
   defaultCypherLanguage: "25"

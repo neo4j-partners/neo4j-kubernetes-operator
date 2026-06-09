@@ -108,10 +108,5 @@ spec:
       bufferSize: "256MB"
 
   # Archive-optimized settings
-  options:
-    "server.memory.heap.initial_size": "2g"
-    "server.memory.heap.max_size": "8g"
-    "server.memory.pagecache.size": "4g"
-
   wait: true
   ifNotExists: true

@@ -232,7 +232,7 @@ spec:
     primaries: 3    # Uses 3 servers for primary role
     secondaries: 2  # Uses 2 servers for secondary role
   options:
-    txLogEnrichment: "FULL"  # Enhanced transaction logging
+    txLogEnrichment: "DIFF"  # Enhanced transaction logging
   defaultCypherLanguage: "25"  # Neo4j 2025.x only
 ```
 
@@ -360,7 +360,7 @@ spec:
   ifNotExists: true
   defaultCypherLanguage: "25"  # Neo4j 2025.x
   options:
-    txLogEnrichment: "FULL"    # Enhanced logging for production
+    txLogEnrichment: "DIFF"    # Enhanced logging for production
 ```
 
 ### Database from Seed URI (Development Copy)
