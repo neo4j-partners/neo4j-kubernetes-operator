@@ -2735,6 +2735,15 @@ behind it see <a href="../ci_and_workflows/">CI/CD &amp; Workflows</a>.</p>
    Address feedback by pushing follow-up commits.</li>
 <li>Merge once required checks pass and the PR is approved.</li>
 </ol>
+<blockquote>
+<p><strong>Pushing cancels in-flight test runs.</strong> The integration lanes use per-PR
+concurrency with <code>cancel-in-progress</code>, so a new push <strong>terminates the currently
+running integration run</strong> and restarts it on the new head — the old run is
+marked "cancelled", not failed. If you're waiting on a green integration
+result, let the run finish before pushing again (or batch fixes into one
+push) rather than pushing on top of an in-flight run. See
+<a href="../ci_and_workflows/#integration-tests">CI/CD &amp; Workflows → Integration Tests</a>.</p>
+</blockquote>
 <h3 id="commit-messages">Commit messages<a class="headerlink" href="#commit-messages" title="Anchor link to this section">&para;</a></h3>
 <p>Use <a href="https://www.conventionalcommits.org/">Conventional Commits</a>: <code>feat:</code>,
 <code>fix:</code>, <code>docs:</code>, <code>refactor:</code>, <code>test:</code>, <code>chore:</code>, <code>ci:</code>. Breaking changes get a
@@ -2759,22 +2768,32 @@ behind it see <a href="../ci_and_workflows/">CI/CD &amp; Workflows</a>.</p>
 <td><code>make test-unit</code> (race-enabled) passes.</td>
 </tr>
 <tr>
+<td><strong>Integration Tests</strong></td>
+<td>The <code>core</code> subset on 5.26 + CalVer (parallel). Runs automatically when the PR touches runtime paths (<code>internal/**</code>, <code>api/**</code>, <code>cmd/**</code>, <code>test/integration/**</code>, <code>Makefile</code>, <code>go.{mod,sum}</code>).</td>
+</tr>
+<tr>
 <td><strong>Extended Integration Tests</strong></td>
-<td>Runs automatically only when the PR touches the cluster/restore/backup controllers or the integration suite; otherwise on-demand (see below).</td>
+<td>The full suite on CalVer. Runs nightly; <strong>does not auto-run on PRs</strong> — opt a PR in with the <code>run-extended</code> label (runs extended-only) or dispatch manually (see below).</td>
 </tr>
 </tbody>
 </table>
 <p>Lint (<code>golangci-lint</code>, <code>staticcheck</code>) runs via the pre-commit hooks locally; run
 <code>make lint</code> before pushing.</p>
+<p>See <a href="../ci_and_workflows/#test-tiers-core-vs-extended">CI/CD &amp; Workflows → Test tiers</a>
+for the <code>core</code> vs <code>extended</code> label convention and how to run each tier locally.</p>
 <h3 id="running-the-extended-integration-tests-on-demand">Running the Extended Integration Tests on demand<a class="headerlink" href="#running-the-extended-integration-tests-on-demand" title="Anchor link to this section">&para;</a></h3>
-<p>The 90-minute suite doesn't run on every PR. Trigger it when your change could
-affect cluster coordination:</p>
+<p>The full (~90–150 min) CalVer suite doesn't run on every PR. Trigger it when your
+change could affect cluster coordination, backup/restore, or sharding:</p>
 <ul>
-<li><strong>PR label:</strong> add <code>run-integration-tests</code>, or</li>
-<li><strong>Commit message:</strong> include <code>[run-integration]</code>, or</li>
+<li><strong>On a PR:</strong> apply the <strong><code>run-extended</code></strong> label. The workflow then runs the
+  <code>extended</code> specs against that PR (the <code>core</code> lane already covers <code>core</code>, so it
+  isn't re-run). Labels are maintainer-only.</li>
 <li><strong>Manually:</strong> run the <em>Extended Integration Tests</em> workflow from the Actions
-  tab (lets you pick the Neo4j version).</li>
+  tab <strong>against your branch</strong> (lets you pick the Neo4j version) — runs the full
+  suite.</li>
 </ul>
+<p>The fast <code>core</code> lane (<em>Integration Tests</em>) runs automatically on any
+runtime-path PR — no opt-in needed.</p>
 <h2 id="code-owners-and-review">Code owners and review<a class="headerlink" href="#code-owners-and-review" title="Anchor link to this section">&para;</a></h2>
 <p><code>.github/CODEOWNERS</code> controls automatic review requests. Today the whole repo is
 owned by the maintainer; as the team grows, add path-scoped owners (e.g. one

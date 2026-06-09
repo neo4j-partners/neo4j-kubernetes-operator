@@ -3793,6 +3793,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#make-gotestsum" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        make gotestsum
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -5487,6 +5498,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#make-gotestsum" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        make gotestsum
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -6012,11 +6034,15 @@ Chains: <code>manifests</code> → <code>generate</code> → <code>sync-kustomiz
 <strong>Usage</strong>: <code>make test-unit</code>
 <strong>Dependencies</strong>: <code>manifests</code>, <code>generate</code>, <code>fmt</code>, <code>vet</code>, <code>envtest</code>
 <strong>Duration</strong>: ~30 seconds
+<strong>Test runner override</strong>: the recipe runs <code>$(GO_TEST_CMD)</code> (default <code>go test</code>). CI swaps in <a href="#make-gotestsum">gotestsum</a> for richer reporting:
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>make<span class="w"> </span>gotestsum
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>make<span class="w"> </span>test-unit<span class="w"> </span><span class="nv">GO_TEST_CMD</span><span class="o">=</span><span class="s2">&quot;./bin/gotestsum --format=testname --junitfile=unit-junit.xml --jsonfile=unit-tests.json --&quot;</span>
+</span></code></pre></div>
 <strong>Example</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>make<span class="w"> </span>test-unit
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="c1"># ✅ Fast tests for controller logic</span>
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="c1"># ✅ No cluster setup required</span>
-</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="c1"># ✅ Includes coverage reporting</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>make<span class="w"> </span>test-unit
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="c1"># ✅ Fast tests for controller logic</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="c1"># ✅ No cluster setup required</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="c1"># ✅ Includes coverage reporting</span>
 </span></code></pre></div></p>
 <h4 id="make-test-coverage"><code>make test-coverage</code><a class="headerlink" href="#make-test-coverage" title="Anchor link to this section">&para;</a></h4>
 <p><strong>Description</strong>: Generate detailed coverage report
@@ -6025,9 +6051,9 @@ Chains: <code>manifests</code> → <code>generate</code> → <code>sync-kustomiz
 <strong>Env</strong>: <code>KUBEBUILDER_ASSETS</code> is set automatically from <code>ENVTEST_K8S_VERSION</code> — the controller suite needs it to start envtest. Running <code>go test -coverprofile ./...</code> directly without <code>make</code> requires you to export it yourself.
 <strong>Output</strong>: <code>coverage/coverage.html</code>
 <strong>Example</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>make<span class="w"> </span>test-coverage
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="c1"># Generates HTML coverage report</span>
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="c1"># Opens coverage/coverage.html in browser</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>make<span class="w"> </span>test-coverage
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="c1"># Generates HTML coverage report</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="c1"># Opens coverage/coverage.html in browser</span>
 </span></code></pre></div></p>
 <h3 id="integration-testing">Integration Testing<a class="headerlink" href="#integration-testing" title="Anchor link to this section">&para;</a></h3>
 <h4 id="make-test-integration"><code>make test-integration</code><a class="headerlink" href="#make-test-integration" title="Anchor link to this section">&para;</a></h4>
@@ -6042,11 +6068,11 @@ Chains: <code>manifests</code> → <code>generate</code> → <code>sync-kustomiz
 - Includes plugin testing
 - Cleanup handled automatically</p>
 <p><strong>Example</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>make<span class="w"> </span>test-integration
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="c1"># 🔄 Creates neo4j-operator-test cluster</span>
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="c1"># 📦 Builds and deploys operator</span>
-</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="c1"># 🧪 Runs full test suite</span>
-</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="c1"># 🧹 Automatic cleanup</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>make<span class="w"> </span>test-integration
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="c1"># 🔄 Creates neo4j-operator-test cluster</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="c1"># 📦 Builds and deploys operator</span>
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="c1"># 🧪 Runs full test suite</span>
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="c1"># 🧹 Automatic cleanup</span>
 </span></code></pre></div></p>
 <h4 id="make-test-integration-ci"><code>make test-integration-ci</code><a class="headerlink" href="#make-test-integration-ci" title="Anchor link to this section">&para;</a></h4>
 <p><strong>Description</strong>: Run essential integration tests optimized for CI environments
@@ -6059,10 +6085,10 @@ Chains: <code>manifests</code> → <code>generate</code> → <code>sync-kustomiz
 - Focuses on core functionality
 - Optimized for CI resource constraints</p>
 <p><strong>Example</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>make<span class="w"> </span>test-integration-ci
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="c1"># 🚀 CI-optimized test suite</span>
-</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="c1"># ⚡ Essential tests only</span>
-</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="c1"># 💾 Reduces resource usage</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>make<span class="w"> </span>test-integration-ci
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="c1"># 🚀 CI-optimized test suite</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="c1"># ⚡ Essential tests only</span>
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="c1"># 💾 Reduces resource usage</span>
 </span></code></pre></div></p>
 <h4 id="make-test-integration-ci-full"><code>make test-integration-ci-full</code><a class="headerlink" href="#make-test-integration-ci-full" title="Anchor link to this section">&para;</a></h4>
 <p><strong>Description</strong>: Run complete integration test suite in CI environment
@@ -6071,9 +6097,9 @@ Chains: <code>manifests</code> → <code>generate</code> → <code>sync-kustomiz
 <strong>Duration</strong>: ~15-20 minutes
 <strong>⚠️ </strong>Warning**: May cause resource exhaustion in CI</p>
 <p><strong>Example</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>make<span class="w"> </span>test-integration-ci-full
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="c1"># ⚠️  Full test suite - use with caution in CI</span>
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="c1"># 🔋 High resource consumption</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>make<span class="w"> </span>test-integration-ci-full
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="c1"># ⚠️  Full test suite - use with caution in CI</span>
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="c1"># 🔋 High resource consumption</span>
 </span></code></pre></div></p>
 <h4 id="make-test-one"><code>make test-one</code><a class="headerlink" href="#make-test-one" title="Anchor link to this section">&para;</a></h4>
 <p><strong>Description</strong>: Run a single integration test by name (Ginkgo <code>--focus</code>). Exports the kubeconfig for <code>neo4j-operator-test</code> (falling back to <code>neo4j-operator-dev</code>), then runs <code>ginkgo run --focus "$TEST" --timeout=300s --procs=1 -v ./test/integration/...</code>.
@@ -6090,10 +6116,10 @@ Chains: <code>manifests</code> → <code>generate</code> → <code>sync-kustomiz
 <strong>Usage</strong>: <code>make test-setup</code>
 <strong>Dependencies</strong>: Test environment scripts
 <strong>Example</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>make<span class="w"> </span>test-setup
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="c1"># Prepares test environment</span>
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="c1"># Creates necessary directories</span>
-</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="c1"># Sets up test configurations</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>make<span class="w"> </span>test-setup
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="c1"># Prepares test environment</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="c1"># Creates necessary directories</span>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="c1"># Sets up test configurations</span>
 </span></code></pre></div></p>
 <h4 id="make-test-cleanup"><code>make test-cleanup</code><a class="headerlink" href="#make-test-cleanup" title="Anchor link to this section">&para;</a></h4>
 <p><strong>Description</strong>: Clean up test environment artifacts while keeping cluster
@@ -6103,10 +6129,10 @@ Chains: <code>manifests</code> → <code>generate</code> → <code>sync-kustomiz
 - Cleans coverage files
 - Preserves cluster for reuse
 <strong>Example</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>make<span class="w"> </span>test-cleanup
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="c1"># Removes test-results/ coverage/ logs/ tmp/</span>
-</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="c1"># Cleans test-output.log and coverage files</span>
-</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="c1"># Keeps cluster running</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>make<span class="w"> </span>test-cleanup
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="c1"># Removes test-results/ coverage/ logs/ tmp/</span>
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="c1"># Cleans test-output.log and coverage files</span>
+</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="c1"># Keeps cluster running</span>
 </span></code></pre></div></p>
 <h4 id="make-test-cluster"><code>make test-cluster</code><a class="headerlink" href="#make-test-cluster" title="Anchor link to this section">&para;</a></h4>
 <p><strong>Description</strong>: Create dedicated Kind cluster for testing
@@ -6121,44 +6147,44 @@ Chains: <code>manifests</code> → <code>generate</code> → <code>sync-kustomiz
 - Pre-configured with self-signed issuer
 - Optimized for testing workloads</p>
 <p><strong>Example</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>make<span class="w"> </span>test-cluster
-</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="c1"># Creates neo4j-operator-test cluster</span>
-</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="c1"># Installs cert-manager</span>
-</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="c1"># Sets up TLS certificates</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>make<span class="w"> </span>test-cluster
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="c1"># Creates neo4j-operator-test cluster</span>
+</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="c1"># Installs cert-manager</span>
+</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="c1"># Sets up TLS certificates</span>
 </span></code></pre></div></p>
 <h4 id="make-test-cluster-clean"><code>make test-cluster-clean</code><a class="headerlink" href="#make-test-cluster-clean" title="Anchor link to this section">&para;</a></h4>
 <p><strong>Description</strong>: Remove operator resources from test cluster (keep cluster running)
 <strong>Usage</strong>: <code>make test-cluster-clean</code>
 <strong>Example</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>make<span class="w"> </span>test-cluster-clean
-</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="c1"># Removes operator deployment</span>
-</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="c1"># Removes test namespaces</span>
-</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="c1"># Keeps cluster running</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>make<span class="w"> </span>test-cluster-clean
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="c1"># Removes operator deployment</span>
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="c1"># Removes test namespaces</span>
+</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="c1"># Keeps cluster running</span>
 </span></code></pre></div></p>
 <h4 id="make-test-cluster-reset"><code>make test-cluster-reset</code><a class="headerlink" href="#make-test-cluster-reset" title="Anchor link to this section">&para;</a></h4>
 <p><strong>Description</strong>: Delete and recreate test cluster
 <strong>Usage</strong>: <code>make test-cluster-reset</code>
 <strong>Dependencies</strong>: <code>test-cluster-delete</code>, <code>test-cluster</code>
 <strong>Example</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>make<span class="w"> </span>test-cluster-reset
-</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="c1"># Complete cluster refresh</span>
-</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="c1"># Preserves no state</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>make<span class="w"> </span>test-cluster-reset
+</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="c1"># Complete cluster refresh</span>
+</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="c1"># Preserves no state</span>
 </span></code></pre></div></p>
 <h4 id="make-test-cluster-delete"><code>make test-cluster-delete</code><a class="headerlink" href="#make-test-cluster-delete" title="Anchor link to this section">&para;</a></h4>
 <p><strong>Description</strong>: Delete test cluster completely
 <strong>Usage</strong>: <code>make test-cluster-delete</code>
 <strong>Example</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>make<span class="w"> </span>test-cluster-delete
-</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="c1"># Removes neo4j-operator-test cluster</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>make<span class="w"> </span>test-cluster-delete
+</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="c1"># Removes neo4j-operator-test cluster</span>
 </span></code></pre></div></p>
 <h4 id="make-test-destroy"><code>make test-destroy</code><a class="headerlink" href="#make-test-destroy" title="Anchor link to this section">&para;</a></h4>
 <p><strong>Description</strong>: Complete test environment cleanup
 <strong>Usage</strong>: <code>make test-destroy</code>
 <strong>Example</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>make<span class="w"> </span>test-destroy
-</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="c1"># Removes all test artifacts</span>
-</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="c1"># Deletes test cluster</span>
-</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a><span class="c1"># Cleans temporary files</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>make<span class="w"> </span>test-destroy
+</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="c1"># Removes all test artifacts</span>
+</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="c1"># Deletes test cluster</span>
+</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="c1"># Cleans temporary files</span>
 </span></code></pre></div></p>
 <h3 id="comprehensive-testing">Comprehensive Testing<a class="headerlink" href="#comprehensive-testing" title="Anchor link to this section">&para;</a></h3>
 <h4 id="make-test"><code>make test</code><a class="headerlink" href="#make-test" title="Anchor link to this section">&para;</a></h4>
@@ -6167,10 +6193,10 @@ Chains: <code>manifests</code> → <code>generate</code> → <code>sync-kustomiz
 <strong>Dependencies</strong>: <code>test-unit</code>, <code>test-integration</code>
 <strong>Duration</strong>: ~15-20 minutes
 <strong>Example</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>make<span class="w"> </span><span class="nb">test</span>
-</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="c1"># ✅ Unit tests</span>
-</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="c1"># ✅ Integration tests</span>
-</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="c1"># ✅ Full validation</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>make<span class="w"> </span><span class="nb">test</span>
+</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="c1"># ✅ Unit tests</span>
+</span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="c1"># ✅ Integration tests</span>
+</span><span id="__span-23-4"><a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a><span class="c1"># ✅ Full validation</span>
 </span></code></pre></div></p>
 <h4 id="make-test-ci-local"><code>make test-ci-local</code> 🆕<a class="headerlink" href="#make-test-ci-local" title="Anchor link to this section">&para;</a></h4>
 <p><strong>Description</strong>: Emulate GitHub Actions CI workflow locally with comprehensive debug logging
@@ -6187,11 +6213,11 @@ Chains: <code>manifests</code> → <code>generate</code> → <code>sync-kustomiz
 - <code>logs/ci-local-integration.log</code> - Integration test execution
 - <code>logs/ci-local-cleanup.log</code> - Environment cleanup</p>
 <p><strong>Example</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>make<span class="w"> </span>test-ci-local
-</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="c1"># 🔄 Phase 1: Unit tests with CI environment</span>
-</span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="c1"># 🔗 Phase 2: Integration tests with CI constraints</span>
-</span><span id="__span-23-4"><a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a><span class="c1"># 🧹 Phase 3: Complete cleanup</span>
-</span><span id="__span-23-5"><a id="__codelineno-23-5" name="__codelineno-23-5" href="#__codelineno-23-5"></a><span class="c1"># 📁 Debug logs in logs/ directory</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>make<span class="w"> </span>test-ci-local
+</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="c1"># 🔄 Phase 1: Unit tests with CI environment</span>
+</span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a><span class="c1"># 🔗 Phase 2: Integration tests with CI constraints</span>
+</span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a><span class="c1"># 🧹 Phase 3: Complete cleanup</span>
+</span><span id="__span-24-5"><a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a><span class="c1"># 📁 Debug logs in logs/ directory</span>
 </span></code></pre></div></p>
 <p><strong>When to use</strong>:
 - Debugging CI failures locally
@@ -6205,9 +6231,9 @@ Chains: <code>manifests</code> → <code>generate</code> → <code>sync-kustomiz
 <strong>Dependencies</strong>: <code>manifests</code>, <code>generate</code>, <code>fmt</code>, <code>vet</code>
 <strong>Output</strong>: <code>bin/manager</code>
 <strong>Example</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>make<span class="w"> </span>build
-</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="c1"># Builds bin/manager executable</span>
-</span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a><span class="c1"># Includes all code generation</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>make<span class="w"> </span>build
+</span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="c1"># Builds bin/manager executable</span>
+</span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a><span class="c1"># Includes all code generation</span>
 </span></code></pre></div></p>
 <h3 id="make-docker-build"><code>make docker-build</code><a class="headerlink" href="#make-docker-build" title="Anchor link to this section">&para;</a></h3>
 <p><strong>Description</strong>: Build Docker image with operator
@@ -6216,19 +6242,19 @@ Chains: <code>manifests</code> → <code>generate</code> → <code>sync-kustomiz
 <strong>Default Image</strong>: <code>ghcr.io/neo4j-partners/neo4j-kubernetes-operator:latest</code>
 <strong>Notes</strong>: Passes <code>VERSION</code>, <code>BUILD_DATE</code>, and <code>VCS_REF</code> build-args into the Dockerfile.
 <strong>Example</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>make<span class="w"> </span>docker-build
-</span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="c1"># Builds ghcr.io/neo4j-partners/neo4j-kubernetes-operator:latest image</span>
-</span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a>
-</span><span id="__span-25-4"><a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a>make<span class="w"> </span>docker-build<span class="w"> </span><span class="nv">IMG</span><span class="o">=</span>my-operator:v1.0
-</span><span id="__span-25-5"><a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a><span class="c1"># Builds custom image name</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a>make<span class="w"> </span>docker-build
+</span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="c1"># Builds ghcr.io/neo4j-partners/neo4j-kubernetes-operator:latest image</span>
+</span><span id="__span-26-3"><a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a>
+</span><span id="__span-26-4"><a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a>make<span class="w"> </span>docker-build<span class="w"> </span><span class="nv">IMG</span><span class="o">=</span>my-operator:v1.0
+</span><span id="__span-26-5"><a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a><span class="c1"># Builds custom image name</span>
 </span></code></pre></div></p>
 <h3 id="make-docker-push"><code>make docker-push</code><a class="headerlink" href="#make-docker-push" title="Anchor link to this section">&para;</a></h3>
 <p><strong>Description</strong>: Push Docker image to registry
 <strong>Usage</strong>: <code>make docker-push [IMG=&lt;image-name&gt;]</code>
 <strong>Dependencies</strong>: <code>docker-build</code>
 <strong>Example</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a>make<span class="w"> </span>docker-push<span class="w"> </span><span class="nv">IMG</span><span class="o">=</span>ghcr.io/my-org/neo4j-operator:latest
-</span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="c1"># Pushes image to GitHub Container Registry</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>make<span class="w"> </span>docker-push<span class="w"> </span><span class="nv">IMG</span><span class="o">=</span>ghcr.io/my-org/neo4j-operator:latest
+</span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="c1"># Pushes image to GitHub Container Registry</span>
 </span></code></pre></div></p>
 <h2 id="deployment">Deployment<a class="headerlink" href="#deployment" title="Anchor link to this section">&para;</a></h2>
 <blockquote>
@@ -6240,8 +6266,8 @@ Chains: <code>manifests</code> → <code>generate</code> → <code>sync-kustomiz
 <strong>Usage</strong>: <code>make install</code>
 <strong>Dependencies</strong>: <code>manifests</code>, <code>kustomize</code>
 <strong>Example</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>make<span class="w"> </span>install
-</span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="c1"># Installs all CRDs to current cluster context</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a>make<span class="w"> </span>install
+</span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a><span class="c1"># Installs all CRDs to current cluster context</span>
 </span></code></pre></div></p>
 <h4 id="make-uninstall"><code>make uninstall</code><a class="headerlink" href="#make-uninstall" title="Anchor link to this section">&para;</a></h4>
 <p><strong>Description</strong>: Remove CRDs from cluster
@@ -6249,8 +6275,8 @@ Chains: <code>manifests</code> → <code>generate</code> → <code>sync-kustomiz
 <strong>Dependencies</strong>: <code>manifests</code>, <code>kustomize</code>
 <strong>⚠️ </strong>Warning<strong>: This will delete all Neo4j instances
 </strong>Example**:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a>make<span class="w"> </span>uninstall
-</span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a><span class="c1"># Removes all CRDs and instances</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a>make<span class="w"> </span>uninstall
+</span><span id="__span-29-2"><a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="c1"># Removes all CRDs and instances</span>
 </span></code></pre></div></p>
 <h3 id="operator-deployment">Operator Deployment<a class="headerlink" href="#operator-deployment" title="Anchor link to this section">&para;</a></h3>
 <h4 id="make-deploy-dev"><code>make deploy-dev</code><a class="headerlink" href="#make-deploy-dev" title="Anchor link to this section">&para;</a></h4>
@@ -6264,10 +6290,10 @@ Chains: <code>manifests</code> → <code>generate</code> → <code>sync-kustomiz
 - Development-friendly settings
 - Enhanced logging</p>
 <p><strong>Example</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a>make<span class="w"> </span>deploy-dev
-</span><span id="__span-29-2"><a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="c1"># 🔨 Builds neo4j-operator:dev image</span>
-</span><span id="__span-29-3"><a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a><span class="c1"># 📦 Loads to Kind cluster</span>
-</span><span id="__span-29-4"><a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a><span class="c1"># 🚀 Deploys to neo4j-operator-dev namespace</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a>make<span class="w"> </span>deploy-dev
+</span><span id="__span-30-2"><a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="c1"># 🔨 Builds neo4j-operator:dev image</span>
+</span><span id="__span-30-3"><a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a><span class="c1"># 📦 Loads to Kind cluster</span>
+</span><span id="__span-30-4"><a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a><span class="c1"># 🚀 Deploys to neo4j-operator-dev namespace</span>
 </span></code></pre></div></p>
 <h4 id="make-deploy-prod"><code>make deploy-prod</code><a class="headerlink" href="#make-deploy-prod" title="Anchor link to this section">&para;</a></h4>
 <p><strong>Description</strong>: Deploy operator with production configuration using local images
@@ -6280,10 +6306,10 @@ Chains: <code>manifests</code> → <code>generate</code> → <code>sync-kustomiz
 - Resource limits applied
 - Standard logging levels</p>
 <p><strong>Example</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a>make<span class="w"> </span>deploy-prod
-</span><span id="__span-30-2"><a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="c1"># 🔨 Builds neo4j-operator:latest image</span>
-</span><span id="__span-30-3"><a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a><span class="c1"># 📦 Loads to Kind cluster</span>
-</span><span id="__span-30-4"><a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a><span class="c1"># 🚀 Deploys to neo4j-operator-system namespace</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a>make<span class="w"> </span>deploy-prod
+</span><span id="__span-31-2"><a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a><span class="c1"># 🔨 Builds neo4j-operator:latest image</span>
+</span><span id="__span-31-3"><a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a><span class="c1"># 📦 Loads to Kind cluster</span>
+</span><span id="__span-31-4"><a id="__codelineno-31-4" name="__codelineno-31-4" href="#__codelineno-31-4"></a><span class="c1"># 🚀 Deploys to neo4j-operator-system namespace</span>
 </span></code></pre></div></p>
 <h4 id="make-deploy-dev-local"><code>make deploy-dev-local</code><a class="headerlink" href="#make-deploy-dev-local" title="Anchor link to this section">&para;</a></h4>
 <p><strong>Description</strong>: Build and deploy controller with local dev image to Kind cluster
@@ -6294,9 +6320,9 @@ Chains: <code>manifests</code> → <code>generate</code> → <code>sync-kustomiz
 - Auto-detects and loads to available Kind cluster
 - Deploys to <code>neo4j-operator-dev</code> namespace
 <strong>Example</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a>make<span class="w"> </span>deploy-dev-local
-</span><span id="__span-31-2"><a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a><span class="c1"># Explicit local build and deploy</span>
-</span><span id="__span-31-3"><a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a><span class="c1"># Same as deploy-dev but more explicit</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-32-1"><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a>make<span class="w"> </span>deploy-dev-local
+</span><span id="__span-32-2"><a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a><span class="c1"># Explicit local build and deploy</span>
+</span><span id="__span-32-3"><a id="__codelineno-32-3" name="__codelineno-32-3" href="#__codelineno-32-3"></a><span class="c1"># Same as deploy-dev but more explicit</span>
 </span></code></pre></div></p>
 <h4 id="make-deploy-prod-local"><code>make deploy-prod-local</code><a class="headerlink" href="#make-deploy-prod-local" title="Anchor link to this section">&para;</a></h4>
 <p><strong>Description</strong>: Build and deploy controller with local prod image to Kind cluster
@@ -6307,9 +6333,9 @@ Chains: <code>manifests</code> → <code>generate</code> → <code>sync-kustomiz
 - Auto-detects and loads to available Kind cluster
 - Deploys to production namespace
 <strong>Example</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-32-1"><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a>make<span class="w"> </span>deploy-prod-local
-</span><span id="__span-32-2"><a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a><span class="c1"># Explicit local build and deploy</span>
-</span><span id="__span-32-3"><a id="__codelineno-32-3" name="__codelineno-32-3" href="#__codelineno-32-3"></a><span class="c1"># Same as deploy-prod but more explicit</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-33-1"><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a>make<span class="w"> </span>deploy-prod-local
+</span><span id="__span-33-2"><a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a><span class="c1"># Explicit local build and deploy</span>
+</span><span id="__span-33-3"><a id="__codelineno-33-3" name="__codelineno-33-3" href="#__codelineno-33-3"></a><span class="c1"># Same as deploy-prod but more explicit</span>
 </span></code></pre></div></p>
 <h4 id="make-deploy-dev-registry"><code>make deploy-dev-registry</code><a class="headerlink" href="#make-deploy-dev-registry" title="Anchor link to this section">&para;</a></h4>
 <p><strong>Description</strong>: Deploy development configuration using registry image (applies <code>config/overlays/dev</code>)
@@ -6317,9 +6343,9 @@ Chains: <code>manifests</code> → <code>generate</code> → <code>sync-kustomiz
 <strong>Dependencies</strong>: <code>manifests</code>, <code>kustomize</code>, <code>check-rbac</code>
 <strong>Image Source</strong>: Container registry (requires authentication)
 <strong>Example</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-33-1"><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a>make<span class="w"> </span>deploy-dev-registry
-</span><span id="__span-33-2"><a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a><span class="c1"># 📥 Pulls from ghcr.io registry</span>
-</span><span id="__span-33-3"><a id="__codelineno-33-3" name="__codelineno-33-3" href="#__codelineno-33-3"></a><span class="c1"># 🚀 Deploys dev configuration</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-34-1"><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a>make<span class="w"> </span>deploy-dev-registry
+</span><span id="__span-34-2"><a id="__codelineno-34-2" name="__codelineno-34-2" href="#__codelineno-34-2"></a><span class="c1"># 📥 Pulls from ghcr.io registry</span>
+</span><span id="__span-34-3"><a id="__codelineno-34-3" name="__codelineno-34-3" href="#__codelineno-34-3"></a><span class="c1"># 🚀 Deploys dev configuration</span>
 </span></code></pre></div></p>
 <h4 id="make-deploy-prod-registry"><code>make deploy-prod-registry</code><a class="headerlink" href="#make-deploy-prod-registry" title="Anchor link to this section">&para;</a></h4>
 <p><strong>Description</strong>: Deploy production configuration using registry image (applies <code>config/overlays/prod-registry</code>)
@@ -6327,9 +6353,9 @@ Chains: <code>manifests</code> → <code>generate</code> → <code>sync-kustomiz
 <strong>Dependencies</strong>: <code>manifests</code>, <code>kustomize</code>, <code>check-rbac</code>
 <strong>Image Source</strong>: Container registry (requires authentication)
 <strong>Example</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-34-1"><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a>make<span class="w"> </span>deploy-prod-registry
-</span><span id="__span-34-2"><a id="__codelineno-34-2" name="__codelineno-34-2" href="#__codelineno-34-2"></a><span class="c1"># 📥 Pulls from ghcr.io registry</span>
-</span><span id="__span-34-3"><a id="__codelineno-34-3" name="__codelineno-34-3" href="#__codelineno-34-3"></a><span class="c1"># 🚀 Deploys production configuration</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-35-1"><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a>make<span class="w"> </span>deploy-prod-registry
+</span><span id="__span-35-2"><a id="__codelineno-35-2" name="__codelineno-35-2" href="#__codelineno-35-2"></a><span class="c1"># 📥 Pulls from ghcr.io registry</span>
+</span><span id="__span-35-3"><a id="__codelineno-35-3" name="__codelineno-35-3" href="#__codelineno-35-3"></a><span class="c1"># 🚀 Deploys production configuration</span>
 </span></code></pre></div></p>
 <h4 id="make-deploy-namespace-scoped"><code>make deploy-namespace-scoped</code><a class="headerlink" href="#make-deploy-namespace-scoped" title="Anchor link to this section">&para;</a></h4>
 <p><strong>Description</strong>: Deploy the controller with namespace-scoped permissions only (no ClusterRole). Applies <code>config/overlays/namespace-scoped</code>. Limited functionality — only manages resources within the <code>neo4j-operator-dev</code> namespace.
@@ -6343,17 +6369,17 @@ Chains: <code>manifests</code> → <code>generate</code> → <code>sync-kustomiz
 <p><strong>Description</strong>: Remove development operator deployment
 <strong>Usage</strong>: <code>make undeploy-dev</code>
 <strong>Example</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-35-1"><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a>make<span class="w"> </span>undeploy-dev
-</span><span id="__span-35-2"><a id="__codelineno-35-2" name="__codelineno-35-2" href="#__codelineno-35-2"></a><span class="c1"># Removes development operator</span>
-</span><span id="__span-35-3"><a id="__codelineno-35-3" name="__codelineno-35-3" href="#__codelineno-35-3"></a><span class="c1"># Keeps CRDs and instances</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-36-1"><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a>make<span class="w"> </span>undeploy-dev
+</span><span id="__span-36-2"><a id="__codelineno-36-2" name="__codelineno-36-2" href="#__codelineno-36-2"></a><span class="c1"># Removes development operator</span>
+</span><span id="__span-36-3"><a id="__codelineno-36-3" name="__codelineno-36-3" href="#__codelineno-36-3"></a><span class="c1"># Keeps CRDs and instances</span>
 </span></code></pre></div></p>
 <h4 id="make-undeploy-prod"><code>make undeploy-prod</code><a class="headerlink" href="#make-undeploy-prod" title="Anchor link to this section">&para;</a></h4>
 <p><strong>Description</strong>: Remove production operator deployment
 <strong>Usage</strong>: <code>make undeploy-prod</code>
 <strong>Example</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-36-1"><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a>make<span class="w"> </span>undeploy-prod
-</span><span id="__span-36-2"><a id="__codelineno-36-2" name="__codelineno-36-2" href="#__codelineno-36-2"></a><span class="c1"># Removes production operator</span>
-</span><span id="__span-36-3"><a id="__codelineno-36-3" name="__codelineno-36-3" href="#__codelineno-36-3"></a><span class="c1"># Keeps CRDs and instances</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-37-1"><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a>make<span class="w"> </span>undeploy-prod
+</span><span id="__span-37-2"><a id="__codelineno-37-2" name="__codelineno-37-2" href="#__codelineno-37-2"></a><span class="c1"># Removes production operator</span>
+</span><span id="__span-37-3"><a id="__codelineno-37-3" name="__codelineno-37-3" href="#__codelineno-37-3"></a><span class="c1"># Keeps CRDs and instances</span>
 </span></code></pre></div></p>
 <h4 id="make-undeploy-namespace-scoped"><code>make undeploy-namespace-scoped</code><a class="headerlink" href="#make-undeploy-namespace-scoped" title="Anchor link to this section">&para;</a></h4>
 <p><strong>Description</strong>: Remove the namespace-scoped controller deployment (deletes <code>config/overlays/namespace-scoped</code>).
@@ -6386,54 +6412,54 @@ Chains: <code>manifests</code> → <code>generate</code> → <code>sync-kustomiz
 - Self-signed ClusterIssuer for TLS
 - Development-optimized configuration</p>
 <p><strong>Example</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-37-1"><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a>make<span class="w"> </span>dev-cluster
-</span><span id="__span-37-2"><a id="__codelineno-37-2" name="__codelineno-37-2" href="#__codelineno-37-2"></a><span class="c1"># Creates neo4j-operator-dev cluster</span>
-</span><span id="__span-37-3"><a id="__codelineno-37-3" name="__codelineno-37-3" href="#__codelineno-37-3"></a><span class="c1"># Installs cert-manager</span>
-</span><span id="__span-37-4"><a id="__codelineno-37-4" name="__codelineno-37-4" href="#__codelineno-37-4"></a><span class="c1"># Sets up development certificates</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-38-1"><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a>make<span class="w"> </span>dev-cluster
+</span><span id="__span-38-2"><a id="__codelineno-38-2" name="__codelineno-38-2" href="#__codelineno-38-2"></a><span class="c1"># Creates neo4j-operator-dev cluster</span>
+</span><span id="__span-38-3"><a id="__codelineno-38-3" name="__codelineno-38-3" href="#__codelineno-38-3"></a><span class="c1"># Installs cert-manager</span>
+</span><span id="__span-38-4"><a id="__codelineno-38-4" name="__codelineno-38-4" href="#__codelineno-38-4"></a><span class="c1"># Sets up development certificates</span>
 </span></code></pre></div></p>
 <h4 id="make-dev-cluster-clean"><code>make dev-cluster-clean</code><a class="headerlink" href="#make-dev-cluster-clean" title="Anchor link to this section">&para;</a></h4>
 <p><strong>Description</strong>: Remove operator resources from development cluster
 <strong>Usage</strong>: <code>make dev-cluster-clean</code>
 <strong>Example</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-38-1"><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a>make<span class="w"> </span>dev-cluster-clean
-</span><span id="__span-38-2"><a id="__codelineno-38-2" name="__codelineno-38-2" href="#__codelineno-38-2"></a><span class="c1"># Removes operator deployment</span>
-</span><span id="__span-38-3"><a id="__codelineno-38-3" name="__codelineno-38-3" href="#__codelineno-38-3"></a><span class="c1"># Removes CRDs and instances</span>
-</span><span id="__span-38-4"><a id="__codelineno-38-4" name="__codelineno-38-4" href="#__codelineno-38-4"></a><span class="c1"># Keeps cluster running</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-39-1"><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a>make<span class="w"> </span>dev-cluster-clean
+</span><span id="__span-39-2"><a id="__codelineno-39-2" name="__codelineno-39-2" href="#__codelineno-39-2"></a><span class="c1"># Removes operator deployment</span>
+</span><span id="__span-39-3"><a id="__codelineno-39-3" name="__codelineno-39-3" href="#__codelineno-39-3"></a><span class="c1"># Removes CRDs and instances</span>
+</span><span id="__span-39-4"><a id="__codelineno-39-4" name="__codelineno-39-4" href="#__codelineno-39-4"></a><span class="c1"># Keeps cluster running</span>
 </span></code></pre></div></p>
 <h4 id="make-dev-cluster-reset"><code>make dev-cluster-reset</code><a class="headerlink" href="#make-dev-cluster-reset" title="Anchor link to this section">&para;</a></h4>
 <p><strong>Description</strong>: Reset development cluster (delete and recreate)
 <strong>Usage</strong>: <code>make dev-cluster-reset</code>
 <strong>Dependencies</strong>: <code>dev-cluster-delete</code>, <code>dev-cluster</code>
 <strong>Example</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-39-1"><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a>make<span class="w"> </span>dev-cluster-reset
-</span><span id="__span-39-2"><a id="__codelineno-39-2" name="__codelineno-39-2" href="#__codelineno-39-2"></a><span class="c1"># Complete cluster refresh</span>
-</span><span id="__span-39-3"><a id="__codelineno-39-3" name="__codelineno-39-3" href="#__codelineno-39-3"></a><span class="c1"># Loses all state and data</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-40-1"><a id="__codelineno-40-1" name="__codelineno-40-1" href="#__codelineno-40-1"></a>make<span class="w"> </span>dev-cluster-reset
+</span><span id="__span-40-2"><a id="__codelineno-40-2" name="__codelineno-40-2" href="#__codelineno-40-2"></a><span class="c1"># Complete cluster refresh</span>
+</span><span id="__span-40-3"><a id="__codelineno-40-3" name="__codelineno-40-3" href="#__codelineno-40-3"></a><span class="c1"># Loses all state and data</span>
 </span></code></pre></div></p>
 <h4 id="make-dev-cluster-delete"><code>make dev-cluster-delete</code><a class="headerlink" href="#make-dev-cluster-delete" title="Anchor link to this section">&para;</a></h4>
 <p><strong>Description</strong>: Delete development cluster
 <strong>Usage</strong>: <code>make dev-cluster-delete</code>
 <strong>Example</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-40-1"><a id="__codelineno-40-1" name="__codelineno-40-1" href="#__codelineno-40-1"></a>make<span class="w"> </span>dev-cluster-delete
-</span><span id="__span-40-2"><a id="__codelineno-40-2" name="__codelineno-40-2" href="#__codelineno-40-2"></a><span class="c1"># Removes neo4j-operator-dev cluster</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-41-1"><a id="__codelineno-41-1" name="__codelineno-41-1" href="#__codelineno-41-1"></a>make<span class="w"> </span>dev-cluster-delete
+</span><span id="__span-41-2"><a id="__codelineno-41-2" name="__codelineno-41-2" href="#__codelineno-41-2"></a><span class="c1"># Removes neo4j-operator-dev cluster</span>
 </span></code></pre></div></p>
 <h4 id="make-dev-cleanup"><code>make dev-cleanup</code><a class="headerlink" href="#make-dev-cleanup" title="Anchor link to this section">&para;</a></h4>
 <p><strong>Description</strong>: Clean up development environment completely (keeps cluster)
 <strong>Usage</strong>: <code>make dev-cleanup</code>
 <strong>Dependencies</strong>: Development cleanup script
 <strong>Example</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-41-1"><a id="__codelineno-41-1" name="__codelineno-41-1" href="#__codelineno-41-1"></a>make<span class="w"> </span>dev-cleanup
-</span><span id="__span-41-2"><a id="__codelineno-41-2" name="__codelineno-41-2" href="#__codelineno-41-2"></a><span class="c1"># Runs hack/cleanup-dev.sh</span>
-</span><span id="__span-41-3"><a id="__codelineno-41-3" name="__codelineno-41-3" href="#__codelineno-41-3"></a><span class="c1"># Removes artifacts but keeps cluster</span>
-</span><span id="__span-41-4"><a id="__codelineno-41-4" name="__codelineno-41-4" href="#__codelineno-41-4"></a><span class="c1"># Useful for resetting state</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-42-1"><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a>make<span class="w"> </span>dev-cleanup
+</span><span id="__span-42-2"><a id="__codelineno-42-2" name="__codelineno-42-2" href="#__codelineno-42-2"></a><span class="c1"># Runs hack/cleanup-dev.sh</span>
+</span><span id="__span-42-3"><a id="__codelineno-42-3" name="__codelineno-42-3" href="#__codelineno-42-3"></a><span class="c1"># Removes artifacts but keeps cluster</span>
+</span><span id="__span-42-4"><a id="__codelineno-42-4" name="__codelineno-42-4" href="#__codelineno-42-4"></a><span class="c1"># Useful for resetting state</span>
 </span></code></pre></div></p>
 <h4 id="make-dev-destroy"><code>make dev-destroy</code><a class="headerlink" href="#make-dev-destroy" title="Anchor link to this section">&para;</a></h4>
 <p><strong>Description</strong>: Complete development environment destruction
 <strong>Usage</strong>: <code>make dev-destroy</code>
 <strong>Example</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-42-1"><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a>make<span class="w"> </span>dev-destroy
-</span><span id="__span-42-2"><a id="__codelineno-42-2" name="__codelineno-42-2" href="#__codelineno-42-2"></a><span class="c1"># Removes all development artifacts</span>
-</span><span id="__span-42-3"><a id="__codelineno-42-3" name="__codelineno-42-3" href="#__codelineno-42-3"></a><span class="c1"># Deletes development cluster</span>
-</span><span id="__span-42-4"><a id="__codelineno-42-4" name="__codelineno-42-4" href="#__codelineno-42-4"></a><span class="c1"># Complete cleanup</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-43-1"><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a>make<span class="w"> </span>dev-destroy
+</span><span id="__span-43-2"><a id="__codelineno-43-2" name="__codelineno-43-2" href="#__codelineno-43-2"></a><span class="c1"># Removes all development artifacts</span>
+</span><span id="__span-43-3"><a id="__codelineno-43-3" name="__codelineno-43-3" href="#__codelineno-43-3"></a><span class="c1"># Deletes development cluster</span>
+</span><span id="__span-43-4"><a id="__codelineno-43-4" name="__codelineno-43-4" href="#__codelineno-43-4"></a><span class="c1"># Complete cleanup</span>
 </span></code></pre></div></p>
 <h3 id="operator-management">Operator Management<a class="headerlink" href="#operator-management" title="Anchor link to this section">&para;</a></h3>
 <h4 id="make-operator-setup"><code>make operator-setup</code><a class="headerlink" href="#make-operator-setup" title="Anchor link to this section">&para;</a></h4>
@@ -6445,37 +6471,37 @@ Chains: <code>manifests</code> → <code>generate</code> → <code>sync-kustomiz
 - <strong>Status verification</strong>: Confirms successful deployment
 - <strong>Error handling</strong>: Provides troubleshooting guidance</p>
 <p><strong>Example</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-43-1"><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a>make<span class="w"> </span>operator-setup
-</span><span id="__span-43-2"><a id="__codelineno-43-2" name="__codelineno-43-2" href="#__codelineno-43-2"></a><span class="c1"># 🔍 Detects available Kind cluster</span>
-</span><span id="__span-43-3"><a id="__codelineno-43-3" name="__codelineno-43-3" href="#__codelineno-43-3"></a><span class="c1"># 📦 Builds and loads appropriate image</span>
-</span><span id="__span-43-4"><a id="__codelineno-43-4" name="__codelineno-43-4" href="#__codelineno-43-4"></a><span class="c1"># 🚀 Deploys operator</span>
-</span><span id="__span-43-5"><a id="__codelineno-43-5" name="__codelineno-43-5" href="#__codelineno-43-5"></a><span class="c1"># ✅ Verifies deployment status</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-44-1"><a id="__codelineno-44-1" name="__codelineno-44-1" href="#__codelineno-44-1"></a>make<span class="w"> </span>operator-setup
+</span><span id="__span-44-2"><a id="__codelineno-44-2" name="__codelineno-44-2" href="#__codelineno-44-2"></a><span class="c1"># 🔍 Detects available Kind cluster</span>
+</span><span id="__span-44-3"><a id="__codelineno-44-3" name="__codelineno-44-3" href="#__codelineno-44-3"></a><span class="c1"># 📦 Builds and loads appropriate image</span>
+</span><span id="__span-44-4"><a id="__codelineno-44-4" name="__codelineno-44-4" href="#__codelineno-44-4"></a><span class="c1"># 🚀 Deploys operator</span>
+</span><span id="__span-44-5"><a id="__codelineno-44-5" name="__codelineno-44-5" href="#__codelineno-44-5"></a><span class="c1"># ✅ Verifies deployment status</span>
 </span></code></pre></div></p>
 <h4 id="make-operator-setup-interactive"><code>make operator-setup-interactive</code><a class="headerlink" href="#make-operator-setup-interactive" title="Anchor link to this section">&para;</a></h4>
 <p><strong>Description</strong>: Interactive operator deployment with user prompts
 <strong>Usage</strong>: <code>make operator-setup-interactive</code>
 <strong>Example</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-44-1"><a id="__codelineno-44-1" name="__codelineno-44-1" href="#__codelineno-44-1"></a>make<span class="w"> </span>operator-setup-interactive
-</span><span id="__span-44-2"><a id="__codelineno-44-2" name="__codelineno-44-2" href="#__codelineno-44-2"></a><span class="c1"># 💬 Interactive cluster selection</span>
-</span><span id="__span-44-3"><a id="__codelineno-44-3" name="__codelineno-44-3" href="#__codelineno-44-3"></a><span class="c1"># 🎛️  Configuration options</span>
-</span><span id="__span-44-4"><a id="__codelineno-44-4" name="__codelineno-44-4" href="#__codelineno-44-4"></a><span class="c1"># 📋 Detailed status reporting</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-45-1"><a id="__codelineno-45-1" name="__codelineno-45-1" href="#__codelineno-45-1"></a>make<span class="w"> </span>operator-setup-interactive
+</span><span id="__span-45-2"><a id="__codelineno-45-2" name="__codelineno-45-2" href="#__codelineno-45-2"></a><span class="c1"># 💬 Interactive cluster selection</span>
+</span><span id="__span-45-3"><a id="__codelineno-45-3" name="__codelineno-45-3" href="#__codelineno-45-3"></a><span class="c1"># 🎛️  Configuration options</span>
+</span><span id="__span-45-4"><a id="__codelineno-45-4" name="__codelineno-45-4" href="#__codelineno-45-4"></a><span class="c1"># 📋 Detailed status reporting</span>
 </span></code></pre></div></p>
 <h4 id="make-operator-status"><code>make operator-status</code><a class="headerlink" href="#make-operator-status" title="Anchor link to this section">&para;</a></h4>
 <p><strong>Description</strong>: Display comprehensive operator status
 <strong>Usage</strong>: <code>make operator-status</code>
 <strong>Example</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-45-1"><a id="__codelineno-45-1" name="__codelineno-45-1" href="#__codelineno-45-1"></a>make<span class="w"> </span>operator-status
-</span><span id="__span-45-2"><a id="__codelineno-45-2" name="__codelineno-45-2" href="#__codelineno-45-2"></a><span class="c1"># 📊 Operator deployment status</span>
-</span><span id="__span-45-3"><a id="__codelineno-45-3" name="__codelineno-45-3" href="#__codelineno-45-3"></a><span class="c1"># 🔍 Pod health and logs</span>
-</span><span id="__span-45-4"><a id="__codelineno-45-4" name="__codelineno-45-4" href="#__codelineno-45-4"></a><span class="c1"># 📈 Resource usage</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-46-1"><a id="__codelineno-46-1" name="__codelineno-46-1" href="#__codelineno-46-1"></a>make<span class="w"> </span>operator-status
+</span><span id="__span-46-2"><a id="__codelineno-46-2" name="__codelineno-46-2" href="#__codelineno-46-2"></a><span class="c1"># 📊 Operator deployment status</span>
+</span><span id="__span-46-3"><a id="__codelineno-46-3" name="__codelineno-46-3" href="#__codelineno-46-3"></a><span class="c1"># 🔍 Pod health and logs</span>
+</span><span id="__span-46-4"><a id="__codelineno-46-4" name="__codelineno-46-4" href="#__codelineno-46-4"></a><span class="c1"># 📈 Resource usage</span>
 </span></code></pre></div></p>
 <h4 id="make-operator-logs"><code>make operator-logs</code><a class="headerlink" href="#make-operator-logs" title="Anchor link to this section">&para;</a></h4>
 <p><strong>Description</strong>: Follow operator logs in real-time
 <strong>Usage</strong>: <code>make operator-logs</code>
 <strong>Example</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-46-1"><a id="__codelineno-46-1" name="__codelineno-46-1" href="#__codelineno-46-1"></a>make<span class="w"> </span>operator-logs
-</span><span id="__span-46-2"><a id="__codelineno-46-2" name="__codelineno-46-2" href="#__codelineno-46-2"></a><span class="c1"># 📋 Real-time log streaming</span>
-</span><span id="__span-46-3"><a id="__codelineno-46-3" name="__codelineno-46-3" href="#__codelineno-46-3"></a><span class="c1"># 🔍 Filtered for relevant events</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-47-1"><a id="__codelineno-47-1" name="__codelineno-47-1" href="#__codelineno-47-1"></a>make<span class="w"> </span>operator-logs
+</span><span id="__span-47-2"><a id="__codelineno-47-2" name="__codelineno-47-2" href="#__codelineno-47-2"></a><span class="c1"># 📋 Real-time log streaming</span>
+</span><span id="__span-47-3"><a id="__codelineno-47-3" name="__codelineno-47-3" href="#__codelineno-47-3"></a><span class="c1"># 🔍 Filtered for relevant events</span>
 </span></code></pre></div></p>
 <h4 id="make-dev-watch"><code>make dev-watch</code><a class="headerlink" href="#make-dev-watch" title="Anchor link to this section">&para;</a></h4>
 <p><strong>Description</strong>: File-watch dev loop — on changes under <code>api/</code>, <code>internal/</code>, <code>cmd/</code> re-runs <code>manifests generate build deploy-dev-local</code>. Uses <code>watchexec</code> if present, else <code>fswatch</code>; errors out with install hints if neither is available.
@@ -6547,45 +6573,45 @@ Chains: <code>manifests</code> → <code>generate</code> → <code>sync-kustomiz
 <strong>Usage</strong>: <code>make opm</code>
 <strong>Location</strong>: <code>bin/opm</code>
 <strong>Example</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-47-1"><a id="__codelineno-47-1" name="__codelineno-47-1" href="#__codelineno-47-1"></a>make<span class="w"> </span>opm
-</span><span id="__span-47-2"><a id="__codelineno-47-2" name="__codelineno-47-2" href="#__codelineno-47-2"></a><span class="c1"># Downloads opm for catalog management</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-48-1"><a id="__codelineno-48-1" name="__codelineno-48-1" href="#__codelineno-48-1"></a>make<span class="w"> </span>opm
+</span><span id="__span-48-2"><a id="__codelineno-48-2" name="__codelineno-48-2" href="#__codelineno-48-2"></a><span class="c1"># Downloads opm for catalog management</span>
 </span></code></pre></div></p>
 <h4 id="make-bundle_1"><code>make bundle</code><a class="headerlink" href="#make-bundle_1" title="Anchor link to this section">&para;</a></h4>
 <p><strong>Description</strong>: Generate operator bundle manifests
 <strong>Usage</strong>: <code>make bundle [VERSION=&lt;version&gt;]</code>
 <strong>Dependencies</strong>: <code>manifests</code>, <code>kustomize</code>, <code>operator-sdk</code>
 <strong>Example</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-48-1"><a id="__codelineno-48-1" name="__codelineno-48-1" href="#__codelineno-48-1"></a>make<span class="w"> </span>bundle<span class="w"> </span><span class="nv">VERSION</span><span class="o">=</span><span class="m">0</span>.1.0
-</span><span id="__span-48-2"><a id="__codelineno-48-2" name="__codelineno-48-2" href="#__codelineno-48-2"></a><span class="c1"># Generates bundle for version 0.1.0</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-49-1"><a id="__codelineno-49-1" name="__codelineno-49-1" href="#__codelineno-49-1"></a>make<span class="w"> </span>bundle<span class="w"> </span><span class="nv">VERSION</span><span class="o">=</span><span class="m">0</span>.1.0
+</span><span id="__span-49-2"><a id="__codelineno-49-2" name="__codelineno-49-2" href="#__codelineno-49-2"></a><span class="c1"># Generates bundle for version 0.1.0</span>
 </span></code></pre></div></p>
 <h4 id="make-bundle-build"><code>make bundle-build</code><a class="headerlink" href="#make-bundle-build" title="Anchor link to this section">&para;</a></h4>
 <p><strong>Description</strong>: Build bundle image
 <strong>Usage</strong>: <code>make bundle-build [BUNDLE_IMG=&lt;image&gt;]</code>
 <strong>Example</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-49-1"><a id="__codelineno-49-1" name="__codelineno-49-1" href="#__codelineno-49-1"></a>make<span class="w"> </span>bundle-build<span class="w"> </span><span class="nv">BUNDLE_IMG</span><span class="o">=</span>my-bundle:v0.1.0
-</span><span id="__span-49-2"><a id="__codelineno-49-2" name="__codelineno-49-2" href="#__codelineno-49-2"></a><span class="c1"># Builds bundle container image</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-50-1"><a id="__codelineno-50-1" name="__codelineno-50-1" href="#__codelineno-50-1"></a>make<span class="w"> </span>bundle-build<span class="w"> </span><span class="nv">BUNDLE_IMG</span><span class="o">=</span>my-bundle:v0.1.0
+</span><span id="__span-50-2"><a id="__codelineno-50-2" name="__codelineno-50-2" href="#__codelineno-50-2"></a><span class="c1"># Builds bundle container image</span>
 </span></code></pre></div></p>
 <h4 id="make-bundle-push"><code>make bundle-push</code><a class="headerlink" href="#make-bundle-push" title="Anchor link to this section">&para;</a></h4>
 <p><strong>Description</strong>: Push bundle image to registry
 <strong>Usage</strong>: <code>make bundle-push [BUNDLE_IMG=&lt;image&gt;]</code>
 <strong>Example</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-50-1"><a id="__codelineno-50-1" name="__codelineno-50-1" href="#__codelineno-50-1"></a>make<span class="w"> </span>bundle-push<span class="w"> </span><span class="nv">BUNDLE_IMG</span><span class="o">=</span>ghcr.io/org/bundle:v0.1.0
-</span><span id="__span-50-2"><a id="__codelineno-50-2" name="__codelineno-50-2" href="#__codelineno-50-2"></a><span class="c1"># Pushes bundle to registry</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-51-1"><a id="__codelineno-51-1" name="__codelineno-51-1" href="#__codelineno-51-1"></a>make<span class="w"> </span>bundle-push<span class="w"> </span><span class="nv">BUNDLE_IMG</span><span class="o">=</span>ghcr.io/org/bundle:v0.1.0
+</span><span id="__span-51-2"><a id="__codelineno-51-2" name="__codelineno-51-2" href="#__codelineno-51-2"></a><span class="c1"># Pushes bundle to registry</span>
 </span></code></pre></div></p>
 <h4 id="make-catalog-build"><code>make catalog-build</code><a class="headerlink" href="#make-catalog-build" title="Anchor link to this section">&para;</a></h4>
 <p><strong>Description</strong>: Build a catalog image for OLM
 <strong>Usage</strong>: <code>make catalog-build [CATALOG_IMG=&lt;image&gt;] [BUNDLE_IMGS=&lt;bundles&gt;]</code>
 <strong>Dependencies</strong>: <code>opm</code>
 <strong>Example</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-51-1"><a id="__codelineno-51-1" name="__codelineno-51-1" href="#__codelineno-51-1"></a>make<span class="w"> </span>catalog-build<span class="w"> </span><span class="nv">CATALOG_IMG</span><span class="o">=</span>my-catalog:v1.0
-</span><span id="__span-51-2"><a id="__codelineno-51-2" name="__codelineno-51-2" href="#__codelineno-51-2"></a><span class="c1"># Builds catalog with bundle images</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-52-1"><a id="__codelineno-52-1" name="__codelineno-52-1" href="#__codelineno-52-1"></a>make<span class="w"> </span>catalog-build<span class="w"> </span><span class="nv">CATALOG_IMG</span><span class="o">=</span>my-catalog:v1.0
+</span><span id="__span-52-2"><a id="__codelineno-52-2" name="__codelineno-52-2" href="#__codelineno-52-2"></a><span class="c1"># Builds catalog with bundle images</span>
 </span></code></pre></div></p>
 <h4 id="make-catalog-push"><code>make catalog-push</code><a class="headerlink" href="#make-catalog-push" title="Anchor link to this section">&para;</a></h4>
 <p><strong>Description</strong>: Push catalog image to registry
 <strong>Usage</strong>: <code>make catalog-push [CATALOG_IMG=&lt;image&gt;]</code>
 <strong>Example</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-52-1"><a id="__codelineno-52-1" name="__codelineno-52-1" href="#__codelineno-52-1"></a>make<span class="w"> </span>catalog-push<span class="w"> </span><span class="nv">CATALOG_IMG</span><span class="o">=</span>ghcr.io/my-org/catalog:v1.0
-</span><span id="__span-52-2"><a id="__codelineno-52-2" name="__codelineno-52-2" href="#__codelineno-52-2"></a><span class="c1"># Pushes catalog to registry</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-53-1"><a id="__codelineno-53-1" name="__codelineno-53-1" href="#__codelineno-53-1"></a>make<span class="w"> </span>catalog-push<span class="w"> </span><span class="nv">CATALOG_IMG</span><span class="o">=</span>ghcr.io/my-org/catalog:v1.0
+</span><span id="__span-53-2"><a id="__codelineno-53-2" name="__codelineno-53-2" href="#__codelineno-53-2"></a><span class="c1"># Pushes catalog to registry</span>
 </span></code></pre></div></p>
 <h4 id="make-scorecard"><code>make scorecard</code><a class="headerlink" href="#make-scorecard" title="Anchor link to this section">&para;</a></h4>
 <p><strong>Description</strong>: Run <code>operator-sdk scorecard</code> checks against the generated bundle.
@@ -6615,6 +6641,10 @@ Chains: <code>manifests</code> → <code>generate</code> → <code>sync-kustomiz
 <p><strong>Description</strong>: Download Operator SDK for bundle management
 <strong>Version</strong>: v1.39.1
 <strong>Location</strong>: <code>bin/operator-sdk</code></p>
+<h4 id="make-gotestsum"><code>make gotestsum</code><a class="headerlink" href="#make-gotestsum" title="Anchor link to this section">&para;</a></h4>
+<p><strong>Description</strong>: Download <a href="https://github.com/gotestyourself/gotestsum">gotestsum</a>, a <code>go test</code> wrapper that prints a readable summary and emits JUnit XML + test2json reports. CI uses it for the Unit Tests job (see <a href="#make-test-unit"><code>test-unit</code></a> and the <a href="../ci_and_workflows/#ci">CI workflow</a>).
+<strong>Version</strong>: v1.13.0 (v1.12.0 won't compile under Go 1.26)
+<strong>Location</strong>: <code>bin/gotestsum</code></p>
 <h2 id="code-quality">Code Quality<a class="headerlink" href="#code-quality" title="Anchor link to this section">&para;</a></h2>
 <h3 id="make-security"><code>make security</code><a class="headerlink" href="#make-security" title="Anchor link to this section">&para;</a></h3>
 <p><strong>Description</strong>: Run security analysis with gosec
@@ -6624,17 +6654,17 @@ Chains: <code>manifests</code> → <code>generate</code> → <code>sync-kustomiz
 - Scans for security vulnerabilities
 - Reports potential issues</p>
 <p><strong>Example</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-53-1"><a id="__codelineno-53-1" name="__codelineno-53-1" href="#__codelineno-53-1"></a>make<span class="w"> </span>security
-</span><span id="__span-53-2"><a id="__codelineno-53-2" name="__codelineno-53-2" href="#__codelineno-53-2"></a><span class="c1"># 🛡️  Security vulnerability scan</span>
-</span><span id="__span-53-3"><a id="__codelineno-53-3" name="__codelineno-53-3" href="#__codelineno-53-3"></a><span class="c1"># 📋 Detailed security report</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-54-1"><a id="__codelineno-54-1" name="__codelineno-54-1" href="#__codelineno-54-1"></a>make<span class="w"> </span>security
+</span><span id="__span-54-2"><a id="__codelineno-54-2" name="__codelineno-54-2" href="#__codelineno-54-2"></a><span class="c1"># 🛡️  Security vulnerability scan</span>
+</span><span id="__span-54-3"><a id="__codelineno-54-3" name="__codelineno-54-3" href="#__codelineno-54-3"></a><span class="c1"># 📋 Detailed security report</span>
 </span></code></pre></div></p>
 <h3 id="make-tidy"><code>make tidy</code><a class="headerlink" href="#make-tidy" title="Anchor link to this section">&para;</a></h3>
 <p><strong>Description</strong>: Clean up Go module dependencies
 <strong>Usage</strong>: <code>make tidy</code>
 <strong>Example</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-54-1"><a id="__codelineno-54-1" name="__codelineno-54-1" href="#__codelineno-54-1"></a>make<span class="w"> </span>tidy
-</span><span id="__span-54-2"><a id="__codelineno-54-2" name="__codelineno-54-2" href="#__codelineno-54-2"></a><span class="c1"># 🧹 Removes unused dependencies</span>
-</span><span id="__span-54-3"><a id="__codelineno-54-3" name="__codelineno-54-3" href="#__codelineno-54-3"></a><span class="c1"># ✅ Verifies module integrity</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-55-1"><a id="__codelineno-55-1" name="__codelineno-55-1" href="#__codelineno-55-1"></a>make<span class="w"> </span>tidy
+</span><span id="__span-55-2"><a id="__codelineno-55-2" name="__codelineno-55-2" href="#__codelineno-55-2"></a><span class="c1"># 🧹 Removes unused dependencies</span>
+</span><span id="__span-55-3"><a id="__codelineno-55-3" name="__codelineno-55-3" href="#__codelineno-55-3"></a><span class="c1"># ✅ Verifies module integrity</span>
 </span></code></pre></div></p>
 <h3 id="make-clean"><code>make clean</code><a class="headerlink" href="#make-clean" title="Anchor link to this section">&para;</a></h3>
 <p><strong>Description</strong>: Clean all build artifacts and temporary files
@@ -6645,9 +6675,9 @@ Chains: <code>manifests</code> → <code>generate</code> → <code>sync-kustomiz
 - <code>results.sarif</code>, <code>build-errors.log</code>, <code>.air.toml</code>
 - Also invokes <code>make test-cleanup</code> to remove test artifacts</p>
 <p><strong>Example</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-55-1"><a id="__codelineno-55-1" name="__codelineno-55-1" href="#__codelineno-55-1"></a>make<span class="w"> </span>clean
-</span><span id="__span-55-2"><a id="__codelineno-55-2" name="__codelineno-55-2" href="#__codelineno-55-2"></a><span class="c1"># 🧹 Complete cleanup</span>
-</span><span id="__span-55-3"><a id="__codelineno-55-3" name="__codelineno-55-3" href="#__codelineno-55-3"></a><span class="c1"># 🗑️  Removes all build artifacts</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-56-1"><a id="__codelineno-56-1" name="__codelineno-56-1" href="#__codelineno-56-1"></a>make<span class="w"> </span>clean
+</span><span id="__span-56-2"><a id="__codelineno-56-2" name="__codelineno-56-2" href="#__codelineno-56-2"></a><span class="c1"># 🧹 Complete cleanup</span>
+</span><span id="__span-56-3"><a id="__codelineno-56-3" name="__codelineno-56-3" href="#__codelineno-56-3"></a><span class="c1"># 🗑️  Removes all build artifacts</span>
 </span></code></pre></div></p>
 <h2 id="environment-variables">Environment Variables<a class="headerlink" href="#environment-variables" title="Anchor link to this section">&para;</a></h2>
 <h3 id="image-configuration">Image Configuration<a class="headerlink" href="#image-configuration" title="Anchor link to this section">&para;</a></h3>
@@ -6676,110 +6706,110 @@ Chains: <code>manifests</code> → <code>generate</code> → <code>sync-kustomiz
 <li><code>BUNDLE_IMG</code>: Bundle image name</li>
 </ul>
 <p><strong>Examples</strong>:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-56-1"><a id="__codelineno-56-1" name="__codelineno-56-1" href="#__codelineno-56-1"></a><span class="c1"># Custom image build</span>
-</span><span id="__span-56-2"><a id="__codelineno-56-2" name="__codelineno-56-2" href="#__codelineno-56-2"></a>make<span class="w"> </span>docker-build<span class="w"> </span><span class="nv">IMG</span><span class="o">=</span>my-registry/neo4j-operator:v2.0
-</span><span id="__span-56-3"><a id="__codelineno-56-3" name="__codelineno-56-3" href="#__codelineno-56-3"></a>
-</span><span id="__span-56-4"><a id="__codelineno-56-4" name="__codelineno-56-4" href="#__codelineno-56-4"></a><span class="c1"># CI-mode testing</span>
-</span><span id="__span-56-5"><a id="__codelineno-56-5" name="__codelineno-56-5" href="#__codelineno-56-5"></a><span class="nv">CI</span><span class="o">=</span><span class="nb">true</span><span class="w"> </span>make<span class="w"> </span>test-unit
-</span><span id="__span-56-6"><a id="__codelineno-56-6" name="__codelineno-56-6" href="#__codelineno-56-6"></a>
-</span><span id="__span-56-7"><a id="__codelineno-56-7" name="__codelineno-56-7" href="#__codelineno-56-7"></a><span class="c1"># Custom tool location</span>
-</span><span id="__span-56-8"><a id="__codelineno-56-8" name="__codelineno-56-8" href="#__codelineno-56-8"></a><span class="nv">LOCALBIN</span><span class="o">=</span>/usr/local/bin<span class="w"> </span>make<span class="w"> </span>kustomize
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-57-1"><a id="__codelineno-57-1" name="__codelineno-57-1" href="#__codelineno-57-1"></a><span class="c1"># Custom image build</span>
+</span><span id="__span-57-2"><a id="__codelineno-57-2" name="__codelineno-57-2" href="#__codelineno-57-2"></a>make<span class="w"> </span>docker-build<span class="w"> </span><span class="nv">IMG</span><span class="o">=</span>my-registry/neo4j-operator:v2.0
+</span><span id="__span-57-3"><a id="__codelineno-57-3" name="__codelineno-57-3" href="#__codelineno-57-3"></a>
+</span><span id="__span-57-4"><a id="__codelineno-57-4" name="__codelineno-57-4" href="#__codelineno-57-4"></a><span class="c1"># CI-mode testing</span>
+</span><span id="__span-57-5"><a id="__codelineno-57-5" name="__codelineno-57-5" href="#__codelineno-57-5"></a><span class="nv">CI</span><span class="o">=</span><span class="nb">true</span><span class="w"> </span>make<span class="w"> </span>test-unit
+</span><span id="__span-57-6"><a id="__codelineno-57-6" name="__codelineno-57-6" href="#__codelineno-57-6"></a>
+</span><span id="__span-57-7"><a id="__codelineno-57-7" name="__codelineno-57-7" href="#__codelineno-57-7"></a><span class="c1"># Custom tool location</span>
+</span><span id="__span-57-8"><a id="__codelineno-57-8" name="__codelineno-57-8" href="#__codelineno-57-8"></a><span class="nv">LOCALBIN</span><span class="o">=</span>/usr/local/bin<span class="w"> </span>make<span class="w"> </span>kustomize
 </span></code></pre></div></p>
 <h2 id="workflows">Workflows<a class="headerlink" href="#workflows" title="Anchor link to this section">&para;</a></h2>
 <h3 id="complete-development-setup">Complete Development Setup<a class="headerlink" href="#complete-development-setup" title="Anchor link to this section">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-57-1"><a id="__codelineno-57-1" name="__codelineno-57-1" href="#__codelineno-57-1"></a><span class="c1"># 1. Create development environment</span>
-</span><span id="__span-57-2"><a id="__codelineno-57-2" name="__codelineno-57-2" href="#__codelineno-57-2"></a>make<span class="w"> </span>dev-cluster<span class="w">           </span><span class="c1"># Create Kind cluster</span>
-</span><span id="__span-57-3"><a id="__codelineno-57-3" name="__codelineno-57-3" href="#__codelineno-57-3"></a>make<span class="w"> </span>operator-setup<span class="w">        </span><span class="c1"># Deploy operator</span>
-</span><span id="__span-57-4"><a id="__codelineno-57-4" name="__codelineno-57-4" href="#__codelineno-57-4"></a>
-</span><span id="__span-57-5"><a id="__codelineno-57-5" name="__codelineno-57-5" href="#__codelineno-57-5"></a><span class="c1"># 2. Develop and test</span>
-</span><span id="__span-57-6"><a id="__codelineno-57-6" name="__codelineno-57-6" href="#__codelineno-57-6"></a>make<span class="w"> </span>test-unit<span class="w">            </span><span class="c1"># Fast feedback loop</span>
-</span><span id="__span-57-7"><a id="__codelineno-57-7" name="__codelineno-57-7" href="#__codelineno-57-7"></a>make<span class="w"> </span>build<span class="w">                </span><span class="c1"># Build changes</span>
-</span><span id="__span-57-8"><a id="__codelineno-57-8" name="__codelineno-57-8" href="#__codelineno-57-8"></a>make<span class="w"> </span>deploy-dev<span class="w">           </span><span class="c1"># Update deployment</span>
-</span><span id="__span-57-9"><a id="__codelineno-57-9" name="__codelineno-57-9" href="#__codelineno-57-9"></a>
-</span><span id="__span-57-10"><a id="__codelineno-57-10" name="__codelineno-57-10" href="#__codelineno-57-10"></a><span class="c1"># 3. Comprehensive testing</span>
-</span><span id="__span-57-11"><a id="__codelineno-57-11" name="__codelineno-57-11" href="#__codelineno-57-11"></a>make<span class="w"> </span>test-integration<span class="w">     </span><span class="c1"># Full validation</span>
-</span><span id="__span-57-12"><a id="__codelineno-57-12" name="__codelineno-57-12" href="#__codelineno-57-12"></a>make<span class="w"> </span>test-ci-local<span class="w">        </span><span class="c1"># CI simulation</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-58-1"><a id="__codelineno-58-1" name="__codelineno-58-1" href="#__codelineno-58-1"></a><span class="c1"># 1. Create development environment</span>
+</span><span id="__span-58-2"><a id="__codelineno-58-2" name="__codelineno-58-2" href="#__codelineno-58-2"></a>make<span class="w"> </span>dev-cluster<span class="w">           </span><span class="c1"># Create Kind cluster</span>
+</span><span id="__span-58-3"><a id="__codelineno-58-3" name="__codelineno-58-3" href="#__codelineno-58-3"></a>make<span class="w"> </span>operator-setup<span class="w">        </span><span class="c1"># Deploy operator</span>
+</span><span id="__span-58-4"><a id="__codelineno-58-4" name="__codelineno-58-4" href="#__codelineno-58-4"></a>
+</span><span id="__span-58-5"><a id="__codelineno-58-5" name="__codelineno-58-5" href="#__codelineno-58-5"></a><span class="c1"># 2. Develop and test</span>
+</span><span id="__span-58-6"><a id="__codelineno-58-6" name="__codelineno-58-6" href="#__codelineno-58-6"></a>make<span class="w"> </span>test-unit<span class="w">            </span><span class="c1"># Fast feedback loop</span>
+</span><span id="__span-58-7"><a id="__codelineno-58-7" name="__codelineno-58-7" href="#__codelineno-58-7"></a>make<span class="w"> </span>build<span class="w">                </span><span class="c1"># Build changes</span>
+</span><span id="__span-58-8"><a id="__codelineno-58-8" name="__codelineno-58-8" href="#__codelineno-58-8"></a>make<span class="w"> </span>deploy-dev<span class="w">           </span><span class="c1"># Update deployment</span>
+</span><span id="__span-58-9"><a id="__codelineno-58-9" name="__codelineno-58-9" href="#__codelineno-58-9"></a>
+</span><span id="__span-58-10"><a id="__codelineno-58-10" name="__codelineno-58-10" href="#__codelineno-58-10"></a><span class="c1"># 3. Comprehensive testing</span>
+</span><span id="__span-58-11"><a id="__codelineno-58-11" name="__codelineno-58-11" href="#__codelineno-58-11"></a>make<span class="w"> </span>test-integration<span class="w">     </span><span class="c1"># Full validation</span>
+</span><span id="__span-58-12"><a id="__codelineno-58-12" name="__codelineno-58-12" href="#__codelineno-58-12"></a>make<span class="w"> </span>test-ci-local<span class="w">        </span><span class="c1"># CI simulation</span>
 </span></code></pre></div>
 <h3 id="production-deployment-workflow">Production Deployment Workflow<a class="headerlink" href="#production-deployment-workflow" title="Anchor link to this section">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-58-1"><a id="__codelineno-58-1" name="__codelineno-58-1" href="#__codelineno-58-1"></a><span class="c1"># 1. Validate code quality</span>
-</span><span id="__span-58-2"><a id="__codelineno-58-2" name="__codelineno-58-2" href="#__codelineno-58-2"></a>make<span class="w"> </span>fmt<span class="w"> </span>vet<span class="w"> </span>lint<span class="w">         </span><span class="c1"># Code formatting and analysis</span>
-</span><span id="__span-58-3"><a id="__codelineno-58-3" name="__codelineno-58-3" href="#__codelineno-58-3"></a>make<span class="w"> </span>security<span class="w">             </span><span class="c1"># Security scanning</span>
-</span><span id="__span-58-4"><a id="__codelineno-58-4" name="__codelineno-58-4" href="#__codelineno-58-4"></a>
-</span><span id="__span-58-5"><a id="__codelineno-58-5" name="__codelineno-58-5" href="#__codelineno-58-5"></a><span class="c1"># 2. Test comprehensively</span>
-</span><span id="__span-58-6"><a id="__codelineno-58-6" name="__codelineno-58-6" href="#__codelineno-58-6"></a>make<span class="w"> </span><span class="nb">test</span><span class="w">                 </span><span class="c1"># Unit + integration tests</span>
-</span><span id="__span-58-7"><a id="__codelineno-58-7" name="__codelineno-58-7" href="#__codelineno-58-7"></a>make<span class="w"> </span>test-coverage<span class="w">        </span><span class="c1"># Verify coverage</span>
-</span><span id="__span-58-8"><a id="__codelineno-58-8" name="__codelineno-58-8" href="#__codelineno-58-8"></a>
-</span><span id="__span-58-9"><a id="__codelineno-58-9" name="__codelineno-58-9" href="#__codelineno-58-9"></a><span class="c1"># 3. Build and deploy</span>
-</span><span id="__span-58-10"><a id="__codelineno-58-10" name="__codelineno-58-10" href="#__codelineno-58-10"></a>make<span class="w"> </span>docker-build<span class="w">         </span><span class="c1"># Build production image</span>
-</span><span id="__span-58-11"><a id="__codelineno-58-11" name="__codelineno-58-11" href="#__codelineno-58-11"></a>make<span class="w"> </span>deploy-prod<span class="w">          </span><span class="c1"># Production deployment</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-59-1"><a id="__codelineno-59-1" name="__codelineno-59-1" href="#__codelineno-59-1"></a><span class="c1"># 1. Validate code quality</span>
+</span><span id="__span-59-2"><a id="__codelineno-59-2" name="__codelineno-59-2" href="#__codelineno-59-2"></a>make<span class="w"> </span>fmt<span class="w"> </span>vet<span class="w"> </span>lint<span class="w">         </span><span class="c1"># Code formatting and analysis</span>
+</span><span id="__span-59-3"><a id="__codelineno-59-3" name="__codelineno-59-3" href="#__codelineno-59-3"></a>make<span class="w"> </span>security<span class="w">             </span><span class="c1"># Security scanning</span>
+</span><span id="__span-59-4"><a id="__codelineno-59-4" name="__codelineno-59-4" href="#__codelineno-59-4"></a>
+</span><span id="__span-59-5"><a id="__codelineno-59-5" name="__codelineno-59-5" href="#__codelineno-59-5"></a><span class="c1"># 2. Test comprehensively</span>
+</span><span id="__span-59-6"><a id="__codelineno-59-6" name="__codelineno-59-6" href="#__codelineno-59-6"></a>make<span class="w"> </span><span class="nb">test</span><span class="w">                 </span><span class="c1"># Unit + integration tests</span>
+</span><span id="__span-59-7"><a id="__codelineno-59-7" name="__codelineno-59-7" href="#__codelineno-59-7"></a>make<span class="w"> </span>test-coverage<span class="w">        </span><span class="c1"># Verify coverage</span>
+</span><span id="__span-59-8"><a id="__codelineno-59-8" name="__codelineno-59-8" href="#__codelineno-59-8"></a>
+</span><span id="__span-59-9"><a id="__codelineno-59-9" name="__codelineno-59-9" href="#__codelineno-59-9"></a><span class="c1"># 3. Build and deploy</span>
+</span><span id="__span-59-10"><a id="__codelineno-59-10" name="__codelineno-59-10" href="#__codelineno-59-10"></a>make<span class="w"> </span>docker-build<span class="w">         </span><span class="c1"># Build production image</span>
+</span><span id="__span-59-11"><a id="__codelineno-59-11" name="__codelineno-59-11" href="#__codelineno-59-11"></a>make<span class="w"> </span>deploy-prod<span class="w">          </span><span class="c1"># Production deployment</span>
 </span></code></pre></div>
 <h3 id="cicd-emulation">CI/CD Emulation<a class="headerlink" href="#cicd-emulation" title="Anchor link to this section">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-59-1"><a id="__codelineno-59-1" name="__codelineno-59-1" href="#__codelineno-59-1"></a><span class="c1"># Reproduce CI failures locally</span>
-</span><span id="__span-59-2"><a id="__codelineno-59-2" name="__codelineno-59-2" href="#__codelineno-59-2"></a>make<span class="w"> </span>test-ci-local<span class="w">        </span><span class="c1"># Complete CI workflow</span>
-</span><span id="__span-59-3"><a id="__codelineno-59-3" name="__codelineno-59-3" href="#__codelineno-59-3"></a><span class="c1"># Check logs/ci-local-*.log for detailed analysis</span>
-</span><span id="__span-59-4"><a id="__codelineno-59-4" name="__codelineno-59-4" href="#__codelineno-59-4"></a>
-</span><span id="__span-59-5"><a id="__codelineno-59-5" name="__codelineno-59-5" href="#__codelineno-59-5"></a><span class="c1"># Debug specific CI issues</span>
-</span><span id="__span-59-6"><a id="__codelineno-59-6" name="__codelineno-59-6" href="#__codelineno-59-6"></a><span class="nv">CI</span><span class="o">=</span><span class="nb">true</span><span class="w"> </span><span class="nv">GITHUB_ACTIONS</span><span class="o">=</span><span class="nb">true</span><span class="w"> </span>make<span class="w"> </span>test-unit
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-60-1"><a id="__codelineno-60-1" name="__codelineno-60-1" href="#__codelineno-60-1"></a><span class="c1"># Reproduce CI failures locally</span>
+</span><span id="__span-60-2"><a id="__codelineno-60-2" name="__codelineno-60-2" href="#__codelineno-60-2"></a>make<span class="w"> </span>test-ci-local<span class="w">        </span><span class="c1"># Complete CI workflow</span>
+</span><span id="__span-60-3"><a id="__codelineno-60-3" name="__codelineno-60-3" href="#__codelineno-60-3"></a><span class="c1"># Check logs/ci-local-*.log for detailed analysis</span>
+</span><span id="__span-60-4"><a id="__codelineno-60-4" name="__codelineno-60-4" href="#__codelineno-60-4"></a>
+</span><span id="__span-60-5"><a id="__codelineno-60-5" name="__codelineno-60-5" href="#__codelineno-60-5"></a><span class="c1"># Debug specific CI issues</span>
+</span><span id="__span-60-6"><a id="__codelineno-60-6" name="__codelineno-60-6" href="#__codelineno-60-6"></a><span class="nv">CI</span><span class="o">=</span><span class="nb">true</span><span class="w"> </span><span class="nv">GITHUB_ACTIONS</span><span class="o">=</span><span class="nb">true</span><span class="w"> </span>make<span class="w"> </span>test-unit
 </span></code></pre></div>
 <h3 id="testing-workflow">Testing Workflow<a class="headerlink" href="#testing-workflow" title="Anchor link to this section">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-60-1"><a id="__codelineno-60-1" name="__codelineno-60-1" href="#__codelineno-60-1"></a><span class="c1"># Quick development testing</span>
-</span><span id="__span-60-2"><a id="__codelineno-60-2" name="__codelineno-60-2" href="#__codelineno-60-2"></a>make<span class="w"> </span>test-unit<span class="w">            </span><span class="c1"># ~30 seconds</span>
-</span><span id="__span-60-3"><a id="__codelineno-60-3" name="__codelineno-60-3" href="#__codelineno-60-3"></a>
-</span><span id="__span-60-4"><a id="__codelineno-60-4" name="__codelineno-60-4" href="#__codelineno-60-4"></a><span class="c1"># Comprehensive validation</span>
-</span><span id="__span-60-5"><a id="__codelineno-60-5" name="__codelineno-60-5" href="#__codelineno-60-5"></a>make<span class="w"> </span>test-cluster<span class="w">         </span><span class="c1"># Create test environment</span>
-</span><span id="__span-60-6"><a id="__codelineno-60-6" name="__codelineno-60-6" href="#__codelineno-60-6"></a>make<span class="w"> </span>test-integration<span class="w">     </span><span class="c1"># ~15 minutes</span>
-</span><span id="__span-60-7"><a id="__codelineno-60-7" name="__codelineno-60-7" href="#__codelineno-60-7"></a>make<span class="w"> </span>test-cluster-clean<span class="w">   </span><span class="c1"># Clean resources</span>
-</span><span id="__span-60-8"><a id="__codelineno-60-8" name="__codelineno-60-8" href="#__codelineno-60-8"></a>
-</span><span id="__span-60-9"><a id="__codelineno-60-9" name="__codelineno-60-9" href="#__codelineno-60-9"></a><span class="c1"># CI preparation</span>
-</span><span id="__span-60-10"><a id="__codelineno-60-10" name="__codelineno-60-10" href="#__codelineno-60-10"></a>make<span class="w"> </span>test-ci-local<span class="w">        </span><span class="c1"># Full CI emulation</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-61-1"><a id="__codelineno-61-1" name="__codelineno-61-1" href="#__codelineno-61-1"></a><span class="c1"># Quick development testing</span>
+</span><span id="__span-61-2"><a id="__codelineno-61-2" name="__codelineno-61-2" href="#__codelineno-61-2"></a>make<span class="w"> </span>test-unit<span class="w">            </span><span class="c1"># ~30 seconds</span>
+</span><span id="__span-61-3"><a id="__codelineno-61-3" name="__codelineno-61-3" href="#__codelineno-61-3"></a>
+</span><span id="__span-61-4"><a id="__codelineno-61-4" name="__codelineno-61-4" href="#__codelineno-61-4"></a><span class="c1"># Comprehensive validation</span>
+</span><span id="__span-61-5"><a id="__codelineno-61-5" name="__codelineno-61-5" href="#__codelineno-61-5"></a>make<span class="w"> </span>test-cluster<span class="w">         </span><span class="c1"># Create test environment</span>
+</span><span id="__span-61-6"><a id="__codelineno-61-6" name="__codelineno-61-6" href="#__codelineno-61-6"></a>make<span class="w"> </span>test-integration<span class="w">     </span><span class="c1"># ~15 minutes</span>
+</span><span id="__span-61-7"><a id="__codelineno-61-7" name="__codelineno-61-7" href="#__codelineno-61-7"></a>make<span class="w"> </span>test-cluster-clean<span class="w">   </span><span class="c1"># Clean resources</span>
+</span><span id="__span-61-8"><a id="__codelineno-61-8" name="__codelineno-61-8" href="#__codelineno-61-8"></a>
+</span><span id="__span-61-9"><a id="__codelineno-61-9" name="__codelineno-61-9" href="#__codelineno-61-9"></a><span class="c1"># CI preparation</span>
+</span><span id="__span-61-10"><a id="__codelineno-61-10" name="__codelineno-61-10" href="#__codelineno-61-10"></a>make<span class="w"> </span>test-ci-local<span class="w">        </span><span class="c1"># Full CI emulation</span>
 </span></code></pre></div>
 <h3 id="cleanup-workflows">Cleanup Workflows<a class="headerlink" href="#cleanup-workflows" title="Anchor link to this section">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-61-1"><a id="__codelineno-61-1" name="__codelineno-61-1" href="#__codelineno-61-1"></a><span class="c1"># Development cleanup</span>
-</span><span id="__span-61-2"><a id="__codelineno-61-2" name="__codelineno-61-2" href="#__codelineno-61-2"></a>make<span class="w"> </span>dev-cluster-clean<span class="w">    </span><span class="c1"># Remove operator only</span>
-</span><span id="__span-61-3"><a id="__codelineno-61-3" name="__codelineno-61-3" href="#__codelineno-61-3"></a>make<span class="w"> </span>dev-destroy<span class="w">          </span><span class="c1"># Complete destruction</span>
-</span><span id="__span-61-4"><a id="__codelineno-61-4" name="__codelineno-61-4" href="#__codelineno-61-4"></a>
-</span><span id="__span-61-5"><a id="__codelineno-61-5" name="__codelineno-61-5" href="#__codelineno-61-5"></a><span class="c1"># Test cleanup</span>
-</span><span id="__span-61-6"><a id="__codelineno-61-6" name="__codelineno-61-6" href="#__codelineno-61-6"></a>make<span class="w"> </span>test-cluster-clean<span class="w">   </span><span class="c1"># Remove test resources</span>
-</span><span id="__span-61-7"><a id="__codelineno-61-7" name="__codelineno-61-7" href="#__codelineno-61-7"></a>make<span class="w"> </span>test-destroy<span class="w">         </span><span class="c1"># Complete test cleanup</span>
-</span><span id="__span-61-8"><a id="__codelineno-61-8" name="__codelineno-61-8" href="#__codelineno-61-8"></a>
-</span><span id="__span-61-9"><a id="__codelineno-61-9" name="__codelineno-61-9" href="#__codelineno-61-9"></a><span class="c1"># Complete cleanup</span>
-</span><span id="__span-61-10"><a id="__codelineno-61-10" name="__codelineno-61-10" href="#__codelineno-61-10"></a>make<span class="w"> </span>clean<span class="w">                </span><span class="c1"># Remove build artifacts</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-62-1"><a id="__codelineno-62-1" name="__codelineno-62-1" href="#__codelineno-62-1"></a><span class="c1"># Development cleanup</span>
+</span><span id="__span-62-2"><a id="__codelineno-62-2" name="__codelineno-62-2" href="#__codelineno-62-2"></a>make<span class="w"> </span>dev-cluster-clean<span class="w">    </span><span class="c1"># Remove operator only</span>
+</span><span id="__span-62-3"><a id="__codelineno-62-3" name="__codelineno-62-3" href="#__codelineno-62-3"></a>make<span class="w"> </span>dev-destroy<span class="w">          </span><span class="c1"># Complete destruction</span>
+</span><span id="__span-62-4"><a id="__codelineno-62-4" name="__codelineno-62-4" href="#__codelineno-62-4"></a>
+</span><span id="__span-62-5"><a id="__codelineno-62-5" name="__codelineno-62-5" href="#__codelineno-62-5"></a><span class="c1"># Test cleanup</span>
+</span><span id="__span-62-6"><a id="__codelineno-62-6" name="__codelineno-62-6" href="#__codelineno-62-6"></a>make<span class="w"> </span>test-cluster-clean<span class="w">   </span><span class="c1"># Remove test resources</span>
+</span><span id="__span-62-7"><a id="__codelineno-62-7" name="__codelineno-62-7" href="#__codelineno-62-7"></a>make<span class="w"> </span>test-destroy<span class="w">         </span><span class="c1"># Complete test cleanup</span>
+</span><span id="__span-62-8"><a id="__codelineno-62-8" name="__codelineno-62-8" href="#__codelineno-62-8"></a>
+</span><span id="__span-62-9"><a id="__codelineno-62-9" name="__codelineno-62-9" href="#__codelineno-62-9"></a><span class="c1"># Complete cleanup</span>
+</span><span id="__span-62-10"><a id="__codelineno-62-10" name="__codelineno-62-10" href="#__codelineno-62-10"></a>make<span class="w"> </span>clean<span class="w">                </span><span class="c1"># Remove build artifacts</span>
 </span></code></pre></div>
 <h2 id="common-patterns">Common Patterns<a class="headerlink" href="#common-patterns" title="Anchor link to this section">&para;</a></h2>
 <h3 id="error-recovery">Error Recovery<a class="headerlink" href="#error-recovery" title="Anchor link to this section">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-62-1"><a id="__codelineno-62-1" name="__codelineno-62-1" href="#__codelineno-62-1"></a><span class="c1"># If cluster is in bad state</span>
-</span><span id="__span-62-2"><a id="__codelineno-62-2" name="__codelineno-62-2" href="#__codelineno-62-2"></a>make<span class="w"> </span>dev-cluster-reset<span class="w">    </span><span class="c1"># or test-cluster-reset</span>
-</span><span id="__span-62-3"><a id="__codelineno-62-3" name="__codelineno-62-3" href="#__codelineno-62-3"></a>make<span class="w"> </span>operator-setup
-</span><span id="__span-62-4"><a id="__codelineno-62-4" name="__codelineno-62-4" href="#__codelineno-62-4"></a>
-</span><span id="__span-62-5"><a id="__codelineno-62-5" name="__codelineno-62-5" href="#__codelineno-62-5"></a><span class="c1"># If operator is misbehaving</span>
-</span><span id="__span-62-6"><a id="__codelineno-62-6" name="__codelineno-62-6" href="#__codelineno-62-6"></a>make<span class="w"> </span>undeploy-dev<span class="w">         </span><span class="c1"># or undeploy-prod</span>
-</span><span id="__span-62-7"><a id="__codelineno-62-7" name="__codelineno-62-7" href="#__codelineno-62-7"></a>make<span class="w"> </span>deploy-dev<span class="w">           </span><span class="c1"># or deploy-prod</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-63-1"><a id="__codelineno-63-1" name="__codelineno-63-1" href="#__codelineno-63-1"></a><span class="c1"># If cluster is in bad state</span>
+</span><span id="__span-63-2"><a id="__codelineno-63-2" name="__codelineno-63-2" href="#__codelineno-63-2"></a>make<span class="w"> </span>dev-cluster-reset<span class="w">    </span><span class="c1"># or test-cluster-reset</span>
+</span><span id="__span-63-3"><a id="__codelineno-63-3" name="__codelineno-63-3" href="#__codelineno-63-3"></a>make<span class="w"> </span>operator-setup
+</span><span id="__span-63-4"><a id="__codelineno-63-4" name="__codelineno-63-4" href="#__codelineno-63-4"></a>
+</span><span id="__span-63-5"><a id="__codelineno-63-5" name="__codelineno-63-5" href="#__codelineno-63-5"></a><span class="c1"># If operator is misbehaving</span>
+</span><span id="__span-63-6"><a id="__codelineno-63-6" name="__codelineno-63-6" href="#__codelineno-63-6"></a>make<span class="w"> </span>undeploy-dev<span class="w">         </span><span class="c1"># or undeploy-prod</span>
+</span><span id="__span-63-7"><a id="__codelineno-63-7" name="__codelineno-63-7" href="#__codelineno-63-7"></a>make<span class="w"> </span>deploy-dev<span class="w">           </span><span class="c1"># or deploy-prod</span>
 </span></code></pre></div>
 <h3 id="development-iteration">Development Iteration<a class="headerlink" href="#development-iteration" title="Anchor link to this section">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-63-1"><a id="__codelineno-63-1" name="__codelineno-63-1" href="#__codelineno-63-1"></a><span class="c1"># Fast iteration cycle</span>
-</span><span id="__span-63-2"><a id="__codelineno-63-2" name="__codelineno-63-2" href="#__codelineno-63-2"></a>make<span class="w"> </span>test-unit<span class="w">            </span><span class="c1"># Quick validation</span>
-</span><span id="__span-63-3"><a id="__codelineno-63-3" name="__codelineno-63-3" href="#__codelineno-63-3"></a>make<span class="w"> </span>build<span class="w">                </span><span class="c1"># Build changes</span>
-</span><span id="__span-63-4"><a id="__codelineno-63-4" name="__codelineno-63-4" href="#__codelineno-63-4"></a>make<span class="w"> </span>docker-build<span class="w">         </span><span class="c1"># Update image</span>
-</span><span id="__span-63-5"><a id="__codelineno-63-5" name="__codelineno-63-5" href="#__codelineno-63-5"></a>make<span class="w"> </span>deploy-dev<span class="w">           </span><span class="c1"># Deploy changes</span>
-</span><span id="__span-63-6"><a id="__codelineno-63-6" name="__codelineno-63-6" href="#__codelineno-63-6"></a>
-</span><span id="__span-63-7"><a id="__codelineno-63-7" name="__codelineno-63-7" href="#__codelineno-63-7"></a><span class="c1"># Full validation cycle</span>
-</span><span id="__span-63-8"><a id="__codelineno-63-8" name="__codelineno-63-8" href="#__codelineno-63-8"></a>make<span class="w"> </span>fmt<span class="w"> </span>vet<span class="w">              </span><span class="c1"># Code quality</span>
-</span><span id="__span-63-9"><a id="__codelineno-63-9" name="__codelineno-63-9" href="#__codelineno-63-9"></a>make<span class="w"> </span><span class="nb">test</span><span class="w">                 </span><span class="c1"># Comprehensive testing</span>
-</span><span id="__span-63-10"><a id="__codelineno-63-10" name="__codelineno-63-10" href="#__codelineno-63-10"></a>make<span class="w"> </span>deploy-prod<span class="w">          </span><span class="c1"># Production deployment</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-64-1"><a id="__codelineno-64-1" name="__codelineno-64-1" href="#__codelineno-64-1"></a><span class="c1"># Fast iteration cycle</span>
+</span><span id="__span-64-2"><a id="__codelineno-64-2" name="__codelineno-64-2" href="#__codelineno-64-2"></a>make<span class="w"> </span>test-unit<span class="w">            </span><span class="c1"># Quick validation</span>
+</span><span id="__span-64-3"><a id="__codelineno-64-3" name="__codelineno-64-3" href="#__codelineno-64-3"></a>make<span class="w"> </span>build<span class="w">                </span><span class="c1"># Build changes</span>
+</span><span id="__span-64-4"><a id="__codelineno-64-4" name="__codelineno-64-4" href="#__codelineno-64-4"></a>make<span class="w"> </span>docker-build<span class="w">         </span><span class="c1"># Update image</span>
+</span><span id="__span-64-5"><a id="__codelineno-64-5" name="__codelineno-64-5" href="#__codelineno-64-5"></a>make<span class="w"> </span>deploy-dev<span class="w">           </span><span class="c1"># Deploy changes</span>
+</span><span id="__span-64-6"><a id="__codelineno-64-6" name="__codelineno-64-6" href="#__codelineno-64-6"></a>
+</span><span id="__span-64-7"><a id="__codelineno-64-7" name="__codelineno-64-7" href="#__codelineno-64-7"></a><span class="c1"># Full validation cycle</span>
+</span><span id="__span-64-8"><a id="__codelineno-64-8" name="__codelineno-64-8" href="#__codelineno-64-8"></a>make<span class="w"> </span>fmt<span class="w"> </span>vet<span class="w">              </span><span class="c1"># Code quality</span>
+</span><span id="__span-64-9"><a id="__codelineno-64-9" name="__codelineno-64-9" href="#__codelineno-64-9"></a>make<span class="w"> </span><span class="nb">test</span><span class="w">                 </span><span class="c1"># Comprehensive testing</span>
+</span><span id="__span-64-10"><a id="__codelineno-64-10" name="__codelineno-64-10" href="#__codelineno-64-10"></a>make<span class="w"> </span>deploy-prod<span class="w">          </span><span class="c1"># Production deployment</span>
 </span></code></pre></div>
 <h3 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Anchor link to this section">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-64-1"><a id="__codelineno-64-1" name="__codelineno-64-1" href="#__codelineno-64-1"></a><span class="c1"># Check operator status</span>
-</span><span id="__span-64-2"><a id="__codelineno-64-2" name="__codelineno-64-2" href="#__codelineno-64-2"></a>make<span class="w"> </span>operator-status<span class="w">      </span><span class="c1"># Deployment overview</span>
-</span><span id="__span-64-3"><a id="__codelineno-64-3" name="__codelineno-64-3" href="#__codelineno-64-3"></a>make<span class="w"> </span>operator-logs<span class="w">        </span><span class="c1"># Real-time logs</span>
-</span><span id="__span-64-4"><a id="__codelineno-64-4" name="__codelineno-64-4" href="#__codelineno-64-4"></a>
-</span><span id="__span-64-5"><a id="__codelineno-64-5" name="__codelineno-64-5" href="#__codelineno-64-5"></a><span class="c1"># Debug testing issues</span>
-</span><span id="__span-64-6"><a id="__codelineno-64-6" name="__codelineno-64-6" href="#__codelineno-64-6"></a>make<span class="w"> </span>test-ci-local<span class="w">        </span><span class="c1"># Reproduce CI environment</span>
-</span><span id="__span-64-7"><a id="__codelineno-64-7" name="__codelineno-64-7" href="#__codelineno-64-7"></a><span class="c1"># Check logs/ci-local-*.log</span>
-</span><span id="__span-64-8"><a id="__codelineno-64-8" name="__codelineno-64-8" href="#__codelineno-64-8"></a>
-</span><span id="__span-64-9"><a id="__codelineno-64-9" name="__codelineno-64-9" href="#__codelineno-64-9"></a><span class="c1"># Clean slate approach</span>
-</span><span id="__span-64-10"><a id="__codelineno-64-10" name="__codelineno-64-10" href="#__codelineno-64-10"></a>make<span class="w"> </span>dev-destroy<span class="w">          </span><span class="c1"># Complete restart</span>
-</span><span id="__span-64-11"><a id="__codelineno-64-11" name="__codelineno-64-11" href="#__codelineno-64-11"></a>make<span class="w"> </span>dev-cluster
-</span><span id="__span-64-12"><a id="__codelineno-64-12" name="__codelineno-64-12" href="#__codelineno-64-12"></a>make<span class="w"> </span>operator-setup
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-65-1"><a id="__codelineno-65-1" name="__codelineno-65-1" href="#__codelineno-65-1"></a><span class="c1"># Check operator status</span>
+</span><span id="__span-65-2"><a id="__codelineno-65-2" name="__codelineno-65-2" href="#__codelineno-65-2"></a>make<span class="w"> </span>operator-status<span class="w">      </span><span class="c1"># Deployment overview</span>
+</span><span id="__span-65-3"><a id="__codelineno-65-3" name="__codelineno-65-3" href="#__codelineno-65-3"></a>make<span class="w"> </span>operator-logs<span class="w">        </span><span class="c1"># Real-time logs</span>
+</span><span id="__span-65-4"><a id="__codelineno-65-4" name="__codelineno-65-4" href="#__codelineno-65-4"></a>
+</span><span id="__span-65-5"><a id="__codelineno-65-5" name="__codelineno-65-5" href="#__codelineno-65-5"></a><span class="c1"># Debug testing issues</span>
+</span><span id="__span-65-6"><a id="__codelineno-65-6" name="__codelineno-65-6" href="#__codelineno-65-6"></a>make<span class="w"> </span>test-ci-local<span class="w">        </span><span class="c1"># Reproduce CI environment</span>
+</span><span id="__span-65-7"><a id="__codelineno-65-7" name="__codelineno-65-7" href="#__codelineno-65-7"></a><span class="c1"># Check logs/ci-local-*.log</span>
+</span><span id="__span-65-8"><a id="__codelineno-65-8" name="__codelineno-65-8" href="#__codelineno-65-8"></a>
+</span><span id="__span-65-9"><a id="__codelineno-65-9" name="__codelineno-65-9" href="#__codelineno-65-9"></a><span class="c1"># Clean slate approach</span>
+</span><span id="__span-65-10"><a id="__codelineno-65-10" name="__codelineno-65-10" href="#__codelineno-65-10"></a>make<span class="w"> </span>dev-destroy<span class="w">          </span><span class="c1"># Complete restart</span>
+</span><span id="__span-65-11"><a id="__codelineno-65-11" name="__codelineno-65-11" href="#__codelineno-65-11"></a>make<span class="w"> </span>dev-cluster
+</span><span id="__span-65-12"><a id="__codelineno-65-12" name="__codelineno-65-12" href="#__codelineno-65-12"></a>make<span class="w"> </span>operator-setup
 </span></code></pre></div>
 <hr />
 <h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Anchor link to this section">&para;</a></h2>

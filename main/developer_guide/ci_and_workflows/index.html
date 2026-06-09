@@ -2351,10 +2351,43 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#caching" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Caching
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#branch-protection" class="md-nav__link">
     <span class="md-ellipsis">
       
         Branch protection
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#test-tiers-core-vs-extended" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test tiers: core vs extended
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#integration-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Integration Tests
       
     </span>
   </a>
@@ -2627,10 +2660,43 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#caching" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Caching
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#branch-protection" class="md-nav__link">
     <span class="md-ellipsis">
       
         Branch protection
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#test-tiers-core-vs-extended" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test tiers: core vs extended
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#integration-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Integration Tests
       
     </span>
   </a>
@@ -2781,9 +2847,14 @@ in-repo <code>.github/workflows/README.md</code> is a short pointer back here.</
 <td>push/PR to <code>main</code>/<code>develop</code>, manual dispatch</td>
 </tr>
 <tr>
+<td><a href="#integration-tests">Integration Tests</a></td>
+<td><code>integration.yml</code></td>
+<td>PR + push to <code>main</code> on runtime paths</td>
+</tr>
+<tr>
 <td><a href="#extended-integration-tests">Extended Integration Tests</a></td>
 <td><code>integration-tests.yml</code></td>
-<td>PRs touching key controllers/suite, manual dispatch</td>
+<td>nightly (full); <code>run-extended</code> label on a PR (extended-only); manual dispatch (full)</td>
 </tr>
 <tr>
 <td><a href="#release">Release</a></td>
@@ -2812,12 +2883,31 @@ gate that blocks merge. Jobs:</p>
    CRD, RBAC, deepcopy, Helm CRD, or OLM bundle file is stale. Fix locally with
    <code>make sync-all</code> and commit the result.</li>
 <li><strong>Unit Tests</strong> — <code>make test-unit</code> (race-enabled, envtest-backed controller
-   suite + plain unit tests). No external cluster required.</li>
-<li><strong>Integration Tests</strong> — the standard integration suite, but <strong>only</strong> when
-   opted in: a <code>run-integration-tests</code> PR label, <code>[run-integration]</code> in the
-   commit message, or manual dispatch with the toggle on. When skipped, the
-   <code>integration-tests-info</code> job prints how to enable it.</li>
+   suite + plain unit tests). No external cluster required. The job runs the
+   suite through <a href="../makefile_reference/#make-gotestsum">gotestsum</a>
+   (<code>make test-unit GO_TEST_CMD="./bin/gotestsum …"</code>), which emits a JUnit XML +
+   test2json report; a summary step (<code>scripts/gotest-summary.sh</code>) writes the
+   failed and slowest tests to the GitHub step summary.</li>
 </ol>
+<p>Integration coverage lives in its own workflows, not in <code>ci.yml</code>: the fast
+contributor lane is <a href="#integration-tests">Integration Tests</a>; the full matrix is
+<a href="#extended-integration-tests">Extended Integration Tests</a>.</p>
+<h2 id="caching">Caching<a class="headerlink" href="#caching" title="Anchor link to this section">&para;</a></h2>
+<p>The workflows cache the expensive, slowly-changing inputs so reruns stay fast:</p>
+<ul>
+<li><strong><code>./bin</code> tools + envtest assets</strong> — cached by the <code>.github/actions/setup-go</code>
+  composite action, keyed on <code>hashFiles('Makefile')</code> (the tool versions are
+  pinned there), so <code>kustomize</code>/<code>controller-gen</code>/<code>ginkgo</code>/<code>setup-envtest</code> aren't
+  re-downloaded every run.</li>
+<li><strong>Go build/module cache (<code>GOCACHE</code>)</strong> — restored via <code>actions/setup-go</code>'s
+  built-in caching, keyed on <code>go.sum</code>.</li>
+<li><strong>Operator image layers</strong> — the integration lanes build with Buildx and a
+  GitHub Actions layer cache (<code>cache-from/to: type=gha</code>), so unchanged build
+  stages are reused.</li>
+<li><strong>Neo4j image tarball</strong> — the pulled <code>neo4j:&lt;tag&gt;-enterprise</code> image is saved to
+  <code>/tmp/neo4j-image.tar</code> and restored with <code>actions/cache</code>, avoiding a Docker Hub
+  pull on every integration run.</li>
+</ul>
 <h2 id="branch-protection">Branch protection<a class="headerlink" href="#branch-protection" title="Anchor link to this section">&para;</a></h2>
 <p><code>main</code> is a protected branch. The rules enforce the gates above:</p>
 <ul>
@@ -2832,11 +2922,12 @@ gate that blocks merge. Jobs:</p>
 </ul>
 <p>Two things to know:</p>
 <ul>
-<li><strong>The integration checks are intentionally <em>not</em> required.</strong> <code>Integration
-  Tests</code> (CI) and the Extended Integration Tests workflow run conditionally; a
+<li><strong>The integration checks are intentionally <em>not</em> required.</strong> Both the
+  Integration Tests lane and the Extended Integration Tests workflow are
+  path-filtered, so they don't run on every PR (e.g. a docs-only change); a
   required check that doesn't run on a given PR would leave it stuck at
-  "Expected — waiting for status." Reviewers gate on them manually for
-  controller changes.</li>
+  "Expected — waiting for status." Reviewers gate on them manually for code
+  changes.</li>
 <li><strong><code>enforce_admins</code> is currently off</strong> so the maintainer can merge during the
   solo→team transition (GitHub forbids approving your own PR, and the sole
   CODEOWNER would otherwise be unable to merge anything). Turn it on once a
@@ -2846,27 +2937,98 @@ gate that blocks merge. Jobs:</p>
 </ul>
 <p>If you rename a required CI job in <code>ci.yml</code>, update the protection contexts to
 match or every merge will block.</p>
+<h2 id="test-tiers-core-vs-extended">Test tiers: <code>core</code> vs <code>extended</code><a class="headerlink" href="#test-tiers-core-vs-extended" title="Anchor link to this section">&para;</a></h2>
+<p>Every integration spec carries a Ginkgo label on its top-level <code>Describe</code>:</p>
+<ul>
+<li><strong><code>core</code></strong> — reconcile contracts a routine change is most likely to break:
+  standalone → Ready, cluster formation, <code>Neo4jDatabase</code>/<code>Neo4jUser</code>/<code>Neo4jRole</code>/
+  <code>Neo4jRoleBinding</code> CRUD, config rendering, plugin install, basic TLS. Small,
+  fast, deterministic on both tracks.</li>
+<li><strong><code>extended</code></strong> — multi-node scaling, split-brain, rolling upgrade, the full
+  backup/restore matrix, property sharding, MinIO/cloud, MCP, ABAC/OIDC. Slow,
+  resource-heavy, or version-gated; high value before a release, low marginal
+  value per PR.</li>
+</ul>
+<p>The two workflows below select by label. Run a tier locally with
+<code>ginkgo run --label-filter='core' ./test/integration/...</code> (or <code>'extended'</code>, or
+<code>'core || extended'</code> for everything). When you add a spec file, <strong>label its
+<code>Describe</code></strong> or it runs in neither lane.</p>
+<h2 id="integration-tests">Integration Tests<a class="headerlink" href="#integration-tests" title="Anchor link to this section">&para;</a></h2>
+<p><strong><code>integration.yml</code> — the fast contributor lane.</strong> Runs the <strong><code>core</code></strong> subset
+against <strong>both supported Neo4j tracks in parallel</strong>:</p>
+<ul>
+<li><code>5.26-enterprise</code> — the last SemVer LTS; exercises the SemVer-only operator
+  paths (V2_ONLY discovery, <code>system_bootstrapping_strategy</code>).</li>
+<li>the pinned CalVer tag (currently <code>2026.04-enterprise</code>) — the track new users
+  deploy; catches strict-mode fatals (duplicate conf keys, Cypher-25 defaults)
+  that 5.26 tolerates.</li>
+</ul>
+<p>Because it's the core subset and the two cells run in parallel, wall-clock ≈ the
+slower (CalVer) cell, not the sum. Triggers on <code>pull_request</code> + <code>push</code> to <code>main</code>
+when <strong>runtime paths</strong> change (<code>internal/**</code>, <code>api/**</code>, <code>cmd/**</code>,
+<code>test/integration/**</code>, <code>Makefile</code>, <code>go.{mod,sum}</code>, the workflow itself) — never
+on docs-only changes.</p>
+<p>This is the lane that should give a contributor a fast, legible yes/no on the
+contracts they touched, on the versions users actually run.</p>
+<blockquote>
+<p><strong>Caveat — a new push cancels the in-flight run.</strong> Each integration lane uses a
+per-PR <a href="https://docs.github.com/actions/using-jobs/using-concurrency">concurrency group</a>
+with <code>cancel-in-progress: true</code>, keyed on the PR number (<code>integration-core-${{
+github.event.pull_request.number || github.run_id }}</code> and the Extended
+equivalent). Pushing a new commit while a run is still going <strong>terminates that
+run</strong> and starts a fresh one on the new head — even a docs-only or trivial
+push (on <code>pull_request</code> the path filter is evaluated against the cumulative
+base→head diff, so any push re-fires the lane if the PR has <em>ever</em> touched a
+runtime path). The cancelled run shows up as red/"cancelled", not a failure.
+If you're waiting on a green integration result, <strong>let it finish before pushing
+again</strong>, or batch your changes into one push.</p>
+</blockquote>
 <h2 id="extended-integration-tests">Extended Integration Tests<a class="headerlink" href="#extended-integration-tests" title="Anchor link to this section">&para;</a></h2>
-<p><strong><code>integration-tests.yml</code> — the long (≈90-minute) suite against a real Kind
-cluster with the operator deployed.</strong> Distinct from CI's opt-in integration job:
-this is the comprehensive run.</p>
-<p><strong>Runs automatically on PRs</strong> that touch the controllers most likely to silently
-break cluster coordination, or the suite itself:</p>
+<p><strong><code>integration-tests.yml</code> — the full suite (<code>core</code> + <code>extended</code>, ≈90–150 min)
+against a real Kind cluster, on the pinned CalVer track.</strong> This is the
+release-readiness and deep-coverage run.</p>
+<p><strong>Extended does NOT auto-run on PRs</strong> — by design, the default PR signal is the
+fast core lane, keeping the dev cycle short. Extended runs:</p>
 <ul>
-<li><code>internal/controller/neo4jrestore_controller.go</code>, <code>neo4jrestore_coordination*.go</code></li>
-<li><code>internal/controller/neo4jbackup_controller.go</code></li>
-<li><code>internal/controller/neo4jenterprisecluster_controller.go</code>, <code>neo4jenterprisestandalone_controller.go</code></li>
-<li><code>test/integration/**</code></li>
-<li><code>.github/workflows/integration-tests.yml</code></li>
+<li><strong>Nightly</strong> (<code>cron: 0 3 * * *</code>) on <code>main</code>, <strong>full suite</strong> — keeps <code>main</code>
+  continuously known-good on the CalVer track, so a regression is caught the day
+  it merges and a release tag ships a commit whose CalVer health is already
+  established (the tag is the release trigger — too late to be the gate itself).
+  This is also the only <em>scheduled</em> check, so it must exercise everything,
+  including <code>core</code>.</li>
+<li><strong>Per-PR opt-in</strong> — apply the <strong><code>run-extended</code></strong> label to a PR to run it against
+  that PR. On the PR event it runs <strong><code>extended</code>-only</strong> (the core lane already
+  covers <code>core</code> on that PR, so re-running it would be redundant). Labels are
+  maintainer-only, which also keeps fork PRs from triggering it. Use this for
+  backup/restore/sharding/coordination changes that the <code>core</code> subset doesn't
+  exercise.</li>
+<li><strong>Manual dispatch</strong> (Actions tab), <strong>full suite</strong>, with inputs:</li>
+<li><code>neo4j-version</code> — image tag (default the pinned CalVer; pass <code>5.26-enterprise</code>
+    to verify the LTS floor, or <code>2025.12-enterprise+</code> for the property-sharding
+    paths). Dispatch against your branch to run the full suite before merging.</li>
+<li><code>timeout-minutes</code> — default <code>150</code> (CalVer is ~2× slower per spec).</li>
 </ul>
-<p><strong>Manual dispatch</strong> (Actions tab) accepts inputs:</p>
-<ul>
-<li><code>neo4j-version</code> — image tag to test against (default <code>5.26-enterprise</code>). Use a
-  <code>2025.12-enterprise+</code> tag to exercise the property-sharding CI smoke path.</li>
-<li><code>timeout-minutes</code> — default <code>90</code>.</li>
-</ul>
-<p>It builds and deploys the operator, runs <code>ginkgo ./test/integration/...</code>,
-uploads logs/cluster-state artifacts, and tears the cluster down.</p>
+<p>It builds and deploys the operator, runs the selected scope, uploads
+logs/cluster-state artifacts, and tears the cluster down.</p>
+<blockquote>
+<p><strong>Not everything labelled <code>extended</code> runs in this lane.</strong> The tier label only
+selects the lane; a runtime <code>Skip</code> can still exclude a spec there. The
+resource-heavy property-sharding suites self-skip in CI (they need the
+production 4Gi/server floor) and are <strong>local-only</strong> — only the minimal
+<code>property_sharding_ci_smoke</code> runs here. See
+<a href="../testing/#what-runs-where-coverage-map">Testing → What runs where</a> for the
+full map and how to run the local-only suites.</p>
+</blockquote>
+<p><strong>Bumping the CalVer pin:</strong> the version is pinned (not floating) for
+deterministic CI, in <strong>two</strong> places that must move together (GitHub allows
+neither an <code>env</code> var in a matrix nor an expression in a dispatch-input default,
+so there's no single shared variable):</p>
+<ol>
+<li>the <code>neo4j-version</code> <strong>matrix list</strong> in <code>integration.yml</code> (the core lane), and</li>
+<li>the <code>neo4j-version</code> input <strong>default</strong> in <code>integration-tests.yml</code> (the Extended
+   lane).</li>
+</ol>
+<p>Bump both in the same PR — the bump is itself a tested change.</p>
 <h2 id="release">Release<a class="headerlink" href="#release" title="Anchor link to this section">&para;</a></h2>
 <p><strong><code>release.yml</code> — tag-driven release pipeline.</strong> Push a <code>vX.Y.Z</code> tag (or dispatch
 with a tag input). Jobs:</p>
