@@ -2138,6 +2138,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -2218,6 +2222,90 @@
   
   
     <li class="md-nav__item">
+      <a href="../contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../collaboration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Collaboration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ci_and_workflows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CI/CD & Workflows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../architecture/" class="md-nav__link">
         
   
@@ -2254,34 +2342,6 @@
     
   
     Testing
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../contributing/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Contributing
   
 
     
@@ -2423,10 +2483,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#ciopenshift-smoke-proposed" class="md-nav__link">
+  <a href="#openshift-smoke-testing-manual" class="md-nav__link">
     <span class="md-ellipsis">
       
-        CI/OpenShift smoke (proposed)
+        OpenShift smoke testing (manual)
       
     </span>
   </a>
@@ -2509,10 +2569,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#ciopenshift-smoke-proposed" class="md-nav__link">
+  <a href="#openshift-smoke-testing-manual" class="md-nav__link">
     <span class="md-ellipsis">
       
-        CI/OpenShift smoke (proposed)
+        OpenShift smoke testing (manual)
       
     </span>
   </a>
@@ -2584,11 +2644,14 @@ timestamp before image build; it's invoked by the release workflow in
 </span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>oc<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>config/samples/olm/subscription.yaml
 </span></code></pre></div>
 <p>Default bundle channels can be set via <code>CHANNELS</code>/<code>DEFAULT_CHANNEL</code> when running <code>make bundle</code>.</p>
-<h2 id="ciopenshift-smoke-proposed">CI/OpenShift smoke (proposed)<a class="headerlink" href="#ciopenshift-smoke-proposed" title="Anchor link to this section">&para;</a></h2>
-<ul>
-<li>See <code>.github/workflows/openshift-olm-smoke.yml</code> for a self-hosted GitHub Actions job that uses OpenShift Local (crc): it starts CRC (requires <code>CRC_PULL_SECRET</code>, <code>CRC_KUBEADMIN_PASSWORD</code> secrets), builds/pushes the bundle and catalog to GHCR, and installs via the sample CatalogSource/Subscription. Runner must support virtualization (self-hosted).</li>
-<li>If you have a remote OpenShift, set <code>OCP_API</code>/<code>OCP_TOKEN</code> and reuse the same bundle+catalog steps without CRC.</li>
-</ul>
+<h2 id="openshift-smoke-testing-manual">OpenShift smoke testing (manual)<a class="headerlink" href="#openshift-smoke-testing-manual" title="Anchor link to this section">&para;</a></h2>
+<p>OLM/OperatorHub is a supported <strong>manual</strong> install path; it is not exercised in
+CI (a smoke test needs an OpenShift cluster, which standard GitHub runners can't
+provide). To validate the bundle on OpenShift, build and push the bundle and
+catalog (<code>make bundle bundle-build bundle-push catalog-build catalog-push</code>),
+then install via the sample <code>CatalogSource</code>/<code>Subscription</code> under
+<code>config/samples/olm/</code>. OpenShift Local (CRC) works for a local check on a
+virtualization-capable host; a remote OpenShift cluster works equally well.</p>
 
 
 
