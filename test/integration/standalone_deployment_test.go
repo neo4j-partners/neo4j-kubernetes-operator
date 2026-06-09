@@ -94,20 +94,24 @@ var _ = Describe("Neo4jEnterpriseStandalone Integration Tests", func() {
 			Expect(k8sClient.Create(ctx, standalone)).To(Succeed())
 
 			By("Waiting for standalone to become Ready")
-			Eventually(func() bool {
+			Eventually(func() error {
+				// Fail fast: a crash-looping Neo4j pod never recovers, so abort
+				// immediately with the fatal log instead of polling to timeout.
+				if err := crashLoopError(ctx, namespaceName); err != nil {
+					return StopTrying("Neo4j standalone pod is crash-looping").Wrap(err)
+				}
 				updated := &neo4jv1beta1.Neo4jEnterpriseStandalone{}
 				if err := k8sClient.Get(ctx, types.NamespacedName{
 					Name: standaloneName, Namespace: namespaceName,
 				}, updated); err != nil {
-					return false
+					return err
 				}
-				if updated.Status.Phase == "Ready" {
-					GinkgoWriter.Printf("Standalone is ready. Phase: %s\n", updated.Status.Phase)
-					return true
+				if updated.Status.Phase != "Ready" {
+					return fmt.Errorf("standalone not yet ready, phase=%s", updated.Status.Phase)
 				}
-				GinkgoWriter.Printf("Standalone not yet ready. Phase: %s\n", updated.Status.Phase)
-				return false
-			}, timeout, interval).Should(BeTrue())
+				GinkgoWriter.Printf("Standalone is ready. Phase: %s\n", updated.Status.Phase)
+				return nil
+			}, timeout, interval).Should(Succeed())
 		})
 
 		AfterAll(func() {

@@ -176,27 +176,26 @@ var _ = Describe("Cluster Lifecycle Integration Tests", func() {
 
 			By("Waiting for initial cluster to be Ready before scaling")
 			// Wait for cluster to form properly before attempting to scale
-			Eventually(func() bool {
+			Eventually(func() error {
+				// Fail fast: a crash-looping server pod never recovers, so abort
+				// immediately with the fatal log instead of polling to timeout.
+				if err := crashLoopError(ctx, namespace.Name); err != nil {
+					return StopTrying("Neo4j server pod is crash-looping").Wrap(err)
+				}
 				err := k8sClient.Get(ctx, types.NamespacedName{
 					Name:      clusterName,
 					Namespace: namespace.Name,
 				}, cluster)
 				if err != nil {
-					GinkgoWriter.Printf("Failed to get cluster during initial formation: %v\n", err)
-					return false
+					return err
 				}
-
-				// Check if cluster phase is Ready
-				if cluster.Status.Phase == "Ready" {
-					GinkgoWriter.Printf("Initial cluster is ready. Phase: %s\n", cluster.Status.Phase)
-					return true
+				if cluster.Status.Phase != "Ready" {
+					return fmt.Errorf("waiting for initial cluster formation, phase=%s message=%q",
+						cluster.Status.Phase, cluster.Status.Message)
 				}
-
-				// Log current status for debugging
-				GinkgoWriter.Printf("Waiting for initial cluster formation. Phase: %s, Message: %s\n",
-					cluster.Status.Phase, cluster.Status.Message)
-				return false
-			}, clusterTimeout, interval).Should(BeTrue(), "Initial cluster should be Ready before scaling")
+				GinkgoWriter.Printf("Initial cluster is ready. Phase: %s\n", cluster.Status.Phase)
+				return nil
+			}, clusterTimeout, interval).Should(Succeed(), "Initial cluster should be Ready before scaling")
 
 			By("Scaling up servers")
 			// In CI, scale from 2 to 3; in local, scale from 3 to 5
