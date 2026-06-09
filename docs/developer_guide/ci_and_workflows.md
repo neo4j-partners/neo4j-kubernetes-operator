@@ -104,6 +104,47 @@ with a tag input). Jobs:
 Pushing the tag also fires **Pages — Docs** and **Pages — Helm Repo** (below),
 so a single tag publishes images, the release, the docs version, and the chart.
 
+### Cutting a release (runbook)
+
+Releases are tag-driven. **Do not bump `Chart.yaml`** — `version`/`appVersion`
+are the `0.0.1` placeholder in the repo and the workflows stamp the real value
+from the tag.
+
+**Before tagging** (on an up-to-date, green `main`):
+
+1. `make ship-prep` — regenerates everything, builds the bundle, and runs
+   `helm-lint` + `check-csv-coverage` (more than CI's drift gate). Review
+   `git status` and commit anything regenerated.
+2. If there are breaking changes or notable upgrade steps, add/extend the
+   `Upgrading from vX to vY` section in
+   [`migration_guide.md`](../user_guide/migration_guide.md).
+3. Draft the **What's Changed** notes — `git log <last-tag>..HEAD --pretty=oneline`
+   is a good starting point. (The release workflow renders only the
+   boilerplate from `.github/release-notes-template.md`; the changelog is
+   hand-written.)
+
+**Tag and push** from `main`:
+
+```bash
+git tag v1.12.0 && git push origin v1.12.0
+```
+
+This fans out to **Release** (multi-arch signed images + GitHub release +
+kubectl bundles + OLM CSV), **Pages — Docs** (`/v1.12/` + `/latest/`), and
+**Pages — Helm Repo** (`/charts/`).
+
+**After the workflows finish:**
+
+4. Paste the **What's Changed** section into the GitHub release body (above the
+   generated boilerplate).
+5. Verify:
+   - `gh run list` — Release, Pages — Docs, Pages — Helm Repo all green.
+   - `gh release view v1.12.0` — has `…-complete.yaml` and `…operator.yaml` assets.
+   - `helm repo update && helm search repo neo4j-operator/neo4j-operator --versions` — new version listed.
+   - Docs `/latest/` and `/v1.12/` load and the version dropdown shows the release.
+   - `cosign verify ghcr.io/priyolahiri/neo4j-kubernetes-operator:v1.12.0 …` succeeds.
+   - (Optional, highest-confidence) `helm install` the published chart on a fresh Kind cluster.
+
 ## Publishing to GitHub Pages
 
 Both Pages workflows write to the **`gh-pages`** branch and share a `gh-pages`
