@@ -624,6 +624,19 @@ func (r *Neo4jPluginReconciler) uninstallPlugin(ctx context.Context, plugin *neo
 		return nil
 	}
 
+	// Prune this plugin's additive security tokens (e.g. gds.*) from the
+	// StatefulSet env vars. The install path unions these in for EVERY mode
+	// (mergePluginSecurityEnv runs regardless of PreBaked/VerifiedDownload),
+	// so removal must be mode-independent too — done here, before the
+	// mode-specific early returns below, rather than only in the Managed
+	// JAR-removal path. The cluster controller's env merge is subset/
+	// ownership-tracked and will NOT drop tokens it doesn't own, so this
+	// explicit prune is the only thing that removes them. Best-effort: a
+	// failure here must not block the finalizer.
+	if err := r.prunePluginSecurityEnv(ctx, plugin, deployment); err != nil {
+		logger.Error(err, "Failed to prune plugin security env vars from StatefulSet; continuing", "plugin", plugin.Spec.Name)
+	}
+
 	// VerifiedDownload installs need the init container + auth/CA
 	// volumes removed from the StatefulSet on uninstall — otherwise
 	// the next reconcile would still try to download and the pod
@@ -645,9 +658,8 @@ func (r *Neo4jPluginReconciler) uninstallPlugin(ctx context.Context, plugin *neo
 	// PreBaked installs are JARs the operator did not deliver — never run the
 	// jar-removal Job against them. The user-supplied custom image owns
 	// /plugins/*; touching it could orphan files the operator did not put
-	// there. Only configuration (env vars, ConfigMap entries) was operator-
-	// owned, and that is removed when the StatefulSet/ConfigMap is reconciled
-	// after the CR is deleted.
+	// there. The operator-owned configuration (security env tokens) has
+	// already been pruned above; ConfigMap entries are reconciled separately.
 	if isPreBakedInstallMode(plugin) {
 		logger.Info("Skipping JAR removal for PreBaked plugin", "plugin", plugin.Spec.Name)
 		return nil
@@ -726,13 +738,8 @@ func (r *Neo4jPluginReconciler) removePluginFromDeployment(ctx context.Context, 
 		return fmt.Errorf("failed to create plugin removal job: %w", err)
 	}
 
-	// Prune this plugin's additive security tokens from the StatefulSet env vars
-	// so an uninstalled plugin's allowlist (e.g. gds.*) doesn't linger — the
-	// install path only ever unions tokens in, so removal must happen here.
-	// Best-effort: a failure here shouldn't block the finalizer / removal job.
-	if err := r.prunePluginSecurityEnv(ctx, plugin, deployment); err != nil {
-		logger.Error(err, "Failed to prune plugin security env vars from StatefulSet; continuing", "plugin", plugin.Spec.Name)
-	}
+	// Security-token env pruning is handled mode-independently in
+	// uninstallPlugin (before the mode branches), so it is not repeated here.
 
 	// Wait for job completion
 	return r.waitForJobCompletion(ctx, removeJob)
