@@ -8,6 +8,8 @@ on:
           CalVer track — the strict ceiling new users run. Pass 5.26-enterprise
           to verify the LTS floor on the full suite.'
         required: false
+        # Pinned CalVer default. Keep in sync with the neo4j-version matrix list
+        # in integration.yml (the core lane) — bump both in the same PR.
         default: '2026.04-enterprise'
         type: string
       timeout-minutes:

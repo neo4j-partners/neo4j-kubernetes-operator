@@ -44,10 +44,6 @@ concurrency:
 env:
   GO_VERSION: '1.26'
   KIND_VERSION: 'v0.27.0'
-  # Pinned CalVer track. Bump deliberately when a newer stable CalVer ships — the
-  # bump is itself a tested change. Keep in sync with the Extended workflow.
-  CALVER_VERSION: '2026.04-enterprise'
-  LTS_VERSION: '5.26-enterprise'
 
 jobs:
   core-integration-tests:
@@ -57,9 +53,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Both supported tracks. 5.26 is the LTS floor; CalVer is the strict
-        # ceiling new users run. Cells run in parallel, so wall-clock ≈ the
-        # slower (CalVer) cell, not the sum.
+        # SOURCE OF TRUTH for the core lane's Neo4j versions. This list is the pin
+        # (deliberate, not floating) — GitHub does not allow the `env` context in
+        # a matrix, so the tags are inline here rather than in a shared var.
+        # 5.26 is the LTS floor (exercises the SemVer-only operator paths); the
+        # CalVer tag is the strict ceiling new users run. Cells run in parallel,
+        # so wall-clock ≈ the slower (CalVer) cell, not the sum.
+        # When bumping CalVer, update BOTH this list AND the `neo4j-version`
+        # default in integration-tests.yml (the Extended lane) in the same PR.
         neo4j-version: ['5.26-enterprise', '2026.04-enterprise']
     permissions:
       contents: read

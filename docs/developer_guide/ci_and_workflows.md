@@ -139,9 +139,15 @@ logs/cluster-state artifacts, and tears the cluster down.
 > full map and how to run the local-only suites.
 
 **Bumping the CalVer pin:** the version is pinned (not floating) for
-deterministic CI. When a newer stable CalVer ships, bump `CALVER_VERSION` in
-`integration.yml` and the `neo4j-version` default in `integration-tests.yml` in
-one PR — the bump is itself a tested change.
+deterministic CI, in **two** places that must move together (GitHub allows
+neither an `env` var in a matrix nor an expression in a dispatch-input default,
+so there's no single shared variable):
+
+1. the `neo4j-version` **matrix list** in `integration.yml` (the core lane), and
+2. the `neo4j-version` input **default** in `integration-tests.yml` (the Extended
+   lane).
+
+Bump both in the same PR — the bump is itself a tested change.
 
 ## Release
 
