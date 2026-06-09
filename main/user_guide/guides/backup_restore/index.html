@@ -5114,15 +5114,19 @@
 </tr>
 </tbody>
 </table>
-<p><strong>Cluster path (Cypher)</strong> — works with both cloud and PVC backups:
-- <strong>Cloud-backed backup</strong> (S3 / GCS / Azure): the operator passes the exact <code>.backup</code> <strong>file</strong> URI of the latest successful run (<code>s3://bucket/&lt;path&gt;/&lt;backup-cr-name&gt;/&lt;dbname&gt;-&lt;timestamp&gt;.backup</code>) as <code>seedURI</code> — <code>CloudSeedProvider</code> seeds a single database from one file, not a directory. When that file is a differential, Neo4j resolves and applies the full + differential chain from the same directory automatically. The cluster's pods must have the cloud credentials Secret projected via <code>spec.extraEnvFrom</code> — the operator emits an actionable error if they don't, or auto-patches under annotation <code>neo4j.com/auto-inherit-seed-creds=true</code>.
-- <strong>PVC-backed backup</strong>: the operator spawns an in-cluster busybox httpd proxy (<code>backup-seed-proxy-&lt;restore-name&gt;</code>) mounting the backup PVC RO at <code>/backup</code>, then passes the per-run <code>.backup</code> file URL as <code>seedURI</code> (<code>http://backup-seed-proxy-&lt;restore-name&gt;:8080/&lt;backup-cr-name&gt;/&lt;filename&gt;</code>). Neo4j's <code>URLConnectionSeedProvider</code> fetches it. The proxy Deployment + Service are owned by the <code>Neo4jRestore</code> CR and GC'd when it's deleted. No credentials required.
-- <code>dbms.recreateDatabase</code> preserves user/role privileges on the existing database; no <code>DROP DATABASE</code> needed.
-- For new databases, the operator emits <code>CREATE DATABASE … OPTIONS { seedURI: '…' } WAIT</code>.
-- Both forms block until the new state is online — when the restore returns, the database is ready.</p>
-<p><strong>Standalone path (Job)</strong>:
-- The operator spawns a Kubernetes Job that mounts the backup PVC (or streams from cloud storage), runs <code>neo4j-admin database restore --from-path=&lt;latest-file&gt;</code>, then automatically runs <code>CREATE DATABASE</code> or <code>START DATABASE</code> over Bolt.
-- The <code>&lt;latest-file&gt;</code> is resolved at Pod startup via shell substitution (<code>ls &lt;dir&gt;/&lt;dbname&gt;-*.backup | tail -1</code>), so the most recent run in the chain wins by default.</p>
+<p><strong>Cluster path (Cypher)</strong> — works with both cloud and PVC backups:</p>
+<ul>
+<li><strong>Cloud-backed backup</strong> (S3 / GCS / Azure): the operator passes the exact <code>.backup</code> <strong>file</strong> URI of the latest successful run (<code>s3://bucket/&lt;path&gt;/&lt;backup-cr-name&gt;/&lt;dbname&gt;-&lt;timestamp&gt;.backup</code>) as <code>seedURI</code> — <code>CloudSeedProvider</code> seeds a single database from one file, not a directory. When that file is a differential, Neo4j resolves and applies the full + differential chain from the same directory automatically. The cluster's pods must have the cloud credentials Secret projected via <code>spec.extraEnvFrom</code> — the operator emits an actionable error if they don't, or auto-patches under annotation <code>neo4j.com/auto-inherit-seed-creds=true</code>.</li>
+<li><strong>PVC-backed backup</strong>: the operator spawns an in-cluster busybox httpd proxy (<code>backup-seed-proxy-&lt;restore-name&gt;</code>) mounting the backup PVC RO at <code>/backup</code>, then passes the per-run <code>.backup</code> file URL as <code>seedURI</code> (<code>http://backup-seed-proxy-&lt;restore-name&gt;:8080/&lt;backup-cr-name&gt;/&lt;filename&gt;</code>). Neo4j's <code>URLConnectionSeedProvider</code> fetches it. The proxy Deployment + Service are owned by the <code>Neo4jRestore</code> CR and GC'd when it's deleted. No credentials required.</li>
+<li><code>dbms.recreateDatabase</code> preserves user/role privileges on the existing database; no <code>DROP DATABASE</code> needed.</li>
+<li>For new databases, the operator emits <code>CREATE DATABASE … OPTIONS { seedURI: '…' } WAIT</code>.</li>
+<li>Both forms block until the new state is online — when the restore returns, the database is ready.</li>
+</ul>
+<p><strong>Standalone path (Job)</strong>:</p>
+<ul>
+<li>The operator spawns a Kubernetes Job that mounts the backup PVC (or streams from cloud storage), runs <code>neo4j-admin database restore --from-path=&lt;latest-file&gt;</code>, then automatically runs <code>CREATE DATABASE</code> or <code>START DATABASE</code> over Bolt.</li>
+<li>The <code>&lt;latest-file&gt;</code> is resolved at Pod startup via shell substitution (<code>ls &lt;dir&gt;/&lt;dbname&gt;-*.backup | tail -1</code>), so the most recent run in the chain wins by default.</li>
+</ul>
 <p><strong>No manual post-restore Cypher is required</strong> for either path.</p>
 <h3 id="simple-restore-examples">Simple Restore Examples<a class="headerlink" href="#simple-restore-examples" title="Anchor link to this section">&para;</a></h3>
 <h4 id="restore-from-a-backup-reference">Restore from a Backup Reference<a class="headerlink" href="#restore-from-a-backup-reference" title="Anchor link to this section">&para;</a></h4>
@@ -5424,11 +5428,13 @@
 </span><span id="__span-41-4"><a id="__codelineno-41-4" name="__codelineno-41-4" href="#__codelineno-41-4"></a><span class="w">      </span><span class="nt">size</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;50Gi&quot;</span><span class="w">              </span><span class="c1"># should be &gt;= expected backup size</span>
 </span><span id="__span-41-5"><a id="__codelineno-41-5" name="__codelineno-41-5" href="#__codelineno-41-5"></a><span class="w">      </span><span class="nt">storageClassName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gp3</span><span class="w">     </span><span class="c1"># optional, uses cluster default if omitted</span>
 </span></code></pre></div>
-<p>The operator:
-1. Creates a PVC named <code>{backup-name}-temp-staging</code> (or <code>{restore-name}-temp-staging</code>)
-2. Sets the CR as owner — the PVC is garbage-collected when the backup/restore CR is deleted
-3. Mounts the PVC at <code>/tmp/neo4j-staging</code> in the Job pod
-4. Passes <code>--temp-path=/tmp/neo4j-staging</code> to <code>neo4j-admin</code></p>
+<p>The operator:</p>
+<ol>
+<li>Creates a PVC named <code>{backup-name}-temp-staging</code> (or <code>{restore-name}-temp-staging</code>)</li>
+<li>Sets the CR as owner — the PVC is garbage-collected when the backup/restore CR is deleted</li>
+<li>Mounts the PVC at <code>/tmp/neo4j-staging</code> in the Job pod</li>
+<li>Passes <code>--temp-path=/tmp/neo4j-staging</code> to <code>neo4j-admin</code></li>
+</ol>
 <p>If you prefer to manage the PVC yourself, use <code>tempPath</code> instead (points to any path you've mounted via <code>additionalArgs</code> or other means).</p>
 <h3 id="backup-options-reference">Backup Options Reference<a class="headerlink" href="#backup-options-reference" title="Anchor link to this section">&para;</a></h3>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-42-1"><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a><span class="nt">options</span><span class="p">:</span>

@@ -4635,17 +4635,21 @@ cluster reaches <code>Ready</code> — see <a href="../neo4jrestore/"><code>Neo4
 </tr>
 </tbody>
 </table>
-<p><strong>Server Role Management</strong>:
-- Servers self-organize into primary/secondary roles at the <strong>database level</strong>
-- Role constraints influence which databases a server can host:
-  - <code>NONE</code>: Server can host databases in any mode (default)
-  - <code>PRIMARY</code>: Server only hosts databases in primary mode
-  - <code>SECONDARY</code>: Server only hosts databases in secondary mode
-- Use <code>serverRoles</code> for granular per-server control</p>
-<p><strong>Validation</strong>:
-- Minimum 2 servers required for clustering
-- Cannot configure all servers as <code>SECONDARY</code> (cluster needs primaries)
-- Server indices in <code>serverRoles</code> must be within range (0 to servers-1)</p>
+<p><strong>Server Role Management</strong>:</p>
+<ul>
+<li>Servers self-organize into primary/secondary roles at the <strong>database level</strong></li>
+<li>Role constraints influence which databases a server can host:</li>
+<li><code>NONE</code>: Server can host databases in any mode (default)</li>
+<li><code>PRIMARY</code>: Server only hosts databases in primary mode</li>
+<li><code>SECONDARY</code>: Server only hosts databases in secondary mode</li>
+<li>Use <code>serverRoles</code> for granular per-server control</li>
+</ul>
+<p><strong>Validation</strong>:</p>
+<ul>
+<li>Minimum 2 servers required for clustering</li>
+<li>Cannot configure all servers as <code>SECONDARY</code> (cluster needs primaries)</li>
+<li>Server indices in <code>serverRoles</code> must be within range (0 to servers-1)</li>
+</ul>
 <h3 id="serverrolehint">ServerRoleHint<a class="headerlink" href="#serverrolehint" title="Anchor link to this section">&para;</a></h3>
 <p>Specifies role constraints for individual servers.</p>
 <table>

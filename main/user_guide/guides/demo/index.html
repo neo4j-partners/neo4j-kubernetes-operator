@@ -3203,13 +3203,15 @@
 <h3 id="full-demo-with-environment-setup-recommended-for-first-run">Full demo with environment setup (recommended for first run)<a class="headerlink" href="#full-demo-with-environment-setup-recommended-for-first-run" title="Anchor link to this section">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>make<span class="w"> </span>demo
 </span></code></pre></div>
-<p>This will:
-1. Ask before destroying any existing Kind clusters
-2. Create a fresh <code>neo4j-operator-dev</code> Kind cluster
-3. Install cert-manager and self-signed ClusterIssuer
-4. Build and deploy the operator
-5. Run the interactive demo (pauses between sections for confirmation)
-6. Ask whether to clean up at the end</p>
+<p>This will:</p>
+<ol>
+<li>Ask before destroying any existing Kind clusters</li>
+<li>Create a fresh <code>neo4j-operator-dev</code> Kind cluster</li>
+<li>Install cert-manager and self-signed ClusterIssuer</li>
+<li>Build and deploy the operator</li>
+<li>Run the interactive demo (pauses between sections for confirmation)</li>
+<li>Ask whether to clean up at the end</li>
+</ol>
 <h3 id="fast-automated-demo-no-prompts">Fast automated demo (no prompts)<a class="headerlink" href="#fast-automated-demo-no-prompts" title="Anchor link to this section">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>make<span class="w"> </span>demo-fast
 </span></code></pre></div>
@@ -3255,34 +3257,46 @@
 </span></code></pre></div>
 <h2 id="demo-flow-details">Demo Flow Details<a class="headerlink" href="#demo-flow-details" title="Anchor link to this section">&para;</a></h2>
 <h3 id="part-1-tls-standalone">Part 1: TLS Standalone<a class="headerlink" href="#part-1-tls-standalone" title="Anchor link to this section">&para;</a></h3>
-<p>Creates a <code>Neo4jEnterpriseStandalone</code> with:
-- <code>tls.mode: cert-manager</code> using <code>ca-cluster-issuer</code>
-- 1.5Gi memory, 10Gi storage
-- Readiness/liveness/startup health probes
-- Verifies with <code>cypher-shell -a bolt+ssc://localhost:7687</code></p>
+<p>Creates a <code>Neo4jEnterpriseStandalone</code> with:</p>
+<ul>
+<li><code>tls.mode: cert-manager</code> using <code>ca-cluster-issuer</code></li>
+<li>1.5Gi memory, 10Gi storage</li>
+<li>Readiness/liveness/startup health probes</li>
+<li>Verifies with <code>cypher-shell -a bolt+ssc://localhost:7687</code></li>
+</ul>
 <h3 id="part-2-tls-ha-cluster">Part 2: TLS HA Cluster<a class="headerlink" href="#part-2-tls-ha-cluster" title="Anchor link to this section">&para;</a></h3>
-<p>Creates a <code>Neo4jEnterpriseCluster</code> with:
-- 3 servers, <code>tls.mode: cert-manager</code>
-- <code>monitoring.enabled: true</code> for live diagnostics
-- Verifies cluster formation with <code>SHOW SERVERS</code></p>
+<p>Creates a <code>Neo4jEnterpriseCluster</code> with:</p>
+<ul>
+<li>3 servers, <code>tls.mode: cert-manager</code></li>
+<li><code>monitoring.enabled: true</code> for live diagnostics</li>
+<li>Verifies cluster formation with <code>SHOW SERVERS</code></li>
+</ul>
 <h3 id="part-3-external-access">Part 3: External Access<a class="headerlink" href="#part-3-external-access" title="Anchor link to this section">&para;</a></h3>
-<p>Demonstrates <code>kubectl port-forward</code> for both deployments:
-- Standalone: <code>https://localhost:7473</code> (HTTPS) and <code>bolt+ssc://localhost:7687</code>
-- Cluster: same ports via the client service</p>
+<p>Demonstrates <code>kubectl port-forward</code> for both deployments:</p>
+<ul>
+<li>Standalone: <code>https://localhost:7473</code> (HTTPS) and <code>bolt+ssc://localhost:7687</code></li>
+<li>Cluster: same ports via the client service</li>
+</ul>
 <h3 id="part-4-database-management">Part 4: Database Management<a class="headerlink" href="#part-4-database-management" title="Anchor link to this section">&para;</a></h3>
-<p>Creates databases on both deployment types:
-- <strong>Standalone</strong>: <code>products</code> database with schema constraints and sample data
-- <strong>Cluster</strong>: <code>orders</code> database with 2 primaries + 1 secondary topology</p>
+<p>Creates databases on both deployment types:</p>
+<ul>
+<li><strong>Standalone</strong>: <code>products</code> database with schema constraints and sample data</li>
+<li><strong>Cluster</strong>: <code>orders</code> database with 2 primaries + 1 secondary topology</li>
+</ul>
 <h3 id="part-5-plugin-management">Part 5: Plugin Management<a class="headerlink" href="#part-5-plugin-management" title="Anchor link to this section">&para;</a></h3>
-<p>Installs APOC on the cluster via <code>Neo4jPlugin</code> CRD:
-- Operator adds <code>NEO4J_PLUGINS=["apoc"]</code> to the StatefulSet
-- Rolling restart preserves cluster availability
-- Verified with <code>RETURN apoc.version()</code></p>
+<p>Installs APOC on the cluster via <code>Neo4jPlugin</code> CRD:</p>
+<ul>
+<li>Operator adds <code>NEO4J_PLUGINS=["apoc"]</code> to the StatefulSet</li>
+<li>Rolling restart preserves cluster availability</li>
+<li>Verified with <code>RETURN apoc.version()</code></li>
+</ul>
 <h3 id="part-6-multi-database-topologies">Part 6: Multi-Database Topologies<a class="headerlink" href="#part-6-multi-database-topologies" title="Anchor link to this section">&para;</a></h3>
-<p>Creates two additional databases on the same cluster:
-- <code>analytics</code>: 1 primary, 2 secondaries (optimized for reads)
-- <code>sessions</code>: 2 primaries, 0 secondaries (optimized for writes)
-- Verified with <code>SHOW DATABASES</code> showing role distribution</p>
+<p>Creates two additional databases on the same cluster:</p>
+<ul>
+<li><code>analytics</code>: 1 primary, 2 secondaries (optimized for reads)</li>
+<li><code>sessions</code>: 2 primaries, 0 secondaries (optimized for writes)</li>
+<li>Verified with <code>SHOW DATABASES</code> showing role distribution</li>
+</ul>
 <h3 id="part-7-declarative-user-role-management">Part 7: Declarative User &amp; Role Management<a class="headerlink" href="#part-7-declarative-user-role-management" title="Anchor link to this section">&para;</a></h3>
 <p>Demonstrates the <code>Neo4jUser</code> / <code>Neo4jRole</code> / <code>Neo4jRoleBinding</code> CRDs against the running cluster:</p>
 <ul>
@@ -3298,11 +3312,13 @@
 <li><strong>Built-in roles are protected.</strong> Names like <code>reader</code>, <code>editor</code>, <code>admin</code> are rejected unless <code>adoptBuiltin: true</code>.</li>
 </ul>
 <h3 id="part-8-live-diagnostics">Part 8: Live Diagnostics<a class="headerlink" href="#part-8-live-diagnostics" title="Anchor link to this section">&para;</a></h3>
-<p>Reads <code>status.diagnostics</code> from the cluster CR:
-- <code>status.diagnostics.servers</code> — name, address, state, health for each server
-- <code>status.diagnostics.databases</code> — name, status, role for each database replica
-- <code>status.diagnostics.users</code> / <code>status.diagnostics.roles</code> — capped at 50 entries each, with full counts in <code>userCount</code> / <code>roleCount</code>
-- <code>status.conditions</code> — Ready, ServersHealthy, DatabasesHealthy</p>
+<p>Reads <code>status.diagnostics</code> from the cluster CR:</p>
+<ul>
+<li><code>status.diagnostics.servers</code> — name, address, state, health for each server</li>
+<li><code>status.diagnostics.databases</code> — name, status, role for each database replica</li>
+<li><code>status.diagnostics.users</code> / <code>status.diagnostics.roles</code> — capped at 50 entries each, with full counts in <code>userCount</code> / <code>roleCount</code></li>
+<li><code>status.conditions</code> — Ready, ServersHealthy, DatabasesHealthy</li>
+</ul>
 <h2 id="timing">Timing<a class="headerlink" href="#timing" title="Anchor link to this section">&para;</a></h2>
 <table>
 <thead>

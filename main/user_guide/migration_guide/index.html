@@ -3105,9 +3105,11 @@
 <h2 id="breaking-changes">⚠️ Breaking Changes<a class="headerlink" href="#breaking-changes" title="Anchor link to this section">&para;</a></h2>
 <h3 id="cluster-intra-node-tls-now-defaults-to-strict-peer-validation">Cluster intra-node TLS now defaults to strict peer validation<a class="headerlink" href="#cluster-intra-node-tls-now-defaults-to-strict-peer-validation" title="Anchor link to this section">&para;</a></h3>
 <p><strong>What changed.</strong> The operator used to emit <code>dbms.ssl.policy.cluster.trust_all=true</code> and <code>client_auth=NONE</code> for TLS-enabled clusters. Neo4j's own documentation flags <code>trust_all=true</code> as <em>"debugging only, since it does not offer security."</em> The default now matches the canonical production posture: <code>trust_all=false</code> + <code>client_auth=REQUIRE</code> (mutual TLS) + <code>verify_hostname=true</code>, with the cert-manager Secret's <code>ca.crt</code> projected to <code>/ssl/trusted/ca.crt</code> as the trust anchor.</p>
-<p><strong>Who is affected.</strong> Existing <code>Neo4jEnterpriseCluster</code> resources with <code>spec.tls.mode=cert-manager</code>. On the next reconcile after the operator upgrade:
-1. The StatefulSet template changes (new Secret projection + new config keys), triggering a rolling restart of the server pods.
-2. Restarted pods run with the strict configuration. The rolling restart is safe because old pods (loose) still accept any cert presented by new pods, and new pods validate old pods' certs against the same CA — RAFT quorum survives the mixed-state window.</p>
+<p><strong>Who is affected.</strong> Existing <code>Neo4jEnterpriseCluster</code> resources with <code>spec.tls.mode=cert-manager</code>. On the next reconcile after the operator upgrade:</p>
+<ol>
+<li>The StatefulSet template changes (new Secret projection + new config keys), triggering a rolling restart of the server pods.</li>
+<li>Restarted pods run with the strict configuration. The rolling restart is safe because old pods (loose) still accept any cert presented by new pods, and new pods validate old pods' certs against the same CA — RAFT quorum survives the mixed-state window.</li>
+</ol>
 <p><strong>Action required.</strong> None for clusters whose cert-manager issuer populates <code>ca.crt</code> in the Secret it issues (CA, ACME, Vault, and most external issuers all do). The operator detects a missing <code>ca.crt</code> at reconcile time and refuses to apply the strict config — <code>status.phase</code> flips to <code>Failed</code> with a message naming the offending issuer.</p>
 <p><strong>Opt-out.</strong> Set <code>spec.tls.strictPeerValidation: false</code> on the cluster CR to keep the old behavior. The escape hatch is intended for installations whose external issuer doesn't populate <code>ca.crt</code>. Reverting to the legacy posture means accepting Neo4j's "debugging only, no security" warning.</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1beta1</span>
@@ -3305,27 +3307,33 @@
 </span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="c1"># After (v1.7.0-alpha)</span>
 </span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1beta1</span>
 </span></code></pre></div>
-<p>This applies to <strong>all</strong> operator CRDs:
-- <code>Neo4jEnterpriseCluster</code>
-- <code>Neo4jEnterpriseStandalone</code>
-- <code>Neo4jDatabase</code>
-- <code>Neo4jBackup</code>
-- <code>Neo4jRestore</code>
-- <code>Neo4jPlugin</code>
-- <code>Neo4jShardedDatabase</code></p>
+<p>This applies to <strong>all</strong> operator CRDs:</p>
+<ul>
+<li><code>Neo4jEnterpriseCluster</code></li>
+<li><code>Neo4jEnterpriseStandalone</code></li>
+<li><code>Neo4jDatabase</code></li>
+<li><code>Neo4jBackup</code></li>
+<li><code>Neo4jRestore</code></li>
+<li><code>Neo4jPlugin</code></li>
+<li><code>Neo4jShardedDatabase</code></li>
+</ul>
 <h3 id="bolt-tls-enforcement">Bolt TLS enforcement<a class="headerlink" href="#bolt-tls-enforcement" title="Anchor link to this section">&para;</a></h3>
 <p>When TLS is enabled (<code>tls.mode: cert-manager</code>), the operator now sets <code>server.bolt.tls_level=REQUIRED</code> on both cluster and standalone deployments. Previously this was <code>OPTIONAL</code>, meaning plain <code>bolt://</code> connections were silently accepted even with TLS configured.</p>
-<p><strong>Action required</strong> if you have clients connecting via plain <code>bolt://</code> to TLS-enabled deployments:
-- Update connection strings from <code>bolt://</code> to <code>bolt+s://</code> (with CA verification) or <code>bolt+ssc://</code> (self-signed certs)
-- Update <code>cypher-shell</code> commands to use <code>-a bolt+ssc://host:7687</code>
-- Update application driver configurations to enable TLS</p>
+<p><strong>Action required</strong> if you have clients connecting via plain <code>bolt://</code> to TLS-enabled deployments:</p>
+<ul>
+<li>Update connection strings from <code>bolt://</code> to <code>bolt+s://</code> (with CA verification) or <code>bolt+ssc://</code> (self-signed certs)</li>
+<li>Update <code>cypher-shell</code> commands to use <code>-a bolt+ssc://host:7687</code></li>
+<li>Update application driver configurations to enable TLS</li>
+</ul>
 <h3 id="deprecated-configuration-key">Deprecated configuration key<a class="headerlink" href="#deprecated-configuration-key" title="Anchor link to this section">&para;</a></h3>
 <p><code>dbms.logs.query.enabled</code> is now flagged as deprecated by the config validator. Replace with <code>db.logs.query.enabled</code> in your <code>spec.config</code> sections.</p>
 <h3 id="standalone-health-probes">Standalone health probes<a class="headerlink" href="#standalone-health-probes" title="Anchor link to this section">&para;</a></h3>
-<p>Standalone deployments now include readiness, liveness, and startup probes using <code>/conf/health.sh</code>. This means:
-- Pods are no longer marked Ready until Neo4j is actually accepting connections
-- The <code>status.phase</code> transition to <code>Ready</code> now reflects true Neo4j readiness
-- Existing deployments will see a rolling update when the operator is upgraded (new probe spec on the StatefulSet)</p>
+<p>Standalone deployments now include readiness, liveness, and startup probes using <code>/conf/health.sh</code>. This means:</p>
+<ul>
+<li>Pods are no longer marked Ready until Neo4j is actually accepting connections</li>
+<li>The <code>status.phase</code> transition to <code>Ready</code> now reflects true Neo4j readiness</li>
+<li>Existing deployments will see a rolling update when the operator is upgraded (new probe spec on the StatefulSet)</li>
+</ul>
 <h3 id="quick-upgrade-checklist_1">Quick upgrade checklist<a class="headerlink" href="#quick-upgrade-checklist_1" title="Anchor link to this section">&para;</a></h3>
 <ol>
 <li>Update all manifests: <code>apiVersion: neo4j.neo4j.com/v1alpha1</code> → <code>apiVersion: neo4j.neo4j.com/v1beta1</code></li>
@@ -3502,11 +3510,13 @@
 <li><strong>Consider proper resource configuration</strong> for cluster deployments</li>
 <li><strong>Implement proper backup</strong> strategies for your deployment type</li>
 </ol>
-<p>For more information, see:
-- <a href="../../api_reference/neo4jenterprisecluster/">Neo4jEnterpriseCluster API Reference</a>
-- <a href="../../api_reference/neo4jenterprisestandalone/">Neo4jEnterpriseStandalone API Reference</a>
-- <a href="../getting_started/">Getting Started Guide</a>
-- <a href="../guides/troubleshooting/">Troubleshooting Guide</a></p>
+<p>For more information, see:</p>
+<ul>
+<li><a href="../../api_reference/neo4jenterprisecluster/">Neo4jEnterpriseCluster API Reference</a></li>
+<li><a href="../../api_reference/neo4jenterprisestandalone/">Neo4jEnterpriseStandalone API Reference</a></li>
+<li><a href="../getting_started/">Getting Started Guide</a></li>
+<li><a href="../guides/troubleshooting/">Troubleshooting Guide</a></li>
+</ul>
 
 
 

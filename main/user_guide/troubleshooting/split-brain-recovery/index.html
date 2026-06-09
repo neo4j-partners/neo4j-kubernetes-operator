@@ -3422,11 +3422,13 @@
 <p>The Neo4j Kubernetes Operator includes <strong>automatic split-brain detection and repair</strong> to prevent and resolve these issues proactively.</p>
 <h2 id="understanding-split-brain-scenarios">Understanding Split-Brain Scenarios<a class="headerlink" href="#understanding-split-brain-scenarios" title="Anchor link to this section">&para;</a></h2>
 <h3 id="what-is-split-brain">What is Split-Brain?<a class="headerlink" href="#what-is-split-brain" title="Anchor link to this section">&para;</a></h3>
-<p>Split-brain happens when:
-1. Network partitions separate cluster servers
-2. Servers cannot communicate with each other
-3. Multiple independent "clusters" form within the same deployment
-4. Each partition believes it is the authoritative cluster</p>
+<p>Split-brain happens when:</p>
+<ol>
+<li>Network partitions separate cluster servers</li>
+<li>Servers cannot communicate with each other</li>
+<li>Multiple independent "clusters" form within the same deployment</li>
+<li>Each partition believes it is the authoritative cluster</li>
+</ol>
 <h3 id="common-causes">Common Causes<a class="headerlink" href="#common-causes" title="Anchor link to this section">&para;</a></h3>
 <ul>
 <li><strong>Network partitions</strong> between Kubernetes nodes</li>
@@ -3493,12 +3495,14 @@
 </li>
 </ol>
 <h3 id="identify-split-brain-symptoms">Identify Split-Brain Symptoms<a class="headerlink" href="#identify-split-brain-symptoms" title="Anchor link to this section">&para;</a></h3>
-<p><strong>Indicators of Split-Brain:</strong>
-- Different server counts reported by different pods
-- Inconsistent database allocations across servers
-- Some servers showing as "offline" from others' perspectives
-- Database creation failures with "insufficient servers" errors
-- Application connection failures to some databases</p>
+<p><strong>Indicators of Split-Brain:</strong></p>
+<ul>
+<li>Different server counts reported by different pods</li>
+<li>Inconsistent database allocations across servers</li>
+<li>Some servers showing as "offline" from others' perspectives</li>
+<li>Database creation failures with "insufficient servers" errors</li>
+<li>Application connection failures to some databases</li>
+</ul>
 <h2 id="repair-strategies">Repair Strategies<a class="headerlink" href="#repair-strategies" title="Anchor link to this section">&para;</a></h2>
 <h3 id="automatic-repair-recommended">Automatic Repair (Recommended)<a class="headerlink" href="#automatic-repair-recommended" title="Anchor link to this section">&para;</a></h3>
 <p>The operator automatically repairs split-brain scenarios by:</p>
@@ -3805,11 +3809,13 @@
 <li>Set up Kubernetes event alerting</li>
 <li>Track cluster consistency metrics</li>
 </ol>
-<p>For additional troubleshooting help, see:
-- <a href="../../guides/troubleshooting/">General Troubleshooting Guide</a>
-- <a href="../../tls_configuration/">TLS Configuration Issues</a>
-- <a href="../../performance/">Performance Troubleshooting</a>
-- <a href="../backup_restore/">Backup/Restore Issues</a></p>
+<p>For additional troubleshooting help, see:</p>
+<ul>
+<li><a href="../../guides/troubleshooting/">General Troubleshooting Guide</a></li>
+<li><a href="../../tls_configuration/">TLS Configuration Issues</a></li>
+<li><a href="../../performance/">Performance Troubleshooting</a></li>
+<li><a href="../backup_restore/">Backup/Restore Issues</a></li>
+</ul>
 
 
 

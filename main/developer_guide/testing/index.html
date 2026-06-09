@@ -4598,12 +4598,14 @@ forming its own:</p>
 </ul>
 <p><strong>When you add a spec:</strong> if it needs a plain native cluster and only touches the
 system/user DBs, <strong>reuse <code>useSharedNativeCluster</code></strong> — don't create a new cluster.
-Then:
-- give your CRs <strong>unique names</strong> (the shared system DB is sequential state across
-  specs);
-- in <code>AfterEach</code>, delete <strong>only your own</strong> CRs — never the shared cluster, and
+Then:</p>
+<ul>
+<li>give your CRs <strong>unique names</strong> (the shared system DB is sequential state across
+  specs);</li>
+<li>in <code>AfterEach</code>, delete <strong>only your own</strong> CRs — never the shared cluster, and
   never <code>cleanupCustomResourcesInNamespace</code> on the shared namespace (it would nuke
-  other specs' resources).</p>
+  other specs' resources).</li>
+</ul>
 <p>This is safe only because the suite runs <strong>serially</strong> (<code>--procs=1</code>): specs mutate
 the shared system DB one at a time. Reusing the cluster is incompatible with
 Ginkgo <code>-p</code> for that reason.</p>
@@ -4770,11 +4772,13 @@ sidecar. Tests verify the Job spawned by a <code>Neo4jBackup</code> CR:</p>
 </span><span id="__span-13-17"><a id="__codelineno-13-17" name="__codelineno-13-17" href="#__codelineno-13-17"></a><span class="w">    </span><span class="p">}</span>
 </span><span id="__span-13-18"><a id="__codelineno-13-18" name="__codelineno-13-18" href="#__codelineno-13-18"></a><span class="p">})</span>
 </span></code></pre></div>
-<p><strong>Why This Pattern Is Critical:</strong>
-- <strong>Prevents resource accumulation</strong> that causes "Insufficient memory" errors
-- <strong>Ensures cleanup even if tests fail</strong> (inline cleanup won't run on failure)
-- <strong>Removes finalizers</strong> to prevent resources stuck in Terminating state
-- <strong>Cleans namespace resources</strong> that might not have owner references</p>
+<p><strong>Why This Pattern Is Critical:</strong></p>
+<ul>
+<li><strong>Prevents resource accumulation</strong> that causes "Insufficient memory" errors</li>
+<li><strong>Ensures cleanup even if tests fail</strong> (inline cleanup won't run on failure)</li>
+<li><strong>Removes finalizers</strong> to prevent resources stuck in Terminating state</li>
+<li><strong>Cleans namespace resources</strong> that might not have owner references</li>
+</ul>
 <h4 id="2-common-mistakes-to-avoid">2. Common Mistakes to Avoid<a class="headerlink" href="#2-common-mistakes-to-avoid" title="Anchor link to this section">&para;</a></h4>
 <p>❌ <strong>No AfterEach block</strong> - Causes resource leaks if tests fail
 ❌ <strong>Inline cleanup only</strong> - Won't execute if test panics or fails
@@ -4837,10 +4841,12 @@ sidecar. Tests verify the Job spawned by a <code>Neo4jBackup</code> CR:</p>
 </span><span id="__span-18-7"><a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a><span class="w">    </span><span class="p">},</span>
 </span><span id="__span-18-8"><a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a><span class="p">},</span>
 </span></code></pre></div>
-<p><strong>Why 1.5Gi is required</strong>:
-- Neo4j Enterprise needs minimum memory for database operations
-- Lower values cause Out of Memory kills (exit code 137)
-- Database creation and topology operations fail with insufficient memory</p>
+<p><strong>Why 1.5Gi is required</strong>:</p>
+<ul>
+<li>Neo4j Enterprise needs minimum memory for database operations</li>
+<li>Lower values cause Out of Memory kills (exit code 137)</li>
+<li>Database creation and topology operations fail with insufficient memory</li>
+</ul>
 <h3 id="waiting-patterns">Waiting Patterns<a class="headerlink" href="#waiting-patterns" title="Anchor link to this section">&para;</a></h3>
 <h4 id="cluster-readiness-condition-based">Cluster Readiness (Condition-Based)<a class="headerlink" href="#cluster-readiness-condition-based" title="Anchor link to this section">&para;</a></h4>
 <div class="language-go highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="nx">Eventually</span><span class="p">(</span><span class="kd">func</span><span class="p">()</span><span class="w"> </span><span class="kt">string</span><span class="w"> </span><span class="p">{</span>
@@ -4886,11 +4892,13 @@ sidecar. Tests verify the Job spawned by a <code>Neo4jBackup</code> CR:</p>
 </span></code></pre></div>
 <h2 id="cicd-testing">CI/CD Testing<a class="headerlink" href="#cicd-testing" title="Anchor link to this section">&para;</a></h2>
 <h3 id="github-actions-integration">GitHub Actions Integration<a class="headerlink" href="#github-actions-integration" title="Anchor link to this section">&para;</a></h3>
-<p>Tests run automatically in CI with:
-- <strong>Parallel Execution</strong>: Multiple test suites run concurrently
-- <strong>Resource Constraints</strong>: CI-optimized resource limits
-- <strong>Timeout Handling</strong>: Extended timeouts for image pull delays
-- <strong>Cleanup Automation</strong>: Automatic test environment cleanup</p>
+<p>Tests run automatically in CI with:</p>
+<ul>
+<li><strong>Parallel Execution</strong>: Multiple test suites run concurrently</li>
+<li><strong>Resource Constraints</strong>: CI-optimized resource limits</li>
+<li><strong>Timeout Handling</strong>: Extended timeouts for image pull delays</li>
+<li><strong>Cleanup Automation</strong>: Automatic test environment cleanup</li>
+</ul>
 <h3 id="ci-specific-configuration">CI-Specific Configuration<a class="headerlink" href="#ci-specific-configuration" title="Anchor link to this section">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="c1"># Environment variables for CI</span>
 </span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="nb">export</span><span class="w"> </span><span class="nv">CI</span><span class="o">=</span><span class="nb">true</span>
@@ -4930,16 +4938,20 @@ sidecar. Tests verify the Job spawned by a <code>Neo4jBackup</code> CR:</p>
 </span><span id="__span-27-4"><a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a><span class="c1"># Monitor memory usage</span>
 </span><span id="__span-27-5"><a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a>kubectl<span class="w"> </span>top<span class="w"> </span>pod<span class="w"> </span>&lt;pod-name&gt;<span class="w"> </span>--containers
 </span></code></pre></div></p>
-<p><strong>Solutions</strong>:
-- Increase memory limits to minimum 1.5Gi for Neo4j Enterprise
-- Reduce concurrent test execution
-- Use minimal storage and CPU allocations</p>
+<p><strong>Solutions</strong>:</p>
+<ul>
+<li>Increase memory limits to minimum 1.5Gi for Neo4j Enterprise</li>
+<li>Reduce concurrent test execution</li>
+<li>Use minimal storage and CPU allocations</li>
+</ul>
 <h4 id="3-test-timeouts">3. Test Timeouts<a class="headerlink" href="#3-test-timeouts" title="Anchor link to this section">&para;</a></h4>
 <p><strong>Symptoms</strong>: Tests fail with "Timed out after 300s"</p>
-<p><strong>Common Causes</strong>:
-- Image pull delays in CI environments
-- Insufficient resources for cluster formation
-- Missing RBAC permissions</p>
+<p><strong>Common Causes</strong>:</p>
+<ul>
+<li>Image pull delays in CI environments</li>
+<li>Insufficient resources for cluster formation</li>
+<li>Missing RBAC permissions</li>
+</ul>
 <p><strong>Solutions</strong>:
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="c1"># Check operator status</span>
 </span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>neo4j-operator
@@ -4979,12 +4991,14 @@ sidecar. Tests verify the Job spawned by a <code>Neo4jBackup</code> CR:</p>
 <li><strong>Integration Tests</strong>: All major workflows covered</li>
 </ul>
 <h3 id="quality-checks">Quality Checks<a class="headerlink" href="#quality-checks" title="Anchor link to this section">&para;</a></h3>
-<p>Integration tests should verify:
-- <strong>Resource Creation</strong>: All expected Kubernetes resources created
-- <strong>Status Updates</strong>: Proper status conditions and phase transitions
-- <strong>Error Handling</strong>: Graceful handling of failure scenarios
-- <strong>Resource Cleanup</strong>: Proper finalizer handling and cleanup
-- <strong>Performance</strong>: Efficient reconciliation and resource usage</p>
+<p>Integration tests should verify:</p>
+<ul>
+<li><strong>Resource Creation</strong>: All expected Kubernetes resources created</li>
+<li><strong>Status Updates</strong>: Proper status conditions and phase transitions</li>
+<li><strong>Error Handling</strong>: Graceful handling of failure scenarios</li>
+<li><strong>Resource Cleanup</strong>: Proper finalizer handling and cleanup</li>
+<li><strong>Performance</strong>: Efficient reconciliation and resource usage</li>
+</ul>
 <h2 id="ci-workflow-emulation-for-troubleshooting-added-2025-08-22">CI Workflow Emulation for Troubleshooting (Added 2025-08-22)<a class="headerlink" href="#ci-workflow-emulation-for-troubleshooting-added-2025-08-22" title="Anchor link to this section">&para;</a></h2>
 <p>When encountering CI failures or testing memory-constrained environments, use the comprehensive CI workflow emulation:</p>
 <h3 id="quick-start">Quick Start<a class="headerlink" href="#quick-start" title="Anchor link to this section">&para;</a></h3>
@@ -5155,12 +5169,14 @@ sidecar. Tests verify the Job spawned by a <code>Neo4jBackup</code> CR:</p>
 <li><strong>Test both success and failure scenarios</strong></li>
 </ol>
 <h3 id="test-documentation">Test Documentation<a class="headerlink" href="#test-documentation" title="Anchor link to this section">&para;</a></h3>
-<p>Document test scenarios:
-- <strong>Purpose</strong>: What functionality is being tested
-- <strong>Setup</strong>: Required resources and configuration
-- <strong>Expected Results</strong>: What should happen in success case
-- <strong>Cleanup</strong>: How resources are cleaned up
-- <strong>CI Considerations</strong>: Any special requirements for CI</p>
+<p>Document test scenarios:</p>
+<ul>
+<li><strong>Purpose</strong>: What functionality is being tested</li>
+<li><strong>Setup</strong>: Required resources and configuration</li>
+<li><strong>Expected Results</strong>: What should happen in success case</li>
+<li><strong>Cleanup</strong>: How resources are cleaned up</li>
+<li><strong>CI Considerations</strong>: Any special requirements for CI</li>
+</ul>
 <p>This comprehensive testing strategy ensures the Neo4j Enterprise Operator works reliably across different environments and deployment scenarios.</p>
 
 

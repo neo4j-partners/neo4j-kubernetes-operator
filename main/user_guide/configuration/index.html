@@ -3185,9 +3185,11 @@
 <h1 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Anchor link to this section">&para;</a></h1>
 <p>This guide provides a comprehensive overview of the configuration options available for both <code>Neo4jEnterpriseCluster</code> and <code>Neo4jEnterpriseStandalone</code> custom resources. The operator allows for a declarative approach to managing your Neo4j deployments, where you define the desired state in a YAML file, and the operator works to make it a reality.</p>
 <h2 id="crd-specification">CRD Specification<a class="headerlink" href="#crd-specification" title="Anchor link to this section">&para;</a></h2>
-<p>The full CRD specifications, which detail every possible configuration field, can be found in the API Reference:
-- <a href="../../api_reference/neo4jenterprisecluster/">Neo4jEnterpriseCluster</a> - For clustered deployments
-- <a href="../../api_reference/neo4jenterprisestandalone/">Neo4jEnterpriseStandalone</a> - For single-node deployments</p>
+<p>The full CRD specifications, which detail every possible configuration field, can be found in the API Reference:</p>
+<ul>
+<li><a href="../../api_reference/neo4jenterprisecluster/">Neo4jEnterpriseCluster</a> - For clustered deployments</li>
+<li><a href="../../api_reference/neo4jenterprisestandalone/">Neo4jEnterpriseStandalone</a> - For single-node deployments</li>
+</ul>
 <h2 id="key-configuration-fields">Key Configuration Fields<a class="headerlink" href="#key-configuration-fields" title="Anchor link to this section">&para;</a></h2>
 <p>Below are some of the most important fields you will use to configure your cluster. For a complete list, please consult the API reference.</p>
 <ul>
@@ -3209,13 +3211,15 @@
 </span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-registry-secret</span>
 </span></code></pre></div>
 <p>The <code>pullSecrets</code> field accepts a list of secret names. Secrets must exist in the same namespace as the cluster. The operator automatically propagates the secrets to the StatefulSet's <code>imagePullSecrets</code> field.</p>
-<p><strong>Cloud-managed registries</strong>: For ECR (AWS), GCR (Google Cloud), or ACR (Azure), use workload identity / IRSA to avoid long-lived credentials where possible. The <code>pullSecrets</code> field supports any Kubernetes <code>kubernetes.io/dockerconfigjson</code> secret.
-*   <code>spec.topology</code>: (Cluster only) Defines the architecture of your cluster. Specify the total number of servers (minimum 2) that will self-organize into primary and secondary roles based on database requirements. You can optionally configure server role constraints.
-*   <code>spec.storage</code>: Configures the persistent storage for the cluster, including storage class, size, and <a href="#storage-and-pvc-retention">retention policy</a>.
-*   <code>spec.auth</code>: Manages authentication, allowing you to specify the provider (native, LDAP, etc.) and the secret containing credentials.
-*   <code>spec.resources</code>: Allows you to set specific CPU and memory requests and limits for the Neo4j pods, which is crucial for performance tuning.
-*   Backups: Use the separate <code>Neo4jBackup</code> CRD for backup management — see the <a href="../guides/backup_restore/">Backup and Restore guide</a>.
-*   <code>spec.monitoring</code>: Enable monitoring, Prometheus metrics exposure, and query logging.</p>
+<p><strong>Cloud-managed registries</strong>: For ECR (AWS), GCR (Google Cloud), or ACR (Azure), use workload identity / IRSA to avoid long-lived credentials where possible. The <code>pullSecrets</code> field supports any Kubernetes <code>kubernetes.io/dockerconfigjson</code> secret.</p>
+<ul>
+<li><code>spec.topology</code>: (Cluster only) Defines the architecture of your cluster. Specify the total number of servers (minimum 2) that will self-organize into primary and secondary roles based on database requirements. You can optionally configure server role constraints.</li>
+<li><code>spec.storage</code>: Configures the persistent storage for the cluster, including storage class, size, and <a href="#storage-and-pvc-retention">retention policy</a>.</li>
+<li><code>spec.auth</code>: Manages authentication, allowing you to specify the provider (native, LDAP, etc.) and the secret containing credentials.</li>
+<li><code>spec.resources</code>: Allows you to set specific CPU and memory requests and limits for the Neo4j pods, which is crucial for performance tuning.</li>
+<li>Backups: Use the separate <code>Neo4jBackup</code> CRD for backup management — see the <a href="../guides/backup_restore/">Backup and Restore guide</a>.</li>
+<li><code>spec.monitoring</code>: Enable monitoring, Prometheus metrics exposure, and query logging.</li>
+</ul>
 <blockquote>
 <p><strong>Live Diagnostics:</strong> When <code>enabled: true</code> and the cluster is <code>Ready</code>, the operator
 automatically runs <code>SHOW SERVERS</code> and <code>SHOW DATABASES</code> and writes results to
@@ -3273,16 +3277,20 @@ reflect cluster health without requiring <code>kubectl exec</code>. See the
 </span></code></pre></div>
 <p>This applies identically to both <code>Neo4jEnterpriseCluster</code> and <code>Neo4jEnterpriseStandalone</code>.</p>
 <h3 id="what-happens-with-each-policy">What happens with each policy<a class="headerlink" href="#what-happens-with-each-policy" title="Anchor link to this section">&para;</a></h3>
-<p><strong>With <code>Delete</code> (default):</strong>
-1. You run <code>kubectl delete neo4jenterprisecluster my-cluster</code>
-2. The operator deletes the StatefulSet and all associated PVCs
-3. The underlying PersistentVolumes are released and reclaimed per the StorageClass <code>reclaimPolicy</code>
-4. Data is gone</p>
-<p><strong>With <code>Retain</code>:</strong>
-1. You run <code>kubectl delete neo4jenterprisecluster my-cluster</code>
-2. The operator deletes the StatefulSet but <strong>leaves PVCs intact</strong>
-3. PVCs remain in the namespace with their data
-4. You can inspect the data, attach it to a new deployment, or manually delete when ready</p>
+<p><strong>With <code>Delete</code> (default):</strong></p>
+<ol>
+<li>You run <code>kubectl delete neo4jenterprisecluster my-cluster</code></li>
+<li>The operator deletes the StatefulSet and all associated PVCs</li>
+<li>The underlying PersistentVolumes are released and reclaimed per the StorageClass <code>reclaimPolicy</code></li>
+<li>Data is gone</li>
+</ol>
+<p><strong>With <code>Retain</code>:</strong></p>
+<ol>
+<li>You run <code>kubectl delete neo4jenterprisecluster my-cluster</code></li>
+<li>The operator deletes the StatefulSet but <strong>leaves PVCs intact</strong></li>
+<li>PVCs remain in the namespace with their data</li>
+<li>You can inspect the data, attach it to a new deployment, or manually delete when ready</li>
+</ol>
 <h3 id="checking-current-policy">Checking current policy<a class="headerlink" href="#checking-current-policy" title="Anchor link to this section">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Check the retention policy of a running cluster</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>neo4jenterprisecluster<span class="w"> </span>my-cluster<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.spec.storage.retentionPolicy}&#39;</span>
@@ -3515,16 +3523,20 @@ For client configuration and HTTP/STDIO usage, see the <a href="../guides/mcp_cl
 </span></code></pre></div>
 <h3 id="configuration-the-operator-writes-for-you">Configuration the operator writes for you<a class="headerlink" href="#configuration-the-operator-writes-for-you" title="Anchor link to this section">&para;</a></h3>
 <p>You don't need to set these yourself — the operator injects them at pod startup based on <code>spec.topology</code> and the Neo4j version:</p>
-<p><strong>Cluster deployments</strong>
-- LIST discovery with static pod FQDNs (<code>{cluster}-server-{n}.{cluster}-headless.{ns}.svc.cluster.local:6000</code>)
-- Version-specific endpoint key (<code>dbms.cluster.discovery.v2.endpoints</code> for 5.26.x, <code>dbms.cluster.endpoints</code> for 2025.x+)
-- <code>dbms.cluster.discovery.version=V2_ONLY</code> (5.26.x only — V2 is the only protocol in CalVer)
-- ME/OTHER bootstrap strategy (server-0 is the preferred bootstrapper)
-- RAFT and routing port advertisement</p>
-<p><strong>Standalone deployments</strong>
-- Unified clustering infrastructure (no <code>dbms.mode=SINGLE</code>)
-- Single-member cluster configuration
-- Listen-address bindings</p>
+<p><strong>Cluster deployments</strong></p>
+<ul>
+<li>LIST discovery with static pod FQDNs (<code>{cluster}-server-{n}.{cluster}-headless.{ns}.svc.cluster.local:6000</code>)</li>
+<li>Version-specific endpoint key (<code>dbms.cluster.discovery.v2.endpoints</code> for 5.26.x, <code>dbms.cluster.endpoints</code> for 2025.x+)</li>
+<li><code>dbms.cluster.discovery.version=V2_ONLY</code> (5.26.x only — V2 is the only protocol in CalVer)</li>
+<li>ME/OTHER bootstrap strategy (server-0 is the preferred bootstrapper)</li>
+<li>RAFT and routing port advertisement</li>
+</ul>
+<p><strong>Standalone deployments</strong></p>
+<ul>
+<li>Unified clustering infrastructure (no <code>dbms.mode=SINGLE</code>)</li>
+<li>Single-member cluster configuration</li>
+<li>Listen-address bindings</li>
+</ul>
 <h2 id="migrating-from-older-neo4j-versions">Migrating from older Neo4j versions<a class="headerlink" href="#migrating-from-older-neo4j-versions" title="Anchor link to this section">&para;</a></h2>
 <p>If you're moving from Neo4j 4.x or an early 5.x release:</p>
 <ol>

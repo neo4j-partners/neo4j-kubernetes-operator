@@ -3312,9 +3312,11 @@
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">monitoring</span><span class="p">:</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </span></code></pre></div>
-<p>For clusters, the operator also creates:
-- A <code>Service</code> named <code>&lt;cluster&gt;-metrics</code> (port 2004)
-- A <code>ServiceMonitor</code> named <code>&lt;cluster&gt;-monitoring</code> (if Prometheus Operator CRDs are available)</p>
+<p>For clusters, the operator also creates:</p>
+<ul>
+<li>A <code>Service</code> named <code>&lt;cluster&gt;-metrics</code> (port 2004)</li>
+<li>A <code>ServiceMonitor</code> named <code>&lt;cluster&gt;-monitoring</code> (if Prometheus Operator CRDs are available)</li>
+</ul>
 <h3 id="standalone-example">Standalone example<a class="headerlink" href="#standalone-example" title="Anchor link to this section">&para;</a></h3>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">spec</span><span class="p">:</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">monitoring</span><span class="p">:</span>
@@ -3450,10 +3452,12 @@
 </table>
 <h3 id="prometheus-metric-naming">Prometheus metric naming<a class="headerlink" href="#prometheus-metric-naming" title="Anchor link to this section">&para;</a></h3>
 <p>Neo4j converts metric names for Prometheus: dots become underscores, counter metrics get a <code>_total</code> suffix. The <code># HELP</code> comment preserves the original name.</p>
-<p>Examples:
-- <code>neo4j.dbms.bolt.connections_running</code> → <code>neo4j_dbms_bolt_connections_running</code>
-- <code>neo4j.database.&lt;db&gt;.transaction.committed</code> → <code>neo4j_database_&lt;db&gt;_transaction_committed_total</code>
-- <code>neo4j.page_cache.hit_ratio</code> → <code>neo4j_page_cache_hit_ratio</code></p>
+<p>Examples:</p>
+<ul>
+<li><code>neo4j.dbms.bolt.connections_running</code> → <code>neo4j_dbms_bolt_connections_running</code></li>
+<li><code>neo4j.database.&lt;db&gt;.transaction.committed</code> → <code>neo4j_database_&lt;db&gt;_transaction_committed_total</code></li>
+<li><code>neo4j.page_cache.hit_ratio</code> → <code>neo4j_page_cache_hit_ratio</code></li>
+</ul>
 <h2 id="aura-fleet-management-cloud-monitoring">Aura Fleet Management (cloud monitoring)<a class="headerlink" href="#aura-fleet-management-cloud-monitoring" title="Anchor link to this section">&para;</a></h2>
 <p>For a hosted monitoring experience, you can register your deployment with <a href="https://neo4j.com/docs/aura/fleet-management/">Neo4j Aura Fleet Management</a>. This lets you view topology, status, and metrics for all self-managed Neo4j instances alongside your Aura-managed instances in the Aura console.</p>
 <p>The operator handles plugin installation and token registration automatically. See the <a href="../../aura_fleet_management/">Aura Fleet Management Guide</a> for setup instructions.</p>

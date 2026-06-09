@@ -3737,11 +3737,13 @@
 </tr>
 </tbody>
 </table>
-<p><strong>Seed URI Notes</strong>:
-- <code>seedURI</code> is for a single backup location (expects shard-suffixed artifacts).
-- <code>seedURIs</code> is for per-shard URIs (e.g., dump files or multi-location backups).
-- <code>seedBackupRef</code> is mutually exclusive with both <code>seedURI</code> and <code>seedURIs</code>; the operator materialises it into a seed URI at reconcile time.
-- <code>seedConfig.restoreUntil</code> maps to the <code>seedRestoreUntil</code> CREATE DATABASE option for sharded databases.</p>
+<p><strong>Seed URI Notes</strong>:</p>
+<ul>
+<li><code>seedURI</code> is for a single backup location (expects shard-suffixed artifacts).</li>
+<li><code>seedURIs</code> is for per-shard URIs (e.g., dump files or multi-location backups).</li>
+<li><code>seedBackupRef</code> is mutually exclusive with both <code>seedURI</code> and <code>seedURIs</code>; the operator materialises it into a seed URI at reconcile time.</li>
+<li><code>seedConfig.restoreUntil</code> maps to the <code>seedRestoreUntil</code> CREATE DATABASE option for sharded databases.</li>
+</ul>
 <h3 id="propertyshardingconfiguration">PropertyShardingConfiguration<a class="headerlink" href="#propertyshardingconfiguration" title="Anchor link to this section">&para;</a></h3>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nt">propertySharding</span><span class="p">:</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span><span class="nt">propertyShards</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">int32</span><span class="w">                    </span><span class="c1"># Required: 1-1000</span>
@@ -3837,12 +3839,16 @@
 </tbody>
 </table>
 <h4 id="topology-guidelines">Topology Guidelines<a class="headerlink" href="#topology-guidelines" title="Anchor link to this section">&para;</a></h4>
-<p><strong>Graph Shard</strong> (stores nodes/relationships):
-- Recommended: 3+ primaries for high availability
-- Uses Raft consensus for consistency</p>
-<p><strong>Property Shards</strong> (store properties):
-- Recommended: 2+ replicas for fault tolerance
-- Uses replica-based replication</p>
+<p><strong>Graph Shard</strong> (stores nodes/relationships):</p>
+<ul>
+<li>Recommended: 3+ primaries for high availability</li>
+<li>Uses Raft consensus for consistency</li>
+</ul>
+<p><strong>Property Shards</strong> (store properties):</p>
+<ul>
+<li>Recommended: 2+ replicas for fault tolerance</li>
+<li>Uses replica-based replication</li>
+</ul>
 <h3 id="backups-and-restore">Backups and Restore<a class="headerlink" href="#backups-and-restore" title="Anchor link to this section">&para;</a></h3>
 <p>Sharded databases are a first-class backup/restore target. The <code>Neo4jBackup</code> CRD's <code>target.kind</code> accepts <code>ShardedDatabase</code> (alongside <code>Cluster</code> and <code>Database</code>); a single backup run captures every shard consistently using a <code>{name}*</code> glob, with per-shard artifacts tracked in <code>status.history[].shardArtifacts</code>.</p>
 <p>Restore is performed by re-creating the sharded database from a backup rather than via a restore Job:</p>

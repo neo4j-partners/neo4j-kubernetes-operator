@@ -4072,11 +4072,13 @@ does not offer security."</em></p>
 </blockquote>
 <h2 id="authentication-configuration">Authentication Configuration<a class="headerlink" href="#authentication-configuration" title="Anchor link to this section">&para;</a></h2>
 <p>The operator provides first-class, typed configuration for external authentication providers. When you use the typed fields (described below), the operator automatically generates the correct <code>neo4j.conf</code> entries — you do not need to manually place <code>dbms.security.*</code> keys in <code>spec.config</code>.</p>
-<p><strong>Where to start:</strong>
-- <strong>Most deployments</strong>: <a href="#native-authentication">Native Authentication</a> — just create an admin secret and go.
-- <strong>Corporate SSO</strong>: <a href="#oidc-sso-integration">OIDC / SSO Integration</a> — Okta, Azure AD, Google, or any OIDC provider.
-- <strong>Active Directory / LDAP</strong>: <a href="#ldap-integration">LDAP Integration</a> — bind templates, group mapping, nested groups.
-- <strong>Internal CAs</strong>: <a href="#jvm-truststore-for-internal-cas">JVM TrustStore</a> — if your LDAP/OIDC endpoints use certificates signed by a private CA.</p>
+<p><strong>Where to start:</strong></p>
+<ul>
+<li><strong>Most deployments</strong>: <a href="#native-authentication">Native Authentication</a> — just create an admin secret and go.</li>
+<li><strong>Corporate SSO</strong>: <a href="#oidc-sso-integration">OIDC / SSO Integration</a> — Okta, Azure AD, Google, or any OIDC provider.</li>
+<li><strong>Active Directory / LDAP</strong>: <a href="#ldap-integration">LDAP Integration</a> — bind templates, group mapping, nested groups.</li>
+<li><strong>Internal CAs</strong>: <a href="#jvm-truststore-for-internal-cas">JVM TrustStore</a> — if your LDAP/OIDC endpoints use certificates signed by a private CA.</li>
+</ul>
 <h3 id="multi-provider-support">Multi-Provider Support<a class="headerlink" href="#multi-provider-support" title="Anchor link to this section">&para;</a></h3>
 <p>Neo4j evaluates authentication providers in order. You can combine providers for fallback (e.g., LDAP first, then native for the initial admin user):</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">spec</span><span class="p">:</span>
@@ -5406,11 +5408,13 @@ bundled example CRs that intentionally trip Audit warnings.</p>
 </span></code></pre></div></p>
 </li>
 </ol>
-<p>For additional security guidance, see:
-- <a href="../configuration/#best-practices-for-specconfig">Configuration Best Practices</a>
-- <a href="../tls_configuration/">TLS Configuration Guide</a>
-- <a href="../guides/backup_restore/">Backup &amp; Restore</a>
-- <a href="../troubleshooting/split-brain-recovery/">Split-Brain Recovery</a></p>
+<p>For additional security guidance, see:</p>
+<ul>
+<li><a href="../configuration/#best-practices-for-specconfig">Configuration Best Practices</a></li>
+<li><a href="../tls_configuration/">TLS Configuration Guide</a></li>
+<li><a href="../guides/backup_restore/">Backup &amp; Restore</a></li>
+<li><a href="../troubleshooting/split-brain-recovery/">Split-Brain Recovery</a></li>
+</ul>
 
 
 

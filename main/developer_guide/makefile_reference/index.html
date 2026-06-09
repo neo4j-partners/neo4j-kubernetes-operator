@@ -6061,12 +6061,14 @@ Chains: <code>manifests</code> → <code>generate</code> → <code>sync-kustomiz
 <strong>Usage</strong>: <code>make test-integration</code>
 <strong>Dependencies</strong>: <code>manifests generate test-cluster ginkgo kustomize</code> — the <code>manifests</code>/<code>generate</code> prereqs guarantee CRDs and RBAC deployed to the test cluster match the current controller source. Skipping <code>manifests</code> (e.g., by calling kustomize directly) silently deploys stale schemas.
 <strong>Duration</strong>: ~10-15 minutes
-<strong>Features</strong>:
-- Auto-creates test cluster if needed
-- Deploys operator automatically
-- Tests real Neo4j deployments
-- Includes plugin testing
-- Cleanup handled automatically</p>
+<strong>Features</strong>:</p>
+<ul>
+<li>Auto-creates test cluster if needed</li>
+<li>Deploys operator automatically</li>
+<li>Tests real Neo4j deployments</li>
+<li>Includes plugin testing</li>
+<li>Cleanup handled automatically</li>
+</ul>
 <p><strong>Example</strong>:
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>make<span class="w"> </span>test-integration
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="c1"># 🔄 Creates neo4j-operator-test cluster</span>
@@ -6079,11 +6081,13 @@ Chains: <code>manifests</code> → <code>generate</code> → <code>sync-kustomiz
 <strong>Usage</strong>: <code>make test-integration-ci</code>
 <strong>Dependencies</strong>: Existing test cluster and deployed operator
 <strong>Duration</strong>: ~5-8 minutes
-<strong>Features</strong>:
-- Assumes cluster and operator already deployed
-- Skips resource-intensive tests
-- Focuses on core functionality
-- Optimized for CI resource constraints</p>
+<strong>Features</strong>:</p>
+<ul>
+<li>Assumes cluster and operator already deployed</li>
+<li>Skips resource-intensive tests</li>
+<li>Focuses on core functionality</li>
+<li>Optimized for CI resource constraints</li>
+</ul>
 <p><strong>Example</strong>:
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>make<span class="w"> </span>test-integration-ci
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="c1"># 🚀 CI-optimized test suite</span>
@@ -6124,28 +6128,34 @@ Chains: <code>manifests</code> → <code>generate</code> → <code>sync-kustomiz
 <h4 id="make-test-cleanup"><code>make test-cleanup</code><a class="headerlink" href="#make-test-cleanup" title="Anchor link to this section">&para;</a></h4>
 <p><strong>Description</strong>: Clean up test environment artifacts while keeping cluster
 <strong>Usage</strong>: <code>make test-cleanup</code>
-<strong>Features</strong>:
-- Removes test results and logs
-- Cleans coverage files
-- Preserves cluster for reuse
+<strong>Features</strong>:</p>
+<ul>
+<li>Removes test results and logs</li>
+<li>Cleans coverage files</li>
+<li>Preserves cluster for reuse
 <strong>Example</strong>:
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>make<span class="w"> </span>test-cleanup
 </span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="c1"># Removes test-results/ coverage/ logs/ tmp/</span>
 </span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="c1"># Cleans test-output.log and coverage files</span>
 </span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="c1"># Keeps cluster running</span>
-</span></code></pre></div></p>
+</span></code></pre></div></li>
+</ul>
 <h4 id="make-test-cluster"><code>make test-cluster</code><a class="headerlink" href="#make-test-cluster" title="Anchor link to this section">&para;</a></h4>
 <p><strong>Description</strong>: Create dedicated Kind cluster for testing
 <strong>Usage</strong>: <code>make test-cluster</code>
 <strong>Dependencies</strong>: Kind installed
 <strong>Cluster Name</strong>: <code>neo4j-operator-test</code>
-<strong>Variables</strong> (Makefile defaults, overridable via <code>make VAR=...</code>):
-- <code>KIND_NODE_IMAGE ?= kindest/node:v1.34.0</code> — pins the K8s version. Kept in sync with <code>ENVTEST_K8S_VERSION</code> so unit tests, dev cluster, and integration tests all run on the same K8s.
-- <code>CERT_MANAGER_VERSION ?= v1.20.0</code> — pins the cert-manager release.</p>
+<strong>Variables</strong> (Makefile defaults, overridable via <code>make VAR=...</code>):</p>
+<ul>
+<li><code>KIND_NODE_IMAGE ?= kindest/node:v1.34.0</code> — pins the K8s version. Kept in sync with <code>ENVTEST_K8S_VERSION</code> so unit tests, dev cluster, and integration tests all run on the same K8s.</li>
+<li><code>CERT_MANAGER_VERSION ?= v1.20.0</code> — pins the cert-manager release.</li>
+</ul>
 <p>Both are threaded into <code>scripts/test-env.sh</code> via environment variables; the script enforces them as required (no fallback) so direct invocations can't drift from the Makefile defaults.</p>
-<p><strong>Features</strong>:
-- Pre-configured with self-signed issuer
-- Optimized for testing workloads</p>
+<p><strong>Features</strong>:</p>
+<ul>
+<li>Pre-configured with self-signed issuer</li>
+<li>Optimized for testing workloads</li>
+</ul>
 <p><strong>Example</strong>:
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>make<span class="w"> </span>test-cluster
 </span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="c1"># Creates neo4j-operator-test cluster</span>
@@ -6202,16 +6212,20 @@ Chains: <code>manifests</code> → <code>generate</code> → <code>sync-kustomiz
 <p><strong>Description</strong>: Emulate GitHub Actions CI workflow locally with comprehensive debug logging
 <strong>Usage</strong>: <code>make test-ci-local</code>
 <strong>Duration</strong>: ~20-25 minutes
-<strong>Features</strong>:
-- <strong>Complete CI emulation</strong>: Uses <code>CI=true GITHUB_ACTIONS=true</code> environment
-- <strong>Resource constraints</strong>: Tests with 512Mi memory limits (same as CI)
-- <strong>Debug logging</strong>: Comprehensive logs saved to <code>logs/</code> directory
-- <strong>Automatic troubleshooting</strong>: Provides debugging commands on failure
-- <strong>Self-contained</strong>: Creates, tests, and destroys environment</p>
-<p><strong>Output Files</strong>:
-- <code>logs/ci-local-unit.log</code> - Unit test output with environment info
-- <code>logs/ci-local-integration.log</code> - Integration test execution
-- <code>logs/ci-local-cleanup.log</code> - Environment cleanup</p>
+<strong>Features</strong>:</p>
+<ul>
+<li><strong>Complete CI emulation</strong>: Uses <code>CI=true GITHUB_ACTIONS=true</code> environment</li>
+<li><strong>Resource constraints</strong>: Tests with 512Mi memory limits (same as CI)</li>
+<li><strong>Debug logging</strong>: Comprehensive logs saved to <code>logs/</code> directory</li>
+<li><strong>Automatic troubleshooting</strong>: Provides debugging commands on failure</li>
+<li><strong>Self-contained</strong>: Creates, tests, and destroys environment</li>
+</ul>
+<p><strong>Output Files</strong>:</p>
+<ul>
+<li><code>logs/ci-local-unit.log</code> - Unit test output with environment info</li>
+<li><code>logs/ci-local-integration.log</code> - Integration test execution</li>
+<li><code>logs/ci-local-cleanup.log</code> - Environment cleanup</li>
+</ul>
 <p><strong>Example</strong>:
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>make<span class="w"> </span>test-ci-local
 </span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="c1"># 🔄 Phase 1: Unit tests with CI environment</span>
@@ -6219,11 +6233,13 @@ Chains: <code>manifests</code> → <code>generate</code> → <code>sync-kustomiz
 </span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a><span class="c1"># 🧹 Phase 3: Complete cleanup</span>
 </span><span id="__span-24-5"><a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a><span class="c1"># 📁 Debug logs in logs/ directory</span>
 </span></code></pre></div></p>
-<p><strong>When to use</strong>:
-- Debugging CI failures locally
-- Testing resource-constrained scenarios
-- Validating changes before CI push
-- Reproducing CI-specific issues</p>
+<p><strong>When to use</strong>:</p>
+<ul>
+<li>Debugging CI failures locally</li>
+<li>Testing resource-constrained scenarios</li>
+<li>Validating changes before CI push</li>
+<li>Reproducing CI-specific issues</li>
+</ul>
 <h2 id="build-images">Build &amp; Images<a class="headerlink" href="#build-images" title="Anchor link to this section">&para;</a></h2>
 <h3 id="make-build"><code>make build</code><a class="headerlink" href="#make-build" title="Anchor link to this section">&para;</a></h3>
 <p><strong>Description</strong>: Build the operator binary
@@ -6285,10 +6301,12 @@ Chains: <code>manifests</code> → <code>generate</code> → <code>sync-kustomiz
 <strong>Dependencies</strong>: <code>deploy-dev-local</code>
 <strong>Namespace</strong>: <code>neo4j-operator-dev</code>
 <strong>Image</strong>: <code>neo4j-operator:dev</code> (built locally)
-<strong>Features</strong>:
-- Auto-loads image to Kind cluster
-- Development-friendly settings
-- Enhanced logging</p>
+<strong>Features</strong>:</p>
+<ul>
+<li>Auto-loads image to Kind cluster</li>
+<li>Development-friendly settings</li>
+<li>Enhanced logging</li>
+</ul>
 <p><strong>Example</strong>:
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a>make<span class="w"> </span>deploy-dev
 </span><span id="__span-30-2"><a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="c1"># 🔨 Builds neo4j-operator:dev image</span>
@@ -6301,10 +6319,12 @@ Chains: <code>manifests</code> → <code>generate</code> → <code>sync-kustomiz
 <strong>Dependencies</strong>: <code>deploy-prod-local</code>
 <strong>Namespace</strong>: <code>neo4j-operator-system</code>
 <strong>Image</strong>: <code>neo4j-operator:latest</code> (built locally)
-<strong>Features</strong>:
-- Production-grade settings
-- Resource limits applied
-- Standard logging levels</p>
+<strong>Features</strong>:</p>
+<ul>
+<li>Production-grade settings</li>
+<li>Resource limits applied</li>
+<li>Standard logging levels</li>
+</ul>
 <p><strong>Example</strong>:
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a>make<span class="w"> </span>deploy-prod
 </span><span id="__span-31-2"><a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a><span class="c1"># 🔨 Builds neo4j-operator:latest image</span>
@@ -6315,28 +6335,32 @@ Chains: <code>manifests</code> → <code>generate</code> → <code>sync-kustomiz
 <p><strong>Description</strong>: Build and deploy controller with local dev image to Kind cluster
 <strong>Usage</strong>: <code>make deploy-dev-local</code>
 <strong>Dependencies</strong>: <code>manifests</code>, <code>kustomize</code>, <code>docker-build</code>
-<strong>Features</strong>:
-- Builds <code>neo4j-operator:dev</code> image locally
-- Auto-detects and loads to available Kind cluster
-- Deploys to <code>neo4j-operator-dev</code> namespace
+<strong>Features</strong>:</p>
+<ul>
+<li>Builds <code>neo4j-operator:dev</code> image locally</li>
+<li>Auto-detects and loads to available Kind cluster</li>
+<li>Deploys to <code>neo4j-operator-dev</code> namespace
 <strong>Example</strong>:
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-32-1"><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a>make<span class="w"> </span>deploy-dev-local
 </span><span id="__span-32-2"><a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a><span class="c1"># Explicit local build and deploy</span>
 </span><span id="__span-32-3"><a id="__codelineno-32-3" name="__codelineno-32-3" href="#__codelineno-32-3"></a><span class="c1"># Same as deploy-dev but more explicit</span>
-</span></code></pre></div></p>
+</span></code></pre></div></li>
+</ul>
 <h4 id="make-deploy-prod-local"><code>make deploy-prod-local</code><a class="headerlink" href="#make-deploy-prod-local" title="Anchor link to this section">&para;</a></h4>
 <p><strong>Description</strong>: Build and deploy controller with local prod image to Kind cluster
 <strong>Usage</strong>: <code>make deploy-prod-local</code>
 <strong>Dependencies</strong>: <code>manifests</code>, <code>kustomize</code>, <code>docker-build</code>
-<strong>Features</strong>:
-- Builds <code>neo4j-operator:latest</code> image locally
-- Auto-detects and loads to available Kind cluster
-- Deploys to production namespace
+<strong>Features</strong>:</p>
+<ul>
+<li>Builds <code>neo4j-operator:latest</code> image locally</li>
+<li>Auto-detects and loads to available Kind cluster</li>
+<li>Deploys to production namespace
 <strong>Example</strong>:
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-33-1"><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a>make<span class="w"> </span>deploy-prod-local
 </span><span id="__span-33-2"><a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a><span class="c1"># Explicit local build and deploy</span>
 </span><span id="__span-33-3"><a id="__codelineno-33-3" name="__codelineno-33-3" href="#__codelineno-33-3"></a><span class="c1"># Same as deploy-prod but more explicit</span>
-</span></code></pre></div></p>
+</span></code></pre></div></li>
+</ul>
 <h4 id="make-deploy-dev-registry"><code>make deploy-dev-registry</code><a class="headerlink" href="#make-deploy-dev-registry" title="Anchor link to this section">&para;</a></h4>
 <p><strong>Description</strong>: Deploy development configuration using registry image (applies <code>config/overlays/dev</code>)
 <strong>Usage</strong>: <code>make deploy-dev-registry</code>
@@ -6407,10 +6431,12 @@ Chains: <code>manifests</code> → <code>generate</code> → <code>sync-kustomiz
 <strong>Usage</strong>: <code>make dev-cluster</code>
 <strong>Cluster Name</strong>: <code>neo4j-operator-dev</code>
 <strong>Dependencies</strong>: Kind installed
-<strong>Features</strong>:
-- Includes cert-manager v1.20.0
-- Self-signed ClusterIssuer for TLS
-- Development-optimized configuration</p>
+<strong>Features</strong>:</p>
+<ul>
+<li>Includes cert-manager v1.20.0</li>
+<li>Self-signed ClusterIssuer for TLS</li>
+<li>Development-optimized configuration</li>
+</ul>
 <p><strong>Example</strong>:
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-38-1"><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a>make<span class="w"> </span>dev-cluster
 </span><span id="__span-38-2"><a id="__codelineno-38-2" name="__codelineno-38-2" href="#__codelineno-38-2"></a><span class="c1"># Creates neo4j-operator-dev cluster</span>
@@ -6465,11 +6491,13 @@ Chains: <code>manifests</code> → <code>generate</code> → <code>sync-kustomiz
 <h4 id="make-operator-setup"><code>make operator-setup</code><a class="headerlink" href="#make-operator-setup" title="Anchor link to this section">&para;</a></h4>
 <p><strong>Description</strong>: Automated operator deployment to available Kind cluster
 <strong>Usage</strong>: <code>make operator-setup</code>
-<strong>Features</strong>:
-- <strong>Auto-detection</strong>: Finds available Kind cluster (dev or test)
-- <strong>Smart deployment</strong>: Chooses appropriate configuration
-- <strong>Status verification</strong>: Confirms successful deployment
-- <strong>Error handling</strong>: Provides troubleshooting guidance</p>
+<strong>Features</strong>:</p>
+<ul>
+<li><strong>Auto-detection</strong>: Finds available Kind cluster (dev or test)</li>
+<li><strong>Smart deployment</strong>: Chooses appropriate configuration</li>
+<li><strong>Status verification</strong>: Confirms successful deployment</li>
+<li><strong>Error handling</strong>: Provides troubleshooting guidance</li>
+</ul>
 <p><strong>Example</strong>:
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-44-1"><a id="__codelineno-44-1" name="__codelineno-44-1" href="#__codelineno-44-1"></a>make<span class="w"> </span>operator-setup
 </span><span id="__span-44-2"><a id="__codelineno-44-2" name="__codelineno-44-2" href="#__codelineno-44-2"></a><span class="c1"># 🔍 Detects available Kind cluster</span>
@@ -6649,10 +6677,12 @@ Chains: <code>manifests</code> → <code>generate</code> → <code>sync-kustomiz
 <h3 id="make-security"><code>make security</code><a class="headerlink" href="#make-security" title="Anchor link to this section">&para;</a></h3>
 <p><strong>Description</strong>: Run security analysis with gosec
 <strong>Usage</strong>: <code>make security</code>
-<strong>Features</strong>:
-- Auto-installs gosec if needed
-- Scans for security vulnerabilities
-- Reports potential issues</p>
+<strong>Features</strong>:</p>
+<ul>
+<li>Auto-installs gosec if needed</li>
+<li>Scans for security vulnerabilities</li>
+<li>Reports potential issues</li>
+</ul>
 <p><strong>Example</strong>:
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-54-1"><a id="__codelineno-54-1" name="__codelineno-54-1" href="#__codelineno-54-1"></a>make<span class="w"> </span>security
 </span><span id="__span-54-2"><a id="__codelineno-54-2" name="__codelineno-54-2" href="#__codelineno-54-2"></a><span class="c1"># 🛡️  Security vulnerability scan</span>
@@ -6669,11 +6699,13 @@ Chains: <code>manifests</code> → <code>generate</code> → <code>sync-kustomiz
 <h3 id="make-clean"><code>make clean</code><a class="headerlink" href="#make-clean" title="Anchor link to this section">&para;</a></h3>
 <p><strong>Description</strong>: Clean all build artifacts and temporary files
 <strong>Usage</strong>: <code>make clean</code>
-<strong>Removes</strong>:
-- <code>bin/</code>, <code>tmp/</code>, and <code>dist/</code> directories
-- <code>cover.out</code>, <code>coverage.html</code>
-- <code>results.sarif</code>, <code>build-errors.log</code>, <code>.air.toml</code>
-- Also invokes <code>make test-cleanup</code> to remove test artifacts</p>
+<strong>Removes</strong>:</p>
+<ul>
+<li><code>bin/</code>, <code>tmp/</code>, and <code>dist/</code> directories</li>
+<li><code>cover.out</code>, <code>coverage.html</code></li>
+<li><code>results.sarif</code>, <code>build-errors.log</code>, <code>.air.toml</code></li>
+<li>Also invokes <code>make test-cleanup</code> to remove test artifacts</li>
+</ul>
 <p><strong>Example</strong>:
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-56-1"><a id="__codelineno-56-1" name="__codelineno-56-1" href="#__codelineno-56-1"></a>make<span class="w"> </span>clean
 </span><span id="__span-56-2"><a id="__codelineno-56-2" name="__codelineno-56-2" href="#__codelineno-56-2"></a><span class="c1"># 🧹 Complete cleanup</span>

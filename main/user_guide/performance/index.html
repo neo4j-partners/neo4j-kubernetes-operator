@@ -3269,12 +3269,14 @@
 <h1 id="performance-tuning-guide">Performance Tuning Guide<a class="headerlink" href="#performance-tuning-guide" title="Anchor link to this section">&para;</a></h1>
 <p>This comprehensive guide covers performance optimization strategies for Neo4j clusters deployed using the Neo4j Kubernetes Operator, focusing on server-based architecture and Neo4j 5.26+/2025.x versions.</p>
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Anchor link to this section">&para;</a></h2>
-<p>Neo4j performance in Kubernetes environments depends on several key factors:
-- <strong>Resource allocation</strong> (CPU, memory, storage)
-- <strong>Cluster topology</strong> and database distribution
-- <strong>Storage configuration</strong> and I/O optimization
-- <strong>Network configuration</strong> and discovery performance
-- <strong>Neo4j-specific tuning</strong> parameters</p>
+<p>Neo4j performance in Kubernetes environments depends on several key factors:</p>
+<ul>
+<li><strong>Resource allocation</strong> (CPU, memory, storage)</li>
+<li><strong>Cluster topology</strong> and database distribution</li>
+<li><strong>Storage configuration</strong> and I/O optimization</li>
+<li><strong>Network configuration</strong> and discovery performance</li>
+<li><strong>Neo4j-specific tuning</strong> parameters</li>
+</ul>
 <h2 id="server-based-architecture-performance">Server-Based Architecture Performance<a class="headerlink" href="#server-based-architecture-performance" title="Anchor link to this section">&para;</a></h2>
 <p>The Neo4j Kubernetes Operator uses a server-based architecture where servers self-organize into roles based on database requirements.</p>
 <h3 id="optimal-server-configurations">Optimal Server Configurations<a class="headerlink" href="#optimal-server-configurations" title="Anchor link to this section">&para;</a></h3>
@@ -3624,11 +3626,13 @@ The config validator rejects user overrides such as
 <li><strong>Scaling</strong>: Scale servers based on actual database hosting requirements</li>
 <li><strong>Optimization</strong>: Continuously tune configuration based on workload patterns</li>
 </ol>
-<p>For additional performance guidance, see:
-- <a href="../configuration/#best-practices-for-specconfig">Configuration Best Practices</a>
-- <a href="../guides/resource_sizing/">Resource Sizing Guide</a>
-- <a href="../guides/monitoring/">Monitoring Guide</a>
-- <a href="../guides/backup_restore/">Backup and Restore</a></p>
+<p>For additional performance guidance, see:</p>
+<ul>
+<li><a href="../configuration/#best-practices-for-specconfig">Configuration Best Practices</a></li>
+<li><a href="../guides/resource_sizing/">Resource Sizing Guide</a></li>
+<li><a href="../guides/monitoring/">Monitoring Guide</a></li>
+<li><a href="../guides/backup_restore/">Backup and Restore</a></li>
+</ul>
 
 
 

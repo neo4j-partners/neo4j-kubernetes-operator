@@ -4793,50 +4793,66 @@
 <h3 id="core-controllers-internalcontroller">Core Controllers (<code>internal/controller/</code>)<a class="headerlink" href="#core-controllers-internalcontroller" title="Anchor link to this section">&para;</a></h3>
 <h4 id="neo4jenterprisecluster-controller-neo4jenterprisecluster_controllergo">Neo4jEnterpriseCluster Controller (<code>neo4jenterprisecluster_controller.go</code>)<a class="headerlink" href="#neo4jenterprisecluster-controller-neo4jenterprisecluster_controllergo" title="Anchor link to this section">&para;</a></h4>
 <p><strong>Primary cluster management controller with server-based architecture:</strong></p>
-<p><strong>Performance Optimizations</strong>:
-- <strong>Efficient Reconciliation</strong>: Reduced from ~18,000 to ~34 reconciliations per minute
-- <strong>Smart Status Updates</strong>: Only updates when cluster state changes
-- <strong>ConfigMap Debouncing</strong>: 2-minute debounce prevents restart loops
-- <strong>Resource Version Conflict Handling</strong>: Retry logic for concurrent updates</p>
-<p><strong>Server-Based Implementation</strong>:
-- <strong>Single StatefulSet</strong>: Creates <code>{cluster-name}-server</code> instead of separate primary/secondary
-- <strong>Self-Organizing Servers</strong>: Neo4j servers automatically assign database hosting roles
-- <strong>Simplified Resource Management</strong>: Unified pod templates and configuration
-- <strong>Certificate DNS</strong>: Includes all server pod names in TLS certificates</p>
-<p><strong>Split-Brain Detection</strong>:
-- <strong>Location</strong>: <code>internal/controller/splitbrain_detector.go</code>
-- <strong>Multi-Pod Analysis</strong>: Connects to each server to compare cluster views
-- <strong>Automatic Repair</strong>: Restarts orphaned pods to rejoin main cluster
-- <strong>Production Ready</strong>: Comprehensive logging and fallback mechanisms</p>
+<p><strong>Performance Optimizations</strong>:</p>
+<ul>
+<li><strong>Efficient Reconciliation</strong>: Reduced from ~18,000 to ~34 reconciliations per minute</li>
+<li><strong>Smart Status Updates</strong>: Only updates when cluster state changes</li>
+<li><strong>ConfigMap Debouncing</strong>: 2-minute debounce prevents restart loops</li>
+<li><strong>Resource Version Conflict Handling</strong>: Retry logic for concurrent updates</li>
+</ul>
+<p><strong>Server-Based Implementation</strong>:</p>
+<ul>
+<li><strong>Single StatefulSet</strong>: Creates <code>{cluster-name}-server</code> instead of separate primary/secondary</li>
+<li><strong>Self-Organizing Servers</strong>: Neo4j servers automatically assign database hosting roles</li>
+<li><strong>Simplified Resource Management</strong>: Unified pod templates and configuration</li>
+<li><strong>Certificate DNS</strong>: Includes all server pod names in TLS certificates</li>
+</ul>
+<p><strong>Split-Brain Detection</strong>:</p>
+<ul>
+<li><strong>Location</strong>: <code>internal/controller/splitbrain_detector.go</code></li>
+<li><strong>Multi-Pod Analysis</strong>: Connects to each server to compare cluster views</li>
+<li><strong>Automatic Repair</strong>: Restarts orphaned pods to rejoin main cluster</li>
+<li><strong>Production Ready</strong>: Comprehensive logging and fallback mechanisms</li>
+</ul>
 <h4 id="neo4jenterprisestandalone-controller-neo4jenterprisestandalone_controllergo">Neo4jEnterpriseStandalone Controller (<code>neo4jenterprisestandalone_controller.go</code>)<a class="headerlink" href="#neo4jenterprisestandalone-controller-neo4jenterprisestandalone_controllergo" title="Anchor link to this section">&para;</a></h4>
 <p><strong>Single-node deployment controller:</strong></p>
-<p><strong>Key Features</strong>:
-- <strong>Clustering Infrastructure</strong>: Uses same infrastructure as clusters (Neo4j 5.26+ approach)
-- <strong>Single Member Configuration</strong>: Sets up clustering with single server
-- <strong>Resource Management</strong>: Handles ConfigMap, Service, and StatefulSet
-- <strong>Status Tracking</strong>: Comprehensive status updates for standalone instances</p>
+<p><strong>Key Features</strong>:</p>
+<ul>
+<li><strong>Clustering Infrastructure</strong>: Uses same infrastructure as clusters (Neo4j 5.26+ approach)</li>
+<li><strong>Single Member Configuration</strong>: Sets up clustering with single server</li>
+<li><strong>Resource Management</strong>: Handles ConfigMap, Service, and StatefulSet</li>
+<li><strong>Status Tracking</strong>: Comprehensive status updates for standalone instances</li>
+</ul>
 <h4 id="database-controller-neo4jdatabase_controllergo">Database Controller (<code>neo4jdatabase_controller.go</code>)<a class="headerlink" href="#database-controller-neo4jdatabase_controllergo" title="Anchor link to this section">&para;</a></h4>
-<p><strong>Enhanced for dual deployment support:</strong>
-- <strong>Automatic Detection</strong>: Tries cluster lookup first, then standalone fallback
-- <strong>Neo4j Client Creation</strong>: <code>NewClientForEnterprise()</code> vs <code>NewClientForEnterpriseStandalone()</code>
-- <strong>Authentication Handling</strong>: Manages NEO4J_AUTH for standalone deployments
-- <strong>Syntax Support</strong>: Neo4j 5.26+ and 2025.x database creation syntax</p>
+<p><strong>Enhanced for dual deployment support:</strong></p>
+<ul>
+<li><strong>Automatic Detection</strong>: Tries cluster lookup first, then standalone fallback</li>
+<li><strong>Neo4j Client Creation</strong>: <code>NewClientForEnterprise()</code> vs <code>NewClientForEnterpriseStandalone()</code></li>
+<li><strong>Authentication Handling</strong>: Manages NEO4J_AUTH for standalone deployments</li>
+<li><strong>Syntax Support</strong>: Neo4j 5.26+ and 2025.x database creation syntax</li>
+</ul>
 <h4 id="plugin-controller-plugin_controllergo">Plugin Controller (<code>plugin_controller.go</code>)<a class="headerlink" href="#plugin-controller-plugin_controllergo" title="Anchor link to this section">&para;</a></h4>
-<p><strong>Manages plugin lifecycle with architecture compatibility:</strong>
-- <strong>DeploymentInfo Abstraction</strong>: Unified handling of cluster/standalone types
-- <strong>Resource Naming</strong>: Correct StatefulSet names (<code>{cluster-name}-server</code> vs <code>{standalone-name}</code>)
-- <strong>Pod Labels</strong>: Applies appropriate labels for each deployment type
-- <strong>Plugin Sources</strong>: Official, community, custom registries, direct URLs</p>
+<p><strong>Manages plugin lifecycle with architecture compatibility:</strong></p>
+<ul>
+<li><strong>DeploymentInfo Abstraction</strong>: Unified handling of cluster/standalone types</li>
+<li><strong>Resource Naming</strong>: Correct StatefulSet names (<code>{cluster-name}-server</code> vs <code>{standalone-name}</code>)</li>
+<li><strong>Pod Labels</strong>: Applies appropriate labels for each deployment type</li>
+<li><strong>Plugin Sources</strong>: Official, community, custom registries, direct URLs</li>
+</ul>
 <h4 id="backup-controller-neo4jbackup_controllergo">Backup Controller (<code>neo4jbackup_controller.go</code>)<a class="headerlink" href="#backup-controller-neo4jbackup_controllergo" title="Anchor link to this section">&para;</a></h4>
-<p><strong>Backup management:</strong>
-- <strong>Architecture</strong>: Job-per-<code>Neo4jBackup</code>-CR. No persistent backup pod or sidecars.
-- <strong>Cross-Deployment Support</strong>: Backs up both clusters and standalone deployments
-- <strong>Modern Syntax</strong>: Neo4j 5.26+ compatible backup commands</p>
+<p><strong>Backup management:</strong></p>
+<ul>
+<li><strong>Architecture</strong>: Job-per-<code>Neo4jBackup</code>-CR. No persistent backup pod or sidecars.</li>
+<li><strong>Cross-Deployment Support</strong>: Backs up both clusters and standalone deployments</li>
+<li><strong>Modern Syntax</strong>: Neo4j 5.26+ compatible backup commands</li>
+</ul>
 <h4 id="restore-controller-neo4jrestore_controllergo">Restore Controller (<code>neo4jrestore_controller.go</code>)<a class="headerlink" href="#restore-controller-neo4jrestore_controllergo" title="Anchor link to this section">&para;</a></h4>
-<p><strong>Database restoration management:</strong>
-- <strong>Point-in-Time Recovery</strong>: Supports precise timestamp restoration via <code>--restore-until</code>
-- <strong>Flexible Targets</strong>: Cluster OR standalone (auto-detected through <code>getClusterRef</code>; standalone is converted into a synthetic cluster representation with <code>Topology.Servers=1</code> via <code>standaloneAsCluster</code>)
-- <strong>Validation</strong>: Ensures target deployment compatibility</p>
+<p><strong>Database restoration management:</strong></p>
+<ul>
+<li><strong>Point-in-Time Recovery</strong>: Supports precise timestamp restoration via <code>--restore-until</code></li>
+<li><strong>Flexible Targets</strong>: Cluster OR standalone (auto-detected through <code>getClusterRef</code>; standalone is converted into a synthetic cluster representation with <code>Topology.Servers=1</code> via <code>standaloneAsCluster</code>)</li>
+<li><strong>Validation</strong>: Ensures target deployment compatibility</li>
+</ul>
 <p><strong>Two restore paths.</strong> <code>startRestore</code> branches on <code>isRestoreTargetTrueCluster</code>:
 true clusters take a <strong>Cypher path</strong> (no Job — <code>neo4j-admin restore</code>'s
 <code>--overwrite-destination</code> is documented as unsafe on a cluster); standalone
@@ -4875,20 +4891,26 @@ before marking the restore <code>Completed</code>.</p>
 <p><strong>Integration test coverage caveat</strong>: the <code>test/integration</code> suite covers backup and restore of clusters only. Standalone backup/restore is exercised by unit tests in <code>internal/controller/*_test.go</code> and manual smoke tests. End-to-end Ginkgo coverage for the standalone path is a known follow-up — the code paths are the same so failures would surface in the cluster specs, but a dedicated standalone round-trip would harden the contract.</p>
 <p><strong>Race-tolerance</strong>: AlreadyExists on Job creation is treated as "another reconcile got there first" rather than terminal-failure. Concurrent reconciles during the stopCluster cycle (10s scale-down delay queues a fresh reconcile before the original finishes) are common; without this tolerance the loser would flip the restore to <code>Failed</code> and the "Restore previously failed" guard would pin it permanently.</p>
 <h4 id="neo4juser-neo4jrole-neo4jrolebinding-controllers-neo4juser_controllergo-neo4jrole_controllergo-neo4jrolebinding_controllergo">Neo4jUser / Neo4jRole / Neo4jRoleBinding Controllers (<code>neo4juser_controller.go</code>, <code>neo4jrole_controller.go</code>, <code>neo4jrolebinding_controller.go</code>)<a class="headerlink" href="#neo4juser-neo4jrole-neo4jrolebinding-controllers-neo4juser_controllergo-neo4jrole_controllergo-neo4jrolebinding_controllergo" title="Anchor link to this section">&para;</a></h4>
-<p><strong>Identity &amp; access management:</strong>
-- <strong>Shared cluster resolver</strong>: <code>cluster_resolver.go</code> — <code>ResolveClusterRef</code> handles cluster + standalone lookup
-- <strong>Watches</strong>: the user controller watches <code>Neo4jRole</code> so users referencing missing custom roles re-reconcile when the role lands (sets <code>PendingDependencies</code> condition meanwhile, not terminal-fail)
-- <strong>Source-of-truth model</strong>: Privileges live on <code>Neo4jRole</code> (never on users). Built-in roles require <code>adoptBuiltin: true</code> to be managed; never dropped on CR delete
-- <strong><code>Neo4jRoleBinding</code> is non-destructive</strong>: never creates or drops users — only grants/revokes role assignments on externally-provisioned (SSO / LDAP) users</p>
+<p><strong>Identity &amp; access management:</strong></p>
+<ul>
+<li><strong>Shared cluster resolver</strong>: <code>cluster_resolver.go</code> — <code>ResolveClusterRef</code> handles cluster + standalone lookup</li>
+<li><strong>Watches</strong>: the user controller watches <code>Neo4jRole</code> so users referencing missing custom roles re-reconcile when the role lands (sets <code>PendingDependencies</code> condition meanwhile, not terminal-fail)</li>
+<li><strong>Source-of-truth model</strong>: Privileges live on <code>Neo4jRole</code> (never on users). Built-in roles require <code>adoptBuiltin: true</code> to be managed; never dropped on CR delete</li>
+<li><strong><code>Neo4jRoleBinding</code> is non-destructive</strong>: never creates or drops users — only grants/revokes role assignments on externally-provisioned (SSO / LDAP) users</li>
+</ul>
 <h4 id="neo4jauthrule-controller-neo4jauthrule_controllergo">Neo4jAuthRule Controller (<code>neo4jauthrule_controller.go</code>)<a class="headerlink" href="#neo4jauthrule-controller-neo4jauthrule_controllergo" title="Anchor link to this section">&para;</a></h4>
-<p><strong>ABAC / attribute-based access control:</strong>
-- <strong>Version requirement</strong>: refuses to reconcile against Neo4j versions where <code>SupportsAuthRules()</code> returns false (pre-2026.03)
-- <strong>Production wiring</strong>: always present in <code>setupProductionControllers</code>; dev mode (<code>--controllers</code>) MUST list <code>authrule</code> or local deployments will silently accept <code>Neo4jAuthRule</code> CRs without reconciling them
-- <strong>Cypher prefix</strong>: every AUTH RULE DDL prepends <code>CYPHER 25</code> (system DB defaults to Cypher 5 on 2026.x, which can't parse <code>AUTH</code> keywords)</p>
+<p><strong>ABAC / attribute-based access control:</strong></p>
+<ul>
+<li><strong>Version requirement</strong>: refuses to reconcile against Neo4j versions where <code>SupportsAuthRules()</code> returns false (pre-2026.03)</li>
+<li><strong>Production wiring</strong>: always present in <code>setupProductionControllers</code>; dev mode (<code>--controllers</code>) MUST list <code>authrule</code> or local deployments will silently accept <code>Neo4jAuthRule</code> CRs without reconciling them</li>
+<li><strong>Cypher prefix</strong>: every AUTH RULE DDL prepends <code>CYPHER 25</code> (system DB defaults to Cypher 5 on 2026.x, which can't parse <code>AUTH</code> keywords)</li>
+</ul>
 <h4 id="neo4jshardeddatabase-controller-neo4jshardeddatabase_controllergo">Neo4jShardedDatabase Controller (<code>neo4jshardeddatabase_controller.go</code>)<a class="headerlink" href="#neo4jshardeddatabase-controller-neo4jshardeddatabase_controllergo" title="Anchor link to this section">&para;</a></h4>
-<p><strong>Property-sharding management:</strong>
-- <strong>Version-gated</strong>: requires Neo4j 2025.12+ images
-- <strong>Resource requirements</strong>: 5+ servers, 4-8Gi memory per server, 2+ CPU per server</p>
+<p><strong>Property-sharding management:</strong></p>
+<ul>
+<li><strong>Version-gated</strong>: requires Neo4j 2025.12+ images</li>
+<li><strong>Resource requirements</strong>: 5+ servers, 4-8Gi memory per server, 2+ CPU per server</li>
+</ul>
 <h2 id="validation-framework-internalvalidation">Validation Framework (<code>internal/validation/</code>)<a class="headerlink" href="#validation-framework-internalvalidation" title="Anchor link to this section">&para;</a></h2>
 <h3 id="comprehensive-validation-architecture">Comprehensive Validation Architecture<a class="headerlink" href="#comprehensive-validation-architecture" title="Anchor link to this section">&para;</a></h3>
 <h4 id="core-validators">Core Validators:<a class="headerlink" href="#core-validators" title="Anchor link to this section">&para;</a></h4>
@@ -5027,11 +5049,13 @@ CalVer detection: <code>ParseVersion()</code> → <code>IsCalver</code> (<code>m
 <h2 id="resource-management-architecture">Resource Management Architecture<a class="headerlink" href="#resource-management-architecture" title="Anchor link to this section">&para;</a></h2>
 <h3 id="intelligent-resource-handling">Intelligent Resource Handling<a class="headerlink" href="#intelligent-resource-handling" title="Anchor link to this section">&para;</a></h3>
 <h4 id="resource-builders-internalresources">Resource Builders (<code>internal/resources/</code>):<a class="headerlink" href="#resource-builders-internalresources" title="Anchor link to this section">&para;</a></h4>
-<p>These are free <code>Build*ForEnterprise</code> / <code>Build*ForStandalone</code> functions, not stateful builder types. The standalone path reuses the <code>cluster.go</code> builders (StatefulSet, ConfigMap, Services) via the <code>standaloneAsCluster</code> synthetic representation rather than a dedicated <code>standalone.go</code> file.
-- <strong>StatefulSet / Services / ConfigMap</strong> (<code>cluster.go</code>): <code>BuildServerStatefulSetForEnterprise</code>, <code>BuildClientServiceForEnterprise</code>, <code>BuildDiscoveryServiceForEnterprise</code>, <code>BuildConfigMapForEnterprise</code> — server-based resources for both clusters and (via the synthetic cluster) standalone.
-- <strong>NetworkPolicy / Route / MCP</strong> (<code>networkpolicy.go</code>, <code>route.go</code>, <code>mcp.go</code>): include <code>*ForStandalone</code> variants for standalone-specific wiring.
-- <strong>Backup Job</strong>: built inline by <code>neo4jbackup_controller.go</code> (per-<code>Neo4jBackup</code>-CR Kubernetes Job — no persistent backup pod, no sidecars, no dedicated <code>resources/</code> builder).
-- <strong>TruststoreBuilder</strong> (<code>cluster.go:BuildTrustStoreInitContainer / BuildTrustStoreVolumes / CollectTrustedCASecrets</code>): emits the per-Secret volume mounts, the writable <code>/truststore</code> EmptyDir, and the <code>truststore-init</code> init container (seeds <code>/truststore/truststore.jks</code> from <code>$JAVA_HOME/lib/security/cacerts</code>, then <code>keytool -import</code> for each <code>spec.trustedCASecrets</code> entry using the Secret name as alias). Reused by both cluster (env var) and standalone (ConfigMap) wire-up paths via <code>CollectTrustedCASecrets</code>, which folds the legacy singular <code>spec.auth.trustStore</code> into the new plural list.</p>
+<p>These are free <code>Build*ForEnterprise</code> / <code>Build*ForStandalone</code> functions, not stateful builder types. The standalone path reuses the <code>cluster.go</code> builders (StatefulSet, ConfigMap, Services) via the <code>standaloneAsCluster</code> synthetic representation rather than a dedicated <code>standalone.go</code> file.</p>
+<ul>
+<li><strong>StatefulSet / Services / ConfigMap</strong> (<code>cluster.go</code>): <code>BuildServerStatefulSetForEnterprise</code>, <code>BuildClientServiceForEnterprise</code>, <code>BuildDiscoveryServiceForEnterprise</code>, <code>BuildConfigMapForEnterprise</code> — server-based resources for both clusters and (via the synthetic cluster) standalone.</li>
+<li><strong>NetworkPolicy / Route / MCP</strong> (<code>networkpolicy.go</code>, <code>route.go</code>, <code>mcp.go</code>): include <code>*ForStandalone</code> variants for standalone-specific wiring.</li>
+<li><strong>Backup Job</strong>: built inline by <code>neo4jbackup_controller.go</code> (per-<code>Neo4jBackup</code>-CR Kubernetes Job — no persistent backup pod, no sidecars, no dedicated <code>resources/</code> builder).</li>
+<li><strong>TruststoreBuilder</strong> (<code>cluster.go:BuildTrustStoreInitContainer / BuildTrustStoreVolumes / CollectTrustedCASecrets</code>): emits the per-Secret volume mounts, the writable <code>/truststore</code> EmptyDir, and the <code>truststore-init</code> init container (seeds <code>/truststore/truststore.jks</code> from <code>$JAVA_HOME/lib/security/cacerts</code>, then <code>keytool -import</code> for each <code>spec.trustedCASecrets</code> entry using the Secret name as alias). Reused by both cluster (env var) and standalone (ConfigMap) wire-up paths via <code>CollectTrustedCASecrets</code>, which folds the legacy singular <code>spec.auth.trustStore</code> into the new plural list.</li>
+</ul>
 <h4 id="server-based-resource-patterns">Server-Based Resource Patterns:<a class="headerlink" href="#server-based-resource-patterns" title="Anchor link to this section">&para;</a></h4>
 <ul>
 <li><strong>StatefulSet Naming</strong>: <code>{cluster-name}-server</code> for clusters, <code>{standalone-name}</code> for standalone</li>
@@ -5065,11 +5089,13 @@ CalVer detection: <code>ParseVersion()</code> → <code>IsCalver</code> (<code>m
 <li><strong>Service Account Security</strong>: Dedicated accounts with specific roles</li>
 </ul>
 <h4 id="discovery-rbac-critical">Discovery RBAC (Critical):<a class="headerlink" href="#discovery-rbac-critical" title="Anchor link to this section">&para;</a></h4>
-<p>Each cluster gets automatic RBAC creation:
-- <strong>ServiceAccount</strong>: <code>{cluster-name}-discovery</code>
-- <strong>Role</strong>: Services and endpoints permissions
-- <strong>RoleBinding</strong>: Links account to role
-- <strong>Endpoints Permission</strong>: <strong>CRITICAL</strong> for cluster formation</p>
+<p>Each cluster gets automatic RBAC creation:</p>
+<ul>
+<li><strong>ServiceAccount</strong>: <code>{cluster-name}-discovery</code></li>
+<li><strong>Role</strong>: Services and endpoints permissions</li>
+<li><strong>RoleBinding</strong>: Links account to role</li>
+<li><strong>Endpoints Permission</strong>: <strong>CRITICAL</strong> for cluster formation</li>
+</ul>
 <h3 id="tlsssl-support">TLS/SSL Support<a class="headerlink" href="#tlsssl-support" title="Anchor link to this section">&para;</a></h3>
 <p>The operator integrates with <a href="https://cert-manager.io/">cert-manager</a> for the
 full certificate lifecycle. The flow is the same for clusters and standalones,
@@ -5173,11 +5199,13 @@ routing scheme too, for symmetry; on a single-member topology
 <code>getRoutingTable</code> reports the lone member as both reader and writer, so
 behavior is equivalent to direct connection.</p>
 <p><strong>Driver timeouts.</strong> <code>NewClientForEnterprise</code> /
-<code>NewClientForEnterpriseStandalone</code> configure:
-- <code>ConnectionAcquisitionTimeout = 10s</code> — full budget for getting a
-  connection (includes routing-table fetch retries under <code>neo4j://</code>)
-- <code>SocketConnectTimeout = 5s</code> — TCP connect to a router member
-- <code>MaxTransactionRetryTime = 15s</code> — retry budget for transient errors</p>
+<code>NewClientForEnterpriseStandalone</code> configure:</p>
+<ul>
+<li><code>ConnectionAcquisitionTimeout = 10s</code> — full budget for getting a
+  connection (includes routing-table fetch retries under <code>neo4j://</code>)</li>
+<li><code>SocketConnectTimeout = 5s</code> — TCP connect to a router member</li>
+<li><code>MaxTransactionRetryTime = 15s</code> — retry budget for transient errors</li>
+</ul>
 <p>These values are deliberately tight: an unreachable cluster fails fast
 instead of stalling the controller's reconcile queue behind hung Bolt
 calls. Healthy clusters complete the routing handshake in well under one
@@ -5352,26 +5380,32 @@ references a per-policy <code>truststore_path</code>.</p>
 <p>The <code>MonitoringSpec</code> field (<code>spec.monitoring</code>) drives two distinct
 responsibilities inside the cluster controller:</p>
 <p><strong>1. Infrastructure setup</strong> (<code>ReconcileMonitoring</code>):
-Creates Kubernetes resources for metrics collection:
-- <code>{cluster-name}-metrics</code> Service — exposes port 2004 for Prometheus scraping
-- <code>{cluster-name}-monitoring</code> ServiceMonitor — tells the Prometheus Operator to scrape the metrics service
-- Neo4j config flags (<code>server.metrics.prometheus.enabled=true</code>, <code>prometheus.io/*</code> annotations)</p>
+Creates Kubernetes resources for metrics collection:</p>
+<ul>
+<li><code>{cluster-name}-metrics</code> Service — exposes port 2004 for Prometheus scraping</li>
+<li><code>{cluster-name}-monitoring</code> ServiceMonitor — tells the Prometheus Operator to scrape the metrics service</li>
+<li>Neo4j config flags (<code>server.metrics.prometheus.enabled=true</code>, <code>prometheus.io/*</code> annotations)</li>
+</ul>
 <p>Runs on every reconcile regardless of cluster phase.</p>
 <p><strong>2. Live diagnostics</strong> (<code>CollectDiagnostics</code>):
-Runs <code>SHOW SERVERS</code> and <code>SHOW DATABASES</code> via the Bolt client when the cluster is <code>Ready</code>:
-- Writes results to <code>status.diagnostics</code> (<code>ClusterDiagnosticsStatus</code>)
-- Sets <code>ServersHealthy</code> condition (<code>True</code> when all servers are <code>state=Enabled</code> and <code>health=Available</code>)
-- Sets <code>DatabasesHealthy</code> condition (<code>True</code> when all user databases have <code>status=online</code>; the <code>system</code> database is excluded)
-- Updates <code>neo4j_operator_server_health</code> Prometheus gauge per server (labels: <code>cluster_name</code>, <code>namespace</code>, <code>server_name</code>, <code>server_address</code>)
-- Non-fatal: collection errors are surfaced in <code>status.diagnostics.collectionError</code> and the conditions are set to <code>Unknown</code> with reason <code>DiagnosticsUnavailable</code></p>
+Runs <code>SHOW SERVERS</code> and <code>SHOW DATABASES</code> via the Bolt client when the cluster is <code>Ready</code>:</p>
+<ul>
+<li>Writes results to <code>status.diagnostics</code> (<code>ClusterDiagnosticsStatus</code>)</li>
+<li>Sets <code>ServersHealthy</code> condition (<code>True</code> when all servers are <code>state=Enabled</code> and <code>health=Available</code>)</li>
+<li>Sets <code>DatabasesHealthy</code> condition (<code>True</code> when all user databases have <code>status=online</code>; the <code>system</code> database is excluded)</li>
+<li>Updates <code>neo4j_operator_server_health</code> Prometheus gauge per server (labels: <code>cluster_name</code>, <code>namespace</code>, <code>server_name</code>, <code>server_address</code>)</li>
+<li>Non-fatal: collection errors are surfaced in <code>status.diagnostics.collectionError</code> and the conditions are set to <code>Unknown</code> with reason <code>DiagnosticsUnavailable</code></li>
+</ul>
 <p>The diagnostics Bolt client is created fresh per-reconcile and closed with <code>defer</code>. It
 never shares state with the cluster formation or upgrade clients.</p>
 <p><strong>Architecture invariant:</strong> All status writes in <code>CollectDiagnostics</code> use
 <code>retry.RetryOnConflict</code> to handle concurrent updates without panicking.</p>
-<p><strong>Condition constants</strong> (defined in <code>internal/controller/conditions.go</code>):
-- <code>ConditionTypeServersHealthy = "ServersHealthy"</code>
-- <code>ConditionTypeDatabasesHealthy = "DatabasesHealthy"</code>
-- Reason values: <code>AllServersHealthy</code>, <code>ServerDegraded</code>, <code>AllDatabasesOnline</code>, <code>DatabaseOffline</code>, <code>DiagnosticsUnavailable</code></p>
+<p><strong>Condition constants</strong> (defined in <code>internal/controller/conditions.go</code>):</p>
+<ul>
+<li><code>ConditionTypeServersHealthy = "ServersHealthy"</code></li>
+<li><code>ConditionTypeDatabasesHealthy = "DatabasesHealthy"</code></li>
+<li>Reason values: <code>AllServersHealthy</code>, <code>ServerDegraded</code>, <code>AllDatabasesOnline</code>, <code>DatabaseOffline</code>, <code>DiagnosticsUnavailable</code></li>
+</ul>
 <h2 id="integration-architecture">Integration Architecture<a class="headerlink" href="#integration-architecture" title="Anchor link to this section">&para;</a></h2>
 <h3 id="external-system-integration">External System Integration:<a class="headerlink" href="#external-system-integration" title="Anchor link to this section">&para;</a></h3>
 <ul>

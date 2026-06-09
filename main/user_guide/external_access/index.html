@@ -3143,11 +3143,13 @@
 <h1 id="external-access-guide">External Access Guide<a class="headerlink" href="#external-access-guide" title="Anchor link to this section">&para;</a></h1>
 <p>This guide explains how to expose your Neo4j deployments for access from outside the Kubernetes cluster.</p>
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Anchor link to this section">&para;</a></h2>
-<p>The Neo4j Kubernetes Operator supports multiple methods for external access:
-- <strong>Port Forwarding</strong> - Quick access for development/testing
-- <strong>LoadBalancer</strong> - Cloud provider managed load balancers
-- <strong>NodePort</strong> - Direct node access (on-premise/development)
-- <strong>Ingress</strong> - HTTP/HTTPS access through ingress controllers</p>
+<p>The Neo4j Kubernetes Operator supports multiple methods for external access:</p>
+<ul>
+<li><strong>Port Forwarding</strong> - Quick access for development/testing</li>
+<li><strong>LoadBalancer</strong> - Cloud provider managed load balancers</li>
+<li><strong>NodePort</strong> - Direct node access (on-premise/development)</li>
+<li><strong>Ingress</strong> - HTTP/HTTPS access through ingress controllers</li>
+</ul>
 <h2 id="quick-start">Quick Start<a class="headerlink" href="#quick-start" title="Anchor link to this section">&para;</a></h2>
 <h3 id="development-access">Development Access<a class="headerlink" href="#development-access" title="Anchor link to this section">&para;</a></h3>
 <p>The fastest way to access Neo4j during development:</p>

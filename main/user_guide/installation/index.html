@@ -3203,11 +3203,13 @@ updated automatically on every operator release.</p>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases/download/<span class="si">${</span><span class="nv">RELEASE_VERSION</span><span class="si">}</span>/neo4j-kubernetes-operator-complete.yaml
 </span></code></pre></div>
-<p><strong>What this installs</strong>:
-- Custom Resource Definitions (CRDs)
-- Operator Deployment (multi-arch images from ghcr.io)
-- All required RBAC permissions (ClusterRole, ClusterRoleBinding, ServiceAccount)
-- Deployed to the <code>neo4j-operator-system</code> namespace</p>
+<p><strong>What this installs</strong>:</p>
+<ul>
+<li>Custom Resource Definitions (CRDs)</li>
+<li>Operator Deployment (multi-arch images from ghcr.io)</li>
+<li>All required RBAC permissions (ClusterRole, ClusterRoleBinding, ServiceAccount)</li>
+<li>Deployed to the <code>neo4j-operator-system</code> namespace</li>
+</ul>
 <p><strong>To find available releases</strong>:
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Visit: https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="c1"># Or use the GitHub CLI:</span>
@@ -3260,11 +3262,13 @@ released chart already carries the real version.)</p>
 </span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a>make<span class="w"> </span>deploy-prod-local<span class="w">     </span><span class="c1"># Explicit local build and deploy to Kind cluster</span>
 </span><span id="__span-10-15"><a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a>make<span class="w"> </span>deploy-prod-registry<span class="w">  </span><span class="c1"># Deploy from ghcr.io registry (requires authentication)</span>
 </span></code></pre></div>
-<p><strong>What this installs</strong>:
-- Custom Resource Definitions (CRDs)
-- Operator Deployment
-- All required RBAC permissions
-- ServiceAccount and ClusterRole bindings</p>
+<p><strong>What this installs</strong>:</p>
+<ul>
+<li>Custom Resource Definitions (CRDs)</li>
+<li>Operator Deployment</li>
+<li>All required RBAC permissions</li>
+<li>ServiceAccount and ClusterRole bindings</li>
+</ul>
 <h2 id="custom-kustomize-configuration">Custom Kustomize Configuration<a class="headerlink" href="#custom-kustomize-configuration" title="Anchor link to this section">&para;</a></h2>
 <p>For deployments that need a custom namespace, labels, or image tag, layer your own kustomization on top of <code>config/default</code>:</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># kustomization.yaml</span>
@@ -3560,10 +3564,12 @@ If you know you'll use cert-manager TLS, install cert-manager <strong>before</st
 <li>Apply the sample <code>CatalogSource</code> and <code>Subscription</code> under <code>config/samples/olm/</code> after updating the catalog image and channel to match your bundle.</li>
 </ul>
 <h3 id="next-steps">Next Steps<a class="headerlink" href="#next-steps" title="Anchor link to this section">&para;</a></h3>
-<p>Once installed, see:
-- <a href="../getting_started/">Getting Started Guide</a> - Deploy your first Neo4j instance
-- <a href="../configuration/">Configuration Guide</a> - Detailed configuration options
-- <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/tree/main/examples">Examples</a> - Ready-to-use configurations</p>
+<p>Once installed, see:</p>
+<ul>
+<li><a href="../getting_started/">Getting Started Guide</a> - Deploy your first Neo4j instance</li>
+<li><a href="../configuration/">Configuration Guide</a> - Detailed configuration options</li>
+<li><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/tree/main/examples">Examples</a> - Ready-to-use configurations</li>
+</ul>
 
 
 

@@ -3674,26 +3674,36 @@
 </span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="c1"># Deploy the operator to development cluster (REQUIRED - in-cluster only)</span>
 </span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>make<span class="w"> </span>operator-setup
 </span></code></pre></div>
-<p>The operator always runs <strong>in-cluster</strong> — never <code>make dev-run</code> (DNS resolution fails when the operator runs outside the cluster). For a fast inner loop after code changes:
-- <strong><code>make deploy-dev-local</code></strong>: Rebuild image + redeploy to Kind (~60s).
-- <strong><code>make dev-watch</code></strong>: Auto-rebuild and redeploy on file changes.
-- <strong><code>tilt up</code></strong>: Live reload (~5s, requires Tilt).
-- <strong>Direct logs</strong>: <code>make operator-logs</code> or <code>kubectl logs -n neo4j-operator-dev deployment/neo4j-operator-controller-manager -f</code>.</p>
+<p>The operator always runs <strong>in-cluster</strong> — never <code>make dev-run</code> (DNS resolution fails when the operator runs outside the cluster). For a fast inner loop after code changes:</p>
+<ul>
+<li><strong><code>make deploy-dev-local</code></strong>: Rebuild image + redeploy to Kind (~60s).</li>
+<li><strong><code>make dev-watch</code></strong>: Auto-rebuild and redeploy on file changes.</li>
+<li><strong><code>tilt up</code></strong>: Live reload (~5s, requires Tilt).</li>
+<li><strong>Direct logs</strong>: <code>make operator-logs</code> or <code>kubectl logs -n neo4j-operator-dev deployment/neo4j-operator-controller-manager -f</code>.</li>
+</ul>
 <h3 id="3-make-your-changes">3. Make Your Changes<a class="headerlink" href="#3-make-your-changes" title="Anchor link to this section">&para;</a></h3>
 <p>The operator follows a well-defined architecture. Key areas for contributions:</p>
-<p><strong>Controllers</strong> (<code>internal/controller/</code>):
-- Neo4jEnterpriseCluster controller for clustered deployments
-- Neo4jEnterpriseStandalone controller for single-node deployments
-- Database, Plugin, Backup, and Restore controllers</p>
-<p><strong>Custom Resources</strong> (<code>api/v1beta1/</code>):
-- CRD type definitions for all Neo4j resources
-- Validation tags and documentation</p>
-<p><strong>Resource Builders</strong> (<code>internal/resources/</code>):
-- Kubernetes resource generation logic
-- ConfigMap, Service, and StatefulSet builders</p>
-<p><strong>Validation Framework</strong> (<code>internal/validation/</code>):
-- Input validation and recommendations
-- Error handling and user guidance</p>
+<p><strong>Controllers</strong> (<code>internal/controller/</code>):</p>
+<ul>
+<li>Neo4jEnterpriseCluster controller for clustered deployments</li>
+<li>Neo4jEnterpriseStandalone controller for single-node deployments</li>
+<li>Database, Plugin, Backup, and Restore controllers</li>
+</ul>
+<p><strong>Custom Resources</strong> (<code>api/v1beta1/</code>):</p>
+<ul>
+<li>CRD type definitions for all Neo4j resources</li>
+<li>Validation tags and documentation</li>
+</ul>
+<p><strong>Resource Builders</strong> (<code>internal/resources/</code>):</p>
+<ul>
+<li>Kubernetes resource generation logic</li>
+<li>ConfigMap, Service, and StatefulSet builders</li>
+</ul>
+<p><strong>Validation Framework</strong> (<code>internal/validation/</code>):</p>
+<ul>
+<li>Input validation and recommendations</li>
+<li>Error handling and user guidance</li>
+</ul>
 <h3 id="4-testing-your-changes">4. Testing Your Changes<a class="headerlink" href="#4-testing-your-changes" title="Anchor link to this section">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Run unit tests (no cluster required)</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>make<span class="w"> </span>test-unit
@@ -3826,10 +3836,12 @@
 <li><strong>API Changes</strong>: Update relevant API documentation</li>
 </ul>
 <h4 id="user-documentation">User Documentation<a class="headerlink" href="#user-documentation" title="Anchor link to this section">&para;</a></h4>
-<p>For user-facing features, update:
-- <strong>Examples</strong>: Add example configurations in <code>examples/</code>
-- <strong>User Guide</strong>: Update relevant user guide sections
-- <strong>API Reference</strong>: Update CRD documentation if API changes</p>
+<p>For user-facing features, update:</p>
+<ul>
+<li><strong>Examples</strong>: Add example configurations in <code>examples/</code></li>
+<li><strong>User Guide</strong>: Update relevant user guide sections</li>
+<li><strong>API Reference</strong>: Update CRD documentation if API changes</li>
+</ul>
 <h2 id="development-workflow">🔄 Development Workflow<a class="headerlink" href="#development-workflow" title="Anchor link to this section">&para;</a></h2>
 <h3 id="branch-strategy">Branch Strategy<a class="headerlink" href="#branch-strategy" title="Anchor link to this section">&para;</a></h3>
 <ol>
@@ -3891,14 +3903,16 @@
 </span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;feat!: change topology field structure for server-based architecture&quot;</span>
 </span></code></pre></div>
 <p><strong>Format</strong>: <code>&lt;type&gt;[optional scope]: &lt;description&gt;</code></p>
-<p><strong>Types</strong>:
-- <code>feat</code>: New features
-- <code>fix</code>: Bug fixes
-- <code>docs</code>: Documentation changes
-- <code>style</code>: Code style changes (no logic changes)
-- <code>refactor</code>: Code refactoring
-- <code>test</code>: Test additions or modifications
-- <code>chore</code>: Maintenance tasks</p>
+<p><strong>Types</strong>:</p>
+<ul>
+<li><code>feat</code>: New features</li>
+<li><code>fix</code>: Bug fixes</li>
+<li><code>docs</code>: Documentation changes</li>
+<li><code>style</code>: Code style changes (no logic changes)</li>
+<li><code>refactor</code>: Code refactoring</li>
+<li><code>test</code>: Test additions or modifications</li>
+<li><code>chore</code>: Maintenance tasks</li>
+</ul>
 <h2 id="bug-reports-and-feature-requests">🐛 Bug Reports and Feature Requests<a class="headerlink" href="#bug-reports-and-feature-requests" title="Anchor link to this section">&para;</a></h2>
 <h3 id="reporting-bugs">Reporting Bugs<a class="headerlink" href="#reporting-bugs" title="Anchor link to this section">&para;</a></h3>
 <p>When reporting bugs, include:</p>
@@ -4000,15 +4014,19 @@
 </ol>
 <p>CI's <code>check-drift</code> job runs <code>make sync-all bundle</code> and fails the PR if anything is out of date — this enforces step 8. To catch drift locally before pushing, run <code>make install-hooks</code> once; the pre-commit <code>check-drift</code> hook fires whenever you stage files under <code>api/</code>, <code>internal/controller/</code>, <code>scripts/</code>, <code>config/</code>, <code>charts/</code>, or <code>bundle/</code>, runs the same gate, and leaves regenerated artifacts in your working tree if anything was stale.</p>
 <h3 id="performance-considerations">Performance Considerations<a class="headerlink" href="#performance-considerations" title="Anchor link to this section">&para;</a></h3>
-<p><strong>Controller Optimization</strong>:
-- Use <code>client.Reader</code> for read-only operations
-- Implement proper caching strategies
-- Minimize API calls with efficient resource queries
-- Use <code>controllerutil.CreateOrUpdate</code> for idempotent operations</p>
-<p><strong>Resource Management</strong>:
-- Set appropriate resource requests/limits
-- Use owner references for automatic cleanup
-- Implement proper finalizer handling</p>
+<p><strong>Controller Optimization</strong>:</p>
+<ul>
+<li>Use <code>client.Reader</code> for read-only operations</li>
+<li>Implement proper caching strategies</li>
+<li>Minimize API calls with efficient resource queries</li>
+<li>Use <code>controllerutil.CreateOrUpdate</code> for idempotent operations</li>
+</ul>
+<p><strong>Resource Management</strong>:</p>
+<ul>
+<li>Set appropriate resource requests/limits</li>
+<li>Use owner references for automatic cleanup</li>
+<li>Implement proper finalizer handling</li>
+</ul>
 <h3 id="debugging-tips">Debugging Tips<a class="headerlink" href="#debugging-tips" title="Anchor link to this section">&para;</a></h3>
 <h4 id="local-debugging">Local Debugging<a class="headerlink" href="#local-debugging" title="Anchor link to this section">&para;</a></h4>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Deploy operator with debug logging to development cluster</span>
@@ -4052,10 +4070,12 @@
 <li><strong>Documentation</strong>: Check existing documentation first</li>
 </ul>
 <h3 id="recognition">Recognition<a class="headerlink" href="#recognition" title="Anchor link to this section">&para;</a></h3>
-<p>Contributors are recognized in:
-- Release notes for significant contributions
-- GitHub contributors list
-- Project documentation acknowledgments</p>
+<p>Contributors are recognized in:</p>
+<ul>
+<li>Release notes for significant contributions</li>
+<li>GitHub contributors list</li>
+<li>Project documentation acknowledgments</li>
+</ul>
 <h2 id="resources">📚 Resources<a class="headerlink" href="#resources" title="Anchor link to this section">&para;</a></h2>
 <h3 id="learning-resources">Learning Resources<a class="headerlink" href="#learning-resources" title="Anchor link to this section">&para;</a></h3>
 <ul>

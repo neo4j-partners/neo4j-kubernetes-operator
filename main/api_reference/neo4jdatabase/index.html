@@ -3670,10 +3670,12 @@
 </tr>
 </tbody>
 </table>
-<p><strong>Validation</strong>:
-- <code>primaries + secondaries</code> must not exceed cluster's <code>spec.topology.servers</code>
-- Servers are selected based on role constraints (if configured)
-- For standalone deployments, topology is automatically managed</p>
+<p><strong>Validation</strong>:</p>
+<ul>
+<li><code>primaries + secondaries</code> must not exceed cluster's <code>spec.topology.servers</code></li>
+<li>Servers are selected based on role constraints (if configured)</li>
+<li>For standalone deployments, topology is automatically managed</li>
+</ul>
 <h3 id="initialdataspec">InitialDataSpec<a class="headerlink" href="#initialdataspec" title="Anchor link to this section">&para;</a></h3>
 <table>
 <thead>
@@ -3734,14 +3736,18 @@
 </tr>
 </tbody>
 </table>
-<p><strong>Point-in-Time Recovery Formats</strong> (Neo4j 2025.x only):
-- <strong>RFC3339 Timestamp</strong>: <code>"2025-01-15T10:30:00Z"</code>
-- <strong>Transaction ID</strong>: <code>"txId:12345"</code></p>
-<p><strong>Configuration Options</strong>:
-- <code>compression</code>: <code>"gzip"</code>, <code>"lz4"</code>, <code>"none"</code>
-- <code>validation</code>: <code>"strict"</code>, <code>"lenient"</code>
-- <code>bufferSize</code>: Buffer size (e.g., <code>"64MB"</code>, <code>"128MB"</code>)
-- Cloud-specific options for S3, GCS, Azure</p>
+<p><strong>Point-in-Time Recovery Formats</strong> (Neo4j 2025.x only):</p>
+<ul>
+<li><strong>RFC3339 Timestamp</strong>: <code>"2025-01-15T10:30:00Z"</code></li>
+<li><strong>Transaction ID</strong>: <code>"txId:12345"</code></li>
+</ul>
+<p><strong>Configuration Options</strong>:</p>
+<ul>
+<li><code>compression</code>: <code>"gzip"</code>, <code>"lz4"</code>, <code>"none"</code></li>
+<li><code>validation</code>: <code>"strict"</code>, <code>"lenient"</code></li>
+<li><code>bufferSize</code>: Buffer size (e.g., <code>"64MB"</code>, <code>"128MB"</code>)</li>
+<li>Cloud-specific options for S3, GCS, Azure</li>
+</ul>
 <h4 id="seedconfiguration-options">SeedConfiguration Options<a class="headerlink" href="#seedconfiguration-options" title="Anchor link to this section">&para;</a></h4>
 <table>
 <thead>
@@ -3937,21 +3943,29 @@
 </tbody>
 </table>
 <h4 id="required-secret-keys-by-uri-scheme">Required Secret Keys by URI Scheme<a class="headerlink" href="#required-secret-keys-by-uri-scheme" title="Anchor link to this section">&para;</a></h4>
-<p><strong>Amazon S3 (<code>s3://</code>)</strong>:
-- <code>AWS_ACCESS_KEY_ID</code> (required)
-- <code>AWS_SECRET_ACCESS_KEY</code> (required)
-- <code>AWS_SESSION_TOKEN</code> (optional, for temporary credentials)
-- <code>AWS_REGION</code> (optional)</p>
-<p><strong>Google Cloud Storage (<code>gs://</code>)</strong>:
-- <code>GOOGLE_APPLICATION_CREDENTIALS</code> (required, service account JSON key)
-- <code>GOOGLE_CLOUD_PROJECT</code> (optional)</p>
-<p><strong>Azure Blob Storage (<code>azb://</code>)</strong>:
-- <code>AZURE_STORAGE_ACCOUNT</code> (required)
-- Either <code>AZURE_STORAGE_KEY</code> or <code>AZURE_STORAGE_SAS_TOKEN</code> (required)</p>
-<p><strong>HTTP/HTTPS/FTP</strong>:
-- <code>USERNAME</code> (optional)
-- <code>PASSWORD</code> (optional)
-- <code>AUTH_HEADER</code> (optional, for custom authentication)</p>
+<p><strong>Amazon S3 (<code>s3://</code>)</strong>:</p>
+<ul>
+<li><code>AWS_ACCESS_KEY_ID</code> (required)</li>
+<li><code>AWS_SECRET_ACCESS_KEY</code> (required)</li>
+<li><code>AWS_SESSION_TOKEN</code> (optional, for temporary credentials)</li>
+<li><code>AWS_REGION</code> (optional)</li>
+</ul>
+<p><strong>Google Cloud Storage (<code>gs://</code>)</strong>:</p>
+<ul>
+<li><code>GOOGLE_APPLICATION_CREDENTIALS</code> (required, service account JSON key)</li>
+<li><code>GOOGLE_CLOUD_PROJECT</code> (optional)</li>
+</ul>
+<p><strong>Azure Blob Storage (<code>azb://</code>)</strong>:</p>
+<ul>
+<li><code>AZURE_STORAGE_ACCOUNT</code> (required)</li>
+<li>Either <code>AZURE_STORAGE_KEY</code> or <code>AZURE_STORAGE_SAS_TOKEN</code> (required)</li>
+</ul>
+<p><strong>HTTP/HTTPS/FTP</strong>:</p>
+<ul>
+<li><code>USERNAME</code> (optional)</li>
+<li><code>PASSWORD</code> (optional)</li>
+<li><code>AUTH_HEADER</code> (optional, for custom authentication)</li>
+</ul>
 <h2 id="status">Status<a class="headerlink" href="#status" title="Anchor link to this section">&para;</a></h2>
 <table>
 <thead>
@@ -4361,51 +4375,65 @@
 </ol>
 <p>To control the default database topology at cluster creation time without using this CRD, set <code>initial.dbms.default_primaries_count</code> and <code>initial.dbms.default_secondaries_count</code> in the cluster's <code>spec.config</code> (bootstrap-only, see <a href="../../user_guide/clustering/#default-database-topology">Clustering Guide</a>).</p>
 <h3 id="database-creation-process">Database Creation Process<a class="headerlink" href="#database-creation-process" title="Anchor link to this section">&para;</a></h3>
-<p><strong>Standard Database Creation</strong>:
-1. Discover target deployment (cluster or standalone)
-2. Check if database exists (if <code>ifNotExists: true</code>)
-3. Validate topology constraints (cluster only)
-4. Construct CREATE DATABASE command with Neo4j 5.26+ syntax
-5. Execute command via appropriate client connection
-6. Wait for completion (if <code>wait: true</code>)
-7. Import initial data (if specified)
-8. Update status with current state</p>
-<p><strong>Seed URI Database Creation</strong>:
-1. Discover target deployment and validate seed URI format
-2. Prepare cloud authentication (if <code>seedCredentials</code> specified)
-3. Construct CREATE DATABASE FROM URI command with CloudSeedProvider
-4. Execute command with seed configuration options
-5. Wait for restoration completion (if <code>wait: true</code>)
-6. Update status (<strong>Note</strong>: initial data import skipped - data comes from seed)</p>
+<p><strong>Standard Database Creation</strong>:</p>
+<ol>
+<li>Discover target deployment (cluster or standalone)</li>
+<li>Check if database exists (if <code>ifNotExists: true</code>)</li>
+<li>Validate topology constraints (cluster only)</li>
+<li>Construct CREATE DATABASE command with Neo4j 5.26+ syntax</li>
+<li>Execute command via appropriate client connection</li>
+<li>Wait for completion (if <code>wait: true</code>)</li>
+<li>Import initial data (if specified)</li>
+<li>Update status with current state</li>
+</ol>
+<p><strong>Seed URI Database Creation</strong>:</p>
+<ol>
+<li>Discover target deployment and validate seed URI format</li>
+<li>Prepare cloud authentication (if <code>seedCredentials</code> specified)</li>
+<li>Construct CREATE DATABASE FROM URI command with CloudSeedProvider</li>
+<li>Execute command with seed configuration options</li>
+<li>Wait for restoration completion (if <code>wait: true</code>)</li>
+<li>Update status (<strong>Note</strong>: initial data import skipped - data comes from seed)</li>
+</ol>
 <h3 id="version-specific-behavior">Version-Specific Behavior<a class="headerlink" href="#version-specific-behavior" title="Anchor link to this section">&para;</a></h3>
-<p><strong>Neo4j 5.26.x</strong>:
-- Standard <code>CREATE DATABASE</code> syntax with <code>TOPOLOGY</code> clause
-- Seed URI support via CloudSeedProvider
-- No Cypher language version support
-- Compatible with both cluster and standalone deployments</p>
-<p><strong>Neo4j 2025.x</strong>:
-- Enhanced <code>CREATE DATABASE</code> with <code>DEFAULT LANGUAGE CYPHER</code> support
-- Point-in-time recovery for seed URIs (<code>restoreUntil</code>)
-- Advanced seed configuration options
-- Same compatibility with cluster and standalone deployments</p>
+<p><strong>Neo4j 5.26.x</strong>:</p>
+<ul>
+<li>Standard <code>CREATE DATABASE</code> syntax with <code>TOPOLOGY</code> clause</li>
+<li>Seed URI support via CloudSeedProvider</li>
+<li>No Cypher language version support</li>
+<li>Compatible with both cluster and standalone deployments</li>
+</ul>
+<p><strong>Neo4j 2025.x</strong>:</p>
+<ul>
+<li>Enhanced <code>CREATE DATABASE</code> with <code>DEFAULT LANGUAGE CYPHER</code> support</li>
+<li>Point-in-time recovery for seed URIs (<code>restoreUntil</code>)</li>
+<li>Advanced seed configuration options</li>
+<li>Same compatibility with cluster and standalone deployments</li>
+</ul>
 <h3 id="version-specific-behavior_1">Version-Specific Behavior<a class="headerlink" href="#version-specific-behavior_1" title="Anchor link to this section">&para;</a></h3>
-<p><strong>Neo4j 5.26.x</strong>:
-- Standard CREATE DATABASE syntax
-- Seed URI support with CloudSeedProvider
-- No Cypher language version support
-- No point-in-time recovery for seed URIs
-- Supports all topology and option features</p>
-<p><strong>Neo4j 2025.x</strong>:
-- Supports <code>defaultCypherLanguage</code> field
-- Enhanced seed URI support with point-in-time recovery (<code>restoreUntil</code>)
-- Enhanced topology management
-- Additional database options available</p>
+<p><strong>Neo4j 5.26.x</strong>:</p>
+<ul>
+<li>Standard CREATE DATABASE syntax</li>
+<li>Seed URI support with CloudSeedProvider</li>
+<li>No Cypher language version support</li>
+<li>No point-in-time recovery for seed URIs</li>
+<li>Supports all topology and option features</li>
+</ul>
+<p><strong>Neo4j 2025.x</strong>:</p>
+<ul>
+<li>Supports <code>defaultCypherLanguage</code> field</li>
+<li>Enhanced seed URI support with point-in-time recovery (<code>restoreUntil</code>)</li>
+<li>Enhanced topology management</li>
+<li>Additional database options available</li>
+</ul>
 <h3 id="reconciliation">Reconciliation<a class="headerlink" href="#reconciliation" title="Anchor link to this section">&para;</a></h3>
-<p>The operator continuously reconciles the database state:
-- If database doesn't exist and <code>ifNotExists: true</code>, creates it
-- If database exists and state differs, updates it (start/stop)
-- If topology changes, redistributes database (Neo4j 5.20+)
-- Updates status with current database information</p>
+<p>The operator continuously reconciles the database state:</p>
+<ul>
+<li>If database doesn't exist and <code>ifNotExists: true</code>, creates it</li>
+<li>If database exists and state differs, updates it (start/stop)</li>
+<li>If topology changes, redistributes database (Neo4j 5.20+)</li>
+<li>Updates status with current database information</li>
+</ul>
 <h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Anchor link to this section">&para;</a></h2>
 <h3 id="general-best-practices">General Best Practices<a class="headerlink" href="#general-best-practices" title="Anchor link to this section">&para;</a></h3>
 <ol>
@@ -4430,19 +4458,25 @@
 <p><strong>Check operator logs</strong>:
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>neo4j-operator<span class="w"> </span>deployment/neo4j-operator-controller-manager
 </span></code></pre></div></p>
-<p><strong>Common Issues</strong>:
-- <strong>Target Not Found</strong>: <code>clusterRef</code> doesn't match any cluster or standalone
-- <strong>Topology Validation</strong>: Insufficient servers for requested topology (cluster only)
-- <strong>Name Conflicts</strong>: Database name already exists
-- <strong>Authentication</strong>: Connection issues to Neo4j instance
-- <strong>Seed URI Issues</strong>: Invalid format, inaccessible backup, credential problems
-- <strong>Version Compatibility</strong>: Using 2025.x features with 5.26.x Neo4j</p>
-<p><strong>Cluster-Specific Issues</strong>:
-- Server capacity exceeded (primaries + secondaries &gt; cluster servers)
-- Role constraint conflicts (e.g., requesting primaries from SECONDARY-only servers)</p>
-<p><strong>Standalone-Specific Issues</strong>:
-- Topology specified for standalone deployment (will be ignored)
-- Authentication configuration missing (<code>adminSecret</code> not configured)</p>
+<p><strong>Common Issues</strong>:</p>
+<ul>
+<li><strong>Target Not Found</strong>: <code>clusterRef</code> doesn't match any cluster or standalone</li>
+<li><strong>Topology Validation</strong>: Insufficient servers for requested topology (cluster only)</li>
+<li><strong>Name Conflicts</strong>: Database name already exists</li>
+<li><strong>Authentication</strong>: Connection issues to Neo4j instance</li>
+<li><strong>Seed URI Issues</strong>: Invalid format, inaccessible backup, credential problems</li>
+<li><strong>Version Compatibility</strong>: Using 2025.x features with 5.26.x Neo4j</li>
+</ul>
+<p><strong>Cluster-Specific Issues</strong>:</p>
+<ul>
+<li>Server capacity exceeded (primaries + secondaries &gt; cluster servers)</li>
+<li>Role constraint conflicts (e.g., requesting primaries from SECONDARY-only servers)</li>
+</ul>
+<p><strong>Standalone-Specific Issues</strong>:</p>
+<ul>
+<li>Topology specified for standalone deployment (will be ignored)</li>
+<li>Authentication configuration missing (<code>adminSecret</code> not configured)</li>
+</ul>
 <h3 id="database-stuck-in-pending">Database Stuck in Pending<a class="headerlink" href="#database-stuck-in-pending" title="Anchor link to this section">&para;</a></h3>
 <p><strong>Verify target deployment</strong>:
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># For cluster targets</span>
@@ -4457,12 +4491,14 @@
 </span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>neo4jdatabase<span class="w"> </span>&lt;database-name&gt;
 </span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a>kubectl<span class="w"> </span>get<span class="w"> </span>events<span class="w"> </span>--field-selector<span class="w"> </span>involvedObject.name<span class="o">=</span>&lt;database-name&gt;
 </span></code></pre></div></p>
-<p><strong>Common Causes</strong>:
-- Target deployment not ready or in failed state
-- Neo4j authentication issues
-- Network connectivity problems
-- Resource constraints (memory, CPU)
-- Database name validation failures</p>
+<p><strong>Common Causes</strong>:</p>
+<ul>
+<li>Target deployment not ready or in failed state</li>
+<li>Neo4j authentication issues</li>
+<li>Network connectivity problems</li>
+<li>Resource constraints (memory, CPU)</li>
+<li>Database name validation failures</li>
+</ul>
 <h3 id="seed-uri-troubleshooting">Seed URI Troubleshooting<a class="headerlink" href="#seed-uri-troubleshooting" title="Anchor link to this section">&para;</a></h3>
 <p><strong>Authentication Issues:</strong>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Check secret exists and has correct keys</span>
@@ -4472,16 +4508,20 @@
 </span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>kubectl<span class="w"> </span>run<span class="w"> </span>test-pod<span class="w"> </span>--rm<span class="w"> </span>-it<span class="w"> </span>--image<span class="o">=</span>amazon/aws-cli<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="w">  </span>--<span class="w"> </span>aws<span class="w"> </span>s3<span class="w"> </span>ls<span class="w"> </span>s3://my-bucket/backup.backup
 </span></code></pre></div></p>
-<p><strong>URI Access Issues:</strong>
-- Verify the backup file exists at the specified URI
-- Check network connectivity from Neo4j pods to the URI
-- Ensure firewall rules allow outbound access
-- Test URI format: <code>scheme://host/path/file.backup</code></p>
-<p><strong>Performance Issues:</strong>
-- Use <code>.backup</code> format instead of <code>.dump</code> for large datasets
-- Increase <code>bufferSize</code> in <code>seedConfig.config</code>
-- Use <code>compression: "lz4"</code> for faster processing
-- Monitor pod resources during restoration</p>
+<p><strong>URI Access Issues:</strong></p>
+<ul>
+<li>Verify the backup file exists at the specified URI</li>
+<li>Check network connectivity from Neo4j pods to the URI</li>
+<li>Ensure firewall rules allow outbound access</li>
+<li>Test URI format: <code>scheme://host/path/file.backup</code></li>
+</ul>
+<p><strong>Performance Issues:</strong></p>
+<ul>
+<li>Use <code>.backup</code> format instead of <code>.dump</code> for large datasets</li>
+<li>Increase <code>bufferSize</code> in <code>seedConfig.config</code></li>
+<li>Use <code>compression: "lz4"</code> for faster processing</li>
+<li>Monitor pod resources during restoration</li>
+</ul>
 <p><strong>Validation Errors:</strong>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Check for configuration conflicts</span>
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>neo4jdatabase<span class="w"> </span>&lt;database-name&gt;
@@ -4505,13 +4545,15 @@
 </span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="c1"># Check operator logs for import errors</span>
 </span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>neo4j-operator<span class="w"> </span>deployment/neo4j-operator-controller-manager<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span><span class="s2">&quot;initial.*data&quot;</span>
 </span></code></pre></div></p>
-<p><strong>Common Issues</strong>:
-- Invalid Cypher syntax in statements
-- Constraint/index name conflicts
-- Database not fully online before import
-- Insufficient privileges for data import
-- <strong>Note</strong>: Initial data automatically skipped when using <code>seedURI</code>
-- <strong>Standalone</strong>: Ensure <code>adminSecret</code> properly configures authentication</p>
+<p><strong>Common Issues</strong>:</p>
+<ul>
+<li>Invalid Cypher syntax in statements</li>
+<li>Constraint/index name conflicts</li>
+<li>Database not fully online before import</li>
+<li>Insufficient privileges for data import</li>
+<li><strong>Note</strong>: Initial data automatically skipped when using <code>seedURI</code></li>
+<li><strong>Standalone</strong>: Ensure <code>adminSecret</code> properly configures authentication</li>
+</ul>
 <h3 id="seed-uri-troubleshooting_1">Seed URI Troubleshooting<a class="headerlink" href="#seed-uri-troubleshooting_1" title="Anchor link to this section">&para;</a></h3>
 <p><strong>Monitor Progress</strong>:
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Watch database creation events</span>
@@ -4524,12 +4566,14 @@
 </span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a>kubectl<span class="w"> </span>run<span class="w"> </span>test-uri<span class="w"> </span>--rm<span class="w"> </span>-it<span class="w"> </span>--image<span class="o">=</span>curlimages/curl<span class="w"> </span>--<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a><span class="w">  </span>curl<span class="w"> </span>-I<span class="w"> </span><span class="s2">&quot;&lt;seed-uri&gt;&quot;</span><span class="w">  </span><span class="c1"># Test HTTP/HTTPS accessibility</span>
 </span></code></pre></div></p>
-<p><strong>Key Events</strong>:
-- <code>DatabaseCreatedFromSeed</code>: Successful seed URI restoration
-- <code>DataSeeded</code>: Database seeding completed
-- <code>ValidationWarning</code>: Configuration or URI format warnings
-- <code>CreationFailed</code>: Seed restoration failed
-- <code>AuthenticationError</code>: Credential issues with seed URI</p>
+<p><strong>Key Events</strong>:</p>
+<ul>
+<li><code>DatabaseCreatedFromSeed</code>: Successful seed URI restoration</li>
+<li><code>DataSeeded</code>: Database seeding completed</li>
+<li><code>ValidationWarning</code>: Configuration or URI format warnings</li>
+<li><code>CreationFailed</code>: Seed restoration failed</li>
+<li><code>AuthenticationError</code>: Credential issues with seed URI</li>
+</ul>
 <p><strong>Authentication Debugging</strong>:
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Check secret exists and has correct format</span>
 </span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>secret<span class="w"> </span>&lt;seed-credentials-secret&gt;<span class="w"> </span>-o<span class="w"> </span>yaml
@@ -4538,11 +4582,13 @@
 </span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>kubectl<span class="w"> </span>run<span class="w"> </span>aws-test<span class="w"> </span>--rm<span class="w"> </span>-it<span class="w"> </span>--image<span class="o">=</span>amazon/aws-cli<span class="w"> </span>--<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="w">  </span>aws<span class="w"> </span>s3<span class="w"> </span>ls<span class="w"> </span>&lt;s3-bucket&gt;<span class="w">  </span><span class="c1"># For S3 URIs</span>
 </span></code></pre></div></p>
-<p><strong>Performance Issues</strong>:
-- Use <code>.backup</code> format instead of <code>.dump</code> for large datasets
-- Increase <code>bufferSize</code> in seed configuration
-- Use faster compression (<code>lz4</code> instead of <code>gzip</code>)
-- Monitor pod resource usage during restoration</p>
+<p><strong>Performance Issues</strong>:</p>
+<ul>
+<li>Use <code>.backup</code> format instead of <code>.dump</code> for large datasets</li>
+<li>Increase <code>bufferSize</code> in seed configuration</li>
+<li>Use faster compression (<code>lz4</code> instead of <code>gzip</code>)</li>
+<li>Monitor pod resource usage during restoration</li>
+</ul>
 
 
 

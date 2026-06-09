@@ -3475,12 +3475,14 @@
 <h1 id="tls-configuration">TLS Configuration<a class="headerlink" href="#tls-configuration" title="Anchor link to this section">&para;</a></h1>
 <p>This guide explains how to configure TLS for Neo4j deployments and work with the certificates the operator manages — both as a <em>cluster operator</em> (configuring the operator's TLS surface) and as a <em>client</em> (connecting to a TLS-enabled deployment).</p>
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Anchor link to this section">&para;</a></h2>
-<p>When you enable TLS using cert-manager, the Neo4j operator automatically:
-- Creates certificate requests
-- Stores certificates in Kubernetes secrets
-- Mounts certificates in Neo4j pods
-- Configures Neo4j SSL policies (Bolt, HTTPS, and intra-cluster)
-- Renews certificates via cert-manager</p>
+<p>When you enable TLS using cert-manager, the Neo4j operator automatically:</p>
+<ul>
+<li>Creates certificate requests</li>
+<li>Stores certificates in Kubernetes secrets</li>
+<li>Mounts certificates in Neo4j pods</li>
+<li>Configures Neo4j SSL policies (Bolt, HTTPS, and intra-cluster)</li>
+<li>Renews certificates via cert-manager</li>
+</ul>
 <h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Anchor link to this section">&para;</a></h2>
 <ul>
 <li>cert-manager installed in your cluster (v1.20+ recommended)</li>
@@ -3556,10 +3558,12 @@
 <li><strong>Standalone</strong>: <code>&lt;standalone-name&gt;-tls-secret</code></li>
 </ul>
 <h3 id="certificate-files">Certificate Files<a class="headerlink" href="#certificate-files" title="Anchor link to this section">&para;</a></h3>
-<p>Inside the secret, you'll find:
-- <code>tls.crt</code> - The server certificate
-- <code>tls.key</code> - The private key (DO NOT SHARE)
-- <code>ca.crt</code> - The Certificate Authority certificate</p>
+<p>Inside the secret, you'll find:</p>
+<ul>
+<li><code>tls.crt</code> - The server certificate</li>
+<li><code>tls.key</code> - The private key (DO NOT SHARE)</li>
+<li><code>ca.crt</code> - The Certificate Authority certificate</li>
+</ul>
 <h2 id="retrieving-certificates-for-clients">Retrieving Certificates for Clients<a class="headerlink" href="#retrieving-certificates-for-clients" title="Anchor link to this section">&para;</a></h2>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Extract the CA certificate for client trust stores</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>secret<span class="w"> </span>&lt;deployment-name&gt;-tls-secret<span class="w"> </span><span class="se">\</span>
