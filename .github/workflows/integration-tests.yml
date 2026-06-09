@@ -33,6 +33,15 @@ on:
       - 'test/integration/**'
       - '.github/workflows/integration-tests.yml'
 
+# Cancel a PR's in-flight run when a new commit is pushed to the same PR — the
+# extended suite is multi-hour on CalVer, so leaving the superseded run going
+# wastes a runner for nothing. Keyed on the PR number for pull_request events;
+# manual workflow_dispatch runs (no PR number) fall back to the unique run_id so
+# they each get their own group and never cancel one another's verification runs.
+concurrency:
+  group: extended-integration-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
 env:
   GO_VERSION: '1.26'
   KIND_VERSION: 'v0.27.0'
