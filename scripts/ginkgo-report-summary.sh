@@ -29,8 +29,11 @@ fi
 
 OUT="${GITHUB_STEP_SUMMARY:-/dev/null}"
 
+# Only LeafNodeType=="It" entries are real specs; BeforeSuite/AfterSuite/etc.
+# also appear in SpecReports (empty names, ~0s) and would otherwise show as junk
+# rows and inflate the count.
 fail_count="$(jq -r '
-  [ .[].SpecReports[]? | select(.State=="failed" or .State=="panicked" or .State=="timedout" or .State=="interrupted") ] | length
+  [ .[].SpecReports[]? | select(.LeafNodeType=="It" and (.State=="failed" or .State=="panicked" or .State=="timedout" or .State=="interrupted")) ] | length
 ' "$REPORT" 2>/dev/null || echo 0)"
 
 {
@@ -40,6 +43,7 @@ fail_count="$(jq -r '
     echo
     jq -r --argjson fail '["failed","panicked","timedout","interrupted"]' '
       [ .[].SpecReports[]?
+        | select(.LeafNodeType == "It")
         | select(.State as $s | $fail | index($s))
         | { name:  ((((.ContainerHierarchyTexts // []) + [.LeafNodeText])
                      | map(select(. != null and . != ""))) | join(" › ")),
@@ -56,7 +60,7 @@ fail_count="$(jq -r '
 
   # ── Slowest specs (always) ───────────────────────────────────────────────────
   read -r total_secs ran <<<"$(jq -r '
-    [ .[].SpecReports[]? | select(.State=="passed" or .State=="failed") ] as $s
+    [ .[].SpecReports[]? | select(.LeafNodeType == "It" and (.State=="passed" or .State=="failed")) ] as $s
     | "\((([$s[].RunTime] | add) // 0) / 1000000000 | floor) \($s | length)"' "$REPORT" 2>/dev/null)"
 
   echo "## ⏱️ Slowest specs (top ${TOPN})"
@@ -68,6 +72,7 @@ fail_count="$(jq -r '
   echo "|--:|:--|:--|"
   jq -r --argjson n "$TOPN" '
     [ .[].SpecReports[]?
+      | select(.LeafNodeType == "It")
       | select(.State=="passed" or .State=="failed")
       | { secs:  (.RunTime / 1000000000),
           state: .State,

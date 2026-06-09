@@ -85,13 +85,13 @@ jobs:
         kind-version: ${{ env.KIND_VERSION }}
 
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+      uses: docker/setup-buildx-action@v4
 
     # Build the operator image with a GitHub Actions layer cache so unchanged
     # layers (base image, go mod download) are reused; only changed Go code
     # rebuilds. load:true puts it in the daemon for the kind load below.
     - name: Build operator image (gha layer cache)
-      uses: docker/build-push-action@v6
+      uses: docker/build-push-action@v7
       with:
         context: .
         load: true
@@ -107,7 +107,7 @@ jobs:
     # skip the Docker Hub pull entirely (faster + dodges anonymous rate limits)
     # and import the tarball straight into kind's containerd.
     - name: Cache Neo4j image tarball
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: /tmp/neo4j-image.tar
         key: neo4j-image-${{ matrix.neo4j-version }}
