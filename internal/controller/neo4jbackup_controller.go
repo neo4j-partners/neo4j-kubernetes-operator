@@ -276,7 +276,7 @@ func (r *Neo4jBackupReconciler) reconcileScheduledHistory(ctx context.Context, b
 			if !ok {
 				continue // still running
 			}
-			if backupRunAlreadyRecorded(latest.Status.History, run) {
+			if backupRunAlreadyRecorded(latest.Status.History, run, string(job.UID)) {
 				continue
 			}
 			// F3 / F4: augment with per-Job filename/size + validation
@@ -412,17 +412,31 @@ func jobToBackupRun(job *batchv1.Job, backupsPath string) (neo4jv1beta1.BackupRu
 	}
 }
 
-// backupRunAlreadyRecorded reports whether a BackupRun with the same RunID is
-// already in history. RunID is the Job's name, which is unique per recorded
-// run (one-shot: "<backup>-backup", created once per CR — issue #116;
-// scheduled: "<cronjob>-<unix-seconds>" per child), so it is a reliable dedup
-// key.
-func backupRunAlreadyRecorded(history []neo4jv1beta1.BackupRun, run neo4jv1beta1.BackupRun) bool {
+// backupRunAlreadyRecorded reports whether a BackupRun for this Job is already
+// in history. RunID is the Job's name, which is unique per recorded run
+// (one-shot: "<backup>-backup", created once per CR — issue #116; scheduled:
+// "<cronjob>-<unix-seconds>" per child), so it is a reliable dedup key.
+//
+// jobUID is matched in addition to RunID purely for the upgrade transition:
+// before #158, RunID was populated from the Job's metadata.uid. After upgrade,
+// a CronJob child that completed pre-upgrade still has a UID-keyed history
+// entry, while reconcileScheduledHistory now builds the run with a name-keyed
+// RunID — so a name-only check would re-record the same Job (duplicating it
+// until the history cap trims it). Matching jobUID recognises the legacy entry
+// and skips it. No false-positive risk: a UID is a UUID and a RunID/name is a
+// DNS label, so the two value spaces never overlap.
+func backupRunAlreadyRecorded(history []neo4jv1beta1.BackupRun, run neo4jv1beta1.BackupRun, jobUID string) bool {
 	if run.RunID == "" {
 		return false
 	}
 	for _, existing := range history {
+		if existing.RunID == "" {
+			continue
+		}
 		if existing.RunID == run.RunID {
+			return true
+		}
+		if jobUID != "" && existing.RunID == jobUID {
 			return true
 		}
 	}
@@ -1704,7 +1718,7 @@ func (r *Neo4jBackupReconciler) recordOneShotBackupRun(ctx context.Context, back
 		// produces a new Job with a new UID. Returning nil (instead of an
 		// idempotent Status.Update) saves the round-trip and the
 		// resourceVersion bump on every redundant reconcile.
-		if backupRunAlreadyRecorded(latest.Status.History, run) {
+		if backupRunAlreadyRecorded(latest.Status.History, run, string(job.UID)) {
 			return nil
 		}
 

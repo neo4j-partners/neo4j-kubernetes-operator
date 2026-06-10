@@ -134,26 +134,27 @@ func TestBackupRunAlreadyRecorded(t *testing.T) {
 		name    string
 		history []neo4jv1beta1.BackupRun
 		run     neo4jv1beta1.BackupRun
+		jobUID  string
 		want    bool
 	}{
 		{
 			name: "match found",
 			history: []neo4jv1beta1.BackupRun{
-				mk("uid-a"), mk("uid-b"),
+				mk("a"), mk("b"),
 			},
-			run:  mk("uid-b"),
+			run:  mk("b"),
 			want: true,
 		},
 		{
 			name:    "no match",
-			history: []neo4jv1beta1.BackupRun{mk("uid-a")},
-			run:     mk("uid-b"),
+			history: []neo4jv1beta1.BackupRun{mk("a")},
+			run:     mk("b"),
 			want:    false,
 		},
 		{
 			name:    "empty history",
 			history: nil,
-			run:     mk("uid-a"),
+			run:     mk("a"),
 			want:    false,
 		},
 		{
@@ -161,15 +162,35 @@ func TestBackupRunAlreadyRecorded(t *testing.T) {
 			// Avoids false positives against historic entries pre-upgrade
 			// that have RunID="" — those would otherwise all "match" each
 			// other and break the append path the first time around.
-			history: []neo4jv1beta1.BackupRun{mk(""), mk("uid-a")},
+			history: []neo4jv1beta1.BackupRun{mk(""), mk("a")},
 			run:     mk(""),
+			want:    false,
+		},
+		{
+			// Upgrade transition: a CronJob child recorded before #158 has a
+			// UID-keyed history entry; after upgrade the run is rebuilt with a
+			// name-keyed RunID. Matching jobUID recognises the legacy entry so
+			// the same Job isn't re-recorded (duplicated).
+			name:    "legacy UID-keyed entry matched by jobUID (no re-record on upgrade)",
+			history: []neo4jv1beta1.BackupRun{mk("550e8400-e29b-41d4-a716-446655440000")},
+			run:     mk("my-backup-cron-1737028800"),
+			jobUID:  "550e8400-e29b-41d4-a716-446655440000",
+			want:    true,
+		},
+		{
+			// A genuinely new run (different name, different UID) is not a
+			// duplicate of the legacy entry.
+			name:    "new run with different name and UID is not a duplicate",
+			history: []neo4jv1beta1.BackupRun{mk("550e8400-e29b-41d4-a716-446655440000")},
+			run:     mk("my-backup-cron-1737099999"),
+			jobUID:  "660e8400-e29b-41d4-a716-446655449999",
 			want:    false,
 		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := backupRunAlreadyRecorded(tc.history, tc.run)
+			got := backupRunAlreadyRecorded(tc.history, tc.run, tc.jobUID)
 			if got != tc.want {
 				t.Errorf("backupRunAlreadyRecorded() = %v, want %v", got, tc.want)
 			}
