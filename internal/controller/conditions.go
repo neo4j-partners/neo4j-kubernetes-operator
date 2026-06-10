@@ -97,7 +97,7 @@ func PhaseToConditionStatus(phase string) (metav1.ConditionStatus, string) {
 		return metav1.ConditionTrue, ConditionReasonReady
 	case "Completed":
 		return metav1.ConditionTrue, ConditionReasonBackupSucceeded
-	case "Failed", "Degraded", "Suspended":
+	case "Failed", "Degraded", "Suspended", "Invalid":
 		return metav1.ConditionFalse, ConditionReasonFailed
 	case "Upgrading":
 		return metav1.ConditionUnknown, ConditionReasonUpgrading

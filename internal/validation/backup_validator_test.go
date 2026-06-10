@@ -554,3 +554,56 @@ func TestValidateScheduledBackupName(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateSchedule(t *testing.T) {
+	v := &BackupValidator{}
+	cases := []struct {
+		schedule  string
+		expectErr bool
+	}{
+		{"0 2 * * *", false},          // standard 5-field
+		{"0,30 * * * *", false},       // comma list (was wrongly rejected before)
+		{"0 9-17 * * MON-FRI", false}, // range + named days
+		{"*/15 * * * *", false},       // step
+		{"@daily", false},             // macro
+		{"0 0 2 * * *", true},         // 6-field — K8s CronJob rejects (was wrongly accepted before)
+		{"* * * *", true},             // 4-field
+		{"not-a-cron", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.schedule, func(t *testing.T) {
+			err := v.validateSchedule(tc.schedule)
+			if tc.expectErr && err == nil {
+				t.Fatalf("expected error for schedule %q", tc.schedule)
+			}
+			if !tc.expectErr && err != nil {
+				t.Fatalf("unexpected error for schedule %q: %v", tc.schedule, err)
+			}
+		})
+	}
+}
+
+func TestIsValidMaxAge(t *testing.T) {
+	cases := []struct {
+		in   string
+		want bool
+	}{
+		{"7d", true}, // runtime shorthand — time.ParseDuration rejects this
+		{"30d", true},
+		{"24h", true},
+		{"90m", true},
+		{"45s", true},
+		{"1h30m", true}, // valid Go duration
+		{"7days", false},
+		{"0d", false},
+		{"abc", false},
+		{"", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.in, func(t *testing.T) {
+			if got := isValidMaxAge(tc.in); got != tc.want {
+				t.Errorf("isValidMaxAge(%q) = %v, want %v", tc.in, got, tc.want)
+			}
+		})
+	}
+}
