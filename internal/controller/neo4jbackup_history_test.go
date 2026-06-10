@@ -83,8 +83,8 @@ func TestJobToBackupRun(t *testing.T) {
 		if !ok {
 			t.Fatalf("expected ok=true for a succeeded Job")
 		}
-		if run.RunID != "uid-a" {
-			t.Errorf("RunID: got %q, want %q", run.RunID, "uid-a")
+		if run.RunID != "my-backup-backup-cron-28832400" {
+			t.Errorf("RunID: got %q, want the Job name %q (issue #158)", run.RunID, "my-backup-backup-cron-28832400")
 		}
 		if run.Status != "Succeeded" {
 			t.Errorf("Status: got %q, want Succeeded", run.Status)
@@ -100,7 +100,7 @@ func TestJobToBackupRun(t *testing.T) {
 
 	t.Run("failed Job → BackupRun without Duration", func(t *testing.T) {
 		job := &batchv1.Job{
-			ObjectMeta: metav1.ObjectMeta{UID: types.UID("uid-b")},
+			ObjectMeta: metav1.ObjectMeta{Name: "my-backup-backup"},
 			Status:     batchv1.JobStatus{Failed: 3, StartTime: &start},
 		}
 		run, ok := jobToBackupRun(job, "my-backup")
@@ -117,7 +117,7 @@ func TestJobToBackupRun(t *testing.T) {
 
 	t.Run("still-running Job → ok=false", func(t *testing.T) {
 		job := &batchv1.Job{
-			ObjectMeta: metav1.ObjectMeta{UID: types.UID("uid-c")},
+			ObjectMeta: metav1.ObjectMeta{Name: "my-backup-backup"},
 			Status:     batchv1.JobStatus{StartTime: &start},
 		}
 		if _, ok := jobToBackupRun(job, "my-backup"); ok {
@@ -135,26 +135,27 @@ func TestBackupRunAlreadyRecorded(t *testing.T) {
 		name    string
 		history []neo4jv1beta1.BackupRun
 		run     neo4jv1beta1.BackupRun
+		jobUID  string
 		want    bool
 	}{
 		{
 			name: "match found",
 			history: []neo4jv1beta1.BackupRun{
-				mk("uid-a"), mk("uid-b"),
+				mk("a"), mk("b"),
 			},
-			run:  mk("uid-b"),
+			run:  mk("b"),
 			want: true,
 		},
 		{
 			name:    "no match",
-			history: []neo4jv1beta1.BackupRun{mk("uid-a")},
-			run:     mk("uid-b"),
+			history: []neo4jv1beta1.BackupRun{mk("a")},
+			run:     mk("b"),
 			want:    false,
 		},
 		{
 			name:    "empty history",
 			history: nil,
-			run:     mk("uid-a"),
+			run:     mk("a"),
 			want:    false,
 		},
 		{
@@ -162,15 +163,35 @@ func TestBackupRunAlreadyRecorded(t *testing.T) {
 			// Avoids false positives against historic entries pre-upgrade
 			// that have RunID="" — those would otherwise all "match" each
 			// other and break the append path the first time around.
-			history: []neo4jv1beta1.BackupRun{mk(""), mk("uid-a")},
+			history: []neo4jv1beta1.BackupRun{mk(""), mk("a")},
 			run:     mk(""),
+			want:    false,
+		},
+		{
+			// Upgrade transition: a CronJob child recorded before #158 has a
+			// UID-keyed history entry; after upgrade the run is rebuilt with a
+			// name-keyed RunID. Matching jobUID recognises the legacy entry so
+			// the same Job isn't re-recorded (duplicated).
+			name:    "legacy UID-keyed entry matched by jobUID (no re-record on upgrade)",
+			history: []neo4jv1beta1.BackupRun{mk("550e8400-e29b-41d4-a716-446655440000")},
+			run:     mk("my-backup-cron-1737028800"),
+			jobUID:  "550e8400-e29b-41d4-a716-446655440000",
+			want:    true,
+		},
+		{
+			// A genuinely new run (different name, different UID) is not a
+			// duplicate of the legacy entry.
+			name:    "new run with different name and UID is not a duplicate",
+			history: []neo4jv1beta1.BackupRun{mk("550e8400-e29b-41d4-a716-446655440000")},
+			run:     mk("my-backup-cron-1737099999"),
+			jobUID:  "660e8400-e29b-41d4-a716-446655449999",
 			want:    false,
 		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := backupRunAlreadyRecorded(tc.history, tc.run)
+			got := backupRunAlreadyRecorded(tc.history, tc.run, tc.jobUID)
 			if got != tc.want {
 				t.Errorf("backupRunAlreadyRecorded() = %v, want %v", got, tc.want)
 			}
@@ -321,12 +342,17 @@ func TestRecordOneShotBackupRunDedup(t *testing.T) {
 
 	start := metav1.NewTime(time.Date(2026, 6, 2, 10, 0, 0, 0, time.UTC))
 	end := metav1.NewTime(start.Add(45 * time.Second))
+	// RunID is now the Job name (issue #158), which is the dedup key. jobA
+	// and jobB carry distinct names to exercise the dedup function's
+	// "different run → new entry" path. (In production the one-shot terminal
+	// guard means one CR only ever produces one Job name; this unit test
+	// drives the dedup logic directly.)
 	jobA := &batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{UID: types.UID("uid-A")},
+		ObjectMeta: metav1.ObjectMeta{Name: "b-backup"},
 		Status:     batchv1.JobStatus{Succeeded: 1, StartTime: &start, CompletionTime: &end},
 	}
 	jobB := &batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{UID: types.UID("uid-B")},
+		ObjectMeta: metav1.ObjectMeta{Name: "b-backup-2"},
 		Status:     batchv1.JobStatus{Succeeded: 1, StartTime: &start, CompletionTime: &end},
 	}
 	backup := &neo4jv1beta1.Neo4jBackup{
@@ -351,28 +377,28 @@ func TestRecordOneShotBackupRunDedup(t *testing.T) {
 		require.NotNil(t, got.Status.Stats, "Stats must be set after first call")
 		assert.Equal(t, "45s", got.Status.Stats.Duration)
 		require.Len(t, got.Status.History, 1)
-		assert.Equal(t, "uid-A", got.Status.History[0].RunID)
+		assert.Equal(t, "b-backup", got.Status.History[0].RunID)
 	})
 
 	t.Run("duplicate call is a no-op (no resourceVersion bump)", func(t *testing.T) {
 		before := get()
 		rvBefore := before.ResourceVersion
 
-		r.recordOneShotBackupRun(ctx, backup, jobA) // same Job UID
+		r.recordOneShotBackupRun(ctx, backup, jobA) // same Job name
 
 		after := get()
 		assert.Equal(t, rvBefore, after.ResourceVersion, "duplicate recordOneShotBackupRun must not write")
 		require.Len(t, after.Status.History, 1, "history must stay at length 1")
 	})
 
-	t.Run("new Job UID appends a second history entry", func(t *testing.T) {
+	t.Run("new Job name appends a second history entry", func(t *testing.T) {
 		r.recordOneShotBackupRun(ctx, backup, jobB)
 
 		got := get()
 		require.Len(t, got.Status.History, 2)
 		// Newest first per the prepend convention.
-		assert.Equal(t, "uid-B", got.Status.History[0].RunID)
-		assert.Equal(t, "uid-A", got.Status.History[1].RunID)
+		assert.Equal(t, "b-backup-2", got.Status.History[0].RunID)
+		assert.Equal(t, "b-backup", got.Status.History[1].RunID)
 	})
 }
 
@@ -406,7 +432,7 @@ func TestRecordOneShotBackupRun_FailedJobAppendsToHistory(t *testing.T) {
 	require.Len(t, got.Status.History, 1,
 		"failed one-shot Jobs must be appended to status.history (recheck gap 2)")
 	assert.Equal(t, "Failed", got.Status.History[0].Status)
-	assert.Equal(t, "uid-fail", got.Status.History[0].RunID)
+	assert.Equal(t, "my-backup-backup", got.Status.History[0].RunID)
 	assert.Equal(t, "b", got.Status.History[0].BackupsPath,
 		"BackupsPath must be populated for failed runs too — partial artifacts may exist. "+
 			"Value is the CR name (shared-directory layout, rule 40), not the Job name.")
