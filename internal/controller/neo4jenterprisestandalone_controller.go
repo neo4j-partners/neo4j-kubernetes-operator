@@ -386,10 +386,8 @@ func (r *Neo4jEnterpriseStandaloneReconciler) reconcileConfigMap(ctx context.Con
 	}
 
 	// Create or update ConfigMap with retry logic to handle resource version conflicts.
-	var opResult controllerutil.OperationResult
 	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		var err error
-		opResult, err = controllerutil.CreateOrUpdate(ctx, r.Client, configMap, func() error {
+		_, err := controllerutil.CreateOrUpdate(ctx, r.Client, configMap, func() error {
 			// controllerutil.CreateOrUpdate's Get overwrites configMap with the
 			// EXISTING object, so the desired state MUST be (re)applied here in the
 			// mutate fn — an empty mutate would silently write the stale data back
@@ -443,14 +441,15 @@ func (r *Neo4jEnterpriseStandaloneReconciler) reconcileConfigMap(ctx context.Con
 	}
 	logger.Info("Successfully created or updated ConfigMap", "name", configMap.Name)
 
-	// The rendered conf changed on an already-running standalone — roll the pod
-	// so Neo4j re-reads neo4j.conf. Covers user spec.config edits and any
-	// Neo4jPlugin add/change/remove (which now flows through this single owner).
-	// Skipped on create (the pod hasn't started yet).
-	if opResult == controllerutil.OperationResultUpdated {
-		if err := r.restartStandalonePod(ctx, standalone); err != nil {
-			logger.Error(err, "failed to roll standalone pod after config change")
-		}
+	// Roll the pod when the rendered neo4j.conf changes so Neo4j re-reads it
+	// (it only reads conf at startup). Driven by a hash of the rendered conf
+	// stamped on the pod template — NOT by the ConfigMap's create/update result —
+	// so that a roll which FAILS to apply is retried on the next reconcile
+	// (the hash still differs) instead of leaving Neo4j on stale conf until the
+	// ConfigMap happens to change again. Idempotent: a matching hash is a no-op.
+	// The error is returned (requeue), not swallowed.
+	if err := r.ensureStandalonePodConfigHash(ctx, standalone, standaloneConfHash(configMap.Data["neo4j.conf"])); err != nil {
+		return fmt.Errorf("failed to roll standalone pod after config change: %w", err)
 	}
 
 	return nil
@@ -481,25 +480,43 @@ func (r *Neo4jEnterpriseStandaloneReconciler) collectPluginConfSettings(ctx cont
 	return unionPluginConfSettings(plugins.Items, standalone.Name), nil
 }
 
-// restartStandalonePod rolls the standalone's pod by bumping a restart annotation
-// on the StatefulSet template, so Neo4j re-reads neo4j.conf after a config change.
-// Called only when the rendered conf actually changed (#146 makes config-change
-// restarts the standalone controller's responsibility, replacing the plugin
-// controller's per-plugin restart). Best-effort: a missing StatefulSet (not yet
-// created) is a no-op.
-func (r *Neo4jEnterpriseStandaloneReconciler) restartStandalonePod(ctx context.Context, standalone *neo4jv1beta1.Neo4jEnterpriseStandalone) error {
-	sts := &appsv1.StatefulSet{}
-	if err := r.Get(ctx, types.NamespacedName{Name: standalone.Name, Namespace: standalone.Namespace}, sts); err != nil {
-		if errors.IsNotFound(err) {
+// standaloneConfigHashAnnotation carries a hash of the rendered neo4j.conf on the
+// pod template. Changing it triggers a StatefulSet rolling update (so Neo4j
+// re-reads conf at startup); leaving it unchanged is a no-op. Being a function
+// of the conf content makes the roll idempotent AND retried — a failed roll
+// leaves the hash mismatched, so the next reconcile retries it.
+const standaloneConfigHashAnnotation = "neo4j.com/config-hash"
+
+// standaloneConfHash returns a stable hex hash of the rendered neo4j.conf.
+func standaloneConfHash(conf string) string {
+	sum := sha256.Sum256([]byte(conf))
+	return hex.EncodeToString(sum[:])
+}
+
+// ensureStandalonePodConfigHash rolls the standalone's pod when the rendered conf
+// changes, by stamping confHash on the pod template. Idempotent (matching hash →
+// no-op), so it's safe to call every reconcile; the Update error is returned so a
+// failed roll requeues and is retried (#146 makes config-change rolls the
+// standalone controller's responsibility). A missing StatefulSet (pod not created
+// yet) is a no-op. Wrapped in RetryOnConflict for the read-modify-write.
+func (r *Neo4jEnterpriseStandaloneReconciler) ensureStandalonePodConfigHash(ctx context.Context, standalone *neo4jv1beta1.Neo4jEnterpriseStandalone, confHash string) error {
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		sts := &appsv1.StatefulSet{}
+		if err := r.Get(ctx, types.NamespacedName{Name: standalone.Name, Namespace: standalone.Namespace}, sts); err != nil {
+			if errors.IsNotFound(err) {
+				return nil
+			}
+			return err
+		}
+		if sts.Spec.Template.Annotations[standaloneConfigHashAnnotation] == confHash {
 			return nil
 		}
-		return err
-	}
-	if sts.Spec.Template.Annotations == nil {
-		sts.Spec.Template.Annotations = make(map[string]string)
-	}
-	sts.Spec.Template.Annotations["neo4j.com/config-restarted-at"] = time.Now().UTC().Format(time.RFC3339)
-	return r.Update(ctx, sts)
+		if sts.Spec.Template.Annotations == nil {
+			sts.Spec.Template.Annotations = make(map[string]string)
+		}
+		sts.Spec.Template.Annotations[standaloneConfigHashAnnotation] = confHash
+		return r.Update(ctx, sts)
+	})
 }
 
 // splitCSVSet parses a comma-separated annotation value into a set.
@@ -627,6 +644,20 @@ func (r *Neo4jEnterpriseStandaloneReconciler) createHeadlessService(standalone *
 // token, APOC vars). See mergeEnvVars for the merge semantics.
 const standaloneOwnedEnvVarsAnnotation = "neo4j.com/standalone-controller-env-vars"
 
+// standaloneOwnedInitContainersAnnotation / standaloneOwnedVolumesAnnotation
+// record the init-container and volume NAMES the standalone controller rendered
+// on the last reconcile. They play the same role for init containers / volumes
+// that standaloneOwnedEnvVarsAnnotation plays for env vars: on a template apply
+// they let the controller DROP an item it used to own but no longer renders
+// (e.g. the truststore init container + its CA volume once spec.trustedCASecrets
+// is cleared) WITHOUT clobbering foreign items added by another controller (the
+// plugin controller's VerifiedDownload init container + auth/CA volumes). See
+// mergeOwnedByName.
+const (
+	standaloneOwnedInitContainersAnnotation = "neo4j.com/standalone-controller-init-containers"
+	standaloneOwnedVolumesAnnotation        = "neo4j.com/standalone-controller-volumes"
+)
+
 // standaloneTemplateHashAnnotation stores a hash of the operator's DESIRED pod
 // template from the previous reconcile. reconcileStatefulSet applies the
 // desired template (image, resources, probes, env, volumes…) only when this
@@ -649,13 +680,19 @@ func standalonePodTemplateHash(t corev1.PodTemplateSpec) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// mergeForeignByName returns desired followed by every item in current whose
-// name (per nameOf) is NOT in desired — i.e. desired wins on a name collision
-// and foreign items added by another controller (the plugin controller's
-// VerifiedDownload init container and its auth/CA volumes) are preserved across
-// a template apply. Order is stable: desired first (operator-owned), then
-// preserved foreign items in their existing relative order.
-func mergeForeignByName[T any](current, desired []T, nameOf func(T) string) []T {
+// mergeOwnedByName applies the operator's desired items while preserving foreign
+// ones, mirroring mergeEnvVars (which does the same for env vars):
+//   - desired: applied (wins by name).
+//   - previousOwned ∖ desired: DROPPED — an item the operator used to render and
+//     no longer does (e.g. the truststore init container + its CA volume once
+//     spec.trustedCASecrets is cleared). Without this they'd be mistaken for
+//     foreign and re-appended forever.
+//   - current ∖ previousOwned ∖ desired: preserved (genuinely foreign — the
+//     plugin controller's VerifiedDownload init container + auth/CA volumes).
+//
+// Output: desired first (operator-owned), then preserved foreign items in their
+// original relative order.
+func mergeOwnedByName[T any](current, desired []T, previousOwned map[string]struct{}, nameOf func(T) string) []T {
 	desiredNames := make(map[string]struct{}, len(desired))
 	for _, d := range desired {
 		desiredNames[nameOf(d)] = struct{}{}
@@ -663,11 +700,28 @@ func mergeForeignByName[T any](current, desired []T, nameOf func(T) string) []T 
 	out := make([]T, 0, len(current)+len(desired))
 	out = append(out, desired...)
 	for _, c := range current {
-		if _, ok := desiredNames[nameOf(c)]; !ok {
-			out = append(out, c)
+		n := nameOf(c)
+		if _, inDesired := desiredNames[n]; inDesired {
+			continue // desired already holds it
 		}
+		if _, owned := previousOwned[n]; owned {
+			continue // operator-owned but no longer desired → drop
+		}
+		out = append(out, c) // foreign → preserve
 	}
 	return out
+}
+
+// sortedNamesCSV returns the items' names (per nameOf) sorted and comma-joined,
+// for the owned-init-containers / owned-volumes annotations (stable so they
+// don't churn the StatefulSet between reconciles).
+func sortedNamesCSV[T any](items []T, nameOf func(T) string) string {
+	names := make([]string, 0, len(items))
+	for _, it := range items {
+		names = append(names, nameOf(it))
+	}
+	sort.Strings(names)
+	return strings.Join(names, ",")
 }
 
 // standaloneEnvVarNames returns the env-var names sorted and comma-joined, for
@@ -758,6 +812,8 @@ func (r *Neo4jEnterpriseStandaloneReconciler) reconcileStatefulSet(ctx context.C
 			//     otherwise an image/resource upgrade would drop them and the pod
 			//     would roll without the verified plugin JAR.
 			previousOwned := splitCSVSet(statefulSet.Annotations[standaloneOwnedEnvVarsAnnotation])
+			prevOwnedInit := splitCSVSet(statefulSet.Annotations[standaloneOwnedInitContainersAnnotation])
+			prevOwnedVolumes := splitCSVSet(statefulSet.Annotations[standaloneOwnedVolumesAnnotation])
 			currentEnv := []corev1.EnvVar{}
 			if len(statefulSet.Spec.Template.Spec.Containers) > 0 {
 				currentEnv = statefulSet.Spec.Template.Spec.Containers[0].Env
@@ -790,14 +846,14 @@ func (r *Neo4jEnterpriseStandaloneReconciler) reconcileStatefulSet(ctx context.C
 			if len(statefulSet.Spec.Template.Spec.Containers) > 0 {
 				statefulSet.Spec.Template.Spec.Containers[0].Env = mergedEnv
 			}
-			statefulSet.Spec.Template.Spec.InitContainers = mergeForeignByName(
-				currentInit, desiredTemplate.Spec.InitContainers,
+			statefulSet.Spec.Template.Spec.InitContainers = mergeOwnedByName(
+				currentInit, desiredTemplate.Spec.InitContainers, prevOwnedInit,
 				func(c corev1.Container) string { return c.Name })
-			statefulSet.Spec.Template.Spec.Volumes = mergeForeignByName(
-				currentVolumes, desiredTemplate.Spec.Volumes,
+			statefulSet.Spec.Template.Spec.Volumes = mergeOwnedByName(
+				currentVolumes, desiredTemplate.Spec.Volumes, prevOwnedVolumes,
 				func(v corev1.Volume) string { return v.Name })
 
-			r.stampStandaloneStatefulSetTracking(statefulSet, desiredHash, desiredEnv)
+			r.stampStandaloneStatefulSetTracking(statefulSet, desiredHash, desiredSpec.Template)
 			return nil
 		})
 		return err
@@ -811,14 +867,23 @@ func (r *Neo4jEnterpriseStandaloneReconciler) reconcileStatefulSet(ctx context.C
 }
 
 // stampStandaloneStatefulSetTracking records the desired template hash and the
-// operator-owned env-var names on the StatefulSet so the next reconcile can diff
-// against them (template-change detection + foreign-env preservation).
-func (r *Neo4jEnterpriseStandaloneReconciler) stampStandaloneStatefulSetTracking(sts *appsv1.StatefulSet, templateHash string, ownedEnv []corev1.EnvVar) {
+// operator-owned env-var / init-container / volume names on the StatefulSet so
+// the next reconcile can diff against them (template-change detection +
+// foreign-item preservation + owned-item removal). `desired` must be the
+// pristine operator-rendered template (desiredSpec.Template), not the merged
+// one — the annotations track what the operator OWNS, not what's live.
+func (r *Neo4jEnterpriseStandaloneReconciler) stampStandaloneStatefulSetTracking(sts *appsv1.StatefulSet, templateHash string, desired corev1.PodTemplateSpec) {
 	if sts.Annotations == nil {
 		sts.Annotations = map[string]string{}
 	}
+	var ownedEnv []corev1.EnvVar
+	if len(desired.Spec.Containers) > 0 {
+		ownedEnv = desired.Spec.Containers[0].Env
+	}
 	sts.Annotations[standaloneTemplateHashAnnotation] = templateHash
 	sts.Annotations[standaloneOwnedEnvVarsAnnotation] = standaloneEnvVarNames(ownedEnv)
+	sts.Annotations[standaloneOwnedInitContainersAnnotation] = sortedNamesCSV(desired.Spec.InitContainers, func(c corev1.Container) string { return c.Name })
+	sts.Annotations[standaloneOwnedVolumesAnnotation] = sortedNamesCSV(desired.Spec.Volumes, func(v corev1.Volume) string { return v.Name })
 }
 
 // reconcileNetworkPolicy reconciles the NetworkPolicy for the standalone

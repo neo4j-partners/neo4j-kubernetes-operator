@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -360,5 +361,82 @@ func TestReconcileConfigMap_SameNamedClusterPluginsNotFolded(t *testing.T) {
 	conf := renderedConf(t, c)
 	if strings.Contains(conf, "gds.*") {
 		t.Errorf("cluster-targeted plugin must not be folded into the same-named standalone; conf:\n%s", conf)
+	}
+}
+
+// TestReconcileConfigMap_RollsPodOnConfChangeIdempotently: a neo4j.conf change
+// must roll the pod (stamp the config-hash annotation), and an unchanged conf
+// must NOT churn the StatefulSet. The hash-based roll is what makes a failed
+// roll retryable (see PodRollFailureReturnsError).
+func TestReconcileConfigMap_RollsPodOnConfChangeIdempotently(t *testing.T) {
+	r, _ := standaloneCMTestReconciler(t)
+	ctx := context.Background()
+
+	sa := standaloneForSTS("5.26.0-enterprise")
+	sa.Spec.Config = map[string]string{"db.transaction.timeout": "30s"}
+	if err := r.reconcileStatefulSet(ctx, sa); err != nil {
+		t.Fatalf("create STS: %v", err)
+	}
+	if err := r.reconcileConfigMap(ctx, sa); err != nil {
+		t.Fatalf("reconcile conf 1: %v", err)
+	}
+	h1 := getSTS(t, r).Spec.Template.Annotations[standaloneConfigHashAnnotation]
+	if h1 == "" {
+		t.Fatal("expected config-hash annotation to be stamped after conf reconcile")
+	}
+
+	// Same conf again → no StatefulSet churn.
+	rv := getSTS(t, r).ResourceVersion
+	if err := r.reconcileConfigMap(ctx, sa); err != nil {
+		t.Fatalf("reconcile conf 2 (idempotent): %v", err)
+	}
+	if getSTS(t, r).ResourceVersion != rv {
+		t.Errorf("unchanged conf should not churn the StatefulSet (rv changed from %s)", rv)
+	}
+
+	// Change conf → config-hash changes (pod rolls).
+	sa.Spec.Config["db.transaction.timeout"] = "90s"
+	if err := r.reconcileConfigMap(ctx, sa); err != nil {
+		t.Fatalf("reconcile conf 3 (changed): %v", err)
+	}
+	if h2 := getSTS(t, r).Spec.Template.Annotations[standaloneConfigHashAnnotation]; h2 == h1 {
+		t.Errorf("config-hash should change when neo4j.conf changes; still %s", h2)
+	}
+}
+
+// TestReconcileConfigMap_PodRollFailureReturnsError: if the pod roll (StatefulSet
+// update) fails, reconcileConfigMap must return the error (→ requeue) rather than
+// log-and-succeed, which would leave Neo4j on stale conf. Regression for Bugbot
+// "Config restart failures never retried".
+func TestReconcileConfigMap_PodRollFailureReturnsError(t *testing.T) {
+	scheme := runtime.NewScheme()
+	if err := clientgoscheme.AddToScheme(scheme); err != nil {
+		t.Fatalf("scheme: %v", err)
+	}
+	if err := neo4jv1beta1.AddToScheme(scheme); err != nil {
+		t.Fatalf("scheme: %v", err)
+	}
+	rollErr := errors.New("statefulset update boom")
+	c := fake.NewClientBuilder().WithScheme(scheme).WithInterceptorFuncs(interceptor.Funcs{
+		Update: func(ctx context.Context, cl client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+			if _, ok := obj.(*appsv1.StatefulSet); ok {
+				return rollErr
+			}
+			return cl.Update(ctx, obj, opts...)
+		},
+	}).Build()
+	r := &Neo4jEnterpriseStandaloneReconciler{Client: c, Scheme: scheme}
+	ctx := context.Background()
+
+	// A StatefulSet must exist so the roll attempts (and fails) an Update.
+	if err := c.Create(ctx, &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{Name: "sa", Namespace: "default"},
+	}); err != nil {
+		t.Fatalf("pre-create STS: %v", err)
+	}
+
+	sa := standaloneForConf(map[string]string{"db.transaction.timeout": "30s"})
+	if err := r.reconcileConfigMap(ctx, sa); err == nil {
+		t.Fatal("expected reconcileConfigMap to return an error when the pod roll fails")
 	}
 }

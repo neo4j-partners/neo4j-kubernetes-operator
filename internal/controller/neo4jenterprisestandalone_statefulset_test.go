@@ -327,6 +327,52 @@ func TestReconcileStatefulSet_MonitoringOffRemovesScrapeAnnotations(t *testing.T
 	}
 }
 
+// TestReconcileStatefulSet_RemovedOwnedInitContainerDropped: an init container
+// the operator used to render but no longer does (the truststore-init once
+// spec.trustedCASecrets is cleared) must be DROPPED on the next apply — not
+// mistaken for a foreign item and re-appended. A genuinely foreign init (the
+// plugin controller's) must still survive. Regression for Bugbot "Removed
+// truststore inits kept foreign".
+func TestReconcileStatefulSet_RemovedOwnedInitContainerDropped(t *testing.T) {
+	r, _ := standaloneCMTestReconciler(t)
+	ctx := context.Background()
+
+	sa := standaloneForSTS("5.26.0-enterprise")
+	sa.Spec.TrustedCASecrets = []neo4jv1beta1.TrustedCASecret{{Name: "corp-ca"}}
+	if err := r.reconcileStatefulSet(ctx, sa); err != nil {
+		t.Fatalf("reconcile 1: %v", err)
+	}
+	sts := getSTS(t, r)
+	if !hasInitContainer(sts.Spec.Template.Spec.InitContainers, "truststore-init") {
+		t.Fatalf("expected operator-owned truststore-init with trustedCASecrets set; got %+v", sts.Spec.Template.Spec.InitContainers)
+	}
+
+	// Simulate the plugin controller injecting a foreign init container + volume.
+	sts.Spec.Template.Spec.InitContainers = append(sts.Spec.Template.Spec.InitContainers,
+		corev1.Container{Name: "plugin-download-gds", Image: "plugin-init:latest"})
+	sts.Spec.Template.Spec.Volumes = append(sts.Spec.Template.Spec.Volumes,
+		corev1.Volume{Name: "plugin-auth-gds", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}})
+	if err := r.Update(ctx, sts); err != nil {
+		t.Fatalf("inject foreign init/volume: %v", err)
+	}
+
+	// Clear trustedCASecrets → operator no longer renders truststore-init.
+	sa.Spec.TrustedCASecrets = nil
+	if err := r.reconcileStatefulSet(ctx, sa); err != nil {
+		t.Fatalf("reconcile 2: %v", err)
+	}
+	sts = getSTS(t, r)
+	if hasInitContainer(sts.Spec.Template.Spec.InitContainers, "truststore-init") {
+		t.Errorf("operator-owned truststore-init should be dropped after trustedCASecrets cleared; got %+v", sts.Spec.Template.Spec.InitContainers)
+	}
+	if !hasInitContainer(sts.Spec.Template.Spec.InitContainers, "plugin-download-gds") {
+		t.Errorf("foreign init container must be preserved; got %+v", sts.Spec.Template.Spec.InitContainers)
+	}
+	if !hasVolume(sts.Spec.Template.Spec.Volumes, "plugin-auth-gds") {
+		t.Errorf("foreign volume must be preserved; got %+v", sts.Spec.Template.Spec.Volumes)
+	}
+}
+
 func hasInitContainer(cs []corev1.Container, name string) bool {
 	for _, c := range cs {
 		if c.Name == name {
