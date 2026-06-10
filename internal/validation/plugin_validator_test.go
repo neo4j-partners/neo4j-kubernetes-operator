@@ -29,10 +29,11 @@ func TestPluginValidator_Validate(t *testing.T) {
 	validator := NewPluginValidator()
 
 	tests := []struct {
-		name        string
-		plugin      *neo4jv1beta1.Neo4jPlugin
-		expectError bool
-		errorCount  int
+		name         string
+		plugin       *neo4jv1beta1.Neo4jPlugin
+		expectError  bool
+		errorCount   int
+		warningCount int
 	}{
 		{
 			name: "valid APOC plugin",
@@ -79,8 +80,9 @@ func TestPluginValidator_Validate(t *testing.T) {
 					Enabled:    true,
 				},
 			},
-			expectError: true,
-			errorCount:  1,
+			expectError:  false, // compatibility is advisory: warning, not error
+			errorCount:   0,
+			warningCount: 1,
 		},
 		{
 			name: "deprecated plugin",
@@ -95,8 +97,9 @@ func TestPluginValidator_Validate(t *testing.T) {
 					Enabled:    true,
 				},
 			},
-			expectError: true,
-			errorCount:  1,
+			expectError:  false, // deprecation is advisory: warning, not error
+			errorCount:   0,
+			warningCount: 1,
 		},
 		{
 			name: "unknown plugin",
@@ -111,8 +114,9 @@ func TestPluginValidator_Validate(t *testing.T) {
 					Enabled:    true,
 				},
 			},
-			expectError: true,
-			errorCount:  1,
+			expectError:  false, // unknown plugins are advisory: warning, not error
+			errorCount:   0,
+			warningCount: 1,
 		},
 		{
 			name: "missing plugin name",
@@ -318,17 +322,20 @@ func TestPluginValidator_Validate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			errors := validator.Validate(tt.plugin)
+			result := validator.Validate(tt.plugin)
 
 			if tt.expectError {
-				if len(errors) == 0 {
+				if len(result.Errors) == 0 {
 					t.Errorf("expected validation errors but got none")
 				}
-				if len(errors) != tt.errorCount {
-					t.Errorf("expected %d errors but got %d: %v", tt.errorCount, len(errors), errors)
+				if len(result.Errors) != tt.errorCount {
+					t.Errorf("expected %d errors but got %d: %v", tt.errorCount, len(result.Errors), result.Errors)
 				}
-			} else if len(errors) > 0 {
-				t.Errorf("expected no validation errors but got %d: %v", len(errors), errors)
+			} else if len(result.Errors) > 0 {
+				t.Errorf("expected no validation errors but got %d: %v", len(result.Errors), result.Errors)
+			}
+			if len(result.Warnings) != tt.warningCount {
+				t.Errorf("expected %d warnings but got %d: %v", tt.warningCount, len(result.Warnings), result.Warnings)
 			}
 		})
 	}
@@ -413,7 +420,7 @@ func TestPluginValidator_ChecksumRules(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			errs := validator.Validate(base(tt.source))
+			errs := validator.Validate(base(tt.source)).Errors
 			if tt.wantErr {
 				if len(errs) == 0 {
 					t.Fatalf("expected an error, got none")
@@ -430,70 +437,70 @@ func TestPluginValidator_ChecksumRules(t *testing.T) {
 	}
 }
 
-func TestPluginValidator_validatePluginCompatibility(t *testing.T) {
+func TestPluginValidator_pluginCompatibilityWarning(t *testing.T) {
 	validator := NewPluginValidator()
 
 	tests := []struct {
-		name        string
-		pluginName  string
-		version     string
-		expectError bool
+		name          string
+		pluginName    string
+		version       string
+		expectWarning bool
 	}{
 		{
-			name:        "valid APOC version",
-			pluginName:  "apoc",
-			version:     "5.26.0",
-			expectError: false,
+			name:          "valid APOC version",
+			pluginName:    "apoc",
+			version:       "5.26.0",
+			expectWarning: false,
 		},
 		{
-			name:        "valid GDS version",
-			pluginName:  "graph-data-science",
-			version:     "2.9.0",
-			expectError: false,
+			name:          "valid GDS version",
+			pluginName:    "graph-data-science",
+			version:       "2.9.0",
+			expectWarning: false,
 		},
 		{
-			name:        "invalid APOC version - too old",
-			pluginName:  "apoc",
-			version:     "5.25.0",
-			expectError: true,
+			name:          "APOC version below recorded minimum warns",
+			pluginName:    "apoc",
+			version:       "5.25.0",
+			expectWarning: true,
 		},
 		{
-			name:        "deprecated plugin",
-			pluginName:  "neo4j-graph-algorithms",
-			version:     "3.5.0",
-			expectError: true,
+			name:          "deprecated plugin warns",
+			pluginName:    "neo4j-graph-algorithms",
+			version:       "3.5.0",
+			expectWarning: true,
 		},
 		{
-			name:        "unknown plugin",
-			pluginName:  "unknown-plugin",
-			version:     "1.0.0",
-			expectError: true,
+			name:          "unknown plugin warns",
+			pluginName:    "unknown-plugin",
+			version:       "1.0.0",
+			expectWarning: true,
 		},
 		{
-			name:        "valid plugin version newer than minimum",
-			pluginName:  "apoc",
-			version:     "5.26.5", // synthetic fixture to verify version-comparison ordering (> 5.26.0); not a claim about an actual published APOC release
-			expectError: false,
+			name:          "valid plugin version newer than minimum",
+			pluginName:    "apoc",
+			version:       "5.26.5", // synthetic fixture to verify version-comparison ordering (> 5.26.0); not a claim about an actual published APOC release
+			expectWarning: false,
 		},
 		{
-			name:        "valid CalVer plugin",
-			pluginName:  "neo4j-genai",
-			version:     "2025.01.0",
-			expectError: false,
+			name:          "valid CalVer plugin",
+			pluginName:    "neo4j-genai",
+			version:       "2025.01.0",
+			expectWarning: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := validator.validatePluginCompatibility(tt.pluginName, tt.version)
+			msg := validator.pluginCompatibilityWarning(tt.pluginName, tt.version)
 
-			if tt.expectError {
-				if err == nil {
-					t.Errorf("expected error but got none")
+			if tt.expectWarning {
+				if msg == "" {
+					t.Errorf("expected a warning but got none")
 				}
 			} else {
-				if err != nil {
-					t.Errorf("expected no error but got: %v", err)
+				if msg != "" {
+					t.Errorf("expected no warning but got: %q", msg)
 				}
 			}
 		})
@@ -625,7 +632,7 @@ func TestPluginValidator_VerifiedDownloadGates(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			errs := validator.Validate(base(tt.source, tt.deps))
+			errs := validator.Validate(base(tt.source, tt.deps)).Errors
 			if tt.wantErr {
 				if len(errs) == 0 {
 					t.Fatalf("expected an error, got none")

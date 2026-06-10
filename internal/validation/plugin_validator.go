@@ -40,13 +40,22 @@ func NewPluginValidator() *PluginValidator {
 	return &PluginValidator{}
 }
 
-// Validate validates the plugin configuration for Neo4j 5.26+ compatibility
-func (v *PluginValidator) Validate(plugin *neo4jv1beta1.Neo4jPlugin) field.ErrorList {
-	var allErrs field.ErrorList
+// PluginValidationResult carries hard errors (which block install) separately
+// from advisory warnings (surfaced as events but never block). Mirrors
+// DatabaseValidationResult so callers handle both validators uniformly.
+type PluginValidationResult struct {
+	Errors   field.ErrorList
+	Warnings []string
+}
+
+// Validate validates the plugin configuration for Neo4j 5.26+ compatibility.
+// Hard errors land in Errors; advisory compatibility notes land in Warnings.
+func (v *PluginValidator) Validate(plugin *neo4jv1beta1.Neo4jPlugin) *PluginValidationResult {
+	result := &PluginValidationResult{}
 
 	// Validate plugin name
 	if plugin.Spec.Name == "" {
-		allErrs = append(allErrs, field.Required(
+		result.Errors = append(result.Errors, field.Required(
 			field.NewPath("spec", "name"),
 			"plugin name must be specified",
 		))
@@ -54,47 +63,46 @@ func (v *PluginValidator) Validate(plugin *neo4jv1beta1.Neo4jPlugin) field.Error
 
 	// Validate plugin version
 	if plugin.Spec.Version == "" {
-		allErrs = append(allErrs, field.Required(
+		result.Errors = append(result.Errors, field.Required(
 			field.NewPath("spec", "version"),
 			"plugin version must be specified",
 		))
 	}
 
-	// Validate plugin compatibility with Neo4j 5.26+
+	// Plugin compatibility with the known matrix is advisory only — the
+	// operator installs arbitrary (incl. URL-sourced) plugins and is
+	// forward-compatible across Neo4j versions, so an unknown/older entry is
+	// a warning, never a hard reject.
 	if plugin.Spec.Name != "" && plugin.Spec.Version != "" {
-		if err := v.validatePluginCompatibility(plugin.Spec.Name, plugin.Spec.Version); err != nil {
-			allErrs = append(allErrs, field.Invalid(
-				field.NewPath("spec", "name"),
-				plugin.Spec.Name,
-				err.Error(),
-			))
+		if msg := v.pluginCompatibilityWarning(plugin.Spec.Name, plugin.Spec.Version); msg != "" {
+			result.Warnings = append(result.Warnings, msg)
 		}
 	}
 
 	// Validate plugin source
 	if plugin.Spec.Source != nil {
-		allErrs = append(allErrs, v.validatePluginSource(plugin.Spec.Source)...)
+		result.Errors = append(result.Errors, v.validatePluginSource(plugin.Spec.Source)...)
 	}
 
 	// Validate plugin dependencies
 	if len(plugin.Spec.Dependencies) > 0 {
-		allErrs = append(allErrs, v.validatePluginDependencies(plugin.Spec.Dependencies)...)
+		result.Errors = append(result.Errors, v.validatePluginDependencies(plugin.Spec.Dependencies)...)
 	}
 
 	// Validate plugin security configuration
 	if plugin.Spec.Security != nil {
-		allErrs = append(allErrs, v.validatePluginSecurity(plugin.Spec.Security)...)
+		result.Errors = append(result.Errors, v.validatePluginSecurity(plugin.Spec.Security)...)
 	}
 
 	// Validate plugin resources
 	if plugin.Spec.Resources != nil {
-		allErrs = append(allErrs, v.validatePluginResources(plugin.Spec.Resources)...)
+		result.Errors = append(result.Errors, v.validatePluginResources(plugin.Spec.Resources)...)
 	}
 
 	// Cross-field gates for installMode: VerifiedDownload.
-	allErrs = append(allErrs, v.validateVerifiedDownloadMode(plugin)...)
+	result.Errors = append(result.Errors, v.validateVerifiedDownloadMode(plugin)...)
 
-	return allErrs
+	return result
 }
 
 // validateVerifiedDownloadMode enforces the gates the VerifiedDownload
@@ -154,7 +162,14 @@ func (v *PluginValidator) validateVerifiedDownloadMode(plugin *neo4jv1beta1.Neo4
 }
 
 // validatePluginCompatibility validates plugin compatibility with Neo4j 5.26+
-func (v *PluginValidator) validatePluginCompatibility(name, version string) error {
+// pluginCompatibilityWarning returns an advisory message when a plugin isn't
+// in the known compatibility matrix, is deprecated, or is below the matrix's
+// recorded minimum version. It NEVER hard-rejects: the operator installs
+// arbitrary (incl. URL-sourced) plugins and is forward-compatible across
+// Neo4j versions, and this matrix is a best-effort convenience that drifts as
+// Neo4j ships new plugins (and uses different labels, e.g. "neo4j-bloom" vs
+// the operator's "bloom"). Returns "" when nothing noteworthy.
+func (v *PluginValidator) pluginCompatibilityWarning(name, version string) string {
 	// Define known plugins and their minimum compatible versions with Neo4j 5.26+
 	compatibilityMatrix := map[string]string{
 		"apoc":                   "5.26.0",
@@ -177,21 +192,23 @@ func (v *PluginValidator) validatePluginCompatibility(name, version string) erro
 	// Check if plugin is known
 	minVersion, exists := compatibilityMatrix[strings.ToLower(name)]
 	if !exists {
-		// For unknown plugins, require they explicitly state Neo4j 5.26+ compatibility
-		return fmt.Errorf("plugin '%s' is not in the known compatibility matrix. Please verify it supports Neo4j 5.26+", name)
+		// Unknown plugins are common and legitimate (URL-sourced, newly
+		// shipped, or labelled differently than this matrix records) — note
+		// it, don't block.
+		return fmt.Sprintf("plugin '%s' is not in the operator's known compatibility matrix — verify it supports your Neo4j version", name)
 	}
 
 	// Check for deprecated plugins
 	if minVersion == "deprecated" {
-		return fmt.Errorf("plugin '%s' is deprecated in Neo4j 5.26+. Please use alternative plugins", name)
+		return fmt.Sprintf("plugin '%s' is deprecated in Neo4j 5.26+ — consider an alternative", name)
 	}
 
 	// Validate version against minimum requirement
 	if !v.isPluginVersionCompatible(version, minVersion) {
-		return fmt.Errorf("plugin '%s' version '%s' is not compatible with Neo4j 5.26+. Minimum version required: %s", name, version, minVersion)
+		return fmt.Sprintf("plugin '%s' version '%s' is below the operator's recorded minimum for Neo4j 5.26+ (%s) — verify compatibility", name, version, minVersion)
 	}
 
-	return nil
+	return ""
 }
 
 // validatePluginSource validates plugin source configuration

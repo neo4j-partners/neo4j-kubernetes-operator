@@ -38,6 +38,7 @@ import (
 	neo4jv1beta1 "github.com/neo4j-partners/neo4j-kubernetes-operator/api/v1beta1"
 	neo4jclient "github.com/neo4j-partners/neo4j-kubernetes-operator/internal/neo4j"
 	"github.com/neo4j-partners/neo4j-kubernetes-operator/internal/resources"
+	"github.com/neo4j-partners/neo4j-kubernetes-operator/internal/validation"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -120,6 +121,13 @@ type Neo4jPluginReconciler struct {
 	Scheme       *runtime.Scheme
 	Recorder     record.EventRecorder
 	RequeueAfter time.Duration
+
+	// Validator performs structural validation of the Neo4jPlugin spec
+	// (name/version/source/checksum/dependencies/security/resources) inline
+	// before any install work. Hard errors short-circuit the reconcile into
+	// the "Invalid" phase; compatibility-matrix advisories are surfaced as
+	// Warning events only. Always set via NewPluginValidator() in cmd/main.go.
+	Validator *validation.PluginValidator
 
 	// PluginInitImage overrides the default init container image
 	// (resources.DefaultPluginInitContainerImage) used for
@@ -227,6 +235,25 @@ func (r *Neo4jPluginReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{Requeue: true}, nil
+	}
+
+	// Structural validation gate. Hard errors (missing name/version, bad
+	// source/checksum, conflicting security, VerifiedDownload gaps) leave the
+	// plugin in "Invalid" with no requeue — re-edit the CR to retry. The
+	// compatibility matrix produces advisory Warnings only (the operator
+	// installs arbitrary, incl. URL-sourced, plugins and is forward-compatible
+	// across Neo4j versions), so those never block install.
+	if r.Validator != nil {
+		result := r.Validator.Validate(plugin)
+		for _, w := range result.Warnings {
+			r.Recorder.Event(plugin, corev1.EventTypeWarning, EventReasonValidationWarning, w)
+		}
+		if len(result.Errors) > 0 {
+			msg := fmt.Sprintf("Neo4jPlugin spec is invalid: %s", result.Errors.ToAggregate().Error())
+			r.updatePluginStatus(ctx, plugin, "Invalid", msg)
+			r.Recorder.Event(plugin, corev1.EventTypeWarning, EventReasonValidationFailed, msg)
+			return ctrl.Result{}, nil
+		}
 	}
 
 	// Refuse to reconcile if another Neo4jPlugin CR already owns this
