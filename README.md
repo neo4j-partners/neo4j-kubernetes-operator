@@ -9,9 +9,6 @@ A Kubernetes operator for Neo4j Enterprise — declarative clusters, databases, 
 > [!TIP]
 > 📖 **Documentation site**: [neo4j-partners.github.io/neo4j-kubernetes-operator](https://neo4j-partners.github.io/neo4j-kubernetes-operator/) — searchable, versioned, with a release dropdown. Every link in this README also resolves on the docs site.
 
-> [!WARNING]
-> Development is LLM-driven, not merely LLM-assisted, so expect bugs — including subtle, non-obvious ones. **Independent validation is required before production use.** APIs may change between releases. Contributors are welcome — real-world usage is what will carry the project forward to an acceptable maturity level. Issues and PRs are handled best-effort via [GitHub Issues](https://github.com/neo4j-partners/neo4j-kubernetes-operator/issues).
-
 ## Requirements
 
 - **Neo4j**: Enterprise 5.26 LTS or any CalVer release (2025.x+)
@@ -93,7 +90,7 @@ Each has examples under [`examples/`](examples/) and a dedicated guide on the [d
 
 ## Contributing
 
-This project exclusively uses **Kind** for development, testing, and CI workflows.
+This project uses **Kind** for development, testing, and CI workflows.
 
 ```bash
 git clone https://github.com/neo4j-partners/neo4j-kubernetes-operator.git
@@ -104,11 +101,3 @@ make test-unit          # Run unit tests
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) and the [developer guide](https://neo4j-partners.github.io/neo4j-kubernetes-operator/main/developer_guide/development/) for the full inner-loop workflow, test layout, and PR process.
-
-## License
-
-[Apache License 2.0](LICENSE)
-
-## Support
-
-Best-effort via [GitHub Issues](https://github.com/neo4j-partners/neo4j-kubernetes-operator/issues). This is a personal-capacity project, not an officially supported Neo4j product.
