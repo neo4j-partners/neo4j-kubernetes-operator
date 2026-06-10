@@ -8,6 +8,8 @@ Neo4j Enterprise Operator for Kubernetes — manages Neo4j Enterprise deployment
 
 **Supported Neo4j versions**: 5.26.x (last semver LTS) and 2025.x.x+ (CalVer). No 5.27+ semver — Neo4j switched to CalVer after 5.26.
 
+**Support policy** (see `docs/user_guide/version_support.md`): the operator supports **the current LTS line + the current CalVer feature line** (today: 5.26 + 2025.x/2026.x). A new LTS is *added* at its GA; the previous LTS is *dropped only at its Neo4j EOL* — never the moment a new LTS ships — so the operator is never stricter than the database. Steady state = 2 CI anchors; a vendor-overlap window may run 3. CalVer tracks the *line* (forward-compatible via `IsCalver`), not individual monthly releases.
+
 **Hard constraints (NEVER violate):**
 - **KIND ONLY** for dev/test/CI. No minikube, k3s, etc.
 - **ENTERPRISE IMAGES ONLY**: `neo4j:5.26-enterprise` / `neo4j:2025.01.0-enterprise`. Never community.

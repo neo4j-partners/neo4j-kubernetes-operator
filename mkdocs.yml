@@ -108,6 +108,7 @@ nav:
       - Deployment: user_guide/deployment.md
       - Operator Modes: user_guide/operator-modes.md
       - Try the Demo: user_guide/guides/demo.md
+      - Supported Neo4j Versions: user_guide/version_support.md
       - Migrating from a Prior Version: user_guide/migration_guide.md
 
   - Configure & Deploy:
