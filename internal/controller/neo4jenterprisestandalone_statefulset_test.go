@@ -373,6 +373,53 @@ func TestReconcileStatefulSet_RemovedOwnedInitContainerDropped(t *testing.T) {
 	}
 }
 
+// TestReconcileStatefulSet_ConfigHashStampedAndRollsOnConfChange: the rendered
+// neo4j.conf hash is stamped on the pod template at CREATION (so there's no
+// deferred extra restart — Bugbot "Config hash deferred extra restart"), an
+// unchanged conf doesn't churn the StatefulSet, and a conf change flips the hash
+// (rolling the pod through the normal template-apply path).
+func TestReconcileStatefulSet_ConfigHashStampedAndRollsOnConfChange(t *testing.T) {
+	r, _ := standaloneCMTestReconciler(t)
+	ctx := context.Background()
+
+	sa := standaloneForSTS("5.26.0-enterprise")
+	sa.Spec.Config = map[string]string{"db.transaction.timeout": "30s"}
+
+	// ConfigMap first (reconcileStatefulSet reads it for the conf hash), as the
+	// reconcile loop orders them.
+	if err := r.reconcileConfigMap(ctx, sa); err != nil {
+		t.Fatalf("configmap 1: %v", err)
+	}
+	if err := r.reconcileStatefulSet(ctx, sa); err != nil {
+		t.Fatalf("sts create: %v", err)
+	}
+	h1 := getSTS(t, r).Spec.Template.Annotations[standaloneConfigHashAnnotation]
+	if h1 == "" {
+		t.Fatal("config-hash must be stamped on the StatefulSet at creation (no deferred roll)")
+	}
+
+	// Unchanged conf → no churn (no spurious roll).
+	rv := getSTS(t, r).ResourceVersion
+	if err := r.reconcileStatefulSet(ctx, sa); err != nil {
+		t.Fatalf("sts idempotent: %v", err)
+	}
+	if getSTS(t, r).ResourceVersion != rv {
+		t.Errorf("unchanged conf should not churn the StatefulSet (rv changed from %s)", rv)
+	}
+
+	// Change conf → re-render ConfigMap → STS config-hash changes (pod rolls).
+	sa.Spec.Config["db.transaction.timeout"] = "90s"
+	if err := r.reconcileConfigMap(ctx, sa); err != nil {
+		t.Fatalf("configmap 2: %v", err)
+	}
+	if err := r.reconcileStatefulSet(ctx, sa); err != nil {
+		t.Fatalf("sts roll: %v", err)
+	}
+	if h2 := getSTS(t, r).Spec.Template.Annotations[standaloneConfigHashAnnotation]; h2 == h1 {
+		t.Errorf("config-hash should change when neo4j.conf changes; still %s", h2)
+	}
+}
+
 func hasInitContainer(cs []corev1.Container, name string) bool {
 	for _, c := range cs {
 		if c.Name == name {

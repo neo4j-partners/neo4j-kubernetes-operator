@@ -441,17 +441,10 @@ func (r *Neo4jEnterpriseStandaloneReconciler) reconcileConfigMap(ctx context.Con
 	}
 	logger.Info("Successfully created or updated ConfigMap", "name", configMap.Name)
 
-	// Roll the pod when the rendered neo4j.conf changes so Neo4j re-reads it
-	// (it only reads conf at startup). Driven by a hash of the rendered conf
-	// stamped on the pod template — NOT by the ConfigMap's create/update result —
-	// so that a roll which FAILS to apply is retried on the next reconcile
-	// (the hash still differs) instead of leaving Neo4j on stale conf until the
-	// ConfigMap happens to change again. Idempotent: a matching hash is a no-op.
-	// The error is returned (requeue), not swallowed.
-	if err := r.ensureStandalonePodConfigHash(ctx, standalone, standaloneConfHash(configMap.Data["neo4j.conf"])); err != nil {
-		return fmt.Errorf("failed to roll standalone pod after config change: %w", err)
-	}
-
+	// Rolling the pod when neo4j.conf changes is handled by reconcileStatefulSet,
+	// which stamps a hash of the rendered conf onto the pod template so the roll
+	// flows through the normal template-apply path: present from pod creation (no
+	// deferred extra restart), retried on failure, idempotent when unchanged.
 	return nil
 }
 
@@ -493,30 +486,20 @@ func standaloneConfHash(conf string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// ensureStandalonePodConfigHash rolls the standalone's pod when the rendered conf
-// changes, by stamping confHash on the pod template. Idempotent (matching hash →
-// no-op), so it's safe to call every reconcile; the Update error is returned so a
-// failed roll requeues and is retried (#146 makes config-change rolls the
-// standalone controller's responsibility). A missing StatefulSet (pod not created
-// yet) is a no-op. Wrapped in RetryOnConflict for the read-modify-write.
-func (r *Neo4jEnterpriseStandaloneReconciler) ensureStandalonePodConfigHash(ctx context.Context, standalone *neo4jv1beta1.Neo4jEnterpriseStandalone, confHash string) error {
-	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		sts := &appsv1.StatefulSet{}
-		if err := r.Get(ctx, types.NamespacedName{Name: standalone.Name, Namespace: standalone.Namespace}, sts); err != nil {
-			if errors.IsNotFound(err) {
-				return nil
-			}
-			return err
-		}
-		if sts.Spec.Template.Annotations[standaloneConfigHashAnnotation] == confHash {
-			return nil
-		}
-		if sts.Spec.Template.Annotations == nil {
-			sts.Spec.Template.Annotations = make(map[string]string)
-		}
-		sts.Spec.Template.Annotations[standaloneConfigHashAnnotation] = confHash
-		return r.Update(ctx, sts)
-	})
+// renderedConfHash reads the standalone's ConfigMap and returns a stable hash of
+// its neo4j.conf, for stamping onto the pod template (see reconcileStatefulSet).
+// Returns "" when the ConfigMap or its neo4j.conf isn't present yet — the caller
+// then skips the stamp rather than rolling on a transient absence.
+func (r *Neo4jEnterpriseStandaloneReconciler) renderedConfHash(ctx context.Context, standalone *neo4jv1beta1.Neo4jEnterpriseStandalone) string {
+	cm := &corev1.ConfigMap{}
+	if err := r.Get(ctx, types.NamespacedName{Name: standalone.Name + "-config", Namespace: standalone.Namespace}, cm); err != nil {
+		return ""
+	}
+	conf := cm.Data["neo4j.conf"]
+	if conf == "" {
+		return ""
+	}
+	return standaloneConfHash(conf)
 }
 
 // splitCSVSet parses a comma-separated annotation value into a set.
@@ -755,6 +738,21 @@ func (r *Neo4jEnterpriseStandaloneReconciler) reconcileStatefulSet(ctx context.C
 
 	// Create StatefulSet using the standalone configuration
 	statefulSet := r.createStatefulSet(standalone)
+
+	// Stamp a hash of the rendered neo4j.conf onto the desired pod template so a
+	// conf change rolls the pod through the NORMAL template-apply path below
+	// (Neo4j only reads conf at startup). Doing it here — rather than as a
+	// separate post-hoc StatefulSet update — means the hash is present from pod
+	// creation (no deferred extra restart) and the roll inherits the apply path's
+	// every-reconcile, hash-gated, error-returning retry. reconcileConfigMap has
+	// already written the ConfigMap this reconcile (it runs first), so the conf
+	// is available; an absent ConfigMap (shouldn't happen) just skips the stamp.
+	if confHash := r.renderedConfHash(ctx, standalone); confHash != "" {
+		if statefulSet.Spec.Template.Annotations == nil {
+			statefulSet.Spec.Template.Annotations = map[string]string{}
+		}
+		statefulSet.Spec.Template.Annotations[standaloneConfigHashAnnotation] = confHash
+	}
 
 	// Set owner reference
 	if err := controllerutil.SetControllerReference(standalone, statefulSet, r.Scheme); err != nil {
