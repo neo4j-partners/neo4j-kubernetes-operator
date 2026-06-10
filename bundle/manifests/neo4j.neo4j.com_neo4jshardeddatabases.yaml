@@ -419,7 +419,7 @@ spec:
                   runID:
                     description: |-
                       RunID matches BackupRun.RunID in the Neo4jBackup CR (the backup Job's
-                      metadata.uid). Stable across status refreshes and unique per run.
+                      name). Stable across status refreshes and unique per run.
                     type: string
                   timestamp:
                     description: Timestamp is the time the backup Job's Pod reported

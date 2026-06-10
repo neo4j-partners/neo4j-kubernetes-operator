@@ -82,8 +82,8 @@ func TestJobToBackupRun(t *testing.T) {
 		if !ok {
 			t.Fatalf("expected ok=true for a succeeded Job")
 		}
-		if run.RunID != "uid-a" {
-			t.Errorf("RunID: got %q, want %q", run.RunID, "uid-a")
+		if run.RunID != "my-backup-backup-cron-28832400" {
+			t.Errorf("RunID: got %q, want the Job name %q (issue #158)", run.RunID, "my-backup-backup-cron-28832400")
 		}
 		if run.Status != "Succeeded" {
 			t.Errorf("Status: got %q, want Succeeded", run.Status)
@@ -99,7 +99,7 @@ func TestJobToBackupRun(t *testing.T) {
 
 	t.Run("failed Job → BackupRun without Duration", func(t *testing.T) {
 		job := &batchv1.Job{
-			ObjectMeta: metav1.ObjectMeta{UID: types.UID("uid-b")},
+			ObjectMeta: metav1.ObjectMeta{Name: "my-backup-backup"},
 			Status:     batchv1.JobStatus{Failed: 3, StartTime: &start},
 		}
 		run, ok := jobToBackupRun(job, "my-backup")
@@ -116,7 +116,7 @@ func TestJobToBackupRun(t *testing.T) {
 
 	t.Run("still-running Job → ok=false", func(t *testing.T) {
 		job := &batchv1.Job{
-			ObjectMeta: metav1.ObjectMeta{UID: types.UID("uid-c")},
+			ObjectMeta: metav1.ObjectMeta{Name: "my-backup-backup"},
 			Status:     batchv1.JobStatus{StartTime: &start},
 		}
 		if _, ok := jobToBackupRun(job, "my-backup"); ok {
@@ -320,12 +320,17 @@ func TestRecordOneShotBackupRunDedup(t *testing.T) {
 
 	start := metav1.NewTime(time.Date(2026, 6, 2, 10, 0, 0, 0, time.UTC))
 	end := metav1.NewTime(start.Add(45 * time.Second))
+	// RunID is now the Job name (issue #158), which is the dedup key. jobA
+	// and jobB carry distinct names to exercise the dedup function's
+	// "different run → new entry" path. (In production the one-shot terminal
+	// guard means one CR only ever produces one Job name; this unit test
+	// drives the dedup logic directly.)
 	jobA := &batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{UID: types.UID("uid-A")},
+		ObjectMeta: metav1.ObjectMeta{Name: "b-backup"},
 		Status:     batchv1.JobStatus{Succeeded: 1, StartTime: &start, CompletionTime: &end},
 	}
 	jobB := &batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{UID: types.UID("uid-B")},
+		ObjectMeta: metav1.ObjectMeta{Name: "b-backup-2"},
 		Status:     batchv1.JobStatus{Succeeded: 1, StartTime: &start, CompletionTime: &end},
 	}
 	backup := &neo4jv1beta1.Neo4jBackup{
@@ -350,28 +355,28 @@ func TestRecordOneShotBackupRunDedup(t *testing.T) {
 		require.NotNil(t, got.Status.Stats, "Stats must be set after first call")
 		assert.Equal(t, "45s", got.Status.Stats.Duration)
 		require.Len(t, got.Status.History, 1)
-		assert.Equal(t, "uid-A", got.Status.History[0].RunID)
+		assert.Equal(t, "b-backup", got.Status.History[0].RunID)
 	})
 
 	t.Run("duplicate call is a no-op (no resourceVersion bump)", func(t *testing.T) {
 		before := get()
 		rvBefore := before.ResourceVersion
 
-		r.recordOneShotBackupRun(ctx, backup, jobA) // same Job UID
+		r.recordOneShotBackupRun(ctx, backup, jobA) // same Job name
 
 		after := get()
 		assert.Equal(t, rvBefore, after.ResourceVersion, "duplicate recordOneShotBackupRun must not write")
 		require.Len(t, after.Status.History, 1, "history must stay at length 1")
 	})
 
-	t.Run("new Job UID appends a second history entry", func(t *testing.T) {
+	t.Run("new Job name appends a second history entry", func(t *testing.T) {
 		r.recordOneShotBackupRun(ctx, backup, jobB)
 
 		got := get()
 		require.Len(t, got.Status.History, 2)
 		// Newest first per the prepend convention.
-		assert.Equal(t, "uid-B", got.Status.History[0].RunID)
-		assert.Equal(t, "uid-A", got.Status.History[1].RunID)
+		assert.Equal(t, "b-backup-2", got.Status.History[0].RunID)
+		assert.Equal(t, "b-backup", got.Status.History[1].RunID)
 	})
 }
 
@@ -405,7 +410,7 @@ func TestRecordOneShotBackupRun_FailedJobAppendsToHistory(t *testing.T) {
 	require.Len(t, got.Status.History, 1,
 		"failed one-shot Jobs must be appended to status.history (recheck gap 2)")
 	assert.Equal(t, "Failed", got.Status.History[0].Status)
-	assert.Equal(t, "uid-fail", got.Status.History[0].RunID)
+	assert.Equal(t, "my-backup-backup", got.Status.History[0].RunID)
 	assert.Equal(t, "b", got.Status.History[0].BackupsPath,
 		"BackupsPath must be populated for failed runs too — partial artifacts may exist. "+
 			"Value is the CR name (shared-directory layout, rule 40), not the Job name.")

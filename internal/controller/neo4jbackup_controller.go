@@ -355,11 +355,11 @@ func (r *Neo4jBackupReconciler) reconcileScheduledHistory(ctx context.Context, b
 // reconcileScheduledHistory could drop different entries on different
 // reconciles when StartTime collisions are present.
 //
-// RunID descending (lexicographic) is the chosen tie-break direction; UID
-// has no semantic ordering anyway, we just need *some* total order, and
-// "higher string sorts to the top" keeps the function's contract uniform
-// (newest first → if you can't tell which is newest, pick the
-// lexicographically-larger UID).
+// RunID descending (lexicographic) is the chosen tie-break direction. RunID
+// is the backing Job's name; for CronJob children ("<cronjob>-<unix-seconds>")
+// the lexicographically-larger name is the later run, so this keeps the
+// function's contract uniform (newest first → if StartTimes tie, pick the
+// lexicographically-larger RunID).
 func sortBackupRunsNewestFirst(runs []neo4jv1beta1.BackupRun) {
 	sort.Slice(runs, func(i, j int) bool {
 		a, b := runs[i], runs[j]
@@ -377,10 +377,17 @@ func sortBackupRunsNewestFirst(runs []neo4jv1beta1.BackupRun) {
 // root) — same for every run of one CR under the shared-directory layout
 // (rule 40). Pass the Neo4jBackup CR name; jobToBackupRun records it as
 // `BackupRun.BackupsPath` for audit + sharded-seed-proxy URL building.
-// The Job UID still uniquely identifies the run via `BackupRun.RunID`.
+//
+// RunID is the backing Job's NAME (not its opaque UID), so a history entry
+// is human-readable and maps directly to the Job a user finds via
+// `kubectl get jobs` — and to the same value the backup Pod sees as
+// BACKUP_RUN_ID (issue #158). The name is unique per recorded run: one-shot
+// Jobs are "<backup>-backup", created exactly once per CR (the Completed/
+// Failed terminal guard in handleOneTimeBackup never recreates them —
+// issue #116); CronJob children are "<cronjob>-<unix-seconds>".
 func jobToBackupRun(job *batchv1.Job, backupsPath string) (neo4jv1beta1.BackupRun, bool) {
 	run := neo4jv1beta1.BackupRun{
-		RunID:       string(job.UID),
+		RunID:       job.Name,
 		BackupsPath: backupsPath,
 	}
 	if job.Status.StartTime != nil {
@@ -406,8 +413,10 @@ func jobToBackupRun(job *batchv1.Job, backupsPath string) (neo4jv1beta1.BackupRu
 }
 
 // backupRunAlreadyRecorded reports whether a BackupRun with the same RunID is
-// already in history. RunID comes from the Job's metadata.uid which is unique
-// and stable per Job, so this is a reliable dedup key.
+// already in history. RunID is the Job's name, which is unique per recorded
+// run (one-shot: "<backup>-backup", created once per CR — issue #116;
+// scheduled: "<cronjob>-<unix-seconds>" per child), so it is a reliable dedup
+// key.
 func backupRunAlreadyRecorded(history []neo4jv1beta1.BackupRun, run neo4jv1beta1.BackupRun) bool {
 	if run.RunID == "" {
 		return false

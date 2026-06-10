@@ -277,9 +277,12 @@ type BackupStats struct {
 // BackupRun represents a single backup execution
 type BackupRun struct {
 	// RunID uniquely identifies this backup execution. Populated from the
-	// backing Job's metadata.uid so a history entry can be correlated with
-	// the actual Job artifact (or audit log) that produced it. Stable for
-	// the lifetime of the Job; new for every retry.
+	// backing Job's name (e.g. "my-backup-backup" for a one-shot run,
+	// "my-backup-cron-1737028800" for a scheduled child) so a history entry
+	// is human-readable and maps directly to the Job found via
+	// `kubectl get jobs` — the same value the backup Pod sees as
+	// BACKUP_RUN_ID. Unique per run: one-shot Jobs are created once per CR;
+	// CronJob children carry a Unix-second suffix.
 	RunID string `json:"runID,omitempty"`
 
 	// Start time of the backup run

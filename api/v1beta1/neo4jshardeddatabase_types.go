@@ -246,7 +246,7 @@ type ShardedDatabaseBackupReference struct {
 	BackupRef string `json:"backupRef"`
 
 	// RunID matches BackupRun.RunID in the Neo4jBackup CR (the backup Job's
-	// metadata.uid). Stable across status refreshes and unique per run.
+	// name). Stable across status refreshes and unique per run.
 	RunID string `json:"runID,omitempty"`
 
 	// BackupsPath is the per-run subdirectory inside the backup storage where
