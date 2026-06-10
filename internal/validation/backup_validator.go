@@ -396,6 +396,16 @@ func (v *BackupValidator) validateSchedule(schedule string) (err error) {
 			err = fmt.Errorf("invalid cron schedule %q: %v", schedule, r)
 		}
 	}()
+
+	// robfig/cron's ParseStandard accepts a leading "TZ="/"CRON_TZ=" prefix,
+	// but Kubernetes rejects timezone-embedded strings in CronJob.spec.schedule
+	// (the operator does not set CronJob.spec.timeZone). Accepting them here
+	// would let the CronJob create fail later with an opaque apiserver error,
+	// defeating up-front validation — so reject them with a clear message.
+	if t := strings.TrimSpace(schedule); strings.HasPrefix(t, "TZ=") || strings.HasPrefix(t, "CRON_TZ=") {
+		return fmt.Errorf("cron schedule %q must not embed a timezone (TZ=/CRON_TZ=) — Kubernetes rejects timezone-prefixed CronJob schedules; use a plain UTC schedule such as \"0 2 * * *\"", schedule)
+	}
+
 	if _, perr := cron.ParseStandard(schedule); perr != nil {
 		return fmt.Errorf("invalid cron schedule %q: %v (Kubernetes CronJob expects standard 5-field cron, e.g. \"0 2 * * *\", or a macro like \"@daily\")", schedule, perr)
 	}
