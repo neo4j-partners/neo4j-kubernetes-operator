@@ -554,3 +554,87 @@ func TestValidateScheduledBackupName(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateSchedule(t *testing.T) {
+	v := &BackupValidator{}
+	cases := []struct {
+		schedule  string
+		expectErr bool
+	}{
+		{"0 2 * * *", false},          // standard 5-field
+		{"0,30 * * * *", false},       // comma list (was wrongly rejected before)
+		{"0 9-17 * * MON-FRI", false}, // range + named days
+		{"*/15 * * * *", false},       // step
+		{"@daily", false},             // macro
+		{"0 0 2 * * *", true},         // 6-field — K8s CronJob rejects (was wrongly accepted before)
+		{"* * * *", true},             // 4-field
+		{"not-a-cron", true},
+		// Timezone-embedded schedules parse in robfig/cron but Kubernetes
+		// rejects them in CronJob.spec.schedule — reject up front.
+		{"CRON_TZ=UTC 0 0 * * *", true},
+		{"TZ=America/New_York 0 0 * * *", true},
+		{"", true}, // empty → error (and must not panic; validateSchedule recovers)
+	}
+	for _, tc := range cases {
+		t.Run(tc.schedule, func(t *testing.T) {
+			err := v.validateSchedule(tc.schedule)
+			if tc.expectErr && err == nil {
+				t.Fatalf("expected error for schedule %q", tc.schedule)
+			}
+			if !tc.expectErr && err != nil {
+				t.Fatalf("unexpected error for schedule %q: %v", tc.schedule, err)
+			}
+		})
+	}
+}
+
+func TestIsValidMaxAge(t *testing.T) {
+	cases := []struct {
+		in   string
+		want bool
+	}{
+		{"7d", true}, // runtime shorthand — time.ParseDuration rejects this
+		{"30d", true},
+		{"24h", true},
+		{"90m", true},
+		{"45s", true},
+		{"1h30m", true}, // valid Go duration
+		{"7days", false},
+		{"0d", false},
+		{"abc", false},
+		{"", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.in, func(t *testing.T) {
+			if got := isValidMaxAge(tc.in); got != tc.want {
+				t.Errorf("isValidMaxAge(%q) = %v, want %v", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestBackupValidator_CloudAtSpecLevel pins the fix for the regression that
+// surfaced when BackupValidator was wired into the reconciler: cloud config
+// commonly lives at the top-level spec.cloud (not nested under spec.storage.cloud),
+// and the reconciler resolves storage.cloud ?? spec.cloud. The validator must
+// accept a cloud backup whose provider is set only at spec.cloud.
+func TestBackupValidator_CloudAtSpecLevel(t *testing.T) {
+	v := NewBackupValidator()
+	backup := &neo4jv1beta1.Neo4jBackup{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-backup"},
+		Spec: neo4jv1beta1.Neo4jBackupSpec{
+			Target:  neo4jv1beta1.BackupTarget{Kind: "Cluster", Name: "test-cluster"},
+			Storage: neo4jv1beta1.StorageLocation{Type: "s3", Bucket: "test-bucket"}, // no nested storage.cloud
+			Cloud:   &neo4jv1beta1.CloudBlock{Provider: "aws"},                       // provider only at spec.cloud
+		},
+	}
+	if errs := v.Validate(backup); len(errs) != 0 {
+		t.Errorf("expected no errors for S3 backup with provider at spec.cloud, got: %v", errs)
+	}
+
+	// And it still rejects when neither spec.cloud nor storage.cloud has a provider.
+	backup.Spec.Cloud = nil
+	if errs := v.Validate(backup); len(errs) == 0 {
+		t.Error("expected an error for S3 backup with no cloud provider anywhere")
+	}
+}

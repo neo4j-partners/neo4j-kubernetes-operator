@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	cron "github.com/robfig/cron/v3"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 
 	neo4jv1beta1 "github.com/neo4j-partners/neo4j-kubernetes-operator/api/v1beta1"
@@ -57,6 +58,21 @@ func ValidateScheduledBackupName(name string) error {
 	return nil
 }
 
+// maxAgeShorthand matches the day/hour/minute/second retention shorthand the
+// backup controller's parseFindTimeArg understands (e.g. "7d", "30d", "24h").
+var maxAgeShorthand = regexp.MustCompile(`^[1-9][0-9]*[dhms]$`)
+
+// isValidMaxAge reports whether a retention maxAge is one the operator can
+// actually apply: either the "<n>{d|h|m|s}" shorthand or a value Go's
+// time.ParseDuration accepts. (time.ParseDuration alone rejects "7d"/"30d".)
+func isValidMaxAge(maxAge string) bool {
+	if maxAgeShorthand.MatchString(maxAge) {
+		return true
+	}
+	_, err := time.ParseDuration(maxAge)
+	return err == nil
+}
+
 // BackupValidator validates Neo4j backup configuration for Neo4j 5.26+ compatibility
 type BackupValidator struct{}
 
@@ -73,7 +89,7 @@ func (v *BackupValidator) Validate(backup *neo4jv1beta1.Neo4jBackup) field.Error
 	allErrs = append(allErrs, v.validateBackupTarget(&backup.Spec.Target, backup.Namespace)...)
 
 	// Validate storage configuration
-	allErrs = append(allErrs, v.validateStorageConfiguration(&backup.Spec.Storage)...)
+	allErrs = append(allErrs, v.validateStorageConfiguration(&backup.Spec.Storage, backup.Spec.Cloud)...)
 
 	// Validate schedule if specified
 	if backup.Spec.Schedule != "" {
@@ -198,8 +214,11 @@ func (v *BackupValidator) validateBackupTarget(target *neo4jv1beta1.BackupTarget
 	return allErrs
 }
 
-// validateStorageConfiguration validates storage configuration for Neo4j 5.26+
-func (v *BackupValidator) validateStorageConfiguration(storage *neo4jv1beta1.StorageLocation) field.ErrorList {
+// validateStorageConfiguration validates storage configuration for Neo4j 5.26+.
+// specCloud is the top-level spec.cloud block; the operator resolves the
+// effective cloud config as storage.cloud ?? spec.cloud (see getCloudBlock in
+// the backup controller), so provider checks must consider both.
+func (v *BackupValidator) validateStorageConfiguration(storage *neo4jv1beta1.StorageLocation, specCloud *neo4jv1beta1.CloudBlock) field.ErrorList {
 	var allErrs field.ErrorList
 	storagePath := field.NewPath("spec", "storage")
 
@@ -220,7 +239,7 @@ func (v *BackupValidator) validateStorageConfiguration(storage *neo4jv1beta1.Sto
 	}
 
 	// Validate storage provider specific configurations
-	if err := v.validateStorageProvider(storage); err != nil {
+	if err := v.validateStorageProvider(storage, specCloud); err != nil {
 		allErrs = append(allErrs, field.Invalid(
 			storagePath,
 			storage,
@@ -293,9 +312,18 @@ func (v *BackupValidator) validateSchemeSpecificURI(uri, scheme string) error {
 	return nil
 }
 
-// validateStorageProvider validates provider-specific storage configurations
-func (v *BackupValidator) validateStorageProvider(storage *neo4jv1beta1.StorageLocation) error {
+// validateStorageProvider validates provider-specific storage configurations.
+// effectiveCloud mirrors the controller's resolution (storage.cloud ?? spec.cloud)
+// so cloud-provider requirements are checked against the block the operator
+// actually uses — the cloud config commonly lives at spec.cloud, not nested
+// under storage.cloud.
+func (v *BackupValidator) validateStorageProvider(storage *neo4jv1beta1.StorageLocation, specCloud *neo4jv1beta1.CloudBlock) error {
 	storageType := strings.ToLower(storage.Type)
+
+	effectiveCloud := storage.Cloud
+	if effectiveCloud == nil {
+		effectiveCloud = specCloud
+	}
 
 	// For cloud storage providers, validate additional configuration
 	switch storageType {
@@ -304,24 +332,24 @@ func (v *BackupValidator) validateStorageProvider(storage *neo4jv1beta1.StorageL
 		if storage.Bucket == "" {
 			return fmt.Errorf("S3 storage requires bucket name for Neo4j 5.26+")
 		}
-		if storage.Cloud == nil || storage.Cloud.Provider != "aws" {
-			return fmt.Errorf("S3 storage requires cloud provider to be set to 'aws'")
+		if effectiveCloud == nil || effectiveCloud.Provider != "aws" {
+			return fmt.Errorf("S3 storage requires cloud provider 'aws' (set spec.cloud.provider or spec.storage.cloud.provider)")
 		}
 	case "gcs":
 		// GCS specific validations
 		if storage.Bucket == "" {
 			return fmt.Errorf("Google Cloud Storage requires bucket name for Neo4j 5.26+")
 		}
-		if storage.Cloud == nil || storage.Cloud.Provider != "gcp" {
-			return fmt.Errorf("GCS storage requires cloud provider to be set to 'gcp'")
+		if effectiveCloud == nil || effectiveCloud.Provider != "gcp" {
+			return fmt.Errorf("GCS storage requires cloud provider 'gcp' (set spec.cloud.provider or spec.storage.cloud.provider)")
 		}
 	case "azure":
 		// Azure specific validations
 		if storage.Bucket == "" {
 			return fmt.Errorf("Azure Blob Storage requires container name for Neo4j 5.26+")
 		}
-		if storage.Cloud == nil || storage.Cloud.Provider != "azure" {
-			return fmt.Errorf("Azure storage requires cloud provider to be set to 'azure'")
+		if effectiveCloud == nil || effectiveCloud.Provider != "azure" {
+			return fmt.Errorf("Azure storage requires cloud provider 'azure' (set spec.cloud.provider or spec.storage.cloud.provider)")
 		}
 	case "pvc":
 		// PVC specific validations.
@@ -349,116 +377,39 @@ func (v *BackupValidator) validateStorageProvider(storage *neo4jv1beta1.StorageL
 	return nil
 }
 
-// validateSchedule validates cron schedule format
-func (v *BackupValidator) validateSchedule(schedule string) error {
-	// Basic cron validation (5 or 6 fields)
-	fields := strings.Fields(schedule)
-	if len(fields) < 5 || len(fields) > 6 {
-		return fmt.Errorf("invalid cron schedule format. Expected 5 or 6 fields, got %d", len(fields))
-	}
-
-	// Validate each field in the cron expression
-
-	for i, field := range fields {
-		switch i {
-		case 0: // Second (if 6 fields) or Minute (if 5 fields)
-			if len(fields) == 6 {
-				// Second field (0-59)
-				if !v.validateCronField(field, 0, 59) {
-					return fmt.Errorf("invalid second field in cron schedule: %s", field)
-				}
-			} else {
-				// Minute field (0-59)
-				if !v.validateCronField(field, 0, 59) {
-					return fmt.Errorf("invalid minute field in cron schedule: %s", field)
-				}
-			}
-		case 1: // Minute (if 6 fields) or Hour (if 5 fields)
-			if len(fields) == 6 {
-				// Minute field (0-59)
-				if !v.validateCronField(field, 0, 59) {
-					return fmt.Errorf("invalid minute field in cron schedule: %s", field)
-				}
-			} else {
-				// Hour field (0-23)
-				if !v.validateCronField(field, 0, 23) {
-					return fmt.Errorf("invalid hour field in cron schedule: %s", field)
-				}
-			}
-		case 2: // Hour (if 6 fields) or Day (if 5 fields)
-			if len(fields) == 6 {
-				// Hour field (0-23)
-				if !v.validateCronField(field, 0, 23) {
-					return fmt.Errorf("invalid hour field in cron schedule: %s", field)
-				}
-			} else {
-				// Day field (1-31)
-				if !v.validateCronField(field, 1, 31) {
-					return fmt.Errorf("invalid day field in cron schedule: %s", field)
-				}
-			}
-		case 3: // Day (if 6 fields) or Month (if 5 fields)
-			if len(fields) == 6 {
-				// Day field (1-31)
-				if !v.validateCronField(field, 1, 31) {
-					return fmt.Errorf("invalid day field in cron schedule: %s", field)
-				}
-			} else {
-				// Month field (1-12)
-				if !v.validateCronField(field, 1, 12) {
-					return fmt.Errorf("invalid month field in cron schedule: %s", field)
-				}
-			}
-		case 4: // Month (if 6 fields) or Day of week (if 5 fields)
-			if len(fields) == 6 {
-				// Month field (1-12)
-				if !v.validateCronField(field, 1, 12) {
-					return fmt.Errorf("invalid month field in cron schedule: %s", field)
-				}
-			} else {
-				// Day of week field (0-7, where 0 and 7 are Sunday)
-				if !v.validateCronField(field, 0, 7) {
-					return fmt.Errorf("invalid day of week field in cron schedule: %s", field)
-				}
-			}
-		case 5: // Day of week (only if 6 fields)
-			// Day of week field (0-7, where 0 and 7 are Sunday)
-			if !v.validateCronField(field, 0, 7) {
-				return fmt.Errorf("invalid day of week field in cron schedule: %s", field)
-			}
+// validateSchedule validates the cron schedule using the SAME parser
+// Kubernetes uses for CronJob.spec.schedule (github.com/robfig/cron/v3
+// ParseStandard). This guarantees the operator accepts exactly what the
+// generated CronJob will accept — standard 5-field cron plus lists ("0,30"),
+// ranges ("1-5"), steps ("*/15", "1-30/5"), names ("MON-FRI", "JAN"), and
+// macros ("@daily"). A hand-rolled check previously rejected several of those
+// valid forms and, conversely, accepted 6-field expressions that the CronJob
+// then rejected at create time — so we defer to the canonical parser.
+func (v *BackupValidator) validateSchedule(schedule string) (err error) {
+	// robfig/cron's parser can panic on some malformed inputs (e.g. certain
+	// TZ=/CRON_TZ= forms) instead of returning an error. Kubernetes wraps the
+	// same parser with a recover; do the same so a bad user-supplied schedule
+	// is reported as a validation error rather than crashing the reconcile
+	// worker.
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("invalid cron schedule %q: %v", schedule, r)
 		}
+	}()
+
+	// robfig/cron's ParseStandard accepts a leading "TZ="/"CRON_TZ=" prefix,
+	// but Kubernetes rejects timezone-embedded strings in CronJob.spec.schedule
+	// (the operator does not set CronJob.spec.timeZone). Accepting them here
+	// would let the CronJob create fail later with an opaque apiserver error,
+	// defeating up-front validation — so reject them with a clear message.
+	if t := strings.TrimSpace(schedule); strings.HasPrefix(t, "TZ=") || strings.HasPrefix(t, "CRON_TZ=") {
+		return fmt.Errorf("cron schedule %q must not embed a timezone (TZ=/CRON_TZ=) — Kubernetes rejects timezone-prefixed CronJob schedules; use a plain UTC schedule such as \"0 2 * * *\"", schedule)
 	}
 
+	if _, perr := cron.ParseStandard(schedule); perr != nil {
+		return fmt.Errorf("invalid cron schedule %q: %v (Kubernetes CronJob expects standard 5-field cron, e.g. \"0 2 * * *\", or a macro like \"@daily\")", schedule, perr)
+	}
 	return nil
-}
-
-// validateCronField validates individual cron field
-func (v *BackupValidator) validateCronField(field string, min, max int) bool {
-	if field == "*" {
-		return true
-	}
-
-	// Handle step values (*/n)
-	if strings.HasPrefix(field, "*/") {
-		stepStr := field[2:]
-		step, err := strconv.Atoi(stepStr)
-		return err == nil && step > 0 && step <= max
-	}
-
-	// Handle ranges (n-m)
-	if strings.Contains(field, "-") {
-		parts := strings.Split(field, "-")
-		if len(parts) != 2 {
-			return false
-		}
-		start, err1 := strconv.Atoi(parts[0])
-		end, err2 := strconv.Atoi(parts[1])
-		return err1 == nil && err2 == nil && start >= min && start <= max && end >= min && end <= max && start <= end
-	}
-
-	// Handle single number
-	num, err := strconv.Atoi(field)
-	return err == nil && num >= min && num <= max
 }
 
 // validateCloudConfiguration validates cloud-specific backup configuration
@@ -503,15 +454,18 @@ func (v *BackupValidator) validateRetentionPolicy(retention *neo4jv1beta1.Retent
 	var allErrs field.ErrorList
 	retentionPath := field.NewPath("spec", "retention")
 
-	// Validate max age format if specified
-	if retention.MaxAge != "" {
-		if _, err := time.ParseDuration(retention.MaxAge); err != nil {
-			allErrs = append(allErrs, field.Invalid(
-				retentionPath.Child("maxAge"),
-				retention.MaxAge,
-				"invalid duration format. Use format like '24h', '7d', '30d'",
-			))
-		}
+	// Validate max age format if specified. The runtime (parseFindTimeArg in
+	// the backup controller) accepts a day/hour/minute/second shorthand like
+	// "7d", "30d", "24h" — which Go's time.ParseDuration rejects (no "d"
+	// unit). Accept the shorthand the runtime understands, and also tolerate
+	// any value time.ParseDuration accepts, so the validator never rejects a
+	// maxAge the operator can actually apply.
+	if retention.MaxAge != "" && !isValidMaxAge(retention.MaxAge) {
+		allErrs = append(allErrs, field.Invalid(
+			retentionPath.Child("maxAge"),
+			retention.MaxAge,
+			"invalid duration format. Use a value like '7d', '30d', '24h', or '90m'",
+		))
 	}
 
 	// Validate max count
