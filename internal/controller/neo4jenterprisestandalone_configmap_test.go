@@ -140,40 +140,49 @@ func TestReconcileConfigMap_PreservesForeignKeys(t *testing.T) {
 	}
 }
 
-// TestReconcileConfigMap_AdditiveForeignTokensPreserved: when a plugin unions
-// tokens into an additive key the operator also owns (procedures.unrestricted),
-// both the operator and plugin tokens must survive — and stay stable across
-// reconciles (no tug-of-war / oscillation).
-func TestReconcileConfigMap_AdditiveForeignTokensPreserved(t *testing.T) {
-	r, c := standaloneCMTestReconciler(t)
+// TestReconcileConfigMap_UserAndPluginAdditiveUnioned: a user's spec.config
+// allowlist and a plugin's additive allowlist are BOTH operator-owned and are
+// unioned in the rendered conf (single declaration), and the result is stable
+// across reconciles (no churn). This replaces the old "foreign tokens" case —
+// after #146 plugin tokens flow through the single owner (a plugin CR), not an
+// external patch to the ConfigMap.
+func TestReconcileConfigMap_UserAndPluginAdditiveUnioned(t *testing.T) {
+	scheme := runtime.NewScheme()
+	if err := clientgoscheme.AddToScheme(scheme); err != nil {
+		t.Fatalf("scheme: %v", err)
+	}
+	if err := neo4jv1beta1.AddToScheme(scheme); err != nil {
+		t.Fatalf("scheme: %v", err)
+	}
+	gds := pluginCR("gds-plugin", "gds", "sa", true, nil)
+	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(gds).Build()
+	r := &Neo4jEnterpriseStandaloneReconciler{Client: c, Scheme: scheme}
 	ctx := context.Background()
 
-	sa := standaloneForConf(map[string]string{"dbms.security.procedures.unrestricted": "gds.*"})
+	sa := standaloneForConf(map[string]string{"dbms.security.procedures.unrestricted": "myapp.*"})
 	if err := r.reconcileConfigMap(ctx, sa); err != nil {
 		t.Fatalf("reconcile 1: %v", err)
 	}
-	// Plugin unions apoc.* into the additive key.
-	cm := &corev1.ConfigMap{}
-	if err := c.Get(ctx, types.NamespacedName{Name: "sa-config", Namespace: "default"}, cm); err != nil {
-		t.Fatalf("get: %v", err)
+	got := renderedConf(t, c)
+	for _, want := range []string{"myapp.*", "gds.*", "apoc.load.*"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("expected user + plugin token %q unioned; conf:\n%s", want, got)
+		}
 	}
-	cm.Data["neo4j.conf"] = strings.ReplaceAll(cm.Data["neo4j.conf"],
-		"dbms.security.procedures.unrestricted=gds.*",
-		"dbms.security.procedures.unrestricted=gds.*,apoc.*")
-	if err := c.Update(ctx, cm); err != nil {
-		t.Fatalf("simulate plugin union: %v", err)
+	if n := strings.Count(got, "dbms.security.procedures.unrestricted="); n != 1 {
+		t.Errorf("procedures.unrestricted should be declared exactly once, got %d; conf:\n%s", n, got)
 	}
 
+	// Stable across a repeat reconcile (no churn).
+	cm1 := &corev1.ConfigMap{}
+	_ = c.Get(ctx, types.NamespacedName{Name: "sa-config", Namespace: "default"}, cm1)
 	if err := r.reconcileConfigMap(ctx, sa); err != nil {
 		t.Fatalf("reconcile 2: %v", err)
 	}
-	got := renderedConf(t, c)
-	if !strings.Contains(got, "apoc.*") || !strings.Contains(got, "gds.*") {
-		t.Errorf("both operator (gds.*) and plugin (apoc.*) tokens should survive; conf:\n%s", got)
-	}
-	// And the key must still be single-declared (no duplicate line).
-	if n := strings.Count(got, "dbms.security.procedures.unrestricted="); n != 1 {
-		t.Errorf("procedures.unrestricted should be declared exactly once, got %d; conf:\n%s", n, got)
+	cm2 := &corev1.ConfigMap{}
+	_ = c.Get(ctx, types.NamespacedName{Name: "sa-config", Namespace: "default"}, cm2)
+	if cm1.ResourceVersion != cm2.ResourceVersion {
+		t.Errorf("ConfigMap churned on repeat reconcile (rv %s -> %s)", cm1.ResourceVersion, cm2.ResourceVersion)
 	}
 }
 
@@ -211,5 +220,83 @@ func TestReconcileConfigMap_Idempotent(t *testing.T) {
 	if cm1.ResourceVersion != cm2.ResourceVersion {
 		t.Errorf("ConfigMap changed on repeat reconcile (rv %s -> %s) — would churn/restart the pod",
 			cm1.ResourceVersion, cm2.ResourceVersion)
+	}
+}
+
+// --- #146: plugin-derived conf is owned & unioned by the standalone controller ---
+
+func pluginCR(name, pluginName, clusterRef string, enabled bool, config map[string]string) *neo4jv1beta1.Neo4jPlugin {
+	return &neo4jv1beta1.Neo4jPlugin{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
+		Spec: neo4jv1beta1.Neo4jPluginSpec{
+			Name: pluginName, ClusterRef: clusterRef, Enabled: enabled, Config: config,
+		},
+	}
+}
+
+// TestUnionPluginConfSettings: union across plugins (additive keys merged),
+// honoring clusterRef + enabled filtering.
+func TestUnionPluginConfSettings(t *testing.T) {
+	plugins := []neo4jv1beta1.Neo4jPlugin{
+		*pluginCR("gds", "gds", "sa", true, nil),
+		*pluginCR("bloom", "bloom", "sa", true, nil),
+		*pluginCR("elsewhere", "gds", "other", true, nil),      // different target → ignored
+		*pluginCR("off", "fleet-management", "sa", false, nil), // disabled → ignored
+	}
+	got := unionPluginConfSettings(plugins, "sa")
+
+	u := got["dbms.security.procedures.unrestricted"]
+	if !strings.Contains(u, "gds.*") || !strings.Contains(u, "bloom.*") {
+		t.Errorf("expected gds.* and bloom.* unioned in procedures.unrestricted, got %q", u)
+	}
+	if strings.Contains(u, "fleetManagement.*") {
+		t.Errorf("disabled/other-target plugins must not contribute, got %q", u)
+	}
+	if got["server.unmanaged_extension_classes"] == "" {
+		t.Error("bloom's unmanaged_extension_classes should be present")
+	}
+}
+
+// TestReconcileConfigMap_PluginUnionRenderedAndPruned: the standalone renders the
+// union of its plugins' conf as operator-owned, and prunes a plugin's keys when
+// it's uninstalled (#146 — the missing piece beyond #151's foreign-key preserve).
+func TestReconcileConfigMap_PluginUnionRenderedAndPruned(t *testing.T) {
+	scheme := runtime.NewScheme()
+	if err := clientgoscheme.AddToScheme(scheme); err != nil {
+		t.Fatalf("scheme: %v", err)
+	}
+	if err := neo4jv1beta1.AddToScheme(scheme); err != nil {
+		t.Fatalf("scheme: %v", err)
+	}
+	gds := pluginCR("gds-plugin", "gds", "sa", true, nil)
+	bloom := pluginCR("bloom-plugin", "bloom", "sa", true, nil)
+	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(gds, bloom).Build()
+	r := &Neo4jEnterpriseStandaloneReconciler{Client: c, Scheme: scheme}
+	ctx := context.Background()
+	sa := standaloneForConf(nil) // name "sa"
+
+	if err := r.reconcileConfigMap(ctx, sa); err != nil {
+		t.Fatalf("reconcile 1: %v", err)
+	}
+	conf := renderedConf(t, c)
+	for _, want := range []string{"gds.*", "bloom.*", "server.unmanaged_extension_classes"} {
+		if !strings.Contains(conf, want) {
+			t.Errorf("expected plugin-derived %q in rendered conf; conf:\n%s", want, conf)
+		}
+	}
+
+	// Uninstall GDS.
+	if err := c.Delete(ctx, gds); err != nil {
+		t.Fatalf("delete gds: %v", err)
+	}
+	if err := r.reconcileConfigMap(ctx, sa); err != nil {
+		t.Fatalf("reconcile 2: %v", err)
+	}
+	conf2 := renderedConf(t, c)
+	if strings.Contains(conf2, "gds.*") {
+		t.Errorf("gds.* should be pruned after GDS uninstall; conf:\n%s", conf2)
+	}
+	if !strings.Contains(conf2, "bloom.*") {
+		t.Errorf("bloom.* should remain after GDS uninstall; conf:\n%s", conf2)
 	}
 }

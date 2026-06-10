@@ -18,6 +18,9 @@ package controller
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"sort"
@@ -224,7 +227,9 @@ func (r *Neo4jEnterpriseStandaloneReconciler) reconcileStandalone(ctx context.Co
 		}
 	}
 
-	// Reconcile ConfigMap (always needed for config)
+	// Reconcile ConfigMap (always needed for config). The standalone controller
+	// owns neo4j.conf (incl. plugin-derived settings) and rolls the pod itself
+	// when the rendered conf changes.
 	if err := r.reconcileConfigMap(ctx, standalone); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to reconcile ConfigMap: %w", err)
 	}
@@ -342,13 +347,29 @@ func (r *Neo4jEnterpriseStandaloneReconciler) reconcileStandalone(ctx context.Co
 // env-var ownership annotation (neo4j.com/cluster-controller-env-vars).
 const ownedStandaloneConfKeysAnnotation = "neo4j.com/standalone-controller-conf-keys"
 
-// reconcileConfigMap reconciles the ConfigMap for the standalone deployment.
+// reconcileConfigMap reconciles the standalone's ConfigMap. The standalone
+// controller is the single owner of neo4j.conf, folding in the UNION of every
+// Neo4jPlugin's derived settings for this standalone (#146) — so plugin keys are
+// rendered as operator-owned (and pruned when a plugin is uninstalled) rather
+// than patched in afterward by the plugin controller. When the rendered conf
+// actually changes, it rolls the pod (Neo4j only re-reads neo4j.conf at startup,
+// and a ConfigMap-only change doesn't otherwise restart it).
 func (r *Neo4jEnterpriseStandaloneReconciler) reconcileConfigMap(ctx context.Context, standalone *neo4jv1beta1.Neo4jEnterpriseStandalone) error {
 	logger := log.FromContext(ctx)
 
 	// Fully re-render the operator-owned config from spec each reconcile.
 	desired := r.createConfigMap(standalone)
 	desiredConf := desired.Data["neo4j.conf"]
+
+	// Fold in plugin-derived conf — the UNION across every Neo4jPlugin CR
+	// targeting this standalone — so the standalone controller is the single
+	// owner of neo4j.conf (issue #146). These keys become operator-owned (tracked
+	// in the annotation below), so an uninstalled plugin's keys are PRUNED on the
+	// next reconcile, and there's no after-the-fact ConfigMap patching by the
+	// plugin controller to fight with.
+	if pluginConf := r.collectPluginConfSettings(ctx, standalone); len(pluginConf) > 0 {
+		desiredConf = resources.DedupeNeo4jConf(resources.UpsertNeo4jConfSettings(desiredConf, pluginConf))
+	}
 	desiredKeys := resources.Neo4jConfSettings(desiredConf) // operator-owned keys this reconcile
 
 	configMap := &corev1.ConfigMap{
@@ -356,23 +377,33 @@ func (r *Neo4jEnterpriseStandaloneReconciler) reconcileConfigMap(ctx context.Con
 	}
 
 	// Create or update ConfigMap with retry logic to handle resource version conflicts.
+	var opResult controllerutil.OperationResult
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		_, err := controllerutil.CreateOrUpdate(ctx, r.Client, configMap, func() error {
+		var err error
+		opResult, err = controllerutil.CreateOrUpdate(ctx, r.Client, configMap, func() error {
 			// controllerutil.CreateOrUpdate's Get overwrites configMap with the
 			// EXISTING object, so the desired state MUST be (re)applied here in the
 			// mutate fn — an empty mutate would silently write the stale data back
 			// (the cause of stale spec.config keys never clearing on update).
 			prevOwned := splitCSVSet(configMap.Annotations[ownedStandaloneConfKeysAnnotation])
 
-			// Preserve foreign keys (e.g. a Neo4jPlugin's), but drop operator keys
-			// the user removed: a key the operator owned last time and no longer
-			// renders must not be resurrected from the existing ConfigMap.
+			// Decide which EXISTING conf keys to carry forward:
+			//   - operator-owned this reconcile (in desiredKeys): SKIP — desiredConf
+			//     already holds the authoritative value (scalar, or the additive
+			//     UNION computed from spec.config + all plugin CRs). Carrying the
+			//     existing value back would re-introduce stale additive tokens from
+			//     an uninstalled plugin, so the key would never prune.
+			//   - previously operator-owned but no longer (prevOwned ∖ desiredKeys):
+			//     SKIP — the user/plugin removed it; don't resurrect it.
+			//   - everything else: a genuinely FOREIGN key (added by some other
+			//     actor the operator doesn't manage) → preserve it.
 			mergeBack := make(map[string]string)
 			for k, v := range resources.Neo4jConfSettings(configMap.Data["neo4j.conf"]) {
+				if _, owned := desiredKeys[k]; owned {
+					continue
+				}
 				if _, wasOwned := prevOwned[k]; wasOwned {
-					if _, stillDesired := desiredKeys[k]; !stillDesired {
-						continue // operator key the user deleted — let it go
-					}
+					continue
 				}
 				mergeBack[k] = v
 			}
@@ -403,7 +434,50 @@ func (r *Neo4jEnterpriseStandaloneReconciler) reconcileConfigMap(ctx context.Con
 	}
 	logger.Info("Successfully created or updated ConfigMap", "name", configMap.Name)
 
+	// The rendered conf changed on an already-running standalone — roll the pod
+	// so Neo4j re-reads neo4j.conf. Covers user spec.config edits and any
+	// Neo4jPlugin add/change/remove (which now flows through this single owner).
+	// Skipped on create (the pod hasn't started yet).
+	if opResult == controllerutil.OperationResultUpdated {
+		if err := r.restartStandalonePod(ctx, standalone); err != nil {
+			logger.Error(err, "failed to roll standalone pod after config change")
+		}
+	}
+
 	return nil
+}
+
+// collectPluginConfSettings returns the union of neo4j.conf settings derived from
+// every enabled Neo4jPlugin targeting this standalone (#146). Non-fatal: a list
+// error yields no plugin settings rather than failing the reconcile.
+func (r *Neo4jEnterpriseStandaloneReconciler) collectPluginConfSettings(ctx context.Context, standalone *neo4jv1beta1.Neo4jEnterpriseStandalone) map[string]string {
+	plugins := &neo4jv1beta1.Neo4jPluginList{}
+	if err := r.List(ctx, plugins, client.InNamespace(standalone.Namespace)); err != nil {
+		log.FromContext(ctx).V(1).Info("Unable to list plugins for ConfigMap render; proceeding without plugin-derived config", "error", err)
+		return nil
+	}
+	return unionPluginConfSettings(plugins.Items, standalone.Name)
+}
+
+// restartStandalonePod rolls the standalone's pod by bumping a restart annotation
+// on the StatefulSet template, so Neo4j re-reads neo4j.conf after a config change.
+// Called only when the rendered conf actually changed (#146 makes config-change
+// restarts the standalone controller's responsibility, replacing the plugin
+// controller's per-plugin restart). Best-effort: a missing StatefulSet (not yet
+// created) is a no-op.
+func (r *Neo4jEnterpriseStandaloneReconciler) restartStandalonePod(ctx context.Context, standalone *neo4jv1beta1.Neo4jEnterpriseStandalone) error {
+	sts := &appsv1.StatefulSet{}
+	if err := r.Get(ctx, types.NamespacedName{Name: standalone.Name, Namespace: standalone.Namespace}, sts); err != nil {
+		if errors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+	if sts.Spec.Template.Annotations == nil {
+		sts.Spec.Template.Annotations = make(map[string]string)
+	}
+	sts.Spec.Template.Annotations["neo4j.com/config-restarted-at"] = time.Now().UTC().Format(time.RFC3339)
+	return r.Update(ctx, sts)
 }
 
 // splitCSVSet parses a comma-separated annotation value into a set.
@@ -522,7 +596,63 @@ func (r *Neo4jEnterpriseStandaloneReconciler) createHeadlessService(standalone *
 	}
 }
 
-// reconcileStatefulSet reconciles the StatefulSet for the standalone deployment
+// standaloneOwnedEnvVarsAnnotation lists the env-var names the standalone
+// controller rendered into the StatefulSet's neo4j container on the last
+// reconcile. It mirrors the cluster controller's neo4j.com/cluster-controller-
+// env-vars annotation and lets a subsequent reconcile drop a var the operator
+// stopped owning (e.g. a removed spec.config key) WITHOUT clobbering foreign
+// vars patched in by the plugin / fleet controllers (NEO4J_PLUGINS, fleet
+// token, APOC vars). See mergeEnvVars for the merge semantics.
+const standaloneOwnedEnvVarsAnnotation = "neo4j.com/standalone-controller-env-vars"
+
+// standaloneTemplateHashAnnotation stores a hash of the operator's DESIRED pod
+// template from the previous reconcile. reconcileStatefulSet applies the
+// desired template (image, resources, probes, env, volumes…) only when this
+// hash changes — comparing the operator's own desired-vs-last-desired rather
+// than desired-vs-server-state, so API-server field defaulting can't make every
+// reconcile look like a change and roll the pod in a loop.
+const standaloneTemplateHashAnnotation = "neo4j.com/standalone-template-hash"
+
+// standalonePodTemplateHash returns a stable hash of a pod template. JSON
+// marshalling sorts map keys, so the hash is deterministic across reconciles
+// for an unchanged template (no spurious rolls). Returns "" on the (practically
+// impossible) marshal error, which the caller treats as "changed" — converge
+// rather than silently skip.
+func standalonePodTemplateHash(t corev1.PodTemplateSpec) string {
+	data, err := json.Marshal(t)
+	if err != nil {
+		return ""
+	}
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
+}
+
+// standaloneEnvVarNames returns the env-var names sorted and comma-joined, for
+// the owned-env-vars annotation (stable so it doesn't churn the StatefulSet).
+func standaloneEnvVarNames(env []corev1.EnvVar) string {
+	names := make([]string, 0, len(env))
+	for _, e := range env {
+		names = append(names, e.Name)
+	}
+	sort.Strings(names)
+	return strings.Join(names, ",")
+}
+
+// reconcileStatefulSet reconciles the StatefulSet for the standalone deployment.
+//
+// CreateOrUpdate's Get overwrites the passed object with the EXISTING cluster
+// state on update, so the desired template MUST be (re)applied inside the mutate
+// fn. The previous empty mutate (`return nil`) meant template changes — image
+// upgrades, resource edits, probe/securityContext/volume changes, updateStrategy
+// switches — were silently written back as the stale stored spec and never rolled
+// to a running standalone (the upgrade event fired but no upgrade happened).
+//
+// To avoid rolling the pod on every reconcile (API-server field defaulting makes
+// a naive DeepEqual always differ), the desired template is applied only when its
+// hash differs from the hash recorded on the previous reconcile. Foreign env vars
+// (NEO4J_PLUGINS etc. patched by the plugin / fleet controllers) and foreign pod-
+// template annotations (the conf-path config-restart stamp, service-mesh
+// injection) are preserved across the apply.
 func (r *Neo4jEnterpriseStandaloneReconciler) reconcileStatefulSet(ctx context.Context, standalone *neo4jv1beta1.Neo4jEnterpriseStandalone) error {
 	logger := log.FromContext(ctx)
 
@@ -534,10 +664,72 @@ func (r *Neo4jEnterpriseStandaloneReconciler) reconcileStatefulSet(ctx context.C
 		return fmt.Errorf("failed to set owner reference: %w", err)
 	}
 
+	// Capture the desired spec + its template hash BEFORE CreateOrUpdate's Get
+	// clobbers `statefulSet` with the existing cluster object on update.
+	desiredSpec := *statefulSet.Spec.DeepCopy()
+	desiredHash := standalonePodTemplateHash(desiredSpec.Template)
+	desiredEnv := []corev1.EnvVar{}
+	if len(desiredSpec.Template.Spec.Containers) > 0 {
+		desiredEnv = desiredSpec.Template.Spec.Containers[0].Env
+	}
+
 	// Create or update StatefulSet with retry logic to handle resource version conflicts
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		_, err := controllerutil.CreateOrUpdate(ctx, r.Client, statefulSet, func() error {
-			// StatefulSet template updates for standalone deployments
+			// On update, CreateOrUpdate's Get has replaced `statefulSet` with the
+			// stored object (carrying our previously-stamped tracking annotations);
+			// on create it still holds the freshly-built desired object (no
+			// annotations yet). We branch on the template-hash annotation rather
+			// than UID: UID isn't populated by the fake client used in unit tests,
+			// and ResourceVersion is set even for new objects (so neither is a
+			// reliable create-vs-update signal here).
+
+			// Spec-level fields are cheap to set unconditionally — they don't roll
+			// pods on their own and CreateOrUpdate skips the Update when nothing
+			// changed. UpdateStrategy must apply so a Rolling↔Recreate switch takes
+			// effect; Replicas is always 1 for a standalone.
+			statefulSet.Spec.Replicas = desiredSpec.Replicas
+			statefulSet.Spec.UpdateStrategy = desiredSpec.UpdateStrategy
+
+			// Apply the desired template only when our desired hash differs from the
+			// hash recorded last reconcile. Matching hash → leave the stored template
+			// alone, preserving foreign env vars and the conf-path restart annotation,
+			// and CreateOrUpdate no-ops (no pod disruption). A missing annotation —
+			// create, or first reconcile after operator upgrade — is treated as
+			// changed so we converge (on create the template already equals desired,
+			// so the apply is a harmless no-op that just stamps the tracking).
+			if statefulSet.Annotations[standaloneTemplateHashAnnotation] == desiredHash {
+				return nil
+			}
+
+			// Apply the desired template, preserving:
+			//   - foreign env vars (plugin / fleet additions) via mergeEnvVars,
+			//     which also drops vars the operator previously owned but no longer
+			//     does (e.g. a removed spec.config key);
+			//   - foreign pod-template annotations (conf-path config-restart stamp,
+			//     mesh injection) by overlaying the desired annotations onto them.
+			previousOwned := splitCSVSet(statefulSet.Annotations[standaloneOwnedEnvVarsAnnotation])
+			currentEnv := []corev1.EnvVar{}
+			if len(statefulSet.Spec.Template.Spec.Containers) > 0 {
+				currentEnv = statefulSet.Spec.Template.Spec.Containers[0].Env
+			}
+			mergedEnv := mergeEnvVars(currentEnv, desiredEnv, previousOwned)
+
+			mergedAnnotations := map[string]string{}
+			for k, v := range statefulSet.Spec.Template.Annotations {
+				mergedAnnotations[k] = v
+			}
+			for k, v := range desiredSpec.Template.Annotations {
+				mergedAnnotations[k] = v
+			}
+
+			statefulSet.Spec.Template = *desiredSpec.Template.DeepCopy()
+			statefulSet.Spec.Template.Annotations = mergedAnnotations
+			if len(statefulSet.Spec.Template.Spec.Containers) > 0 {
+				statefulSet.Spec.Template.Spec.Containers[0].Env = mergedEnv
+			}
+
+			r.stampStandaloneStatefulSetTracking(statefulSet, desiredHash, desiredEnv)
 			return nil
 		})
 		return err
@@ -548,6 +740,17 @@ func (r *Neo4jEnterpriseStandaloneReconciler) reconcileStatefulSet(ctx context.C
 	logger.Info("Successfully created or updated StatefulSet", "name", statefulSet.Name)
 
 	return nil
+}
+
+// stampStandaloneStatefulSetTracking records the desired template hash and the
+// operator-owned env-var names on the StatefulSet so the next reconcile can diff
+// against them (template-change detection + foreign-env preservation).
+func (r *Neo4jEnterpriseStandaloneReconciler) stampStandaloneStatefulSetTracking(sts *appsv1.StatefulSet, templateHash string, ownedEnv []corev1.EnvVar) {
+	if sts.Annotations == nil {
+		sts.Annotations = map[string]string{}
+	}
+	sts.Annotations[standaloneTemplateHashAnnotation] = templateHash
+	sts.Annotations[standaloneOwnedEnvVarsAnnotation] = standaloneEnvVarNames(ownedEnv)
 }
 
 // reconcileNetworkPolicy reconciles the NetworkPolicy for the standalone
@@ -1840,7 +2043,22 @@ func (r *Neo4jEnterpriseStandaloneReconciler) SetupWithManager(mgr ctrl.Manager)
 		Owns(&appsv1.StatefulSet{}).
 		Owns(&corev1.Service{}).
 		Owns(&corev1.ConfigMap{}).
-		Owns(&networkingv1.Ingress{})
+		Owns(&networkingv1.Ingress{}).
+		// A Neo4jPlugin's settings are folded into the standalone's neo4j.conf
+		// (the standalone controller is the single owner — issue #146), so
+		// re-reconcile the targeted standalone whenever a plugin is added,
+		// changed, or removed (so its keys are rendered or pruned).
+		Watches(&neo4jv1beta1.Neo4jPlugin{}, handler.EnqueueRequestsFromMapFunc(
+			func(_ context.Context, obj client.Object) []ctrl.Request {
+				plugin, ok := obj.(*neo4jv1beta1.Neo4jPlugin)
+				if !ok || plugin.Spec.ClusterRef == "" {
+					return nil
+				}
+				return []ctrl.Request{{NamespacedName: types.NamespacedName{
+					Namespace: plugin.Namespace,
+					Name:      plugin.Spec.ClusterRef,
+				}}}
+			}))
 
 	// Only watch Certificate resources if cert-manager is actually installed
 	// in the cluster. We check the REST mapper (real CRD presence) rather than

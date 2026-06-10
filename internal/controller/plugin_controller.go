@@ -274,16 +274,13 @@ func (r *Neo4jPluginReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, nil // Don't return error - status is set correctly
 	}
 
-	// Apply ConfigMap-based configurations first (before checking connectivity)
-	// This is critical for security settings that need to be in place before Neo4j starts
-	if deployment.Type == "standalone" {
-		if err := r.updateStandaloneConfigMapForPlugin(ctx, plugin, deployment); err != nil {
-			logger.Error(err, "Failed to update ConfigMap for standalone deployment", "plugin", plugin.Spec.Name)
-			r.updatePluginStatus(ctx, plugin, "Failed", fmt.Sprintf("Failed to update ConfigMap: %v", err))
-			return ctrl.Result{}, nil
-		}
-		logger.Info("Successfully updated ConfigMap for standalone deployment", "plugin", plugin.Spec.Name)
-	}
+	// Standalone neo4j.conf (plugin security settings) is owned by the standalone
+	// controller, which folds in the union of all Neo4jPlugin CRs for the target
+	// and rolls the pod on change (issue #146). It watches Neo4jPlugin, so creating
+	// this CR triggers that reconcile — the plugin controller no longer patches the
+	// standalone's ConfigMap here (that caused a two-controller tug-of-war and left
+	// uninstalled plugins' keys behind). NEO4J_PLUGINS env + init containers below
+	// are still managed here.
 
 	// Check if deployment is actually functional, not just status reporting
 	if !r.isDeploymentFunctional(ctx, deployment) {
@@ -1403,118 +1400,6 @@ func formatPluginInitOwned(set map[string]struct{}) string {
 	return strings.Join(names, ",")
 }
 
-// updateStandaloneConfigMapForPlugin updates the ConfigMap for standalone deployments with plugin security settings
-func (r *Neo4jPluginReconciler) updateStandaloneConfigMapForPlugin(ctx context.Context, plugin *neo4jv1beta1.Neo4jPlugin, deployment *DeploymentInfo) error {
-	logger := log.FromContext(ctx)
-
-	// Get automatic security settings for this plugin
-	automaticSettings := r.getAutomaticSecuritySettings(plugin.Spec.Name)
-
-	// Get user-provided non-dynamic settings that must be applied at startup
-	nonDynamicUserSettings := make(map[string]string)
-	for key, value := range plugin.Spec.Config {
-		// Include settings that are non-dynamic and must be in neo4j.conf at startup
-		if r.isNonDynamicSetting(key) || r.isSecuritySetting(key) {
-			nonDynamicUserSettings[key] = value
-		}
-	}
-
-	// Combine automatic and user-provided settings
-	allSettings := make(map[string]string)
-	for key, value := range automaticSettings {
-		allSettings[key] = value
-	}
-	for key, value := range nonDynamicUserSettings {
-		allSettings[key] = value // User settings can override automatic ones
-	}
-
-	if len(allSettings) == 0 {
-		logger.Info("No ConfigMap settings required for plugin", "plugin", plugin.Spec.Name)
-		return nil
-	}
-
-	// Get the standalone resource
-	standalone, ok := deployment.Object.(*neo4jv1beta1.Neo4jEnterpriseStandalone)
-	if !ok {
-		return fmt.Errorf("deployment typed as standalone but object is %T", deployment.Object)
-	}
-
-	// Get the ConfigMap name for the standalone
-	configMapName := fmt.Sprintf("%s-config", standalone.Name)
-	configMapKey := types.NamespacedName{
-		Namespace: standalone.Namespace,
-		Name:      configMapName,
-	}
-
-	// Retrieve the current ConfigMap
-	configMap := &corev1.ConfigMap{}
-	if err := r.Get(ctx, configMapKey, configMap); err != nil {
-		return fmt.Errorf("failed to get ConfigMap %s: %w", configMapName, err)
-	}
-
-	// Get current neo4j.conf content
-	currentConf := configMap.Data["neo4j.conf"]
-	if currentConf == "" {
-		return fmt.Errorf("neo4j.conf not found in ConfigMap %s", configMapName)
-	}
-
-	// Merge plugin settings into neo4j.conf without creating duplicate keys.
-	// The previous approach appended a line guarded only by an exact-substring
-	// check, so a plugin allowlist (e.g. dbms.security.procedures.unrestricted=
-	// apoc.*) was added as a SECOND declaration when the conf already had that
-	// key (e.g. =gds.*) — CalVer Neo4j then refuses to start ("declared multiple
-	// times"). UpsertNeo4jConfSettings unions additive keys and adds scalar keys
-	// only when absent; it is idempotent, so a no-op won't churn the ConfigMap
-	// or restart the pod.
-	updatedConf := resources.UpsertNeo4jConfSettings(currentConf, allSettings)
-
-	// Update the ConfigMap if changes were made
-	if updatedConf != currentConf {
-		configMap.Data["neo4j.conf"] = updatedConf
-		if err := r.Update(ctx, configMap); err != nil {
-			return fmt.Errorf("failed to update ConfigMap %s: %w", configMapName, err)
-		}
-		logger.Info("ConfigMap updated with plugin security settings", "plugin", plugin.Spec.Name)
-
-		// Restart the standalone pod to pick up the configuration changes
-		if err := r.restartStandalonePods(ctx, standalone); err != nil {
-			logger.Error(err, "Failed to restart standalone pods after ConfigMap update")
-			// Don't fail the entire operation if restart fails - ConfigMap is updated
-		}
-	}
-
-	return nil
-}
-
-// restartStandalonePods restarts the pods of a standalone deployment to pick up ConfigMap changes
-func (r *Neo4jPluginReconciler) restartStandalonePods(ctx context.Context, standalone *neo4jv1beta1.Neo4jEnterpriseStandalone) error {
-	logger := log.FromContext(ctx)
-
-	// Get the StatefulSet for the standalone
-	stsKey := types.NamespacedName{
-		Namespace: standalone.Namespace,
-		Name:      standalone.Name,
-	}
-
-	sts := &appsv1.StatefulSet{}
-	if err := r.Get(ctx, stsKey, sts); err != nil {
-		return fmt.Errorf("failed to get StatefulSet %s: %w", standalone.Name, err)
-	}
-
-	// Add a restart annotation to force pod restart
-	if sts.Spec.Template.Annotations == nil {
-		sts.Spec.Template.Annotations = make(map[string]string)
-	}
-	sts.Spec.Template.Annotations["kubectl.kubernetes.io/restartedAt"] = time.Now().Format(time.RFC3339)
-
-	if err := r.Update(ctx, sts); err != nil {
-		return fmt.Errorf("failed to update StatefulSet to restart pods: %w", err)
-	}
-
-	logger.Info("StatefulSet updated with restart annotation", "name", standalone.Name)
-	return nil
-}
-
 // mapPluginName maps our plugin names to Neo4j's expected plugin names for NEO4J_PLUGINS
 func (r *Neo4jPluginReconciler) mapPluginName(pluginName string) string {
 	switch pluginName {
@@ -1899,25 +1784,11 @@ func (r *Neo4jPluginReconciler) requiresAutomaticSecurityConfiguration(pluginNam
 	}
 }
 
-// getAutomaticSecuritySettings returns the required security settings for plugins that need automatic configuration
+// getAutomaticSecuritySettings returns the security settings a plugin requires.
+// Delegates to the shared helper so the env-var path and the standalone
+// ConfigMap owner (issue #146) agree on the exact set.
 func (r *Neo4jPluginReconciler) getAutomaticSecuritySettings(pluginName string) map[string]string {
-	settings := make(map[string]string)
-
-	switch pluginName {
-	case "bloom":
-		// Bloom requires these security settings to function properly
-		settings["dbms.security.procedures.unrestricted"] = "bloom.*"
-		settings["dbms.security.http_auth_allowlist"] = "/,/browser.*,/bloom.*"
-		settings["server.unmanaged_extension_classes"] = "com.neo4j.bloom.server=/bloom"
-	case "graph-data-science", "gds":
-		// GDS default automatic security (can be overridden by user security settings)
-		settings["dbms.security.procedures.unrestricted"] = "gds.*,apoc.load.*"
-	case "fleet-management":
-		settings["dbms.security.procedures.unrestricted"] = "fleetManagement.*"
-		settings["dbms.security.procedures.allowlist"] = "fleetManagement.*"
-	}
-
-	return settings
+	return automaticPluginSecuritySettings(pluginName)
 }
 
 // filterNeo4jClientConfig filters out plugin-specific configurations that should be handled via environment variables
@@ -1945,13 +1816,6 @@ func (r *Neo4jPluginReconciler) filterNeo4jClientConfig(config map[string]string
 	}
 
 	return filtered
-}
-
-// isSecuritySetting determines if a configuration setting is security-related and must be in neo4j.conf at startup
-func (r *Neo4jPluginReconciler) isSecuritySetting(key string) bool {
-	return strings.HasPrefix(key, "dbms.security.") ||
-		strings.HasPrefix(key, "server.unmanaged_extension_classes") ||
-		strings.HasPrefix(key, "dbms.bloom.") // Bloom-specific settings
 }
 
 // isNonDynamicSetting determines if a configuration setting can only be applied at startup

@@ -508,13 +508,12 @@ func TestGetAutomaticSecuritySettings(t *testing.T) {
 }
 
 func TestIsSecuritySetting(t *testing.T) {
-	r := &Neo4jPluginReconciler{}
-	assert.True(t, r.isSecuritySetting("dbms.security.procedures.unrestricted"))
-	assert.True(t, r.isSecuritySetting("dbms.security.procedures.allowlist"))
-	assert.True(t, r.isSecuritySetting("server.unmanaged_extension_classes"))
-	assert.True(t, r.isSecuritySetting("dbms.bloom.license_file"))
-	assert.False(t, r.isSecuritySetting("server.memory.heap.max_size"))
-	assert.False(t, r.isSecuritySetting("gds.maxConcurrentRequests"))
+	assert.True(t, pluginConfKeyIsSecurity("dbms.security.procedures.unrestricted"))
+	assert.True(t, pluginConfKeyIsSecurity("dbms.security.procedures.allowlist"))
+	assert.True(t, pluginConfKeyIsSecurity("server.unmanaged_extension_classes"))
+	assert.True(t, pluginConfKeyIsSecurity("dbms.bloom.license_file"))
+	assert.False(t, pluginConfKeyIsSecurity("server.memory.heap.max_size"))
+	assert.False(t, pluginConfKeyIsSecurity("gds.maxConcurrentRequests"))
 }
 
 func TestFilterNeo4jClientConfig(t *testing.T) {
