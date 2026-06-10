@@ -5,5 +5,5 @@
 #   /internal/controller/  @neo4j-partners/operator-controllers
 #   /docs/                  @neo4j-partners/operator-docs
 
-# Catch-all: the maintainer owns everything until ownership is split out.
-*   @priyolahiri
+# Catch-all: the maintainers own everything until ownership is split out.
+*   @priyolahiri @benofben
