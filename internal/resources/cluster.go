@@ -192,7 +192,8 @@ func BuildServerStatefulSetForEnterprise(cluster *neo4jv1beta1.Neo4jEnterpriseCl
 }
 
 // BuildServerStatefulSetsForEnterprise creates individual StatefulSets for each Neo4j server
-// DEPRECATED: Use BuildServerStatefulSetForEnterprise for unified StatefulSet approach
+//
+// Deprecated: Use BuildServerStatefulSetForEnterprise for the unified StatefulSet approach.
 // Each server has its own StatefulSet with a replica count of 1
 // First server uses bootstrapping_strategy=me, others use bootstrapping_strategy=other
 func BuildServerStatefulSetsForEnterprise(cluster *neo4jv1beta1.Neo4jEnterpriseCluster) []*appsv1.StatefulSet {
@@ -2444,13 +2445,9 @@ func ValidateServerRoleHints(cluster *neo4jv1beta1.Neo4jEnterpriseCluster) []str
 
 	// Warn if all servers are constrained to SECONDARY (cluster would have no primaries)
 	allSecondary := true
-	allPrimary := true
 	for _, roleHint := range cluster.Spec.Topology.ServerRoles {
 		if roleHint.ModeConstraint != "SECONDARY" {
 			allSecondary = false
-		}
-		if roleHint.ModeConstraint != "PRIMARY" {
-			allPrimary = false
 		}
 	}
 
@@ -2459,10 +2456,8 @@ func ValidateServerRoleHints(cluster *neo4jv1beta1.Neo4jEnterpriseCluster) []str
 		if allSecondary {
 			errors = append(errors, "all servers are constrained to SECONDARY mode - cluster would have no primary servers available")
 		}
-		if allPrimary && serverCount > 1 {
-			// This is actually valid, but might want to warn about no dedicated secondaries
-			// Not adding this as an error since it's a valid configuration
-		}
+		// allPrimary with serverCount > 1 is intentionally not flagged: it's a
+		// valid configuration (no dedicated secondaries).
 	}
 
 	return errors

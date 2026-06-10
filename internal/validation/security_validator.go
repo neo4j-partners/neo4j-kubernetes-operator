@@ -319,18 +319,17 @@ func (v *SecurityValidator) validateTLSConfig(tls *neo4jv1beta1.TLSSpec) field.E
 				tlsPath.Child("issuerRef"),
 				"issuerRef is required for cert-manager TLS mode",
 			))
-		} else {
-			if tls.IssuerRef.Name == "" {
-				allErrs = append(allErrs, field.Required(
-					tlsPath.Child("issuerRef", "name"),
-					"issuer name must be specified",
-				))
-			}
-			// kind is intentionally unrestricted: cert-manager's external issuer
-			// interface allows any registered CRD kind (e.g. AWSPCAClusterIssuer,
-			// VaultIssuer, GoogleCASClusterIssuer) to act as an issuer alongside
-			// the built-in Issuer and ClusterIssuer kinds. The operator passes
-			// kind directly to the cert-manager Certificate resource unchanged.
+			// Only issuerRef.name is required. issuerRef.kind is intentionally
+			// unrestricted: cert-manager's external-issuer interface allows any
+			// registered CRD kind (e.g. AWSPCAClusterIssuer, VaultIssuer,
+			// GoogleCASClusterIssuer) alongside the built-in Issuer and
+			// ClusterIssuer kinds. The operator passes kind directly to the
+			// cert-manager Certificate resource unchanged.
+		} else if tls.IssuerRef.Name == "" {
+			allErrs = append(allErrs, field.Required(
+				tlsPath.Child("issuerRef", "name"),
+				"issuer name must be specified",
+			))
 		}
 	}
 

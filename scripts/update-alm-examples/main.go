@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -43,7 +44,7 @@ func loadSamples(samplesDir string) ([]map[string]any, error) {
 		for {
 			var doc map[string]any
 			if err := decoder.Decode(&doc); err != nil {
-				if err == io.EOF {
+				if errors.Is(err, io.EOF) {
 					break
 				}
 				return nil, err

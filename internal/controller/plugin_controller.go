@@ -558,10 +558,16 @@ func (r *Neo4jPluginReconciler) configurePlugin(ctx context.Context, plugin *neo
 	var err error
 
 	if deployment.Type == "cluster" {
-		cluster := deployment.Object.(*neo4jv1beta1.Neo4jEnterpriseCluster)
+		cluster, ok := deployment.Object.(*neo4jv1beta1.Neo4jEnterpriseCluster)
+		if !ok {
+			return fmt.Errorf("deployment typed as cluster but object is %T", deployment.Object)
+		}
 		neo4jClient, err = neo4jclient.NewClientForEnterprise(cluster, r.Client, getClusterAdminSecretName(cluster))
 	} else {
-		standalone := deployment.Object.(*neo4jv1beta1.Neo4jEnterpriseStandalone)
+		standalone, ok := deployment.Object.(*neo4jv1beta1.Neo4jEnterpriseStandalone)
+		if !ok {
+			return fmt.Errorf("deployment typed as standalone but object is %T", deployment.Object)
+		}
 		neo4jClient, err = neo4jclient.NewClientForEnterpriseStandalone(standalone, r.Client, getStandaloneAdminSecretName(standalone))
 	}
 
@@ -619,9 +625,10 @@ func (r *Neo4jPluginReconciler) uninstallPlugin(ctx context.Context, plugin *neo
 	// Get target deployment
 	deployment, err := r.getTargetDeployment(ctx, plugin)
 	if err != nil {
-		// If deployment is not found, consider plugin already uninstalled
+		// Deployment gone → nothing to uninstall from. Succeed so the finalizer
+		// releases instead of wedging on a target that no longer exists.
 		logger.Info("Target deployment not found, considering plugin uninstalled")
-		return nil
+		return nil //nolint:nilerr // intentional: missing target means already uninstalled
 	}
 
 	// Prune this plugin's additive security tokens (e.g. gds.*) from the
@@ -1427,7 +1434,10 @@ func (r *Neo4jPluginReconciler) updateStandaloneConfigMapForPlugin(ctx context.C
 	}
 
 	// Get the standalone resource
-	standalone := deployment.Object.(*neo4jv1beta1.Neo4jEnterpriseStandalone)
+	standalone, ok := deployment.Object.(*neo4jv1beta1.Neo4jEnterpriseStandalone)
+	if !ok {
+		return fmt.Errorf("deployment typed as standalone but object is %T", deployment.Object)
+	}
 
 	// Get the ConfigMap name for the standalone
 	configMapName := fmt.Sprintf("%s-config", standalone.Name)
@@ -1576,7 +1586,10 @@ func (r *Neo4jPluginReconciler) isDeploymentFunctional(ctx context.Context, depl
 
 	// For clusters, try to connect and verify cluster formation
 	if deployment.Type == "cluster" {
-		cluster := deployment.Object.(*neo4jv1beta1.Neo4jEnterpriseCluster)
+		cluster, ok := deployment.Object.(*neo4jv1beta1.Neo4jEnterpriseCluster)
+		if !ok {
+			return false
+		}
 		neo4jClient, err := neo4jclient.NewClientForEnterprise(cluster, r.Client, getClusterAdminSecretName(cluster))
 		if err != nil {
 			logger.Info("Cannot create Neo4j client", "error", err)
@@ -1604,7 +1617,10 @@ func (r *Neo4jPluginReconciler) isDeploymentFunctional(ctx context.Context, depl
 
 	// For standalone, just check basic connectivity
 	if deployment.Type == "standalone" {
-		standalone := deployment.Object.(*neo4jv1beta1.Neo4jEnterpriseStandalone)
+		standalone, ok := deployment.Object.(*neo4jv1beta1.Neo4jEnterpriseStandalone)
+		if !ok {
+			return false
+		}
 		neo4jClient, err := neo4jclient.NewClientForEnterpriseStandalone(standalone, r.Client, getStandaloneAdminSecretName(standalone))
 		if err != nil {
 			logger.Info("Cannot create Neo4j standalone client", "error", err)
@@ -1756,8 +1772,9 @@ func (r *Neo4jPluginReconciler) getPodLabels(deployment *DeploymentInfo) map[str
 // getExpectedReplicas returns the expected number of replicas for the deployment
 func (r *Neo4jPluginReconciler) getExpectedReplicas(deployment *DeploymentInfo) int {
 	if deployment.Type == "cluster" {
-		cluster := deployment.Object.(*neo4jv1beta1.Neo4jEnterpriseCluster)
-		return int(cluster.Spec.Topology.Servers)
+		if cluster, ok := deployment.Object.(*neo4jv1beta1.Neo4jEnterpriseCluster); ok {
+			return int(cluster.Spec.Topology.Servers)
+		}
 	}
 	// Standalone always has 1 replica
 	return 1
@@ -1984,10 +2001,16 @@ func (r *Neo4jPluginReconciler) applyAPOCSecurityConfiguration(ctx context.Conte
 		var err error
 
 		if deployment.Type == "cluster" {
-			cluster := deployment.Object.(*neo4jv1beta1.Neo4jEnterpriseCluster)
+			cluster, ok := deployment.Object.(*neo4jv1beta1.Neo4jEnterpriseCluster)
+			if !ok {
+				return fmt.Errorf("deployment typed as cluster but object is %T", deployment.Object)
+			}
 			neo4jClient, err = neo4jclient.NewClientForEnterprise(cluster, r.Client, getClusterAdminSecretName(cluster))
 		} else {
-			standalone := deployment.Object.(*neo4jv1beta1.Neo4jEnterpriseStandalone)
+			standalone, ok := deployment.Object.(*neo4jv1beta1.Neo4jEnterpriseStandalone)
+			if !ok {
+				return fmt.Errorf("deployment typed as standalone but object is %T", deployment.Object)
+			}
 			neo4jClient, err = neo4jclient.NewClientForEnterpriseStandalone(standalone, r.Client, getStandaloneAdminSecretName(standalone))
 		}
 

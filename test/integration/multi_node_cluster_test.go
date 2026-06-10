@@ -215,7 +215,7 @@ var _ = Describe("Multi-Node Cluster Formation Integration Tests", Label("extend
 				}
 				statefulSet := &appsv1.StatefulSet{}
 				if err := k8sClient.Get(ctx, serverKey, statefulSet); err != nil {
-					return fmt.Errorf("server StatefulSet not found: %v", err)
+					return fmt.Errorf("server StatefulSet not found: %w", err)
 				}
 
 				if statefulSet.Spec.Replicas == nil || *statefulSet.Spec.Replicas != 2 {

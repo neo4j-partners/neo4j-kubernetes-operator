@@ -324,7 +324,7 @@ func crashLoopError(ctx context.Context, namespace string) error {
 	podList := &corev1.PodList{}
 	if err := k8sClient.List(ctx, podList, client.InNamespace(namespace)); err != nil {
 		// Transient list failure — let the normal readiness poll handle it.
-		return nil
+		return nil //nolint:nilerr // intentional: a transient List error isn't a crash-loop signal
 	}
 	for i := range podList.Items {
 		pod := &podList.Items[i]

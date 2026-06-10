@@ -526,7 +526,10 @@ func (r *Neo4jAuthRuleReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		c,
 		func() client.ObjectList { return &neo4jv1beta1.Neo4jAuthRuleList{} },
 		func(list client.ObjectList, emit func(name, namespace, clusterRef string)) {
-			rules := list.(*neo4jv1beta1.Neo4jAuthRuleList)
+			rules, ok := list.(*neo4jv1beta1.Neo4jAuthRuleList)
+			if !ok {
+				return
+			}
 			for i := range rules.Items {
 				ar := &rules.Items[i]
 				emit(ar.Name, ar.Namespace, ar.Spec.ClusterRef)

@@ -402,14 +402,12 @@ func (v *DatabaseValidator) validateSeedConfiguration(database *neo4jv1beta1.Neo
 					restoreUntil,
 					"transaction ID cannot be empty when using txId: format"))
 			}
-		} else {
-			// Assume RFC3339 format and validate basic structure
-			if !strings.Contains(restoreUntil, "T") || !strings.Contains(restoreUntil, ":") {
-				result.Errors = append(result.Errors, field.Invalid(
-					restoreUntilPath,
-					restoreUntil,
-					"restoreUntil must be RFC3339 timestamp (e.g., '2025-01-15T10:30:00Z') or transaction ID (e.g., 'txId:12345')"))
-			}
+			// Assume RFC3339 format and validate basic structure.
+		} else if !strings.Contains(restoreUntil, "T") || !strings.Contains(restoreUntil, ":") {
+			result.Errors = append(result.Errors, field.Invalid(
+				restoreUntilPath,
+				restoreUntil,
+				"restoreUntil must be RFC3339 timestamp (e.g., '2025-01-15T10:30:00Z') or transaction ID (e.g., 'txId:12345')"))
 		}
 	}
 

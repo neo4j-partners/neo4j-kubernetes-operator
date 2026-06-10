@@ -488,7 +488,7 @@ func setupOIDCStub(ctx context.Context, ns string) string {
 		Spec: certmgrv1.CertificateSpec{
 			SecretName: oidcStubName_TLSSecret,
 			Duration:   &metav1.Duration{Duration: 24 * time.Hour},
-			IssuerRef: cmmeta.ObjectReference{
+			IssuerRef: cmmeta.IssuerReference{
 				Name: "ca-cluster-issuer",
 				Kind: "ClusterIssuer",
 			},

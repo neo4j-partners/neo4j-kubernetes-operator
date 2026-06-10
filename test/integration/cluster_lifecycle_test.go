@@ -156,7 +156,7 @@ var _ = Describe("Cluster Lifecycle Integration Tests", Label("core"), func() {
 					Namespace: namespace.Name,
 				}, serverStatefulSet)
 				if err != nil {
-					return fmt.Errorf("server StatefulSet not found: %v", err)
+					return fmt.Errorf("server StatefulSet not found: %w", err)
 				}
 				if serverStatefulSet.Spec.Replicas == nil || *serverStatefulSet.Spec.Replicas != expectedInitialReplicas {
 					return fmt.Errorf("server StatefulSet should have %d replicas, got %v", expectedInitialReplicas, serverStatefulSet.Spec.Replicas)
@@ -418,7 +418,7 @@ var _ = Describe("Cluster Lifecycle Integration Tests", Label("core"), func() {
 					Namespace: namespace.Name,
 				}, serverSts1)
 				if err != nil {
-					return fmt.Errorf("cluster-1 server StatefulSet not found: %v", err)
+					return fmt.Errorf("cluster-1 server StatefulSet not found: %w", err)
 				}
 				if serverSts1.Spec.Replicas == nil || *serverSts1.Spec.Replicas != expectedReplicas1 {
 					return fmt.Errorf("cluster-1 server StatefulSet should have %d replicas, got %v", expectedReplicas1, serverSts1.Spec.Replicas)
@@ -434,7 +434,7 @@ var _ = Describe("Cluster Lifecycle Integration Tests", Label("core"), func() {
 					Namespace: namespace.Name,
 				}, serverSts2)
 				if err != nil {
-					return fmt.Errorf("cluster-2 server StatefulSet not found: %v", err)
+					return fmt.Errorf("cluster-2 server StatefulSet not found: %w", err)
 				}
 				if serverSts2.Spec.Replicas == nil || *serverSts2.Spec.Replicas != expectedReplicas2 {
 					return fmt.Errorf("cluster-2 server StatefulSet should have %d replicas, got %v", expectedReplicas2, serverSts2.Spec.Replicas)

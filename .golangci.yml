@@ -15,10 +15,8 @@ linters:
     - staticcheck
     - unconvert
     - revive
-    - misspell
     - gosec
     - ginkgolinter
-    - testpackage
     - nakedret
     - gocritic
     - nolintlint
@@ -30,13 +28,15 @@ linters:
     - errorlint
     - forcetypeassert
     - nilerr
-    - nilnil
     - noctx
     - rowserrcheck
     - sqlclosecheck
     - wastedassign
   disable:
     - typecheck  # Disabled due to controller-runtime interface resolution issues
+    - testpackage  # Codebase deliberately uses white-box (internal-package) tests that exercise unexported funcs
+    - nilnil  # Lookup helpers intentionally return (nil, nil) for "not found"; callers nil-check
+    - misspell  # British-English prose mixed with US technical terms (artifact/serialize in exported API fields) makes this high-friction with little payoff
     - exhaustive  # Too noisy for this codebase
     - exhaustruct  # Too restrictive for Kubernetes resources
     - cyclop  # Redundant with gocyclo
@@ -76,14 +76,6 @@ linters-settings:
     line-length: 120
     tab-width: 4
 
-  misspell:
-    locale: US
-    ignore-words:
-      - "Neo4j"
-      - "neo4j"
-      - "kubernetes"
-      - "kubectl"
-
   prealloc:
     simple: true
     range-loops: true
@@ -100,18 +92,14 @@ linters-settings:
   gocritic:
     enabled-tags:
       - diagnostic
+    # Only checks in the enabled "diagnostic" tag need disabling here; the rest
+    # (style/perf tags) aren't enabled, so listing them just produced "no need to
+    # disable" warnings.
     disabled-checks:
-      - unnamedResult
-      - hugeParam
-      - rangeValCopy
+      - sprintfQuotedString  # We build shell/JSON command fragments where "%s" is deliberate shell/JSON quoting, not Go %q
       - commentedOutCode
       - ifElseChain
       - assignOp
-      - emptyStringTest
-      - httpNoBody
-      - nestingReduce
-      - paramTypeCombine
-      - appendCombine
       - unnecessaryDefer
 
   revive:
@@ -161,6 +149,22 @@ issues:
   new: false
   fix: false
   exclude-rules:
+    # controller-runtime v0.24's mgr.GetEventRecorderFor (old record.EventRecorder
+    # API) is deprecated in favour of GetEventRecorder (new events.EventRecorder,
+    # different Eventf signature). Migrating touches every controller's Recorder
+    # field + all Event/Eventf call sites + test wiring; upstream itself still
+    # uses GetEventRecorderFor with //nolint. Tracked as a separate migration.
+    - text: "SA1019: mgr.GetEventRecorderFor is deprecated"
+      linters:
+        - staticcheck
+
+    # scheme.Builder in the api package is the standard kubebuilder scaffolding
+    # pattern; the deprecation is advisory for dependency-minimal api packages.
+    - path: api/v1beta1/groupversion_info\.go
+      text: "SA1019: scheme.Builder is deprecated"
+      linters:
+        - staticcheck
+
     # Exclude some linters from running on test files
     - path: _test\.go
       linters:

@@ -223,7 +223,8 @@ func buildTLSConfig(ctx context.Context, k8sClient client.Client, namespace, res
 			pool := x509.NewCertPool()
 			if pool.AppendCertsFromPEM(caCert) {
 				return &tls.Config{
-					RootCAs: pool,
+					RootCAs:    pool,
+					MinVersion: tls.VersionTLS12,
 				}
 			}
 		}
@@ -1356,7 +1357,7 @@ func (c *Client) FindSystemDatabasePrimaryAddress(ctx context.Context) (string, 
 		}
 	}
 
-	if err = result.Err(); err != nil {
+	if err := result.Err(); err != nil {
 		return "", err
 	}
 

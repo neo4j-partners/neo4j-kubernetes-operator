@@ -584,7 +584,10 @@ func (r *Neo4jDatabaseReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		mgr.GetClient(),
 		func() client.ObjectList { return &neo4jv1beta1.Neo4jDatabaseList{} },
 		func(list client.ObjectList, emit func(name, namespace, clusterRef string)) {
-			databases := list.(*neo4jv1beta1.Neo4jDatabaseList)
+			databases, ok := list.(*neo4jv1beta1.Neo4jDatabaseList)
+			if !ok {
+				return
+			}
 			for i := range databases.Items {
 				d := &databases.Items[i]
 				emit(d.Name, d.Namespace, d.Spec.ClusterRef)

@@ -607,6 +607,16 @@ $(ENVTEST): $(LOCALBIN)
 .PHONY: golangci-lint
 golangci-lint: $(GOLANGCI_LINT) ## Download golangci-lint locally if necessary.
 $(GOLANGCI_LINT): $(LOCALBIN)
+	@# golangci-lint embeds the Go version it was built with and refuses to lint a
+	@# module targeting a newer Go ("built with go1.X is lower than targeted go1.Y").
+	@# The version-only install sentinel below never rebuilds on a Go upgrade, so
+	@# force a rebuild when the existing binary's build-Go differs from the active
+	@# toolchain. Without this, bumping Go silently breaks `make lint` until the
+	@# stale binary is removed by hand.
+	@if [ -x "$(GOLANGCI_LINT)" ] && ! "$(GOLANGCI_LINT)" version 2>/dev/null | grep -q "built with $$(go env GOVERSION)"; then \
+		echo "golangci-lint was built with a stale Go toolchain; rebuilding for $$(go env GOVERSION)"; \
+		rm -f "$(GOLANGCI_LINT)" "$(GOLANGCI_LINT)-$(GOLANGCI_LINT_VERSION)"; \
+	fi
 	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint,$(GOLANGCI_LINT_VERSION))
 
 .PHONY: gotestsum

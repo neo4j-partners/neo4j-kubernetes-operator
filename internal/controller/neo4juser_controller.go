@@ -206,7 +206,9 @@ func (r *Neo4jUserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	// Role binding diff
 	desiredRoles := normaliseRoles(user.Spec.Roles)
 	currentRoles := normaliseRoles(info.Roles) // Note: may be slightly stale after CREATE; re-read just below.
-	if info != nil && len(info.Roles) == 0 {
+	// info is non-nil here: the create branch above re-reads it (and bails if
+	// still nil) and the else branch only runs when it was already non-nil.
+	if len(info.Roles) == 0 {
 		// fresh-create path: fetch live roles since create-time info has none granted.
 		if live, err := nc.ListUserRoles(ctx, username); err == nil {
 			currentRoles = normaliseRoles(live)
@@ -582,7 +584,10 @@ func (r *Neo4jUserReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		c,
 		func() client.ObjectList { return &neo4jv1beta1.Neo4jUserList{} },
 		func(list client.ObjectList, emit func(name, namespace, clusterRef string)) {
-			users := list.(*neo4jv1beta1.Neo4jUserList)
+			users, ok := list.(*neo4jv1beta1.Neo4jUserList)
+			if !ok {
+				return
+			}
 			for i := range users.Items {
 				u := &users.Items[i]
 				emit(u.Name, u.Namespace, u.Spec.ClusterRef)

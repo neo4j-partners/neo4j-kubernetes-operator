@@ -447,7 +447,10 @@ func (r *Neo4jRoleBindingReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		c,
 		func() client.ObjectList { return &neo4jv1beta1.Neo4jRoleBindingList{} },
 		func(list client.ObjectList, emit func(name, namespace, clusterRef string)) {
-			bindings := list.(*neo4jv1beta1.Neo4jRoleBindingList)
+			bindings, ok := list.(*neo4jv1beta1.Neo4jRoleBindingList)
+			if !ok {
+				return
+			}
 			for i := range bindings.Items {
 				b := &bindings.Items[i]
 				emit(b.Name, b.Namespace, b.Spec.ClusterRef)
