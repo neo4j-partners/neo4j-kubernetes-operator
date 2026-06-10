@@ -155,7 +155,7 @@ func (r *Neo4jRoleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 
 	// Privilege diff
-	desired, errs := r.canonicaliseDesired(role.Spec.Privileges)
+	desired, desiredByCanonical, errs := r.canonicaliseDesired(role.Spec.Privileges)
 	if errs != nil {
 		return r.fail(ctx, role, "privilege canonicalisation failed", errs, requeue)
 	}
@@ -171,8 +171,17 @@ func (r *Neo4jRoleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 
 	for _, canon := range toAdd {
-		if err := nc.ExecutePrivilegeStatement(ctx, canon); err != nil {
-			return r.fail(ctx, role, fmt.Sprintf("apply privilege %q failed", canon), err, requeue)
+		// Execute the original spec text, never the canonical form: canonical
+		// upper-cases bare tokens including unquoted identifiers, so a role/
+		// graph/database named e.g. `users` written unquoted would canonicalise
+		// to `... TO USERS` and target the wrong (case-sensitive) role. The diff
+		// is keyed on canonical; the statement run is the user's original.
+		stmt := desiredByCanonical[canon]
+		if stmt == "" {
+			stmt = canon // defensive fallback (should not happen)
+		}
+		if err := nc.ExecutePrivilegeStatement(ctx, stmt); err != nil {
+			return r.fail(ctx, role, fmt.Sprintf("apply privilege %q failed", stmt), err, requeue)
 		}
 	}
 
@@ -289,22 +298,29 @@ func (r *Neo4jRoleReconciler) handleDeletion(ctx context.Context, role *neo4jv1b
 }
 
 // canonicaliseDesired turns the spec privileges into a deduplicated, sorted
-// slice of canonical statements.
-func (r *Neo4jRoleReconciler) canonicaliseDesired(stmts []string) ([]string, error) {
+// slice of canonical statements plus a map from each canonical form back to the
+// original spec text. The diff is keyed on the canonical form, but callers
+// execute the original text — the canonical form upper-cases bare tokens
+// (including unquoted identifiers) and is explicitly not safe to feed to Neo4j.
+func (r *Neo4jRoleReconciler) canonicaliseDesired(stmts []string) ([]string, map[string]string, error) {
 	set := map[string]struct{}{}
+	byCanonical := map[string]string{}
 	for _, s := range stmts {
 		canon := neo4jclient.CanonicalisePrivilegeStatement(s)
 		if canon == "" {
 			continue
 		}
 		set[canon] = struct{}{}
+		if _, exists := byCanonical[canon]; !exists {
+			byCanonical[canon] = s // first original wins for a given canonical form
+		}
 	}
 	out := make([]string, 0, len(set))
 	for k := range set {
 		out = append(out, k)
 	}
 	sort.Strings(out)
-	return out, nil
+	return out, byCanonical, nil
 }
 
 // fetchCurrentPrivileges reads SHOW ROLE PRIVILEGES AS COMMANDS and returns:
