@@ -349,7 +349,10 @@ func TestWarnIfChainParent(t *testing.T) {
 	restore := &neo4jv1beta1.Neo4jRestore{ObjectMeta: metav1.ObjectMeta{Name: "r", Namespace: ns}}
 
 	drain := func(r *Neo4jRestoreReconciler) []string {
-		fr := r.Recorder.(*record.FakeRecorder)
+		fr, ok := r.Recorder.(*record.FakeRecorder)
+		if !ok {
+			t.Fatalf("expected *record.FakeRecorder, got %T", r.Recorder)
+		}
 		var out []string
 		for {
 			select {

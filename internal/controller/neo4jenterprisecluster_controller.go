@@ -158,7 +158,7 @@ func (r *Neo4jEnterpriseClusterReconciler) verifyTLSSecretHasCA(ctx context.Cont
 		// hint as to which keys cert-manager populated.
 		presentKeys := make([]string, 0, len(secret.Data))
 		for k, v := range secret.Data {
-			presentKeys = append(presentKeys, fmt.Sprintf("%s(%dB)", k, len(v))) //nolint:perfsprint
+			presentKeys = append(presentKeys, fmt.Sprintf("%s(%dB)", k, len(v))) //nolint:perfsprint // composite "key(NB)" debug string; Sprintf is clearer than strconv here
 		}
 		return fmt.Errorf("strict peer validation requires Secret %s/%s to expose a non-empty ca.crt key, but the cert-manager-issued Secret has keys=[%s]. The issuer %q likely does not populate ca.crt (some external issuers don't), or cert-manager has not finished issuing. Either fix the issuer to include the CA in its Secret output, or set spec.tls.strictPeerValidation=false on this cluster to opt into the legacy trust_all=true posture",
 			cluster.Namespace, secretName, strings.Join(presentKeys, ","), issuerName)

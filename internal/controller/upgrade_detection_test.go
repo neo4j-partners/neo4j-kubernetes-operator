@@ -9,7 +9,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	neo4jv1beta1 "github.com/neo4j-partners/neo4j-kubernetes-operator/api/v1beta1"
@@ -87,10 +87,8 @@ func TestValidateVersionCompatibility(t *testing.T) {
 						t.Fatalf("expected error to contain %q, got: %v", tc.errContains, err)
 					}
 				}
-			} else {
-				if err != nil {
-					t.Fatalf("unexpected error for current=%q target=%q: %v", tc.current, tc.target, err)
-				}
+			} else if err != nil {
+				t.Fatalf("unexpected error for current=%q target=%q: %v", tc.current, tc.target, err)
 			}
 		})
 	}
@@ -154,7 +152,7 @@ func TestIsUpgradeRequiredSingleStatefulSet(t *testing.T) {
 			Namespace: "default",
 		},
 		Spec: appsv1.StatefulSetSpec{
-			Replicas: pointer.Int32(3),
+			Replicas: ptr.To(int32(3)),
 			Template: corev1.PodTemplateSpec{
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{

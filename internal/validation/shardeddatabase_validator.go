@@ -256,11 +256,10 @@ func (v *ShardedDatabaseValidator) validatePropertyShardingConfig(shardedDB *neo
 func (v *ShardedDatabaseValidator) validateTopologyConfig(shardedDB *neo4jv1beta1.Neo4jShardedDatabase, result *ShardedDatabaseValidationResult) {
 	shardingPath := field.NewPath("spec", "propertySharding")
 
-	// Validate graph shard topology
+	// Validate graph shard topology. validateDatabaseTopology appends any errors
+	// to result directly; the returned error is already reflected there.
 	graphPath := shardingPath.Child("graphShard")
-	if err := v.validateDatabaseTopology(&shardedDB.Spec.PropertySharding.GraphShard, graphPath, result); err != nil {
-		// Error already added to result
-	}
+	_ = v.validateDatabaseTopology(&shardedDB.Spec.PropertySharding.GraphShard, graphPath, result)
 
 	// Validate property shard topology
 	propertyPath := shardingPath.Child("propertyShardTopology")

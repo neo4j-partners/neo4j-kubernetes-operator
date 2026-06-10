@@ -434,7 +434,10 @@ func (r *Neo4jRoleReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		mgr.GetClient(),
 		func() client.ObjectList { return &neo4jv1beta1.Neo4jRoleList{} },
 		func(list client.ObjectList, emit func(name, namespace, clusterRef string)) {
-			roles := list.(*neo4jv1beta1.Neo4jRoleList)
+			roles, ok := list.(*neo4jv1beta1.Neo4jRoleList)
+			if !ok {
+				return
+			}
 			for i := range roles.Items {
 				role := &roles.Items[i]
 				emit(role.Name, role.Namespace, role.Spec.ClusterRef)

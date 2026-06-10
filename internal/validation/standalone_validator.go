@@ -318,11 +318,9 @@ func (v *StandaloneValidator) validateStorageChanges(oldStandalone, newStandalon
 		))
 	}
 
-	// Storage size can only increase
-	if oldStandalone.Spec.Storage.Size != newStandalone.Spec.Storage.Size {
-		// Note: More sophisticated size comparison logic would be needed here
-		// For now, we'll allow any size change
-	}
+	// Storage size changes are allowed here; PVC expansion (and the no-shrink
+	// guard) is enforced by the storage-expansion reconcile path, not this
+	// validator. No quantity comparison gate at admission time.
 
 	return allErrs
 }

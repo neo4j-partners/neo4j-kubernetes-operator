@@ -167,7 +167,7 @@ var _ = Describe("Neo4jDatabase Controller", func() {
 			result := validator.Validate(ctx, database)
 
 			// Should have no validation errors for a properly configured seed URI database
-			Expect(result.Errors).To(HaveLen(0))
+			Expect(result.Errors).To(BeEmpty())
 
 			// Should have some warnings (e.g., about system-wide auth, missing optional keys)
 			Expect(len(result.Warnings)).To(BeNumerically(">=", 1))

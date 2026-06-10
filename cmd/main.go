@@ -992,7 +992,6 @@ func startupFeedback(ctx context.Context, mode OperatorMode, metricsAddr, probeA
 				}
 			}
 		}
-
 	}
 }
 
@@ -1242,7 +1241,7 @@ func watchNamespaceChanges(ctx context.Context, clientset kubernetes.Interface, 
 			}
 			continue
 		}
-		backoff = 1 * time.Second
+		backoff = 1 * time.Second //nolint:wastedassign // reset reconnect backoff after a successful watch; read on the next reconnect attempt
 
 		for {
 			select {

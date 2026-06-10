@@ -27,7 +27,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	neo4jv1beta1 "github.com/neo4j-partners/neo4j-kubernetes-operator/api/v1beta1"
@@ -71,7 +71,7 @@ func serverSTSForUpgrade(clusterName, ns, image string, replicas int32) *appsv1.
 			Namespace: ns,
 		},
 		Spec: appsv1.StatefulSetSpec{
-			Replicas: pointer.Int32(replicas),
+			Replicas: ptr.To(replicas),
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{"app": clusterName},
 			},
