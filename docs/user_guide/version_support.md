@@ -1,55 +1,100 @@
-# Neo4j Version Support Policy
+# Supported Neo4j Versions
 
-This page defines which Neo4j versions the operator supports, and the policy by
-which that set changes over time. The goal is a small, predictable support
-matrix that never lags behind the database it manages.
+Which Neo4j versions the operator runs, what's **guaranteed** vs **best-effort**,
+how long your version is supported, and what happens when a new release lands.
+The design goal: a small, predictable support window that **never lags behind
+the database it manages**, so you can plan upgrades on your own schedule.
 
-## Supported versions (current)
+## Which version should I run?
 
-| Track | Operator behaviour | Notes |
+| Your situation | Run this | Why |
 |---|---|---|
-| **LTS** | **5.26.x** — validated & supported | Last SemVer release; the 5-line Long-Term-Support version. |
-| **Feature (CalVer)** | **validated** against one anchor per release (e.g. `2026.04`); **allowed** (best-effort) for any newer `2025.x+`/`2026.x+` in the same major | CalVer is auto-detected (`major >= 2025`), so future releases run without a code change — but "runs" is best-effort, not "tested". See [What CalVer support means](#what-calver-support-means). |
+| **Mission-critical, strict change control, SLAs** | **5.26 LTS** (`neo4j:5.26-enterprise`) | Feature-stable, fixes-only, longest support lifecycle. Nothing new churns under you. |
+| **Want the latest features; agile / non-mission-critical** | the **operator-validated CalVer anchor** (named in each operator release, e.g. `2026.04`) | Newest capabilities, validated by the operator's CI. |
+| **Evaluating / dev / test** | either | CalVer for newest features, LTS for stability. |
 
-Enterprise images only (`neo4j:5.26-enterprise`, `neo4j:2025.xx.x-enterprise`,
-…). Community is not supported. Versions older than 5.26 (4.x, 5.0–5.25) are
-**not** supported.
+Enterprise Edition images only — Community is not supported. Versions older than
+5.26 (4.x, 5.0–5.25) are not supported.
 
-### What CalVer support means
+## Support lifecycle — what you can plan around
 
-The CalVer track releases frequently (monthly, cumulative). The operator does
-**not** claim to *support* every CalVer that lands between operator releases —
-that would be a guarantee for releases that didn't exist when the operator
-shipped. Instead, two distinct things:
+- **5.26 LTS** is supported for the duration of Neo4j's own LTS lifecycle
+  (~3.5 years from its GA — roughly **mid-2028**; see Neo4j's published support
+  schedule for authoritative dates).
+- **You will not be force-migrated.** When the next LTS ships, the operator
+  *adds* it but keeps supporting 5.26 until 5.26 reaches Neo4j end-of-life — so
+  the operator is **never stricter than the database**. You get the full vendor
+  overlap (~1+ year) to plan and test your migration.
+- **CalVer** is a stay-current track: Neo4j itself supports only the latest
+  CalVer, and so does the operator (see below).
 
-- **Validated (tested, guaranteed):** each operator release pins **one anchor
-  CalVer** in CI (named in its release notes) and stands behind it.
-- **Allowed (best-effort):** the operator does not upper-bound CalVer, so it
-  *accepts and runs* any newer CalVer in the supported major via version-
-  agnostic code paths + auto-detection. This is expected to work, but is **not
-  a tested guarantee**.
+## What "supported" means: validated vs. best-effort
 
-Why the distinction is load-bearing: the operator **emits config and Cypher that
-Neo4j strictly validates** (`server.config.strict_validation.enabled=true`,
-Cypher 25 DDL). A CalVer released *after* an operator version can rename or
-remove a config key the operator writes, or change a Cypher default — and the
-pod won't start. (This is exactly the class of break fixed in the
-de-duplicate-conf-keys and `server.directories.certificates` work.) So a brand-
-new, untested CalVer genuinely *can* break the operator; the fix then ships in
-the next operator release.
+The two tracks carry different guarantees — this matters for production sign-off:
 
-This also mirrors Neo4j itself: the vendor supports only the **latest** CalVer
-(you must stay current to receive fixes), so the operator cannot support a
-mid-window CalVer more strongly than the database does.
+- **Validated (tested, guaranteed):** 5.26 LTS, and **one anchor CalVer** per
+  operator release (named in its release notes). These run in the operator's
+  integration CI and are what we stand behind.
+- **Allowed (best-effort):** any CalVer *newer* than a release's anchor. The
+  operator doesn't upper-bound CalVer — auto-detection (`major >= 2025`) means
+  newer releases run unchanged — but "runs" is not a tested guarantee.
 
-**Recommendation:** for production, run the operator-validated anchor CalVer (or
-5.26 LTS). Newer CalVers are fine to run and usually work unchanged, but treat
-them as best-effort until a subsequent operator release validates against them.
+Why the distinction is load-bearing for the operator specifically: it **emits
+config and Cypher that Neo4j strictly validates**
+(`server.config.strict_validation.enabled=true`, Cypher 25 DDL). A CalVer
+released *after* an operator version can rename/remove a config key the operator
+writes, or change a Cypher default — and the pod won't start. So a brand-new,
+untested CalVer genuinely *can* break the operator; the fix ships in the next
+operator release. **For production, run the validated anchor CalVer (or 5.26
+LTS); treat newer CalVers as best-effort until a later operator release validates
+them.**
 
-## Background: Neo4j's two release tracks
+## How non-breaking releases let features arrive gradually
 
-Since Neo4j 5, Neo4j ships on two tracks, and the cadence/lifecycle numbers are
-what drive this policy:
+Neo4j's release model is what makes new-version support a smooth ramp rather than
+a series of cliffs — a real benefit for enterprise planning:
+
+- **Features are additive.** New capabilities land in CalVer incrementally, and
+  previously-available functionality keeps working. The operator adopts each
+  feature *when it appears*, gated to the release that introduced it, while older
+  versions keep the old path — one codebase, e.g. property sharding gated to
+  ≥ 2025.12, `ServerSeedProvider` to ≥ 2026.04, remote-address-resolution
+  defaulting on at ≥ 2025.09.
+- **Deprecations come with a runway.** Neo4j announces a deprecation only once a
+  replacement exists, warns across versions, and removes only a major later. The
+  operator adopts the replacement early (gated) and retires the old path lazily
+  — e.g. the recreate-database procedure switches `dbms.cluster.recreateDatabase`
+  (5.24–2025.03) → `dbms.recreateDatabase` (2025.04+), carrying both until the
+  floor moves past the old one.
+- **The LTS is a snapshot of CalVer you've already been running.** Because a
+  feature line *becomes* the next LTS after ~2 years, everything in a new LTS
+  shipped in CalVer months earlier. By the time it's blessed as LTS, the operator
+  already supports it — the transition is a config/CI change for you, not a
+  migration scramble.
+
+**Caveat:** "non-breaking" is a guarantee about *user-facing* functionality
+(queries, drivers, app compatibility). The operator also sits on the *config/ops
+emission surface*, where keys can be renamed/removed across CalVers — hence the
+best-effort caveat above. Feature adoption ramps smoothly; operator-emitted
+config still needs per-CalVer validation.
+
+## Upgrades & version transitions
+
+Neo4j supports any-to-any rolling upgrades within a track (e.g. any 5.x to a
+later 5.x in one step, zero-downtime in a cluster), and the operator orchestrates
+the rollout. For the mechanics (rolling vs. recreate, pre-upgrade health checks,
+store-format upgrades), see the [Upgrades guide](guides/upgrades.md). The LTS→LTS
+transition is non-disruptive for you: nothing is dropped until your current LTS
+reaches Neo4j EOL.
+
+## The policy (how the support set evolves)
+
+> The operator supports **the current Neo4j LTS line plus the current CalVer
+> feature line**. A new LTS is **added** at its GA; the previous LTS is **dropped
+> only when it reaches Neo4j end-of-life**, not when the new LTS ships.
+
+Today this maps to **5.26 = the active LTS** + **2025.x/2026.x = the feature
+track**. The numbers behind it:
 
 | | LTS (feature-stable) | Feature release (CalVer) |
 |---|---|---|
@@ -58,44 +103,13 @@ what drive this policy:
 | Migration overlap | ~1 year between consecutive LTSs | n/a |
 | Path to LTS | — | a feature line becomes the next LTS after ~2 years |
 
-Because the **LTS support lifecycle (~3.5y) is longer than the LTS cadence
-(~2y)**, two LTS lines are supported by Neo4j *at the same time* for roughly the
-last ~1.5 years of the older one. That overlap is the crux of this policy.
+Because the LTS lifecycle (~3.5y) outlasts the LTS cadence (~2y), two LTS lines
+are supported by Neo4j at once for ~1.5 years. The operator mirrors that:
 
-Today this maps to: **5.26 = the active LTS**, **2025.x/2026.x = the feature
-track**.
-
-## The policy
-
-> The operator supports **the current Neo4j LTS line plus the current CalVer
-> feature line**. When a new LTS reaches GA it is **added**; the previous LTS is
-> **dropped only when it reaches Neo4j end-of-life**, not when the new LTS ships.
-
-Three rules make this precise:
-
-1. **Add the new LTS at its GA.** The first operator release after a new LTS
-   GAs adds it to the supported set and CI.
-2. **Keep the old LTS until *Neo4j's* EOL for that line.** The operator must
-   never refuse a Neo4j version that Neo4j itself still supports. Dropping the
-   old LTS the moment a new one ships would strand still-supported production
-   clusters on a frozen operator — so we hold it through the vendor overlap
-   window, until the old LTS's ~3.5-year lifecycle ends.
-3. **Validate one CalVer anchor; allow the rest best-effort.** "Supported
-   CalVer" is not "every release in the window" — each operator release pins one
-   anchor CalVer in CI; newer CalVers are *allowed* (forward-compatible) but
-   best-effort until a later release validates them. See
-   [What CalVer support means](#what-calver-support-means).
-
-### Steady state vs. transition
-
-- **Steady state = exactly two anchors** (current LTS + current CalVer). This is
-  the bounded matrix the policy optimises for — minimal CI cost and code paths.
-- **Transition = briefly three anchors** (old LTS + new LTS + CalVer) during the
-  vendor overlap window, narrowing back to two when the old LTS reaches Neo4j
-  EOL. That short-lived third lane is the deliberate, time-boxed cost of not
-  being stricter than the database.
-
-### Worked example (5.26 → next LTS)
+- **Steady state = two anchors** (current LTS + current CalVer) — the bounded
+  matrix this policy optimises for.
+- **Transition = briefly three anchors** (old LTS + new LTS + CalVer) through the
+  overlap, back to two when the old LTS reaches EOL.
 
 ```
 5.26 GA (Dec 2024) ──────────────────────────────── 5.26 Neo4j EOL (~mid 2028)
@@ -107,49 +121,48 @@ Three rules make this precise:
                                                                   (2 anchors again)
 ```
 
-When the new LTS GAs, the operator supports **5.26 + new LTS + CalVer** for the
-overlap. 5.26 is dropped only at *its* Neo4j EOL — not at the new LTS's launch.
+## For maintainers
 
-## What "supported" means in the operator
+**Validation gates in code:**
 
-- **Hard gate (rejected by the version validator):** genuinely unsupported
-  versions — anything older than the current LTS (pre-5.26 today), or a line
-  past its Neo4j EOL.
-- **Soft (allowed, may warn):** a CalVer newer than the one the current operator
-  release was validated against. A brand-new CalVer must not be rejected the day
-  it ships, so the validator does not hard-block "newer than tested" within a
-  supported track.
-- **CI anchors:** the integration suites run against the supported anchors
-  (today: `5.26-enterprise` + latest CalVer). The steady-state invariant is
-  *exactly two* anchors; a transition window may run three.
+- **Hard-reject** (version validator): anything older than the current LTS
+  (pre-5.26 today) or a line past its Neo4j EOL.
+- **Allow, don't block** "newer than the validated anchor" within a supported
+  track — a brand-new CalVer must not be rejected the day it ships.
+- **CI anchors:** integration suites run `5.26-enterprise` + the latest CalVer.
+  Invariant: *exactly two* anchors steady-state; a transition window may run three.
 
-## When the next LTS lands — maintenance checklist
+**When the next LTS lands**, the change is small and contained — touch:
 
-The change is small and contained. Adding a new LTS / eventually dropping 5.26
-touches:
-
-- the Neo4j version validator's allowed/minimum set (`internal/validation/`),
+- the version validator's allowed/minimum set (`internal/validation/`),
 - the CI matrix anchors (`.github/workflows/integration.yml`, `integration-tests.yml`),
 - the "Supported Neo4j versions" line in `CLAUDE.md`,
-- the support matrix at the top of this page.
+- the matrix at the top of this page.
+
+At the *old* LTS's EOL, raising the floor also lets you delete its now-dead
+version gates (e.g. the SemVer-only discovery paths once 5.26 is dropped).
 
 ## FAQ
 
 **I'm on 5.26 and a new LTS just shipped — will the next operator drop me?**
 No. 5.26 stays supported until Neo4j's own EOL for the 5.26 line (~mid 2028),
-regardless of how many operator releases ship in between.
+regardless of how many operator releases ship in between. You migrate on your
+schedule, within the overlap window.
 
 **Do you support every CalVer that ships in a given window?**
-No. Each operator release *validates* one anchor CalVer; every newer CalVer in
-the major is *allowed* (forward-compatible) and usually works, but on a
-best-effort basis — we can't guarantee a release that didn't exist when the
-operator shipped, and because the operator emits strictly-validated config and
-Cypher, a future CalVer can break it until the next operator release catches up.
-See [What CalVer support means](#what-calver-support-means). This matches Neo4j,
-which itself supports only the latest CalVer.
+No. Each operator release *validates* one anchor CalVer; newer CalVers in the
+major are *allowed* (forward-compatible) and usually work, but best-effort —
+because the operator emits strictly-validated config/Cypher, a future CalVer can
+break it until the next operator release catches up. This matches Neo4j, which
+supports only the latest CalVer.
 
-**Why not just keep supporting every LTS forever?**
-Each supported line multiplies CI cost, branch maintenance, and
-inter-version compatibility surface. Bounding the matrix to "current LTS +
-feature line" (briefly +1 during overlap) is the whole point — it keeps the
-operator fast to maintain without ever lagging the database's own lifecycle.
+**Can I keep running an older CalVer?**
+The operator won't block it, but neither Neo4j nor the operator *supports* an
+old CalVer — the model is stay-current. For a stable, long-supported floor, use
+5.26 LTS instead.
+
+**Why not just support every LTS forever?**
+Each supported line multiplies CI cost, branch maintenance, and inter-version
+compatibility surface. Bounding the matrix to "current LTS + feature line"
+(briefly +1 during overlap) keeps the operator fast to maintain without ever
+lagging the database's lifecycle.
