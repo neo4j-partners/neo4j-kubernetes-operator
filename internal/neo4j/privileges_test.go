@@ -277,3 +277,115 @@ func TestPrivilegeStatementMatchesRole_PBAC(t *testing.T) {
 		}
 	}
 }
+
+// TestCanonicalise_BacktickQuotingNormalised pins the fix for the privilege
+// drift loop: `SHOW ROLE ... PRIVILEGES AS COMMANDS` re-renders identifiers
+// backtick-quoted (e.g. `neo4j`, `analytics_reader`), while users write them
+// bare in Neo4jRole.spec.privileges. Both must canonicalise identically, or
+// the controller sees perpetual drift and GRANT/REVOKE-churns every reconcile
+// under enforcePrivileges (observed as a 25N11 transaction conflict on
+// 2026.04 in CI). See neo4jrole_test.go:146.
+func TestCanonicalise_BacktickQuotingNormalised(t *testing.T) {
+	cases := []struct {
+		name   string
+		bare   string
+		quoted string
+	}{
+		{
+			name:   "database and role names",
+			bare:   "GRANT ACCESS ON DATABASE neo4j TO analytics_reader",
+			quoted: "GRANT ACCESS ON DATABASE `neo4j` TO `analytics_reader`",
+		},
+		{
+			name:   "graph match privilege",
+			bare:   "GRANT MATCH {*} ON GRAPH neo4j NODES * TO analytics_reader",
+			quoted: "GRANT MATCH {*} ON GRAPH `neo4j` NODES * TO `analytics_reader`",
+		},
+		{
+			name:   "deny on graph",
+			bare:   "DENY WRITE ON GRAPH movies TO editor",
+			quoted: "DENY WRITE ON GRAPH `movies` TO `editor`",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cb := CanonicalisePrivilegeStatement(tc.bare)
+			cq := CanonicalisePrivilegeStatement(tc.quoted)
+			if cb != cq {
+				t.Fatalf("bare vs quoted canonical forms differ:\n bare:   %q\n quoted: %q", cb, cq)
+			}
+		})
+	}
+}
+
+// TestCanonicalise_ReservedAndSpecialNamesKeepBackticks ensures we only strip
+// backticks when the inner name is a simple, non-reserved identifier. A role
+// named after a reserved keyword, or a name with characters that require
+// quoting, must keep its backticks so the canonical form stays valid Cypher
+// (DerivePrivilegeRevoke feeds it back to Neo4j).
+func TestCanonicalise_ReservedAndSpecialNamesKeepBackticks(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{
+			name: "reserved word as role name keeps backticks",
+			in:   "GRANT ACCESS ON DATABASE neo4j TO `graph`",
+			want: "GRANT ACCESS ON DATABASE neo4j TO `graph`",
+		},
+		{
+			name: "hyphenated name keeps backticks",
+			in:   "GRANT ACCESS ON DATABASE `my-db` TO r",
+			want: "GRANT ACCESS ON DATABASE `my-db` TO r",
+		},
+		{
+			name: "dotted name keeps backticks",
+			in:   "GRANT ACCESS ON DATABASE `foo.bar` TO r",
+			want: "GRANT ACCESS ON DATABASE `foo.bar` TO r",
+		},
+		{
+			name: "name with space keeps backticks",
+			in:   "GRANT ACCESS ON DATABASE `My DB` TO r",
+			want: "GRANT ACCESS ON DATABASE `My DB` TO r",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := CanonicalisePrivilegeStatement(tc.in); got != tc.want {
+				t.Fatalf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestCanonicalise_StableUnderReReconcile models the controller's diff: the
+// desired statement (from spec, bare) and the current statement (from
+// AS COMMANDS, quoted) must produce an empty add/remove set, and re-running
+// canonicalisation on its own output must be a fixed point — otherwise the
+// reconcile never converges.
+func TestCanonicalise_StableUnderReReconcile(t *testing.T) {
+	desired := "GRANT MATCH {*} ON GRAPH neo4j NODES * TO analytics_reader"
+	current := "GRANT MATCH {*} ON GRAPH `neo4j` NODES * TO `analytics_reader`"
+
+	cd := CanonicalisePrivilegeStatement(desired)
+	cc := CanonicalisePrivilegeStatement(current)
+	if cd != cc {
+		t.Fatalf("desired and current canonical forms differ → perpetual drift:\n desired: %q\n current: %q", cd, cc)
+	}
+
+	// Idempotence: canonicalising the canonical form changes nothing.
+	if again := CanonicalisePrivilegeStatement(cd); again != cd {
+		t.Fatalf("canonicalisation not idempotent: %q -> %q", cd, again)
+	}
+
+	// The derived REVOKE must remain valid (bare, executable) Cypher.
+	revoke, err := DerivePrivilegeRevoke(current)
+	if err != nil {
+		t.Fatalf("DerivePrivilegeRevoke(%q) errored: %v", current, err)
+	}
+	want := "REVOKE GRANT MATCH {*} ON GRAPH neo4j NODES * FROM analytics_reader"
+	if revoke != want {
+		t.Fatalf("derived REVOKE = %q, want %q", revoke, want)
+	}
+}

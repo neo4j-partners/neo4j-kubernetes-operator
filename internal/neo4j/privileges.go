@@ -34,6 +34,9 @@ import (
 //   - trims leading and trailing whitespace and any single trailing semicolon
 //   - upper-cases reserved keywords (GRANT/DENY/REVOKE/ON/TO/FROM/...)
 //     while preserving identifiers, quoted strings and braces
+//   - strips redundant backticks around simple, non-reserved identifiers so
+//     that `neo4j` (the form `SHOW ... PRIVILEGES AS COMMANDS` emits) and
+//     neo4j (the form users typically write in spec) compare equal
 //
 // The result is suitable for use as a map key when diffing desired vs.
 // actual privileges. It is NOT safe to feed the canonical form back to
@@ -144,7 +147,33 @@ var privilegeKeywords = map[string]struct{}{
 
 var (
 	tokenSplit = regexp.MustCompile(`\s+`)
+	// simpleIdentifierRe matches an identifier that is valid unquoted in
+	// Cypher: a letter followed by letters, digits or underscores. Names
+	// requiring quotes (spaces, dots, hyphens, leading digits) do not match,
+	// so their backticks are preserved.
+	simpleIdentifierRe = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]*$`)
 )
+
+// redundantlyBacktickedIdentifier reports whether t is a backtick-quoted token
+// whose backticks are redundant — the inner name is a simple identifier that
+// is valid unquoted and is not a reserved privilege keyword — and if so returns
+// the unquoted inner name. Names that genuinely require quoting (special
+// characters, embedded/doubled backticks, or a reserved word that would change
+// meaning or become invalid Cypher when unquoted) keep their backticks so the
+// canonical form remains executable.
+func redundantlyBacktickedIdentifier(t string) (string, bool) {
+	if len(t) < 2 || t[0] != '`' || t[len(t)-1] != '`' {
+		return "", false
+	}
+	inner := t[1 : len(t)-1]
+	if !simpleIdentifierRe.MatchString(inner) {
+		return "", false
+	}
+	if _, reserved := privilegeKeywords[strings.ToUpper(inner)]; reserved {
+		return "", false
+	}
+	return inner, true
+}
 
 // collapseWhitespacePreservingQuotes collapses whitespace runs to a single
 // space, but does not modify whitespace inside single- or double-quoted
@@ -218,6 +247,14 @@ func upperCaseReservedKeywords(s string) string {
 		t := token.String()
 		token.Reset()
 		if t == "" {
+			return
+		}
+		// Drop redundant backticks around simple identifiers (e.g. `neo4j` →
+		// neo4j) so spec and `AS COMMANDS` forms canonicalise identically.
+		// This is what stops the privilege diff from seeing perpetual drift
+		// (and GRANT/REVOKE-churning every reconcile) under enforcePrivileges.
+		if inner, ok := redundantlyBacktickedIdentifier(t); ok {
+			out.WriteString(inner)
 			return
 		}
 		if _, ok := privilegeKeywords[strings.ToUpper(t)]; ok {
