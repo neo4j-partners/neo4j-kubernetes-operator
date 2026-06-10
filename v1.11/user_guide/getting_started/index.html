@@ -2990,10 +2990,18 @@
 <ul>
 <li>A Kubernetes cluster (v1.32+)</li>
 <li><code>kubectl</code> installed and configured</li>
-<li>Neo4j Enterprise Edition (evaluation license acceptable for testing)</li>
+<li>Neo4j Enterprise Edition — <strong>5.26 LTS or any CalVer release</strong> (2025.x, 2026.x, …); evaluation license acceptable for testing</li>
 <li>Go 1.26+ (for building from source)</li>
 <li>cert-manager 1.20+ (optional, for TLS-enabled deployments)</li>
 </ul>
+<blockquote>
+<p><strong>Neo4j version:</strong> the examples below pin <code>5.26.0-enterprise</code>, but every one
+works on a CalVer release too — just change the image <code>tag</code> (e.g.
+<code>2026.04-enterprise</code>). The operator auto-detects CalVer (discovery mode,
+Cypher 25, etc.); nothing else in the manifest changes. For the CalVer-only
+default Cypher 25 language on a database, see
+<a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/databases/database-2025x.yaml"><code>examples/databases/database-2025x.yaml</code></a>.</p>
+</blockquote>
 <h2 id="installation">Installation<a class="headerlink" href="#installation" title="Anchor link to this section">&para;</a></h2>
 <p>The recommended path is the Helm chart repository (available from v1.8.0 onwards):</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>helm<span class="w"> </span>repo<span class="w"> </span>add<span class="w"> </span>neo4j-operator<span class="w"> </span>https://neo4j-partners.github.io/neo4j-kubernetes-operator/charts
@@ -3185,10 +3193,12 @@
 </span><span id="__span-18-16"><a id="__codelineno-18-16" name="__codelineno-18-16" href="#__codelineno-18-16"></a><span class="s">EOF</span>
 </span></code></pre></div>
 <p>For large datasets that need horizontal scaling, see the <a href="../property_sharding/">Property Sharding guide</a> (Neo4j 2025.12+, via <code>Neo4jShardedDatabase</code>).</p>
-<p>See also:
-- <a href="../../api_reference/neo4jdatabase/">Neo4jDatabase API Reference</a>
-- <a href="../guides/seed-uri/">Database Seed URI Guide</a>
-- <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/tree/main/examples/databases">Database Examples</a></p>
+<p>See also:</p>
+<ul>
+<li><a href="../../api_reference/neo4jdatabase/">Neo4jDatabase API Reference</a></li>
+<li><a href="../guides/seed-uri/">Database Seed URI Guide</a></li>
+<li><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/tree/main/examples/databases">Database Examples</a></li>
+</ul>
 <h2 id="next-steps">Next Steps<a class="headerlink" href="#next-steps" title="Anchor link to this section">&para;</a></h2>
 <p>Now that you have Neo4j running on Kubernetes:</p>
 <ol>
@@ -3243,11 +3253,13 @@
 </tr>
 </tbody>
 </table>
-<p>For more advanced topics, see:
-- <a href="../configuration/">Configuration Guide</a> - Advanced configuration options
-- <a href="../security/">Security Guide</a> - Authentication, TLS, and security best practices
-- <a href="../performance/">Performance Guide</a> - Optimization and scaling strategies
-- <a href="../migration_guide/">Migration Guide</a> - Migrating from previous versions</p>
+<p>For more advanced topics, see:</p>
+<ul>
+<li><a href="../configuration/">Configuration Guide</a> - Advanced configuration options</li>
+<li><a href="../security/">Security Guide</a> - Authentication, TLS, and security best practices</li>
+<li><a href="../performance/">Performance Guide</a> - Optimization and scaling strategies</li>
+<li><a href="../migration_guide/">Migration Guide</a> - Migrating from previous versions</li>
+</ul>
 
 
 

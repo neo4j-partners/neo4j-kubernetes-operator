@@ -3143,11 +3143,13 @@
 <h1 id="external-access-guide">External Access Guide<a class="headerlink" href="#external-access-guide" title="Anchor link to this section">&para;</a></h1>
 <p>This guide explains how to expose your Neo4j deployments for access from outside the Kubernetes cluster.</p>
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Anchor link to this section">&para;</a></h2>
-<p>The Neo4j Kubernetes Operator supports multiple methods for external access:
-- <strong>Port Forwarding</strong> - Quick access for development/testing
-- <strong>LoadBalancer</strong> - Cloud provider managed load balancers
-- <strong>NodePort</strong> - Direct node access (on-premise/development)
-- <strong>Ingress</strong> - HTTP/HTTPS access through ingress controllers</p>
+<p>The Neo4j Kubernetes Operator supports multiple methods for external access:</p>
+<ul>
+<li><strong>Port Forwarding</strong> - Quick access for development/testing</li>
+<li><strong>LoadBalancer</strong> - Cloud provider managed load balancers</li>
+<li><strong>NodePort</strong> - Direct node access (on-premise/development)</li>
+<li><strong>Ingress</strong> - HTTP/HTTPS access through ingress controllers</li>
+</ul>
 <h2 id="quick-start">Quick Start<a class="headerlink" href="#quick-start" title="Anchor link to this section">&para;</a></h2>
 <h3 id="development-access">Development Access<a class="headerlink" href="#development-access" title="Anchor link to this section">&para;</a></h3>
 <p>The fastest way to access Neo4j during development:</p>
@@ -3159,6 +3161,39 @@
 </span></code></pre></div>
 <p>Access Neo4j Browser at: http://localhost:7474</p>
 <h2 id="service-configuration">Service Configuration<a class="headerlink" href="#service-configuration" title="Anchor link to this section">&para;</a></h2>
+<p>Ready-to-apply manifests for each exposure type (set <code>spec.service.type</code> /
+Ingress / Route accordingly):</p>
+<table>
+<thead>
+<tr>
+<th>Exposure</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>LoadBalancer</td>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/clusters/loadbalancer-cluster.yaml"><code>examples/clusters/loadbalancer-cluster.yaml</code></a></td>
+</tr>
+<tr>
+<td>NodePort</td>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/clusters/nodeport-cluster.yaml"><code>examples/clusters/nodeport-cluster.yaml</code></a></td>
+</tr>
+<tr>
+<td>Ingress</td>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/clusters/ingress-cluster.yaml"><code>examples/clusters/ingress-cluster.yaml</code></a></td>
+</tr>
+<tr>
+<td>OpenShift Route</td>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/clusters/route-cluster.yaml"><code>examples/clusters/route-cluster.yaml</code></a></td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>These exposure paths aren't covered by the operator's integration tests (they
+need a real cloud LB / Ingress controller / OpenShift), so validate them in
+your own environment.</p>
+</blockquote>
 <h3 id="loadbalancer-recommended-for-cloud">LoadBalancer (Recommended for Cloud)<a class="headerlink" href="#loadbalancer-recommended-for-cloud" title="Anchor link to this section">&para;</a></h3>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1beta1</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Neo4jEnterpriseCluster</span>

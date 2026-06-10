@@ -3230,11 +3230,13 @@
 <li><strong>Regions</strong>: Larger geographical boundaries containing multiple zones</li>
 </ul>
 <h3 id="topology-keys">Topology Keys<a class="headerlink" href="#topology-keys" title="Anchor link to this section">&para;</a></h3>
-<p>Standard Kubernetes topology labels used for placement:
-- <code>topology.kubernetes.io/zone</code> - Availability zone placement
-- <code>kubernetes.io/hostname</code> - Node-level anti-affinity
-- <code>topology.kubernetes.io/region</code> - Regional placement
-- Custom labels defined by your infrastructure team</p>
+<p>Standard Kubernetes topology labels used for placement:</p>
+<ul>
+<li><code>topology.kubernetes.io/zone</code> - Availability zone placement</li>
+<li><code>kubernetes.io/hostname</code> - Node-level anti-affinity</li>
+<li><code>topology.kubernetes.io/region</code> - Regional placement</li>
+<li>Custom labels defined by your infrastructure team</li>
+</ul>
 <h2 id="basic-configuration">Basic Configuration<a class="headerlink" href="#basic-configuration" title="Anchor link to this section">&para;</a></h2>
 <h3 id="simple-zone-distribution">Simple Zone Distribution<a class="headerlink" href="#simple-zone-distribution" title="Anchor link to this section">&para;</a></h3>
 <p>For most production deployments, distributing across availability zones is recommended:</p>
@@ -3252,11 +3254,13 @@
 </span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">        </span><span class="nt">maxSkew</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
 </span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">        </span><span class="nt">whenUnsatisfiable</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;DoNotSchedule&quot;</span>
 </span></code></pre></div>
-<p>This configuration ensures:
-- Server pods are evenly distributed across availability zones
-- Maximum difference of 1 pod between any two zones
-- Pods won't be scheduled if distribution requirements can't be met
-- Servers self-organize to host databases with appropriate primary/secondary topologies</p>
+<p>This configuration ensures:</p>
+<ul>
+<li>Server pods are evenly distributed across availability zones</li>
+<li>Maximum difference of 1 pod between any two zones</li>
+<li>Pods won't be scheduled if distribution requirements can't be met</li>
+<li>Servers self-organize to host databases with appropriate primary/secondary topologies</li>
+</ul>
 <h3 id="pod-anti-affinity">Pod Anti-Affinity<a class="headerlink" href="#pod-anti-affinity" title="Anchor link to this section">&para;</a></h3>
 <p>To prevent multiple Neo4j server pods from running on the same node:</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">spec</span><span class="p">:</span>
@@ -3268,9 +3272,11 @@
 </span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">        </span><span class="nt">topologyKey</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;kubernetes.io/hostname&quot;</span>
 </span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">        </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;preferred&quot;</span><span class="w">  </span><span class="c1"># or &quot;required&quot; for strict enforcement</span>
 </span></code></pre></div>
-<p>Anti-affinity types:
-- <code>preferred</code>: Best effort - scheduler tries to avoid co-location
-- <code>required</code>: Strict - pods will remain unscheduled if constraints can't be met</p>
+<p>Anti-affinity types:</p>
+<ul>
+<li><code>preferred</code>: Best effort - scheduler tries to avoid co-location</li>
+<li><code>required</code>: Strict - pods will remain unscheduled if constraints can't be met</li>
+</ul>
 <h2 id="advanced-configuration">Advanced Configuration<a class="headerlink" href="#advanced-configuration" title="Anchor link to this section">&para;</a></h2>
 <h3 id="combining-topology-spread-and-anti-affinity">Combining Topology Spread and Anti-Affinity<a class="headerlink" href="#combining-topology-spread-and-anti-affinity" title="Anchor link to this section">&para;</a></h3>
 <p>For maximum resilience, combine zone distribution with node anti-affinity:</p>

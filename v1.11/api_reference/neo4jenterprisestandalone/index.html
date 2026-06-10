@@ -4147,12 +4147,14 @@
 <li><a href="../neo4jenterprisecluster/"><code>Neo4jEnterpriseCluster</code></a> - For clustered deployments</li>
 </ul>
 <h2 id="when-to-use-neo4jenterprisestandalone">When to Use Neo4jEnterpriseStandalone<a class="headerlink" href="#when-to-use-neo4jenterprisestandalone" title="Anchor link to this section">&para;</a></h2>
-<p>Use <code>Neo4jEnterpriseStandalone</code> when you need:
-- <strong>Development environments</strong> with a single Neo4j instance
-- <strong>Testing scenarios</strong> that don't require clustering
-- <strong>Simple production workloads</strong> with basic availability requirements
-- <strong>Migration from Community Edition</strong> to Enterprise features without clustering
-- <strong>Cost-effective deployments</strong> that don't need high availability</p>
+<p>Use <code>Neo4jEnterpriseStandalone</code> when you need:</p>
+<ul>
+<li><strong>Development environments</strong> with a single Neo4j instance</li>
+<li><strong>Testing scenarios</strong> that don't require clustering</li>
+<li><strong>Simple production workloads</strong> with basic availability requirements</li>
+<li><strong>Migration from Community Edition</strong> to Enterprise features without clustering</li>
+<li><strong>Cost-effective deployments</strong> that don't need high availability</li>
+</ul>
 <blockquote>
 <p><strong>Note</strong>: For production workloads requiring high availability, use <code>Neo4jEnterpriseCluster</code> instead.</p>
 </blockquote>
@@ -4255,18 +4257,20 @@
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span><span class="nt">server.memory.heap.max_size</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;2G&quot;</span>
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span><span class="nt">server.memory.pagecache.size</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;1G&quot;</span>
 </span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">  </span><span class="nt">dbms.security.procedures.unrestricted</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;gds.*,apoc.*&quot;</span>
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">  </span><span class="nt">db.logs.query.enabled</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">  </span><span class="nt">dbms.logs.query.threshold</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;1s&quot;</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">  </span><span class="nt">db.logs.query.enabled</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;INFO&quot;</span><span class="w">   </span><span class="c1"># enum: OFF | INFO | VERBOSE (not a boolean)</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">  </span><span class="nt">db.logs.query.threshold</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;1s&quot;</span>
 </span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">  </span><span class="c1"># Neo4j 5.26+ configuration syntax</span>
 </span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="w">  </span><span class="nt">server.default_listen_address</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;0.0.0.0&quot;</span>
 </span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="w">  </span><span class="nt">server.discovery.advertised_address</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;$(hostname</span><span class="nv"> </span><span class="s">-f)&quot;</span>
 </span></code></pre></div>
-<p><strong>Automatically Managed</strong>: The following configurations are managed by the operator and must not be set in <code>spec.config</code>:
-- <code>dbms.cluster.discovery.*</code> - Discovery settings (LIST resolver with pod FQDNs, injected by startup script)
-- <code>dbms.cluster.endpoints</code> - CalVer endpoint list (injected by startup script)
-- <code>server.bolt.listen_address</code> - Network listeners
-- <code>server.http.listen_address</code> - HTTP endpoints
-- <code>NEO4J_AUTH</code> - Authentication setup (when using adminSecret)</p>
+<p><strong>Automatically Managed</strong>: The following configurations are managed by the operator and must not be set in <code>spec.config</code>:</p>
+<ul>
+<li><code>dbms.cluster.discovery.*</code> - Discovery settings (LIST resolver with pod FQDNs, injected by startup script)</li>
+<li><code>dbms.cluster.endpoints</code> - CalVer endpoint list (injected by startup script)</li>
+<li><code>server.bolt.listen_address</code> - Network listeners</li>
+<li><code>server.http.listen_address</code> - HTTP endpoints</li>
+<li><code>NEO4J_AUTH</code> - Authentication setup (when using adminSecret)</li>
+</ul>
 <p><strong>Critical for Standalone</strong>: The operator automatically configures clustering infrastructure but ensures single-node operation.</p>
 <h4 id="tls-tlsspec"><code>tls</code> (TLSSpec)<a class="headerlink" href="#tls-tlsspec" title="Anchor link to this section">&para;</a></h4>
 <p>TLS/SSL configuration for secure connections. Same shape as
@@ -4369,11 +4373,13 @@ plugin management:</p>
 </span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a><span class="w">    </span><span class="s">&quot;apoc.export.file.enabled&quot;</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
 </span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a><span class="w">    </span><span class="s">&quot;apoc.import.file.enabled&quot;</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
 </span></code></pre></div>
-<p><strong>Plugin Installation</strong>: The Neo4jPlugin controller automatically:
-1. Updates the standalone StatefulSet with <code>NEO4J_PLUGINS</code> environment variable
-2. Adds plugin-specific configuration as <code>NEO4J_*</code> environment variables
-3. Triggers a rolling restart to apply plugin changes
-4. Verifies plugin installation and marks status as Ready</p>
+<p><strong>Plugin Installation</strong>: The Neo4jPlugin controller automatically:</p>
+<ol>
+<li>Updates the standalone StatefulSet with <code>NEO4J_PLUGINS</code> environment variable</li>
+<li>Adds plugin-specific configuration as <code>NEO4J_*</code> environment variables</li>
+<li>Triggers a rolling restart to apply plugin changes</li>
+<li>Verifies plugin installation and marks status as Ready</li>
+</ol>
 <p>See the <a href="../neo4jplugin/">Neo4jPlugin API reference</a> for complete documentation.</p>
 <h4 id="monitoring-monitoringspec"><code>monitoring</code> (MonitoringSpec)<a class="headerlink" href="#monitoring-monitoringspec" title="Anchor link to this section">&para;</a></h4>
 <p>Query performance monitoring.</p>
@@ -4497,11 +4503,13 @@ standard core/v1 shapes.</p>
 <p>The <code>Neo4jEnterpriseStandalone</code> status provides information about the current state of the deployment.</p>
 <h3 id="primary-status-fields">Primary Status Fields<a class="headerlink" href="#primary-status-fields" title="Anchor link to this section">&para;</a></h3>
 <h4 id="phase-string"><code>phase</code> (string)<a class="headerlink" href="#phase-string" title="Anchor link to this section">&para;</a></h4>
-<p>Current deployment phase:
-- <code>Pending</code>: Deployment is being created
-- <code>Ready</code>: Deployment is running and ready for connections
-- <code>Failed</code>: Deployment has failed
-- <code>ValidationFailed</code>: Spec validation failed</p>
+<p>Current deployment phase:</p>
+<ul>
+<li><code>Pending</code>: Deployment is being created</li>
+<li><code>Ready</code>: Deployment is running and ready for connections</li>
+<li><code>Failed</code>: Deployment has failed</li>
+<li><code>ValidationFailed</code>: Spec validation failed</li>
+</ul>
 <h4 id="ready-boolean"><code>ready</code> (boolean)<a class="headerlink" href="#ready-boolean" title="Anchor link to this section">&para;</a></h4>
 <p>Indicates if the standalone deployment is ready for connections.</p>
 <h4 id="laststarttime-metav1time"><code>lastStartTime</code> (*metav1.Time)<a class="headerlink" href="#laststarttime-metav1time" title="Anchor link to this section">&para;</a></h4>
@@ -4717,8 +4725,8 @@ standard core/v1 shapes.</p>
 </span><span id="__span-23-45"><a id="__codelineno-23-45" name="__codelineno-23-45" href="#__codelineno-23-45"></a><span class="w">    </span><span class="nt">server.memory.heap.initial_size</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;3G&quot;</span>
 </span><span id="__span-23-46"><a id="__codelineno-23-46" name="__codelineno-23-46" href="#__codelineno-23-46"></a><span class="w">    </span><span class="nt">server.memory.heap.max_size</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;6G&quot;</span>
 </span><span id="__span-23-47"><a id="__codelineno-23-47" name="__codelineno-23-47" href="#__codelineno-23-47"></a><span class="w">    </span><span class="nt">server.memory.pagecache.size</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;2G&quot;</span>
-</span><span id="__span-23-48"><a id="__codelineno-23-48" name="__codelineno-23-48" href="#__codelineno-23-48"></a><span class="w">    </span><span class="nt">db.logs.query.enabled</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
-</span><span id="__span-23-49"><a id="__codelineno-23-49" name="__codelineno-23-49" href="#__codelineno-23-49"></a><span class="w">    </span><span class="nt">dbms.logs.query.threshold</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;1s&quot;</span>
+</span><span id="__span-23-48"><a id="__codelineno-23-48" name="__codelineno-23-48" href="#__codelineno-23-48"></a><span class="w">    </span><span class="nt">db.logs.query.enabled</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;INFO&quot;</span><span class="w">   </span><span class="c1"># enum: OFF | INFO | VERBOSE (not a boolean)</span>
+</span><span id="__span-23-49"><a id="__codelineno-23-49" name="__codelineno-23-49" href="#__codelineno-23-49"></a><span class="w">    </span><span class="nt">db.logs.query.threshold</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;1s&quot;</span>
 </span><span id="__span-23-50"><a id="__codelineno-23-50" name="__codelineno-23-50" href="#__codelineno-23-50"></a><span class="w">    </span><span class="c1"># Password policy via Neo4j config keys</span>
 </span><span id="__span-23-51"><a id="__codelineno-23-51" name="__codelineno-23-51" href="#__codelineno-23-51"></a><span class="w">    </span><span class="nt">dbms.security.auth_minimum_password_length</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;12&quot;</span>
 </span></code></pre></div>
@@ -4811,8 +4819,8 @@ standard core/v1 shapes.</p>
 </span><span id="__span-25-45"><a id="__codelineno-25-45" name="__codelineno-25-45" href="#__codelineno-25-45"></a><span class="w">    </span><span class="nt">server.memory.heap.initial_size</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;3G&quot;</span>
 </span><span id="__span-25-46"><a id="__codelineno-25-46" name="__codelineno-25-46" href="#__codelineno-25-46"></a><span class="w">    </span><span class="nt">server.memory.heap.max_size</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;6G&quot;</span>
 </span><span id="__span-25-47"><a id="__codelineno-25-47" name="__codelineno-25-47" href="#__codelineno-25-47"></a><span class="w">    </span><span class="nt">server.memory.pagecache.size</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;2G&quot;</span>
-</span><span id="__span-25-48"><a id="__codelineno-25-48" name="__codelineno-25-48" href="#__codelineno-25-48"></a><span class="w">    </span><span class="nt">db.logs.query.enabled</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
-</span><span id="__span-25-49"><a id="__codelineno-25-49" name="__codelineno-25-49" href="#__codelineno-25-49"></a><span class="w">    </span><span class="nt">dbms.logs.query.threshold</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;500ms&quot;</span>
+</span><span id="__span-25-48"><a id="__codelineno-25-48" name="__codelineno-25-48" href="#__codelineno-25-48"></a><span class="w">    </span><span class="nt">db.logs.query.enabled</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;INFO&quot;</span><span class="w">   </span><span class="c1"># enum: OFF | INFO | VERBOSE (not a boolean)</span>
+</span><span id="__span-25-49"><a id="__codelineno-25-49" name="__codelineno-25-49" href="#__codelineno-25-49"></a><span class="w">    </span><span class="nt">db.logs.query.threshold</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;500ms&quot;</span>
 </span><span id="__span-25-50"><a id="__codelineno-25-50" name="__codelineno-25-50" href="#__codelineno-25-50"></a><span class="w">    </span><span class="nt">dbms.security.auth_minimum_password_length</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;12&quot;</span>
 </span><span id="__span-25-51"><a id="__codelineno-25-51" name="__codelineno-25-51" href="#__codelineno-25-51"></a>
 </span><span id="__span-25-52"><a id="__codelineno-25-52" name="__codelineno-25-52" href="#__codelineno-25-52"></a><span class="w">  </span><span class="nt">env</span><span class="p">:</span>
@@ -5032,8 +5040,8 @@ standard core/v1 shapes.</p>
 </span><span id="__span-36-4"><a id="__codelineno-36-4" name="__codelineno-36-4" href="#__codelineno-36-4"></a>
 </span><span id="__span-36-5"><a id="__codelineno-36-5" name="__codelineno-36-5" href="#__codelineno-36-5"></a><span class="c1"># For high IOPS workloads</span>
 </span><span id="__span-36-6"><a id="__codelineno-36-6" name="__codelineno-36-6" href="#__codelineno-36-6"></a><span class="nt">config</span><span class="p">:</span>
-</span><span id="__span-36-7"><a id="__codelineno-36-7" name="__codelineno-36-7" href="#__codelineno-36-7"></a><span class="w">  </span><span class="nt">dbms.checkpoint.interval.time</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;15s&quot;</span>
-</span><span id="__span-36-8"><a id="__codelineno-36-8" name="__codelineno-36-8" href="#__codelineno-36-8"></a><span class="w">  </span><span class="nt">dbms.checkpoint.interval.tx</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;100000&quot;</span>
+</span><span id="__span-36-7"><a id="__codelineno-36-7" name="__codelineno-36-7" href="#__codelineno-36-7"></a><span class="w">  </span><span class="nt">db.checkpoint.interval.time</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;15s&quot;</span>
+</span><span id="__span-36-8"><a id="__codelineno-36-8" name="__codelineno-36-8" href="#__codelineno-36-8"></a><span class="w">  </span><span class="nt">db.checkpoint.interval.tx</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;100000&quot;</span>
 </span></code></pre></div>
 <h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Anchor link to this section">&para;</a></h2>
 <ol>
@@ -5188,12 +5196,14 @@ standard core/v1 shapes.</p>
 <li><strong>Production Workloads</strong>: Enhanced reliability and performance</li>
 <li><strong>Load Distribution</strong>: Separation of read and write workloads</li>
 </ul>
-<p>For more information:
-- <a href="../neo4jenterprisecluster/">Neo4jEnterpriseCluster API Reference</a>
-- <a href="../neo4jdatabase/">Neo4jDatabase API Reference</a>
-- <a href="../neo4jplugin/">Neo4jPlugin API Reference</a>
-- <a href="../../user_guide/guides/backup_restore/">Backup and Restore Guide</a>
-- <a href="../../user_guide/configuration/#best-practices-for-specconfig">Configuration Best Practices</a></p>
+<p>For more information:</p>
+<ul>
+<li><a href="../neo4jenterprisecluster/">Neo4jEnterpriseCluster API Reference</a></li>
+<li><a href="../neo4jdatabase/">Neo4jDatabase API Reference</a></li>
+<li><a href="../neo4jplugin/">Neo4jPlugin API Reference</a></li>
+<li><a href="../../user_guide/guides/backup_restore/">Backup and Restore Guide</a></li>
+<li><a href="../../user_guide/configuration/#best-practices-for-specconfig">Configuration Best Practices</a></li>
+</ul>
 
 
 

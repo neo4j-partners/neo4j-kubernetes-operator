@@ -3310,13 +3310,15 @@
 </span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">  </span><span class="nt">monitoring</span><span class="p">:</span>
 </span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </span></code></pre></div>
-<p>When <code>monitoring.enabled: true</code>, the operator automatically:
-- Sets <code>server.metrics.prometheus.enabled=true</code> and binds to <code>0.0.0.0:2004</code>
-- Exposes container port 2004 on every Neo4j pod
-- Adds <code>prometheus.io/*</code> annotations for annotation-based scraping
-- Creates a dedicated <code>my-cluster-metrics</code> Service (port 2004)
-- Creates a <code>ServiceMonitor</code> named <code>my-cluster-monitoring</code> (if Prometheus Operator CRDs exist)
-- Creates a <code>PrometheusRule</code> named <code>my-cluster-query-alerts</code> with default alert rules</p>
+<p>When <code>monitoring.enabled: true</code>, the operator automatically:</p>
+<ul>
+<li>Sets <code>server.metrics.prometheus.enabled=true</code> and binds to <code>0.0.0.0:2004</code></li>
+<li>Exposes container port 2004 on every Neo4j pod</li>
+<li>Adds <code>prometheus.io/*</code> annotations for annotation-based scraping</li>
+<li>Creates a dedicated <code>my-cluster-metrics</code> Service (port 2004)</li>
+<li>Creates a <code>ServiceMonitor</code> named <code>my-cluster-monitoring</code> (if Prometheus Operator CRDs exist)</li>
+<li>Creates a <code>PrometheusRule</code> named <code>my-cluster-query-alerts</code> with default alert rules</li>
+</ul>
 <h3 id="standalone-deployments">Standalone deployments<a class="headerlink" href="#standalone-deployments" title="Anchor link to this section">&para;</a></h3>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.com/v1beta1</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Neo4jEnterpriseStandalone</span>

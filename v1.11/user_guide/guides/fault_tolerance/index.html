@@ -3402,15 +3402,19 @@
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">    </span><span class="nt">primaries</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">    </span><span class="nt">secondaries</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0</span>
 </span></code></pre></div>
-<p><strong>Characteristics:</strong>
-- ✅ <strong>Simplicity</strong>: Easiest to manage and deploy
-- ✅ <strong>Resource Efficiency</strong>: Minimal resource requirements
-- ❌ <strong>No Fault Tolerance</strong>: Any failure results in downtime
-- ❌ <strong>No High Availability</strong>: Not suitable for production</p>
-<p><strong>Use Cases:</strong>
-- Development environments
-- Testing and prototyping
-- Non-critical applications</p>
+<p><strong>Characteristics:</strong></p>
+<ul>
+<li>✅ <strong>Simplicity</strong>: Easiest to manage and deploy</li>
+<li>✅ <strong>Resource Efficiency</strong>: Minimal resource requirements</li>
+<li>❌ <strong>No Fault Tolerance</strong>: Any failure results in downtime</li>
+<li>❌ <strong>No High Availability</strong>: Not suitable for production</li>
+</ul>
+<p><strong>Use Cases:</strong></p>
+<ul>
+<li>Development environments</li>
+<li>Testing and prototyping</li>
+<li>Non-critical applications</li>
+</ul>
 <hr />
 <h3 id="2-two-primary-nodes-limited-fault-tolerance">2. Two Primary Nodes ⚠️ (Limited Fault Tolerance)<a class="headerlink" href="#2-two-primary-nodes-limited-fault-tolerance" title="Anchor link to this section">&para;</a></h3>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">spec</span><span class="p">:</span>
@@ -3418,20 +3422,24 @@
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span><span class="nt">primaries</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span>
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">    </span><span class="nt">secondaries</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0</span><span class="w">  </span><span class="c1"># or more for read scaling</span>
 </span></code></pre></div>
-<p><strong>Characteristics:</strong>
-- ⚠️ <strong>Split-Brain Risk</strong>: In network partition, neither node can form quorum
-- ❌ <strong>Single Point of Failure</strong>: If one node fails, cluster becomes read-only
-- ⚠️ <strong>Manual Intervention Required</strong>: Recovery often requires operator intervention</p>
+<p><strong>Characteristics:</strong></p>
+<ul>
+<li>⚠️ <strong>Split-Brain Risk</strong>: In network partition, neither node can form quorum</li>
+<li>❌ <strong>Single Point of Failure</strong>: If one node fails, cluster becomes read-only</li>
+<li>⚠️ <strong>Manual Intervention Required</strong>: Recovery often requires operator intervention</li>
+</ul>
 <p><strong>Fault Tolerance Matrix:</strong>
 | Scenario | Available Nodes | Quorum (2/2 + 1 = 2) | Cluster State |
 |----------|-----------------|----------------------|---------------|
 | Normal | 2 | ✅ Met | Fully Operational |
 | 1 Node Down | 1 | ❌ Not Met | Read-Only Mode |
 | Network Split | 1+1 | ❌ Not Met | Both Partitions Read-Only |</p>
-<p><strong>When to Consider:</strong>
-- Development environments requiring some clustering features
-- Cost-constrained environments with manual failover capability
-- Temporary configurations during cluster expansion</p>
+<p><strong>When to Consider:</strong></p>
+<ul>
+<li>Development environments requiring some clustering features</li>
+<li>Cost-constrained environments with manual failover capability</li>
+<li>Temporary configurations during cluster expansion</li>
+</ul>
 <hr />
 <h3 id="3-three-primary-nodes-recommended-minimum">3. Three Primary Nodes ✅ (Recommended Minimum)<a class="headerlink" href="#3-three-primary-nodes-recommended-minimum" title="Anchor link to this section">&para;</a></h3>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">spec</span><span class="p">:</span>
@@ -3439,10 +3447,12 @@
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">    </span><span class="nt">primaries</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span>
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">    </span><span class="nt">secondaries</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0</span><span class="w">  </span><span class="c1"># or more for read scaling</span>
 </span></code></pre></div>
-<p><strong>Characteristics:</strong>
-- ✅ <strong>True Fault Tolerance</strong>: Can survive one node failure
-- ✅ <strong>Automatic Recovery</strong>: Cluster remains operational with &#8532; nodes
-- ✅ <strong>Split-Brain Protection</strong>: Minority partition becomes read-only</p>
+<p><strong>Characteristics:</strong></p>
+<ul>
+<li>✅ <strong>True Fault Tolerance</strong>: Can survive one node failure</li>
+<li>✅ <strong>Automatic Recovery</strong>: Cluster remains operational with &#8532; nodes</li>
+<li>✅ <strong>Split-Brain Protection</strong>: Minority partition becomes read-only</li>
+</ul>
 <p><strong>Fault Tolerance Matrix:</strong>
 | Scenario | Available Nodes | Quorum (3/2 + 1 = 2) | Cluster State |
 |----------|-----------------|----------------------|---------------|
@@ -3450,10 +3460,12 @@
 | 1 Node Down | 2 | ✅ Met | Fully Operational |
 | 2 Nodes Down | 1 | ❌ Not Met | Read-Only Mode |
 | Network Split (2+1) | 2 vs 1 | ✅/❌ Met/Not Met | Majority Operational |</p>
-<p><strong>Best For:</strong>
-- Production environments
-- Applications requiring high availability
-- Balanced performance and fault tolerance</p>
+<p><strong>Best For:</strong></p>
+<ul>
+<li>Production environments</li>
+<li>Applications requiring high availability</li>
+<li>Balanced performance and fault tolerance</li>
+</ul>
 <hr />
 <h3 id="4-four-primary-nodes-redundant-resources">4. Four Primary Nodes ⚠️ (Redundant Resources)<a class="headerlink" href="#4-four-primary-nodes-redundant-resources" title="Anchor link to this section">&para;</a></h3>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">spec</span><span class="p">:</span>
@@ -3461,10 +3473,12 @@
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">    </span><span class="nt">primaries</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4</span>
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">    </span><span class="nt">secondaries</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0</span><span class="w">  </span><span class="c1"># or more for read scaling</span>
 </span></code></pre></div>
-<p><strong>Characteristics:</strong>
-- ⚠️ <strong>Same Fault Tolerance as 3</strong>: Can still only survive one failure
-- ❌ <strong>Resource Inefficiency</strong>: Extra node provides no additional fault tolerance
-- ⚠️ <strong>Increased Consensus Overhead</strong>: More nodes participating in consensus</p>
+<p><strong>Characteristics:</strong></p>
+<ul>
+<li>⚠️ <strong>Same Fault Tolerance as 3</strong>: Can still only survive one failure</li>
+<li>❌ <strong>Resource Inefficiency</strong>: Extra node provides no additional fault tolerance</li>
+<li>⚠️ <strong>Increased Consensus Overhead</strong>: More nodes participating in consensus</li>
+</ul>
 <p><strong>Fault Tolerance Matrix:</strong>
 | Scenario | Available Nodes | Quorum (4/2 + 1 = 3) | Cluster State |
 |----------|-----------------|----------------------|---------------|
@@ -3479,10 +3493,12 @@
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">    </span><span class="nt">primaries</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5</span>
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">    </span><span class="nt">secondaries</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0</span><span class="w">  </span><span class="c1"># or more for read scaling</span>
 </span></code></pre></div>
-<p><strong>Characteristics:</strong>
-- ✅ <strong>Enhanced Fault Tolerance</strong>: Can survive two simultaneous failures
-- ✅ <strong>Complex Partition Tolerance</strong>: Better handling of network partitions
-- ⚠️ <strong>Increased Complexity</strong>: More nodes to manage and monitor</p>
+<p><strong>Characteristics:</strong></p>
+<ul>
+<li>✅ <strong>Enhanced Fault Tolerance</strong>: Can survive two simultaneous failures</li>
+<li>✅ <strong>Complex Partition Tolerance</strong>: Better handling of network partitions</li>
+<li>⚠️ <strong>Increased Complexity</strong>: More nodes to manage and monitor</li>
+</ul>
 <p><strong>Fault Tolerance Matrix:</strong>
 | Scenario | Available Nodes | Quorum (5/2 + 1 = 3) | Cluster State |
 |----------|-----------------|----------------------|---------------|
@@ -3490,10 +3506,12 @@
 | 1 Node Down | 4 | ✅ Met | Fully Operational |
 | 2 Nodes Down | 3 | ✅ Met | Fully Operational |
 | 3 Nodes Down | 2 | ❌ Not Met | Read-Only Mode |</p>
-<p><strong>Best For:</strong>
-- Mission-critical applications
-- Environments with higher failure rates
-- Multi-zone deployments with zone failures</p>
+<p><strong>Best For:</strong></p>
+<ul>
+<li>Mission-critical applications</li>
+<li>Environments with higher failure rates</li>
+<li>Multi-zone deployments with zone failures</li>
+</ul>
 <hr />
 <h3 id="6-six-primary-nodes-diminishing-returns">6. Six Primary Nodes ⚠️ (Diminishing Returns)<a class="headerlink" href="#6-six-primary-nodes-diminishing-returns" title="Anchor link to this section">&para;</a></h3>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">spec</span><span class="p">:</span>
@@ -3501,10 +3519,12 @@
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">    </span><span class="nt">primaries</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">6</span>
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">    </span><span class="nt">secondaries</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0</span><span class="w">  </span><span class="c1"># or more for read scaling</span>
 </span></code></pre></div>
-<p><strong>Characteristics:</strong>
-- ⚠️ <strong>Same Fault Tolerance as 5</strong>: Can still only survive two failures
-- ❌ <strong>Significant Resource Overhead</strong>: Extra node with no fault tolerance benefit
-- ❌ <strong>Increased Consensus Latency</strong>: More nodes slow down consensus</p>
+<p><strong>Characteristics:</strong></p>
+<ul>
+<li>⚠️ <strong>Same Fault Tolerance as 5</strong>: Can still only survive two failures</li>
+<li>❌ <strong>Significant Resource Overhead</strong>: Extra node with no fault tolerance benefit</li>
+<li>❌ <strong>Increased Consensus Latency</strong>: More nodes slow down consensus</li>
+</ul>
 <p><strong>Consider Instead:</strong> 5 primaries + 1 secondary for better resource utilization</p>
 <hr />
 <h3 id="7-seven-primary-nodes-maximum-recommended">7. Seven Primary Nodes ✅ (Maximum Recommended)<a class="headerlink" href="#7-seven-primary-nodes-maximum-recommended" title="Anchor link to this section">&para;</a></h3>
@@ -3513,10 +3533,12 @@
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">    </span><span class="nt">primaries</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">7</span>
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">    </span><span class="nt">secondaries</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0</span><span class="w">  </span><span class="c1"># or more for read scaling</span>
 </span></code></pre></div>
-<p><strong>Characteristics:</strong>
-- ✅ <strong>Maximum Fault Tolerance</strong>: Can survive three simultaneous failures
-- ⚠️ <strong>High Resource Requirements</strong>: Significant infrastructure investment
-- ⚠️ <strong>Performance Impact</strong>: Consensus overhead becomes noticeable</p>
+<p><strong>Characteristics:</strong></p>
+<ul>
+<li>✅ <strong>Maximum Fault Tolerance</strong>: Can survive three simultaneous failures</li>
+<li>⚠️ <strong>High Resource Requirements</strong>: Significant infrastructure investment</li>
+<li>⚠️ <strong>Performance Impact</strong>: Consensus overhead becomes noticeable</li>
+</ul>
 <p><strong>Fault Tolerance Matrix:</strong>
 | Scenario | Available Nodes | Quorum (7/2 + 1 = 4) | Cluster State |
 |----------|-----------------|----------------------|---------------|
@@ -3525,14 +3547,16 @@
 | 2 Nodes Down | 5 | ✅ Met | Fully Operational |
 | 3 Nodes Down | 4 | ✅ Met | Fully Operational |
 | 4 Nodes Down | 3 | ❌ Not Met | Read-Only Mode |</p>
-<p><strong>Best For:</strong>
-- Extremely critical applications
-- Large-scale deployments across multiple regions
-- Environments with very high availability requirements (99.99%+)</p>
+<p><strong>Best For:</strong></p>
+<ul>
+<li>Extremely critical applications</li>
+<li>Large-scale deployments across multiple regions</li>
+<li>Environments with very high availability requirements (99.99%+)</li>
+</ul>
 <h2 id="recommendations-by-environment">Recommendations by Environment<a class="headerlink" href="#recommendations-by-environment" title="Anchor link to this section">&para;</a></h2>
 <p>The snippets below show the recommended <code>Neo4jDatabase.spec.topology</code> for each environment (database-level role distribution). The containing <code>Neo4jEnterpriseCluster</code> must have at least <code>servers: &lt;primaries + secondaries&gt;</code> configured.</p>
 <h3 id="development-environment">Development Environment<a class="headerlink" href="#development-environment" title="Anchor link to this section">&para;</a></h3>
-<p><div class="language-yaml highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Neo4jEnterpriseCluster</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Neo4jEnterpriseCluster</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="nt">spec</span><span class="p">:</span>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span><span class="nt">topology</span><span class="p">:</span>
 </span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">    </span><span class="nt">servers</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
@@ -3543,10 +3567,12 @@
 </span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="w">    </span><span class="nt">primaries</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
 </span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="w">    </span><span class="nt">secondaries</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0</span>
 </span></code></pre></div>
-- <strong>Rationale</strong>: Simplicity and resource efficiency
-- <strong>Trade-off</strong>: No fault tolerance for development speed</p>
+<ul>
+<li><strong>Rationale</strong>: Simplicity and resource efficiency</li>
+<li><strong>Trade-off</strong>: No fault tolerance for development speed</li>
+</ul>
 <h3 id="stagingtesting-environment">Staging/Testing Environment<a class="headerlink" href="#stagingtesting-environment" title="Anchor link to this section">&para;</a></h3>
-<p><div class="language-yaml highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Neo4jEnterpriseCluster</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Neo4jEnterpriseCluster</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="nt">spec</span><span class="p">:</span>
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span><span class="nt">topology</span><span class="p">:</span>
 </span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">    </span><span class="nt">servers</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4</span>
@@ -3557,10 +3583,12 @@
 </span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="w">    </span><span class="nt">primaries</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span>
 </span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="w">    </span><span class="nt">secondaries</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
 </span></code></pre></div>
-- <strong>Rationale</strong>: Tests production-like behavior with fault tolerance
-- <strong>Trade-off</strong>: Moderate resource usage for realistic testing</p>
+<ul>
+<li><strong>Rationale</strong>: Tests production-like behavior with fault tolerance</li>
+<li><strong>Trade-off</strong>: Moderate resource usage for realistic testing</li>
+</ul>
 <h3 id="production-environment-standard">Production Environment (Standard)<a class="headerlink" href="#production-environment-standard" title="Anchor link to this section">&para;</a></h3>
-<p><div class="language-yaml highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Neo4jEnterpriseCluster</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Neo4jEnterpriseCluster</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="nt">spec</span><span class="p">:</span>
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">  </span><span class="nt">topology</span><span class="p">:</span>
 </span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">    </span><span class="nt">servers</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5</span>
@@ -3571,10 +3599,12 @@
 </span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="w">    </span><span class="nt">primaries</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span>
 </span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="w">    </span><span class="nt">secondaries</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span>
 </span></code></pre></div>
-- <strong>Rationale</strong>: Good balance of fault tolerance and performance
-- <strong>Trade-off</strong>: One node failure tolerance with read scaling</p>
+<ul>
+<li><strong>Rationale</strong>: Good balance of fault tolerance and performance</li>
+<li><strong>Trade-off</strong>: One node failure tolerance with read scaling</li>
+</ul>
 <h3 id="production-environment-high-availability">Production Environment (High Availability)<a class="headerlink" href="#production-environment-high-availability" title="Anchor link to this section">&para;</a></h3>
-<p><div class="language-yaml highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Neo4jEnterpriseCluster</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Neo4jEnterpriseCluster</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="nt">spec</span><span class="p">:</span>
 </span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">  </span><span class="nt">topology</span><span class="p">:</span>
 </span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">    </span><span class="nt">servers</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">8</span>
@@ -3585,10 +3615,12 @@
 </span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="w">    </span><span class="nt">primaries</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5</span>
 </span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="w">    </span><span class="nt">secondaries</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span>
 </span></code></pre></div>
-- <strong>Rationale</strong>: Two node failure tolerance with significant read capacity
-- <strong>Trade-off</strong>: Higher resource requirements for enhanced availability</p>
+<ul>
+<li><strong>Rationale</strong>: Two node failure tolerance with significant read capacity</li>
+<li><strong>Trade-off</strong>: Higher resource requirements for enhanced availability</li>
+</ul>
 <h3 id="mission-critical-environment">Mission-Critical Environment<a class="headerlink" href="#mission-critical-environment" title="Anchor link to this section">&para;</a></h3>
-<p><div class="language-yaml highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Neo4jEnterpriseCluster</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Neo4jEnterpriseCluster</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="nt">spec</span><span class="p">:</span>
 </span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">  </span><span class="nt">topology</span><span class="p">:</span>
 </span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">    </span><span class="nt">servers</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">12</span>
@@ -3599,8 +3631,10 @@
 </span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="w">    </span><span class="nt">primaries</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">7</span>
 </span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="w">    </span><span class="nt">secondaries</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5</span>
 </span></code></pre></div>
-- <strong>Rationale</strong>: Maximum fault tolerance with extensive read scaling
-- <strong>Trade-off</strong>: Significant resource investment for maximum availability</p>
+<ul>
+<li><strong>Rationale</strong>: Maximum fault tolerance with extensive read scaling</li>
+<li><strong>Trade-off</strong>: Significant resource investment for maximum availability</li>
+</ul>
 <h2 id="multi-zone-considerations">Multi-Zone Considerations<a class="headerlink" href="#multi-zone-considerations" title="Anchor link to this section">&para;</a></h2>
 <p>When deploying across availability zones, consider:</p>
 <h3 id="zone-distribution">Zone Distribution<a class="headerlink" href="#zone-distribution" title="Anchor link to this section">&para;</a></h3>

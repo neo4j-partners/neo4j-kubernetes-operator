@@ -3355,17 +3355,23 @@
 <h2 id="authentication-methods">Authentication Methods<a class="headerlink" href="#authentication-methods" title="Anchor link to this section">&para;</a></h2>
 <h3 id="1-system-wide-authentication-recommended">1. System-Wide Authentication (Recommended)<a class="headerlink" href="#1-system-wide-authentication-recommended" title="Anchor link to this section">&para;</a></h3>
 <p>Use cloud-native authentication mechanisms that don't require explicit credentials:</p>
-<p><strong>AWS S3:</strong>
-- IAM roles for service accounts (IRSA)
-- EC2 instance profiles
-- Environment variables on nodes</p>
-<p><strong>Google Cloud Storage:</strong>
-- Workload Identity
-- Service account keys via mounted volumes
-- Compute Engine default service accounts</p>
-<p><strong>Azure Blob Storage:</strong>
-- Managed identities
-- Service principal environment variables</p>
+<p><strong>AWS S3:</strong></p>
+<ul>
+<li>IAM roles for service accounts (IRSA)</li>
+<li>EC2 instance profiles</li>
+<li>Environment variables on nodes</li>
+</ul>
+<p><strong>Google Cloud Storage:</strong></p>
+<ul>
+<li>Workload Identity</li>
+<li>Service account keys via mounted volumes</li>
+<li>Compute Engine default service accounts</li>
+</ul>
+<p><strong>Azure Blob Storage:</strong></p>
+<ul>
+<li>Managed identities</li>
+<li>Service principal environment variables</li>
+</ul>
 <h3 id="2-explicit-credentials-via-secrets">2. Explicit Credentials via Secrets<a class="headerlink" href="#2-explicit-credentials-via-secrets" title="Anchor link to this section">&para;</a></h3>
 <p>For environments where system-wide authentication isn't available, you can reference a credentials Secret with <code>spec.seedCredentials.secretRef</code>:</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
@@ -3403,26 +3409,38 @@
 </blockquote>
 <h2 id="credential-requirements-by-provider">Credential Requirements by Provider<a class="headerlink" href="#credential-requirements-by-provider" title="Anchor link to this section">&para;</a></h2>
 <h3 id="amazon-s3">Amazon S3<a class="headerlink" href="#amazon-s3" title="Anchor link to this section">&para;</a></h3>
-<p><strong>Required:</strong>
-- <code>AWS_ACCESS_KEY_ID</code>
-- <code>AWS_SECRET_ACCESS_KEY</code></p>
-<p><strong>Optional:</strong>
-- <code>AWS_SESSION_TOKEN</code> (for temporary credentials)
-- <code>AWS_REGION</code></p>
+<p><strong>Required:</strong></p>
+<ul>
+<li><code>AWS_ACCESS_KEY_ID</code></li>
+<li><code>AWS_SECRET_ACCESS_KEY</code></li>
+</ul>
+<p><strong>Optional:</strong></p>
+<ul>
+<li><code>AWS_SESSION_TOKEN</code> (for temporary credentials)</li>
+<li><code>AWS_REGION</code></li>
+</ul>
 <h3 id="google-cloud-storage">Google Cloud Storage<a class="headerlink" href="#google-cloud-storage" title="Anchor link to this section">&para;</a></h3>
-<p><strong>Required:</strong>
-- <code>GOOGLE_APPLICATION_CREDENTIALS</code> (service account JSON key)</p>
-<p><strong>Optional:</strong>
-- <code>GOOGLE_CLOUD_PROJECT</code></p>
+<p><strong>Required:</strong></p>
+<ul>
+<li><code>GOOGLE_APPLICATION_CREDENTIALS</code> (service account JSON key)</li>
+</ul>
+<p><strong>Optional:</strong></p>
+<ul>
+<li><code>GOOGLE_CLOUD_PROJECT</code></li>
+</ul>
 <h3 id="azure-blob-storage">Azure Blob Storage<a class="headerlink" href="#azure-blob-storage" title="Anchor link to this section">&para;</a></h3>
-<p><strong>Required:</strong>
-- <code>AZURE_STORAGE_ACCOUNT</code>
-- Either <code>AZURE_STORAGE_KEY</code> OR <code>AZURE_STORAGE_SAS_TOKEN</code></p>
+<p><strong>Required:</strong></p>
+<ul>
+<li><code>AZURE_STORAGE_ACCOUNT</code></li>
+<li>Either <code>AZURE_STORAGE_KEY</code> OR <code>AZURE_STORAGE_SAS_TOKEN</code></li>
+</ul>
 <h3 id="httphttpsftp">HTTP/HTTPS/FTP<a class="headerlink" href="#httphttpsftp" title="Anchor link to this section">&para;</a></h3>
-<p><strong>Optional:</strong>
-- <code>USERNAME</code>
-- <code>PASSWORD</code>
-- <code>AUTH_HEADER</code> (for custom authentication)</p>
+<p><strong>Optional:</strong></p>
+<ul>
+<li><code>USERNAME</code></li>
+<li><code>PASSWORD</code></li>
+<li><code>AUTH_HEADER</code> (for custom authentication)</li>
+</ul>
 <h2 id="advanced-configuration">Advanced Configuration<a class="headerlink" href="#advanced-configuration" title="Anchor link to this section">&para;</a></h2>
 <h3 id="point-in-time-recovery-neo4j-2025x-only">Point-in-Time Recovery (Neo4j 2025.x only)<a class="headerlink" href="#point-in-time-recovery-neo4j-2025x-only" title="Anchor link to this section">&para;</a></h3>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">seedConfig</span><span class="p">:</span>
@@ -3480,14 +3498,18 @@
 <p>When <code>seedURI</code> is specified, <code>initialData</code> is ignored since the seed provides the initial data.</p>
 <h2 id="status-and-events">Status and Events<a class="headerlink" href="#status-and-events" title="Anchor link to this section">&para;</a></h2>
 <p>The operator provides detailed status and events during seed restoration:</p>
-<p><strong>Events:</strong>
-- <code>DatabaseCreatedFromSeed</code>: Database successfully created from seed URI
-- <code>DataSeeded</code>: Database seeded from URI successfully
-- <code>ValidationWarning</code>: Validation warnings (e.g., suboptimal topology)</p>
-<p><strong>Status Conditions:</strong>
-- <code>Ready</code>: Database is ready and available
-- <code>ValidationFailed</code>: Configuration validation failed
-- <code>CreationFailed</code>: Database creation failed</p>
+<p><strong>Events:</strong></p>
+<ul>
+<li><code>DatabaseCreatedFromSeed</code>: Database successfully created from seed URI</li>
+<li><code>DataSeeded</code>: Database seeded from URI successfully</li>
+<li><code>ValidationWarning</code>: Validation warnings (e.g., suboptimal topology)</li>
+</ul>
+<p><strong>Status Conditions:</strong></p>
+<ul>
+<li><code>Ready</code>: Database is ready and available</li>
+<li><code>ValidationFailed</code>: Configuration validation failed</li>
+<li><code>CreationFailed</code>: Database creation failed</li>
+</ul>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Anchor link to this section">&para;</a></h2>
 <h3 id="common-issues">Common Issues<a class="headerlink" href="#common-issues" title="Anchor link to this section">&para;</a></h3>
 <ol>

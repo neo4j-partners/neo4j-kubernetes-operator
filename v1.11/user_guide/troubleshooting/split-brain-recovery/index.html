@@ -3422,11 +3422,13 @@
 <p>The Neo4j Kubernetes Operator includes <strong>automatic split-brain detection and repair</strong> to prevent and resolve these issues proactively.</p>
 <h2 id="understanding-split-brain-scenarios">Understanding Split-Brain Scenarios<a class="headerlink" href="#understanding-split-brain-scenarios" title="Anchor link to this section">&para;</a></h2>
 <h3 id="what-is-split-brain">What is Split-Brain?<a class="headerlink" href="#what-is-split-brain" title="Anchor link to this section">&para;</a></h3>
-<p>Split-brain happens when:
-1. Network partitions separate cluster servers
-2. Servers cannot communicate with each other
-3. Multiple independent "clusters" form within the same deployment
-4. Each partition believes it is the authoritative cluster</p>
+<p>Split-brain happens when:</p>
+<ol>
+<li>Network partitions separate cluster servers</li>
+<li>Servers cannot communicate with each other</li>
+<li>Multiple independent "clusters" form within the same deployment</li>
+<li>Each partition believes it is the authoritative cluster</li>
+</ol>
 <h3 id="common-causes">Common Causes<a class="headerlink" href="#common-causes" title="Anchor link to this section">&para;</a></h3>
 <ul>
 <li><strong>Network partitions</strong> between Kubernetes nodes</li>
@@ -3493,12 +3495,14 @@
 </li>
 </ol>
 <h3 id="identify-split-brain-symptoms">Identify Split-Brain Symptoms<a class="headerlink" href="#identify-split-brain-symptoms" title="Anchor link to this section">&para;</a></h3>
-<p><strong>Indicators of Split-Brain:</strong>
-- Different server counts reported by different pods
-- Inconsistent database allocations across servers
-- Some servers showing as "offline" from others' perspectives
-- Database creation failures with "insufficient servers" errors
-- Application connection failures to some databases</p>
+<p><strong>Indicators of Split-Brain:</strong></p>
+<ul>
+<li>Different server counts reported by different pods</li>
+<li>Inconsistent database allocations across servers</li>
+<li>Some servers showing as "offline" from others' perspectives</li>
+<li>Database creation failures with "insufficient servers" errors</li>
+<li>Application connection failures to some databases</li>
+</ul>
 <h2 id="repair-strategies">Repair Strategies<a class="headerlink" href="#repair-strategies" title="Anchor link to this section">&para;</a></h2>
 <h3 id="automatic-repair-recommended">Automatic Repair (Recommended)<a class="headerlink" href="#automatic-repair-recommended" title="Anchor link to this section">&para;</a></h3>
 <p>The operator automatically repairs split-brain scenarios by:</p>
@@ -3586,12 +3590,8 @@
 <h3 id="network-configuration">Network Configuration<a class="headerlink" href="#network-configuration" title="Anchor link to this section">&para;</a></h3>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="nt">spec</span><span class="p">:</span>
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="w">  </span><span class="nt">config</span><span class="p">:</span>
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">    </span><span class="c1"># Optimize discovery resolution timeout (operator uses LIST discovery with static pod FQDNs)</span>
-</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">    </span><span class="nt">dbms.cluster.discovery.resolution_timeout</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;30s&quot;</span>
-</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>
-</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="w">    </span><span class="c1"># Cluster communication resilience (Neo4j 5.26+)</span>
-</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="w">    </span><span class="nt">dbms.cluster.raft.election_timeout</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;7s&quot;</span>
-</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="w">    </span><span class="nt">dbms.cluster.raft.leader_failure_detection_window</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;30s&quot;</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">    </span><span class="c1"># Cluster communication resilience (Neo4j 5.26+)</span>
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">    </span><span class="nt">dbms.cluster.raft.leader_failure_detection_window</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;30s&quot;</span>
 </span></code></pre></div>
 <h2 id="monitoring-and-alerting">Monitoring and Alerting<a class="headerlink" href="#monitoring-and-alerting" title="Anchor link to this section">&para;</a></h2>
 <h3 id="prometheus-metrics">Prometheus Metrics<a class="headerlink" href="#prometheus-metrics" title="Anchor link to this section">&para;</a></h3>
@@ -3809,11 +3809,13 @@
 <li>Set up Kubernetes event alerting</li>
 <li>Track cluster consistency metrics</li>
 </ol>
-<p>For additional troubleshooting help, see:
-- <a href="../../guides/troubleshooting/">General Troubleshooting Guide</a>
-- <a href="../../tls_configuration/">TLS Configuration Issues</a>
-- <a href="../../performance/">Performance Troubleshooting</a>
-- <a href="../backup_restore/">Backup/Restore Issues</a></p>
+<p>For additional troubleshooting help, see:</p>
+<ul>
+<li><a href="../../guides/troubleshooting/">General Troubleshooting Guide</a></li>
+<li><a href="../../tls_configuration/">TLS Configuration Issues</a></li>
+<li><a href="../../performance/">Performance Troubleshooting</a></li>
+<li><a href="../backup_restore/">Backup/Restore Issues</a></li>
+</ul>
 
 
 

@@ -3491,14 +3491,18 @@
 <blockquote>
 <p><strong>Note</strong>: Do not confuse this with the Neo4j <code>K8S</code> resolver type, which queries the Kubernetes API directly. This operator always uses the <code>LIST</code> resolver.</p>
 </blockquote>
-<p><strong>Discovery ports</strong>:
-- Port <strong>6000</strong> (<code>tcp-tx</code>): V2 cluster communication — used by this operator for discovery endpoints
-- Port <strong>5000</strong> (<code>tcp-discovery</code>): V1 discovery — deprecated, <strong>never used by this operator</strong></p>
+<p><strong>Discovery ports</strong>:</p>
+<ul>
+<li>Port <strong>6000</strong> (<code>tcp-tx</code>): V2 cluster communication — used by this operator for discovery endpoints</li>
+<li>Port <strong>5000</strong> (<code>tcp-discovery</code>): V1 discovery — deprecated, <strong>never used by this operator</strong></li>
+</ul>
 <h3 id="kubernetes-services-created">Kubernetes Services Created<a class="headerlink" href="#kubernetes-services-created" title="Anchor link to this section">&para;</a></h3>
-<p>The operator automatically creates:
-- <code>{cluster-name}-headless</code> — StatefulSet headless service (pod FQDNs)
-- <code>{cluster-name}-internals</code> — cluster-internal routing
-- <code>{cluster-name}-client</code> — external Bolt/HTTP access</p>
+<p>The operator automatically creates:</p>
+<ul>
+<li><code>{cluster-name}-headless</code> — StatefulSet headless service (pod FQDNs)</li>
+<li><code>{cluster-name}-internals</code> — cluster-internal routing</li>
+<li><code>{cluster-name}-client</code> — external Bolt/HTTP access</li>
+</ul>
 <h3 id="discovery-configuration-injected-automatically">Discovery Configuration (Injected Automatically)<a class="headerlink" href="#discovery-configuration-injected-automatically" title="Anchor link to this section">&para;</a></h3>
 <p>The operator injects version-specific discovery settings into every pod's startup script. <strong>Do not set these in <code>spec.config</code></strong> — the operator manages them.</p>
 <p><strong>Neo4j 5.26.x (SemVer)</strong>:
@@ -3622,11 +3626,13 @@
 </span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="w">  </span><span class="c1"># The operator never uses the K8S service-list resolver; do not set</span>
 </span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="w">  </span><span class="c1"># dbms.kubernetes.discovery.* in spec.config (the validator rejects it).</span>
 </span></code></pre></div>
-<p><strong>Note</strong>: The operator automatically handles all clustering configuration including:
-- LIST discovery setup with pod FQDNs on port 6000 (<code>tcp-tx</code>)
-- RBAC resource creation
-- Service creation for cluster communication
-- Neo4j configuration for optimal clustering</p>
+<p><strong>Note</strong>: The operator automatically handles all clustering configuration including:</p>
+<ul>
+<li>LIST discovery setup with pod FQDNs on port 6000 (<code>tcp-tx</code>)</li>
+<li>RBAC resource creation</li>
+<li>Service creation for cluster communication</li>
+<li>Neo4j configuration for optimal clustering</li>
+</ul>
 <h3 id="using-kubectl-commands">Using kubectl Commands<a class="headerlink" href="#using-kubectl-commands" title="Anchor link to this section">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Check cluster status</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>neo4jenterprisecluster<span class="w"> </span>my-cluster<span class="w"> </span>-o<span class="w"> </span>yaml
@@ -3689,11 +3695,13 @@
 </span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">serverIndex</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span>
 </span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="w">        </span><span class="nt">modeConstraint</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">NONE</span><span class="w">       </span><span class="c1"># server-2 can host either mode</span>
 </span></code></pre></div>
-<p><strong>Validation rules</strong> (enforced by the controller, not a webhook):
-- <code>servers</code> must be between 2 and 100 (the 100 cap is an operator safety rail, not a Neo4j limit; realistic deployments rarely exceed ~10).
-- Each <code>serverRoles[].serverIndex</code> must be in the range <code>[0, servers-1]</code>.
-- <code>serverRoles[].serverIndex</code> values must be unique (no duplicates).
-- You cannot constrain <strong>all</strong> servers to <code>SECONDARY</code> — at least one server must be able to host primaries.</p>
+<p><strong>Validation rules</strong> (enforced by the controller, not a webhook):</p>
+<ul>
+<li><code>servers</code> must be between 2 and 100 (the 100 cap is an operator safety rail, not a Neo4j limit; realistic deployments rarely exceed ~10).</li>
+<li>Each <code>serverRoles[].serverIndex</code> must be in the range <code>[0, servers-1]</code>.</li>
+<li><code>serverRoles[].serverIndex</code> values must be unique (no duplicates).</li>
+<li>You cannot constrain <strong>all</strong> servers to <code>SECONDARY</code> — at least one server must be able to host primaries.</li>
+</ul>
 <h3 id="multi-zone-deployment">Multi-Zone Deployment<a class="headerlink" href="#multi-zone-deployment" title="Anchor link to this section">&para;</a></h3>
 <p>Configure topology spread and anti-affinity for high availability:</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="nt">spec</span><span class="p">:</span>

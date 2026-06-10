@@ -4072,11 +4072,13 @@ does not offer security."</em></p>
 </blockquote>
 <h2 id="authentication-configuration">Authentication Configuration<a class="headerlink" href="#authentication-configuration" title="Anchor link to this section">&para;</a></h2>
 <p>The operator provides first-class, typed configuration for external authentication providers. When you use the typed fields (described below), the operator automatically generates the correct <code>neo4j.conf</code> entries — you do not need to manually place <code>dbms.security.*</code> keys in <code>spec.config</code>.</p>
-<p><strong>Where to start:</strong>
-- <strong>Most deployments</strong>: <a href="#native-authentication">Native Authentication</a> — just create an admin secret and go.
-- <strong>Corporate SSO</strong>: <a href="#oidc-sso-integration">OIDC / SSO Integration</a> — Okta, Azure AD, Google, or any OIDC provider.
-- <strong>Active Directory / LDAP</strong>: <a href="#ldap-integration">LDAP Integration</a> — bind templates, group mapping, nested groups.
-- <strong>Internal CAs</strong>: <a href="#jvm-truststore-for-internal-cas">JVM TrustStore</a> — if your LDAP/OIDC endpoints use certificates signed by a private CA.</p>
+<p><strong>Where to start:</strong></p>
+<ul>
+<li><strong>Most deployments</strong>: <a href="#native-authentication">Native Authentication</a> — just create an admin secret and go.</li>
+<li><strong>Corporate SSO</strong>: <a href="#oidc-sso-integration">OIDC / SSO Integration</a> — Okta, Azure AD, Google, or any OIDC provider.</li>
+<li><strong>Active Directory / LDAP</strong>: <a href="#ldap-integration">LDAP Integration</a> — bind templates, group mapping, nested groups.</li>
+<li><strong>Internal CAs</strong>: <a href="#jvm-truststore-for-internal-cas">JVM TrustStore</a> — if your LDAP/OIDC endpoints use certificates signed by a private CA.</li>
+</ul>
 <h3 id="multi-provider-support">Multi-Provider Support<a class="headerlink" href="#multi-provider-support" title="Anchor link to this section">&para;</a></h3>
 <p>Neo4j evaluates authentication providers in order. You can combine providers for fallback (e.g., LDAP first, then native for the initial admin user):</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">spec</span><span class="p">:</span>
@@ -4992,16 +4994,22 @@ policy doesn't collide.</p>
 <p>If you're running Istio/Linkerd, target the operator-managed <code>Service</code>s (e.g. <code>{cluster}-client.{ns}.svc.cluster.local</code>) with your usual <code>DestinationRule</code> / <code>PeerAuthentication</code> to enforce mTLS at the mesh layer. Nothing operator-specific is required.</p>
 <h2 id="data-encryption-and-security">Data Encryption and Security<a class="headerlink" href="#data-encryption-and-security" title="Anchor link to this section">&para;</a></h2>
 <h3 id="encryption-at-rest">Encryption at Rest<a class="headerlink" href="#encryption-at-rest" title="Anchor link to this section">&para;</a></h3>
+<p>The portable way to encrypt Neo4j data at rest on Kubernetes is to back the
+data PVC with an encrypted <code>StorageClass</code> (e.g. a CSI driver with encryption
+enabled, or a cloud encrypted disk type):</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="nt">spec</span><span class="p">:</span>
 </span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="w">  </span><span class="nt">storage</span><span class="p">:</span>
-</span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a><span class="w">    </span><span class="nt">className</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;encrypted-ssd&quot;</span><span class="w">   </span><span class="c1"># Use encrypted storage class</span>
+</span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a><span class="w">    </span><span class="nt">className</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;encrypted-ssd&quot;</span><span class="w">   </span><span class="c1"># StorageClass backed by encrypted volumes</span>
 </span><span id="__span-25-4"><a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a><span class="w">    </span><span class="nt">size</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;500Gi&quot;</span>
-</span><span id="__span-25-5"><a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a>
-</span><span id="__span-25-6"><a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a><span class="w">  </span><span class="nt">config</span><span class="p">:</span>
-</span><span id="__span-25-7"><a id="__codelineno-25-7" name="__codelineno-25-7" href="#__codelineno-25-7"></a><span class="w">    </span><span class="c1"># Enable transparent data encryption (Neo4j Enterprise)</span>
-</span><span id="__span-25-8"><a id="__codelineno-25-8" name="__codelineno-25-8" href="#__codelineno-25-8"></a><span class="w">    </span><span class="nt">dbms.security.transparent_data_encryption.enabled</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
-</span><span id="__span-25-9"><a id="__codelineno-25-9" name="__codelineno-25-9" href="#__codelineno-25-9"></a><span class="w">    </span><span class="nt">dbms.security.transparent_data_encryption.keystore</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;/encryption/keystore&quot;</span>
 </span></code></pre></div>
+<blockquote>
+<p>Neo4j Enterprise also offers native Transparent Data Encryption (TDE). It is
+configured with encryption keys and <code>neo4j-admin</code>/<code>dbms.security.keys.*</code>
+settings per the
+<a href="https://neo4j.com/docs/operations-manual/current/security/encryption/">Neo4j TDE documentation</a>,
+not via a single <code>spec.config</code> toggle. Add the relevant keys to <code>spec.config</code>
+only after following that setup.</p>
+</blockquote>
 <h3 id="backup-security">Backup Security<a class="headerlink" href="#backup-security" title="Anchor link to this section">&para;</a></h3>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1beta1</span>
 </span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Neo4jBackup</span>
@@ -5400,11 +5408,13 @@ bundled example CRs that intentionally trip Audit warnings.</p>
 </span></code></pre></div></p>
 </li>
 </ol>
-<p>For additional security guidance, see:
-- <a href="../configuration/#best-practices-for-specconfig">Configuration Best Practices</a>
-- <a href="../tls_configuration/">TLS Configuration Guide</a>
-- <a href="../guides/backup_restore/">Backup &amp; Restore</a>
-- <a href="../troubleshooting/split-brain-recovery/">Split-Brain Recovery</a></p>
+<p>For additional security guidance, see:</p>
+<ul>
+<li><a href="../configuration/#best-practices-for-specconfig">Configuration Best Practices</a></li>
+<li><a href="../tls_configuration/">TLS Configuration Guide</a></li>
+<li><a href="../guides/backup_restore/">Backup &amp; Restore</a></li>
+<li><a href="../troubleshooting/split-brain-recovery/">Split-Brain Recovery</a></li>
+</ul>
 
 
 

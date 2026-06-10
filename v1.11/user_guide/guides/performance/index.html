@@ -2859,10 +2859,12 @@
 </span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">        </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;8Gi&quot;</span>
 </span></code></pre></div>
 <h3 id="memory-validation-and-recommendations">Memory Validation and Recommendations<a class="headerlink" href="#memory-validation-and-recommendations" title="Anchor link to this section">&para;</a></h3>
-<p>The operator includes intelligent memory validation that:
-- Ensures Neo4j heap settings don't exceed available container memory
-- Provides automatic recommendations for optimal memory allocation
-- Validates memory ratios between heap, page cache, and system overhead</p>
+<p>The operator includes intelligent memory validation that:</p>
+<ul>
+<li>Ensures Neo4j heap settings don't exceed available container memory</li>
+<li>Provides automatic recommendations for optimal memory allocation</li>
+<li>Validates memory ratios between heap, page cache, and system overhead</li>
+</ul>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="w">    </span><span class="nt">resources</span><span class="p">:</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">      </span><span class="nt">requests</span><span class="p">:</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">        </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;4Gi&quot;</span><span class="w">    </span><span class="c1"># Minimum for stable operation</span>

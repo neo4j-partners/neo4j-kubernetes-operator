@@ -3160,30 +3160,38 @@
 <h3 id="production-mode">Production Mode<a class="headerlink" href="#production-mode" title="Anchor link to this section">&para;</a></h3>
 <p>Production mode is the default when <code>--mode</code> is not set. Use it for real workloads.
 Explicit flags and Helm values always override the mode defaults.</p>
-<p><strong>Key behavior (binary defaults):</strong>
-- <strong>Mode</strong>: <code>production</code>
-- <strong>Metrics bind</strong>: <code>:8080</code> (unless overridden)
-- <strong>Health bind</strong>: <code>:8081</code> (unless overridden)
-- <strong>Cache strategy</strong>: <code>on-demand</code> (unless overridden)
-- <strong>Leader election</strong>: off by default (recommended for HA)
-- <strong>Controllers loaded</strong>: all controllers — cluster, standalone, database, backup, restore, plugin, shardeddatabase, user, role, rolebinding, authrule</p>
-<p><strong>Helm defaults that matter:</strong>
-- <code>leaderElection.enabled: true</code> (passes <code>--leader-elect=true</code>)
-- <code>logLevel: info</code>
-- <code>metrics.enabled: true</code> with port <code>8080</code>
-- <code>--health-probe-bind-address=:8081</code> is always set by the chart</p>
+<p><strong>Key behavior (binary defaults):</strong></p>
+<ul>
+<li><strong>Mode</strong>: <code>production</code></li>
+<li><strong>Metrics bind</strong>: <code>:8080</code> (unless overridden)</li>
+<li><strong>Health bind</strong>: <code>:8081</code> (unless overridden)</li>
+<li><strong>Cache strategy</strong>: <code>on-demand</code> (unless overridden)</li>
+<li><strong>Leader election</strong>: off by default (recommended for HA)</li>
+<li><strong>Controllers loaded</strong>: all controllers — cluster, standalone, database, backup, restore, plugin, shardeddatabase, user, role, rolebinding, authrule</li>
+</ul>
+<p><strong>Helm defaults that matter:</strong></p>
+<ul>
+<li><code>leaderElection.enabled: true</code> (passes <code>--leader-elect=true</code>)</li>
+<li><code>logLevel: info</code></li>
+<li><code>metrics.enabled: true</code> with port <code>8080</code></li>
+<li><code>--health-probe-bind-address=:8081</code> is always set by the chart</li>
+</ul>
 <h3 id="development-mode-in-cluster-only">Development Mode (In-Cluster Only)<a class="headerlink" href="#development-mode-in-cluster-only" title="Anchor link to this section">&para;</a></h3>
 <p>Development mode is optimized for faster iteration, but it <strong>must run in-cluster</strong>. Use Kind for dev and test clusters.</p>
-<p><strong>How to enable:</strong>
-- <strong>CLI/Kustomize</strong>: add <code>--mode=dev</code>
-- <strong>Helm</strong>: set <code>developmentMode: true</code></p>
-<p><strong>Default behavior in dev mode:</strong>
-- <strong>Metrics bind</strong>: <code>:8082</code> (unless overridden)
-- <strong>Health bind</strong>: <code>:8083</code> (unless overridden)
-- <strong>Cache strategy</strong>: <code>on-demand</code> (or <code>none</code> if <code>--ultra-fast</code>)
-- <strong>skip-cache-wait</strong>: auto-enabled if not explicitly set
-- <strong>API rate limits</strong>: QPS 100, Burst 200
-- <strong>Controllers loaded</strong>: defaults to all controllers (cluster, standalone, database, backup, restore, plugin, shardeddatabase, user, role, rolebinding, authrule); narrow with <code>--controllers</code></p>
+<p><strong>How to enable:</strong></p>
+<ul>
+<li><strong>CLI/Kustomize</strong>: add <code>--mode=dev</code></li>
+<li><strong>Helm</strong>: set <code>developmentMode: true</code></li>
+</ul>
+<p><strong>Default behavior in dev mode:</strong></p>
+<ul>
+<li><strong>Metrics bind</strong>: <code>:8082</code> (unless overridden)</li>
+<li><strong>Health bind</strong>: <code>:8083</code> (unless overridden)</li>
+<li><strong>Cache strategy</strong>: <code>on-demand</code> (or <code>none</code> if <code>--ultra-fast</code>)</li>
+<li><strong>skip-cache-wait</strong>: auto-enabled if not explicitly set</li>
+<li><strong>API rate limits</strong>: QPS 100, Burst 200</li>
+<li><strong>Controllers loaded</strong>: defaults to all controllers (cluster, standalone, database, backup, restore, plugin, shardeddatabase, user, role, rolebinding, authrule); narrow with <code>--controllers</code></li>
+</ul>
 <p>Helm always sets <code>--metrics-bind-address</code> and <code>--health-probe-bind-address</code>, so the dev-mode defaults above only apply when you run the binary directly or override those values.</p>
 <p><strong>In-cluster dev workflow (Kind only):</strong>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>make<span class="w"> </span>dev-cluster
@@ -3223,12 +3231,14 @@ Explicit flags and Helm values always override the mode defaults.</p>
 <li><strong>Non-Helm</strong>: set <code>WATCH_NAMESPACE=team-a,team-b</code> (comma-separated).</li>
 <li><strong>Adding namespaces</strong>: update <code>watchNamespaces</code> (or <code>WATCH_NAMESPACE</code>) and upgrade/redeploy the operator.</li>
 </ul>
-<p><strong>Pattern support (dynamic):</strong>
-- <strong>Globs</strong>: <code>glob:team-*</code> or <code>team-*</code>
-- <strong>Regex</strong>: <code>regex:^team-.*$</code>
-- <strong>Labels</strong>: <code>label:{env=prod,tier=backend}</code> (braces allow commas)
-- Patterns require cluster-scope RBAC because the operator must list/watch namespaces.
-- The operator restarts its manager when namespace matches change.</p>
+<p><strong>Pattern support (dynamic):</strong></p>
+<ul>
+<li><strong>Globs</strong>: <code>glob:team-*</code> or <code>team-*</code></li>
+<li><strong>Regex</strong>: <code>regex:^team-.*$</code></li>
+<li><strong>Labels</strong>: <code>label:{env=prod,tier=backend}</code> (braces allow commas)</li>
+<li>Patterns require cluster-scope RBAC because the operator must list/watch namespaces.</li>
+<li>The operator restarts its manager when namespace matches change.</li>
+</ul>
 <p>Note: backup workflows create per-namespace RBAC (ServiceAccount/Role/RoleBinding) as needed for backup jobs.</p>
 <h2 id="helm-configuration">Helm Configuration<a class="headerlink" href="#helm-configuration" title="Anchor link to this section">&para;</a></h2>
 <p>Key values for modes and scope in <code>charts/neo4j-operator/values.yaml</code>:</p>
@@ -3265,10 +3275,12 @@ Explicit flags and Helm values always override the mode defaults.</p>
 </span></code></pre></div>
 <h2 id="non-helm-configuration">Non-Helm Configuration<a class="headerlink" href="#non-helm-configuration" title="Anchor link to this section">&para;</a></h2>
 <p>If you deploy with Kustomize or raw manifests, configure scope and mode explicitly:</p>
-<p><strong>Recommended Kustomize targets:</strong>
-- <code>config/overlays/prod</code> (production)
-- <code>config/overlays/dev</code> (development, Kind only)
-- <code>config/overlays/namespace-scoped</code> (single namespace)</p>
+<p><strong>Recommended Kustomize targets:</strong></p>
+<ul>
+<li><code>config/overlays/prod</code> (production)</li>
+<li><code>config/overlays/dev</code> (development, Kind only)</li>
+<li><code>config/overlays/namespace-scoped</code> (single namespace)</li>
+</ul>
 <p><strong>Scope (env var):</strong>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">WATCH_NAMESPACE</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">  </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a,team-b</span>
@@ -3280,10 +3292,12 @@ Explicit flags and Helm values always override the mode defaults.</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nt">args</span><span class="p">:</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">--mode=dev</span>
 </span></code></pre></div></p>
-<p>Reference overlays:
-- <code>config/overlays/prod</code>
-- <code>config/overlays/dev</code>
-- <code>config/overlays/namespace-scoped</code></p>
+<p>Reference overlays:</p>
+<ul>
+<li><code>config/overlays/prod</code></li>
+<li><code>config/overlays/dev</code></li>
+<li><code>config/overlays/namespace-scoped</code></li>
+</ul>
 <h2 id="cache-strategies">Cache Strategies<a class="headerlink" href="#cache-strategies" title="Anchor link to this section">&para;</a></h2>
 <p>Cache strategy controls how aggressively the operator caches resources via controller-runtime.</p>
 <table>
@@ -3332,40 +3346,52 @@ Explicit flags and Helm values always override the mode defaults.</p>
 <p>In development mode, you can load only a subset of controllers:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>--controllers<span class="o">=</span>cluster,standalone,database
 </span></code></pre></div>
-<p>Valid controller names:
-- <code>cluster</code>
-- <code>standalone</code>
-- <code>database</code>
-- <code>backup</code>
-- <code>restore</code>
-- <code>plugin</code>
-- <code>shardeddatabase</code>
-- <code>user</code>
-- <code>role</code>
-- <code>rolebinding</code>
-- <code>authrule</code></p>
+<p>Valid controller names:</p>
+<ul>
+<li><code>cluster</code></li>
+<li><code>standalone</code></li>
+<li><code>database</code></li>
+<li><code>backup</code></li>
+<li><code>restore</code></li>
+<li><code>plugin</code></li>
+<li><code>shardeddatabase</code></li>
+<li><code>user</code></li>
+<li><code>role</code></li>
+<li><code>rolebinding</code></li>
+<li><code>authrule</code></li>
+</ul>
 <p>The default dev <code>--controllers</code> value is the full list above; override with <code>--controllers</code> to narrow scope.</p>
 <h2 id="logging-and-metrics">Logging and Metrics<a class="headerlink" href="#logging-and-metrics" title="Anchor link to this section">&para;</a></h2>
-<p><strong>Logging (zap):</strong>
-- <code>--zap-log-level=debug|info|warn|error|dpanic|panic|fatal</code>
-- <code>--zap-devel=true|false</code>
-- <code>--zap-encoder=json|console</code>
-- <code>--zap-stacktrace-level=debug|info|warn|error|dpanic|panic|fatal</code></p>
-<p><strong>Operator metrics endpoint:</strong>
-- <code>--metrics-bind-address=:8080</code> (set to <code>0</code> to disable)
-- <code>--metrics-secure=true</code> (TLS, production mode only)</p>
+<p><strong>Logging (zap):</strong></p>
+<ul>
+<li><code>--zap-log-level=debug|info|warn|error|dpanic|panic|fatal</code></li>
+<li><code>--zap-devel=true|false</code></li>
+<li><code>--zap-encoder=json|console</code></li>
+<li><code>--zap-stacktrace-level=debug|info|warn|error|dpanic|panic|fatal</code></li>
+</ul>
+<p><strong>Operator metrics endpoint:</strong></p>
+<ul>
+<li><code>--metrics-bind-address=:8080</code> (set to <code>0</code> to disable)</li>
+<li><code>--metrics-secure=true</code> (TLS, production mode only)</li>
+</ul>
 <p>Helm sets <code>--metrics-bind-address</code> based on <code>metrics.enabled</code> and <code>metrics.service.port</code>.</p>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Anchor link to this section">&para;</a></h2>
-<p><strong>Operator sees no CRs:</strong>
-- Verify <code>WATCH_NAMESPACE</code> (empty for cluster scope).
-- Confirm <code>operatorMode</code> in Helm matches your intent.</p>
-<p><strong>RBAC forbidden errors:</strong>
-- Cluster scope or multi-namespace requires ClusterRole/ClusterRoleBinding.
-- Namespace scope requires Role/RoleBinding in the operator namespace.
-- Validate with <code>kubectl auth can-i</code> using the operator ServiceAccount.</p>
-<p><strong>Metrics not reachable:</strong>
-- Ensure <code>metrics.enabled: true</code> or <code>--metrics-bind-address</code> is not <code>0</code>.
-- Confirm the Service port matches the bind address.</p>
+<p><strong>Operator sees no CRs:</strong></p>
+<ul>
+<li>Verify <code>WATCH_NAMESPACE</code> (empty for cluster scope).</li>
+<li>Confirm <code>operatorMode</code> in Helm matches your intent.</li>
+</ul>
+<p><strong>RBAC forbidden errors:</strong></p>
+<ul>
+<li>Cluster scope or multi-namespace requires ClusterRole/ClusterRoleBinding.</li>
+<li>Namespace scope requires Role/RoleBinding in the operator namespace.</li>
+<li>Validate with <code>kubectl auth can-i</code> using the operator ServiceAccount.</li>
+</ul>
+<p><strong>Metrics not reachable:</strong></p>
+<ul>
+<li>Ensure <code>metrics.enabled: true</code> or <code>--metrics-bind-address</code> is not <code>0</code>.</li>
+<li>Confirm the Service port matches the bind address.</li>
+</ul>
 <h2 id="additional-resources">Additional Resources<a class="headerlink" href="#additional-resources" title="Anchor link to this section">&para;</a></h2>
 <ul>
 <li><code>docs/developer_guide/architecture.md</code></li>

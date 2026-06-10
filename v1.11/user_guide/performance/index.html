@@ -3269,12 +3269,14 @@
 <h1 id="performance-tuning-guide">Performance Tuning Guide<a class="headerlink" href="#performance-tuning-guide" title="Anchor link to this section">&para;</a></h1>
 <p>This comprehensive guide covers performance optimization strategies for Neo4j clusters deployed using the Neo4j Kubernetes Operator, focusing on server-based architecture and Neo4j 5.26+/2025.x versions.</p>
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Anchor link to this section">&para;</a></h2>
-<p>Neo4j performance in Kubernetes environments depends on several key factors:
-- <strong>Resource allocation</strong> (CPU, memory, storage)
-- <strong>Cluster topology</strong> and database distribution
-- <strong>Storage configuration</strong> and I/O optimization
-- <strong>Network configuration</strong> and discovery performance
-- <strong>Neo4j-specific tuning</strong> parameters</p>
+<p>Neo4j performance in Kubernetes environments depends on several key factors:</p>
+<ul>
+<li><strong>Resource allocation</strong> (CPU, memory, storage)</li>
+<li><strong>Cluster topology</strong> and database distribution</li>
+<li><strong>Storage configuration</strong> and I/O optimization</li>
+<li><strong>Network configuration</strong> and discovery performance</li>
+<li><strong>Neo4j-specific tuning</strong> parameters</li>
+</ul>
 <h2 id="server-based-architecture-performance">Server-Based Architecture Performance<a class="headerlink" href="#server-based-architecture-performance" title="Anchor link to this section">&para;</a></h2>
 <p>The Neo4j Kubernetes Operator uses a server-based architecture where servers self-organize into roles based on database requirements.</p>
 <h3 id="optimal-server-configurations">Optimal Server Configurations<a class="headerlink" href="#optimal-server-configurations" title="Anchor link to this section">&para;</a></h3>
@@ -3402,7 +3404,7 @@
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">spec</span><span class="p">:</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">config</span><span class="p">:</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">    </span><span class="c1"># Cluster communication timeouts (Neo4j 5.26+)</span>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">    </span><span class="nt">dbms.cluster.raft.election_timeout</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;7s&quot;</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">    </span><span class="nt">dbms.cluster.raft.leader_failure_detection_window</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;7s&quot;</span>
 </span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">    </span><span class="nt">dbms.cluster.raft.leader_failure_detection_window</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;30s&quot;</span>
 </span></code></pre></div>
 <blockquote>
@@ -3452,7 +3454,7 @@ The config validator rejects user overrides such as
 </span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="w">    </span><span class="nt">server.memory.query_cache.per_db_cache_num_entries</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;1000&quot;</span>
 </span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>
 </span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="w">    </span><span class="c1"># Transaction timeout (kills long-running transactions)</span>
-</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="w">    </span><span class="nt">dbms.transaction.timeout</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;120s&quot;</span>
+</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="w">    </span><span class="nt">db.transaction.timeout</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;120s&quot;</span>
 </span></code></pre></div>
 <h2 id="monitoring-and-performance-analysis">Monitoring and Performance Analysis<a class="headerlink" href="#monitoring-and-performance-analysis" title="Anchor link to this section">&para;</a></h2>
 <h3 id="key-performance-metrics">Key Performance Metrics<a class="headerlink" href="#key-performance-metrics" title="Anchor link to this section">&para;</a></h3>
@@ -3624,11 +3626,13 @@ The config validator rejects user overrides such as
 <li><strong>Scaling</strong>: Scale servers based on actual database hosting requirements</li>
 <li><strong>Optimization</strong>: Continuously tune configuration based on workload patterns</li>
 </ol>
-<p>For additional performance guidance, see:
-- <a href="../configuration/#best-practices-for-specconfig">Configuration Best Practices</a>
-- <a href="../guides/resource_sizing/">Resource Sizing Guide</a>
-- <a href="../guides/monitoring/">Monitoring Guide</a>
-- <a href="../guides/backup_restore/">Backup and Restore</a></p>
+<p>For additional performance guidance, see:</p>
+<ul>
+<li><a href="../configuration/#best-practices-for-specconfig">Configuration Best Practices</a></li>
+<li><a href="../guides/resource_sizing/">Resource Sizing Guide</a></li>
+<li><a href="../guides/monitoring/">Monitoring Guide</a></li>
+<li><a href="../guides/backup_restore/">Backup and Restore</a></li>
+</ul>
 
 
 

@@ -3660,11 +3660,13 @@
 </span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">      </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;8Gi&quot;</span><span class="w">   </span><span class="c1"># Maximum memory pod can use</span>
 </span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">      </span><span class="nt">cpu</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;4&quot;</span><span class="w">        </span><span class="c1"># Maximum CPU cores pod can use</span>
 </span></code></pre></div>
-<p><strong>Key Concepts:</strong>
-- <strong>Requests</strong>: Kubernetes guarantees these resources are available
-- <strong>Limits</strong>: Pod is throttled/killed if it exceeds these
-- <strong>Memory</strong>: Should have requests = limits (Neo4j doesn't handle swapping well)
-- <strong>CPU</strong>: Can have limits &gt; requests (allows burst processing)</p>
+<p><strong>Key Concepts:</strong></p>
+<ul>
+<li><strong>Requests</strong>: Kubernetes guarantees these resources are available</li>
+<li><strong>Limits</strong>: Pod is throttled/killed if it exceeds these</li>
+<li><strong>Memory</strong>: Should have requests = limits (Neo4j doesn't handle swapping well)</li>
+<li><strong>CPU</strong>: Can have limits &gt; requests (allows burst processing)</li>
+</ul>
 <h3 id="how-the-operator-uses-resources">How the Operator Uses Resources<a class="headerlink" href="#how-the-operator-uses-resources" title="Anchor link to this section">&para;</a></h3>
 <ol>
 <li><strong>Validation</strong>: Ensures minimum 1Gi memory for Neo4j Enterprise (clusters over 3 servers require at least 2Gi/server)</li>
@@ -3889,11 +3891,13 @@
 </span><span id="__span-7-35"><a id="__codelineno-7-35" name="__codelineno-7-35" href="#__codelineno-7-35"></a><span class="w">    </span><span class="nt">server.bolt.thread_pool_max_size</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;400&quot;</span>
 </span><span id="__span-7-36"><a id="__codelineno-7-36" name="__codelineno-7-36" href="#__codelineno-7-36"></a><span class="w">    </span><span class="nt">server.bolt.thread_pool_keep_alive</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;5m&quot;</span>
 </span></code></pre></div>
-<p><strong>JVM Best Practices:</strong>
-- Use G1GC for heaps &gt; 4GB (default in modern JVMs)
-- Enable compressed OOPs for heaps up to 31GB (saves ~30% memory)
-- Set heap initial = max to avoid resize pauses
-- Monitor GC logs to tune pause time goals</p>
+<p><strong>JVM Best Practices:</strong></p>
+<ul>
+<li>Use G1GC for heaps &gt; 4GB (default in modern JVMs)</li>
+<li>Enable compressed OOPs for heaps up to 31GB (saves ~30% memory)</li>
+<li>Set heap initial = max to avoid resize pauses</li>
+<li>Monitor GC logs to tune pause time goals</li>
+</ul>
 <h3 id="query-heavy-workloads">Query-Heavy Workloads<a class="headerlink" href="#query-heavy-workloads" title="Anchor link to this section">&para;</a></h3>
 <p>Optimize for complex analytical queries:</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1beta1</span>
@@ -3918,13 +3922,11 @@
 </span><span id="__span-8-20"><a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a><span class="w">    </span><span class="nt">server.memory.pagecache.size</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;10G&quot;</span><span class="w">    </span><span class="c1"># 31% for data access</span>
 </span><span id="__span-8-21"><a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a>
 </span><span id="__span-8-22"><a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a><span class="w">    </span><span class="c1"># Query optimization</span>
-</span><span id="__span-8-23"><a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a><span class="w">    </span><span class="nt">dbms.cypher.runtime</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;pipelined&quot;</span>
-</span><span id="__span-8-24"><a id="__codelineno-8-24" name="__codelineno-8-24" href="#__codelineno-8-24"></a><span class="w">    </span><span class="nt">dbms.cypher.planner</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;cost&quot;</span>
-</span><span id="__span-8-25"><a id="__codelineno-8-25" name="__codelineno-8-25" href="#__codelineno-8-25"></a><span class="w">    </span><span class="nt">dbms.memory.transaction.total.max</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;4G&quot;</span>
-</span><span id="__span-8-26"><a id="__codelineno-8-26" name="__codelineno-8-26" href="#__codelineno-8-26"></a>
-</span><span id="__span-8-27"><a id="__codelineno-8-27" name="__codelineno-8-27" href="#__codelineno-8-27"></a><span class="w">    </span><span class="c1"># Parallelism</span>
-</span><span id="__span-8-28"><a id="__codelineno-8-28" name="__codelineno-8-28" href="#__codelineno-8-28"></a><span class="w">    </span><span class="nt">dbms.threads.worker_count</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;16&quot;</span>
-</span><span id="__span-8-29"><a id="__codelineno-8-29" name="__codelineno-8-29" href="#__codelineno-8-29"></a><span class="w">    </span><span class="nt">internal.dbms.executors.parallel.enabled</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
+</span><span id="__span-8-23"><a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a><span class="w">    </span><span class="nt">dbms.cypher.planner</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;cost&quot;</span>
+</span><span id="__span-8-24"><a id="__codelineno-8-24" name="__codelineno-8-24" href="#__codelineno-8-24"></a><span class="w">    </span><span class="nt">dbms.memory.transaction.total.max</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;4G&quot;</span>
+</span><span id="__span-8-25"><a id="__codelineno-8-25" name="__codelineno-8-25" href="#__codelineno-8-25"></a>
+</span><span id="__span-8-26"><a id="__codelineno-8-26" name="__codelineno-8-26" href="#__codelineno-8-26"></a><span class="w">    </span><span class="c1"># Parallelism</span>
+</span><span id="__span-8-27"><a id="__codelineno-8-27" name="__codelineno-8-27" href="#__codelineno-8-27"></a><span class="w">    </span><span class="nt">server.threads.worker_count</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;16&quot;</span>
 </span></code></pre></div>
 <h3 id="write-heavy-workloads">Write-Heavy Workloads<a class="headerlink" href="#write-heavy-workloads" title="Anchor link to this section">&para;</a></h3>
 <p>Optimize for high-throughput data ingestion:</p>
@@ -3985,19 +3987,22 @@
 </span><span id="__span-10-23"><a id="__codelineno-10-23" name="__codelineno-10-23" href="#__codelineno-10-23"></a><span class="w">    </span><span class="nt">dbms.memory.transaction.total.max</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;2G&quot;</span>
 </span><span id="__span-10-24"><a id="__codelineno-10-24" name="__codelineno-10-24" href="#__codelineno-10-24"></a>
 </span><span id="__span-10-25"><a id="__codelineno-10-25" name="__codelineno-10-25" href="#__codelineno-10-25"></a><span class="w">    </span><span class="c1"># Vector-specific optimizations</span>
-</span><span id="__span-10-26"><a id="__codelineno-10-26" name="__codelineno-10-26" href="#__codelineno-10-26"></a><span class="w">    </span><span class="nt">dbms.cypher.runtime</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;parallel&quot;</span><span class="w">  </span><span class="c1"># For vector operations</span>
-</span><span id="__span-10-27"><a id="__codelineno-10-27" name="__codelineno-10-27" href="#__codelineno-10-27"></a><span class="w">    </span><span class="nt">dbms.threads.worker_count</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;16&quot;</span>
+</span><span id="__span-10-26"><a id="__codelineno-10-26" name="__codelineno-10-26" href="#__codelineno-10-26"></a><span class="w">    </span><span class="nt">server.threads.worker_count</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;16&quot;</span>
 </span></code></pre></div>
-<p><strong>Vector Index Memory Calculation Example:</strong>
-- 10M vectors with 1536 dimensions (float32)
-- Index size: ~60GB on disk
-- Required OS memory: 0.25 * 60GB = 15GB
-- Total container memory: 8GB (heap) + 10GB (page cache) + 15GB (vector) + 2GB (OS) = 35GB</p>
-<p><strong>Best Practices for Vector Workloads:</strong>
-1. Use 1:4 memory-to-storage ratio for optimal performance
-2. Pre-warm indexes with random queries after startup
-3. Monitor OS memory usage (vector indexes use OS cache, not Neo4j page cache)
-4. Consider dedicated nodes for vector-heavy workloads</p>
+<p><strong>Vector Index Memory Calculation Example:</strong></p>
+<ul>
+<li>10M vectors with 1536 dimensions (float32)</li>
+<li>Index size: ~60GB on disk</li>
+<li>Required OS memory: 0.25 * 60GB = 15GB</li>
+<li>Total container memory: 8GB (heap) + 10GB (page cache) + 15GB (vector) + 2GB (OS) = 35GB</li>
+</ul>
+<p><strong>Best Practices for Vector Workloads:</strong></p>
+<ol>
+<li>Use 1:4 memory-to-storage ratio for optimal performance</li>
+<li>Pre-warm indexes with random queries after startup</li>
+<li>Monitor OS memory usage (vector indexes use OS cache, not Neo4j page cache)</li>
+<li>Consider dedicated nodes for vector-heavy workloads</li>
+</ol>
 <h3 id="mixed-workloads-with-read-replicas">Mixed Workloads with Read Replicas<a class="headerlink" href="#mixed-workloads-with-read-replicas" title="Anchor link to this section">&para;</a></h3>
 <p>Balance reads and writes with dedicated topology:</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1beta1</span>

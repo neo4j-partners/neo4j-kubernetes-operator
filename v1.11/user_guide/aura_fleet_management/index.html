@@ -2932,9 +2932,11 @@
 </span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">aura-fleet-token</span><span class="w">   </span><span class="c1"># the Secret created above</span>
 </span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="w">      </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">token</span><span class="w">               </span><span class="c1"># defaults to &quot;token&quot; if omitted</span>
 </span></code></pre></div>
-<p>The operator will:
-- Merge <code>"fleet-management"</code> into <code>NEO4J_PLUGINS</code> on the next reconcile (causes a rolling pod restart to load the jar)
-- Register the token once the cluster reaches <code>Ready</code> phase</p>
+<p>The operator will:</p>
+<ul>
+<li>Merge <code>"fleet-management"</code> into <code>NEO4J_PLUGINS</code> on the next reconcile (causes a rolling pod restart to load the jar)</li>
+<li>Register the token once the cluster reaches <code>Ready</code> phase</li>
+</ul>
 <h3 id="verify-registration">Verify registration<a class="headerlink" href="#verify-registration" title="Anchor link to this section">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Check status</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>neo4jenterprisecluster<span class="w"> </span>my-cluster<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.auraFleetManagement}&#39;</span>
@@ -3032,10 +3034,12 @@
 <p><strong><code>AuraFleetManagementFailed</code> event</strong></p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>events<span class="w"> </span>--field-selector<span class="w"> </span><span class="nv">reason</span><span class="o">=</span>AuraFleetManagementFailed
 </span></code></pre></div>
-<p>Common causes:
-- Token Secret not found in the correct namespace
-- Incorrect key name in the Secret (default is <code>token</code>)
-- Token has expired — generate a new one in the Aura console and update the Secret</p>
+<p>Common causes:</p>
+<ul>
+<li>Token Secret not found in the correct namespace</li>
+<li>Incorrect key name in the Secret (default is <code>token</code>)</li>
+<li>Token has expired — generate a new one in the Aura console and update the Secret</li>
+</ul>
 <p><strong>Other plugins disappear after enabling Fleet Management</strong></p>
 <p>This should not happen with current operator versions (the additive merge strategy prevents it). If you observe it, verify the operator is up to date and check:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Inspect the full NEO4J_PLUGINS value</span>

@@ -3299,20 +3299,26 @@
 <h1 id="property-sharding-with-neo4j-kubernetes-operator">Property Sharding with Neo4j Kubernetes Operator<a class="headerlink" href="#property-sharding-with-neo4j-kubernetes-operator" title="Anchor link to this section">&para;</a></h1>
 <p>Property Sharding is an advanced Neo4j feature that separates graph structure (nodes and relationships) from properties, enabling better scalability for property-heavy workloads by distributing properties across multiple databases.</p>
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Anchor link to this section">&para;</a></h2>
-<p>Property Sharding decouples data into:
-- <strong>Graph Shard</strong>: Single database containing nodes and relationships WITHOUT properties
-- <strong>Property Shards</strong>: Multiple databases containing properties distributed via hash function
-- <strong>Virtual Database</strong>: Logical database presenting unified view of graph + property shards</p>
+<p>Property Sharding decouples data into:</p>
+<ul>
+<li><strong>Graph Shard</strong>: Single database containing nodes and relationships WITHOUT properties</li>
+<li><strong>Property Shards</strong>: Multiple databases containing properties distributed via hash function</li>
+<li><strong>Virtual Database</strong>: Logical database presenting unified view of graph + property shards</li>
+</ul>
 <h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Anchor link to this section">&para;</a></h2>
 <h3 id="system-requirements">System Requirements<a class="headerlink" href="#system-requirements" title="Anchor link to this section">&para;</a></h3>
-<p><strong>Neo4j Version Requirements:</strong>
-- <strong>Minimum</strong>: Neo4j 2025.12-enterprise (introduced in 2025.12)
-- <strong>Note</strong>: Property sharding is an enterprise-only feature and requires valid licensing
-- <strong>Not available on Aura</strong></p>
-<p><strong>Cluster Infrastructure Requirements:</strong>
-- <strong>Minimum Servers</strong>: 2 servers minimum (3+ recommended for HA graph shard primaries)
-- <strong>Recommended Servers</strong>: 3-7 servers (odd numbers provide better consensus characteristics)
-- <strong>Maximum Recommended</strong>: 20+ servers for very large deployments</p>
+<p><strong>Neo4j Version Requirements:</strong></p>
+<ul>
+<li><strong>Minimum</strong>: Neo4j 2025.12-enterprise (introduced in 2025.12)</li>
+<li><strong>Note</strong>: Property sharding is an enterprise-only feature and requires valid licensing</li>
+<li><strong>Not available on Aura</strong></li>
+</ul>
+<p><strong>Cluster Infrastructure Requirements:</strong></p>
+<ul>
+<li><strong>Minimum Servers</strong>: 2 servers minimum (3+ recommended for HA graph shard primaries)</li>
+<li><strong>Recommended Servers</strong>: 3-7 servers (odd numbers provide better consensus characteristics)</li>
+<li><strong>Maximum Recommended</strong>: 20+ servers for very large deployments</li>
+</ul>
 <p><strong>Resource Requirements per Server:</strong></p>
 <table>
 <thead>
@@ -3350,17 +3356,21 @@
 </tr>
 </tbody>
 </table>
-<p><strong>Additional Requirements:</strong>
-- <strong>Authentication</strong>: Admin secret required (property sharding requires authenticated cluster access)
-- <strong>Storage Class</strong>: Persistent storage class must be specified (e.g., <code>standard</code>, <code>fast-ssd</code>)
-- <strong>Kubernetes Version</strong>: 1.24+ for full operator compatibility
-- <strong>Network Policy</strong>: Allow inter-pod communication on discovery and bolt ports
-- <strong>Cypher Version</strong>: Must use Cypher 25 for sharded database operations</p>
-<p><strong>Performance Considerations:</strong>
-- <strong>Memory Overhead</strong>: 20-30% additional memory required for shard coordination
-- <strong>CPU Overhead</strong>: 20-30% additional CPU required for cross-shard operations
-- <strong>Storage Growth</strong>: Linear growth with number of property shards
-- <strong>Network Traffic</strong>: 2-3x increase in inter-server communication</p>
+<p><strong>Additional Requirements:</strong></p>
+<ul>
+<li><strong>Authentication</strong>: Admin secret required (property sharding requires authenticated cluster access)</li>
+<li><strong>Storage Class</strong>: Persistent storage class must be specified (e.g., <code>standard</code>, <code>fast-ssd</code>)</li>
+<li><strong>Kubernetes Version</strong>: 1.24+ for full operator compatibility</li>
+<li><strong>Network Policy</strong>: Allow inter-pod communication on discovery and bolt ports</li>
+<li><strong>Cypher Version</strong>: Must use Cypher 25 for sharded database operations</li>
+</ul>
+<p><strong>Performance Considerations:</strong></p>
+<ul>
+<li><strong>Memory Overhead</strong>: 20-30% additional memory required for shard coordination</li>
+<li><strong>CPU Overhead</strong>: 20-30% additional CPU required for cross-shard operations</li>
+<li><strong>Storage Growth</strong>: Linear growth with number of property shards</li>
+<li><strong>Network Traffic</strong>: 2-3x increase in inter-server communication</li>
+</ul>
 <p><strong>Capacity Planning Guidelines:</strong></p>
 <p><em>Development/Testing:</em>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">topology</span><span class="p">:</span>
@@ -3610,17 +3620,21 @@ URIs when seeding from dumps or multiple locations.</p>
 </table>
 <h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Anchor link to this section">&para;</a></h2>
 <h3 id="cluster-sizing">Cluster Sizing<a class="headerlink" href="#cluster-sizing" title="Anchor link to this section">&para;</a></h3>
-<p><strong>Development/Testing</strong>:
-- 2 servers minimum (3+ recommended for HA graph shard primaries)
-- 4GB heap per server (absolute minimum for property sharding)
-- 8GB+ total RAM per server (recommended for stable production operation)
-- Property shards: 2-4</p>
-<p><strong>Production</strong>:
-- 3+ servers recommended (HA graph shard primaries)
-- 4-8GB+ heap per server (4GB minimum, 8GB for production)
-- 20GB+ total RAM per server (accounting for system overhead)
-- 2+ CPU cores per server (cross-shard query requirements)
-- Property shards: 4-16 (start conservatively)</p>
+<p><strong>Development/Testing</strong>:</p>
+<ul>
+<li>2 servers minimum (3+ recommended for HA graph shard primaries)</li>
+<li>4GB heap per server (absolute minimum for property sharding)</li>
+<li>8GB+ total RAM per server (recommended for stable production operation)</li>
+<li>Property shards: 2-4</li>
+</ul>
+<p><strong>Production</strong>:</p>
+<ul>
+<li>3+ servers recommended (HA graph shard primaries)</li>
+<li>4-8GB+ heap per server (4GB minimum, 8GB for production)</li>
+<li>20GB+ total RAM per server (accounting for system overhead)</li>
+<li>2+ CPU cores per server (cross-shard query requirements)</li>
+<li>Property shards: 4-16 (start conservatively)</li>
+</ul>
 <h3 id="property-distribution-strategy">Property Distribution Strategy<a class="headerlink" href="#property-distribution-strategy" title="Anchor link to this section">&para;</a></h3>
 <p>Property distribution across shards is automatic; the operator does not provide per-property controls.</p>
 <h3 id="shard-count-recommendations">Shard Count Recommendations<a class="headerlink" href="#shard-count-recommendations" title="Anchor link to this section">&para;</a></h3>

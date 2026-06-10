@@ -3898,19 +3898,23 @@ This project <strong>exclusively uses Kind</strong> for all development and test
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Generate CRDs, RBAC manifests, and Go DeepCopy methods</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>make<span class="w"> </span>manifests<span class="w"> </span>generate
 </span></code></pre></div>
-<p>This command generates:
-- <strong>CRDs</strong>: Custom Resource Definitions in <code>config/crd/bases/</code>
-- <strong>RBAC</strong>: Role-based access control manifests in <code>config/rbac/</code>
-- <strong>DeepCopy Methods</strong>: Go code generation for CRD types</p>
+<p>This command generates:</p>
+<ul>
+<li><strong>CRDs</strong>: Custom Resource Definitions in <code>config/crd/bases/</code></li>
+<li><strong>RBAC</strong>: Role-based access control manifests in <code>config/rbac/</code></li>
+<li><strong>DeepCopy Methods</strong>: Go code generation for CRD types</li>
+</ul>
 <h3 id="3-development-cluster-setup">3. Development Cluster Setup<a class="headerlink" href="#3-development-cluster-setup" title="Anchor link to this section">&para;</a></h3>
 <p>The operator uses <strong>Kind clusters</strong> exclusively for development and testing:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Create development cluster (neo4j-operator-dev)</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>make<span class="w"> </span>dev-cluster
 </span></code></pre></div>
-<p>This creates a Kind cluster with:
-- <strong>Cert-Manager</strong>: v1.20.0 with <code>ca-cluster-issuer</code>
-- <strong>Development-Optimized</strong>: Fast cluster creation for development
-- <strong>Neo4j CRDs</strong>: Automatically installed</p>
+<p>This creates a Kind cluster with:</p>
+<ul>
+<li><strong>Cert-Manager</strong>: v1.20.0 with <code>ca-cluster-issuer</code></li>
+<li><strong>Development-Optimized</strong>: Fast cluster creation for development</li>
+<li><strong>Neo4j CRDs</strong>: Automatically installed</li>
+</ul>
 <h3 id="4-local-development-with-built-images">4. Local Development with Built Images<a class="headerlink" href="#4-local-development-with-built-images" title="Anchor link to this section">&para;</a></h3>
 <p><strong>RECOMMENDED</strong>: Use local image deployment for development to avoid registry dependencies:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Build and deploy operator with local image (RECOMMENDED)</span>
@@ -3927,11 +3931,13 @@ This project <strong>exclusively uses Kind</strong> for all development and test
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>make<span class="w"> </span>deploy-prod-registry<span class="w">  </span><span class="c1"># Deploy prod overlay with ghcr.io image</span>
 </span></code></pre></div></p>
 <p><strong>⚠️ CRITICAL:</strong> The operator must run in-cluster to avoid DNS resolution issues and ensure proper Neo4j cluster formation.</p>
-<p><strong>Benefits of local image development</strong>:
-- <strong>Complete Control</strong>: Use exact code you're working on
-- <strong>No Registry Dependencies</strong>: No need for ghcr.io access or authentication
-- <strong>Rapid Testing</strong>: Build and deploy changes quickly
-- <strong>Consistent Environment</strong>: Same image used for development and testing</p>
+<p><strong>Benefits of local image development</strong>:</p>
+<ul>
+<li><strong>Complete Control</strong>: Use exact code you're working on</li>
+<li><strong>No Registry Dependencies</strong>: No need for ghcr.io access or authentication</li>
+<li><strong>Rapid Testing</strong>: Build and deploy changes quickly</li>
+<li><strong>Consistent Environment</strong>: Same image used for development and testing</li>
+</ul>
 <p><strong>Development logging</strong>:
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Enable debug logging on running operator</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>-n<span class="w"> </span>neo4j-operator-dev<span class="w"> </span>deployment/neo4j-operator-controller-manager<span class="w"> </span><span class="se">\</span>
@@ -4074,26 +4080,34 @@ tests against an already-configured cluster without rebuilding the environment.<
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Emulate complete CI workflow locally with debug logging</span>
 </span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>make<span class="w"> </span>test-ci-local
 </span></code></pre></div>
-<p><strong>What it does:</strong>
-1. <strong>Environment Setup</strong>: Sets <code>CI=true GITHUB_ACTIONS=true</code> environment variables
-2. <strong>Unit Tests</strong>: Runs unit tests with CI constraints and logging
-3. <strong>Integration Tests</strong>: Creates test cluster with 512Mi memory limits (same as CI)
-4. <strong>Debug Logging</strong>: Saves comprehensive logs for troubleshooting
-5. <strong>Cleanup</strong>: Complete environment cleanup</p>
-<p><strong>Generated Debug Files:</strong>
-- <code>logs/ci-local-unit.log</code> - Unit test output with environment info
-- <code>logs/ci-local-integration.log</code> - Integration test output with cluster setup
-- <code>logs/ci-local-cleanup.log</code> - Environment cleanup output</p>
-<p><strong>Key Benefits:</strong>
-- <strong>Identical CI Environment</strong>: Same memory constraints (512Mi vs 1.5Gi local)
-- <strong>Resource Constraint Testing</strong>: Tests memory limits that cause CI failures
-- <strong>Debug Information</strong>: Comprehensive logging for troubleshooting
-- <strong>Complete Workflow</strong>: Unit → Integration → Cleanup (like CI)</p>
-<p><strong>Usage Scenarios:</strong>
-- Debugging CI failures locally
-- Testing memory-constrained environments
-- Validating resource requirements
-- Troubleshooting integration test failures</p>
+<p><strong>What it does:</strong></p>
+<ol>
+<li><strong>Environment Setup</strong>: Sets <code>CI=true GITHUB_ACTIONS=true</code> environment variables</li>
+<li><strong>Unit Tests</strong>: Runs unit tests with CI constraints and logging</li>
+<li><strong>Integration Tests</strong>: Creates test cluster with 512Mi memory limits (same as CI)</li>
+<li><strong>Debug Logging</strong>: Saves comprehensive logs for troubleshooting</li>
+<li><strong>Cleanup</strong>: Complete environment cleanup</li>
+</ol>
+<p><strong>Generated Debug Files:</strong></p>
+<ul>
+<li><code>logs/ci-local-unit.log</code> - Unit test output with environment info</li>
+<li><code>logs/ci-local-integration.log</code> - Integration test output with cluster setup</li>
+<li><code>logs/ci-local-cleanup.log</code> - Environment cleanup output</li>
+</ul>
+<p><strong>Key Benefits:</strong></p>
+<ul>
+<li><strong>Identical CI Environment</strong>: Same memory constraints (512Mi vs 1.5Gi local)</li>
+<li><strong>Resource Constraint Testing</strong>: Tests memory limits that cause CI failures</li>
+<li><strong>Debug Information</strong>: Comprehensive logging for troubleshooting</li>
+<li><strong>Complete Workflow</strong>: Unit → Integration → Cleanup (like CI)</li>
+</ul>
+<p><strong>Usage Scenarios:</strong></p>
+<ul>
+<li>Debugging CI failures locally</li>
+<li>Testing memory-constrained environments</li>
+<li>Validating resource requirements</li>
+<li>Troubleshooting integration test failures</li>
+</ul>
 <p><strong>Troubleshooting Commands (automatically provided on failure):</strong>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Check operator logs</span>
 </span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>neo4j-operator-system<span class="w"> </span>deployment/neo4j-operator-controller-manager
@@ -4146,11 +4160,13 @@ tests against an already-configured cluster without rebuilding the environment.<
 </span></code></pre></div>
 <h2 id="code-generation">Code Generation<a class="headerlink" href="#code-generation" title="Anchor link to this section">&para;</a></h2>
 <h3 id="when-to-regenerate-code">When to Regenerate Code<a class="headerlink" href="#when-to-regenerate-code" title="Anchor link to this section">&para;</a></h3>
-<p>Run code generation after:
-- Adding/modifying CRD fields
-- Changing CRD validation tags
-- Adding new CRDs
-- Updating RBAC permissions</p>
+<p>Run code generation after:</p>
+<ul>
+<li>Adding/modifying CRD fields</li>
+<li>Changing CRD validation tags</li>
+<li>Adding new CRDs</li>
+<li>Updating RBAC permissions</li>
+</ul>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="c1"># Full regeneration</span>
 </span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>make<span class="w"> </span>manifests<span class="w"> </span>generate
 </span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a>

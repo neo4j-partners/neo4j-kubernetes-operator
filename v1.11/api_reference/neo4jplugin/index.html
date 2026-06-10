@@ -3964,10 +3964,12 @@
 </span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">NEO4J_APOC_IMPORT_FILE_ENABLED</span>
 </span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">  </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;true&#39;</span>
 </span></code></pre></div></p>
-<p><strong>Notes</strong>:
-- APOC settings are applied via environment variables in Neo4j 5.26+
-- Bloom/GDS/GenAI settings are applied via ConfigMap (standalone) or runtime configuration (cluster)
-- Automatic dependency resolution and security defaults are applied as needed</p>
+<p><strong>Notes</strong>:</p>
+<ul>
+<li>APOC settings are applied via environment variables in Neo4j 5.26+</li>
+<li>Bloom/GDS/GenAI settings are applied via ConfigMap (standalone) or runtime configuration (cluster)</li>
+<li>Automatic dependency resolution and security defaults are applied as needed</li>
+</ul>
 <h2 id="api-version">API Version<a class="headerlink" href="#api-version" title="Anchor link to this section">&para;</a></h2>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1beta1</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Neo4jPlugin</span>
@@ -4421,17 +4423,19 @@ it via <code>--cacert</code>.</p>
 <p><strong>Init container image</strong> defaults to <code>curlimages/curl:8.5.0</code>. Override
 via the Helm chart's <code>pluginInitContainer.image</code> value when installing
 into air-gapped clusters that need a mirrored image.</p>
-<p><strong>Limitations</strong>:
-- <code>spec.source.type</code> must be <code>url</code> or <code>custom</code> — the entrypoint's
+<p><strong>Limitations</strong>:</p>
+<ul>
+<li><code>spec.source.type</code> must be <code>url</code> or <code>custom</code> — the entrypoint's
   <code>official</code>/<code>community</code> types resolve via an internal manifest the
-  user can't point at a verifiable URL, so they're rejected at admission.
-- <code>spec.dependencies</code> are rejected on a VerifiedDownload plugin —
+  user can't point at a verifiable URL, so they're rejected at admission.</li>
+<li><code>spec.dependencies</code> are rejected on a VerifiedDownload plugin —
   mixed install paths in a single CR confuse the supply-chain story.
   Create each dependency as its own <code>Neo4jPlugin</code> CR with its own
-  <code>source.url</code> + <code>checksum</code>.
-- Every pod restart re-runs the init container, which re-downloads the
+  <code>source.url</code> + <code>checksum</code>.</li>
+<li>Every pod restart re-runs the init container, which re-downloads the
   JAR. For large JARs (GDS ≈ 30 MB) this is bandwidth-wasteful; a
-  caching PVC is a planned follow-up.</p>
+  caching PVC is a planned follow-up.</li>
+</ul>
 <h3 id="duplicate-cr-protection-all-install-modes">Duplicate-CR protection (all install modes)<a class="headerlink" href="#duplicate-cr-protection-all-install-modes" title="Anchor link to this section">&para;</a></h3>
 <p>Two <code>Neo4jPlugin</code> CRs in the same namespace that target the <strong>same
 <code>spec.clusterRef</code></strong> with the <strong>same <code>spec.name</code></strong> would race on the
@@ -4485,11 +4489,13 @@ the unwanted CR. The surviving CR reconciles on its next watch event
 </span><span id="__span-5-29"><a id="__codelineno-5-29" name="__codelineno-5-29" href="#__codelineno-5-29"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;apoc.*&quot;</span>
 </span><span id="__span-5-30"><a id="__codelineno-5-30" name="__codelineno-5-30" href="#__codelineno-5-30"></a><span class="w">    </span><span class="nt">securityPolicy</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;open&quot;</span>
 </span></code></pre></div>
-<p><strong>Result</strong>: Updates <code>my-cluster-server</code> StatefulSet with:
-- <code>NEO4J_PLUGINS=["apoc"]</code>
-- <code>NEO4J_APOC_EXPORT_FILE_ENABLED=true</code>
-- <code>NEO4J_APOC_IMPORT_FILE_ENABLED=true</code>
-- Security settings for APOC procedures</p>
+<p><strong>Result</strong>: Updates <code>my-cluster-server</code> StatefulSet with:</p>
+<ul>
+<li><code>NEO4J_PLUGINS=["apoc"]</code></li>
+<li><code>NEO4J_APOC_EXPORT_FILE_ENABLED=true</code></li>
+<li><code>NEO4J_APOC_IMPORT_FILE_ENABLED=true</code></li>
+<li>Security settings for APOC procedures</li>
+</ul>
 <h3 id="graph-data-science-plugin-for-standalone">Graph Data Science Plugin for Standalone<a class="headerlink" href="#graph-data-science-plugin-for-standalone" title="Anchor link to this section">&para;</a></h3>
 <p>Install GDS plugin with dependencies on a Neo4jEnterpriseStandalone:</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1beta1</span>
@@ -4539,11 +4545,13 @@ the unwanted CR. The surviving CR reconciles on its next watch event
 </span><span id="__span-6-45"><a id="__codelineno-6-45" name="__codelineno-6-45" href="#__codelineno-6-45"></a><span class="w">    </span><span class="nt">cpuLimit</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;1&quot;</span><span class="w">         </span><span class="c1"># CPU for graph algorithms</span>
 </span><span id="__span-6-46"><a id="__codelineno-6-46" name="__codelineno-6-46" href="#__codelineno-6-46"></a><span class="w">    </span><span class="nt">threadPoolSize</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">8</span><span class="w">     </span><span class="c1"># Parallel processing</span>
 </span></code></pre></div>
-<p><strong>Result</strong>: Updates <code>my-standalone</code> StatefulSet with:
-- <code>NEO4J_PLUGINS=["apoc", "graph-data-science"]</code> (dependencies included)
-- GDS-specific environment variables
-- Security settings for both APOC and GDS procedures
-- Enhanced resource allocation</p>
+<p><strong>Result</strong>: Updates <code>my-standalone</code> StatefulSet with:</p>
+<ul>
+<li><code>NEO4J_PLUGINS=["apoc", "graph-data-science"]</code> (dependencies included)</li>
+<li>GDS-specific environment variables</li>
+<li>Security settings for both APOC and GDS procedures</li>
+<li>Enhanced resource allocation</li>
+</ul>
 <h3 id="custom-plugin-example">Custom Plugin Example<a class="headerlink" href="#custom-plugin-example" title="Anchor link to this section">&para;</a></h3>
 <p>Install a plugin from a custom registry:</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1beta1</span>
@@ -4666,18 +4674,22 @@ the unwanted CR. The surviving CR reconciles on its next watch event
 <h2 id="automatic-security-configuration">Automatic Security Configuration<a class="headerlink" href="#automatic-security-configuration" title="Anchor link to this section">&para;</a></h2>
 <p><strong>New Feature</strong>: Some plugins require specific security settings to function properly. The operator automatically applies these settings even when no user configuration is provided.</p>
 <h3 id="plugins-with-automatic-security">Plugins with Automatic Security<a class="headerlink" href="#plugins-with-automatic-security" title="Anchor link to this section">&para;</a></h3>
-<p><strong>Bloom Plugin</strong>:
-- Automatically applies required security settings for proper operation
-- No manual configuration needed for basic functionality
-- Automatically configured settings:
-  - <code>NEO4J_DBMS_SECURITY_PROCEDURES_UNRESTRICTED=bloom.*</code>
-  - <code>NEO4J_DBMS_SECURITY_HTTP_AUTH_ALLOWLIST=/,/browser.*,/bloom.*</code>
-  - <code>NEO4J_SERVER_UNMANAGED_EXTENSION_CLASSES=com.neo4j.bloom.server=/bloom</code></p>
-<p><strong>Graph Data Science Plugin</strong>:
-- Automatically applies default security settings
-- User security configuration can override defaults
-- Automatically configured settings:
-  - <code>NEO4J_DBMS_SECURITY_PROCEDURES_UNRESTRICTED=gds.*,apoc.load.*</code></p>
+<p><strong>Bloom Plugin</strong>:</p>
+<ul>
+<li>Automatically applies required security settings for proper operation</li>
+<li>No manual configuration needed for basic functionality</li>
+<li>Automatically configured settings:</li>
+<li><code>NEO4J_DBMS_SECURITY_PROCEDURES_UNRESTRICTED=bloom.*</code></li>
+<li><code>NEO4J_DBMS_SECURITY_HTTP_AUTH_ALLOWLIST=/,/browser.*,/bloom.*</code></li>
+<li><code>NEO4J_SERVER_UNMANAGED_EXTENSION_CLASSES=com.neo4j.bloom.server=/bloom</code></li>
+</ul>
+<p><strong>Graph Data Science Plugin</strong>:</p>
+<ul>
+<li>Automatically applies default security settings</li>
+<li>User security configuration can override defaults</li>
+<li>Automatically configured settings:</li>
+<li><code>NEO4J_DBMS_SECURITY_PROCEDURES_UNRESTRICTED=gds.*,apoc.load.*</code></li>
+</ul>
 <h3 id="examples-with-automatic-security">Examples with Automatic Security<a class="headerlink" href="#examples-with-automatic-security" title="Anchor link to this section">&para;</a></h3>
 <p><strong>Bloom Plugin (Zero Configuration)</strong>:
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1beta1</span>
@@ -4802,15 +4814,19 @@ the unwanted CR. The surviving CR reconciles on its next watch event
 </ul>
 <h2 id="supported-plugin-sources">Supported Plugin Sources<a class="headerlink" href="#supported-plugin-sources" title="Anchor link to this section">&para;</a></h2>
 <h3 id="official-repository">Official Repository<a class="headerlink" href="#official-repository" title="Anchor link to this section">&para;</a></h3>
-<p>Neo4j's official plugin repository (recommended for production):
-- APOC (Awesome Procedures On Cypher)
-- Neo4j Streams
-- Neo4j GraphQL</p>
+<p>Neo4j's official plugin repository (recommended for production):</p>
+<ul>
+<li>APOC (Awesome Procedures On Cypher)</li>
+<li>Neo4j Streams</li>
+<li>Neo4j GraphQL</li>
+</ul>
 <h3 id="community-repository">Community Repository<a class="headerlink" href="#community-repository" title="Anchor link to this section">&para;</a></h3>
-<p>Community-maintained plugins:
-- Graph Data Science (GDS)
-- Additional APOC extensions
-- Third-party plugins</p>
+<p>Community-maintained plugins:</p>
+<ul>
+<li>Graph Data Science (GDS)</li>
+<li>Additional APOC extensions</li>
+<li>Third-party plugins</li>
+</ul>
 <h3 id="custom-registry">Custom Registry<a class="headerlink" href="#custom-registry" title="Anchor link to this section">&para;</a></h3>
 <p>Private plugin registries with authentication support.</p>
 <h3 id="direct-url">Direct URL<a class="headerlink" href="#direct-url" title="Anchor link to this section">&para;</a></h3>
@@ -5132,10 +5148,12 @@ the unwanted CR. The surviving CR reconciles on its next watch event
 <li><strong>Configuration</strong>: Use environment variables for APOC, neo4j.conf for other plugins</li>
 <li><strong>Troubleshooting</strong>: Enable debug logging for plugin installation issues</li>
 </ol>
-<p>For detailed plugin-specific guides, see:
-- <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/tree/main/examples/plugins">Plugin Examples</a>
-- <a href="../../user_guide/guides/troubleshooting/">Troubleshooting Guide</a>
-- <a href="../../user_guide/guides/performance/">Performance Tuning</a></p>
+<p>For detailed plugin-specific guides, see:</p>
+<ul>
+<li><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/tree/main/examples/plugins">Plugin Examples</a></li>
+<li><a href="../../user_guide/guides/troubleshooting/">Troubleshooting Guide</a></li>
+<li><a href="../../user_guide/guides/performance/">Performance Tuning</a></li>
+</ul>
 
 
 

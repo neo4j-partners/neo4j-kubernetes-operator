@@ -3515,18 +3515,22 @@
 </ul>
 <h2 id="how-it-works">How it works<a class="headerlink" href="#how-it-works" title="Anchor link to this section">&para;</a></h2>
 <p>The operator picks the restore method based on the target kind referenced by <code>clusterRef</code>. The Neo4j docs flag <code>neo4j-admin database restore</code> as <strong>unsafe on clusters</strong>, so the two paths diverge:</p>
-<p><strong><code>Neo4jEnterpriseCluster</code> target</strong> — Cypher over Bolt, no Job:
-1. Resolves <code>source.backupRef</code> (or <code>source.storage</code>) into the exact <code>.backup</code> <strong>file</strong> URI of the latest successful run, e.g. <code>s3://bucket/path/&lt;cr-name&gt;/&lt;dbname&gt;-&lt;timestamp&gt;.backup</code>. Neo4j's <code>CloudSeedProvider</code> seeds a single database from one file (a directory URI fails with <code>Can't open seed file</code>); when that file is a differential, Neo4j resolves and applies the full + differential chain from the same directory automatically.
-   - <strong>Mixed-cadence chains (<code>spec.chainFromBackup</code>)</strong>: "latest successful run" is scoped to the <strong>referenced CR</strong>, not the shared chain directory. Reference the <strong>differential</strong> CR to restore the latest state; referencing the parent <strong>full</strong> CR seeds from its latest full snapshot — the newer diffs are <em>not</em> applied. Restoring via a chain-parent CR emits a <code>RestoreFromChainParent</code> Warning event naming the differential children, so a restore intending "latest" that references the full CR isn't a silent surprise. To pin an arbitrary run, use <code>source.type: storage</code> with <code>backupPath</code> set to the exact <code>.backup</code> file.
-2. Projects cloud credentials onto cluster pods via <code>spec.extraEnvFrom</code> (cluster CR) — required so the JVM's AWS/GCP/Azure SDK can authenticate. The operator emits an actionable error if the Secret isn't projected; set the cluster annotation <code>neo4j.com/auto-inherit-seed-creds=true</code> to auto-patch.
-3. Opens a Bolt session and runs <code>SHOW DATABASES</code> to detect whether the target database already exists.
-4. Existing database → <code>CALL dbms.[cluster.]recreateDatabase($db, {seedURI: $uri})</code>. Preserves user/role privileges, atomically swaps the database on every server, no <code>DROP</code> needed.
-5. New database → <code>CREATE DATABASE $db OPTIONS { seedURI: '&lt;file&gt;' } WAIT</code>.
-6. <code>CREATE … WAIT</code> blocks until online, but <code>dbms.recreateDatabase</code> is <strong>asynchronous</strong> — it returns once the recreate is scheduled. The operator therefore polls <code>SHOW DATABASE</code> until every allocation reports <code>online</code> before marking the restore <code>Completed</code>; if the seed fails the restore goes <code>Failed</code> with the database's <code>statusMessage</code>.</p>
-<p><strong><code>Neo4jEnterpriseStandalone</code> target</strong> — Kubernetes Job:
-1. Spawns a restore Job that runs <code>neo4j-admin database restore --from-path=$(ls &lt;dir&gt;/&lt;dbname&gt;-*.backup | tail -1) &lt;dbname&gt;</code>. The shell substitution picks the latest run in the chain by default.
-2. If <code>stopCluster: true</code>, the operator scales down the StatefulSet first and mounts <code>data-{name}-server-0</code> directly into the Job container for offline access.
-3. After the Job succeeds, automatically runs <code>CREATE DATABASE &lt;dbname&gt;</code> (new) or <code>START DATABASE &lt;dbname&gt;</code> (existed but stopped) via Bolt.</p>
+<p><strong><code>Neo4jEnterpriseCluster</code> target</strong> — Cypher over Bolt, no Job:</p>
+<ol>
+<li>Resolves <code>source.backupRef</code> (or <code>source.storage</code>) into the exact <code>.backup</code> <strong>file</strong> URI of the latest successful run, e.g. <code>s3://bucket/path/&lt;cr-name&gt;/&lt;dbname&gt;-&lt;timestamp&gt;.backup</code>. Neo4j's <code>CloudSeedProvider</code> seeds a single database from one file (a directory URI fails with <code>Can't open seed file</code>); when that file is a differential, Neo4j resolves and applies the full + differential chain from the same directory automatically.</li>
+<li><strong>Mixed-cadence chains (<code>spec.chainFromBackup</code>)</strong>: "latest successful run" is scoped to the <strong>referenced CR</strong>, not the shared chain directory. Reference the <strong>differential</strong> CR to restore the latest state; referencing the parent <strong>full</strong> CR seeds from its latest full snapshot — the newer diffs are <em>not</em> applied. Restoring via a chain-parent CR emits a <code>RestoreFromChainParent</code> Warning event naming the differential children, so a restore intending "latest" that references the full CR isn't a silent surprise. To pin an arbitrary run, use <code>source.type: storage</code> with <code>backupPath</code> set to the exact <code>.backup</code> file.</li>
+<li>Projects cloud credentials onto cluster pods via <code>spec.extraEnvFrom</code> (cluster CR) — required so the JVM's AWS/GCP/Azure SDK can authenticate. The operator emits an actionable error if the Secret isn't projected; set the cluster annotation <code>neo4j.com/auto-inherit-seed-creds=true</code> to auto-patch.</li>
+<li>Opens a Bolt session and runs <code>SHOW DATABASES</code> to detect whether the target database already exists.</li>
+<li>Existing database → <code>CALL dbms.[cluster.]recreateDatabase($db, {seedURI: $uri})</code>. Preserves user/role privileges, atomically swaps the database on every server, no <code>DROP</code> needed.</li>
+<li>New database → <code>CREATE DATABASE $db OPTIONS { seedURI: '&lt;file&gt;' } WAIT</code>.</li>
+<li><code>CREATE … WAIT</code> blocks until online, but <code>dbms.recreateDatabase</code> is <strong>asynchronous</strong> — it returns once the recreate is scheduled. The operator therefore polls <code>SHOW DATABASE</code> until every allocation reports <code>online</code> before marking the restore <code>Completed</code>; if the seed fails the restore goes <code>Failed</code> with the database's <code>statusMessage</code>.</li>
+</ol>
+<p><strong><code>Neo4jEnterpriseStandalone</code> target</strong> — Kubernetes Job:</p>
+<ol>
+<li>Spawns a restore Job that runs <code>neo4j-admin database restore --from-path=$(ls &lt;dir&gt;/&lt;dbname&gt;-*.backup | tail -1) &lt;dbname&gt;</code>. The shell substitution picks the latest run in the chain by default.</li>
+<li>If <code>stopCluster: true</code>, the operator scales down the StatefulSet first and mounts <code>data-{name}-server-0</code> directly into the Job container for offline access.</li>
+<li>After the Job succeeds, automatically runs <code>CREATE DATABASE &lt;dbname&gt;</code> (new) or <code>START DATABASE &lt;dbname&gt;</code> (existed but stopped) via Bolt.</li>
+</ol>
 <p><strong><code>Neo4jShardedDatabase</code> target</strong> — rejected. Sharded restore is owned by the <code>Neo4jShardedDatabase</code> CRD; set <code>spec.replaceExisting: true</code> + <code>spec.force: true</code> on the target sharded DB and reference the backup via <code>spec.seedBackupRef</code>. The Neo4jRestore validator emits an actionable error pointing at this flow.</p>
 <p><strong>No manual post-restore Cypher is required</strong> for either path.</p>
 <h2 id="neo4jrestore-spec">Neo4jRestore Spec<a class="headerlink" href="#neo4jrestore-spec" title="Anchor link to this section">&para;</a></h2>
@@ -3585,9 +3589,11 @@
 </tr>
 </tbody>
 </table>
-<p><strong>Target compatibility</strong>: <code>clusterRef</code> can reference either:
-- <code>Neo4jEnterpriseCluster</code> — for HA cluster restore operations
-- <code>Neo4jEnterpriseStandalone</code> — for single-node restore operations</p>
+<p><strong>Target compatibility</strong>: <code>clusterRef</code> can reference either:</p>
+<ul>
+<li><code>Neo4jEnterpriseCluster</code> — for HA cluster restore operations</li>
+<li><code>Neo4jEnterpriseStandalone</code> — for single-node restore operations</li>
+</ul>
 <h3 id="restoresource">RestoreSource<a class="headerlink" href="#restoresource" title="Anchor link to this section">&para;</a></h3>
 <p>Defines the source of the backup to restore from.</p>
 <table>
@@ -4343,10 +4349,12 @@
 <li>After the restore Job succeeds, the StatefulSet is scaled back up.</li>
 <li>The operator then issues <code>CREATE DATABASE</code> or <code>START DATABASE</code> as described above.</li>
 </ol>
-<p>Use <code>stopCluster: true</code> when:
-- The database is too large for an online restore
-- You need to restore at the storage level rather than via <code>neo4j-admin</code>
-- The cluster is in an inconsistent state that prevents online operations</p>
+<p>Use <code>stopCluster: true</code> when:</p>
+<ul>
+<li>The database is too large for an online restore</li>
+<li>You need to restore at the storage level rather than via <code>neo4j-admin</code></li>
+<li>The cluster is in an inconsistent state that prevents online operations</li>
+</ul>
 <h2 id="examples">Examples<a class="headerlink" href="#examples" title="Anchor link to this section">&para;</a></h2>
 <h3 id="simple-restore-from-a-neo4jbackup-reference">Simple Restore from a Neo4jBackup Reference<a class="headerlink" href="#simple-restore-from-a-neo4jbackup-reference" title="Anchor link to this section">&para;</a></h3>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1beta1</span>
