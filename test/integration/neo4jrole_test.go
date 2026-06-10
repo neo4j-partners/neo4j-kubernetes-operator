@@ -137,13 +137,19 @@ var _ = Describe("Neo4jRole end-to-end", Label("core"), func() {
 		time.Sleep(5 * time.Second)
 
 		By("Manually revoking ACCESS to simulate drift")
-		cmd := exec.CommandContext(ctx, "kubectl", "exec",
-			podName, "-n", namespace.Name, "--",
-			"cypher-shell", "--format", "plain", "-u", "neo4j", "-p", adminPass,
-			"REVOKE ACCESS ON DATABASE neo4j FROM analytics_reader",
-		)
-		out, err := cmd.CombinedOutput()
-		Expect(err).ToNot(HaveOccurred(), "cypher-shell REVOKE failed; output: %s", string(out))
+		// Retry transient system-DB conflicts (GQLSTATUS 25N11) — a manual
+		// admin write can briefly collide with concurrent system-DB activity.
+		Eventually(func() error {
+			cmd := exec.CommandContext(ctx, "kubectl", "exec",
+				podName, "-n", namespace.Name, "--",
+				"cypher-shell", "--format", "plain", "-u", "neo4j", "-p", adminPass,
+				"REVOKE ACCESS ON DATABASE neo4j FROM analytics_reader",
+			)
+			if out, err := cmd.CombinedOutput(); err != nil {
+				return fmt.Errorf("cypher-shell REVOKE failed; output: %s", string(out))
+			}
+			return nil
+		}, 30*time.Second, 2*time.Second).Should(Succeed())
 
 		By("Waiting for the operator to re-apply the GRANT (drift reconciliation)")
 		Eventually(func() bool {

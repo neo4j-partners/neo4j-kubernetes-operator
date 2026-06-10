@@ -384,67 +384,15 @@ func NewClientForEnterprise(cluster *neo4jv1beta1.Neo4jEnterpriseCluster, k8sCli
 		poolMetrics:       poolMetrics,
 	}
 
-	// Start background health monitoring
-	go client.startHealthMonitoring()
-
 	return client, nil
 }
 
-// startHealthMonitoring runs background health checks and pool optimization
-func (c *Client) startHealthMonitoring() {
-	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
-
-	for range ticker.C {
-		c.updatePoolMetrics()
-		c.checkCircuitBreakerState()
-	}
-}
-
-// updatePoolMetrics collects connection pool metrics
-func (c *Client) updatePoolMetrics() {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
-	// Update metrics timestamp
-	c.poolMetrics.LastHealthCheck = time.Now()
-
-	// Collect detailed connection pool metrics
-	// Note: These are estimates since the Go driver doesn't expose detailed pool metrics
-	// In production, you would integrate with Neo4j's JMX metrics or monitoring APIs
-
-	// Simulate pool metrics based on driver state and usage patterns
-	if c.driver != nil {
-		// Estimate connection usage based on recent activity
-		now := time.Now()
-		timeSinceLastCheck := now.Sub(c.poolMetrics.LastHealthCheck)
-
-		// Simulate active connections (would be actual metrics from driver)
-		activeEstimate := int64(5) // Base active connections
-		if timeSinceLastCheck < time.Minute {
-			activeEstimate = int64(10) // Higher activity recently
-		}
-
-		c.poolMetrics.ActiveConnections = activeEstimate
-		c.poolMetrics.TotalConnections = activeEstimate + 5 // Assume some idle connections
-		c.poolMetrics.IdleConnections = c.poolMetrics.TotalConnections - c.poolMetrics.ActiveConnections
-
-		// Update query execution time (rolling average)
-		if c.poolMetrics.QueryExecutionTime == 0 {
-			c.poolMetrics.QueryExecutionTime = 50 * time.Millisecond // Initial estimate
-		} else {
-			// Exponential moving average with new sample
-			newSample := 45 * time.Millisecond // Would be actual measurement
-			alpha := 0.1
-			c.poolMetrics.QueryExecutionTime = time.Duration(
-				float64(c.poolMetrics.QueryExecutionTime)*(1-alpha) +
-					float64(newSample)*alpha,
-			)
-		}
-	}
-}
-
-// checkCircuitBreakerState evaluates and updates circuit breaker state
+// checkCircuitBreakerState evaluates and updates circuit breaker state.
+// Called synchronously at the start of executeWithCircuitBreaker so an Open
+// circuit can transition to HalfOpen once resetTimeout has elapsed — there is
+// no longer a background ticker driving this (a previous implementation leaked
+// a never-stopped goroutine + ticker per client, and every controller builds a
+// client per reconcile).
 func (c *Client) checkCircuitBreakerState() {
 	c.circuitBreaker.mutex.Lock()
 	defer c.circuitBreaker.mutex.Unlock()
@@ -461,6 +409,10 @@ func (c *Client) checkCircuitBreakerState() {
 
 // executeWithCircuitBreaker wraps Neo4j operations with circuit breaker pattern
 func (c *Client) executeWithCircuitBreaker(ctx context.Context, operation func(ctx context.Context) error) error {
+	// Re-evaluate the breaker first so an Open circuit can move to HalfOpen
+	// once resetTimeout has elapsed (previously driven by a background ticker).
+	c.checkCircuitBreakerState()
+
 	c.circuitBreaker.mutex.RLock()
 	state := c.circuitBreaker.state
 	c.circuitBreaker.mutex.RUnlock()
@@ -1129,18 +1081,53 @@ func (c *Client) RevokeRoleFromUser(ctx context.Context, roleName, username stri
 
 // ExecutePrivilegeStatement executes a privilege statement
 func (c *Client) ExecutePrivilegeStatement(ctx context.Context, statement string) error {
-	session := c.driver.NewSession(ctx, neo4j.SessionConfig{
-		AccessMode:   neo4j.AccessModeWrite,
-		DatabaseName: "system",
-	})
-	defer session.Close(ctx)
-
-	_, err := session.Run(ctx, statement, nil)
-	if err != nil {
-		return fmt.Errorf("failed to execute privilege statement: %w", err)
+	// Privilege DDL runs as an auto-commit statement (session.Run), which —
+	// unlike a managed transaction — gets no built-in retry. Concurrent admin
+	// writes on the system database can collide with a transient
+	// "conflicting transaction state" (GQLSTATUS 25N11) that Neo4j explicitly
+	// asks the client to retry. Bounded retries keep the operator's own
+	// privilege writes resilient without changing transaction semantics.
+	const maxAttempts = 4
+	var lastErr error
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		session := c.driver.NewSession(ctx, neo4j.SessionConfig{
+			AccessMode:   neo4j.AccessModeWrite,
+			DatabaseName: "system",
+		})
+		_, err := session.Run(ctx, statement, nil)
+		_ = session.Close(ctx)
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+		if !isTransientNeo4jError(err) || attempt == maxAttempts {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(time.Duration(attempt) * 250 * time.Millisecond):
+		}
 	}
+	return fmt.Errorf("failed to execute privilege statement: %w", lastErr)
+}
 
-	return nil
+// isTransientNeo4jError reports whether err is a transient Neo4j error worth
+// retrying. It trusts the driver's own classification first, then falls back to
+// matching the GQLSTATUS 25N11 "conflicting transaction state" markers, which
+// 2025+/2026 servers surface and which may not be classified retryable by the
+// driver across versions.
+func isTransientNeo4jError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if neo4j.IsRetryable(err) {
+		return true
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "25n11") ||
+		strings.Contains(msg, "conflicting transaction state") ||
+		strings.Contains(msg, "please retry the transaction")
 }
 
 // CheckUpgradeCompatibility checks if an upgrade to the specified version is compatible
