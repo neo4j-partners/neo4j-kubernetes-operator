@@ -380,6 +380,7 @@ func setupProductionControllers(mgr ctrl.Manager) error {
 				Recorder:        mgr.GetEventRecorderFor("neo4j-plugin-controller"),
 				RequeueAfter:    controller.GetTestRequeueAfter(),
 				PluginInitImage: os.Getenv("PLUGIN_INIT_CONTAINER_IMAGE"),
+				Validator:       validation.NewPluginValidator(),
 			},
 		},
 		{
@@ -506,6 +507,7 @@ func setupDevelopmentControllers(mgr ctrl.Manager, controllers []string) error {
 				Recorder:        mgr.GetEventRecorderFor("neo4j-plugin-controller"),
 				RequeueAfter:    controller.GetTestRequeueAfter(),
 				PluginInitImage: os.Getenv("PLUGIN_INIT_CONTAINER_IMAGE"),
+				Validator:       validation.NewPluginValidator(),
 			}, "Neo4jPlugin"
 		},
 		"shardeddatabase": func() (interface{ SetupWithManager(ctrl.Manager) error }, string) {
