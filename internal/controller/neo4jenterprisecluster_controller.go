@@ -1448,24 +1448,43 @@ func (r *Neo4jEnterpriseClusterReconciler) reconcileMutableResource(ctx context.
 		}
 	case *networkingv1.NetworkPolicy:
 		e := existing.(*networkingv1.NetworkPolicy)
-		if !equality.Semantic.DeepEqual(e.Spec, d.Spec) || !equality.Semantic.DeepEqual(e.Labels, d.Labels) {
+		changed := false
+		if !equality.Semantic.DeepEqual(e.Spec, d.Spec) {
 			e.Spec = d.Spec
-			e.Labels = d.Labels
+			changed = true
+		}
+		if applyOwnedMetadata(e, d.Annotations, d.Labels) {
+			changed = true
+		}
+		if changed {
 			logger.Info("Updating NetworkPolicy", "name", e.Name)
 			return r.Update(ctx, e)
 		}
 	case *networkingv1.Ingress:
 		e := existing.(*networkingv1.Ingress)
-		if !equality.Semantic.DeepEqual(e.Spec, d.Spec) || !equality.Semantic.DeepEqual(e.Annotations, d.Annotations) {
+		changed := false
+		if !equality.Semantic.DeepEqual(e.Spec, d.Spec) {
 			e.Spec = d.Spec
-			e.Annotations = d.Annotations
+			changed = true
+		}
+		if applyOwnedMetadata(e, d.Annotations, d.Labels) {
+			changed = true
+		}
+		if changed {
 			logger.Info("Updating Ingress", "name", e.Name)
 			return r.Update(ctx, e)
 		}
 	case *certmanagerv1.Certificate:
 		e := existing.(*certmanagerv1.Certificate)
+		changed := false
 		if !equality.Semantic.DeepEqual(e.Spec, d.Spec) {
 			e.Spec = d.Spec
+			changed = true
+		}
+		if applyOwnedMetadata(e, d.Annotations, d.Labels) {
+			changed = true
+		}
+		if changed {
 			logger.Info("Updating Certificate", "name", e.Name)
 			return r.Update(ctx, e)
 		}
@@ -1512,10 +1531,7 @@ func applyDesiredServiceFields(existing, desired *corev1.Service) bool {
 		existing.Spec.PublishNotReadyAddresses = desired.Spec.PublishNotReadyAddresses
 		changed = true
 	}
-	if mergeStringMapInto(&existing.Annotations, desired.Annotations) {
-		changed = true
-	}
-	if mergeStringMapInto(&existing.Labels, desired.Labels) {
+	if applyOwnedMetadata(existing, desired.Annotations, desired.Labels) {
 		changed = true
 	}
 	return changed
@@ -1549,23 +1565,6 @@ func mergeServicePorts(existing, desired []corev1.ServicePort) []corev1.ServiceP
 		}
 	}
 	return out
-}
-
-// mergeStringMapInto overlays desired onto *target (creating it if nil),
-// preserving keys present only in *target (e.g. annotations added by other
-// controllers). Returns true when *target changed.
-func mergeStringMapInto(target *map[string]string, desired map[string]string) bool {
-	changed := false
-	if *target == nil && len(desired) > 0 {
-		*target = map[string]string{}
-	}
-	for k, v := range desired {
-		if cur, ok := (*target)[k]; !ok || cur != v {
-			(*target)[k] = v
-			changed = true
-		}
-	}
-	return changed
 }
 
 // createOrUpdateUnstructuredResource handles unstructured resources like ExternalSecrets

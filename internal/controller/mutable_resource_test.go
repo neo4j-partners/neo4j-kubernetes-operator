@@ -82,7 +82,11 @@ func TestApplyDesiredServiceFields_NoChangeNoChurn(t *testing.T) {
 	existing.Spec.ClusterIP = "10.0.0.5" // server-assigned, absent from desired
 	desired := svc()
 
+	// First apply stamps owned-key bookkeeping (a one-time change).
+	assert.True(t, applyDesiredServiceFields(existing, desired),
+		"first apply stamps ownership bookkeeping")
+	// Steady state: an identical desired spec must not churn ResourceVersion.
 	assert.False(t, applyDesiredServiceFields(existing, desired),
-		"identical desired spec must not report a change")
+		"identical desired spec on a stamped service must not report a change")
 	assert.Equal(t, "10.0.0.5", existing.Spec.ClusterIP, "ClusterIP still preserved")
 }

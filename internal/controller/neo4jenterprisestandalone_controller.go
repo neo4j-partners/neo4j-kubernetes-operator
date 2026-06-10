@@ -906,11 +906,18 @@ func (r *Neo4jEnterpriseStandaloneReconciler) reconcileNetworkPolicy(ctx context
 		}
 		return fmt.Errorf("failed to get NetworkPolicy: %w", err)
 	}
-	// Update only when the spec actually drifted — avoids ResourceVersion
-	// churn on every reconcile.
+	// Update only when the spec or owned metadata actually drifted — avoids
+	// ResourceVersion churn, and applyOwnedMetadata preserves labels written by
+	// other controllers rather than stomping them.
+	changed := false
 	if !reflect.DeepEqual(existing.Spec, desired.Spec) {
 		existing.Spec = desired.Spec
-		existing.Labels = desired.Labels
+		changed = true
+	}
+	if applyOwnedMetadata(existing, desired.Annotations, desired.Labels) {
+		changed = true
+	}
+	if changed {
 		logger.Info("Updating NetworkPolicy", "name", desired.Name)
 		return r.Update(ctx, existing)
 	}
@@ -943,12 +950,22 @@ func (r *Neo4jEnterpriseStandaloneReconciler) reconcileIngress(ctx context.Conte
 			return fmt.Errorf("failed to get Ingress: %w", err)
 		}
 	} else {
-		// Update existing Ingress
-		existing.Spec = ingress.Spec
-		existing.Annotations = ingress.Annotations
-		logger.Info("Updating Ingress", "name", ingress.Name)
-		if err := r.Update(ctx, existing); err != nil {
-			return fmt.Errorf("failed to update Ingress: %w", err)
+		// Update only on real drift; applyOwnedMetadata merges desired
+		// annotations/labels while preserving keys written by cert-manager or
+		// the ingress controller (a wholesale replace would fight them).
+		changed := false
+		if !reflect.DeepEqual(existing.Spec, ingress.Spec) {
+			existing.Spec = ingress.Spec
+			changed = true
+		}
+		if applyOwnedMetadata(existing, ingress.Annotations, ingress.Labels) {
+			changed = true
+		}
+		if changed {
+			logger.Info("Updating Ingress", "name", ingress.Name)
+			if err := r.Update(ctx, existing); err != nil {
+				return fmt.Errorf("failed to update Ingress: %w", err)
+			}
 		}
 	}
 
