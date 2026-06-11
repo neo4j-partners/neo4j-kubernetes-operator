@@ -767,8 +767,13 @@ func (r *Neo4jEnterpriseStandaloneReconciler) reconcileStatefulSet(ctx context.C
 			// Spec-level fields are cheap to set unconditionally — they don't roll
 			// pods on their own and CreateOrUpdate skips the Update when nothing
 			// changed. UpdateStrategy must apply so a Rolling↔Recreate switch takes
-			// effect; Replicas is always 1 for a standalone.
-			statefulSet.Spec.Replicas = desiredSpec.Replicas
+			// effect; Replicas is normally 1 for a standalone — but leave it alone
+			// while a restore is quiescing the instance (it scales the STS to 0).
+			// Otherwise we race the restore controller and the scale-to-0 never
+			// sticks — the standalone analog of the cluster gate (#117 / #196).
+			if !replicasReconciliationPaused(standalone) {
+				statefulSet.Spec.Replicas = desiredSpec.Replicas
+			}
 			statefulSet.Spec.UpdateStrategy = desiredSpec.UpdateStrategy
 
 			// Apply the desired template only when our desired hash differs from the

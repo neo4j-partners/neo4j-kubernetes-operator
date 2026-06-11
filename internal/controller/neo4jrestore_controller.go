@@ -483,9 +483,9 @@ func (r *Neo4jRestoreReconciler) handleRestoreSuccess(ctx context.Context, resto
 			// Non-fatal — the finalizer path will clean it up if needed.
 		}
 
-		// Wait for cluster to be ready
-		if err := r.waitForClusterReady(ctx, cluster); err != nil {
-			logger.Error(err, "Cluster not ready after restore")
+		// Wait for the standalone to be ready
+		if err := r.waitForClusterReady(ctx, restore, cluster); err != nil {
+			logger.Error(err, "Standalone not ready after restore")
 			r.updateRestoreStatus(ctx, restore, StatusFailed, fmt.Sprintf("Cluster not ready after restore: %v", err))
 			return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 		}
@@ -533,8 +533,11 @@ func (r *Neo4jRestoreReconciler) handleRestoreSuccess(ctx context.Context, resto
 
 // createOrStartDatabase registers the restored database with Neo4j.
 // If the database already exists (overwrite restore) it starts it; otherwise it creates it.
-func (r *Neo4jRestoreReconciler) createOrStartDatabase(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore, cluster *neo4jv1beta1.Neo4jEnterpriseCluster) error {
-	neo4jClient, err := r.createNeo4jClient(ctx, cluster)
+func (r *Neo4jRestoreReconciler) createOrStartDatabase(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore, _ *neo4jv1beta1.Neo4jEnterpriseCluster) error {
+	// Job-path restore is standalone-only (clusters use the Cypher seed/recreate
+	// path, rule 75), so connect via the standalone's `<name>-service`, not the
+	// cluster `<name>-client` routing service a standalone doesn't have (#187).
+	neo4jClient, err := r.newStandaloneRestoreClient(ctx, restore)
 	if err != nil {
 		return fmt.Errorf("failed to create Neo4j client: %w", err)
 	}
@@ -729,9 +732,10 @@ func (r *Neo4jRestoreReconciler) validateRestore(ctx context.Context, restore *n
 	return nil
 }
 
-func (r *Neo4jRestoreReconciler) checkDatabaseExists(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore, cluster *neo4jv1beta1.Neo4jEnterpriseCluster) error {
-	// Create Neo4j client
-	neo4jClient, err := r.createNeo4jClient(ctx, cluster)
+func (r *Neo4jRestoreReconciler) checkDatabaseExists(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore, _ *neo4jv1beta1.Neo4jEnterpriseCluster) error {
+	// Job-path restore is standalone-only (rule 75); connect via the
+	// standalone's `<name>-service` (#187).
+	neo4jClient, err := r.newStandaloneRestoreClient(ctx, restore)
 	if err != nil {
 		return fmt.Errorf("failed to create Neo4j client: %w", err)
 	}
@@ -1655,7 +1659,7 @@ func (r *Neo4jRestoreReconciler) refuseRestoreIfPodsRunning(ctx context.Context,
 	pods := &corev1.PodList{}
 	if err := r.List(ctx, pods,
 		client.InNamespace(cluster.Namespace),
-		client.MatchingLabels(resources.ServerPodSelector(cluster.Name))); err != nil {
+		client.MatchingLabels(resources.StandalonePodSelector(cluster.Name))); err != nil {
 		return fmt.Errorf("failed to list server pods for restore preflight: %w", err)
 	}
 	if len(pods.Items) > 0 {
@@ -1672,12 +1676,18 @@ func (r *Neo4jRestoreReconciler) refuseRestoreIfPodsRunning(ctx context.Context,
 // cannot run concurrently.
 func (r *Neo4jRestoreReconciler) setRestoreInProgressAnnotation(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore, cluster *neo4jv1beta1.Neo4jEnterpriseCluster) error {
 	return retry.RetryOnConflict(retry.DefaultBackoff, func() error {
-		latest := &neo4jv1beta1.Neo4jEnterpriseCluster{}
+		// The Job restore path is standalone-only (clusters use the Cypher
+		// path, rule 75), so the in-progress marker lives on the
+		// Neo4jEnterpriseStandalone — NOT a Neo4jEnterpriseCluster, which
+		// doesn't exist for a standalone target (#196). `cluster` is the
+		// standaloneAsCluster wrapper, so its name/namespace resolve the
+		// standalone.
+		latest := &neo4jv1beta1.Neo4jEnterpriseStandalone{}
 		if err := r.Get(ctx, client.ObjectKeyFromObject(cluster), latest); err != nil {
 			return err
 		}
 		if existing, ok := latest.Annotations[RestoreInProgressAnnotation]; ok && existing != restore.Name {
-			return fmt.Errorf("cluster %q already has a restore in progress by Neo4jRestore %q; cannot start %q", cluster.Name, existing, restore.Name)
+			return fmt.Errorf("standalone %q already has a restore in progress by Neo4jRestore %q; cannot start %q", cluster.Name, existing, restore.Name)
 		}
 		if latest.Annotations == nil {
 			latest.Annotations = map[string]string{}
@@ -1696,10 +1706,14 @@ func (r *Neo4jRestoreReconciler) setRestoreInProgressAnnotation(ctx context.Cont
 // never set or was already cleared.
 func (r *Neo4jRestoreReconciler) clearRestoreInProgressAnnotation(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore, clusterName, clusterNamespace string) error {
 	return retry.RetryOnConflict(retry.DefaultBackoff, func() error {
-		latest := &neo4jv1beta1.Neo4jEnterpriseCluster{}
+		// Mirror of setRestoreInProgressAnnotation: the marker lives on the
+		// Neo4jEnterpriseStandalone. A NotFound here means the target was a
+		// true cluster (which never sets this marker — Cypher path) or the
+		// standalone is already gone, so there's nothing to clear.
+		latest := &neo4jv1beta1.Neo4jEnterpriseStandalone{}
 		if err := r.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: clusterNamespace}, latest); err != nil {
 			if errors.IsNotFound(err) {
-				return nil // cluster gone — nothing to clean
+				return nil // standalone gone / not a standalone target — nothing to clean
 			}
 			return err
 		}
@@ -1757,7 +1771,7 @@ func (r *Neo4jRestoreReconciler) stopCluster(ctx context.Context, cluster *neo4j
 		case <-ticker.C:
 			pods := &corev1.PodList{}
 			if err := r.List(ctx, pods, client.InNamespace(cluster.Namespace),
-				client.MatchingLabels(resources.ServerPodSelector(cluster.Name))); err != nil {
+				client.MatchingLabels(resources.StandalonePodSelector(cluster.Name))); err != nil {
 				logger.Error(err, "Failed to list pods")
 				continue
 			}
@@ -1833,9 +1847,9 @@ func (r *Neo4jRestoreReconciler) startCluster(ctx context.Context, cluster *neo4
 	return nil
 }
 
-func (r *Neo4jRestoreReconciler) waitForClusterReady(ctx context.Context, cluster *neo4jv1beta1.Neo4jEnterpriseCluster) error {
+func (r *Neo4jRestoreReconciler) waitForClusterReady(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore, cluster *neo4jv1beta1.Neo4jEnterpriseCluster) error {
 	logger := log.FromContext(ctx)
-	logger.Info("Waiting for cluster to be ready", "cluster", cluster.Name)
+	logger.Info("Waiting for standalone to be ready", "standalone", cluster.Name)
 
 	timeout := time.After(10 * time.Minute)
 	ticker := time.NewTicker(30 * time.Second)
@@ -1849,7 +1863,7 @@ func (r *Neo4jRestoreReconciler) waitForClusterReady(ctx context.Context, cluste
 			// Check if all pods are ready
 			pods := &corev1.PodList{}
 			if err := r.List(ctx, pods, client.InNamespace(cluster.Namespace),
-				client.MatchingLabels(resources.ServerPodSelector(cluster.Name))); err != nil {
+				client.MatchingLabels(resources.StandalonePodSelector(cluster.Name))); err != nil {
 				logger.Error(err, "Failed to list pods")
 				continue
 			}
@@ -1869,8 +1883,11 @@ func (r *Neo4jRestoreReconciler) waitForClusterReady(ctx context.Context, cluste
 			}
 
 			if allReady {
-				// Verify Neo4j connectivity
-				neo4jClient, err := r.createNeo4jClient(ctx, cluster)
+				// Verify Neo4j connectivity over the standalone's `<name>-service`
+				// (this readiness wait is on the standalone Job path); the cluster
+				// `<name>-client` routing service doesn't exist for a standalone
+				// (#187), so the cluster client would never connect.
+				neo4jClient, err := r.newStandaloneRestoreClient(ctx, restore)
 				if err != nil {
 					logger.Info("Failed to create Neo4j client, retrying...")
 					continue
@@ -2167,6 +2184,27 @@ func (r *Neo4jRestoreReconciler) startClusterCypherRestore(
 					"cluster", cluster.Name)
 				r.updateRestoreStatus(ctx, restore, StatusPending,
 					fmt.Sprintf("Auto-inherited seed credentials Secret %q onto cluster %q; waiting for rolling restart", storage.Cloud.CredentialsSecretRef, cluster.Name))
+				return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
+			}
+			// The creds are in spec.extraEnvFrom, but the cluster controller
+			// rolls the StatefulSet asynchronously to apply them. Issuing the
+			// seedURI restore before that rollout finishes seeds against pods
+			// that still lack the creds — the JVM's AWS/GCP/Azure SDK then
+			// fails ("Unable to load region …"), and the restore terminal-fails
+			// with no retry (#190). Gate on the rollout: stay Pending+requeue
+			// until the STS pod template carries the creds Secret AND every pod
+			// is updated to that template and Ready.
+			rolledOut, rolloutErr := r.seedCredsRolledOut(ctx, cluster, storage.Cloud.CredentialsSecretRef)
+			if rolloutErr != nil {
+				logger.Error(rolloutErr, "Failed to check seed-creds rollout status")
+				r.updateRestoreStatus(ctx, restore, StatusPending,
+					fmt.Sprintf("Waiting to verify seed-credentials rollout on cluster %q: %v", cluster.Name, rolloutErr))
+				return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
+			}
+			if !rolledOut {
+				logger.Info("Waiting for StatefulSet to roll out seed credentials before restoring", "cluster", cluster.Name)
+				r.updateRestoreStatus(ctx, restore, StatusPending,
+					fmt.Sprintf("Waiting for cluster %q server pods to roll out seed credentials Secret %q", cluster.Name, storage.Cloud.CredentialsSecretRef))
 				return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
 			}
 		}
@@ -2573,6 +2611,62 @@ func (r *Neo4jRestoreReconciler) isRestoreTargetTrueCluster(ctx context.Context,
 
 func (r *Neo4jRestoreReconciler) createNeo4jClient(_ context.Context, cluster *neo4jv1beta1.Neo4jEnterpriseCluster) (*neo4j.Client, error) {
 	return neo4j.NewClientForEnterprise(cluster, r.Client, cluster.Spec.Auth.AdminSecret)
+}
+
+// newStandaloneRestoreClient builds a Bolt client for the Neo4jEnterpriseStandalone
+// the restore targets. The Job-based restore path runs only for standalones
+// (clusters use the Cypher seed/recreate path, rule 75). A standalone's Bolt
+// service is `<name>-service` (NewClientForEnterpriseStandalone), whereas
+// createNeo4jClient / NewClientForEnterprise target the cluster `<name>-client`
+// routing service a standalone doesn't have — using that connected to a
+// nonexistent service (#187).
+func (r *Neo4jRestoreReconciler) newStandaloneRestoreClient(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore) (*neo4j.Client, error) {
+	standalone := &neo4jv1beta1.Neo4jEnterpriseStandalone{}
+	if err := r.Get(ctx, types.NamespacedName{Name: restore.Spec.ClusterRef, Namespace: restore.Namespace}, standalone); err != nil {
+		return nil, fmt.Errorf("failed to get standalone %q for restore: %w", restore.Spec.ClusterRef, err)
+	}
+	return neo4j.NewClientForEnterpriseStandalone(standalone, r.Client, getStandaloneAdminSecretName(standalone))
+}
+
+// seedCredsRolledOut reports whether the cluster's StatefulSet has fully rolled
+// out the seed-credentials Secret (projected via spec.extraEnvFrom) onto its
+// server pods — i.e. the pod template's container references the Secret in
+// envFrom AND every replica is updated to that template and Ready. Until then a
+// seedURI restore runs against pods that still lack the creds, so the seed
+// fetch fails (#190). The template-has-Secret check is essential: a fully
+// rolled-out OLD template (without the creds) is also "ready", so readiness
+// alone is not enough.
+func (r *Neo4jRestoreReconciler) seedCredsRolledOut(ctx context.Context, cluster *neo4jv1beta1.Neo4jEnterpriseCluster, secretName string) (bool, error) {
+	sts := &appsv1.StatefulSet{}
+	if err := r.Get(ctx, types.NamespacedName{Name: cluster.Name + "-server", Namespace: cluster.Namespace}, sts); err != nil {
+		return false, err
+	}
+	if !podTemplateReferencesSecretEnvFrom(&sts.Spec.Template, secretName) {
+		return false, nil // cluster controller hasn't applied extraEnvFrom to the template yet
+	}
+	desired := int32(1)
+	if sts.Spec.Replicas != nil {
+		desired = *sts.Spec.Replicas
+	}
+	// Rollout complete: status reflects the current template, and every pod is
+	// on the updated revision and Ready.
+	return sts.Status.ObservedGeneration == sts.Generation &&
+		sts.Status.UpdatedReplicas == desired &&
+		sts.Status.ReadyReplicas == desired, nil
+}
+
+// podTemplateReferencesSecretEnvFrom reports whether any container in the pod
+// template projects the named Secret via envFrom (how spec.extraEnvFrom is
+// wired onto the neo4j container).
+func podTemplateReferencesSecretEnvFrom(tmpl *corev1.PodTemplateSpec, secretName string) bool {
+	for _, c := range tmpl.Spec.Containers {
+		for _, ef := range c.EnvFrom {
+			if ef.SecretRef != nil && ef.SecretRef.Name == secretName {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (r *Neo4jRestoreReconciler) cleanupRestoreJobs(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore) error {
