@@ -26,6 +26,13 @@ Verify CRDs are installed:
 
 ## Quick Start
 
+{{- /* spec.image is an object (repo/tag), not a string. Split the
+       repo:tag default image so the rendered manifests are schema-valid.
+       tag = segment after the last ':'; repo = everything before it (so a
+       registry:port prefix survives). */ -}}
+{{- $tag := .Values.neo4j.defaultImage | splitList ":" | last }}
+{{- $repo := trimSuffix (printf ":%s" $tag) .Values.neo4j.defaultImage }}
+
 1. Create a secret for Neo4j authentication:
    kubectl create secret generic neo4j-admin-secret \
      --from-literal=username=neo4j \
@@ -38,7 +45,11 @@ Verify CRDs are installed:
    metadata:
      name: my-neo4j
    spec:
-     image: {{ .Values.neo4j.defaultImage }}
+     image:
+       repo: {{ $repo | quote }}
+       tag: {{ $tag | quote }}
+     storage:
+       size: 10Gi
      auth:
        adminSecret: neo4j-admin-secret
    EOF
@@ -50,9 +61,13 @@ Verify CRDs are installed:
    metadata:
      name: my-cluster
    spec:
-     image: {{ .Values.neo4j.defaultImage }}
+     image:
+       repo: {{ $repo | quote }}
+       tag: {{ $tag | quote }}
      topology:
        servers: 3
+     storage:
+       size: 10Gi
      auth:
        adminSecret: neo4j-admin-secret
    EOF

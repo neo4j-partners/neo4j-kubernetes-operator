@@ -279,9 +279,10 @@ func (v *StandaloneValidator) validateConfig(standalone *neo4jv1beta1.Neo4jEnter
 	// SSL policies are managed end-to-end by the operator via spec.tls.
 	// Reject user-set dbms.ssl.policy.* / server.bolt.tls_level /
 	// server.directories.certificates. Same rationale as the cluster
-	// ConfigValidator — server.config.strict_validation.enabled=false
-	// means Neo4j silently honours later duplicates, so without this
-	// rejection a user could silently downgrade TLS posture via spec.config.
+	// ConfigValidator — Neo4j runs with server.config.strict_validation.
+	// enabled=true, so a duplicate key from spec.config would make Neo4j
+	// fail to start; rejecting it up front keeps the user from wedging the
+	// pod (and from silently downgrading TLS posture via spec.config).
 	for key, value := range standalone.Spec.Config {
 		if strings.HasPrefix(key, "dbms.ssl.policy.") ||
 			key == "server.bolt.tls_level" ||
