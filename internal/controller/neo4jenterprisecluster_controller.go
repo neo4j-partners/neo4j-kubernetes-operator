@@ -1609,11 +1609,15 @@ func (r *Neo4jEnterpriseClusterReconciler) isUpgradeRequired(ctx context.Context
 		return false
 	}
 
-	// Skip if upgrade is already in progress
-	if cluster.Status.UpgradeStatus != nil &&
-		(cluster.Status.UpgradeStatus.Phase == "InProgress" || cluster.Status.UpgradeStatus.Phase == "Paused") {
+	// "Paused" is an explicit manual hold (autoPauseOnFailure) — never auto-resume.
+	if cluster.Status.UpgradeStatus != nil && cluster.Status.UpgradeStatus.Phase == "Paused" {
 		return false
 	}
+	// A persisted "InProgress" no longer hard-blocks re-entry. If the operator
+	// restarted mid-upgrade, the image-drift check below is still true, so the
+	// upgrade resumes (ExecuteRollingUpgrade re-detects the current partition
+	// and continues) instead of wedging forever; once the upgrade has actually
+	// finished, the live image matches desired and the check returns false.
 
 	// Check the unified server StatefulSet for image drift
 	serverSts := &appsv1.StatefulSet{}

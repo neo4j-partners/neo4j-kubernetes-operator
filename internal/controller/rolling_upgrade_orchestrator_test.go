@@ -265,3 +265,40 @@ func TestUpgradeServers_InitialStagingImage(t *testing.T) {
 		t.Error("expected upgrade-timestamp annotation to be set")
 	}
 }
+
+// TestUpdateUpgradeStatus_PersistsCompleted pins the status-write fix: the
+// "Completed" transition is persisted via a refetch (so a stale reconcile-start
+// object can't lose it), stamps CompletionTime and the new Version, and mirrors
+// back onto the in-memory object.
+func TestUpdateUpgradeStatus_PersistsCompleted(t *testing.T) {
+	scheme := makeUpgradeScheme()
+	cluster := clusterForUpgrade("mycluster", "default", "5.26.0-enterprise", "2025.01.0-enterprise", 3)
+	cluster.Status.UpgradeStatus = &neo4jv1beta1.UpgradeStatus{Phase: "InProgress"}
+
+	fc := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(cluster).
+		WithStatusSubresource(cluster).
+		Build()
+	orch := &RollingUpgradeOrchestrator{Client: fc}
+
+	orch.updateUpgradeStatus(context.Background(), cluster, "Completed", "done", "")
+
+	latest := &neo4jv1beta1.Neo4jEnterpriseCluster{}
+	if err := fc.Get(context.Background(), types.NamespacedName{Name: "mycluster", Namespace: "default"}, latest); err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if latest.Status.UpgradeStatus == nil || latest.Status.UpgradeStatus.Phase != "Completed" {
+		t.Fatalf("Completed phase not persisted: %+v", latest.Status.UpgradeStatus)
+	}
+	if latest.Status.UpgradeStatus.CompletionTime == nil {
+		t.Error("CompletionTime must be set on Completed")
+	}
+	if latest.Status.Version != "2025.01.0-enterprise" {
+		t.Errorf("Version = %q, want the target tag", latest.Status.Version)
+	}
+	// In-memory object is mirrored for callers that read it afterwards.
+	if cluster.Status.UpgradeStatus.Phase != "Completed" {
+		t.Errorf("in-memory mirror not updated: %q", cluster.Status.UpgradeStatus.Phase)
+	}
+}

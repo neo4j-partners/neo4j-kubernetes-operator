@@ -469,23 +469,37 @@ func (r *RollingUpgradeOrchestrator) updateUpgradeStatus(
 		return
 	}
 
-	cluster.Status.UpgradeStatus.Phase = phase
-	cluster.Status.UpgradeStatus.CurrentStep = currentStep
-	cluster.Status.UpgradeStatus.Message = currentStep
-
-	if lastError != "" {
-		cluster.Status.UpgradeStatus.LastError = lastError
-	}
-
-	if phase == "Completed" {
-		now := metav1.Now()
-		cluster.Status.UpgradeStatus.CompletionTime = &now
-		cluster.Status.LastUpgradeTime = &now
-		cluster.Status.Version = cluster.Spec.Image.Tag
-	}
-
-	if err := r.Status().Update(ctx, cluster); err != nil {
-		// Log error but don't fail the upgrade status update
+	// Refetch + RetryOnConflict on every status write. The upgrade runs across
+	// minutes, so the reconcile-start `cluster` object's ResourceVersion goes
+	// stale; a bare Status().Update then conflicts and was silently swallowed —
+	// which could leave even a SUCCESSFUL upgrade stuck in "InProgress" (its
+	// final "Completed" write lost), permanently disabling further orchestrated
+	// upgrades for the CR. Mirrors updateClusterStatus.
+	err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+		latest := &neo4jv1beta1.Neo4jEnterpriseCluster{}
+		if getErr := r.Get(ctx, client.ObjectKeyFromObject(cluster), latest); getErr != nil {
+			return getErr
+		}
+		if latest.Status.UpgradeStatus == nil {
+			return nil
+		}
+		latest.Status.UpgradeStatus.Phase = phase
+		latest.Status.UpgradeStatus.CurrentStep = currentStep
+		latest.Status.UpgradeStatus.Message = currentStep
+		if lastError != "" {
+			latest.Status.UpgradeStatus.LastError = lastError
+		}
+		if phase == "Completed" {
+			now := metav1.Now()
+			latest.Status.UpgradeStatus.CompletionTime = &now
+			latest.Status.LastUpgradeTime = &now
+			latest.Status.Version = cluster.Spec.Image.Tag
+		}
+		// Keep the in-memory object consistent for callers that read it after.
+		cluster.Status.UpgradeStatus = latest.Status.UpgradeStatus
+		return r.Status().Update(ctx, latest)
+	})
+	if err != nil {
 		log.FromContext(ctx).Error(err, "Failed to update cluster status in updateUpgradeStatus")
 	}
 }

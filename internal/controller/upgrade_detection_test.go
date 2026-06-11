@@ -196,3 +196,66 @@ func TestIsUpgradeRequiredSingleStatefulSet(t *testing.T) {
 		t.Fatalf("expected upgrade not to be required when images match")
 	}
 }
+
+// TestIsUpgradeRequired_InProgressResumable pins the resumability fix: a
+// persisted "InProgress" upgrade no longer hard-blocks re-entry (so an operator
+// restart mid-upgrade resumes instead of wedging), while "Paused" stays an
+// explicit manual hold.
+func TestIsUpgradeRequired_InProgressResumable(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = neo4jv1beta1.AddToScheme(scheme)
+	_ = appsv1.AddToScheme(scheme)
+	_ = corev1.AddToScheme(scheme)
+
+	newCluster := func(phase string) *neo4jv1beta1.Neo4jEnterpriseCluster {
+		return &neo4jv1beta1.Neo4jEnterpriseCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: "demo", Namespace: "default"},
+			Spec: neo4jv1beta1.Neo4jEnterpriseClusterSpec{
+				Image:    neo4jv1beta1.ImageSpec{Repo: "neo4j", Tag: "2025.01.0-enterprise"},
+				Topology: neo4jv1beta1.TopologyConfiguration{Servers: 3},
+			},
+			Status: neo4jv1beta1.Neo4jEnterpriseClusterStatus{
+				Phase:         "Ready",
+				UpgradeStatus: &neo4jv1beta1.UpgradeStatus{Phase: phase},
+			},
+		}
+	}
+	newSTS := func(image string) *appsv1.StatefulSet {
+		return &appsv1.StatefulSet{
+			ObjectMeta: metav1.ObjectMeta{Name: "demo-server", Namespace: "default"},
+			Spec: appsv1.StatefulSetSpec{
+				Replicas: ptr.To(int32(3)),
+				Template: corev1.PodTemplateSpec{Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{Name: "neo4j", Image: image}},
+				}},
+			},
+		}
+	}
+
+	t.Run("InProgress + image drift resumes", func(t *testing.T) {
+		c := newCluster("InProgress")
+		fc := fake.NewClientBuilder().WithScheme(scheme).WithObjects(c, newSTS("neo4j:5.26.0-enterprise")).Build()
+		r := &Neo4jEnterpriseClusterReconciler{Client: fc}
+		if !r.isUpgradeRequired(context.Background(), c) {
+			t.Fatal("InProgress with image drift must re-enter (resume), not wedge")
+		}
+	})
+
+	t.Run("InProgress + images match is done", func(t *testing.T) {
+		c := newCluster("InProgress")
+		fc := fake.NewClientBuilder().WithScheme(scheme).WithObjects(c, newSTS("neo4j:2025.01.0-enterprise")).Build()
+		r := &Neo4jEnterpriseClusterReconciler{Client: fc}
+		if r.isUpgradeRequired(context.Background(), c) {
+			t.Fatal("InProgress with matching image must report no upgrade required")
+		}
+	})
+
+	t.Run("Paused is an explicit hold", func(t *testing.T) {
+		c := newCluster("Paused")
+		fc := fake.NewClientBuilder().WithScheme(scheme).WithObjects(c, newSTS("neo4j:5.26.0-enterprise")).Build()
+		r := &Neo4jEnterpriseClusterReconciler{Client: fc}
+		if r.isUpgradeRequired(context.Background(), c) {
+			t.Fatal("Paused must never auto-resume even with image drift")
+		}
+	})
+}
