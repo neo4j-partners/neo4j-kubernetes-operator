@@ -298,6 +298,52 @@ func TestConfigValidator_DeprecatedKeys(t *testing.T) {
 	}
 }
 
+// TestConfigValidator_RejectsDbFormat pins that db.format is rejected for ANY
+// value — including "block" — because the operator emits db.format=block itself
+// and runs with strict_validation=true, so a user-set db.format is a duplicate
+// key that fails Neo4j startup. The rejection message must describe the key as
+// operator-managed, not tell the user to "use block" (which the old check did
+// even when the user had already passed block).
+func TestConfigValidator_RejectsDbFormat(t *testing.T) {
+	validator := NewConfigValidator()
+
+	for _, value := range []string{"block", "high_limit", "standard", "aligned"} {
+		t.Run("db.format="+value, func(t *testing.T) {
+			cluster := &neo4jv1beta1.Neo4jEnterpriseCluster{
+				Spec: neo4jv1beta1.Neo4jEnterpriseClusterSpec{
+					Config: map[string]string{"db.format": value},
+				},
+			}
+
+			errs := validator.Validate(cluster)
+
+			var dbFormatErr *field.Error
+			for _, e := range errs {
+				if e.Field == "spec.config.db.format" {
+					dbFormatErr = e
+					break
+				}
+			}
+			if dbFormatErr == nil {
+				t.Fatalf("expected db.format=%q to be rejected, got errors: %v", value, errs)
+			}
+			// Exactly one error for the key (the old code double-reported
+			// standard/high_limit via both the deprecated map and a dedicated
+			// check).
+			count := 0
+			for _, e := range errs {
+				if e.Field == "spec.config.db.format" {
+					count++
+				}
+			}
+			assert.Equal(t, 1, count, "expected exactly one db.format error, got %d: %v", count, errs)
+			assert.Equal(t, field.ErrorTypeForbidden, dbFormatErr.Type)
+			assert.Contains(t, dbFormatErr.Detail, "managed by the operator")
+			assert.NotContains(t, dbFormatErr.Detail, "use block", "message must not tell the user to set block")
+		})
+	}
+}
+
 func TestConfigValidator_ValidDiscoveryVersion(t *testing.T) {
 	validator := NewConfigValidator()
 

@@ -254,7 +254,7 @@ TLS is configured via `spec.tls`, not `spec.config`. Setting any of the followin
 - `dbms.ssl.policy.{bolt,https,cluster}.*` (full SSL policy block is operator-managed)
 - `server.directories.certificates`
 
-The pre-5.x `dbms.connector.{https,bolt}.*` keys are deprecated and superseded by the `server.*` namespace (`spec.tls` replaces the TLS-related ones). Reason for rejecting the keys above: Neo4j runs with `server.config.strict_validation.enabled=false`, so duplicate keys silently override each other; the validator blocks user values that would shadow operator-managed ones. See the [TLS certificates guide](tls_configuration.md) for the full TLS surface.
+The pre-5.x `dbms.connector.{https,bolt}.*` keys are deprecated and superseded by the `server.*` namespace (`spec.tls` replaces the TLS-related ones). Reason for rejecting the keys above: the operator runs Neo4j with `server.config.strict_validation.enabled=true`, so a duplicate or unknown key in the rendered `neo4j.conf` makes Neo4j **fail to start** rather than being silently dropped; the validator blocks user values that would shadow operator-managed ones before they can wedge startup. See the [TLS certificates guide](tls_configuration.md) for the full TLS surface.
 
 ### Cluster discovery — operator-managed, off-limits in `spec.config`
 
@@ -275,7 +275,7 @@ See the [Clustering guide](clustering.md) for what the operator writes for each 
 | `dbms.memory.*` | Deprecated | `server.memory.*` |
 | `dbms.connector.*` | Deprecated | `server.bolt.*` / `server.http.*` / `server.https.*` (or `spec.tls`) |
 | `causal_clustering.*` | Removed in 5.x | `dbms.cluster.*` |
-| `db.format=standard` / `db.format=high_limit` | Deprecated since 5.23 | `db.format=block` |
+| `db.format` (any value) | Operator-managed | Don't set in `spec.config` — the operator already emits `db.format=block` and the validator rejects a user-set `db.format` (a duplicate key fails startup under strict validation). `standard`/`high_limit` are also deprecated since 5.23. |
 | `server.groups` | Deprecated | `initial.server.tags` |
 | `dbms.logs.query.*` | Deprecated namespace | `db.logs.query.*` |
 | `dbms.cluster.role` | Removed in 5.0 | `SHOW DATABASES` / `SHOW SERVERS` |
@@ -355,7 +355,7 @@ If you're moving from Neo4j 4.x or an early 5.x release:
 2. `dbms.connector.*` → `server.bolt.*` / `server.http.*` / `server.https.*` (and TLS via `spec.tls`)
 3. Remove any `dbms.mode=SINGLE` — there is no replacement; use `Neo4jEnterpriseStandalone` instead
 4. `causal_clustering.*` → `dbms.cluster.*` (most discovery keys are now operator-managed anyway)
-5. `db.format=standard` / `db.format=high_limit` → `db.format=block` for new databases
+5. Remove any `db.format` from `spec.config` — the operator already emits `db.format=block` (the modern default) and the validator rejects a user-set `db.format`. To choose a non-default store format, set it per database via `Neo4jDatabase` `CREATE DATABASE` options, not cluster/standalone `spec.config`.
 6. `dbms.logs.query.*` → `db.logs.query.*`
 
 See the [Migration Guide](migration_guide.md) for operator-level migration steps (removed CRD fields, etc.).

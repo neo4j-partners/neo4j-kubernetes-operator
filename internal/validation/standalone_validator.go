@@ -276,12 +276,27 @@ func (v *StandaloneValidator) validateConfig(standalone *neo4jv1beta1.Neo4jEnter
 		))
 	}
 
+	// db.format is not configurable. The operator standardizes on the 'block'
+	// store format (Neo4j's default for 5.26+) and nothing else — unlike the
+	// cluster path, standalone relies on that default rather than emitting
+	// db.format, so a user value here would actually take effect and quietly
+	// switch the store format. Reject it. (When Neo4j ships additional store
+	// formats, e.g. MVCC, a format-switching surface will be designed then.)
+	// Per-database format selection goes through Neo4jDatabase.
+	if _, exists := standalone.Spec.Config["db.format"]; exists {
+		allErrs = append(allErrs, field.Forbidden(
+			configPath.Key("db.format"),
+			"db.format is managed by the operator (always 'block') and must not be set in spec.config. To choose a non-default store format, set it per database via Neo4jDatabase CREATE DATABASE options.",
+		))
+	}
+
 	// SSL policies are managed end-to-end by the operator via spec.tls.
 	// Reject user-set dbms.ssl.policy.* / server.bolt.tls_level /
 	// server.directories.certificates. Same rationale as the cluster
-	// ConfigValidator — server.config.strict_validation.enabled=false
-	// means Neo4j silently honours later duplicates, so without this
-	// rejection a user could silently downgrade TLS posture via spec.config.
+	// ConfigValidator — Neo4j runs with server.config.strict_validation.
+	// enabled=true, so a duplicate key from spec.config would make Neo4j
+	// fail to start; rejecting it up front keeps the user from wedging the
+	// pod (and from silently downgrading TLS posture via spec.config).
 	for key, value := range standalone.Spec.Config {
 		if strings.HasPrefix(key, "dbms.ssl.policy.") ||
 			key == "server.bolt.tls_level" ||

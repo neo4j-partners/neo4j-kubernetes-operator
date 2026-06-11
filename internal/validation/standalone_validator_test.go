@@ -130,6 +130,22 @@ func TestStandaloneValidator_ValidateCreate(t *testing.T) {
 			wantErrs: 1,
 		},
 		{
+			name: "db.format=block in spec.config is rejected (operator-managed)",
+			mutate: func(s *neo4jv1beta1.Neo4jEnterpriseStandalone) {
+				s.Spec.Config = map[string]string{"db.format": "block"}
+			},
+			wantErrs: 1,
+			errField: "spec.config[db.format]",
+		},
+		{
+			name: "db.format=high_limit in spec.config is rejected",
+			mutate: func(s *neo4jv1beta1.Neo4jEnterpriseStandalone) {
+				s.Spec.Config = map[string]string{"db.format": "high_limit"}
+			},
+			wantErrs: 1,
+			errField: "spec.config[db.format]",
+		},
+		{
 			name: "invalid auth provider",
 			mutate: func(s *neo4jv1beta1.Neo4jEnterpriseStandalone) {
 				s.Spec.Auth = &neo4jv1beta1.AuthSpec{AuthenticationProviders: []string{"bogus-auth"}}
