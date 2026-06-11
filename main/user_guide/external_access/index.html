@@ -858,6 +858,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#services-created-by-the-operator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Services created by the operator
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#quick-start" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2846,6 +2857,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#services-created-by-the-operator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Services created by the operator
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#quick-start" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3179,6 +3201,58 @@
 <li><strong>LoadBalancer</strong> - Cloud provider managed load balancers</li>
 <li><strong>NodePort</strong> - Direct node access (on-premise/development)</li>
 <li><strong>Ingress</strong> - HTTP/HTTPS access through ingress controllers</li>
+</ul>
+<h2 id="services-created-by-the-operator">Services created by the operator<a class="headerlink" href="#services-created-by-the-operator" title="Anchor link to this section">&para;</a></h2>
+<p>The operator names its Services by deployment <strong>kind</strong>, and the names are
+stable: they are baked into the issued TLS certificate's SANs and into each
+pod's stable DNS identity, so they are <strong>not</strong> interchangeable between cluster
+and standalone.</p>
+<table>
+<thead>
+<tr>
+<th>Service</th>
+<th><code>Neo4jEnterpriseCluster</code></th>
+<th><code>Neo4jEnterpriseStandalone</code></th>
+<th>Ports</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Client-facing (your apps connect here)</td>
+<td><code>{name}-client</code></td>
+<td><code>{name}-service</code></td>
+<td><code>bolt 7687</code>, <code>http 7474</code>, <code>https 7473</code> (TLS); standalone also exposes <code>metrics 2004</code> here when monitoring is on</td>
+</tr>
+<tr>
+<td>Headless (stable per-pod DNS)</td>
+<td><code>{name}-headless</code></td>
+<td><code>{name}-headless</code></td>
+<td><code>bolt 7687</code>, <code>http 7474</code>, <code>backup 6362</code>, <code>https 7473</code> (TLS)</td>
+</tr>
+<tr>
+<td>Discovery / internals (cluster only)</td>
+<td><code>{name}-discovery</code>, <code>{name}-internals</code></td>
+<td>—</td>
+<td>clustering ports (<code>6000/7000/7688/7689</code>)</td>
+</tr>
+<tr>
+<td>Metrics (cluster only; standalone folds metrics into its client service)</td>
+<td><code>{name}-metrics</code> (<code>2004</code>)</td>
+<td>—</td>
+<td><code>2004</code></td>
+</tr>
+</tbody>
+</table>
+<p>Notes:</p>
+<ul>
+<li><strong>Client-service name differs by kind</strong> (<code>-client</code> for clusters, <code>-service</code>
+  for standalone). This is intentional and load-bearing — use the right name
+  for the kind you deployed. A pod's stable address is always
+  <code>{name}-0.{name}-headless.&lt;namespace&gt;.svc.cluster.local</code>.</li>
+<li><strong>The standalone headless service exposes <code>bolt</code>/<code>http</code>/<code>backup</code> (and <code>https</code>
+  under TLS)</strong> for direct per-pod addressing, mirroring the cluster headless
+  service. It does <strong>not</strong> expose the clustering ports (<code>6000/7000/7688/7689</code>):
+  a standalone is a single non-clustered node, so nothing listens on them.</li>
 </ul>
 <h2 id="quick-start">Quick Start<a class="headerlink" href="#quick-start" title="Anchor link to this section">&para;</a></h2>
 <h3 id="development-access">Development Access<a class="headerlink" href="#development-access" title="Anchor link to this section">&para;</a></h3>
