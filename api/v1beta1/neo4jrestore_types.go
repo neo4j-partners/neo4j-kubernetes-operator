@@ -208,6 +208,43 @@ type Neo4jRestoreStatus struct {
 
 	// ObservedGeneration reflects the generation of the most recently observed Neo4jRestore
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+
+	// ResolvedSource pins the concrete backup location this restore resolved
+	// from a `source.type: backup` reference. Populated the first time the
+	// referenced Neo4jBackup is successfully dereferenced, then preferred on
+	// every subsequent reconcile — so the restore no longer depends on the
+	// Neo4jBackup CR continuing to exist (it may be deleted after resolution).
+	// Nil for `source.type: storage` restores, which already carry an explicit
+	// location in the spec. See issue #188.
+	ResolvedSource *ResolvedRestoreSource `json:"resolvedSource,omitempty"`
+}
+
+// ResolvedRestoreSource is the concrete, self-contained backup location a
+// `source.type: backup` restore resolved to. Once persisted to
+// Neo4jRestore.status it is the source of truth for the restore, so the
+// operator never has to re-read the (possibly since-deleted) Neo4jBackup CR.
+type ResolvedRestoreSource struct {
+	// BackupRef is the Neo4jBackup name this source was resolved from
+	// (provenance only).
+	BackupRef string `json:"backupRef,omitempty"`
+
+	// Storage is the concrete storage location (PVC or cloud, with creds
+	// folded in) of the resolved backup.
+	Storage *StorageLocation `json:"storage,omitempty"`
+
+	// BackupPath is the per-CR shared directory (chain root) of the resolved
+	// most-recent Succeeded run.
+	BackupPath string `json:"backupPath,omitempty"`
+
+	// ArtifactFilename is the exact `.backup` filename of the resolved
+	// most-recent Succeeded run. Required by the cluster Cypher restore paths
+	// (cloud seedURI + PVC proxy), which seed from a single file; empty for
+	// older backups whose Pod-log capture didn't record it (standalone Job
+	// restores don't need it — they resolve the file with a shell glob).
+	ArtifactFilename string `json:"artifactFilename,omitempty"`
+
+	// ResolvedAt is when the backupRef was first dereferenced.
+	ResolvedAt *metav1.Time `json:"resolvedAt,omitempty"`
 }
 
 // RestoreStats provides restore operation statistics

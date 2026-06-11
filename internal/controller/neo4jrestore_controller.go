@@ -260,6 +260,15 @@ func (r *Neo4jRestoreReconciler) startRestore(ctx context.Context, restore *neo4
 		return ctrl.Result{}, err
 	}
 
+	// Pin the resolved backup location onto status BEFORE branching to either
+	// restore path, so the restore is independent of the referenced Neo4jBackup
+	// CR's lifecycle from here on (issue #188). Both the cluster Cypher path and
+	// the standalone Job path read the snapshot. done=true means the backup
+	// isn't resolvable yet (Pending) or never will be (Failed) — return as-is.
+	if res, done, err := r.ensureResolvedBackupSource(ctx, restore); done {
+		return res, err
+	}
+
 	// Cluster targets bypass the Job + `neo4j-admin restore` path entirely
 	// (the docs flag it as unsafe on clusters — `--overwrite-destination`
 	// "is not safe on a cluster since clusters have additional state that
@@ -663,12 +672,17 @@ func (r *Neo4jRestoreReconciler) validateRestore(ctx context.Context, restore *n
 		if restore.Spec.Source.BackupRef == "" {
 			return fmt.Errorf("backupRef is required when source type is 'backup'")
 		}
-		backup := &neo4jv1beta1.Neo4jBackup{}
-		if err := r.Get(ctx, types.NamespacedName{
-			Name:      restore.Spec.Source.BackupRef,
-			Namespace: restore.Namespace,
-		}, backup); err != nil {
-			return fmt.Errorf("backup %q not found: %w", restore.Spec.Source.BackupRef, err)
+		// If we've already pinned the resolved source (issue #188), the
+		// Neo4jBackup CR is no longer required to exist — it may have been
+		// deleted after resolution, and we restore from the snapshot.
+		if resolvedBackupSnapshot(restore) == nil {
+			backup := &neo4jv1beta1.Neo4jBackup{}
+			if err := r.Get(ctx, types.NamespacedName{
+				Name:      restore.Spec.Source.BackupRef,
+				Namespace: restore.Namespace,
+			}, backup); err != nil {
+				return fmt.Errorf("backup %q not found: %w. If the Neo4jBackup CR was deleted, restore directly from the artifacts with source.type=storage (set source.storage + source.backupPath to the .backup file) — recreating the Neo4jBackup CR would run a new backup into the same path", restore.Spec.Source.BackupRef, err)
+			}
 		}
 
 	case "storage", SourceTypeS3, SourceTypeGCS, "azure":
@@ -1000,6 +1014,18 @@ func (r *Neo4jRestoreReconciler) resolveBackupRef(ctx context.Context, backupRef
 // The resolved view feeds the existing build* helpers unchanged: callers
 // get s3:// / gs:// / azb:// / PVC paths and matching cloud creds for free.
 func (r *Neo4jRestoreReconciler) resolveRestoreSource(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore) (neo4jv1beta1.RestoreSource, error) {
+	// Prefer the pinned snapshot (issue #188): once a backupRef has been
+	// resolved and persisted to status, restore from it directly so the
+	// outcome no longer depends on the Neo4jBackup CR still existing.
+	if snap := resolvedBackupSnapshot(restore); snap != nil {
+		return neo4jv1beta1.RestoreSource{
+			Type:        "storage",
+			Storage:     snap.Storage,
+			BackupPath:  snap.BackupPath,
+			PointInTime: restore.Spec.Source.PointInTime,
+		}, nil
+	}
+
 	if restore.Spec.Source.Type != SourceTypeBackup {
 		return restore.Spec.Source, nil
 	}
@@ -1019,6 +1045,109 @@ func (r *Neo4jRestoreReconciler) resolveRestoreSource(ctx context.Context, resto
 		BackupPath:  backupPath,
 		PointInTime: restore.Spec.Source.PointInTime,
 	}, nil
+}
+
+// resolvedBackupSnapshot returns the pinned backup-source snapshot if this
+// restore has one (issue #188), else nil. A snapshot is only "usable" once it
+// carries a concrete Storage; the nil guard keeps every caller a single
+// if-check away from the live-resolution fallback.
+func resolvedBackupSnapshot(restore *neo4jv1beta1.Neo4jRestore) *neo4jv1beta1.ResolvedRestoreSource {
+	if rs := restore.Status.ResolvedSource; rs != nil && rs.Storage != nil {
+		return rs
+	}
+	return nil
+}
+
+// ensureResolvedBackupSource pins the resolved backup location onto
+// status.ResolvedSource the first time a `source.type: backup` restore runs,
+// so subsequent reconciles (and downstream builders) read the snapshot instead
+// of re-dereferencing the Neo4jBackup CR — which may be deleted after this
+// point (issue #188).
+//
+// Returns (result, done, err): when done is true the caller must return
+// (result, err) immediately — either the backup isn't ready yet (Pending +
+// requeue) or it couldn't be resolved (terminal Failed with an actionable
+// pointer at the type=storage escape hatch). done is false (and the snapshot
+// is now persisted) for restores that can proceed, including non-backup
+// sources and already-pinned restores, which are no-ops.
+func (r *Neo4jRestoreReconciler) ensureResolvedBackupSource(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore) (ctrl.Result, bool, error) {
+	// Only `type: backup` needs pinning; `type: storage`/`pitr` carry their
+	// own source. Already-pinned restores are no-ops.
+	if restore.Spec.Source.Type != SourceTypeBackup || resolvedBackupSnapshot(restore) != nil {
+		return ctrl.Result{}, false, nil
+	}
+
+	storage, backupPath, err := r.resolveBackupRef(ctx, restore.Spec.Source.BackupRef, restore.Namespace)
+	if err != nil {
+		if stderrors.Is(err, errBackupNotReady) {
+			// Transient: the backup may complete on a later reconcile.
+			r.updateRestoreStatus(ctx, restore, StatusPending, fmt.Sprintf("Waiting for backup to complete: %v", err))
+			return ctrl.Result{RequeueAfter: r.RequeueAfter}, true, nil
+		}
+		// Terminal (e.g. the Neo4jBackup CR is missing). Point at the
+		// type=storage escape hatch so a deleted-CR restore isn't a dead end,
+		// and warn against recreating the CR (which would run a fresh backup
+		// into the same chain directory).
+		msg := fmt.Sprintf("Failed to resolve backupRef %q: %v. If the Neo4jBackup CR was deleted, restore directly from the artifacts with source.type=storage (set source.storage to the backup's location and source.backupPath to the .backup file path) — do NOT recreate the Neo4jBackup CR, which would trigger a new backup into the same path.",
+			restore.Spec.Source.BackupRef, err)
+		r.updateRestoreStatus(ctx, restore, StatusFailed, msg)
+		return ctrl.Result{}, true, fmt.Errorf("%s", msg)
+	}
+
+	// Capture the exact artifact filename of the latest Succeeded run for the
+	// cluster Cypher restore paths (cloud seedURI + PVC proxy seed from a
+	// single file). Best-effort: standalone Job restores resolve the file with
+	// a shell glob and don't need it, and older backups may not have captured
+	// it — those paths surface their own error later if the filename is needed.
+	artifact := ""
+	backup := &neo4jv1beta1.Neo4jBackup{}
+	if gerr := r.Get(ctx, types.NamespacedName{Name: restore.Spec.Source.BackupRef, Namespace: restore.Namespace}, backup); gerr == nil {
+		for i := range backup.Status.History {
+			if backup.Status.History[i].Status == "Succeeded" {
+				artifact = backup.Status.History[i].ArtifactFilename
+				break
+			}
+		}
+	}
+
+	now := metav1.Now()
+	snapshot := &neo4jv1beta1.ResolvedRestoreSource{
+		BackupRef:        restore.Spec.Source.BackupRef,
+		Storage:          &storage,
+		BackupPath:       backupPath,
+		ArtifactFilename: artifact,
+		ResolvedAt:       &now,
+	}
+	if err := r.persistResolvedSource(ctx, restore, snapshot); err != nil {
+		// Persisting failed; retry on a later reconcile rather than proceeding
+		// with an unpinned source.
+		return ctrl.Result{RequeueAfter: r.RequeueAfter}, true, err
+	}
+	return ctrl.Result{}, false, nil
+}
+
+// persistResolvedSource durably writes the snapshot to status.ResolvedSource
+// (refetch + RetryOnConflict, the project's mandatory status-write pattern) and
+// mirrors it onto the in-memory restore so the rest of this reconcile reads it.
+// If a concurrent reconcile already pinned a snapshot, that one wins (the
+// resolution is idempotent — same backup, same latest Succeeded run).
+func (r *Neo4jRestoreReconciler) persistResolvedSource(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore, snapshot *neo4jv1beta1.ResolvedRestoreSource) error {
+	return retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+		latest := &neo4jv1beta1.Neo4jRestore{}
+		if err := r.Get(ctx, client.ObjectKeyFromObject(restore), latest); err != nil {
+			return err
+		}
+		if latest.Status.ResolvedSource != nil && latest.Status.ResolvedSource.Storage != nil {
+			restore.Status.ResolvedSource = latest.Status.ResolvedSource
+			return nil
+		}
+		latest.Status.ResolvedSource = snapshot
+		if err := r.Status().Update(ctx, latest); err != nil {
+			return err
+		}
+		restore.Status.ResolvedSource = snapshot
+		return nil
+	})
 }
 
 // buildRestoreCloudEnvVars injects cloud provider credentials into the restore Job,
@@ -2096,23 +2225,32 @@ func (r *Neo4jRestoreReconciler) startClusterCypherRestore(
 		return r.pollClusterRestoreOnline(ctx, restore, cluster)
 	}
 
-	// Resolve backupRef → storage + per-CR shared directory.
-	storage, backupPath, err := ResolveBackupRef(ctx, r.Client, restore.Spec.Source.BackupRef, restore.Namespace)
-	if err != nil {
-		if stderrors.Is(err, ErrBackupNotReady) {
-			logger.Info("Cluster Cypher restore waiting for backup to complete", "error", err.Error())
-			r.updateRestoreStatus(ctx, restore, StatusPending, fmt.Sprintf("Waiting for backup to complete: %v", err))
-			return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
-		}
-		// `storage` and `backupPath` are only used for type=backup. For
-		// type=storage we read directly from spec.source.
-		if restore.Spec.Source.Type != SourceTypeBackup {
-			storage = neo4jv1beta1.StorageLocation{}
-			backupPath = ""
-		} else {
-			logger.Error(err, "Failed to resolve backupRef")
-			r.updateRestoreStatus(ctx, restore, StatusFailed, fmt.Sprintf("Failed to resolve backupRef: %v", err))
-			return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
+	// Resolve backupRef → storage + per-CR shared directory. Prefer the pinned
+	// snapshot (issue #188): startRestore pins it before we get here, so a
+	// Neo4jBackup CR deleted after that point doesn't break a re-driven restore.
+	var storage neo4jv1beta1.StorageLocation
+	var backupPath string
+	var err error
+	if snap := resolvedBackupSnapshot(restore); snap != nil {
+		storage, backupPath = *snap.Storage, snap.BackupPath
+	} else {
+		storage, backupPath, err = ResolveBackupRef(ctx, r.Client, restore.Spec.Source.BackupRef, restore.Namespace)
+		if err != nil {
+			if stderrors.Is(err, ErrBackupNotReady) {
+				logger.Info("Cluster Cypher restore waiting for backup to complete", "error", err.Error())
+				r.updateRestoreStatus(ctx, restore, StatusPending, fmt.Sprintf("Waiting for backup to complete: %v", err))
+				return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
+			}
+			// `storage` and `backupPath` are only used for type=backup. For
+			// type=storage we read directly from spec.source.
+			if restore.Spec.Source.Type != SourceTypeBackup {
+				storage = neo4jv1beta1.StorageLocation{}
+				backupPath = ""
+			} else {
+				logger.Error(err, "Failed to resolve backupRef")
+				r.updateRestoreStatus(ctx, restore, StatusFailed, fmt.Sprintf("Failed to resolve backupRef: %v", err))
+				return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
+			}
 		}
 	}
 	if restore.Spec.Source.Type == "storage" {
@@ -2151,7 +2289,7 @@ func (r *Neo4jRestoreReconciler) startClusterCypherRestore(
 		if restore.Spec.Source.Type == SourceTypeBackup {
 			// type=backup: the operator knows the artifact filename from the
 			// backup's status.history — append it (same as the PVC path).
-			fname, ferr := r.latestSucceededArtifactFilename(ctx, restore.Spec.Source.BackupRef, restore.Namespace)
+			fname, ferr := r.resolvedOrLiveArtifactFilename(ctx, restore)
 			if ferr != nil {
 				r.updateRestoreStatus(ctx, restore, StatusFailed, ferr.Error())
 				return ctrl.Result{}, ferr
@@ -2463,14 +2601,21 @@ func (r *Neo4jRestoreReconciler) resolveClusterPVCRestoreURI(
 	var filename string
 	switch restore.Spec.Source.Type {
 	case SourceTypeBackup:
-		backup := &neo4jv1beta1.Neo4jBackup{}
-		if err := r.Get(ctx, types.NamespacedName{Name: restore.Spec.Source.BackupRef, Namespace: restore.Namespace}, backup); err != nil {
-			return "", ctrl.Result{}, fmt.Errorf("PVC restore: re-fetch backup %q: %w", restore.Spec.Source.BackupRef, err)
-		}
-		for i := range backup.Status.History {
-			if backup.Status.History[i].Status == "Succeeded" {
-				filename = backup.Status.History[i].ArtifactFilename
-				break
+		// Prefer the pinned snapshot (issue #188) so a since-deleted Neo4jBackup
+		// CR doesn't break a PVC-backed cluster restore; fall back to a live
+		// re-fetch when there's no snapshot.
+		if snap := resolvedBackupSnapshot(restore); snap != nil {
+			filename = snap.ArtifactFilename
+		} else {
+			backup := &neo4jv1beta1.Neo4jBackup{}
+			if err := r.Get(ctx, types.NamespacedName{Name: restore.Spec.Source.BackupRef, Namespace: restore.Namespace}, backup); err != nil {
+				return "", ctrl.Result{}, fmt.Errorf("PVC restore: re-fetch backup %q: %w", restore.Spec.Source.BackupRef, err)
+			}
+			for i := range backup.Status.History {
+				if backup.Status.History[i].Status == "Succeeded" {
+					filename = backup.Status.History[i].ArtifactFilename
+					break
+				}
 			}
 		}
 		if filename == "" {
@@ -2534,6 +2679,18 @@ func (r *Neo4jRestoreReconciler) latestSucceededArtifactFilename(ctx context.Con
 		}
 	}
 	return "", fmt.Errorf("Neo4jBackup %q has no Succeeded run with a captured ArtifactFilename — re-run the backup with a recent operator version (Pod-log capture required for cluster restores), or copy the .backup file to storage and restore via type=storage with source.backupPath pointing at the file", backupRef)
+}
+
+// resolvedOrLiveArtifactFilename returns the `.backup` artifact filename for a
+// type=backup restore, preferring the pinned snapshot (issue #188) so a
+// since-deleted Neo4jBackup CR doesn't break a re-driven cluster restore, and
+// falling back to a live status.history read (which also yields the actionable
+// "no captured ArtifactFilename" error for older backups).
+func (r *Neo4jRestoreReconciler) resolvedOrLiveArtifactFilename(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore) (string, error) {
+	if snap := resolvedBackupSnapshot(restore); snap != nil && snap.ArtifactFilename != "" {
+		return snap.ArtifactFilename, nil
+	}
+	return r.latestSucceededArtifactFilename(ctx, restore.Spec.Source.BackupRef, restore.Namespace)
 }
 
 // warnIfChainParent emits a Warning event when source.backupRef points at the

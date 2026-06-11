@@ -1034,6 +1034,130 @@ spec:
               phase:
                 description: Phase represents the current phase of the restore
                 type: string
+              resolvedSource:
+                description: |-
+                  ResolvedSource pins the concrete backup location this restore resolved
+                  from a `source.type: backup` reference. Populated the first time the
+                  referenced Neo4jBackup is successfully dereferenced, then preferred on
+                  every subsequent reconcile — so the restore no longer depends on the
+                  Neo4jBackup CR continuing to exist (it may be deleted after resolution).
+                  Nil for `source.type: storage` restores, which already carry an explicit
+                  location in the spec. See issue #188.
+                properties:
+                  artifactFilename:
+                    description: |-
+                      ArtifactFilename is the exact `.backup` filename of the resolved
+                      most-recent Succeeded run. Required by the cluster Cypher restore paths
+                      (cloud seedURI + PVC proxy), which seed from a single file; empty for
+                      older backups whose Pod-log capture didn't record it (standalone Job
+                      restores don't need it — they resolve the file with a shell glob).
+                    type: string
+                  backupPath:
+                    description: |-
+                      BackupPath is the per-CR shared directory (chain root) of the resolved
+                      most-recent Succeeded run.
+                    type: string
+                  backupRef:
+                    description: |-
+                      BackupRef is the Neo4jBackup name this source was resolved from
+                      (provenance only).
+                    type: string
+                  resolvedAt:
+                    description: ResolvedAt is when the backupRef was first dereferenced.
+                    format: date-time
+                    type: string
+                  storage:
+                    description: |-
+                      Storage is the concrete storage location (PVC or cloud, with creds
+                      folded in) of the resolved backup.
+                    properties:
+                      bucket:
+                        type: string
+                      cloud:
+                        description: Cloud provider configuration
+                        properties:
+                          credentialsSecretRef:
+                            description: |-
+                              CredentialsSecretRef is the name of a Kubernetes Secret containing
+                              cloud provider credentials as environment variables. Optional when
+                              using workload identity / IAM instance profiles.
+                              For S3:    keys AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION
+                              For GCS:   key  GOOGLE_APPLICATION_CREDENTIALS_JSON (base64 service-account JSON)
+                              For Azure: keys AZURE_STORAGE_ACCOUNT, AZURE_STORAGE_KEY
+                            type: string
+                          endpointURL:
+                            description: |-
+                              EndpointURL overrides the S3 API endpoint URL. Use this to target
+                              S3-compatible stores such as MinIO, Ceph RGW, or Cloudflare R2.
+                              Example: "http://minio.minio-ns.svc:9000"
+                              Only applies to the "aws" provider; ignored for gcp and azure.
+                            type: string
+                          forcePathStyle:
+                            description: |-
+                              ForcePathStyle forces S3 path-style addressing, where the bucket name
+                              appears in the URL path (e.g. http://endpoint/bucket/key) rather than
+                              the subdomain (e.g. http://bucket.endpoint/key).
+                              Required for MinIO and most self-hosted S3-compatible stores.
+                              Only effective when EndpointURL is set.
+                            type: boolean
+                          identity:
+                            description: CloudIdentity defines cloud identity configuration
+                            properties:
+                              autoCreate:
+                                description: AutoCreateSpec defines auto-creation
+                                  of service accounts
+                                properties:
+                                  annotations:
+                                    additionalProperties:
+                                      type: string
+                                    type: object
+                                  enabled:
+                                    default: true
+                                    type: boolean
+                                type: object
+                              provider:
+                                enum:
+                                - aws
+                                - gcp
+                                - azure
+                                type: string
+                              serviceAccount:
+                                type: string
+                            required:
+                            - provider
+                            type: object
+                          provider:
+                            enum:
+                            - aws
+                            - gcp
+                            - azure
+                            type: string
+                        type: object
+                      path:
+                        type: string
+                      pvc:
+                        description: PVC configuration
+                        properties:
+                          name:
+                            description: Name of the PVC to use (for referencing existing
+                              PVCs)
+                            type: string
+                          size:
+                            type: string
+                          storageClassName:
+                            type: string
+                        type: object
+                      type:
+                        enum:
+                        - s3
+                        - gcs
+                        - azure
+                        - pvc
+                        type: string
+                    required:
+                    - type
+                    type: object
+                type: object
               startTime:
                 description: Start time of the restore operation
                 format: date-time

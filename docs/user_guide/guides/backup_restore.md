@@ -857,7 +857,9 @@ spec:
 
 **Best for:** Cross-cluster recovery, disaster recovery from a known directory in storage (no `Neo4jBackup` CR available in this namespace).
 
-> **Restoring after the `Neo4jBackup` CR is deleted.** `source.type: backup` resolves the storage location *from the Backup CR*, so it fails with `backup "<name>" not found` once you delete that CR — the artifacts in object storage / the PVC are untouched, but the operator no longer knows where they are. Restore directly from the artifacts with **`source.type: storage`** (above): point `backupPath` at the exact `.backup` file (cluster) or the directory (standalone). You do **not** need to re-create the Backup CR.
+> **Restoring after the `Neo4jBackup` CR is deleted.** A `source.type: backup` restore **pins** the backup's storage location onto its own `status.resolvedSource` the first time it resolves the reference. From that point on the restore reads the snapshot, so deleting the `Neo4jBackup` CR mid-restore (or while it retries) does **not** break it — the operator already knows where the artifacts are.
+>
+> If you create a **new** restore *after* the Backup CR is gone, there's nothing to resolve, so `source.type: backup` fails with an error pointing you here. Restore directly from the artifacts with **`source.type: storage`** (above): set `source.storage` to the backup's location and point `backupPath` at the exact `.backup` file (cluster) or the directory (standalone). You do **not** need to — and should **not** — re-create the Backup CR: re-creating it triggers a fresh backup Job that writes into the same chain directory, which can shadow the artifact you wanted to restore.
 >
 > ⚠️ **Restore is destructive and overwrites in place.** With `replaceExisting`/`force` the target database's current data is replaced by the backup. Re-running a restore — including after re-creating a deleted Backup CR — re-seeds and overwrites again. Treat every restore as a destructive operation against the named database.
 
