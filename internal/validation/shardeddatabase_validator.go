@@ -211,6 +211,52 @@ func (v *ShardedDatabaseValidator) validatePropertyShardingConfig(shardedDB *neo
 			"seedCredentials requires seedURI, seedURIs, or seedBackupRef"))
 	}
 
+	// Per-shard seedURIs keys are interpolated (backtick-escaped) into the
+	// CREATE DATABASE OPTIONS; constrain them to a simple identifier set.
+	for key := range shardedDB.Spec.SeedURIs {
+		if !seedConfigKeyPattern.MatchString(key) {
+			result.Errors = append(result.Errors, field.Invalid(
+				specPath.Child("seedURIs").Key(key),
+				key,
+				"seedURIs key may contain only letters, digits, dots, underscores and dashes"))
+		}
+	}
+
+	// seedConfig is serialised into the documented comma-separated seedConfig
+	// OPTIONS string; restoreUntil maps to seedRestoreUntil. Constrain keys and
+	// values so the serialisation is unambiguous and injection-safe (the same
+	// rules as the standard Neo4jDatabase seed path).
+	if shardedDB.Spec.SeedConfig != nil {
+		scPath := specPath.Child("seedConfig")
+		if ru := shardedDB.Spec.SeedConfig.RestoreUntil; ru != "" {
+			switch {
+			case strings.HasPrefix(ru, "txId:"):
+				if !isValidRestoreUntilTxID(strings.TrimPrefix(ru, "txId:")) {
+					result.Errors = append(result.Errors, field.Invalid(
+						scPath.Child("restoreUntil"), ru,
+						"txId: format requires a positive integer within int64 range (e.g., 'txId:12345')"))
+				}
+			case isRFC3339Timestamp(ru):
+			default:
+				result.Errors = append(result.Errors, field.Invalid(
+					scPath.Child("restoreUntil"), ru,
+					"restoreUntil must be an RFC3339 timestamp or a transaction ID (e.g., 'txId:12345')"))
+			}
+		}
+		for key, value := range shardedDB.Spec.SeedConfig.Config {
+			if !seedConfigKeyPattern.MatchString(key) {
+				result.Errors = append(result.Errors, field.Invalid(
+					scPath.Child("config").Key(key), key,
+					"seedConfig key may contain only letters, digits, dots, underscores and dashes"))
+			}
+			if strings.ContainsAny(value, ",=") || cypherLiteralUnsafe(value) {
+				result.Errors = append(result.Errors, field.Invalid(
+					scPath.Child("config").Key(key), value,
+					"seedConfig value may not contain ',', '=', quote, backtick or newline characters"))
+			}
+		}
+	}
+
 	// replaceExisting is the destructive drop-and-recreate path. Two safety
 	// gates:
 	//   1. Must be paired with force=true so an accidental flip can't

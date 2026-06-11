@@ -53,6 +53,7 @@ import (
 	stderrors "errors"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -519,8 +520,9 @@ func (r *Neo4jShardedDatabaseReconciler) createShardedDatabase(ctx context.Conte
 	}
 	query.WriteString(" }")
 
-	// Add supported options for sharded databases
-	options, err := buildShardedDatabaseOptions(shardedDB)
+	// Add supported options for sharded databases. Values are bound as driver
+	// parameters (params) so seed URIs / config can't inject Cypher (#170).
+	options, params, err := buildShardedDatabaseOptions(shardedDB)
 	if err != nil {
 		return err
 	}
@@ -541,8 +543,9 @@ func (r *Neo4jShardedDatabaseReconciler) createShardedDatabase(ctx context.Conte
 	// Execute the command with retry logic
 	maxRetries := 5
 	for attempt := 0; attempt < maxRetries; attempt++ {
-		// Execute against system database for DDL commands
-		err := (*client).ExecuteCypher(ctx, "system", queryStr)
+		// Execute against system database for DDL commands (params bind the
+		// user-supplied seed values — see buildShardedDatabaseOptions).
+		err := (*client).ExecuteCypherWithParams(ctx, "system", queryStr, params)
 		if err == nil {
 			logger.Info("Successfully created sharded database")
 			return nil
@@ -568,15 +571,25 @@ func (r *Neo4jShardedDatabaseReconciler) createShardedDatabase(ctx context.Conte
 	return fmt.Errorf("failed to create sharded database after %d attempts", maxRetries)
 }
 
-func buildShardedDatabaseOptions(shardedDB *neo4jv1beta1.Neo4jShardedDatabase) (string, error) {
+// buildShardedDatabaseOptions builds the inner OPTIONS entries for a sharded
+// CREATE DATABASE plus the driver parameters they reference. Every user-supplied
+// value (seedURI, per-shard seedURIs, seedSourceDatabase, seedConfig,
+// seedRestoreUntil, txLogEnrichment) is bound as a parameter so it cannot inject
+// Cypher (issue #170). Only the per-shard seedURI map KEYS are interpolated —
+// backtick-escaped, and constrained by the validator. seedConfig is the
+// documented comma-separated string and seedRestoreUntil follows the documented
+// integer/`datetime()` forms, matching the standard seed path.
+func buildShardedDatabaseOptions(shardedDB *neo4jv1beta1.Neo4jShardedDatabase) (string, map[string]any, error) {
 	var options []string
+	params := map[string]any{}
 
 	if shardedDB.Spec.SeedURI != "" && len(shardedDB.Spec.SeedURIs) > 0 {
-		return "", fmt.Errorf("seedURI and seedURIs cannot be specified together")
+		return "", nil, fmt.Errorf("seedURI and seedURIs cannot be specified together")
 	}
 
 	if shardedDB.Spec.SeedURI != "" {
-		options = append(options, fmt.Sprintf("seedURI: '%s'", shardedDB.Spec.SeedURI))
+		options = append(options, "seedURI: $seed_uri")
+		params["seed_uri"] = shardedDB.Spec.SeedURI
 	}
 
 	if len(shardedDB.Spec.SeedURIs) > 0 {
@@ -585,46 +598,48 @@ func buildShardedDatabaseOptions(shardedDB *neo4jv1beta1.Neo4jShardedDatabase) (
 			keys = append(keys, key)
 		}
 		sort.Strings(keys)
-		var entries []string
-		for _, key := range keys {
-			entries = append(entries, fmt.Sprintf("`%s`: '%s'", key, shardedDB.Spec.SeedURIs[key]))
+		entries := make([]string, 0, len(keys))
+		for i, key := range keys {
+			p := fmt.Sprintf("seed_uri_%d", i)
+			entries = append(entries, fmt.Sprintf("`%s`: $%s", neo4j.EscapeBackticks(key), p))
+			params[p] = shardedDB.Spec.SeedURIs[key]
 		}
 		options = append(options, "seedURI: { "+strings.Join(entries, ", ")+" }")
 	}
 
 	if shardedDB.Spec.SeedSourceDatabase != "" {
-		options = append(options, fmt.Sprintf("seedSourceDatabase: '%s'", shardedDB.Spec.SeedSourceDatabase))
+		options = append(options, "seedSourceDatabase: $seed_source_database")
+		params["seed_source_database"] = shardedDB.Spec.SeedSourceDatabase
 	}
 
 	if shardedDB.Spec.SeedConfig != nil {
-		if shardedDB.Spec.SeedConfig.RestoreUntil != "" {
-			restoreUntil := shardedDB.Spec.SeedConfig.RestoreUntil
-			if strings.HasPrefix(restoreUntil, "txId:") {
-				options = append(options, fmt.Sprintf("seedRestoreUntil: %s", restoreUntil))
+		if restoreUntil := shardedDB.Spec.SeedConfig.RestoreUntil; restoreUntil != "" {
+			if txid, ok := strings.CutPrefix(restoreUntil, "txId:"); ok {
+				// The sharded validator (isValidRestoreUntilTxID) rejects a txId
+				// that doesn't fit int64, so ParseInt succeeds for any spec that
+				// reached here; the err==nil guard never silently drops it.
+				if n, err := strconv.ParseInt(txid, 10, 64); err == nil {
+					options = append(options, "seedRestoreUntil: $seed_restore_until")
+					params["seed_restore_until"] = n
+				}
 			} else {
-				options = append(options, fmt.Sprintf("seedRestoreUntil: '%s'", restoreUntil))
+				options = append(options, "seedRestoreUntil: datetime($seed_restore_until)")
+				params["seed_restore_until"] = restoreUntil
 			}
 		}
 
-		if len(shardedDB.Spec.SeedConfig.Config) > 0 {
-			keys := make([]string, 0, len(shardedDB.Spec.SeedConfig.Config))
-			for key := range shardedDB.Spec.SeedConfig.Config {
-				keys = append(keys, key)
-			}
-			sort.Strings(keys)
-			var entries []string
-			for _, key := range keys {
-				entries = append(entries, fmt.Sprintf("%s: '%s'", key, shardedDB.Spec.SeedConfig.Config[key]))
-			}
-			options = append(options, "seedConfig: { "+strings.Join(entries, ", ")+" }")
+		if cfg := neo4j.SerializeSeedConfig(shardedDB.Spec.SeedConfig.Config); cfg != "" {
+			options = append(options, "seedConfig: $seed_config")
+			params["seed_config"] = cfg
 		}
 	}
 
 	if shardedDB.Spec.TxLogEnrichment != "" {
-		options = append(options, fmt.Sprintf("txLogEnrichment: '%s'", shardedDB.Spec.TxLogEnrichment))
+		options = append(options, "txLogEnrichment: $tx_log_enrichment")
+		params["tx_log_enrichment"] = shardedDB.Spec.TxLogEnrichment
 	}
 
-	return strings.Join(options, ", "), nil
+	return strings.Join(options, ", "), params, nil
 }
 
 // isTransientError checks if an error is transient and can be retried

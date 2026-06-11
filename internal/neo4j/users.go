@@ -626,6 +626,13 @@ func escapeBackticks(s string) string {
 	return strings.ReplaceAll(s, "`", "``")
 }
 
+// EscapeBackticks is the exported form of escapeBackticks, for callers in other
+// packages that build backtick-quoted Cypher identifiers (e.g. per-shard
+// seedURI map keys in the sharded-database controller).
+func EscapeBackticks(s string) string {
+	return escapeBackticks(s)
+}
+
 // stringValue safely extracts a string column from a record.
 func stringValue(rec *neo4j.Record, key string) string {
 	v, ok := rec.Get(key)
