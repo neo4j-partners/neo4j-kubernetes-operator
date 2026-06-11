@@ -4668,6 +4668,9 @@
 </tr>
 </tbody>
 </table>
+<blockquote>
+<p><strong>Restoring from MinIO / S3-compatible storage uses the same two fields.</strong> Set <code>endpointURL</code> and <code>forcePathStyle</code> on the <code>Neo4jRestore</code> <code>spec.source.storage.cloud</code> block (and they apply equally to <code>Neo4jDatabase</code> <code>seedURI</code> seeding) — the operator injects <code>AWS_ENDPOINT_URL_S3</code> and the path-style JVM flag into the restore Job and the seeding pods exactly as it does for backup.</p>
+</blockquote>
 <p>Full examples with scheduled incremental backups: <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/backup-restore/backup-minio.yaml"><code>examples/backup-restore/backup-minio.yaml</code></a>.</p>
 <hr />
 <h3 id="google-cloud-storage-authentication">Google Cloud Storage Authentication<a class="headerlink" href="#google-cloud-storage-authentication" title="Anchor link to this section">&para;</a></h3>
