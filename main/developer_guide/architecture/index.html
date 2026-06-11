@@ -4844,6 +4844,45 @@
 <li><strong>Automatic Repair</strong>: Restarts orphaned pods to rejoin main cluster</li>
 <li><strong>Production Ready</strong>: Comprehensive logging and fallback mechanisms</li>
 </ul>
+<p><strong>Scale-Down Drain</strong> (<code>internal/controller/scale_down.go</code>):</p>
+<p>Lowering <code>spec.topology.servers</code> does not immediately shrink the StatefulSet.
+Deleting a pod that still hosts database copies orphans data and can break
+quorum, so the controller drains the outgoing servers through Neo4j's own
+server-lifecycle commands <em>before</em> lowering <code>replicas</code>.</p>
+<ul>
+<li><strong>Replica hold</strong>: while a drain is in progress the controller skips writing
+  <code>sts.Spec.Replicas</code> (gated by <code>scaleDownDrainInProgress</code> + the
+  <code>neo4j.com/scale-down-draining-servers</code> annotation, a CSV of the outgoing
+  <code>serverId</code>s). Targets are tracked by <strong>serverId</strong>, not pod ordinal, because a
+  server's <code>address</code> goes NULL once it enters <code>Deallocating</code> — an ordinal-based
+  map would lose it and prematurely declare the drain complete.</li>
+<li><strong>State machine</strong> (<code>planScaleDownStep</code> over <code>SHOW SERVERS</code>): <code>cordon</code> every
+  outgoing server → once all are <code>Cordoned</code>, <code>DEALLOCATE DATABASES FROM SERVER</code>
+  (relocates their database copies) → wait while they still host any user
+  database → <code>DROP SERVER</code> once a server hosts <strong>only <code>system</code></strong> (a system-DB
+  primary stays <code>Deallocating</code> forever and never reaches <code>Deallocated</code>, so DROP
+  is gated on <em>hosting only <code>system</code></em>, not on the <code>Deallocated</code> state) → finally
+  lower <code>replicas</code>. Scaling back up mid-drain cancels it (clears the annotation).</li>
+<li><strong>Fail-fast pre-flight</strong>: before cordoning anything, a <code>DRYRUN DEALLOCATE</code>
+  checks the move is feasible, and the <strong>system-DB voting floor</strong>
+  (<code>dbms.cluster.minimum_initial_system_primaries_count</code>, read live via
+  <code>MinimumSystemPrimaries</code>) is enforced — if the requested <code>servers</code> is below the
+  floor, or a database has a sole primary on an outgoing server that Neo4j cannot
+  relocate, the controller refuses with a <code>ScaleDownBlocked</code> condition and an
+  actionable remedy instead of stranding a half-deallocated server. Neo4j has no
+  primitive that relocates a <em>sole primary</em> (<code>REALLOCATE</code> and
+  <code>deallocateDatabaseFromServer</code> both refuse it), so the operator never
+  auto-changes a database's <code>TOPOLOGY</code> — that would silently alter durability.</li>
+<li><strong>Formation floor</strong>: <code>EffectiveMinSystemPrimaries()</code> writes
+  <code>minimum_initial_system_primaries_count = min(3, servers)</code> at formation
+  (overridable via <code>spec.topology.minSystemPrimaries</code>, clamped to <code>[2, servers]</code>),
+  so a cluster of 3+ can scale down to 3 (the recommended odd quorum) rather than
+  being pinned at its birth size.</li>
+<li><strong>PVC retention</strong>: the server StatefulSet sets
+  <code>persistentVolumeClaimRetentionPolicy: {whenScaled: Delete, whenDeleted: Retain}</code>
+  so a drained server's PVC is reclaimed on scale-down but cluster-wide deletion
+  still retains data.</li>
+</ul>
 <h4 id="neo4jenterprisestandalone-controller-neo4jenterprisestandalone_controllergo">Neo4jEnterpriseStandalone Controller (<code>neo4jenterprisestandalone_controller.go</code>)<a class="headerlink" href="#neo4jenterprisestandalone-controller-neo4jenterprisestandalone_controllergo" title="Anchor link to this section">&para;</a></h4>
 <p><strong>Single-node deployment controller:</strong></p>
 <p><strong>Key Features</strong>:</p>
