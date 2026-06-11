@@ -146,12 +146,7 @@ func (r *Neo4jEnterpriseStandaloneReconciler) Reconcile(ctx context.Context, req
 			fmt.Sprintf("Validation failed: %v", validationErrs))
 
 		// Update status to reflect validation failure
-		standalone.Status.Phase = EventReasonValidationFailed
-		standalone.Status.Message = fmt.Sprintf("Validation failed: %v", validationErrs)
-		standalone.Status.Ready = false
-		if err := r.Status().Update(ctx, standalone); err != nil {
-			logger.Error(err, "Failed to update status")
-		}
+		r.setFailedStatus(ctx, standalone, fmt.Sprintf("Validation failed: %v", validationErrs))
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
 	}
 
@@ -166,12 +161,7 @@ func (r *Neo4jEnterpriseStandaloneReconciler) Reconcile(ctx context.Context, req
 		msg := fmt.Sprintf("StorageClass %q not found; create it or set spec.storage.className to an existing class (or leave it empty to use the cluster default)", standalone.Spec.Storage.ClassName)
 		logger.Error(fmt.Errorf("storage class not found"), msg)
 		r.Recorder.Event(standalone, corev1.EventTypeWarning, EventReasonStorageClassNotFound, msg)
-		standalone.Status.Phase = "Failed"
-		standalone.Status.Message = msg
-		standalone.Status.Ready = false
-		if statusErr := r.Status().Update(ctx, standalone); statusErr != nil {
-			logger.Error(statusErr, "Failed to update status")
-		}
+		r.setFailedStatus(ctx, standalone, msg)
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
 	}
 
@@ -183,12 +173,7 @@ func (r *Neo4jEnterpriseStandaloneReconciler) Reconcile(ctx context.Context, req
 			fmt.Sprintf("Failed to reconcile: %v", err))
 
 		// Update status to reflect failure
-		standalone.Status.Phase = "Failed"
-		standalone.Status.Message = fmt.Sprintf("Reconciliation failed: %v", err)
-		standalone.Status.Ready = false
-		if statusErr := r.Status().Update(ctx, standalone); statusErr != nil {
-			logger.Error(statusErr, "Failed to update status")
-		}
+		r.setFailedStatus(ctx, standalone, fmt.Sprintf("Reconciliation failed: %v", err))
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 	}
 
@@ -1601,6 +1586,43 @@ func (r *Neo4jEnterpriseStandaloneReconciler) createStatefulSet(standalone *neo4
 	}
 }
 
+// setFailedStatus records a terminal "Failed" phase, refetching the latest
+// object and retrying on conflict. The early-return failure paths previously
+// wrote the stale reconcile-start object directly (no refetch/retry), dropped
+// ObservedGeneration, and one used an event-reason constant as the phase.
+//
+// ObservedGeneration is stamped from the generation we actually reconciled
+// (the reconcile-start object), NOT the refetched latest.Generation. If the
+// spec changed mid-reconcile, latest.Generation is newer than what produced
+// this failure; claiming we observed it would suppress the re-reconcile the
+// new generation deserves. Stamping the older generation leaves
+// observedGeneration < generation, the correct "status is stale, reconcile
+// pending" signal — and the refetch is purely to win the resourceVersion race.
+func (r *Neo4jEnterpriseStandaloneReconciler) setFailedStatus(ctx context.Context, standalone *neo4jv1beta1.Neo4jEnterpriseStandalone, message string) {
+	logger := log.FromContext(ctx)
+	reconciledGen := standalone.Generation
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		latest := &neo4jv1beta1.Neo4jEnterpriseStandalone{}
+		if getErr := r.Get(ctx, types.NamespacedName{Name: standalone.Name, Namespace: standalone.Namespace}, latest); getErr != nil {
+			return getErr
+		}
+		latest.Status.Phase = "Failed"
+		latest.Status.Message = message
+		latest.Status.Ready = false
+		latest.Status.ObservedGeneration = reconciledGen
+		condStatus, condReason := PhaseToConditionStatus("Failed")
+		SetReadyCondition(&latest.Status.Conditions, reconciledGen, condStatus, condReason, message)
+		// Mirror onto the in-memory object for the rest of the reconcile.
+		standalone.Status.Phase = "Failed"
+		standalone.Status.Message = message
+		standalone.Status.Ready = false
+		return r.Status().Update(ctx, latest)
+	})
+	if err != nil {
+		logger.Error(err, "Failed to update standalone status to Failed")
+	}
+}
+
 // updateStatus updates the status of the standalone deployment
 func (r *Neo4jEnterpriseStandaloneReconciler) updateStatus(ctx context.Context, standalone *neo4jv1beta1.Neo4jEnterpriseStandalone) error {
 	logger := log.FromContext(ctx)
@@ -2392,10 +2414,13 @@ func (r *Neo4jEnterpriseStandaloneReconciler) setFleetManagementStatus(ctx conte
 		status.LastRegistrationTime = &now
 	}
 
-	latest := &neo4jv1beta1.Neo4jEnterpriseStandalone{}
-	if err := r.Get(ctx, types.NamespacedName{Namespace: standalone.Namespace, Name: standalone.Name}, latest); err != nil {
-		return err
-	}
-	latest.Status.AuraFleetManagement = status
-	return r.Status().Update(ctx, latest)
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		latest := &neo4jv1beta1.Neo4jEnterpriseStandalone{}
+		if err := r.Get(ctx, types.NamespacedName{Namespace: standalone.Namespace, Name: standalone.Name}, latest); err != nil {
+			return err
+		}
+		latest.Status.AuraFleetManagement = status
+		standalone.Status.AuraFleetManagement = status // mirror for the in-memory caller
+		return r.Status().Update(ctx, latest)
+	})
 }

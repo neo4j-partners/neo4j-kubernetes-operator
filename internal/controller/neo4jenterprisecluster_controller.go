@@ -2648,15 +2648,26 @@ func (r *Neo4jEnterpriseClusterReconciler) mergeFleetManagementPlugin(ctx contex
 
 func (r *Neo4jEnterpriseClusterReconciler) setFleetManagementStatus(ctx context.Context, cluster *neo4jv1beta1.Neo4jEnterpriseCluster, registered bool, message string) error {
 	now := metav1.Now()
-	status := &neo4jv1beta1.AuraFleetManagementStatus{
-		Registered: registered,
-		Message:    message,
-	}
-	if registered {
-		status.LastRegistrationTime = &now
-	}
-	cluster.Status.AuraFleetManagement = status
-	return r.Status().Update(ctx, cluster)
+	// Refetch + RetryOnConflict: fleet registration runs after other status
+	// writes in the same reconcile, so the reconcile-start object is stale and a
+	// bare Status().Update conflicts (the standalone twin already refetches; the
+	// cluster path did not). Mirrors updateClusterStatus.
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		latest := &neo4jv1beta1.Neo4jEnterpriseCluster{}
+		if err := r.Get(ctx, client.ObjectKeyFromObject(cluster), latest); err != nil {
+			return err
+		}
+		status := &neo4jv1beta1.AuraFleetManagementStatus{
+			Registered: registered,
+			Message:    message,
+		}
+		if registered {
+			status.LastRegistrationTime = &now
+		}
+		latest.Status.AuraFleetManagement = status
+		cluster.Status.AuraFleetManagement = status // mirror for the in-memory caller
+		return r.Status().Update(ctx, latest)
+	})
 }
 
 // SetupWithManager sets up the controller with the Manager.
