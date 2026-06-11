@@ -44,6 +44,7 @@ CLI flags and Helm values always override these defaults.
 - `metrics.enabled` controls `--metrics-bind-address` (`0` disables). Port comes from `metrics.service.port`.
 - `--health-probe-bind-address=:8081` is always set by the chart.
 - `leaderElection.enabled: true` passes `--leader-elect=true`.
+- `rbac.perNamespaceRoles: true` (with `operatorMode=namespaces` + a static `watchNamespaces` list) replaces the manager ClusterRole with one Role per namespace — see [Multi-Namespace Scope](#multi-namespace-scope).
 
 ### Health and metrics endpoints (production defaults)
 
@@ -197,7 +198,7 @@ The only case that needs action from you is `spec.topology.enforceDistribution: 
 
 ### Multi-Namespace Scope
 
-- **RBAC**: ClusterRole + ClusterRoleBinding
+- **RBAC**: ClusterRole + ClusterRoleBinding (default), or per-namespace Roles — see below.
 - **Use when**: One operator should manage a fixed list of namespaces.
 - **Helm**:
   ```yaml
@@ -216,6 +217,31 @@ The only case that needs action from you is `spec.topology.enforceDistribution: 
 - **Labels**: `label:{env=prod,tier=backend}` (braces allow commas)
 - Patterns require cluster-scope RBAC because the operator must list/watch namespaces.
 - The operator restarts its manager when namespace matches change.
+
+**Per-namespace Roles (no ClusterRole) — `rbac.perNamespaceRoles`:**
+
+Security-strict clusters that forbid ClusterRoles can run a multi-namespace operator with **only** namespaced `Role` + `RoleBinding` objects. Set `rbac.perNamespaceRoles=true` (default `false`):
+
+```yaml
+operatorMode: namespaces
+watchNamespaces:
+  - team-a
+  - team-b
+rbac:
+  perNamespaceRoles: true
+```
+
+This emits one `Role` + `RoleBinding` per listed namespace (identical permissions to the ClusterRole, generated from the same source so they can't drift) and **no manager ClusterRole/ClusterRoleBinding**. A static list watches scoped caches only — it never lists/watches the cluster-scoped `namespaces` resource — so it needs no cluster-scoped manager grants.
+
+Requirements (each enforced at `helm` render time — install fails fast with a clear message otherwise):
+
+- **`operatorMode` must be `namespaces`.** Ignored in `cluster`/`namespace` mode.
+- **Every `watchNamespaces` entry must be a plain namespace name.** A glob/regex/label/prefix pattern (`team-*`, `regex:…`, `label:…`) is **rejected** — pattern matching needs a cluster-scoped namespace list/watch a Role cannot grant. Use `perNamespaceRoles=false` (ClusterRole) if you need patterns. You cannot have *no ClusterRole* **and** *pattern matching*.
+- **Each listed namespace must already exist** — Helm creates the `Role`+`RoleBinding` *in* each namespace but does not create the namespace.
+
+What you lose vs. the ClusterRole: only **availability-zone auto-discovery** (the same documented namespace-scope limitation — see "Namespace Scope" above; the operator falls back to best-effort zone spread and emits `TopologyZoneDiscoveryDegraded`). TLS via `ClusterIssuer`, external-secrets, backups, and all CR reconciliation work unchanged.
+
+> For a **completely** ClusterRole-free install, also set `preInstallChecks.enabled=false`. The optional pre-install check runs as a Helm hook that reads cluster-scoped CRDs via a transient ClusterRole (auto-deleted after the hook); the metrics endpoint's `metrics-auth`/`metrics-reader` ClusterRoles remain only when `metrics.secure=true`, because the Kubernetes authn/authz APIs they use are inherently cluster-scoped.
 
 Note: backup workflows create per-namespace RBAC (ServiceAccount/Role/RoleBinding) as needed for backup jobs.
 
