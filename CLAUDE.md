@@ -344,6 +344,7 @@ Several files are generated, not hand-written — each carries a `# This file is
 | `config/rbac/<crd>_{editor,viewer}_role.yaml` + kustomization | `spec.{group,names.plural,names.singular}` from each CRD base | `make sync-editor-viewer-roles` |
 | `charts/neo4j-operator/crds/*.yaml` | `config/crd/bases/*.yaml` | `make helm-sync-crds` |
 | `charts/neo4j-operator/templates/clusterrole.yaml` | `config/rbac/role.yaml` rules | `make helm-sync-rbac` |
+| `charts/neo4j-operator/templates/metrics-rbac.yaml` | `config/rbac/metrics_{auth,reader}_role.yaml` | `make helm-sync-rbac` |
 | `charts/neo4j-operator/Chart.yaml` (`artifacthub.io/crds`) | CRD bases + curated descriptions in `scripts/helm-sync-artifacthub-crds.sh` | `make helm-sync-artifacthub-crds` |
 | `bundle/manifests/*` and `bundle/metadata/*` (OperatorHub) | `config/manifests/bases/*.csv.yaml` + everything above | `make bundle` |
 

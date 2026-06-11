@@ -1,0 +1,62 @@
+# This file is GENERATED. DO NOT EDIT.
+#
+# Source of truth: config/rbac/metrics_auth_role.yaml + metrics_reader_role.yaml.
+# To change the metrics RBAC:
+#   1. Edit the relevant config/rbac/metrics_*_role.yaml base
+#   2. Run 'make helm-sync-rbac' (regenerates this file)
+#
+# CI's 'make check-drift' fails if this is out of sync.
+#
+# controller-runtime's secure metrics endpoint (metrics.secure=true) needs the
+# operator SA bound to the metrics-auth role so it can run TokenReview /
+# SubjectAccessReview on incoming scrapes; scrapers need the metrics-reader
+# role. Both ClusterRoles are cluster-scoped (the authn/authz APIs are
+# non-namespaced), so they are emitted in every operatorMode.
+{{- if and .Values.rbac.create .Values.metrics.enabled .Values.metrics.secure }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "neo4j-operator.fullname" . }}-metrics-auth-role
+  labels:
+    {{- include "neo4j-operator.labels" . | nindent 4 }}
+rules:
+- apiGroups:
+    - authentication.k8s.io
+  resources:
+    - tokenreviews
+  verbs:
+    - create
+- apiGroups:
+    - authorization.k8s.io
+  resources:
+    - subjectaccessreviews
+  verbs:
+    - create
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "neo4j-operator.fullname" . }}-metrics-auth-rolebinding
+  labels:
+    {{- include "neo4j-operator.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "neo4j-operator.fullname" . }}-metrics-auth-role
+subjects:
+- kind: ServiceAccount
+  name: {{ include "neo4j-operator.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "neo4j-operator.fullname" . }}-metrics-reader
+  labels:
+    {{- include "neo4j-operator.labels" . | nindent 4 }}
+rules:
+- nonResourceURLs:
+    - "/metrics"
+  verbs:
+    - get
+{{- end }}

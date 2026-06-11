@@ -85,3 +85,84 @@ ${EXT_SECRETS_RULES}
 EOF
 
 echo "Wrote $DST from $SRC"
+
+# --- Metrics RBAC -----------------------------------------------------------
+# controller-runtime's secure metrics endpoint authenticates scrapers via
+# TokenReview and authorizes them via SubjectAccessReview. That requires the
+# operator's ServiceAccount to hold the metrics-auth role (create
+# tokenreviews + subjectaccessreviews); scrapers in turn must be bound to the
+# metrics-reader role (GET /metrics). Both are cluster-scoped — the
+# authentication.k8s.io / authorization.k8s.io APIs are non-namespaced — so
+# they are emitted regardless of operatorMode (unlike the manager role above,
+# which is a Role in namespace mode), gated only on secure metrics being on.
+#
+# Source of truth: config/rbac/metrics_auth_role.yaml + metrics_reader_role.yaml
+# (static kustomize bases). The kustomize binding hard-codes the
+# controller-manager SA + neo4j-operator-system namespace; the Helm template
+# substitutes the chart's serviceAccountName / Release.Namespace instead.
+METRICS_DST="${ROOT}/charts/neo4j-operator/templates/metrics-rbac.yaml"
+AUTH_SRC="${ROOT}/config/rbac/metrics_auth_role.yaml"
+READER_SRC="${ROOT}/config/rbac/metrics_reader_role.yaml"
+
+for f in "$AUTH_SRC" "$READER_SRC"; do
+    if [[ ! -f "$f" ]]; then
+        echo "error: $f not found." >&2
+        exit 1
+    fi
+done
+
+AUTH_RULES=$("$YQ" '.rules' "$AUTH_SRC")
+READER_RULES=$("$YQ" '.rules' "$READER_SRC")
+
+cat > "$METRICS_DST" <<EOF
+# This file is GENERATED. DO NOT EDIT.
+#
+# Source of truth: config/rbac/metrics_auth_role.yaml + metrics_reader_role.yaml.
+# To change the metrics RBAC:
+#   1. Edit the relevant config/rbac/metrics_*_role.yaml base
+#   2. Run 'make helm-sync-rbac' (regenerates this file)
+#
+# CI's 'make check-drift' fails if this is out of sync.
+#
+# controller-runtime's secure metrics endpoint (metrics.secure=true) needs the
+# operator SA bound to the metrics-auth role so it can run TokenReview /
+# SubjectAccessReview on incoming scrapes; scrapers need the metrics-reader
+# role. Both ClusterRoles are cluster-scoped (the authn/authz APIs are
+# non-namespaced), so they are emitted in every operatorMode.
+{{- if and .Values.rbac.create .Values.metrics.enabled .Values.metrics.secure }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "neo4j-operator.fullname" . }}-metrics-auth-role
+  labels:
+    {{- include "neo4j-operator.labels" . | nindent 4 }}
+rules:
+${AUTH_RULES}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "neo4j-operator.fullname" . }}-metrics-auth-rolebinding
+  labels:
+    {{- include "neo4j-operator.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "neo4j-operator.fullname" . }}-metrics-auth-role
+subjects:
+- kind: ServiceAccount
+  name: {{ include "neo4j-operator.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "neo4j-operator.fullname" . }}-metrics-reader
+  labels:
+    {{- include "neo4j-operator.labels" . | nindent 4 }}
+rules:
+${READER_RULES}
+{{- end }}
+EOF
+
+echo "Wrote $METRICS_DST from $AUTH_SRC + $READER_SRC"
