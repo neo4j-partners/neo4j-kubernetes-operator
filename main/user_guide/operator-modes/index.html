@@ -3248,6 +3248,13 @@ Explicit flags and Helm values always override the mode defaults.</p>
 <li><strong>Non-Helm</strong>: set <code>WATCH_NAMESPACE=&lt;namespace&gt;</code>.</li>
 <li><strong>Adding namespaces</strong>: deploy another operator in that namespace or switch to multi-namespace/cluster scope.</li>
 </ul>
+<p><strong>What works in namespace scope.</strong> Almost everything — including the features people often assume need cluster-wide RBAC:</p>
+<ul>
+<li><strong>TLS via a <code>ClusterIssuer</code></strong> (incl. the default <code>issuerRef.kind: ClusterIssuer</code>) — fully supported. The operator only <em>references</em> the issuer in the <code>Certificate</code> it creates; <strong>cert-manager</strong> resolves the <code>ClusterIssuer</code> and issues the cert using its own permissions. The operator never reads the issuer itself, so no cluster-scoped RBAC is required on the operator. A namespaced <code>Issuer</code> works too.</li>
+<li><strong>External Secrets via a <code>ClusterSecretStore</code></strong> — fully supported, for the same reason: the operator only references the store in the <code>ExternalSecret</code> it creates; the <strong>external-secrets operator</strong> does the cluster-scoped resolution. A namespaced <code>SecretStore</code> works too.</li>
+</ul>
+<p><strong>The one behavioral difference: availability-zone auto-discovery.</strong> Listing cluster nodes is the only cluster-scoped read the operator itself performs, and a namespaced Role can't grant it. It's used solely to <em>enumerate</em> zones for <code>spec.topology.placement</code> (topology-spread / anti-affinity). In namespace scope the operator skips enumeration and applies <strong>best-effort zone spread via the zone label key</strong> (the Kubernetes scheduler still spreads across zones), emitting a <code>TopologyZoneDiscoveryDegraded</code> warning event — no stuck reconcile.</p>
+<p>The only case that needs action from you is <code>spec.topology.enforceDistribution: true</code> — a hard "N servers across ≥N zones" guarantee the operator can't verify without seeing the nodes. Set <code>spec.topology.availabilityZones</code> explicitly (no node read needed) and enforced distribution works in namespace scope too. See <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/issues/202">#202</a>.</p>
 <h3 id="multi-namespace-scope">Multi-Namespace Scope<a class="headerlink" href="#multi-namespace-scope" title="Anchor link to this section">&para;</a></h3>
 <ul>
 <li><strong>RBAC</strong>: ClusterRole + ClusterRoleBinding</li>
