@@ -573,6 +573,19 @@ var _ = Describe("Neo4jEnterpriseStandalone Controller", func() {
 			Expect(neo4jContainer.ReadinessProbe.Exec.Command).To(ContainElement("/conf/health.sh"))
 			Expect(neo4jContainer.LivenessProbe.Exec.Command).To(ContainElement("/conf/health.sh"))
 			Expect(neo4jContainer.StartupProbe.Exec.Command).To(ContainElement("/conf/health.sh"))
+
+			By("Verifying the startup probe budget tolerates a slow 5.26 boot under CI CPU throttling")
+			// The startup probe is the only gate during initial Neo4j boot;
+			// readiness/liveness are suspended until it passes. A 5.26
+			// Enterprise boot (JVM + APOC copy + recovery) under the CI 100m CPU
+			// limit on a slow runner can exceed 5 minutes, so the budget must
+			// match the cluster's (~10 min) or the pod CrashLoops and never
+			// reaches Ready. Guard against a regression back to the old 5-min
+			// budget.
+			sp := neo4jContainer.StartupProbe
+			startupBudget := time.Duration(sp.InitialDelaySeconds+sp.PeriodSeconds*sp.FailureThreshold) * time.Second
+			Expect(startupBudget).To(BeNumerically(">=", 10*time.Minute),
+				"standalone startup probe budget (%s) must be >= 10m to tolerate a throttled 5.26 boot", startupBudget)
 		})
 
 		It("Should include health.sh in the ConfigMap", func() {
