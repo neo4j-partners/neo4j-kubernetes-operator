@@ -88,11 +88,67 @@ Get the watch namespace configuration
 {{- end }}
 
 {{/*
-Determine if ClusterRole should be created
+Whether every watchNamespaces entry is a plain (static) namespace name, i.e.
+none is a pattern. MUST mirror the operator's own pattern detection in
+cmd/main.go (parseWatchNamespaceConfig / hasGlobChars): the "glob:", "regex:",
+"re:", "label:" prefixes (case-insensitive) and the bare glob metacharacters
+"*", "?", "[". If the template's notion of "static" diverged from the
+operator's, the chart could lay down per-namespace Roles for a config the
+operator then tries to resolve via cluster-scoped namespace discovery — a
+broken install. Returns "true"/"false". An empty list is vacuously static.
+*/}}
+{{- define "neo4j-operator.watchNamespacesStatic" -}}
+{{- $static := true -}}
+{{- range .Values.watchNamespaces -}}
+{{- $lower := lower (toString .) -}}
+{{- if or (hasPrefix "glob:" $lower) (hasPrefix "regex:" $lower) (hasPrefix "re:" $lower) (hasPrefix "label:" $lower) (contains "*" $lower) (contains "?" $lower) (contains "[" $lower) -}}
+{{- $static = false -}}
+{{- end -}}
+{{- end -}}
+{{- $static -}}
+{{- end }}
+
+{{/*
+Whether to use per-namespace Roles (and therefore suppress the manager
+ClusterRole + ClusterRoleBinding). True only for: rbac.create +
+operatorMode=namespaces + rbac.perNamespaceRoles + a non-empty, STATIC
+watchNamespaces list. Returns "true"/"false".
+
+Fails the render (so `helm install` aborts with a clear message) when
+perNamespaceRoles is requested but the preconditions can't hold — an empty
+list (no namespaces to scope to, and suppressing the ClusterRole would leave
+the operator with zero manager permissions) or a pattern entry (pattern
+discovery needs a cluster-scoped namespace list/watch a Role can't grant).
+Failing fast is deliberate: someone who set perNamespaceRoles=true to forbid
+ClusterRoles must never be silently handed one.
+*/}}
+{{- define "neo4j-operator.perNamespaceRoles" -}}
+{{- if and .Values.rbac.create (eq .Values.operatorMode "namespaces") .Values.rbac.perNamespaceRoles -}}
+{{- if empty .Values.watchNamespaces -}}
+{{- fail "rbac.perNamespaceRoles=true requires a non-empty watchNamespaces list (the namespaces to scope the per-namespace Roles to). Set watchNamespaces, or set rbac.perNamespaceRoles=false to use the ClusterRole." -}}
+{{- else if ne (include "neo4j-operator.watchNamespacesStatic" .) "true" -}}
+{{- fail "rbac.perNamespaceRoles=true requires a static watchNamespaces list (plain namespace names only). A glob/regex/label/prefix pattern needs a ClusterRole because matching namespaces are discovered via a cluster-scoped namespace list/watch, which a namespaced Role cannot grant. List the namespaces explicitly, or set rbac.perNamespaceRoles=false to use the ClusterRole." -}}
+{{- else -}}
+true
+{{- end -}}
+{{- else -}}
+false
+{{- end -}}
+{{- end }}
+
+{{/*
+Determine if ClusterRole should be created. The manager ClusterRole is used for
+cluster scope and for namespaces scope EXCEPT when per-namespace Roles are in
+effect (a static list with rbac.perNamespaceRoles=true), where it is suppressed
+in favour of one Role per namespace.
 */}}
 {{- define "neo4j-operator.createClusterRole" -}}
 {{- if and .Values.rbac.create (or (eq .Values.operatorMode "cluster") (eq .Values.operatorMode "namespaces")) -}}
+{{- if eq (include "neo4j-operator.perNamespaceRoles" .) "true" -}}
+false
+{{- else -}}
 true
+{{- end -}}
 {{- else -}}
 false
 {{- end -}}

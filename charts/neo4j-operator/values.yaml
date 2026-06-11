@@ -58,6 +58,29 @@ rbac:
   # operator will get RBAC-denied when trying to create the ExternalSecret
   # — clear failure mode, easy to debug.
   externalSecretsIntegration: false
+  # Use per-namespace Roles instead of a manager ClusterRole, for
+  # operatorMode=namespaces with a STATIC watchNamespaces list (plain
+  # namespace names). Lets security-strict clusters that forbid ClusterRoles
+  # run one operator across several namespaces with least privilege. Default:
+  # off — the manager ClusterRole is used, so existing installs are unchanged.
+  #
+  # When enabled, the chart emits one Role + RoleBinding per listed namespace
+  # (same rule set as the ClusterRole, generated from the same source so it
+  # can't drift) and emits NO manager ClusterRole/ClusterRoleBinding. The
+  # metrics ClusterRoles are unaffected (the authn/authz APIs are
+  # cluster-scoped regardless of operatorMode).
+  #
+  # Requirements (enforced at render time — `helm install` fails fast with a
+  # clear message otherwise):
+  #   * operatorMode MUST be "namespaces".
+  #   * Every watchNamespaces entry MUST be a plain namespace name. A
+  #     glob/regex/label/prefix pattern (e.g. "team-*", "regex:^team-",
+  #     "label:env=prod") is rejected: matching namespaces are discovered via
+  #     a cluster-scoped namespace list/watch, which a namespaced Role cannot
+  #     grant. Use perNamespaceRoles=false (ClusterRole) for patterns.
+  #   * Each listed namespace MUST already exist — Helm creates the
+  #     Role+RoleBinding in it but does not create the namespace itself.
+  perNamespaceRoles: false
 
 # Init container image used by Neo4jPlugin spec.installMode=VerifiedDownload.
 # When a Neo4jPlugin opts into VerifiedDownload, the operator injects this

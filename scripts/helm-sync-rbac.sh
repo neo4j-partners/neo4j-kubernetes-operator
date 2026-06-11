@@ -131,6 +131,71 @@ EOF
 
 echo "Wrote $ROLE_DST from $SRC"
 
+# --- Per-namespace manager Roles (operatorMode=namespaces, static list) -----
+# When operatorMode=namespaces with a STATIC watchNamespaces list and
+# rbac.perNamespaceRoles=true, the operator needs NO cluster-scoped manager
+# grants (a static list builds scoped caches and never lists/watches the
+# cluster-scoped `namespaces` resource — see cmd/main.go runManagerWithWatchConfig
+# !hasPatterns()). So instead of the manager ClusterRole, emit one Role +
+# RoleBinding per listed namespace. Same rules as the ClusterRole/role.yaml
+# above (CORE_RULES, drift-proof) so they can't fall behind the markers. The
+# `neo4j-operator.perNamespaceRoles` helper gates this AND fails the render on a
+# pattern/empty list; the gate here is belt-and-suspenders with that helper.
+# Cluster-scoped resources named in CORE_RULES (nodes, cluster*issuers,
+# cluster*stores) are inert in a namespaced Role — same documented
+# namespace-mode limitation as role.yaml (#197).
+NS_ROLE_DST="${ROOT}/charts/neo4j-operator/templates/namespaced-roles.yaml"
+cat > "$NS_ROLE_DST" <<EOF
+# This file is GENERATED. DO NOT EDIT.
+#
+# Source of truth: +kubebuilder:rbac:* markers in internal/controller/*.go.
+# To change the operator's permissions:
+#   1. Edit the relevant +kubebuilder:rbac:groups=...,resources=...,verbs=... marker
+#   2. Run 'make manifests' (regenerates config/rbac/role.yaml)
+#   3. Run 'make helm-sync-rbac' (regenerates this file)
+#
+# CI's 'make check-drift' fails if these are out of sync.
+#
+# Emitted only for operatorMode=namespaces + a static watchNamespaces list +
+# rbac.perNamespaceRoles=true (the helper fails the render on a pattern/empty
+# list). One Role + RoleBinding per listed namespace; no manager ClusterRole.
+{{- if eq (include "neo4j-operator.perNamespaceRoles" .) "true" }}
+{{- range \$ns := .Values.watchNamespaces }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "neo4j-operator.fullname" \$ }}-manager-role
+  namespace: {{ \$ns }}
+  labels:
+    {{- include "neo4j-operator.labels" \$ | nindent 4 }}
+rules:
+${CORE_RULES}
+{{- if \$.Values.rbac.externalSecretsIntegration }}
+${EXT_SECRETS_RULES}
+{{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "neo4j-operator.fullname" \$ }}-manager-rolebinding
+  namespace: {{ \$ns }}
+  labels:
+    {{- include "neo4j-operator.labels" \$ | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "neo4j-operator.fullname" \$ }}-manager-role
+subjects:
+- kind: ServiceAccount
+  name: {{ include "neo4j-operator.serviceAccountName" \$ }}
+  namespace: {{ \$.Release.Namespace }}
+{{- end }}
+{{- end }}
+EOF
+
+echo "Wrote $NS_ROLE_DST from $SRC"
+
 # --- Metrics RBAC -----------------------------------------------------------
 # controller-runtime's secure metrics endpoint authenticates scrapers via
 # TokenReview and authorizes them via SubjectAccessReview. That requires the
