@@ -1258,6 +1258,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#backup-targets-targetkind" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Backup targets (target.kind)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#storage-layout" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3486,6 +3497,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#backup-targets-targetkind" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Backup targets (target.kind)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#storage-layout" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4403,6 +4425,38 @@
 <h2 id="backup-architecture">Backup Architecture<a class="headerlink" href="#backup-architecture" title="Anchor link to this section">&para;</a></h2>
 <p>The operator spawns a Kubernetes Job that runs <code>neo4j-admin database backup</code> from the same Neo4j Enterprise image as the cluster (no sidecar containers). The Job connects to each <code>{cluster}-server-N</code> Pod on port 6362 (<code>server.backup.listen_address=0.0.0.0:6362</code>, configured automatically). For cloud destinations, <code>neo4j-admin</code> streams directly to the bucket — set <code>tempStorage</code> for large databases that need a PVC for staging.</p>
 <p>Backup Jobs run as the auto-created <code>neo4j-backup-sa</code> ServiceAccount in the same namespace. For Workload Identity (IRSA / GKE WI / Azure WI), annotate the SA via <code>cloud.identity.autoCreate.annotations</code> — see <a href="#cloud-storage-authentication">Cloud Storage Authentication</a>.</p>
+<h3 id="backup-targets-targetkind">Backup targets (<code>target.kind</code>)<a class="headerlink" href="#backup-targets-targetkind" title="Anchor link to this section">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th><code>target.kind</code></th>
+<th><code>target.name</code></th>
+<th><code>target.clusterRef</code></th>
+<th>Backs up</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Cluster</code></td>
+<td>the <strong>instance</strong> name — a <code>Neo4jEnterpriseCluster</code> <strong>or</strong> <code>Neo4jEnterpriseStandalone</code> (auto-detected)</td>
+<td><em>(unused — leave unset)</em></td>
+<td>every database on the instance</td>
+</tr>
+<tr>
+<td><code>Database</code></td>
+<td>the <strong>database</strong> name (e.g. <code>neo4j</code>)</td>
+<td>the owning instance name</td>
+<td>a single database</td>
+</tr>
+<tr>
+<td><code>ShardedDatabase</code></td>
+<td>the logical sharded-DB name (e.g. <code>products</code>)</td>
+<td>the owning cluster</td>
+<td>all shards in one <code>neo4j-admin</code> run</td>
+</tr>
+</tbody>
+</table>
+<p>There is <strong>no <code>kind: Standalone</code></strong> — a standalone is just an instance. To back one up, use <code>kind: Cluster</code> with <code>name: &lt;standalone-name&gt;</code> (whole instance), or <code>kind: Database</code> with <code>name: &lt;database&gt;</code> + <code>clusterRef: &lt;standalone-name&gt;</code> (one database). Key gotcha: for <code>kind: Cluster</code>, <code>name</code> is the <strong>instance</strong> name and <code>clusterRef</code> is unused; for <code>kind: Database</code>/<code>ShardedDatabase</code>, <code>name</code> is the <strong>database</strong> and <code>clusterRef</code> is the instance that owns it.</p>
 <h3 id="storage-layout">Storage Layout<a class="headerlink" href="#storage-layout" title="Anchor link to this section">&para;</a></h3>
 <p>All runs of a single <code>Neo4jBackup</code> CR write to the <strong>same directory</strong>: <code>&lt;storage.path&gt;/&lt;cr-name&gt;/</code>. This is what <code>neo4j-admin</code> requires for differential backup chaining — every diff run reads the prior full from the same directory to compute the delta. Per-run identity is preserved by the timestamp <code>neo4j-admin</code> embeds in each artifact filename (<code>&lt;dbname&gt;-YYYY-MM-DDThh-mm-ss.backup</code>).</p>
 <p>Each scheduled run appends to <code>status.history[]</code> with a unique <code>runID</code> (Job UID) and the captured artifact filename. To list runs:</p>
@@ -5216,6 +5270,8 @@
 </span></code></pre></div>
 <p><strong>Best for:</strong> Cross-cluster recovery, disaster recovery from a known directory in storage (no <code>Neo4jBackup</code> CR available in this namespace).</p>
 <blockquote>
+<p><strong>Restoring after the <code>Neo4jBackup</code> CR is deleted.</strong> <code>source.type: backup</code> resolves the storage location <em>from the Backup CR</em>, so it fails with <code>backup "&lt;name&gt;" not found</code> once you delete that CR — the artifacts in object storage / the PVC are untouched, but the operator no longer knows where they are. Restore directly from the artifacts with <strong><code>source.type: storage</code></strong> (above): point <code>backupPath</code> at the exact <code>.backup</code> file (cluster) or the directory (standalone). You do <strong>not</strong> need to re-create the Backup CR.</p>
+<p>⚠️ <strong>Restore is destructive and overwrites in place.</strong> With <code>replaceExisting</code>/<code>force</code> the target database's current data is replaced by the backup. Re-running a restore — including after re-creating a deleted Backup CR — re-seeds and overwrites again. Treat every restore as a destructive operation against the named database.</p>
 <p><strong>Which run a restore picks</strong>: a cluster restore seeds from the <strong>latest successful artifact of the referenced <code>Neo4jBackup</code> CR</strong> (standalone uses <code>tail -1</code> of the timestamped glob in that CR's directory). In a FULL+DIFF chain, reference the <strong>DIFF CR</strong> for the latest state or the <strong>FULL CR</strong> to roll back to the last full snapshot — restoring via the FULL CR does <em>not</em> apply the newer diffs (and emits a <code>RestoreFromChainParent</code> warning). To pin to an arbitrary earlier run, set <code>source.type: storage</code> with <code>backupPath</code> pointing at the exact <code>.backup</code> file, or keep a point-in-time snapshot of the directory (cloud lifecycle rules / versioning).</p>
 </blockquote>
 <h4 id="restore-to-a-standalone-instance">Restore to a Standalone Instance<a class="headerlink" href="#restore-to-a-standalone-instance" title="Anchor link to this section">&para;</a></h4>
