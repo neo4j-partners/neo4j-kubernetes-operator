@@ -80,7 +80,7 @@ func TestBuildConfigMapForEnterprise_TLSConfiguration(t *testing.T) {
 
 	// Test startup script for parallel pod management compatibility
 	startupScript := configMap.Data["startup.sh"]
-	assert.Contains(t, startupScript, "dbms.cluster.minimum_initial_system_primaries_count=${TOTAL_SERVERS}", "should use TOTAL_SERVERS as minimum to prevent split-brain")
+	assert.Contains(t, startupScript, "dbms.cluster.minimum_initial_system_primaries_count=3", "should use min(3,servers) floor")
 	assert.Contains(t, startupScript, `BOOTSTRAP_STRATEGY="me"`, "should have me/other bootstrap strategy")
 }
 

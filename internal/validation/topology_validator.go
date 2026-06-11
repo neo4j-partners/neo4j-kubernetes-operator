@@ -53,6 +53,26 @@ func (v *TopologyValidator) Validate(cluster *neo4jv1beta1.Neo4jEnterpriseCluste
 		))
 	}
 
+	// Validate minSystemPrimaries: must be >= 2 (also enforced by the CRD) and
+	// must not exceed the server count — a floor higher than the number of
+	// servers can never be satisfied, so the cluster would never form.
+	if mp := cluster.Spec.Topology.MinSystemPrimaries; mp != nil {
+		if *mp > cluster.Spec.Topology.Servers {
+			allErrs = append(allErrs, field.Invalid(
+				topologyPath.Child("minSystemPrimaries"),
+				*mp,
+				fmt.Sprintf("must not exceed spec.topology.servers (%d); a system-primary floor larger than the cluster can never be satisfied", cluster.Spec.Topology.Servers),
+			))
+		}
+		if *mp < 2 {
+			allErrs = append(allErrs, field.Invalid(
+				topologyPath.Child("minSystemPrimaries"),
+				*mp,
+				"must be at least 2",
+			))
+		}
+	}
+
 	// Validate server mode constraint if specified
 	if cluster.Spec.Topology.ServerModeConstraint != "" {
 		validModes := map[string]bool{"NONE": true, "PRIMARY": true, "SECONDARY": true}
@@ -112,6 +132,14 @@ func (v *TopologyValidator) ValidateWithWarnings(cluster *neo4jv1beta1.Neo4jEnte
 			fmt.Sprintf("Even number of servers (%d) may reduce fault tolerance when databases specify odd-numbered server allocations. "+
 				"Consider using an odd number of servers for optimal fault tolerance.",
 				cluster.Spec.Topology.Servers))
+	}
+
+	// Warn on an even minSystemPrimaries — an even system-DB voting set has no
+	// clean write-quorum majority; an odd value (3, 5, …) is recommended.
+	if mp := cluster.Spec.Topology.MinSystemPrimaries; mp != nil && *mp%2 == 0 {
+		result.Warnings = append(result.Warnings,
+			fmt.Sprintf("minSystemPrimaries=%d is even; an even system-database voting set has no clean write-quorum majority. "+
+				"An odd value (3, 5, …) is recommended.", *mp))
 	}
 
 	// Check for 2 servers specifically (additional warning)

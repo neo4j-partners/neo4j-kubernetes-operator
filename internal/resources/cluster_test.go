@@ -432,7 +432,7 @@ func TestBuildStatefulSetForEnterprise_ParallelManagement(t *testing.T) {
 	configMap := resources.BuildConfigMapForEnterprise(cluster)
 	startupScript := configMap.Data["startup.sh"]
 	assert.Contains(t, startupScript, "TOTAL_SERVERS=3", "startup script should set TOTAL_SERVERS")
-	assert.Contains(t, startupScript, "dbms.cluster.minimum_initial_system_primaries_count=${TOTAL_SERVERS}", "should use TOTAL_SERVERS as minimum to prevent split-brain")
+	assert.Contains(t, startupScript, "dbms.cluster.minimum_initial_system_primaries_count=3", "should use min(3,servers) floor")
 }
 
 func TestBuildCertificateForEnterprise_DNSNames(t *testing.T) {

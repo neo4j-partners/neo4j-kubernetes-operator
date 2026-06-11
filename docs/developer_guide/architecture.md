@@ -182,6 +182,46 @@ type Neo4jDatabaseSpec struct {
 - **Automatic Repair**: Restarts orphaned pods to rejoin main cluster
 - **Production Ready**: Comprehensive logging and fallback mechanisms
 
+**Scale-Down Drain** (`internal/controller/scale_down.go`):
+
+Lowering `spec.topology.servers` does not immediately shrink the StatefulSet.
+Deleting a pod that still hosts database copies orphans data and can break
+quorum, so the controller drains the outgoing servers through Neo4j's own
+server-lifecycle commands *before* lowering `replicas`.
+
+- **Replica hold**: while a drain is in progress the controller skips writing
+  `sts.Spec.Replicas` (gated by `scaleDownDrainInProgress` + the
+  `neo4j.com/scale-down-draining-servers` annotation, a CSV of the outgoing
+  `serverId`s). Targets are tracked by **serverId**, not pod ordinal, because a
+  server's `address` goes NULL once it enters `Deallocating` — an ordinal-based
+  map would lose it and prematurely declare the drain complete.
+- **State machine** (`planScaleDownStep` over `SHOW SERVERS`): `cordon` every
+  outgoing server → once all are `Cordoned`, `DEALLOCATE DATABASES FROM SERVER`
+  (relocates their database copies) → wait while they still host any user
+  database → `DROP SERVER` once a server hosts **only `system`** (a system-DB
+  primary stays `Deallocating` forever and never reaches `Deallocated`, so DROP
+  is gated on *hosting only `system`*, not on the `Deallocated` state) → finally
+  lower `replicas`. Scaling back up mid-drain cancels it (clears the annotation).
+- **Fail-fast pre-flight**: before cordoning anything, a `DRYRUN DEALLOCATE`
+  checks the move is feasible, and the **system-DB voting floor**
+  (`dbms.cluster.minimum_initial_system_primaries_count`, read live via
+  `MinimumSystemPrimaries`) is enforced — if the requested `servers` is below the
+  floor, or a database has a sole primary on an outgoing server that Neo4j cannot
+  relocate, the controller refuses with a `ScaleDownBlocked` condition and an
+  actionable remedy instead of stranding a half-deallocated server. Neo4j has no
+  primitive that relocates a *sole primary* (`REALLOCATE` and
+  `deallocateDatabaseFromServer` both refuse it), so the operator never
+  auto-changes a database's `TOPOLOGY` — that would silently alter durability.
+- **Formation floor**: `EffectiveMinSystemPrimaries()` writes
+  `minimum_initial_system_primaries_count = min(3, servers)` at formation
+  (overridable via `spec.topology.minSystemPrimaries`, clamped to `[2, servers]`),
+  so a cluster of 3+ can scale down to 3 (the recommended odd quorum) rather than
+  being pinned at its birth size.
+- **PVC retention**: the server StatefulSet sets
+  `persistentVolumeClaimRetentionPolicy: {whenScaled: Delete, whenDeleted: Retain}`
+  so a drained server's PVC is reclaimed on scale-down but cluster-wide deletion
+  still retains data.
+
 #### Neo4jEnterpriseStandalone Controller (`neo4jenterprisestandalone_controller.go`)
 **Single-node deployment controller:**
 

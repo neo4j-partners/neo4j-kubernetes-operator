@@ -52,6 +52,7 @@ const (
 	ConditionReasonDiagnosticsUnavailable = "DiagnosticsUnavailable"
 	ConditionReasonServersPendingDrain    = "ServersPendingDrain"
 	ConditionReasonNoServersPendingDrain  = "NoServersPendingDrain"
+	ConditionReasonScaleDownBlocked       = "ScaleDownBlocked"
 )
 
 // SetReadyCondition sets the standard "Ready" condition on a conditions slice.

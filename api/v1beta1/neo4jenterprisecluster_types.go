@@ -1200,6 +1200,19 @@ type PodAntiAffinityConfig struct {
 }
 
 // TopologyConfiguration defines cluster topology requirements
+// EffectiveMinSystemPrimaries returns the value to write for
+// dbms.cluster.minimum_initial_system_primaries_count at cluster formation —
+// the system-DB primary count and the floor the cluster can be scaled down to.
+// Explicit spec.topology.minSystemPrimaries wins (clamped to [2, servers]);
+// otherwise the default is min(3, servers). See #173.
+func (c *Neo4jEnterpriseCluster) EffectiveMinSystemPrimaries() int32 {
+	servers := max(c.Spec.Topology.Servers, 2)
+	if m := c.Spec.Topology.MinSystemPrimaries; m != nil {
+		return min(max(*m, 2), servers)
+	}
+	return min(servers, 3)
+}
+
 type TopologyConfiguration struct {
 	// Servers specifies the number of Neo4j servers in the cluster
 	// Servers self-organize and can host databases in primary or secondary mode
@@ -1212,6 +1225,21 @@ type TopologyConfiguration struct {
 	// +kubebuilder:validation:Minimum=2
 	// +kubebuilder:validation:Maximum=100
 	Servers int32 `json:"servers"`
+
+	// MinSystemPrimaries sets dbms.cluster.minimum_initial_system_primaries_count
+	// — the number of servers that host the `system` database as a primary, which
+	// is also the floor the cluster can be scaled DOWN to (Neo4j refuses to drop a
+	// server below it). It is applied only at initial cluster formation.
+	//
+	// Default (unset): min(3, servers) — i.e. 2 for a 2-server cluster, 3 for any
+	// cluster of 3+. This lets clusters of 3+ scale down to 3 (the recommended odd
+	// quorum) while smaller ones keep their size. Raise it for more system-DB
+	// resilience (pins a higher scale-down floor); it must be >= 2 and <= servers,
+	// and an odd value (3, 5, …) is recommended (even counts give no clean write
+	// majority). See #173.
+	// +kubebuilder:validation:Minimum=2
+	// +optional
+	MinSystemPrimaries *int32 `json:"minSystemPrimaries,omitempty"`
 
 	// ServerModeConstraint optionally constrains all servers to a specific mode
 	// Valid values: "PRIMARY", "SECONDARY", "NONE" (default: "NONE")

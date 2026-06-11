@@ -544,6 +544,15 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 		}
 	}
 
+	// Drive the scale-down drain BEFORE applying the StatefulSet. When a
+	// scale-down is pending it sets ScaleDownDrainingAnnotation (in-memory +
+	// persisted), which the apply below honours to HOLD replicas until the
+	// removed servers are deallocated + dropped (#173). Non-fatal — on
+	// connect/query errors it keeps holding and retries next reconcile.
+	if err := r.reconcileScaleDownDrain(ctx, cluster); err != nil {
+		logger.Error(err, "Scale-down drain step failed (non-fatal)")
+	}
+
 	if err := r.createOrUpdateResource(ctx, serverStatefulSet, cluster); err != nil {
 		logger.Error(err, "Failed to create server StatefulSet")
 		_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Failed to create server StatefulSet: %v", err))
@@ -602,11 +611,10 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 	// Note: Split-brain detection is already performed in verifyNeo4jClusterFormation
 	statusChanged := r.updateClusterStatus(ctx, cluster, "Ready", "Neo4j cluster is fully formed and ready")
 
-	// Surface any servers still registered beyond spec.topology.servers after a
-	// scale-down (not yet deallocated/dropped) as a condition + Warning event.
-	// The Ready check above compares against the new, smaller server count, so
-	// without this an incomplete scale-down silently looks healthy (#173).
-	r.reconcileScaleDownDrainStatus(ctx, cluster)
+	// Scale-down draining (server cordon→deallocate→drop) is driven earlier in
+	// the reconcile by reconcileScaleDownDrain, which owns the
+	// ServersPendingDrain condition + events and holds replicas until the drain
+	// completes (#173).
 
 	// Update property sharding readiness status if enabled
 	if cluster.Spec.PropertySharding != nil && cluster.Spec.PropertySharding.Enabled {
@@ -820,7 +828,11 @@ func (r *Neo4jEnterpriseClusterReconciler) createOrUpdateResourceInternal(ctx co
 				// sticks. Only the replicas line is skipped; everything
 				// else (services, ConfigMap, certs, template updates)
 				// continues to reconcile normally.
-				if !replicasReconciliationPaused(owner) {
+				// Hold replicas during a restore coordination (#117) AND while a
+				// scale-down drain is in progress (#173) — in the latter case the
+				// removed pods must stay running until their servers are
+				// deallocated + dropped, then a later reconcile lowers replicas.
+				if !replicasReconciliationPaused(owner) && !scaleDownDrainInProgress(owner) {
 					sts.Spec.Replicas = desiredSpec.Replicas
 				}
 				sts.Spec.UpdateStrategy = desiredSpec.UpdateStrategy

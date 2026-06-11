@@ -1796,7 +1796,7 @@ func (c *Client) ListServers(ctx context.Context) ([]ServerInfo, error) {
 	// includes the bolt port; we don't strip it because the column is
 	// purely diagnostic — only `id` is consumed by recreate.
 	result, err := session.Run(ctx,
-		"SHOW SERVERS YIELD serverId, name, address, state, health", nil)
+		"SHOW SERVERS YIELD serverId, name, address, state, health, hosting", nil)
 	if err != nil {
 		return nil, fmt.Errorf("SHOW SERVERS failed: %w", err)
 	}
@@ -1828,6 +1828,15 @@ func (c *Client) ListServers(ctx context.Context) ([]ServerInfo, error) {
 		if v, ok := rec.Get("health"); ok {
 			if str, ok := v.(string); ok {
 				s.Health = str
+			}
+		}
+		if v, ok := rec.Get("hosting"); ok {
+			if list, ok := v.([]any); ok {
+				for _, h := range list {
+					if str, ok := h.(string); ok {
+						s.Hosting = append(s.Hosting, str)
+					}
+				}
 			}
 		}
 		servers = append(servers, s)

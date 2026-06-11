@@ -294,6 +294,16 @@ func buildStatefulSetForEnterprise(cluster *neo4jv1beta1.Neo4jEnterpriseCluster,
 				Spec: BuildPodSpecForEnterprise(cluster, serverName, adminSecret),
 			},
 			VolumeClaimTemplates: buildVolumeClaimTemplatesForEnterprise(cluster),
+			// WhenScaled=Delete reclaims a removed server's PVC on scale-down so
+			// a later scale-up provisions a clean ordinal instead of resurrecting
+			// a stale server identity (#173). This is safe because the operator
+			// drains (deallocate + drop) the removed servers BEFORE lowering
+			// replicas, so the data has already been relocated. WhenDeleted=Retain
+			// keeps data if the whole cluster CR is deleted (no accidental loss).
+			PersistentVolumeClaimRetentionPolicy: &appsv1.StatefulSetPersistentVolumeClaimRetentionPolicy{
+				WhenScaled:  appsv1.DeletePersistentVolumeClaimRetentionPolicyType,
+				WhenDeleted: appsv1.RetainPersistentVolumeClaimRetentionPolicyType,
+			},
 		},
 	}
 }
@@ -2251,8 +2261,8 @@ EOF
 # On pod restarts (data already exists), skip this so the server rejoins immediately
 # without waiting for all peers to be visible (avoids blocking StatefulSet rolling updates).
 if [ ! -d "/data/databases/system" ]; then
-    echo "Initial formation: setting ` + getMinInitialPrimariesSetting(cluster) + `=${TOTAL_SERVERS}"
-    echo "` + getMinInitialPrimariesSetting(cluster) + `=${TOTAL_SERVERS}" >> /tmp/neo4j-config/neo4j.conf
+    echo "Initial formation: setting ` + getMinInitialPrimariesSetting(cluster) + `=` + fmt.Sprintf("%d", cluster.EffectiveMinSystemPrimaries()) + `"
+    echo "` + getMinInitialPrimariesSetting(cluster) + `=` + fmt.Sprintf("%d", cluster.EffectiveMinSystemPrimaries()) + `" >> /tmp/neo4j-config/neo4j.conf
 else
     echo "Restart detected (/data/databases/system exists) - skipping minimum primaries count"
 fi

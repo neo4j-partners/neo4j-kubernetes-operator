@@ -76,7 +76,7 @@ func TestBuildConfigMapForEnterprise_ClusterFormation(t *testing.T) {
 				},
 			},
 			expectedBootstrap: "TOTAL_SERVERS=2",
-			expectedJoining:   "dbms.cluster.minimum_initial_system_primaries_count=${TOTAL_SERVERS}",
+			expectedJoining:   "dbms.cluster.minimum_initial_system_primaries_count=2",
 		},
 		{
 			name: "three_node_cluster",
@@ -96,7 +96,7 @@ func TestBuildConfigMapForEnterprise_ClusterFormation(t *testing.T) {
 				},
 			},
 			expectedBootstrap: "TOTAL_SERVERS=3",
-			expectedJoining:   "dbms.cluster.minimum_initial_system_primaries_count=${TOTAL_SERVERS}",
+			expectedJoining:   "dbms.cluster.minimum_initial_system_primaries_count=3",
 		},
 		{
 			name: "list_discovery_5x",
@@ -225,11 +225,14 @@ func TestBuildConfigMapForEnterprise_ClusterFormation(t *testing.T) {
 						"5.x startup script should use internal bootstrapping strategy hint")
 				}
 
-				// All versions: minimum_initial_system_primaries_count prevents premature solo bootstrap
-				assert.Contains(t, startupScript, "dbms.cluster.minimum_initial_system_primaries_count=${TOTAL_SERVERS}",
-					"should use TOTAL_SERVERS shell variable to prevent premature solo bootstrapping")
+				// All versions: minimum_initial_system_primaries_count = min(3, servers)
+				// — the system-DB voting floor + scale-down floor (#173). High enough
+				// to prevent premature solo bootstrap, low enough to allow scale-down to 3.
+				expMin := tt.cluster.EffectiveMinSystemPrimaries()
+				assert.Contains(t, startupScript, fmt.Sprintf("dbms.cluster.minimum_initial_system_primaries_count=%d", expMin),
+					"should set minimum_initial_system_primaries_count to min(3, servers)")
 				assert.NotContains(t, startupScript, "dbms.cluster.minimum_initial_system_primaries_count=1",
-					"must NOT hardcode 1 as minimum - that causes split-brain")
+					"must NOT use 1 as minimum - that causes split-brain")
 			}
 		})
 	}

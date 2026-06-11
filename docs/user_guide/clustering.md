@@ -347,27 +347,30 @@ kubectl patch neo4jenterprisecluster my-cluster --type='merge' -p='{"spec":{"top
 kubectl edit neo4jenterprisecluster my-cluster
 ```
 
-> **Scaling down requires manual server drain (for now).** Reducing
-> `spec.topology.servers` lowers the StatefulSet replica count, but the
-> operator does **not yet** deallocate and drop the removed Neo4j servers
-> automatically (tracked in issue #173). Until it does, the removed servers linger in
-> `SHOW SERVERS` and any databases allocated to them can be left
-> **under-replicated**. The operator surfaces this as a `ServersPendingDrain`
-> condition (`status.conditions`) and a `ScaleDownPendingDrain` warning event.
-> To complete a scale-down safely, drain the removed servers yourself before/
-> after the replica reduction:
->
-> ```cypher
-> -- on the system database, for each removed server (by id from SHOW SERVERS):
-> DEALLOCATE DATABASES FROM SERVER '<server-id>';   -- wait until SHOW SERVERS shows 'Deallocated'
-> DROP SERVER '<server-id>';
-> ```
->
-> If `DEALLOCATE` fails because a database's topology can no longer be
-> satisfied by the remaining servers, reduce that database's topology first
-> (`ALTER DATABASE … SET TOPOLOGY …`) or add servers — do not force-remove a
-> server hosting the only/majority primary of a database (that path is
-> disaster recovery, not scaling).
+**Scale-up** just raises the replica count; new servers join and you rebalance databases onto them (`REALLOCATE DATABASES`, or set per-database `TOPOLOGY`).
+
+#### Scaling down (automated, safe-by-default)
+
+When you **lower** `spec.topology.servers`, the operator drains the removed servers **before** their pods are stopped — it never just deletes pods out from under live data. For each removed server (highest ordinals first) it runs, one step per reconcile:
+
+```
+cordon → DRYRUN DEALLOCATE (feasibility) → DEALLOCATE DATABASES FROM SERVER → wait until it hosts only `system` → DROP SERVER → lower replicas
+```
+
+Replicas are **held** at the current count (the removed pods stay running and reachable for data hand-off) until every removed server is dropped; only then are the pods stopped. Progress shows as a `ServersPendingDrain` condition and `ScaleDownDraining` events. Removed-ordinal PVCs are reclaimed (`PVCRetentionPolicy.WhenScaled=Delete`).
+
+**The system-database floor.** A cluster cannot be scaled below `spec.topology.minSystemPrimaries` (default **min(3, servers)** — i.e. 3 for any cluster of 3+, 2 for a 2-server cluster). This is the `system` database's voting-member quorum; Neo4j refuses to drop below it. To run 1–2 nodes, use `Neo4jEnterpriseStandalone`.
+
+**When a scale-down is refused.** The operator sets `ServersPendingDrain` to a `ScaleDownBlocked` reason (with the exact cause) and **holds replicas — nothing is cordoned or removed** — when:
+
+- The target is **below the system-DB floor** (above) — keep ≥ the floor.
+- A **single-primary database** (e.g. the default `neo4j` DB, which has 1 primary by default) lives on a server being removed. Neo4j refuses to move a sole primary (it would mean write-unavailability), and *no* reallocation primitive can relocate it. Give that database an additional primary first so it becomes relocatable:
+  ```cypher
+  ALTER DATABASE neo4j SET TOPOLOGY 2 PRIMARIES;   -- then the scale-down proceeds
+  ```
+- A database's `TOPOLOGY` can no longer be satisfied by the survivors (e.g. a 3-primary DB on a would-be 2-server cluster) — reduce its topology or keep the servers.
+
+The operator deliberately **never auto-changes a database's `TOPOLOGY`** (that alters your durability guarantees) — it only relocates what Neo4j allows and refuses the rest with actionable guidance.
 
 ### Rolling Upgrades
 

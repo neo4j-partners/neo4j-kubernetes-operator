@@ -5464,7 +5464,6 @@ spec:
                   type: object
                 type: array
               topology:
-                description: TopologyConfiguration defines cluster topology requirements
                 properties:
                   availabilityZones:
                     description: AvailabilityZones specifies the expected availability
@@ -5476,6 +5475,22 @@ spec:
                     description: EnforceDistribution ensures servers are distributed
                       across topology domains
                     type: boolean
+                  minSystemPrimaries:
+                    description: |-
+                      MinSystemPrimaries sets dbms.cluster.minimum_initial_system_primaries_count
+                      — the number of servers that host the `system` database as a primary, which
+                      is also the floor the cluster can be scaled DOWN to (Neo4j refuses to drop a
+                      server below it). It is applied only at initial cluster formation.
+
+                      Default (unset): min(3, servers) — i.e. 2 for a 2-server cluster, 3 for any
+                      cluster of 3+. This lets clusters of 3+ scale down to 3 (the recommended odd
+                      quorum) while smaller ones keep their size. Raise it for more system-DB
+                      resilience (pins a higher scale-down floor); it must be >= 2 and <= servers,
+                      and an odd value (3, 5, …) is recommended (even counts give no clean write
+                      majority). See #173.
+                    format: int32
+                    minimum: 2
+                    type: integer
                   placement:
                     description: Placement defines how instances should be distributed
                       across the cluster
