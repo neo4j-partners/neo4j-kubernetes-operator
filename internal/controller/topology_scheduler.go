@@ -60,14 +60,39 @@ func (ts *TopologyScheduler) CalculateTopologyPlacement(ctx context.Context, clu
 		EnforceDistribution: cluster.Spec.Topology.EnforceDistribution,
 	}
 
-	// If specific AZs are not provided, discover them from the cluster
+	// If specific AZs are not provided, discover them from the cluster.
 	if len(placement.AvailabilityZones) == 0 {
 		azs, err := ts.discoverAvailabilityZones(ctx)
 		if err != nil {
-			logger.Error(err, "Failed to discover availability zones")
-			return placement, err
+			// Listing nodes is a CLUSTER-SCOPED read. In namespace-scoped
+			// installs (operatorMode=namespace) the operator holds only a
+			// namespaced Role and cannot read nodes, so AZ auto-discovery is
+			// unavailable. Failing here would leave the cluster stuck `Failed`
+			// on a core install path (#202), so degrade instead: the
+			// topology-spread / anti-affinity constraints reference the zone
+			// LABEL KEY, not the enumerated AZ list, so the Kubernetes
+			// scheduler still spreads across zones without us enumerating them.
+			//
+			// The one contract we cannot honor blind is enforceDistribution
+			// (a hard "N servers across ≥N zones" guarantee that needs zone
+			// visibility) — fail that with an actionable message rather than
+			// silently pretending it was enforced.
+			if placement.EnforceDistribution {
+				return placement, fmt.Errorf("cannot verify availability zones for enforceDistribution (listing nodes failed: %w). In namespace-scoped mode the operator cannot read cluster-scoped nodes — set spec.topology.availabilityZones explicitly, disable spec.topology.enforceDistribution, or run the operator in cluster mode", err)
+			}
+			// A failed node list only matters when zone-based placement is
+			// actually applied. If neither topology-spread nor anti-affinity is
+			// enabled, the enumerated AZ list is unused — so don't flag
+			// degradation or emit the "best-effort zone spread" warning, which
+			// would be misleading when no zone constraints are produced.
+			if placement.UseTopologySpread || placement.UseAntiAffinity {
+				logger.Info("Availability-zone auto-discovery unavailable; applying best-effort zone spread via the topology key. This is expected in namespace-scoped installs (operatorMode=namespace) where the operator cannot read cluster-scoped nodes; set spec.topology.availabilityZones to enumerate zones explicitly.",
+					"error", err.Error())
+				placement.ZoneDiscoveryDegraded = true
+			}
+		} else {
+			placement.AvailabilityZones = azs
 		}
-		placement.AvailabilityZones = azs
 	}
 
 	// Validate topology configuration
@@ -84,6 +109,12 @@ type TopologyPlacement struct {
 	UseAntiAffinity     bool     `json:"useAntiAffinity"`
 	AvailabilityZones   []string `json:"availabilityZones"`
 	EnforceDistribution bool     `json:"enforceDistribution"`
+	// ZoneDiscoveryDegraded is set when availability-zone auto-discovery was
+	// requested but the cluster-scoped node list was unavailable (e.g.
+	// namespace-scoped RBAC). Spread/anti-affinity still apply via the zone
+	// label key; the controller surfaces a Warning event so the operator knows
+	// enumeration was skipped. See #202.
+	ZoneDiscoveryDegraded bool `json:"zoneDiscoveryDegraded,omitempty"`
 }
 
 // ApplyTopologyConstraints applies topology constraints to a StatefulSet

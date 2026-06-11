@@ -512,6 +512,13 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 			r.Recorder.Event(cluster, corev1.EventTypeNormal, EventReasonTopologyPlacementCalc,
 				fmt.Sprintf("Calculated topology placement across %d zones", len(placement.AvailabilityZones)))
 		}
+		if placement.ZoneDiscoveryDegraded {
+			// Surface the degraded path so it's visible via `kubectl describe`,
+			// not just operator logs. Spread still applies via the zone label
+			// key; only AZ enumeration was skipped (#202).
+			r.Recorder.Event(cluster, corev1.EventTypeWarning, EventReasonTopologyZoneDiscoveryDegraded,
+				"Availability-zone auto-discovery unavailable (cannot list cluster-scoped nodes; expected in namespace-scoped installs). Applying best-effort zone spread via the topology key — set spec.topology.availabilityZones to enumerate zones explicitly.")
+		}
 	}
 
 	// Check if PVC storage expansion is needed before creating/updating StatefulSets.
