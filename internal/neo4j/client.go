@@ -484,30 +484,76 @@ func (c *Client) formatOptionKey(key string) string {
 // user-controlled input (seedURI, option values) can never break out of the
 // Cypher. seedURI, when non-empty, is added as the documented `seedURI` option
 // key (replacing the non-grammar `FROM '<uri>'` clause; see issue #169).
-func (c *Client) buildOptionsClause(options map[string]string, seedURI string) (string, map[string]any) {
-	merged := make(map[string]string, len(options)+1)
+func (c *Client) buildOptionsClause(options map[string]string, seedURI string, seedConfig *neo4jv1beta1.SeedConfiguration) (string, map[string]any) {
+	merged := make(map[string]string, len(options)+2)
 	for k, v := range options {
 		merged[c.formatOptionKey(k)] = v
 	}
 	if seedURI != "" {
 		merged["seedURI"] = seedURI
 	}
-	if len(merged) == 0 {
-		return "", nil
+	// seedConfig: the documented comma-separated provider-config string
+	// (e.g. "region=eu-west-1"). Carried as a driver parameter.
+	if seedConfig != nil {
+		if cfg := serializeSeedConfig(seedConfig.Config); cfg != "" {
+			merged["seedConfig"] = cfg
+		}
 	}
+
 	keys := make([]string, 0, len(merged))
 	for k := range merged {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys) // deterministic clause order
-	params := make(map[string]any, len(merged))
-	parts := make([]string, 0, len(merged))
+	params := make(map[string]any, len(merged)+1)
+	parts := make([]string, 0, len(merged)+1)
 	for _, k := range keys {
 		p := "opt_" + k
 		parts = append(parts, fmt.Sprintf("%s: $%s", k, p))
 		params[p] = merged[k]
 	}
+
+	// seedRestoreUntil (point-in-time) is expressed per the docs: an integer
+	// transaction id as `$p`, an RFC3339 timestamp as `datetime($p)`. CalVer-only
+	// — the validator rejects restoreUntil on 5.26. The value is a parameter
+	// either way, so it can't inject. Appended after the sorted entries.
+	if seedConfig != nil && seedConfig.RestoreUntil != "" {
+		if txid, ok := strings.CutPrefix(seedConfig.RestoreUntil, "txId:"); ok {
+			if n, err := strconv.ParseInt(txid, 10, 64); err == nil {
+				parts = append(parts, "seedRestoreUntil: $opt_seedRestoreUntil")
+				params["opt_seedRestoreUntil"] = n
+			}
+		} else {
+			parts = append(parts, "seedRestoreUntil: datetime($opt_seedRestoreUntil)")
+			params["opt_seedRestoreUntil"] = seedConfig.RestoreUntil
+		}
+	}
+
+	if len(parts) == 0 {
+		return "", nil
+	}
 	return " OPTIONS {" + strings.Join(parts, ", ") + "}", params
+}
+
+// serializeSeedConfig renders a seed-provider config map as the documented
+// comma-separated `key=value` string (e.g. "region=eu-west-1") used by the
+// seedConfig OPTIONS key. Keys are sorted for determinism. The result is passed
+// to Cypher as a driver parameter; the validator constrains keys/values so the
+// comma-separated form is unambiguous and injection-safe.
+func serializeSeedConfig(cfg map[string]string) string {
+	if len(cfg) == 0 {
+		return ""
+	}
+	keys := make([]string, 0, len(cfg))
+	for k := range cfg {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(cfg))
+	for _, k := range keys {
+		parts = append(parts, k+"="+cfg[k])
+	}
+	return strings.Join(parts, ",")
 }
 
 // cypherLanguageClause returns the ` DEFAULT LANGUAGE CYPHER <v>` clause only
@@ -662,7 +708,7 @@ func (c *Client) CreateDatabase(ctx context.Context, databaseName string, option
 	}
 
 	// Add options (values are driver parameters — never interpolated)
-	optClause, params := c.buildOptionsClause(options, "")
+	optClause, params := c.buildOptionsClause(options, "", nil)
 	query += optClause
 
 	// Add WAIT or NOWAIT
@@ -731,7 +777,7 @@ func (c *Client) CreateDatabaseWithTopology(ctx context.Context, databaseName st
 	}
 
 	// Add options (values are driver parameters — never interpolated)
-	optClause, params := c.buildOptionsClause(options, "")
+	optClause, params := c.buildOptionsClause(options, "", nil)
 	query += optClause
 
 	// Add WAIT or NOWAIT
@@ -2439,20 +2485,11 @@ func (c *Client) CreateDatabaseFromSeedURI(ctx context.Context, databaseName, se
 	// Add Cypher language version for Neo4j 2025.x (only "5"/"25" are emitted)
 	query += cypherLanguageClause(cypherVersion)
 
-	// Legacy SEED CONFIG clause (S3SeedProvider-era; vestigial under
-	// CloudSeedProvider — see issue #169). seedConfig values are validated
-	// upstream so they cannot inject.
-	if seedConfig != nil {
-		seedOptions := c.buildSeedOptions(seedConfig)
-		if len(seedOptions) > 0 {
-			query += fmt.Sprintf(" SEED CONFIG %s", seedOptions)
-		}
-	}
-
-	// Seed URI + general options as one OPTIONS map; seedURI and every option
-	// value is a driver parameter (replaces the non-grammar `FROM '<uri>'`
-	// clause — see issue #169).
-	optClause, params := c.buildOptionsClause(options, seedURI)
+	// seedURI, seedConfig (provider-config string), seedRestoreUntil
+	// (point-in-time) and any general options are emitted as one documented
+	// OPTIONS map; every value is a driver parameter. This replaces the
+	// non-grammar `FROM '<uri>'` and `SEED CONFIG {…}` clauses (issue #169).
+	optClause, params := c.buildOptionsClause(options, seedURI, seedConfig)
 	query += optClause
 
 	// Add WAIT or NOWAIT
@@ -2510,20 +2547,11 @@ func (c *Client) CreateDatabaseFromSeedURIWithTopology(ctx context.Context, data
 		}
 	}
 
-	// Legacy SEED CONFIG clause (S3SeedProvider-era; vestigial under
-	// CloudSeedProvider — see issue #169). seedConfig values are validated
-	// upstream so they cannot inject.
-	if seedConfig != nil {
-		seedOptions := c.buildSeedOptions(seedConfig)
-		if len(seedOptions) > 0 {
-			query += fmt.Sprintf(" SEED CONFIG %s", seedOptions)
-		}
-	}
-
-	// Seed URI + general options as one OPTIONS map; seedURI and every option
-	// value is a driver parameter (replaces the non-grammar `FROM '<uri>'`
-	// clause — see issue #169).
-	optClause, params := c.buildOptionsClause(options, seedURI)
+	// seedURI, seedConfig (provider-config string), seedRestoreUntil
+	// (point-in-time) and any general options are emitted as one documented
+	// OPTIONS map; every value is a driver parameter. This replaces the
+	// non-grammar `FROM '<uri>'` and `SEED CONFIG {…}` clauses (issue #169).
+	optClause, params := c.buildOptionsClause(options, seedURI, seedConfig)
 	query += optClause
 
 	// Add WAIT or NOWAIT
@@ -2539,35 +2567,6 @@ func (c *Client) CreateDatabaseFromSeedURIWithTopology(ctx context.Context, data
 	}
 
 	return nil
-}
-
-// buildSeedOptions builds the seed configuration options string
-func (c *Client) buildSeedOptions(seedConfig *neo4jv1beta1.SeedConfiguration) string {
-	var parts []string
-
-	// Add restoreUntil if specified
-	if seedConfig.RestoreUntil != "" {
-		if strings.HasPrefix(seedConfig.RestoreUntil, "txId:") {
-			// Transaction ID format
-			parts = append(parts, fmt.Sprintf("restoreUntil: %s", seedConfig.RestoreUntil))
-		} else {
-			// RFC3339 timestamp format - quote it
-			parts = append(parts, fmt.Sprintf("restoreUntil: '%s'", seedConfig.RestoreUntil))
-		}
-	}
-
-	// Add custom configuration options
-	if seedConfig.Config != nil {
-		for key, value := range seedConfig.Config {
-			parts = append(parts, fmt.Sprintf("%s: '%s'", key, value))
-		}
-	}
-
-	if len(parts) > 0 {
-		return "{" + strings.Join(parts, ", ") + "}"
-	}
-
-	return ""
 }
 
 // PrepareCloudCredentials prepares cloud credentials for seed URI access

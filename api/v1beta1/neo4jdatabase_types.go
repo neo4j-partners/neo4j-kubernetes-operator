@@ -156,17 +156,16 @@ type SeedConfiguration struct {
 	// Only available with Neo4j 2025.x and CloudSeedProvider.
 	RestoreUntil string `json:"restoreUntil,omitempty"`
 
-	// Additional seed provider configuration options
+	// Seed-provider configuration, rendered into the documented `seedConfig`
+	// OPTIONS string as comma-separated key=value pairs (e.g. region=eu-west-1).
 	//
-	// Common configuration options:
-	// - "compression": "gzip" | "lz4" | "none"
-	// - "validation": "strict" | "lenient"
-	// - "bufferSize": Buffer size for seed operations
+	// This is consumed by the S3SeedProvider; CloudSeedProvider (the operator's
+	// default for s3://, gs:// and azb://) resolves credentials and region from
+	// the environment / SDK default chain instead (see spec.extraEnvFrom), so
+	// most deployments leave this empty.
 	//
-	// Cloud-specific options:
-	// - S3: "region", "endpoint", "pathStyleAccess"
-	// - GCS: "project", "location"
-	// - Azure: "endpoint", "containerName"
+	// Keys and values must be simple (no ',', '=', quote, backtick or newline).
+	// Common S3SeedProvider key: "region".
 	Config map[string]string `json:"config,omitempty"`
 }
 

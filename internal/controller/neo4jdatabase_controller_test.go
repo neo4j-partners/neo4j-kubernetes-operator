@@ -297,11 +297,8 @@ var _ = Describe("Neo4jDatabase Controller", func() {
 					Name:       "invalidconfigdb",
 					SeedURI:    "s3://my-backups/database.backup",
 					SeedConfig: &neo4jv1beta1.SeedConfiguration{
-						RestoreUntil: "invalid-timestamp",
-						Config: map[string]string{
-							"compression": "invalid-compression",
-							"validation":  "invalid-validation",
-						},
+						RestoreUntil: "invalid-timestamp",                // bad format
+						Config:       map[string]string{"region": "a,b"}, // comma breaks the seedConfig string
 					},
 				},
 			}
@@ -311,34 +308,24 @@ var _ = Describe("Neo4jDatabase Controller", func() {
 			validator := validation.NewDatabaseValidator(k8sClient)
 			result := validator.Validate(ctx, database)
 
-			// Should have multiple validation errors for invalid configuration
-			Expect(len(result.Errors)).To(BeNumerically(">=", 3)) // restoreUntil + compression + validation
-
-			// Check specific error messages
 			errorMessages := make([]string, len(result.Errors))
 			for i, err := range result.Errors {
 				errorMessages[i] = err.Error()
 			}
 
 			foundRestoreUntilError := false
-			foundCompressionError := false
-			foundValidationError := false
-
+			foundSeedConfigValueError := false
 			for _, msg := range errorMessages {
 				if Contains(msg, "restoreUntil must be an RFC3339 timestamp") {
 					foundRestoreUntilError = true
 				}
-				if Contains(msg, "compression") && Contains(msg, "supported values") {
-					foundCompressionError = true
-				}
-				if Contains(msg, "validation") && Contains(msg, "supported values") {
-					foundValidationError = true
+				if Contains(msg, "may not contain") {
+					foundSeedConfigValueError = true
 				}
 			}
 
-			Expect(foundRestoreUntilError).To(BeTrue())
-			Expect(foundCompressionError).To(BeTrue())
-			Expect(foundValidationError).To(BeTrue())
+			Expect(foundRestoreUntilError).To(BeTrue(), "errors: %v", errorMessages)
+			Expect(foundSeedConfigValueError).To(BeTrue(), "errors: %v", errorMessages)
 
 			// Cleanup
 			Expect(k8sClient.Delete(ctx, database)).To(Succeed())

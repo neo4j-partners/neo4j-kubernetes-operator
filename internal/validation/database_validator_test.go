@@ -609,37 +609,37 @@ func TestDatabaseValidator_ValidateSeedConfiguration(t *testing.T) {
 			shouldContainError: "txId: format requires a positive integer",
 		},
 		{
-			name: "valid compression config",
+			name: "arbitrary provider config keys accepted",
 			seedConfig: &neo4jv1beta1.SeedConfiguration{
 				Config: map[string]string{
-					"compression": "gzip",
-					"validation":  "strict",
+					"region":   "eu-west-1",
+					"endpoint": "s3.example.com",
 				},
 			},
 			expectedErrors:   0,
 			expectedWarnings: 1, // System auth warning
 		},
 		{
-			name: "invalid compression value",
+			name: "seedConfig value with comma rejected",
 			seedConfig: &neo4jv1beta1.SeedConfiguration{
 				Config: map[string]string{
-					"compression": "invalid-compression",
+					"region": "a,b",
 				},
 			},
 			expectedErrors:     1,
 			expectedWarnings:   1,
-			shouldContainError: "supported values:",
+			shouldContainError: "may not contain",
 		},
 		{
-			name: "unknown config option",
+			name: "seedConfig key with space rejected",
 			seedConfig: &neo4jv1beta1.SeedConfiguration{
 				Config: map[string]string{
-					"unknownOption": "someValue",
+					"bad key": "v",
 				},
 			},
-			expectedErrors:       0,
-			expectedWarnings:     2, // System auth + unknown option warnings
-			shouldContainWarning: "Unknown seed configuration option 'unknownOption'",
+			expectedErrors:     1,
+			expectedWarnings:   1,
+			shouldContainError: "seedConfig key may contain only",
 		},
 	}
 
@@ -1105,4 +1105,57 @@ func TestSeedConfigInjectionGuards(t *testing.T) {
 			}
 		}
 	})
+}
+
+// TestSeedConfig_RestoreUntilVersionGate pins that point-in-time seed
+// (restoreUntil → seedRestoreUntil) is rejected on the 5.x LTS line and
+// accepted on CalVer, since seedRestoreUntil is CalVer-only (issue #169).
+func TestSeedConfig_RestoreUntilVersionGate(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = neo4jv1beta1.AddToScheme(scheme)
+
+	mkCluster := func(name, tag string) *neo4jv1beta1.Neo4jEnterpriseCluster {
+		return &neo4jv1beta1.Neo4jEnterpriseCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
+			Spec: neo4jv1beta1.Neo4jEnterpriseClusterSpec{
+				Image:    neo4jv1beta1.ImageSpec{Repo: "neo4j", Tag: tag},
+				Topology: neo4jv1beta1.TopologyConfiguration{Servers: 3},
+			},
+		}
+	}
+	lts := mkCluster("lts", "5.26.0-enterprise")
+	calver := mkCluster("calver", "2025.04.0-enterprise")
+	client := fake.NewClientBuilder().WithScheme(scheme).WithObjects(lts, calver).Build()
+	validator := NewDatabaseValidator(client)
+	ctx := context.Background()
+
+	mkDB := func(clusterRef string) *neo4jv1beta1.Neo4jDatabase {
+		return &neo4jv1beta1.Neo4jDatabase{
+			ObjectMeta: metav1.ObjectMeta{Name: "db", Namespace: "default"},
+			Spec: neo4jv1beta1.Neo4jDatabaseSpec{
+				ClusterRef: clusterRef,
+				Name:       "seededdb",
+				SeedURI:    "s3://bucket/backup.backup",
+				SeedConfig: &neo4jv1beta1.SeedConfiguration{RestoreUntil: "txId:12345"},
+			},
+		}
+	}
+
+	hasErr := func(errs field.ErrorList, sub string) bool {
+		for _, e := range errs {
+			if strings.Contains(e.Error(), sub) {
+				return true
+			}
+		}
+		return false
+	}
+
+	ltsRes := validator.Validate(ctx, mkDB("lts"))
+	if !hasErr(ltsRes.Errors, "requires Neo4j 2025.x+") {
+		t.Errorf("restoreUntil must be rejected on 5.x LTS, errors: %v", ltsRes.Errors)
+	}
+	calverRes := validator.Validate(ctx, mkDB("calver"))
+	if hasErr(calverRes.Errors, "requires Neo4j 2025.x+") {
+		t.Errorf("restoreUntil must be accepted on CalVer, errors: %v", calverRes.Errors)
+	}
 }

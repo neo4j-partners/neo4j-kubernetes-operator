@@ -30,6 +30,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/neo4j-partners/neo4j-kubernetes-operator/internal/neo4j"
+
 	neo4jv1beta1 "github.com/neo4j-partners/neo4j-kubernetes-operator/api/v1beta1"
 )
 
@@ -65,6 +67,11 @@ const MaxDatabaseNameLength = maxDatabaseNameLength
 // restoreUntilTxIDPattern matches the transaction-id form of seedConfig
 // restoreUntil ("txId:<positive integer>").
 var restoreUntilTxIDPattern = regexp.MustCompile(`^[0-9]+$`)
+
+// seedConfigKeyPattern constrains seedConfig.Config keys: they are serialised
+// into the comma/`=`-delimited seedConfig OPTIONS string (e.g. "region=..."),
+// so they must be simple identifiers.
+var seedConfigKeyPattern = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
 
 // isRFC3339Timestamp reports whether s parses as an RFC3339 timestamp. Used to
 // validate seedConfig restoreUntil, which is string-interpolated into Cypher.
@@ -181,8 +188,15 @@ func (v *DatabaseValidator) Validate(ctx context.Context, database *neo4jv1beta1
 	// Validate Cypher language version
 	v.validateCypherLanguage(database, result)
 
+	// Resolve the target image tag (cluster or standalone) so seed-config
+	// version gating (seedRestoreUntil is CalVer-only) can be enforced.
+	imageTag := cluster.Spec.Image.Tag
+	if standalone != nil {
+		imageTag = standalone.Spec.Image.Tag
+	}
+
 	// Validate seed URI configuration
-	v.validateSeedURI(ctx, database, result)
+	v.validateSeedURI(ctx, database, imageTag, result)
 
 	// Validate database options syntax
 	v.validateDatabaseOptions(database, result)
@@ -356,7 +370,7 @@ func (v *DatabaseValidator) validateCypherLanguage(database *neo4jv1beta1.Neo4jD
 	}
 }
 
-func (v *DatabaseValidator) validateSeedURI(ctx context.Context, database *neo4jv1beta1.Neo4jDatabase, result *DatabaseValidationResult) {
+func (v *DatabaseValidator) validateSeedURI(ctx context.Context, database *neo4jv1beta1.Neo4jDatabase, imageTag string, result *DatabaseValidationResult) {
 	seedURIPath := field.NewPath("spec", "seedURI")
 
 	// If no seed URI is specified, skip validation
@@ -404,7 +418,7 @@ func (v *DatabaseValidator) validateSeedURI(ctx context.Context, database *neo4j
 
 	// Validate seed configuration if provided
 	if database.Spec.SeedConfig != nil {
-		v.validateSeedConfiguration(database, result)
+		v.validateSeedConfiguration(database, imageTag, result)
 	}
 
 	// Validate seed credentials if provided
@@ -416,20 +430,18 @@ func (v *DatabaseValidator) validateSeedURI(ctx context.Context, database *neo4j
 	v.addSeedURIWarnings(database, result)
 }
 
-func (v *DatabaseValidator) validateSeedConfiguration(database *neo4jv1beta1.Neo4jDatabase, result *DatabaseValidationResult) {
+func (v *DatabaseValidator) validateSeedConfiguration(database *neo4jv1beta1.Neo4jDatabase, imageTag string, result *DatabaseValidationResult) {
 	seedConfigPath := field.NewPath("spec", "seedConfig")
 	seedConfig := database.Spec.SeedConfig
 
-	// Validate RestoreUntil format if specified
+	// Validate RestoreUntil (point-in-time) if specified. It maps to the
+	// documented seedRestoreUntil OPTIONS key, which is CalVer-only
+	// (CloudSeedProvider/FileSeedProvider) — 5.x has no point-in-time seed.
 	if seedConfig.RestoreUntil != "" {
 		restoreUntilPath := seedConfigPath.Child("restoreUntil")
 		restoreUntil := seedConfig.RestoreUntil
 
-		// Check for supported formats: RFC3339 timestamp or txId:number.
-		// restoreUntil is string-interpolated into the legacy SEED CONFIG clause
-		// (txId: form is unquoted), so the format checks double as the injection
-		// guard — only digits or an RFC3339 timestamp are accepted, neither of
-		// which can contain Cypher metacharacters.
+		// Format: a positive-integer txId, or an RFC3339 timestamp.
 		switch {
 		case strings.HasPrefix(restoreUntil, "txId:"):
 			txId := strings.TrimPrefix(restoreUntil, "txId:")
@@ -447,49 +459,35 @@ func (v *DatabaseValidator) validateSeedConfiguration(database *neo4jv1beta1.Neo
 				restoreUntil,
 				"restoreUntil must be an RFC3339 timestamp (e.g., '2025-01-15T10:30:00Z') or a transaction ID (e.g., 'txId:12345')"))
 		}
+
+		// Version gate: seedRestoreUntil is unavailable on 5.x LTS.
+		if parsed, err := neo4j.ParseVersion(imageTag); err == nil && !parsed.IsCalver {
+			result.Errors = append(result.Errors, field.Forbidden(
+				restoreUntilPath,
+				fmt.Sprintf("point-in-time seed (restoreUntil) requires Neo4j 2025.x+ (CalVer); target image %q is a 5.x LTS line", imageTag)))
+		}
 	}
 
-	// Validate configuration options
+	// Validate seedConfig.Config — the documented provider-config map serialised
+	// into the seedConfig OPTIONS string ("key=value,key2=value2", e.g.
+	// region=eu-west-1 for the S3SeedProvider). The serialisation is
+	// comma/`=`-delimited, so keys and values must not contain `,` or `=`, and
+	// (since the value is rendered into Cypher, albeit via a parameter) must not
+	// contain quote/backtick/newline.
 	if seedConfig.Config != nil {
 		configPath := seedConfigPath.Child("config")
 		for key, value := range seedConfig.Config {
-			// seedConfig values are string-interpolated into the legacy SEED
-			// CONFIG clause (issue #169), so reject anything that could break
-			// out of the single-quoted Cypher literal.
-			if cypherLiteralUnsafe(value) {
+			if !seedConfigKeyPattern.MatchString(key) {
+				result.Errors = append(result.Errors, field.Invalid(
+					configPath.Key(key),
+					key,
+					"seedConfig key may contain only letters, digits, dots, underscores and dashes"))
+			}
+			if strings.ContainsAny(value, ",=") || cypherLiteralUnsafe(value) {
 				result.Errors = append(result.Errors, field.Invalid(
 					configPath.Key(key),
 					value,
-					"value may not contain quote, backtick or newline characters"))
-			}
-			// Validate known configuration keys
-			switch key {
-			case "compression":
-				if !containsSlice([]string{"gzip", "lz4", "none"}, value) {
-					result.Errors = append(result.Errors, field.NotSupported(
-						configPath.Key(key),
-						value,
-						[]string{"gzip", "lz4", "none"}))
-				}
-			case "validation":
-				if !containsSlice([]string{"strict", "lenient"}, value) {
-					result.Errors = append(result.Errors, field.NotSupported(
-						configPath.Key(key),
-						value,
-						[]string{"strict", "lenient"}))
-				}
-			case "bufferSize":
-				if value == "" {
-					result.Errors = append(result.Errors, field.Invalid(
-						configPath.Key(key),
-						value,
-						"bufferSize cannot be empty"))
-				}
-			default:
-				// Allow unknown keys with warning
-				result.Warnings = append(result.Warnings,
-					fmt.Sprintf("Unknown seed configuration option '%s'. "+
-						"Refer to Neo4j CloudSeedProvider documentation for supported options.", key))
+					"seedConfig value may not contain ',', '=', quote, backtick or newline characters"))
 			}
 		}
 	}
