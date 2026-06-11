@@ -10,6 +10,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -50,149 +51,79 @@ func parseServerOrdinal(s, clusterName string) (int, bool) {
 	return n, true
 }
 
-// serversPendingDrain returns the identifiers of servers still registered with
-// the cluster whose pod ordinal is >= desiredServers — i.e. servers slated for
-// removal by a scale-down that have NOT yet been deallocated and dropped. They
-// linger in SHOW SERVERS (often Enabled but Unavailable once their pod is gone)
-// and their databases may be left under-replicated. Servers already in a
-// terminal removal state (Deallocated/Dropped) are excluded — they're being
-// handled. Pure function so the detection is unit-testable without a cluster.
-func serversPendingDrain(servers []neo4jclient.ServerInfo, clusterName string, desiredServers int) []string {
-	var pending []string
-	for _, s := range servers {
-		ord, ok := parseServerOrdinal(s.Address, clusterName)
-		if !ok {
-			ord, ok = parseServerOrdinal(s.Name, clusterName)
-		}
-		if !ok || ord < desiredServers {
-			continue
-		}
-		switch strings.ToLower(s.State) {
-		case "dropped", "deallocated":
-			continue
-		}
-		// Report the serverId — it's always populated and is what
-		// DEALLOCATE/DROP SERVER accept. The `name` column is often empty
-		// (defaults to the id) and the bolt `address` (…:7687) is NOT a valid
-		// server-management argument. Fall back only if id is somehow missing.
-		id := s.ID
-		if id == "" {
-			id = s.Name
-		}
-		if id == "" {
-			id = s.Address
-		}
-		pending = append(pending, id)
-	}
-	return pending
-}
-
-// reconcileScaleDownDrainStatus surfaces, as a status condition + a one-shot
-// Warning event, any servers left registered beyond spec.topology.servers after
-// a scale-down. The operator does not yet auto-deallocate/drop removed servers
-// (#173), so this makes the resulting under-replication VISIBLE instead of it
-// silently passing the Ready check (which compares against the new, smaller
-// server count). Non-fatal: connection / query / status-write failures are
-// swallowed — this is observability, never a reconcile gate.
-func (r *Neo4jEnterpriseClusterReconciler) reconcileScaleDownDrainStatus(ctx context.Context, cluster *neo4jv1beta1.Neo4jEnterpriseCluster) {
-	logger := log.FromContext(ctx)
-	desired := int(cluster.Spec.Topology.Servers)
-	if desired <= 0 {
-		return
-	}
-
-	nc, err := r.createNeo4jClient(ctx, cluster)
-	if err != nil {
-		logger.V(1).Info("Skipping scale-down drain status: could not create Neo4j client", "error", err)
-		return
-	}
-	defer nc.Close()
-
-	servers, err := nc.ListServers(ctx)
-	if err != nil {
-		logger.V(1).Info("Skipping scale-down drain status: SHOW SERVERS failed", "error", err)
-		return
-	}
-
-	pending := serversPendingDrain(servers, cluster.Name, desired)
-
-	status := metav1.ConditionFalse
-	reason := ConditionReasonNoServersPendingDrain
-	message := "No servers pending drain"
-	if len(pending) > 0 {
-		status = metav1.ConditionTrue
-		reason = ConditionReasonServersPendingDrain
-		message = fmt.Sprintf("%d server(s) registered beyond spec.topology.servers=%d and not yet deallocated/dropped: %s. Databases may be under-replicated on these servers — the operator does not yet auto-drain removed servers (#173). Deallocate them (DEALLOCATE DATABASES FROM SERVER) and DROP SERVER manually, or scale back up.",
-			len(pending), desired, strings.Join(pending, ", "))
-	}
-
-	// Emit the Warning only on transition INTO the pending state to avoid
-	// per-reconcile spam.
-	prev := findCondition(cluster.Status.Conditions, ConditionTypeServersPendingDrain)
-	wasPending := prev != nil && prev.Status == metav1.ConditionTrue
-
-	// Persist via refetch + RetryOnConflict (never write a stale in-memory
-	// object — cf. #207).
-	writeErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		latest := &neo4jv1beta1.Neo4jEnterpriseCluster{}
-		if getErr := r.Get(ctx, client.ObjectKeyFromObject(cluster), latest); getErr != nil {
-			return getErr
-		}
-		SetNamedCondition(&latest.Status.Conditions, ConditionTypeServersPendingDrain,
-			latest.Generation, status, reason, message)
-		return r.Status().Update(ctx, latest)
-	})
-	if writeErr != nil {
-		logger.Error(writeErr, "Failed to update ServersPendingDrain condition (non-fatal)")
-		return
-	}
-
-	if len(pending) > 0 && !wasPending {
-		r.Recorder.Event(cluster, corev1.EventTypeWarning, EventReasonScaleDownPendingDrain, message)
-	}
-}
-
 // ---------------------------------------------------------------------------
 // #173 PR2: automated scale-down drain (cordon -> deallocate -> wait -> drop).
 // ---------------------------------------------------------------------------
 
-// ScaleDownDrainingAnnotation is set on the cluster CR while the operator is
-// draining servers removed by a scale-down. While present, the StatefulSet
-// apply holds spec.replicas at the current count so the to-be-removed pods stay
-// running (and reachable for data hand-off) until their databases have been
-// deallocated and the servers dropped — only then is lowering replicas safe.
-// Mirrors RestoreInProgressAnnotation (#117).
-const ScaleDownDrainingAnnotation = "neo4j.com/scale-down-draining"
+// ScaleDownDrainingServersAnnotation holds the comma-separated Neo4j serverIds
+// the operator is draining for an in-progress scale-down. Its presence gates
+// the StatefulSet apply (scaleDownDrainInProgress) to HOLD replicas until the
+// drain finishes. Tracking by serverId — NOT pod ordinal — is essential: once a
+// server enters Deallocating its SHOW SERVERS address becomes NULL (and name is
+// just the UUID), so the ordinal can no longer be derived. The id set is
+// captured once at detection (while addresses are present), then driven until
+// every id is Dropped/gone. Also makes the drain resumable after an operator
+// restart.
+const ScaleDownDrainingServersAnnotation = "neo4j.com/scale-down-draining-servers"
 
 func scaleDownDrainInProgress(owner client.Object) bool {
 	if owner == nil {
 		return false
 	}
-	_, draining := owner.GetAnnotations()[ScaleDownDrainingAnnotation]
-	return draining
+	return strings.TrimSpace(owner.GetAnnotations()[ScaleDownDrainingServersAnnotation]) != ""
 }
 
-// removedServers returns the registered (non-Dropped) servers whose pod ordinal
-// is >= desiredServers — the servers a scale-down intends to remove, in ANY
-// drain state (Enabled/Cordoned/Deallocating/Deallocated). Dropped servers are
-// gone and excluded. (Distinct from serversPendingDrain, which is the PR1
-// visibility signal and excludes Deallocated.)
-func removedServers(servers []neo4jclient.ServerInfo, clusterName string, desiredServers int) []neo4jclient.ServerInfo {
-	var out []neo4jclient.ServerInfo
+func drainServerIDsFromAnnotation(owner client.Object) []string {
+	if owner == nil {
+		return nil
+	}
+	var ids []string
+	for _, p := range strings.Split(owner.GetAnnotations()[ScaleDownDrainingServersAnnotation], ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			ids = append(ids, p)
+		}
+	}
+	return ids
+}
+
+// scaleDownConditionIs reports whether the ServersPendingDrain condition is
+// already True with the given reason — used to emit the Blocked Warning event
+// only on transition, not every reconcile (the condition was fetched fresh at
+// the start of this reconcile, so it reflects the persisted state).
+func scaleDownConditionIs(cluster *neo4jv1beta1.Neo4jEnterpriseCluster, reason string) bool {
+	c := findCondition(cluster.Status.Conditions, ConditionTypeServersPendingDrain)
+	return c != nil && c.Status == metav1.ConditionTrue && c.Reason == reason
+}
+
+func serverIdentifier(s neo4jclient.ServerInfo) string {
+	if s.ID != "" {
+		return s.ID
+	}
+	if s.Name != "" {
+		return s.Name
+	}
+	return s.Address
+}
+
+// initialRemovedServerIDs returns the serverIds to drain for a scale-down,
+// computed from servers whose pod ordinal is >= desiredServers (matched on the
+// still-present address/name). Dropped servers excluded. Used at detection time
+// while addresses are intact; thereafter the set is tracked by id.
+func initialRemovedServerIDs(servers []neo4jclient.ServerInfo, clusterName string, desiredServers int) []string {
+	var ids []string
 	for _, s := range servers {
+		if strings.EqualFold(s.State, "dropped") {
+			continue
+		}
 		ord, ok := parseServerOrdinal(s.Address, clusterName)
 		if !ok {
 			ord, ok = parseServerOrdinal(s.Name, clusterName)
 		}
-		if !ok || ord < desiredServers {
-			continue
+		if ok && ord >= desiredServers {
+			ids = append(ids, serverIdentifier(s))
 		}
-		if strings.EqualFold(s.State, "dropped") {
-			continue
-		}
-		out = append(out, s)
 	}
-	return out
+	return ids
 }
 
 type scaleDownPhase int
@@ -210,26 +141,17 @@ type scaleDownStep struct {
 	serverIDs []string
 }
 
-func serverIdentifier(s neo4jclient.ServerInfo) string {
-	if s.ID != "" {
-		return s.ID
-	}
-	if s.Name != "" {
-		return s.Name
-	}
-	return s.Address
-}
-
 // planScaleDownStep decides the next SINGLE drain action from the live states
-// of the removed servers (one action per call — requeue-driven): cordon any not
-// yet cordoned, then deallocate the cordoned ones, then wait while any are
-// deallocating, then drop the deallocated ones. Pure + unit-tested.
-func planScaleDownStep(removed []neo4jclient.ServerInfo) scaleDownStep {
-	if len(removed) == 0 {
+// of the still-active drain-target servers (one action per call —
+// requeue-driven): cordon any not yet cordoned, then deallocate the cordoned
+// ones, then wait while any are deallocating, then drop the deallocated ones.
+// Pure + unit-tested.
+func planScaleDownStep(active []neo4jclient.ServerInfo) scaleDownStep {
+	if len(active) == 0 {
 		return scaleDownStep{phase: scaleDownNone}
 	}
 	var toCordon, toDeallocate, deallocating, toDrop []string
-	for _, s := range removed {
+	for _, s := range active {
 		id := serverIdentifier(s)
 		switch strings.ToLower(s.State) {
 		case "cordoned":
@@ -256,14 +178,15 @@ func planScaleDownStep(removed []neo4jclient.ServerInfo) scaleDownStep {
 	}
 }
 
-// reconcileScaleDownDrain drives the automated drain. It must run BEFORE the
-// StatefulSet apply so the ScaleDownDrainingAnnotation it sets holds replicas
-// this same reconcile. Detects a pending scale-down (current STS replicas >
-// spec.topology.servers), holds replicas, and executes one drain step per
-// reconcile: cordon → DRYRUN-feasibility → deallocate → wait → drop. When all
-// removed servers are dropped it clears the annotation, releasing the hold so a
-// later reconcile lowers replicas. Non-fatal on connection/query errors — it
-// keeps holding and retries (never removes pods it couldn't drain).
+// reconcileScaleDownDrain drives the automated drain. It runs BEFORE the
+// StatefulSet apply so the annotation it sets holds replicas this same
+// reconcile. Detects a pending scale-down (current STS replicas >
+// spec.topology.servers), captures the removed serverIds, and executes one
+// drain step per reconcile (cordon → DRYRUN-feasibility → deallocate → wait →
+// drop) tracked BY ID. Only once every target is Dropped/gone does it clear the
+// annotation, releasing the hold so a later reconcile lowers replicas. Non-fatal
+// on connect/query errors — it keeps holding and retries (never removes pods it
+// couldn't drain).
 func (r *Neo4jEnterpriseClusterReconciler) reconcileScaleDownDrain(ctx context.Context, cluster *neo4jv1beta1.Neo4jEnterpriseCluster) error {
 	logger := log.FromContext(ctx)
 	desired := int(cluster.Spec.Topology.Servers)
@@ -272,22 +195,18 @@ func (r *Neo4jEnterpriseClusterReconciler) reconcileScaleDownDrain(ctx context.C
 	}
 
 	sts := &appsv1.StatefulSet{}
-	stsKey := types.NamespacedName{Name: cluster.Name + "-server", Namespace: cluster.Namespace}
-	if err := r.Get(ctx, stsKey, sts); err != nil {
+	if err := r.Get(ctx, types.NamespacedName{Name: cluster.Name + "-server", Namespace: cluster.Namespace}, sts); err != nil {
 		return nil // STS not created yet — nothing to drain
 	}
 	current := 0
 	if sts.Spec.Replicas != nil {
 		current = int(*sts.Spec.Replicas)
 	}
-	if current <= desired {
-		// No scale-down pending — ensure we are not holding replicas.
-		return r.setScaleDownDraining(ctx, cluster, false)
-	}
 
-	// Scale-down pending — hold replicas while we drain.
-	if err := r.setScaleDownDraining(ctx, cluster, true); err != nil {
-		return err
+	if current <= desired {
+		// Not scaling down (or scaled back up mid-drain) — cancel any hold so
+		// replicas reconcile normally. Servers not yet cordoned are untouched.
+		return r.setDrainServers(ctx, cluster, nil)
 	}
 
 	nc, err := r.createNeo4jClient(ctx, cluster)
@@ -303,13 +222,70 @@ func (r *Neo4jEnterpriseClusterReconciler) reconcileScaleDownDrain(ctx context.C
 		return nil
 	}
 
-	removed := removedServers(servers, cluster.Name, desired)
-	if len(removed) == 0 {
-		logger.Info("Scale-down drain complete; releasing replica hold", "desired", desired)
-		return r.setScaleDownDraining(ctx, cluster, false)
+	// Drain-target id set = persisted ∪ (currently removable by ordinal). The
+	// union absorbs further scale-downs mid-drain.
+	idSet := map[string]bool{}
+	for _, id := range drainServerIDsFromAnnotation(cluster) {
+		idSet[id] = true
+	}
+	if current > desired {
+		for _, id := range initialRemovedServerIDs(servers, cluster.Name, desired) {
+			idSet[id] = true
+		}
+	}
+	if len(idSet) == 0 {
+		return r.setDrainServers(ctx, cluster, nil)
 	}
 
-	step := planScaleDownStep(removed)
+	live := map[string]neo4jclient.ServerInfo{}
+	for _, s := range servers {
+		live[serverIdentifier(s)] = s
+	}
+	var active []neo4jclient.ServerInfo
+	for id := range idSet {
+		s, present := live[id]
+		if !present {
+			continue // dropped + pod stopped → gone
+		}
+		if strings.EqualFold(s.State, "dropped") {
+			continue // dropped; pod will stop once we release the hold
+		}
+		active = append(active, s)
+	}
+
+	if len(active) == 0 {
+		logger.Info("Scale-down drain complete; releasing replica hold", "desired", desired)
+		r.setScaleDownConditionPersisted(ctx, cluster, metav1.ConditionFalse, ConditionReasonNoServersPendingDrain, "Scale-down drain complete")
+		return r.setDrainServers(ctx, cluster, nil)
+	}
+
+	// Persist/refresh the target set (also holds replicas via the annotation).
+	ids := make([]string, 0, len(idSet))
+	for id := range idSet {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	if err := r.setDrainServers(ctx, cluster, ids); err != nil {
+		return err
+	}
+
+	// Pre-flight floor: a cluster cannot be scaled below the system database's
+	// minimum voting members (dbms.cluster.minimum_initial_system_primaries_count,
+	// default 3). Neo4j only rejects this at DROP time — AFTER the irreversible
+	// deallocate — which permanently strands the server (a Deallocating server
+	// can't be re-enabled). Refuse up front, holding replicas, WITHOUT cordoning
+	// or deallocating anything.
+	if minPrimaries := nc.MinimumSystemPrimaries(ctx); desired < minPrimaries {
+		msg := fmt.Sprintf("Refusing to scale this cluster to %d server(s): a Neo4j cluster cannot drop below %d servers — the system database requires at least %d voting members (dbms.cluster.minimum_initial_system_primaries_count). Scaling lower would strand servers (a deallocated server can't rejoin). Keep at least %d servers, or use Neo4jEnterpriseStandalone for a single node. Replicas held at %d.",
+			desired, minPrimaries, minPrimaries, minPrimaries, current)
+		if !scaleDownConditionIs(cluster, ConditionReasonScaleDownBlocked) {
+			r.Recorder.Event(cluster, corev1.EventTypeWarning, EventReasonScaleDownBlocked, msg)
+		}
+		r.setScaleDownConditionPersisted(ctx, cluster, metav1.ConditionTrue, ConditionReasonScaleDownBlocked, msg)
+		return nil
+	}
+
+	step := planScaleDownStep(active)
 	switch step.phase {
 	case scaleDownCordon:
 		for _, id := range step.serverIDs {
@@ -321,12 +297,12 @@ func (r *Neo4jEnterpriseClusterReconciler) reconcileScaleDownDrain(ctx context.C
 		r.Recorder.Eventf(cluster, corev1.EventTypeNormal, EventReasonScaleDownDraining,
 			"Scale-down: cordoned %d server(s): %s", len(step.serverIDs), strings.Join(step.serverIDs, ", "))
 	case scaleDownDeallocate:
-		// DRYRUN feasibility first — refuse and keep holding if the remaining
-		// servers can't satisfy a database topology (never auto-reduce topology).
 		if derr := nc.DeallocateServers(ctx, step.serverIDs, true); derr != nil {
 			msg := fmt.Sprintf("Scale-down to %d server(s) is blocked: DEALLOCATE dry-run failed: %v. Reduce database topology (ALTER DATABASE ... SET TOPOLOGY) or keep the servers — the operator will not auto-reduce topology. Replicas are held until this is resolvable.", desired, derr)
+			if !scaleDownConditionIs(cluster, ConditionReasonScaleDownBlocked) {
+				r.Recorder.Event(cluster, corev1.EventTypeWarning, EventReasonScaleDownBlocked, msg)
+			}
 			r.setScaleDownConditionPersisted(ctx, cluster, metav1.ConditionTrue, ConditionReasonScaleDownBlocked, msg)
-			r.Recorder.Event(cluster, corev1.EventTypeWarning, EventReasonScaleDownBlocked, msg)
 			return nil
 		}
 		if derr := nc.DeallocateServers(ctx, step.serverIDs, false); derr != nil {
@@ -340,31 +316,41 @@ func (r *Neo4jEnterpriseClusterReconciler) reconcileScaleDownDrain(ctx context.C
 	case scaleDownDrop:
 		for _, id := range step.serverIDs {
 			if derr := nc.DropServer(ctx, id); derr != nil {
-				logger.Error(derr, "Scale-down drain: drop failed", "server", id)
+				// A DROP failure here is typically the system-db minimum-voting-
+				// members floor (defensive — the pre-flight above normally
+				// catches it). Surface it as blocked rather than looping.
+				msg := fmt.Sprintf("Scale-down to %d server(s) is blocked: DROP SERVER %s failed: %v. This usually means the drop would take the system database below its minimum voting members. Keep at least the system minimum number of servers. Replicas are held.", desired, id, derr)
+				if !scaleDownConditionIs(cluster, ConditionReasonScaleDownBlocked) {
+					r.Recorder.Event(cluster, corev1.EventTypeWarning, EventReasonScaleDownBlocked, msg)
+				}
+				r.setScaleDownConditionPersisted(ctx, cluster, metav1.ConditionTrue, ConditionReasonScaleDownBlocked, msg)
 				return nil
 			}
 		}
 		r.Recorder.Eventf(cluster, corev1.EventTypeNormal, EventReasonScaleDownDraining,
 			"Scale-down: dropped %d drained server(s): %s", len(step.serverIDs), strings.Join(step.serverIDs, ", "))
 	}
+
+	r.setScaleDownConditionPersisted(ctx, cluster, metav1.ConditionTrue, ConditionReasonServersPendingDrain,
+		fmt.Sprintf("Scale-down to %d server(s) in progress: draining %d server(s)", desired, len(active)))
 	return nil
 }
 
-// setScaleDownDraining sets or clears ScaleDownDrainingAnnotation on the cluster
-// CR — both in memory (so THIS reconcile's StatefulSet apply sees it) and
-// persisted (refetch + RetryOnConflict).
-func (r *Neo4jEnterpriseClusterReconciler) setScaleDownDraining(ctx context.Context, cluster *neo4jv1beta1.Neo4jEnterpriseCluster, draining bool) error {
-	_, has := cluster.GetAnnotations()[ScaleDownDrainingAnnotation]
-	if has == draining {
+// setDrainServers sets (or clears, when ids is empty) the draining-servers
+// annotation on the cluster CR — both in memory (so THIS reconcile's
+// StatefulSet apply holds replicas) and persisted (refetch + RetryOnConflict).
+func (r *Neo4jEnterpriseClusterReconciler) setDrainServers(ctx context.Context, cluster *neo4jv1beta1.Neo4jEnterpriseCluster, ids []string) error {
+	val := strings.Join(ids, ",")
+	if cluster.GetAnnotations()[ScaleDownDrainingServersAnnotation] == val {
 		return nil
 	}
-	if draining {
-		if cluster.Annotations == nil {
-			cluster.Annotations = map[string]string{}
-		}
-		cluster.Annotations[ScaleDownDrainingAnnotation] = "true"
+	if cluster.Annotations == nil {
+		cluster.Annotations = map[string]string{}
+	}
+	if val == "" {
+		delete(cluster.Annotations, ScaleDownDrainingServersAnnotation)
 	} else {
-		delete(cluster.Annotations, ScaleDownDrainingAnnotation)
+		cluster.Annotations[ScaleDownDrainingServersAnnotation] = val
 	}
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		latest := &neo4jv1beta1.Neo4jEnterpriseCluster{}
@@ -374,17 +360,17 @@ func (r *Neo4jEnterpriseClusterReconciler) setScaleDownDraining(ctx context.Cont
 		if latest.Annotations == nil {
 			latest.Annotations = map[string]string{}
 		}
-		if draining {
-			latest.Annotations[ScaleDownDrainingAnnotation] = "true"
+		if val == "" {
+			delete(latest.Annotations, ScaleDownDrainingServersAnnotation)
 		} else {
-			delete(latest.Annotations, ScaleDownDrainingAnnotation)
+			latest.Annotations[ScaleDownDrainingServersAnnotation] = val
 		}
 		return r.Update(ctx, latest)
 	})
 }
 
-// setScaleDownConditionPersisted writes the ServersPendingDrain condition with a
-// scale-down-specific reason (refetch + RetryOnConflict — never a stale write).
+// setScaleDownConditionPersisted writes the ServersPendingDrain condition
+// (refetch + RetryOnConflict — never a stale write).
 func (r *Neo4jEnterpriseClusterReconciler) setScaleDownConditionPersisted(ctx context.Context, cluster *neo4jv1beta1.Neo4jEnterpriseCluster, status metav1.ConditionStatus, reason, message string) {
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		latest := &neo4jv1beta1.Neo4jEnterpriseCluster{}

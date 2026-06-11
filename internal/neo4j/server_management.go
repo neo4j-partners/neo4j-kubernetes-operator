@@ -11,6 +11,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
@@ -134,4 +135,40 @@ func (c *Client) DropServer(ctx context.Context, serverID string) error {
 		return fmt.Errorf("%s: %w", stmt, err)
 	}
 	return nil
+}
+
+// MinimumSystemPrimaries returns dbms.cluster.minimum_initial_system_primaries_count
+// — the floor on servers hosting the `system` database in primary mode. A
+// cluster cannot be scaled (servers dropped) below this, so the operator uses it
+// to refuse an infeasible scale-down BEFORE the irreversible deallocate (which
+// would strand the server). Defaults to 3 (the Neo4j default) if the setting
+// can't be read.
+func (c *Client) MinimumSystemPrimaries(ctx context.Context) int {
+	const def = 3
+	session := c.driver.NewSession(ctx, neo4j.SessionConfig{
+		AccessMode:   neo4j.AccessModeRead,
+		DatabaseName: "system",
+	})
+	defer session.Close(ctx)
+
+	result, err := session.Run(ctx,
+		"SHOW SETTINGS YIELD name, value WHERE name = 'dbms.cluster.minimum_initial_system_primaries_count' RETURN value",
+		nil)
+	if err != nil {
+		return def
+	}
+	rec, err := result.Single(ctx)
+	if err != nil {
+		return def
+	}
+	v, ok := rec.Get("value")
+	if !ok {
+		return def
+	}
+	if s, ok := v.(string); ok {
+		if n, perr := strconv.Atoi(strings.TrimSpace(s)); perr == nil && n > 0 {
+			return n
+		}
+	}
+	return def
 }
