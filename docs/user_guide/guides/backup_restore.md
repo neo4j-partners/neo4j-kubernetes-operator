@@ -225,6 +225,8 @@ kubectl run minio-client --rm -it --restart=Never \
 | Path-style not working | `forcePathStyle` missing | Confirm `forcePathStyle: true` in spec |
 | `SSL handshake failed` | TLS mismatch | Use `http://` for in-cluster; mount CA for self-signed certs |
 
+> **Restoring from MinIO / S3-compatible storage uses the same two fields.** Set `endpointURL` and `forcePathStyle` on the `Neo4jRestore` `spec.source.storage.cloud` block (and they apply equally to `Neo4jDatabase` `seedURI` seeding) — the operator injects `AWS_ENDPOINT_URL_S3` and the path-style JVM flag into the restore Job and the seeding pods exactly as it does for backup.
+
 Full examples with scheduled incremental backups: [`examples/backup-restore/backup-minio.yaml`](https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/backup-restore/backup-minio.yaml).
 
 ---
