@@ -26,6 +26,16 @@ helm install neo4j-operator neo4j-operator/neo4j-operator \
   --namespace neo4j-operator-system --create-namespace
 ```
 
+Prefer plain `kubectl`? Each release attaches a single apply-able bundle
+(CRDs + RBAC + Deployment) as a **Release asset** — it's not a file in the repo,
+download it from the `releases/download/<tag>/` URL:
+
+```bash
+kubectl apply -f https://github.com/priyolahiri/neo4j-kubernetes-operator/releases/download/v1.11.2/neo4j-kubernetes-operator-complete.yaml
+```
+
+See the [Installation guide](https://priyolahiri.github.io/neo4j-kubernetes-operator/main/user_guide/installation/#method-3-quick-install-from-github-release) for CRDs-only and latest-version variants.
+
 Create admin credentials and deploy your first instance:
 
 ```bash

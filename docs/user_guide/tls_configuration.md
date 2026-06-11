@@ -89,7 +89,7 @@ The opt-out exists for installations whose external issuer (e.g. some custom `AW
 
 ### Hands off the SSL policy keys
 
-> **Do not set `dbms.ssl.policy.*` keys in `spec.config`.** The operator owns the SSL policy surface end-to-end. The cluster validator rejects any `dbms.ssl.policy.*` / `server.bolt.tls_level` / `server.directories.certificates` key in `spec.config` with a `Forbidden` error at apply time, because user values would silently override operator-managed configuration (`server.config.strict_validation.enabled=false` makes Neo4j accept duplicates without warning).
+> **Do not set `dbms.ssl.policy.*` keys in `spec.config`.** The operator owns the SSL policy surface end-to-end. The cluster validator rejects any `dbms.ssl.policy.*` / `server.bolt.tls_level` / `server.directories.certificates` key in `spec.config` with a `Forbidden` error at apply time, because the operator runs Neo4j with `server.config.strict_validation.enabled=true` — a duplicate key from `spec.config` would make Neo4j fail to start, so the validator blocks it before it can wedge the pod.
 
 ### Bolt client-certificate auth is not exposed today
 

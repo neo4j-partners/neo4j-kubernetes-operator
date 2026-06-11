@@ -53,8 +53,7 @@ func (v *ConfigValidator) Validate(cluster *neo4jv1beta1.Neo4jEnterpriseCluster)
 
 	// Check for deprecated configuration settings
 	deprecatedSettings := map[string]string{
-		"dbms.default_database": "use dbms.setDefaultDatabase() procedure instead",
-		"db.format":             "standard and high_limit formats are deprecated, use block format",
+		"dbms.default_database":                     "use dbms.setDefaultDatabase() procedure instead",
 		"dbms.integrations.cloud_storage.s3.region": "replaced by new cloud storage integration settings",
 		"dbms.logs.query.enabled":                   "renamed to db.logs.query.enabled in Neo4j 5.x+",
 	}
@@ -174,15 +173,19 @@ func (v *ConfigValidator) Validate(cluster *neo4jv1beta1.Neo4jEnterpriseCluster)
 			))
 		}
 
-		// Validate database format settings
+		// db.format is operator-managed. The operator always emits
+		// db.format=block and runs Neo4j with strict_validation=true, so a
+		// user-set db.format — block included — is a duplicate key that makes
+		// Neo4j fail to start. Reject every value (the message says so plainly,
+		// rather than implying the user should "use block" as the old check
+		// did). The operator only ever uses block; when Neo4j ships additional
+		// store formats (e.g. MVCC) a format-switching surface will be designed
+		// then. Per-database format selection goes through Neo4jDatabase.
 		if configKey == "db.format" {
-			if configValue == "standard" || configValue == "high_limit" {
-				allErrs = append(allErrs, field.Invalid(
-					configPath.Child(configKey),
-					configValue,
-					"standard and high_limit database formats are deprecated, use block format",
-				))
-			}
+			allErrs = append(allErrs, field.Forbidden(
+				configPath.Child(configKey),
+				"db.format is managed by the operator (always 'block') and must not be set in spec.config; the operator emits it and runs with strict config validation, so a user value would fail Neo4j startup. To choose a non-default store format, set it per database via Neo4jDatabase CREATE DATABASE options.",
+			))
 		}
 
 		// Validate cloud storage integration settings

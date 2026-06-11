@@ -65,11 +65,26 @@ Use the chart version without the `v` prefix (for example, `1.10.2`).
 
 ### Method 3: Quick Install from GitHub Release
 
-For environments where running `helm` is inconvenient, every release also publishes a single kubectl-applyable YAML bundle:
+For environments where running `helm` is inconvenient, every release also publishes a single kubectl-applyable YAML bundle.
+
+> **These are GitHub *Release assets*, not files in the repository.** You won't
+> find `neo4j-kubernetes-operator-complete.yaml` by browsing the source tree on
+> the **Code** tab — it's attached to each tagged release under
+> [**Releases**](https://github.com/priyolahiri/neo4j-kubernetes-operator/releases)
+> → *Assets*, and built fresh by the release pipeline. Download it from the
+> `releases/download/<tag>/` URL below (substitute a real `<tag>` for
+> `${RELEASE_VERSION}`).
 
 ```bash
 RELEASE_VERSION=v1.10.2  # Replace with desired version
 
+kubectl apply -f https://github.com/priyolahiri/neo4j-kubernetes-operator/releases/download/${RELEASE_VERSION}/neo4j-kubernetes-operator-complete.yaml
+```
+
+To always pull the latest published release:
+
+```bash
+RELEASE_VERSION=$(gh release list --repo priyolahiri/neo4j-kubernetes-operator --limit 1 --json tagName --jq '.[0].tagName')
 kubectl apply -f https://github.com/priyolahiri/neo4j-kubernetes-operator/releases/download/${RELEASE_VERSION}/neo4j-kubernetes-operator-complete.yaml
 ```
 
