@@ -521,12 +521,32 @@ func (r *Neo4jEnterpriseStandaloneReconciler) reconcileService(ctx context.Conte
 	logger := log.FromContext(ctx)
 
 	// Headless Service first — the StatefulSet's spec.serviceName depends on it.
-	headless := r.createHeadlessService(standalone)
-	if err := controllerutil.SetControllerReference(standalone, headless, r.Scheme); err != nil {
-		return fmt.Errorf("failed to set owner reference on headless Service: %w", err)
-	}
+	// Capture the desired spec/labels up front: controllerutil.CreateOrUpdate
+	// Gets the live object into its argument before running the mutate fn, so a
+	// no-op mutate would drop our desired state on the update path — an existing
+	// headless Service would keep its old ports across an operator upgrade (the
+	// #184 port-parity additions would never apply). Re-assert the desired
+	// fields inside the closure instead. ClusterIP is immutable once set, so it
+	// is only assigned on create (empty live value).
+	desiredHeadless := r.createHeadlessService(standalone)
+	headless := &corev1.Service{ObjectMeta: metav1.ObjectMeta{
+		Name:      desiredHeadless.Name,
+		Namespace: desiredHeadless.Namespace,
+	}}
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		_, err := controllerutil.CreateOrUpdate(ctx, r.Client, headless, func() error { return nil })
+		_, err := controllerutil.CreateOrUpdate(ctx, r.Client, headless, func() error {
+			if err := controllerutil.SetControllerReference(standalone, headless, r.Scheme); err != nil {
+				return err
+			}
+			headless.Labels = desiredHeadless.Labels
+			if headless.Spec.ClusterIP == "" {
+				headless.Spec.ClusterIP = desiredHeadless.Spec.ClusterIP
+			}
+			headless.Spec.Selector = desiredHeadless.Spec.Selector
+			headless.Spec.PublishNotReadyAddresses = desiredHeadless.Spec.PublishNotReadyAddresses
+			headless.Spec.Ports = desiredHeadless.Spec.Ports
+			return nil
+		})
 		return err
 	}); err != nil {
 		return fmt.Errorf("failed to create or update headless Service: %w", err)
@@ -566,9 +586,52 @@ func (r *Neo4jEnterpriseStandaloneReconciler) reconcileService(ctx context.Conte
 // gives the standalone pod a stable DNS identity for backup, peer Bolt
 // connections, and any other pod-direct addressing. ClusterIP=None makes
 // it headless; the same `app: <name>` selector matches the pod created by
-// the StatefulSet. Only the backup port (6362) is exposed since the
-// client-facing Service ({name}-service) handles Bolt/HTTP.
+// the StatefulSet.
+//
+// Ports mirror the client-reachable ports the cluster headless service
+// exposes (#184): bolt + http (+ https under cert-manager TLS) for direct
+// pod addressing via {name}-0.{name}-headless, plus backup (6362). Combined
+// with PublishNotReadyAddresses below, this lets clients reach the pod over
+// the headless name even before the readiness probe goes green — the
+// client-facing {name}-service ClusterIP does NOT publish not-ready
+// addresses, so it can't during startup.
+//
+// The cluster-only clustering ports (discovery 6000, routing 7688, raft
+// 7000, tx 7689) are intentionally omitted: a standalone is a single
+// non-clustered node that doesn't run RAFT/discovery, so nothing listens
+// on them — exposing dead ports would be misleading.
 func (r *Neo4jEnterpriseStandaloneReconciler) createHeadlessService(standalone *neo4jv1beta1.Neo4jEnterpriseStandalone) *corev1.Service {
+	ports := []corev1.ServicePort{
+		{
+			Name:       "bolt",
+			Port:       resources.BoltPort,
+			TargetPort: intstr.FromInt(resources.BoltPort),
+			Protocol:   corev1.ProtocolTCP,
+		},
+		{
+			Name:       "http",
+			Port:       resources.HTTPPort,
+			TargetPort: intstr.FromInt(resources.HTTPPort),
+			Protocol:   corev1.ProtocolTCP,
+		},
+		{
+			Name:       "backup",
+			Port:       resources.BackupPort,
+			TargetPort: intstr.FromInt(resources.BackupPort),
+			Protocol:   corev1.ProtocolTCP,
+		},
+	}
+
+	// Mirror the client service's HTTPS exposure under cert-manager TLS.
+	if standalone.Spec.TLS != nil && standalone.Spec.TLS.Mode == "cert-manager" {
+		ports = append(ports, corev1.ServicePort{
+			Name:       "https",
+			Port:       resources.HTTPSPort,
+			TargetPort: intstr.FromInt(resources.HTTPSPort),
+			Protocol:   corev1.ProtocolTCP,
+		})
+	}
+
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s-headless", standalone.Name),
@@ -591,14 +654,7 @@ func (r *Neo4jEnterpriseStandaloneReconciler) createHeadlessService(standalone *
 			Selector: map[string]string{
 				"app": standalone.Name,
 			},
-			Ports: []corev1.ServicePort{
-				{
-					Name:       "backup",
-					Port:       6362,
-					TargetPort: intstr.FromInt(6362),
-					Protocol:   corev1.ProtocolTCP,
-				},
-			},
+			Ports: ports,
 		},
 	}
 }

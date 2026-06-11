@@ -11,6 +11,31 @@ The Neo4j Kubernetes Operator supports multiple methods for external access:
 - **NodePort** - Direct node access (on-premise/development)
 - **Ingress** - HTTP/HTTPS access through ingress controllers
 
+## Services created by the operator
+
+The operator names its Services by deployment **kind**, and the names are
+stable: they are baked into the issued TLS certificate's SANs and into each
+pod's stable DNS identity, so they are **not** interchangeable between cluster
+and standalone.
+
+| Service | `Neo4jEnterpriseCluster` | `Neo4jEnterpriseStandalone` | Ports |
+|---|---|---|---|
+| Client-facing (your apps connect here) | `{name}-client` | `{name}-service` | `bolt 7687`, `http 7474`, `https 7473` (TLS); standalone also exposes `metrics 2004` here when monitoring is on |
+| Headless (stable per-pod DNS) | `{name}-headless` | `{name}-headless` | `bolt 7687`, `http 7474`, `backup 6362`, `https 7473` (TLS) |
+| Discovery / internals (cluster only) | `{name}-discovery`, `{name}-internals` | — | clustering ports (`6000/7000/7688/7689`) |
+| Metrics (cluster only; standalone folds metrics into its client service) | `{name}-metrics` (`2004`) | — | `2004` |
+
+Notes:
+
+- **Client-service name differs by kind** (`-client` for clusters, `-service`
+  for standalone). This is intentional and load-bearing — use the right name
+  for the kind you deployed. A pod's stable address is always
+  `{name}-0.{name}-headless.<namespace>.svc.cluster.local`.
+- **The standalone headless service exposes `bolt`/`http`/`backup` (and `https`
+  under TLS)** for direct per-pod addressing, mirroring the cluster headless
+  service. It does **not** expose the clustering ports (`6000/7000/7688/7689`):
+  a standalone is a single non-clustered node, so nothing listens on them.
+
 ## Quick Start
 
 ### Development Access
