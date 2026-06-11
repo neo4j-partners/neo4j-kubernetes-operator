@@ -319,9 +319,15 @@ func (r *Neo4jDatabaseReconciler) handleDeletion(ctx context.Context, database *
 	// Drop database
 	if err := neo4jClient.DropDatabase(ctx, database.Spec.Name); err != nil {
 		logger.Error(err, "Failed to drop database")
+		if classifyFinalizerCleanup(database, err) == retryCleanup {
+			r.Recorder.Eventf(database, corev1.EventTypeWarning, EventReasonDeletionFailed,
+				"Failed to drop database, will retry: %v", err)
+			return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
+		}
 		r.Recorder.Eventf(database, corev1.EventTypeWarning, EventReasonDeletionFailed,
-			"Failed to drop database: %v", err)
-		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
+			"Failed to drop database; releasing finalizer to avoid wedging deletion: %v", err)
+		controllerutil.RemoveFinalizer(database, DatabaseFinalizer)
+		return ctrl.Result{}, r.Update(ctx, database)
 	}
 
 	r.Recorder.Event(database, corev1.EventTypeNormal, EventReasonDatabaseDeleted, "Database dropped successfully")

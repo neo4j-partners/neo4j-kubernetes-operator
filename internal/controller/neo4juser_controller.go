@@ -325,9 +325,15 @@ func (r *Neo4jUserReconciler) handleDeletion(ctx context.Context, user *neo4jv1b
 	defer func() { _ = nc.Close() }()
 
 	if err := nc.DropUserIfExists(ctx, username); err != nil {
+		if classifyFinalizerCleanup(user, err) == retryCleanup {
+			r.Recorder.Eventf(user, corev1.EventTypeWarning, EventReasonUserDeletionFailed,
+				"DROP USER %q failed, will retry: %v", username, err)
+			return ctrl.Result{RequeueAfter: requeue}, nil
+		}
 		r.Recorder.Eventf(user, corev1.EventTypeWarning, EventReasonUserDeletionFailed,
-			"DROP USER %q failed: %v", username, err)
-		return ctrl.Result{RequeueAfter: requeue}, err
+			"DROP USER %q failed; releasing finalizer to avoid wedging deletion: %v", username, err)
+		controllerutil.RemoveFinalizer(user, Neo4jUserFinalizer)
+		return ctrl.Result{}, r.Update(ctx, user)
 	}
 	r.Recorder.Eventf(user, corev1.EventTypeNormal, EventReasonUserDeleted, "User %q dropped", username)
 	controllerutil.RemoveFinalizer(user, Neo4jUserFinalizer)

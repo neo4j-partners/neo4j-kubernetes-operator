@@ -278,9 +278,15 @@ func (r *Neo4jRoleBindingReconciler) handleDeletion(ctx context.Context, rb *neo
 	// non-exclusive bindings.
 	for _, role := range rb.Status.GrantedRoles {
 		if err := nc.RevokeRoleFromUser(ctx, role, rb.Spec.Username); err != nil {
+			if classifyFinalizerCleanup(rb, err) == retryCleanup {
+				r.Recorder.Eventf(rb, corev1.EventTypeWarning, EventReasonBindingFailed,
+					"revoke %q from %q failed, will retry: %v", role, rb.Spec.Username, err)
+				return ctrl.Result{RequeueAfter: requeue}, nil
+			}
 			r.Recorder.Eventf(rb, corev1.EventTypeWarning, EventReasonBindingFailed,
-				"revoke %q from %q failed: %v", role, rb.Spec.Username, err)
-			return ctrl.Result{RequeueAfter: requeue}, err
+				"revoke %q from %q failed; releasing finalizer to avoid wedging deletion: %v", role, rb.Spec.Username, err)
+			controllerutil.RemoveFinalizer(rb, Neo4jRoleBindingFinalizer)
+			return ctrl.Result{}, r.Update(ctx, rb)
 		}
 	}
 	r.Recorder.Eventf(rb, corev1.EventTypeNormal, EventReasonBindingDeleted,

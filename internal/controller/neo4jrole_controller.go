@@ -287,9 +287,15 @@ func (r *Neo4jRoleReconciler) handleDeletion(ctx context.Context, role *neo4jv1b
 	defer func() { _ = nc.Close() }()
 
 	if err := nc.DropRoleIfExists(ctx, roleName); err != nil {
+		if classifyFinalizerCleanup(role, err) == retryCleanup {
+			r.Recorder.Eventf(role, corev1.EventTypeWarning, EventReasonRoleDeletionFailed,
+				"DROP ROLE %q failed, will retry: %v", roleName, err)
+			return ctrl.Result{RequeueAfter: requeue}, nil
+		}
 		r.Recorder.Eventf(role, corev1.EventTypeWarning, EventReasonRoleDeletionFailed,
-			"DROP ROLE %q failed: %v", roleName, err)
-		return ctrl.Result{RequeueAfter: requeue}, err
+			"DROP ROLE %q failed; releasing finalizer to avoid wedging deletion: %v", roleName, err)
+		controllerutil.RemoveFinalizer(role, Neo4jRoleFinalizer)
+		return ctrl.Result{}, r.Update(ctx, role)
 	}
 
 	r.Recorder.Eventf(role, corev1.EventTypeNormal, EventReasonRoleDeleted, "Role %q dropped", roleName)

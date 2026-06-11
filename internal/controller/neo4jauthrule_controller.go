@@ -313,9 +313,15 @@ func (r *Neo4jAuthRuleReconciler) handleDeletion(ctx context.Context, rule *neo4
 		ruleName = rule.Name
 	}
 	if err := nc.DropAuthRuleIfExists(ctx, ruleName); err != nil {
+		if classifyFinalizerCleanup(rule, err) == retryCleanup {
+			r.Recorder.Eventf(rule, corev1.EventTypeWarning, EventReasonAuthRuleFailed,
+				"DROP AUTH RULE %q failed, will retry: %v", ruleName, err)
+			return ctrl.Result{RequeueAfter: requeue}, nil
+		}
 		r.Recorder.Eventf(rule, corev1.EventTypeWarning, EventReasonAuthRuleFailed,
-			"DROP AUTH RULE %q failed: %v", ruleName, err)
-		return ctrl.Result{RequeueAfter: requeue}, err
+			"DROP AUTH RULE %q failed; releasing finalizer to avoid wedging deletion: %v", ruleName, err)
+		controllerutil.RemoveFinalizer(rule, Neo4jAuthRuleFinalizer)
+		return ctrl.Result{}, r.Update(ctx, rule)
 	}
 	r.Recorder.Eventf(rule, corev1.EventTypeNormal, EventReasonAuthRuleDeleted, "auth rule %q dropped", ruleName)
 
