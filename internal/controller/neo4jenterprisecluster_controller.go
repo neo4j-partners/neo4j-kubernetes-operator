@@ -1285,6 +1285,17 @@ func (r *Neo4jEnterpriseClusterReconciler) initContainersEqual(current, desired 
 }
 
 func (r *Neo4jEnterpriseClusterReconciler) updateClusterStatus(ctx context.Context, cluster *neo4jv1beta1.Neo4jEnterpriseCluster, phase, message string) bool {
+	return r.updateClusterStatusWithVersion(ctx, cluster, phase, message, "")
+}
+
+// updateClusterStatusWithVersion is updateClusterStatus plus an optional
+// status.version write, folded into the SAME refetch + RetryOnConflict closure.
+// When version != "" it is written onto the freshly-Get'd `latest` object —
+// never on the caller's in-memory `cluster`, whose resourceVersion may already
+// be stale from an earlier status write in the same reconcile (the rolling-
+// upgrade completion path did exactly that, so the bare follow-up
+// Status().Update conflicted and the version bump was silently dropped — #207).
+func (r *Neo4jEnterpriseClusterReconciler) updateClusterStatusWithVersion(ctx context.Context, cluster *neo4jv1beta1.Neo4jEnterpriseCluster, phase, message, version string) bool {
 	logger := log.FromContext(ctx)
 	statusChanged := false
 
@@ -1298,7 +1309,8 @@ func (r *Neo4jEnterpriseClusterReconciler) updateClusterStatus(ctx context.Conte
 		// Check if status is already exactly what we want
 		readyBool := (phase == "Ready")
 		statusNeedsUpdate := latest.Status.Phase != phase || latest.Status.Message != message ||
-			latest.Status.Ready != readyBool || latest.Status.ObservedGeneration != latest.Generation
+			latest.Status.Ready != readyBool || latest.Status.ObservedGeneration != latest.Generation ||
+			(version != "" && latest.Status.Version != version)
 
 		// Determine standard condition status and reason
 		condStatus, condReason := PhaseToConditionStatus(phase)
@@ -1333,6 +1345,9 @@ func (r *Neo4jEnterpriseClusterReconciler) updateClusterStatus(ctx context.Conte
 		latest.Status.Message = message
 		latest.Status.Ready = readyBool
 		latest.Status.ObservedGeneration = latest.Generation
+		if version != "" {
+			latest.Status.Version = version
+		}
 
 		// Populate connection endpoints + connection examples. Cluster
 		// previously left status.endpoints unset; surfacing these lets users
@@ -1709,12 +1724,12 @@ func (r *Neo4jEnterpriseClusterReconciler) handleRollingUpgrade(ctx context.Cont
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 	}
 
-	// Update cluster status and version
-	_ = r.updateClusterStatus(ctx, cluster, "Ready", "Rolling upgrade completed successfully")
-	cluster.Status.Version = cluster.Spec.Image.Tag
-	if err := r.Status().Update(ctx, cluster); err != nil {
-		logger.Error(err, "Failed to update cluster status")
-	}
+	// Update cluster status and version in ONE refetch+RetryOnConflict write.
+	// Previously this set cluster.Status.Version then did a bare
+	// r.Status().Update(ctx, cluster) AFTER updateClusterStatus had already
+	// refetched + updated a fresh copy — so the second write used a stale
+	// resourceVersion, 409'd, and the version bump was silently lost (#207).
+	_ = r.updateClusterStatusWithVersion(ctx, cluster, "Ready", "Rolling upgrade completed successfully", cluster.Spec.Image.Tag)
 
 	r.Recorder.Event(cluster, corev1.EventTypeNormal, EventReasonUpgradeCompleted, "Rolling upgrade completed successfully")
 	logger.Info("Rolling upgrade completed successfully")
