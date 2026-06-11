@@ -597,7 +597,7 @@ func TestDatabaseValidator_ValidateSeedConfiguration(t *testing.T) {
 			},
 			expectedErrors:     1,
 			expectedWarnings:   2, // System auth warning + point-in-time recovery warning
-			shouldContainError: "restoreUntil must be RFC3339 timestamp",
+			shouldContainError: "restoreUntil must be an RFC3339 timestamp",
 		},
 		{
 			name: "empty transaction ID",
@@ -606,7 +606,7 @@ func TestDatabaseValidator_ValidateSeedConfiguration(t *testing.T) {
 			},
 			expectedErrors:     1,
 			expectedWarnings:   2, // System auth warning + point-in-time recovery warning
-			shouldContainError: "transaction ID cannot be empty when using txId: format",
+			shouldContainError: "txId: format requires a positive integer",
 		},
 		{
 			name: "valid compression config",
@@ -1066,4 +1066,43 @@ func TestIsValidDatabaseName(t *testing.T) {
 	if IsValidDatabaseName(long) {
 		t.Errorf("expected over-length name to be rejected")
 	}
+}
+
+// TestSeedConfigInjectionGuards covers the helpers that protect the legacy
+// string-interpolated SEED CONFIG clause (issue #169) from Cypher injection.
+func TestSeedConfigInjectionGuards(t *testing.T) {
+	t.Run("cypherLiteralUnsafe rejects break-out chars", func(t *testing.T) {
+		for _, s := range []string{"x'", "a`b", "line\nbreak", "carriage\rreturn", "use' } DROP DATABASE neo4j //"} {
+			if !cypherLiteralUnsafe(s) {
+				t.Errorf("expected %q to be flagged unsafe", s)
+			}
+		}
+		for _, s := range []string{"use", "region=eu-west-1", "block", ""} {
+			if cypherLiteralUnsafe(s) {
+				t.Errorf("expected %q to be safe", s)
+			}
+		}
+	})
+
+	t.Run("restoreUntil txId requires positive integer", func(t *testing.T) {
+		if !restoreUntilTxIDPattern.MatchString("12345") {
+			t.Error("expected 12345 to match")
+		}
+		for _, bad := range []string{"", "abc", "12345} DROP", "1.5", "-1"} {
+			if restoreUntilTxIDPattern.MatchString(bad) {
+				t.Errorf("expected %q to be rejected", bad)
+			}
+		}
+	})
+
+	t.Run("isRFC3339Timestamp", func(t *testing.T) {
+		if !isRFC3339Timestamp("2025-01-15T10:30:00Z") {
+			t.Error("expected valid RFC3339 to pass")
+		}
+		for _, bad := range []string{"2025-01-15", "not-a-time", "2025'T:}"} {
+			if isRFC3339Timestamp(bad) {
+				t.Errorf("expected %q to be rejected", bad)
+			}
+		}
+	})
 }

@@ -23,6 +23,7 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -475,6 +476,52 @@ func (c *Client) formatOptionKey(key string) string {
 	return cleanKey
 }
 
+// buildOptionsClause builds a `OPTIONS { … }` clause in which every value is a
+// driver parameter, returning the clause text (with a leading space, empty if
+// no options) and the params map to pass to session.Run. Keys are interpolated
+// — they come from the operator/validator-controlled set (option keys are
+// enum-validated; seedURI is a literal) — while values are ALWAYS parameters so
+// user-controlled input (seedURI, option values) can never break out of the
+// Cypher. seedURI, when non-empty, is added as the documented `seedURI` option
+// key (replacing the non-grammar `FROM '<uri>'` clause; see issue #169).
+func (c *Client) buildOptionsClause(options map[string]string, seedURI string) (string, map[string]any) {
+	merged := make(map[string]string, len(options)+1)
+	for k, v := range options {
+		merged[c.formatOptionKey(k)] = v
+	}
+	if seedURI != "" {
+		merged["seedURI"] = seedURI
+	}
+	if len(merged) == 0 {
+		return "", nil
+	}
+	keys := make([]string, 0, len(merged))
+	for k := range merged {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys) // deterministic clause order
+	params := make(map[string]any, len(merged))
+	parts := make([]string, 0, len(merged))
+	for _, k := range keys {
+		p := "opt_" + k
+		parts = append(parts, fmt.Sprintf("%s: $%s", k, p))
+		params[p] = merged[k]
+	}
+	return " OPTIONS {" + strings.Join(parts, ", ") + "}", params
+}
+
+// cypherLanguageClause returns the ` DEFAULT LANGUAGE CYPHER <v>` clause only
+// for the two valid language versions, so an unexpected value can never be
+// interpolated into the statement (the validator already constrains it).
+func cypherLanguageClause(cypherVersion string) string {
+	switch cypherVersion {
+	case "5", "25":
+		return " DEFAULT LANGUAGE CYPHER " + cypherVersion
+	default:
+		return ""
+	}
+}
+
 // closeSession safely closes a Neo4j session and logs any errors
 func (c *Client) closeSession(ctx context.Context, session neo4j.SessionWithContext) {
 	if err := session.Close(ctx); err != nil {
@@ -614,16 +661,9 @@ func (c *Client) CreateDatabase(ctx context.Context, databaseName string, option
 		query = fmt.Sprintf("CREATE DATABASE `%s` IF NOT EXISTS", databaseName)
 	}
 
-	// Add options if provided
-	if len(options) > 0 {
-		var optionParts []string
-		for key, value := range options {
-			// Quote dotted keys for proper Neo4j OPTIONS syntax
-			formattedKey := c.formatOptionKey(key)
-			optionParts = append(optionParts, fmt.Sprintf("%s: '%s'", formattedKey, value))
-		}
-		query += " OPTIONS {" + strings.Join(optionParts, ", ") + "}"
-	}
+	// Add options (values are driver parameters — never interpolated)
+	optClause, params := c.buildOptionsClause(options, "")
+	query += optClause
 
 	// Add WAIT or NOWAIT
 	if wait {
@@ -633,7 +673,7 @@ func (c *Client) CreateDatabase(ctx context.Context, databaseName string, option
 	}
 
 	// Use timeout protection for WAIT operations
-	err := c.executeWithWaitTimeout(ctx, session, query, nil, wait, 300)
+	err := c.executeWithWaitTimeout(ctx, session, query, params, wait, 300)
 	if err != nil {
 		// Check if database was created despite connection drop or timeout.
 		// With WAIT, Neo4j holds the Bolt connection open until the database is fully online.
@@ -665,10 +705,8 @@ func (c *Client) CreateDatabaseWithTopology(ctx context.Context, databaseName st
 		query = fmt.Sprintf("CREATE DATABASE `%s` IF NOT EXISTS", databaseName)
 	}
 
-	// Add Cypher language version for Neo4j 2025.x
-	if cypherVersion != "" {
-		query += fmt.Sprintf(" DEFAULT LANGUAGE CYPHER %s", cypherVersion)
-	}
+	// Add Cypher language version for Neo4j 2025.x (only "5"/"25" are emitted)
+	query += cypherLanguageClause(cypherVersion)
 
 	// Add topology if specified
 	if primaries > 0 || secondaries > 0 {
@@ -692,16 +730,9 @@ func (c *Client) CreateDatabaseWithTopology(ctx context.Context, databaseName st
 		}
 	}
 
-	// Add options if provided
-	if len(options) > 0 {
-		var optionParts []string
-		for key, value := range options {
-			// Quote dotted keys for proper Neo4j OPTIONS syntax
-			formattedKey := c.formatOptionKey(key)
-			optionParts = append(optionParts, fmt.Sprintf("%s: '%s'", formattedKey, value))
-		}
-		query += " OPTIONS {" + strings.Join(optionParts, ", ") + "}"
-	}
+	// Add options (values are driver parameters — never interpolated)
+	optClause, params := c.buildOptionsClause(options, "")
+	query += optClause
 
 	// Add WAIT or NOWAIT
 	if wait {
@@ -711,7 +742,7 @@ func (c *Client) CreateDatabaseWithTopology(ctx context.Context, databaseName st
 	}
 
 	// Use timeout protection for WAIT operations
-	err := c.executeWithWaitTimeout(ctx, session, query, nil, wait, 300)
+	err := c.executeWithWaitTimeout(ctx, session, query, params, wait, 300)
 	if err != nil {
 		// Check if database was created despite connection drop or timeout.
 		if wait && (errors.Is(err, context.DeadlineExceeded) || strings.Contains(err.Error(), "EOF") || strings.Contains(err.Error(), "ConnectivityError")) {
@@ -2405,15 +2436,12 @@ func (c *Client) CreateDatabaseFromSeedURI(ctx context.Context, databaseName, se
 		query = fmt.Sprintf("CREATE DATABASE `%s` IF NOT EXISTS", databaseName)
 	}
 
-	// Add Cypher language version for Neo4j 2025.x
-	if cypherVersion != "" {
-		query += fmt.Sprintf(" DEFAULT LANGUAGE CYPHER %s", cypherVersion)
-	}
+	// Add Cypher language version for Neo4j 2025.x (only "5"/"25" are emitted)
+	query += cypherLanguageClause(cypherVersion)
 
-	// Add seed URI
-	query += fmt.Sprintf(" FROM '%s'", seedURI)
-
-	// Add seed configuration options
+	// Legacy SEED CONFIG clause (S3SeedProvider-era; vestigial under
+	// CloudSeedProvider — see issue #169). seedConfig values are validated
+	// upstream so they cannot inject.
 	if seedConfig != nil {
 		seedOptions := c.buildSeedOptions(seedConfig)
 		if len(seedOptions) > 0 {
@@ -2421,14 +2449,11 @@ func (c *Client) CreateDatabaseFromSeedURI(ctx context.Context, databaseName, se
 		}
 	}
 
-	// Add general options if provided
-	if len(options) > 0 {
-		var optionParts []string
-		for key, value := range options {
-			optionParts = append(optionParts, fmt.Sprintf("%s: '%s'", key, value))
-		}
-		query += " OPTIONS {" + strings.Join(optionParts, ", ") + "}"
-	}
+	// Seed URI + general options as one OPTIONS map; seedURI and every option
+	// value is a driver parameter (replaces the non-grammar `FROM '<uri>'`
+	// clause — see issue #169).
+	optClause, params := c.buildOptionsClause(options, seedURI)
+	query += optClause
 
 	// Add WAIT or NOWAIT
 	if wait {
@@ -2437,7 +2462,7 @@ func (c *Client) CreateDatabaseFromSeedURI(ctx context.Context, databaseName, se
 		query += " NOWAIT"
 	}
 
-	_, err := session.Run(ctx, query, nil)
+	_, err := session.Run(ctx, query, params)
 	if err != nil {
 		return fmt.Errorf("failed to create database %s from seed URI: %w", databaseName, err)
 	}
@@ -2460,10 +2485,8 @@ func (c *Client) CreateDatabaseFromSeedURIWithTopology(ctx context.Context, data
 		query = fmt.Sprintf("CREATE DATABASE `%s` IF NOT EXISTS", databaseName)
 	}
 
-	// Add Cypher language version for Neo4j 2025.x
-	if cypherVersion != "" {
-		query += fmt.Sprintf(" DEFAULT LANGUAGE CYPHER %s", cypherVersion)
-	}
+	// Add Cypher language version for Neo4j 2025.x (only "5"/"25" are emitted)
+	query += cypherLanguageClause(cypherVersion)
 
 	// Add topology if specified
 	if primaries > 0 || secondaries > 0 {
@@ -2487,10 +2510,9 @@ func (c *Client) CreateDatabaseFromSeedURIWithTopology(ctx context.Context, data
 		}
 	}
 
-	// Add seed URI
-	query += fmt.Sprintf(" FROM '%s'", seedURI)
-
-	// Add seed configuration options
+	// Legacy SEED CONFIG clause (S3SeedProvider-era; vestigial under
+	// CloudSeedProvider — see issue #169). seedConfig values are validated
+	// upstream so they cannot inject.
 	if seedConfig != nil {
 		seedOptions := c.buildSeedOptions(seedConfig)
 		if len(seedOptions) > 0 {
@@ -2498,14 +2520,11 @@ func (c *Client) CreateDatabaseFromSeedURIWithTopology(ctx context.Context, data
 		}
 	}
 
-	// Add general options if provided
-	if len(options) > 0 {
-		var optionParts []string
-		for key, value := range options {
-			optionParts = append(optionParts, fmt.Sprintf("%s: '%s'", key, value))
-		}
-		query += " OPTIONS {" + strings.Join(optionParts, ", ") + "}"
-	}
+	// Seed URI + general options as one OPTIONS map; seedURI and every option
+	// value is a driver parameter (replaces the non-grammar `FROM '<uri>'`
+	// clause — see issue #169).
+	optClause, params := c.buildOptionsClause(options, seedURI)
+	query += optClause
 
 	// Add WAIT or NOWAIT
 	if wait {
@@ -2514,7 +2533,7 @@ func (c *Client) CreateDatabaseFromSeedURIWithTopology(ctx context.Context, data
 		query += " NOWAIT"
 	}
 
-	_, err := session.Run(ctx, query, nil)
+	_, err := session.Run(ctx, query, params)
 	if err != nil {
 		return fmt.Errorf("failed to create database %s with topology from seed URI: %w", databaseName, err)
 	}

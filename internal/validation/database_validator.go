@@ -22,6 +22,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -60,6 +61,25 @@ const maxDatabaseNameLength = 65
 // MaxDatabaseNameLength is the maximum length of a Neo4j database name, exported
 // for callers (e.g. the restore validator) that enforce the same constraint.
 const MaxDatabaseNameLength = maxDatabaseNameLength
+
+// restoreUntilTxIDPattern matches the transaction-id form of seedConfig
+// restoreUntil ("txId:<positive integer>").
+var restoreUntilTxIDPattern = regexp.MustCompile(`^[0-9]+$`)
+
+// isRFC3339Timestamp reports whether s parses as an RFC3339 timestamp. Used to
+// validate seedConfig restoreUntil, which is string-interpolated into Cypher.
+func isRFC3339Timestamp(s string) bool {
+	_, err := time.Parse(time.RFC3339, s)
+	return err == nil
+}
+
+// cypherLiteralUnsafe reports whether s contains characters that could break out
+// of a single-quoted Cypher string literal (quote, backtick, newline). Used for
+// the legacy seedConfig values still string-interpolated into the SEED CONFIG
+// clause (issue #169); values that reach parameterised positions don't need it.
+func cypherLiteralUnsafe(s string) bool {
+	return strings.ContainsAny(s, "'`\n\r")
+}
 
 // IsValidDatabaseName reports whether name is a syntactically valid Neo4j
 // database name (starts with a letter; only letters, digits, dots, dashes; at
@@ -405,22 +425,27 @@ func (v *DatabaseValidator) validateSeedConfiguration(database *neo4jv1beta1.Neo
 		restoreUntilPath := seedConfigPath.Child("restoreUntil")
 		restoreUntil := seedConfig.RestoreUntil
 
-		// Check for supported formats: RFC3339 timestamp or txId:number
-		if strings.HasPrefix(restoreUntil, "txId:") {
-			// Validate transaction ID format
+		// Check for supported formats: RFC3339 timestamp or txId:number.
+		// restoreUntil is string-interpolated into the legacy SEED CONFIG clause
+		// (txId: form is unquoted), so the format checks double as the injection
+		// guard — only digits or an RFC3339 timestamp are accepted, neither of
+		// which can contain Cypher metacharacters.
+		switch {
+		case strings.HasPrefix(restoreUntil, "txId:"):
 			txId := strings.TrimPrefix(restoreUntil, "txId:")
-			if txId == "" {
+			if !restoreUntilTxIDPattern.MatchString(txId) {
 				result.Errors = append(result.Errors, field.Invalid(
 					restoreUntilPath,
 					restoreUntil,
-					"transaction ID cannot be empty when using txId: format"))
+					"txId: format requires a positive integer (e.g., 'txId:12345')"))
 			}
-			// Assume RFC3339 format and validate basic structure.
-		} else if !strings.Contains(restoreUntil, "T") || !strings.Contains(restoreUntil, ":") {
+		case isRFC3339Timestamp(restoreUntil):
+			// ok
+		default:
 			result.Errors = append(result.Errors, field.Invalid(
 				restoreUntilPath,
 				restoreUntil,
-				"restoreUntil must be RFC3339 timestamp (e.g., '2025-01-15T10:30:00Z') or transaction ID (e.g., 'txId:12345')"))
+				"restoreUntil must be an RFC3339 timestamp (e.g., '2025-01-15T10:30:00Z') or a transaction ID (e.g., 'txId:12345')"))
 		}
 	}
 
@@ -428,6 +453,15 @@ func (v *DatabaseValidator) validateSeedConfiguration(database *neo4jv1beta1.Neo
 	if seedConfig.Config != nil {
 		configPath := seedConfigPath.Child("config")
 		for key, value := range seedConfig.Config {
+			// seedConfig values are string-interpolated into the legacy SEED
+			// CONFIG clause (issue #169), so reject anything that could break
+			// out of the single-quoted Cypher literal.
+			if cypherLiteralUnsafe(value) {
+				result.Errors = append(result.Errors, field.Invalid(
+					configPath.Key(key),
+					value,
+					"value may not contain quote, backtick or newline characters"))
+			}
 			// Validate known configuration keys
 			switch key {
 			case "compression":
