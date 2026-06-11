@@ -89,3 +89,59 @@ func TestServersPendingDrain(t *testing.T) {
 			"DEALLOCATE/DROP SERVER take the serverId, not the bolt address")
 	})
 }
+
+func sv(addr, state string) neo4jclient.ServerInfo {
+	return neo4jclient.ServerInfo{ID: "id-" + addr, Name: addr, Address: addr, State: state}
+}
+
+func TestRemovedServers(t *testing.T) {
+	a := func(n int) string { return "c-server-" + strconv.Itoa(n) }
+	servers := []neo4jclient.ServerInfo{
+		sv(a(0), "Enabled"), sv(a(1), "Enabled"), sv(a(2), "Enabled"),
+		sv(a(3), "Cordoned"), sv(a(4), "Dropped"),
+	}
+	removed := removedServers(servers, "c", 3)
+	// ordinal 3 (Cordoned) included; ordinal 4 (Dropped) excluded; 0-2 below desired.
+	got := make([]string, len(removed))
+	for i, s := range removed {
+		got[i] = s.Address
+	}
+	assert.Equal(t, []string{a(3)}, got)
+}
+
+func TestPlanScaleDownStep(t *testing.T) {
+	a := func(n int) string { return "c-server-" + strconv.Itoa(n) }
+
+	t.Run("none when empty", func(t *testing.T) {
+		assert.Equal(t, scaleDownNone, planScaleDownStep(nil).phase)
+	})
+
+	t.Run("cordon first when any enabled", func(t *testing.T) {
+		step := planScaleDownStep([]neo4jclient.ServerInfo{sv(a(3), "Enabled"), sv(a(4), "Cordoned")})
+		assert.Equal(t, scaleDownCordon, step.phase)
+		assert.Equal(t, []string{"id-" + a(3)}, step.serverIDs)
+	})
+
+	t.Run("deallocate cordoned once all cordoned", func(t *testing.T) {
+		step := planScaleDownStep([]neo4jclient.ServerInfo{sv(a(3), "Cordoned"), sv(a(4), "Cordoned")})
+		assert.Equal(t, scaleDownDeallocate, step.phase)
+		assert.ElementsMatch(t, []string{"id-" + a(3), "id-" + a(4)}, step.serverIDs)
+	})
+
+	t.Run("wait while deallocating", func(t *testing.T) {
+		step := planScaleDownStep([]neo4jclient.ServerInfo{sv(a(3), "Deallocating")})
+		assert.Equal(t, scaleDownWaitDeallocating, step.phase)
+	})
+
+	t.Run("drop when deallocated", func(t *testing.T) {
+		step := planScaleDownStep([]neo4jclient.ServerInfo{sv(a(3), "Deallocated")})
+		assert.Equal(t, scaleDownDrop, step.phase)
+		assert.Equal(t, []string{"id-" + a(3)}, step.serverIDs)
+	})
+
+	t.Run("cordon takes priority over later phases", func(t *testing.T) {
+		// mixed: one still enabled => cordon it before progressing the others.
+		step := planScaleDownStep([]neo4jclient.ServerInfo{sv(a(3), "Enabled"), sv(a(4), "Deallocated")})
+		assert.Equal(t, scaleDownCordon, step.phase)
+	})
+}

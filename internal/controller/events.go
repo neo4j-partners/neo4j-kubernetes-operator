@@ -16,6 +16,8 @@ const (
 	EventReasonMCPApocMissing                = "MCPApocMissing"
 	EventReasonReconcileFailed               = "ReconcileFailed"
 	EventReasonScaleDownPendingDrain         = "ScaleDownPendingDrain"
+	EventReasonScaleDownDraining             = "ScaleDownDraining"
+	EventReasonScaleDownBlocked              = "ScaleDownBlocked"
 )
 
 // Rolling upgrade events

@@ -544,6 +544,15 @@ func (r *Neo4jEnterpriseClusterReconciler) Reconcile(ctx context.Context, req ct
 		}
 	}
 
+	// Drive the scale-down drain BEFORE applying the StatefulSet. When a
+	// scale-down is pending it sets ScaleDownDrainingAnnotation (in-memory +
+	// persisted), which the apply below honours to HOLD replicas until the
+	// removed servers are deallocated + dropped (#173). Non-fatal — on
+	// connect/query errors it keeps holding and retries next reconcile.
+	if err := r.reconcileScaleDownDrain(ctx, cluster); err != nil {
+		logger.Error(err, "Scale-down drain step failed (non-fatal)")
+	}
+
 	if err := r.createOrUpdateResource(ctx, serverStatefulSet, cluster); err != nil {
 		logger.Error(err, "Failed to create server StatefulSet")
 		_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Failed to create server StatefulSet: %v", err))
@@ -820,7 +829,11 @@ func (r *Neo4jEnterpriseClusterReconciler) createOrUpdateResourceInternal(ctx co
 				// sticks. Only the replicas line is skipped; everything
 				// else (services, ConfigMap, certs, template updates)
 				// continues to reconcile normally.
-				if !replicasReconciliationPaused(owner) {
+				// Hold replicas during a restore coordination (#117) AND while a
+				// scale-down drain is in progress (#173) — in the latter case the
+				// removed pods must stay running until their servers are
+				// deallocated + dropped, then a later reconcile lowers replicas.
+				if !replicasReconciliationPaused(owner) && !scaleDownDrainInProgress(owner) {
 					sts.Spec.Replicas = desiredSpec.Replicas
 				}
 				sts.Spec.UpdateStrategy = desiredSpec.UpdateStrategy
