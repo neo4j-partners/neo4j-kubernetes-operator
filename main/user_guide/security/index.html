@@ -4045,10 +4045,10 @@
 Do NOT set <code>dbms.ssl.policy.*</code>, <code>server.bolt.tls_level</code>, or
 <code>server.directories.certificates</code> in <code>spec.config</code>. The cluster
 validator rejects every key in that namespace with a <code>Forbidden</code>
-error at apply time. The reason: <code>server.config.strict_validation.
-enabled=false</code> lets Neo4j silently honour duplicate-key overrides,
-so a user value would shadow operator-managed configuration without
-any warning at startup.</p>
+error at apply time. The reason: the operator runs Neo4j with
+<code>server.config.strict_validation.enabled=true</code>, so a duplicate key
+from <code>spec.config</code> would make Neo4j <strong>fail to start</strong> — the validator
+blocks it up front rather than letting it wedge the pod.</p>
 <p>When <code>spec.tls.mode: cert-manager</code> and <code>spec.tls.strictPeerValidation:
 true</code> (the default), the operator emits Neo4j's canonical production
 SSL configuration automatically:</p>

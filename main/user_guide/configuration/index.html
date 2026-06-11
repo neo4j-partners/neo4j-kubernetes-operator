@@ -3442,7 +3442,7 @@ For client configuration and HTTP/STDIO usage, see the <a href="../guides/mcp_cl
 <li><code>dbms.ssl.policy.{bolt,https,cluster}.*</code> (full SSL policy block is operator-managed)</li>
 <li><code>server.directories.certificates</code></li>
 </ul>
-<p>The pre-5.x <code>dbms.connector.{https,bolt}.*</code> keys are deprecated and superseded by the <code>server.*</code> namespace (<code>spec.tls</code> replaces the TLS-related ones). Reason for rejecting the keys above: Neo4j runs with <code>server.config.strict_validation.enabled=false</code>, so duplicate keys silently override each other; the validator blocks user values that would shadow operator-managed ones. See the <a href="../tls_configuration/">TLS certificates guide</a> for the full TLS surface.</p>
+<p>The pre-5.x <code>dbms.connector.{https,bolt}.*</code> keys are deprecated and superseded by the <code>server.*</code> namespace (<code>spec.tls</code> replaces the TLS-related ones). Reason for rejecting the keys above: the operator runs Neo4j with <code>server.config.strict_validation.enabled=true</code>, so a duplicate or unknown key in the rendered <code>neo4j.conf</code> makes Neo4j <strong>fail to start</strong> rather than being silently dropped; the validator blocks user values that would shadow operator-managed ones before they can wedge startup. See the <a href="../tls_configuration/">TLS certificates guide</a> for the full TLS surface.</p>
 <h3 id="cluster-discovery-operator-managed-off-limits-in-specconfig">Cluster discovery — operator-managed, off-limits in <code>spec.config</code><a class="headerlink" href="#cluster-discovery-operator-managed-off-limits-in-specconfig" title="Anchor link to this section">&para;</a></h3>
 <p>The operator emits version-specific discovery config at pod startup (LIST resolver, static pod FQDNs, port 6000). All of the following are rejected by the validator:</p>
 <ul>
@@ -3483,9 +3483,9 @@ For client configuration and HTTP/STDIO usage, see the <a href="../guides/mcp_cl
 <td><code>dbms.cluster.*</code></td>
 </tr>
 <tr>
-<td><code>db.format=standard</code> / <code>db.format=high_limit</code></td>
-<td>Deprecated since 5.23</td>
-<td><code>db.format=block</code></td>
+<td><code>db.format</code> (any value)</td>
+<td>Operator-managed</td>
+<td>Don't set in <code>spec.config</code> — the operator already emits <code>db.format=block</code> and the validator rejects a user-set <code>db.format</code> (a duplicate key fails startup under strict validation). <code>standard</code>/<code>high_limit</code> are also deprecated since 5.23.</td>
 </tr>
 <tr>
 <td><code>server.groups</code></td>
@@ -3574,7 +3574,7 @@ For client configuration and HTTP/STDIO usage, see the <a href="../guides/mcp_cl
 <li><code>dbms.connector.*</code> → <code>server.bolt.*</code> / <code>server.http.*</code> / <code>server.https.*</code> (and TLS via <code>spec.tls</code>)</li>
 <li>Remove any <code>dbms.mode=SINGLE</code> — there is no replacement; use <code>Neo4jEnterpriseStandalone</code> instead</li>
 <li><code>causal_clustering.*</code> → <code>dbms.cluster.*</code> (most discovery keys are now operator-managed anyway)</li>
-<li><code>db.format=standard</code> / <code>db.format=high_limit</code> → <code>db.format=block</code> for new databases</li>
+<li>Remove any <code>db.format</code> from <code>spec.config</code> — the operator already emits <code>db.format=block</code> (the modern default) and the validator rejects a user-set <code>db.format</code>. To choose a non-default store format, set it per database via <code>Neo4jDatabase</code> <code>CREATE DATABASE</code> options, not cluster/standalone <code>spec.config</code>.</li>
 <li><code>dbms.logs.query.*</code> → <code>db.logs.query.*</code></li>
 </ol>
 <p>See the <a href="../migration_guide/">Migration Guide</a> for operator-level migration steps (removed CRD fields, etc.).</p>
