@@ -3133,6 +3133,7 @@
 <li><code>metrics.enabled</code> controls <code>--metrics-bind-address</code> (<code>0</code> disables). Port comes from <code>metrics.service.port</code>.</li>
 <li><code>--health-probe-bind-address=:8081</code> is always set by the chart.</li>
 <li><code>leaderElection.enabled: true</code> passes <code>--leader-elect=true</code>.</li>
+<li><code>rbac.perNamespaceRoles: true</code> (with <code>operatorMode=namespaces</code> + a static <code>watchNamespaces</code> list) replaces the manager ClusterRole with one Role per namespace — see <a href="#multi-namespace-scope">Multi-Namespace Scope</a>.</li>
 </ul>
 <h3 id="health-and-metrics-endpoints-production-defaults">Health and metrics endpoints (production defaults)<a class="headerlink" href="#health-and-metrics-endpoints-production-defaults" title="Anchor link to this section">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>curl<span class="w"> </span>http://localhost:8081/healthz
@@ -3257,7 +3258,7 @@ Explicit flags and Helm values always override the mode defaults.</p>
 <p>The only case that needs action from you is <code>spec.topology.enforceDistribution: true</code> — a hard "N servers across ≥N zones" guarantee the operator can't verify without seeing the nodes. Set <code>spec.topology.availabilityZones</code> explicitly (no node read needed) and enforced distribution works in namespace scope too. See <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/issues/202">#202</a>.</p>
 <h3 id="multi-namespace-scope">Multi-Namespace Scope<a class="headerlink" href="#multi-namespace-scope" title="Anchor link to this section">&para;</a></h3>
 <ul>
-<li><strong>RBAC</strong>: ClusterRole + ClusterRoleBinding</li>
+<li><strong>RBAC</strong>: ClusterRole + ClusterRoleBinding (default), or per-namespace Roles — see below.</li>
 <li><strong>Use when</strong>: One operator should manage a fixed list of namespaces.</li>
 <li><strong>Helm</strong>:
   <div class="language-yaml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">operatorMode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">namespaces</span>
@@ -3276,39 +3277,59 @@ Explicit flags and Helm values always override the mode defaults.</p>
 <li>Patterns require cluster-scope RBAC because the operator must list/watch namespaces.</li>
 <li>The operator restarts its manager when namespace matches change.</li>
 </ul>
+<p><strong>Per-namespace Roles (no ClusterRole) — <code>rbac.perNamespaceRoles</code>:</strong></p>
+<p>Security-strict clusters that forbid ClusterRoles can run a multi-namespace operator with <strong>only</strong> namespaced <code>Role</code> + <code>RoleBinding</code> objects. Set <code>rbac.perNamespaceRoles=true</code> (default <code>false</code>):</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nt">operatorMode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">namespaces</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="nt">watchNamespaces</span><span class="p">:</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-b</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="nt">rbac</span><span class="p">:</span>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">  </span><span class="nt">perNamespaceRoles</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span></code></pre></div>
+<p>This emits one <code>Role</code> + <code>RoleBinding</code> per listed namespace (identical permissions to the ClusterRole, generated from the same source so they can't drift) and <strong>no manager ClusterRole/ClusterRoleBinding</strong>. A static list watches scoped caches only — it never lists/watches the cluster-scoped <code>namespaces</code> resource — so it needs no cluster-scoped manager grants.</p>
+<p>Requirements (each enforced at <code>helm</code> render time — install fails fast with a clear message otherwise):</p>
+<ul>
+<li><strong><code>operatorMode</code> must be <code>namespaces</code>.</strong> Ignored in <code>cluster</code>/<code>namespace</code> mode.</li>
+<li><strong>Every <code>watchNamespaces</code> entry must be a plain namespace name.</strong> A glob/regex/label/prefix pattern (<code>team-*</code>, <code>regex:…</code>, <code>label:…</code>) is <strong>rejected</strong> — pattern matching needs a cluster-scoped namespace list/watch a Role cannot grant. Use <code>perNamespaceRoles=false</code> (ClusterRole) if you need patterns. You cannot have <em>no ClusterRole</em> <strong>and</strong> <em>pattern matching</em>.</li>
+<li><strong>Each listed namespace must already exist</strong> — Helm creates the <code>Role</code>+<code>RoleBinding</code> <em>in</em> each namespace but does not create the namespace.</li>
+</ul>
+<p>What you lose vs. the ClusterRole: only <strong>availability-zone auto-discovery</strong> (the same documented namespace-scope limitation — see "Namespace Scope" above; the operator falls back to best-effort zone spread and emits <code>TopologyZoneDiscoveryDegraded</code>). TLS via <code>ClusterIssuer</code>, external-secrets, backups, and all CR reconciliation work unchanged.</p>
+<blockquote>
+<p>For a <strong>completely</strong> ClusterRole-free install, also set <code>preInstallChecks.enabled=false</code>. The optional pre-install check runs as a Helm hook that reads cluster-scoped CRDs via a transient ClusterRole (auto-deleted after the hook); the metrics endpoint's <code>metrics-auth</code>/<code>metrics-reader</code> ClusterRoles remain only when <code>metrics.secure=true</code>, because the Kubernetes authn/authz APIs they use are inherently cluster-scoped.</p>
+</blockquote>
 <p>Note: backup workflows create per-namespace RBAC (ServiceAccount/Role/RoleBinding) as needed for backup jobs.</p>
 <h2 id="helm-configuration">Helm Configuration<a class="headerlink" href="#helm-configuration" title="Anchor link to this section">&para;</a></h2>
 <p>Key values for modes and scope in <code>charts/neo4j-operator/values.yaml</code>:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Scope</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="nt">operatorMode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cluster</span><span class="w">        </span><span class="c1"># cluster | namespace | namespaces</span>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="nt">watchNamespaces</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[]</span><span class="w">          </span><span class="c1"># used only for operatorMode=namespaces</span>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="c1"># Mode</span>
-</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="nt">developmentMode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
-</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="nt">logLevel</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">info</span>
-</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>
-</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="c1"># Metrics and leader election</span>
-</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="nt">metrics</span><span class="p">:</span>
-</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="w">  </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="w">  </span><span class="nt">service</span><span class="p">:</span>
-</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="w">    </span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">8080</span>
-</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="nt">leaderElection</span><span class="p">:</span>
-</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="w">  </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Scope</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="nt">operatorMode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cluster</span><span class="w">        </span><span class="c1"># cluster | namespace | namespaces</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="nt">watchNamespaces</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[]</span><span class="w">          </span><span class="c1"># used only for operatorMode=namespaces</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="c1"># Mode</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="nt">developmentMode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="nt">logLevel</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">info</span>
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="c1"># Metrics and leader election</span>
+</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="nt">metrics</span><span class="p">:</span>
+</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="w">  </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="w">  </span><span class="nt">service</span><span class="p">:</span>
+</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="w">    </span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">8080</span>
+</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="nt">leaderElection</span><span class="p">:</span>
+</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="w">  </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </span></code></pre></div>
 <p>Examples:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Development mode + cluster scope</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>helm<span class="w"> </span>upgrade<span class="w"> </span>--install<span class="w"> </span>neo4j-operator<span class="w"> </span>neo4j-operator/neo4j-operator<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span>--namespace<span class="w"> </span>neo4j-operator-dev<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">  </span>--create-namespace<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">  </span>--set<span class="w"> </span><span class="nv">developmentMode</span><span class="o">=</span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="w">  </span>--set<span class="w"> </span><span class="nv">logLevel</span><span class="o">=</span>debug
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>
-</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="c1"># Multi-namespace scope</span>
-</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>helm<span class="w"> </span>upgrade<span class="w"> </span>--install<span class="w"> </span>neo4j-operator<span class="w"> </span>neo4j-operator/neo4j-operator<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="w">  </span>--namespace<span class="w"> </span>neo4j-operator-system<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="w">  </span>--create-namespace<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="w">  </span>--set<span class="w"> </span><span class="nv">operatorMode</span><span class="o">=</span>namespaces<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="w">  </span>--set<span class="w"> </span><span class="nv">watchNamespaces</span><span class="o">={</span>team-a,team-b<span class="o">}</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Development mode + cluster scope</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>helm<span class="w"> </span>upgrade<span class="w"> </span>--install<span class="w"> </span>neo4j-operator<span class="w"> </span>neo4j-operator/neo4j-operator<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">  </span>--namespace<span class="w"> </span>neo4j-operator-dev<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">  </span>--create-namespace<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">  </span>--set<span class="w"> </span><span class="nv">developmentMode</span><span class="o">=</span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="w">  </span>--set<span class="w"> </span><span class="nv">logLevel</span><span class="o">=</span>debug
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>
+</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="c1"># Multi-namespace scope</span>
+</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>helm<span class="w"> </span>upgrade<span class="w"> </span>--install<span class="w"> </span>neo4j-operator<span class="w"> </span>neo4j-operator/neo4j-operator<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="w">  </span>--namespace<span class="w"> </span>neo4j-operator-system<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="w">  </span>--create-namespace<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="w">  </span>--set<span class="w"> </span><span class="nv">operatorMode</span><span class="o">=</span>namespaces<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a><span class="w">  </span>--set<span class="w"> </span><span class="nv">watchNamespaces</span><span class="o">={</span>team-a,team-b<span class="o">}</span>
 </span></code></pre></div>
 <h2 id="non-helm-configuration">Non-Helm Configuration<a class="headerlink" href="#non-helm-configuration" title="Anchor link to this section">&para;</a></h2>
 <p>If you deploy with Kustomize or raw manifests, configure scope and mode explicitly:</p>
@@ -3319,15 +3340,15 @@ Explicit flags and Helm values always override the mode defaults.</p>
 <li><code>config/overlays/namespace-scoped</code> (single namespace)</li>
 </ul>
 <p><strong>Scope (env var):</strong>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">WATCH_NAMESPACE</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">  </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a,team-b</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">WATCH_NAMESPACE</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">  </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a,team-b</span>
 </span></code></pre></div></p>
 <p>Pattern examples:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nv">WATCH_NAMESPACE</span><span class="o">=</span>team-*,regex:^prod-,label:<span class="o">{</span><span class="nv">env</span><span class="o">=</span>prod<span class="o">}</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nv">WATCH_NAMESPACE</span><span class="o">=</span>team-*,regex:^prod-,label:<span class="o">{</span><span class="nv">env</span><span class="o">=</span>prod<span class="o">}</span>
 </span></code></pre></div></p>
 <p><strong>Mode (args):</strong>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nt">args</span><span class="p">:</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">--mode=dev</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="nt">args</span><span class="p">:</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">--mode=dev</span>
 </span></code></pre></div></p>
 <p>Reference overlays:</p>
 <ul>
@@ -3374,14 +3395,14 @@ Explicit flags and Helm values always override the mode defaults.</p>
 </tbody>
 </table>
 <p>Set via:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>--cache-strategy<span class="o">=</span>on-demand
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>--cache-strategy<span class="o">=</span>none
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>--ultra-fast<span class="w">           </span><span class="c1"># equivalent to none and enables skip-cache-wait</span>
-</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>--skip-cache-wait<span class="w">      </span><span class="c1"># readiness does not wait for cache sync</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>--cache-strategy<span class="o">=</span>on-demand
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>--cache-strategy<span class="o">=</span>none
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>--ultra-fast<span class="w">           </span><span class="c1"># equivalent to none and enables skip-cache-wait</span>
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>--skip-cache-wait<span class="w">      </span><span class="c1"># readiness does not wait for cache sync</span>
 </span></code></pre></div>
 <h2 id="controller-selection-dev-mode">Controller Selection (Dev Mode)<a class="headerlink" href="#controller-selection-dev-mode" title="Anchor link to this section">&para;</a></h2>
 <p>In development mode, you can load only a subset of controllers:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>--controllers<span class="o">=</span>cluster,standalone,database
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>--controllers<span class="o">=</span>cluster,standalone,database
 </span></code></pre></div>
 <p>Valid controller names:</p>
 <ul>
