@@ -69,49 +69,69 @@ func minimalRestore(name, namespace, clusterRef string) *neo4jv1beta1.Neo4jResto
 	}
 }
 
+// minimalStandaloneForRestore builds a Neo4jEnterpriseStandalone for the
+// Job-based restore path. That path is standalone-only (clusters use the
+// Cypher seed/recreate path, rule 75), so the coordination helpers
+// (setRestoreInProgressAnnotation, stopCluster pod-wait, refuse preflight)
+// operate on a Neo4jEnterpriseStandalone + the `app=<name>` pod selector.
+func minimalStandaloneForRestore(name, namespace string) *neo4jv1beta1.Neo4jEnterpriseStandalone {
+	return &neo4jv1beta1.Neo4jEnterpriseStandalone{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
+		Spec: neo4jv1beta1.Neo4jEnterpriseStandaloneSpec{
+			Image: neo4jv1beta1.ImageSpec{Repo: "neo4j", Tag: "5.26-enterprise"},
+		},
+	}
+}
+
+// The Job-based restore path (and thus the restore-in-progress marker) is
+// standalone-only — clusters use the Cypher path (rule 75). #196: the marker
+// must be written on the Neo4jEnterpriseStandalone; the pre-fix code Got/Updated
+// a Neo4jEnterpriseCluster that doesn't exist for a standalone target and failed
+// with "Neo4jEnterpriseCluster ... not found". `cluster` here is the
+// standaloneAsCluster wrapper, exactly as the controller passes it.
 func TestSetRestoreInProgressAnnotation(t *testing.T) {
 	ctx := context.Background()
 	ns := "default"
 
-	t.Run("sets annotation on a clean cluster", func(t *testing.T) {
-		cluster := minimalClusterForRestore("c", ns)
-		restore := minimalRestore("r1", ns, "c")
-		r := newRestoreTestReconciler(t, cluster, restore)
+	t.Run("sets annotation on a clean standalone (#196)", func(t *testing.T) {
+		sa := minimalStandaloneForRestore("s", ns)
+		restore := minimalRestore("r1", ns, "s")
+		r := newRestoreTestReconciler(t, sa, restore)
 
-		require.NoError(t, r.setRestoreInProgressAnnotation(ctx, restore, cluster))
+		require.NoError(t, r.setRestoreInProgressAnnotation(ctx, restore, standaloneAsCluster(sa)))
 
-		got := &neo4jv1beta1.Neo4jEnterpriseCluster{}
-		require.NoError(t, r.Get(ctx, types.NamespacedName{Name: "c", Namespace: ns}, got))
+		got := &neo4jv1beta1.Neo4jEnterpriseStandalone{}
+		require.NoError(t, r.Get(ctx, types.NamespacedName{Name: "s", Namespace: ns}, got))
 		assert.Equal(t, "r1", got.Annotations[RestoreInProgressAnnotation])
 	})
 
 	t.Run("idempotent when annotation already names this restore", func(t *testing.T) {
-		cluster := minimalClusterForRestore("c", ns)
-		cluster.Annotations = map[string]string{RestoreInProgressAnnotation: "r1"}
-		restore := minimalRestore("r1", ns, "c")
-		r := newRestoreTestReconciler(t, cluster, restore)
+		sa := minimalStandaloneForRestore("s", ns)
+		sa.Annotations = map[string]string{RestoreInProgressAnnotation: "r1"}
+		restore := minimalRestore("r1", ns, "s")
+		r := newRestoreTestReconciler(t, sa, restore)
 
-		require.NoError(t, r.setRestoreInProgressAnnotation(ctx, restore, cluster))
+		require.NoError(t, r.setRestoreInProgressAnnotation(ctx, restore, standaloneAsCluster(sa)))
 
-		got := &neo4jv1beta1.Neo4jEnterpriseCluster{}
-		require.NoError(t, r.Get(ctx, types.NamespacedName{Name: "c", Namespace: ns}, got))
+		got := &neo4jv1beta1.Neo4jEnterpriseStandalone{}
+		require.NoError(t, r.Get(ctx, types.NamespacedName{Name: "s", Namespace: ns}, got))
 		assert.Equal(t, "r1", got.Annotations[RestoreInProgressAnnotation])
 	})
 
 	t.Run("refuses when a different restore is already in progress", func(t *testing.T) {
-		cluster := minimalClusterForRestore("c", ns)
-		cluster.Annotations = map[string]string{RestoreInProgressAnnotation: "older-restore"}
-		restore := minimalRestore("r1", ns, "c")
-		r := newRestoreTestReconciler(t, cluster, restore)
+		sa := minimalStandaloneForRestore("s", ns)
+		sa.Annotations = map[string]string{RestoreInProgressAnnotation: "older-restore"}
+		restore := minimalRestore("r1", ns, "s")
+		r := newRestoreTestReconciler(t, sa, restore)
 
-		err := r.setRestoreInProgressAnnotation(ctx, restore, cluster)
+		err := r.setRestoreInProgressAnnotation(ctx, restore, standaloneAsCluster(sa))
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "older-restore")
 		assert.Contains(t, err.Error(), "r1")
 
 		// Annotation must NOT have been overwritten.
-		got := &neo4jv1beta1.Neo4jEnterpriseCluster{}
-		require.NoError(t, r.Get(ctx, types.NamespacedName{Name: "c", Namespace: ns}, got))
+		got := &neo4jv1beta1.Neo4jEnterpriseStandalone{}
+		require.NoError(t, r.Get(ctx, types.NamespacedName{Name: "s", Namespace: ns}, got))
 		assert.Equal(t, "older-restore", got.Annotations[RestoreInProgressAnnotation])
 	})
 }
@@ -121,107 +141,97 @@ func TestClearRestoreInProgressAnnotation(t *testing.T) {
 	ns := "default"
 
 	t.Run("clears annotation set by this restore", func(t *testing.T) {
-		cluster := minimalClusterForRestore("c", ns)
-		cluster.Annotations = map[string]string{RestoreInProgressAnnotation: "r1"}
-		restore := minimalRestore("r1", ns, "c")
-		r := newRestoreTestReconciler(t, cluster, restore)
+		sa := minimalStandaloneForRestore("s", ns)
+		sa.Annotations = map[string]string{RestoreInProgressAnnotation: "r1"}
+		restore := minimalRestore("r1", ns, "s")
+		r := newRestoreTestReconciler(t, sa, restore)
 
-		require.NoError(t, r.clearRestoreInProgressAnnotation(ctx, restore, "c", ns))
+		require.NoError(t, r.clearRestoreInProgressAnnotation(ctx, restore, "s", ns))
 
-		got := &neo4jv1beta1.Neo4jEnterpriseCluster{}
-		require.NoError(t, r.Get(ctx, types.NamespacedName{Name: "c", Namespace: ns}, got))
+		got := &neo4jv1beta1.Neo4jEnterpriseStandalone{}
+		require.NoError(t, r.Get(ctx, types.NamespacedName{Name: "s", Namespace: ns}, got))
 		_, present := got.Annotations[RestoreInProgressAnnotation]
 		assert.False(t, present, "annotation should be cleared")
 	})
 
 	t.Run("leaves annotation set by a DIFFERENT restore alone", func(t *testing.T) {
-		cluster := minimalClusterForRestore("c", ns)
-		cluster.Annotations = map[string]string{RestoreInProgressAnnotation: "other-restore"}
-		restore := minimalRestore("r1", ns, "c")
-		r := newRestoreTestReconciler(t, cluster, restore)
+		sa := minimalStandaloneForRestore("s", ns)
+		sa.Annotations = map[string]string{RestoreInProgressAnnotation: "other-restore"}
+		restore := minimalRestore("r1", ns, "s")
+		r := newRestoreTestReconciler(t, sa, restore)
 
-		require.NoError(t, r.clearRestoreInProgressAnnotation(ctx, restore, "c", ns))
+		require.NoError(t, r.clearRestoreInProgressAnnotation(ctx, restore, "s", ns))
 
-		got := &neo4jv1beta1.Neo4jEnterpriseCluster{}
-		require.NoError(t, r.Get(ctx, types.NamespacedName{Name: "c", Namespace: ns}, got))
+		got := &neo4jv1beta1.Neo4jEnterpriseStandalone{}
+		require.NoError(t, r.Get(ctx, types.NamespacedName{Name: "s", Namespace: ns}, got))
 		assert.Equal(t, "other-restore", got.Annotations[RestoreInProgressAnnotation],
 			"clear must be a no-op when the annotation belongs to a different restore")
 	})
 
 	t.Run("no-op when annotation is absent", func(t *testing.T) {
-		cluster := minimalClusterForRestore("c", ns)
-		restore := minimalRestore("r1", ns, "c")
-		r := newRestoreTestReconciler(t, cluster, restore)
+		sa := minimalStandaloneForRestore("s", ns)
+		restore := minimalRestore("r1", ns, "s")
+		r := newRestoreTestReconciler(t, sa, restore)
 
-		require.NoError(t, r.clearRestoreInProgressAnnotation(ctx, restore, "c", ns))
+		require.NoError(t, r.clearRestoreInProgressAnnotation(ctx, restore, "s", ns))
 	})
 
-	t.Run("no-op when cluster CR is gone", func(t *testing.T) {
+	t.Run("no-op when target CR is gone (or was a cluster, which never sets it)", func(t *testing.T) {
 		restore := minimalRestore("r1", ns, "gone")
 		r := newRestoreTestReconciler(t, restore)
 
-		// Cleanly handles a missing cluster — the restore finalizer must be
-		// able to release even after the cluster has already been deleted.
+		// Cleanly handles a missing standalone — the restore finalizer must be
+		// able to release even after the standalone is deleted, and a true
+		// cluster (which never sets this marker) is a no-op too.
 		require.NoError(t, r.clearRestoreInProgressAnnotation(ctx, restore, "gone", ns))
 	})
 }
 
+// The Job restore path is standalone-only, so the preflight lists standalone
+// pods via the `app=<name>` selector (StandalonePodSelector) — not the cluster
+// ServerPodSelector. This pins that swap (part of #196/#187).
 func TestRefuseRestoreIfPodsRunning(t *testing.T) {
 	ctx := context.Background()
 	ns := "default"
 
-	serverPod := func(podName string) *corev1.Pod {
+	standalonePod := func(podName, app string) *corev1.Pod {
 		return &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      podName,
 				Namespace: ns,
-				Labels: map[string]string{
-					"app.kubernetes.io/instance":  "c",
-					"app.kubernetes.io/component": "database",
-				},
+				Labels:    map[string]string{"app": app},
 			},
 			Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "neo4j", Image: "neo4j:5.26-enterprise"}}},
 		}
 	}
 
 	t.Run("no pods → allowed", func(t *testing.T) {
-		cluster := minimalClusterForRestore("c", ns)
-		restore := minimalRestore("r1", ns, "c")
-		r := newRestoreTestReconciler(t, cluster, restore)
+		sa := minimalStandaloneForRestore("s", ns)
+		restore := minimalRestore("r1", ns, "s")
+		r := newRestoreTestReconciler(t, sa, restore)
 
-		require.NoError(t, r.refuseRestoreIfPodsRunning(ctx, restore, cluster))
+		require.NoError(t, r.refuseRestoreIfPodsRunning(ctx, restore, standaloneAsCluster(sa)))
 	})
 
-	t.Run("server pods exist → refused with actionable error", func(t *testing.T) {
-		cluster := minimalClusterForRestore("c", ns)
-		restore := minimalRestore("r1", ns, "c")
-		r := newRestoreTestReconciler(t, cluster, restore, serverPod("c-server-0"), serverPod("c-server-1"))
+	t.Run("standalone pod exists → refused with actionable error", func(t *testing.T) {
+		sa := minimalStandaloneForRestore("s", ns)
+		restore := minimalRestore("r1", ns, "s")
+		r := newRestoreTestReconciler(t, sa, restore, standalonePod("s-0", "s"))
 
-		err := r.refuseRestoreIfPodsRunning(ctx, restore, cluster)
+		err := r.refuseRestoreIfPodsRunning(ctx, restore, standaloneAsCluster(sa))
 		require.Error(t, err)
 		msg := err.Error()
-		assert.Contains(t, msg, "2 server pod(s)")
+		assert.Contains(t, msg, "server pod(s)")
 		assert.Contains(t, msg, "stopCluster=true")
 		assert.Contains(t, msg, "\"r1\"")
 	})
 
-	t.Run("pods of an unrelated cluster don't trigger refusal", func(t *testing.T) {
-		cluster := minimalClusterForRestore("c", ns)
-		restore := minimalRestore("r1", ns, "c")
-		other := &corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "other-server-0",
-				Namespace: ns,
-				Labels: map[string]string{
-					"app.kubernetes.io/instance":  "other",
-					"app.kubernetes.io/component": "database",
-				},
-			},
-			Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "neo4j", Image: "neo4j:5.26-enterprise"}}},
-		}
-		r := newRestoreTestReconciler(t, cluster, restore, other)
+	t.Run("pods of an unrelated instance don't trigger refusal", func(t *testing.T) {
+		sa := minimalStandaloneForRestore("s", ns)
+		restore := minimalRestore("r1", ns, "s")
+		r := newRestoreTestReconciler(t, sa, restore, standalonePod("other-0", "other"))
 
-		require.NoError(t, r.refuseRestoreIfPodsRunning(ctx, restore, cluster))
+		require.NoError(t, r.refuseRestoreIfPodsRunning(ctx, restore, standaloneAsCluster(sa)))
 	})
 }
 

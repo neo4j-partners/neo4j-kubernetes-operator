@@ -533,8 +533,11 @@ func (r *Neo4jRestoreReconciler) handleRestoreSuccess(ctx context.Context, resto
 
 // createOrStartDatabase registers the restored database with Neo4j.
 // If the database already exists (overwrite restore) it starts it; otherwise it creates it.
-func (r *Neo4jRestoreReconciler) createOrStartDatabase(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore, cluster *neo4jv1beta1.Neo4jEnterpriseCluster) error {
-	neo4jClient, err := r.createNeo4jClient(ctx, cluster)
+func (r *Neo4jRestoreReconciler) createOrStartDatabase(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore, _ *neo4jv1beta1.Neo4jEnterpriseCluster) error {
+	// Job-path restore is standalone-only (clusters use the Cypher seed/recreate
+	// path, rule 75), so connect via the standalone's `<name>-service`, not the
+	// cluster `<name>-client` routing service a standalone doesn't have (#187).
+	neo4jClient, err := r.newStandaloneRestoreClient(ctx, restore)
 	if err != nil {
 		return fmt.Errorf("failed to create Neo4j client: %w", err)
 	}
@@ -729,9 +732,10 @@ func (r *Neo4jRestoreReconciler) validateRestore(ctx context.Context, restore *n
 	return nil
 }
 
-func (r *Neo4jRestoreReconciler) checkDatabaseExists(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore, cluster *neo4jv1beta1.Neo4jEnterpriseCluster) error {
-	// Create Neo4j client
-	neo4jClient, err := r.createNeo4jClient(ctx, cluster)
+func (r *Neo4jRestoreReconciler) checkDatabaseExists(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore, _ *neo4jv1beta1.Neo4jEnterpriseCluster) error {
+	// Job-path restore is standalone-only (rule 75); connect via the
+	// standalone's `<name>-service` (#187).
+	neo4jClient, err := r.newStandaloneRestoreClient(ctx, restore)
 	if err != nil {
 		return fmt.Errorf("failed to create Neo4j client: %w", err)
 	}
@@ -1655,7 +1659,7 @@ func (r *Neo4jRestoreReconciler) refuseRestoreIfPodsRunning(ctx context.Context,
 	pods := &corev1.PodList{}
 	if err := r.List(ctx, pods,
 		client.InNamespace(cluster.Namespace),
-		client.MatchingLabels(resources.ServerPodSelector(cluster.Name))); err != nil {
+		client.MatchingLabels(resources.StandalonePodSelector(cluster.Name))); err != nil {
 		return fmt.Errorf("failed to list server pods for restore preflight: %w", err)
 	}
 	if len(pods.Items) > 0 {
@@ -1672,12 +1676,18 @@ func (r *Neo4jRestoreReconciler) refuseRestoreIfPodsRunning(ctx context.Context,
 // cannot run concurrently.
 func (r *Neo4jRestoreReconciler) setRestoreInProgressAnnotation(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore, cluster *neo4jv1beta1.Neo4jEnterpriseCluster) error {
 	return retry.RetryOnConflict(retry.DefaultBackoff, func() error {
-		latest := &neo4jv1beta1.Neo4jEnterpriseCluster{}
+		// The Job restore path is standalone-only (clusters use the Cypher
+		// path, rule 75), so the in-progress marker lives on the
+		// Neo4jEnterpriseStandalone — NOT a Neo4jEnterpriseCluster, which
+		// doesn't exist for a standalone target (#196). `cluster` is the
+		// standaloneAsCluster wrapper, so its name/namespace resolve the
+		// standalone.
+		latest := &neo4jv1beta1.Neo4jEnterpriseStandalone{}
 		if err := r.Get(ctx, client.ObjectKeyFromObject(cluster), latest); err != nil {
 			return err
 		}
 		if existing, ok := latest.Annotations[RestoreInProgressAnnotation]; ok && existing != restore.Name {
-			return fmt.Errorf("cluster %q already has a restore in progress by Neo4jRestore %q; cannot start %q", cluster.Name, existing, restore.Name)
+			return fmt.Errorf("standalone %q already has a restore in progress by Neo4jRestore %q; cannot start %q", cluster.Name, existing, restore.Name)
 		}
 		if latest.Annotations == nil {
 			latest.Annotations = map[string]string{}
@@ -1696,10 +1706,14 @@ func (r *Neo4jRestoreReconciler) setRestoreInProgressAnnotation(ctx context.Cont
 // never set or was already cleared.
 func (r *Neo4jRestoreReconciler) clearRestoreInProgressAnnotation(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore, clusterName, clusterNamespace string) error {
 	return retry.RetryOnConflict(retry.DefaultBackoff, func() error {
-		latest := &neo4jv1beta1.Neo4jEnterpriseCluster{}
+		// Mirror of setRestoreInProgressAnnotation: the marker lives on the
+		// Neo4jEnterpriseStandalone. A NotFound here means the target was a
+		// true cluster (which never sets this marker — Cypher path) or the
+		// standalone is already gone, so there's nothing to clear.
+		latest := &neo4jv1beta1.Neo4jEnterpriseStandalone{}
 		if err := r.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: clusterNamespace}, latest); err != nil {
 			if errors.IsNotFound(err) {
-				return nil // cluster gone — nothing to clean
+				return nil // standalone gone / not a standalone target — nothing to clean
 			}
 			return err
 		}
@@ -1757,7 +1771,7 @@ func (r *Neo4jRestoreReconciler) stopCluster(ctx context.Context, cluster *neo4j
 		case <-ticker.C:
 			pods := &corev1.PodList{}
 			if err := r.List(ctx, pods, client.InNamespace(cluster.Namespace),
-				client.MatchingLabels(resources.ServerPodSelector(cluster.Name))); err != nil {
+				client.MatchingLabels(resources.StandalonePodSelector(cluster.Name))); err != nil {
 				logger.Error(err, "Failed to list pods")
 				continue
 			}
@@ -1849,7 +1863,7 @@ func (r *Neo4jRestoreReconciler) waitForClusterReady(ctx context.Context, cluste
 			// Check if all pods are ready
 			pods := &corev1.PodList{}
 			if err := r.List(ctx, pods, client.InNamespace(cluster.Namespace),
-				client.MatchingLabels(resources.ServerPodSelector(cluster.Name))); err != nil {
+				client.MatchingLabels(resources.StandalonePodSelector(cluster.Name))); err != nil {
 				logger.Error(err, "Failed to list pods")
 				continue
 			}
@@ -2573,6 +2587,21 @@ func (r *Neo4jRestoreReconciler) isRestoreTargetTrueCluster(ctx context.Context,
 
 func (r *Neo4jRestoreReconciler) createNeo4jClient(_ context.Context, cluster *neo4jv1beta1.Neo4jEnterpriseCluster) (*neo4j.Client, error) {
 	return neo4j.NewClientForEnterprise(cluster, r.Client, cluster.Spec.Auth.AdminSecret)
+}
+
+// newStandaloneRestoreClient builds a Bolt client for the Neo4jEnterpriseStandalone
+// the restore targets. The Job-based restore path runs only for standalones
+// (clusters use the Cypher seed/recreate path, rule 75). A standalone's Bolt
+// service is `<name>-service` (NewClientForEnterpriseStandalone), whereas
+// createNeo4jClient / NewClientForEnterprise target the cluster `<name>-client`
+// routing service a standalone doesn't have — using that connected to a
+// nonexistent service (#187).
+func (r *Neo4jRestoreReconciler) newStandaloneRestoreClient(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore) (*neo4j.Client, error) {
+	standalone := &neo4jv1beta1.Neo4jEnterpriseStandalone{}
+	if err := r.Get(ctx, types.NamespacedName{Name: restore.Spec.ClusterRef, Namespace: restore.Namespace}, standalone); err != nil {
+		return nil, fmt.Errorf("failed to get standalone %q for restore: %w", restore.Spec.ClusterRef, err)
+	}
+	return neo4j.NewClientForEnterpriseStandalone(standalone, r.Client, getStandaloneAdminSecretName(standalone))
 }
 
 func (r *Neo4jRestoreReconciler) cleanupRestoreJobs(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore) error {
