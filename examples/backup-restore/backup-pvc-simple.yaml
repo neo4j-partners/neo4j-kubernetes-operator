@@ -6,32 +6,32 @@ metadata:
     environment: development
     backup-type: one-time
 spec:
-  # target.kind=Cluster backs up all databases on the cluster
   target:
+    # kind=Cluster backs up EVERY database on the instance. `name` is the
+    # Neo4jEnterpriseCluster *or* Neo4jEnterpriseStandalone name (the operator
+    # auto-detects which) — there is no `kind: Standalone`. Do NOT set
+    # `clusterRef` for kind=Cluster.
+    #
+    # To back up a SINGLE database instead, use:
+    #   kind: Database
+    #   name: <database-name>        # e.g. "neo4j"
+    #   clusterRef: <instance-name>  # the cluster/standalone that owns it
     kind: Cluster
-    name: single-node-cluster  # References your Neo4jEnterpriseCluster name
+    name: my-neo4j        # your Neo4jEnterpriseCluster or Neo4jEnterpriseStandalone name
   storage:
     type: pvc
     pvc:
       name: backup-storage
-      storageClassName: standard  # Must match an available StorageClass
       size: 50Gi
+      # storageClassName is intentionally omitted: the operator creates the PVC
+      # WITHOUT a class so it inherits the cluster's DEFAULT StorageClass —
+      # portable across Kind, EKS, GKE, AKS. Set it ONLY to pin a class that
+      # EXISTS on your cluster (Kind: standard · EKS: gp3 · AKS: managed-csi ·
+      # GKE: standard-rwo). To bind to a PVC you created yourself, set only
+      # `name` (size/storageClassName are then ignored).
+      # storageClassName: gp3
   options:
     compress: true
     backupType: FULL  # FULL | DIFF | AUTO
   retention:
     maxCount: 5
-
----
-# Pre-create the PVC (or let the operator create it via spec.storage.pvc)
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: backup-storage
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 50Gi
-  storageClassName: standard
