@@ -30,6 +30,16 @@ The operator spawns a Kubernetes Job that runs `neo4j-admin database backup` fro
 
 Backup Jobs run as the auto-created `neo4j-backup-sa` ServiceAccount in the same namespace. For Workload Identity (IRSA / GKE WI / Azure WI), annotate the SA via `cloud.identity.autoCreate.annotations` — see [Cloud Storage Authentication](#cloud-storage-authentication).
 
+### Backup targets (`target.kind`)
+
+| `target.kind` | `target.name` | `target.clusterRef` | Backs up |
+|---|---|---|---|
+| `Cluster` | the **instance** name — a `Neo4jEnterpriseCluster` **or** `Neo4jEnterpriseStandalone` (auto-detected) | *(unused — leave unset)* | every database on the instance |
+| `Database` | the **database** name (e.g. `neo4j`) | the owning instance name | a single database |
+| `ShardedDatabase` | the logical sharded-DB name (e.g. `products`) | the owning cluster | all shards in one `neo4j-admin` run |
+
+There is **no `kind: Standalone`** — a standalone is just an instance. To back one up, use `kind: Cluster` with `name: <standalone-name>` (whole instance), or `kind: Database` with `name: <database>` + `clusterRef: <standalone-name>` (one database). Key gotcha: for `kind: Cluster`, `name` is the **instance** name and `clusterRef` is unused; for `kind: Database`/`ShardedDatabase`, `name` is the **database** and `clusterRef` is the instance that owns it.
+
 ### Storage Layout
 
 All runs of a single `Neo4jBackup` CR write to the **same directory**: `<storage.path>/<cr-name>/`. This is what `neo4j-admin` requires for differential backup chaining — every diff run reads the prior full from the same directory to compute the delta. Per-run identity is preserved by the timestamp `neo4j-admin` embeds in each artifact filename (`<dbname>-YYYY-MM-DDThh-mm-ss.backup`).
@@ -846,6 +856,10 @@ spec:
 ```
 
 **Best for:** Cross-cluster recovery, disaster recovery from a known directory in storage (no `Neo4jBackup` CR available in this namespace).
+
+> **Restoring after the `Neo4jBackup` CR is deleted.** `source.type: backup` resolves the storage location *from the Backup CR*, so it fails with `backup "<name>" not found` once you delete that CR — the artifacts in object storage / the PVC are untouched, but the operator no longer knows where they are. Restore directly from the artifacts with **`source.type: storage`** (above): point `backupPath` at the exact `.backup` file (cluster) or the directory (standalone). You do **not** need to re-create the Backup CR.
+>
+> ⚠️ **Restore is destructive and overwrites in place.** With `replaceExisting`/`force` the target database's current data is replaced by the backup. Re-running a restore — including after re-creating a deleted Backup CR — re-seeds and overwrites again. Treat every restore as a destructive operation against the named database.
 
 > **Which run a restore picks**: a cluster restore seeds from the **latest successful artifact of the referenced `Neo4jBackup` CR** (standalone uses `tail -1` of the timestamped glob in that CR's directory). In a FULL+DIFF chain, reference the **DIFF CR** for the latest state or the **FULL CR** to roll back to the last full snapshot — restoring via the FULL CR does *not* apply the newer diffs (and emits a `RestoreFromChainParent` warning). To pin to an arbitrary earlier run, set `source.type: storage` with `backupPath` pointing at the exact `.backup` file, or keep a point-in-time snapshot of the directory (cloud lifecycle rules / versioning).
 

@@ -17,7 +17,7 @@ metadata:
 spec:
   target:
     kind: Cluster
-    name: single-node-cluster  # References your Neo4jEnterpriseCluster name
+    name: my-neo4j  # kind=Cluster: the Neo4jEnterpriseCluster OR Neo4jEnterpriseStandalone instance name (clusterRef unused; backs up all databases)
   # schedule is a flat cron string — no nesting
   schedule: "0 2 * * *"  # Daily at 2 AM UTC
   storage:
