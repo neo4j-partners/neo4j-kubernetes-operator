@@ -1338,11 +1338,19 @@ func buildStandaloneStartupProbe() *corev1.Probe {
 				Command: []string{"/bin/bash", "-c", "/conf/health.sh"},
 			},
 		},
-		InitialDelaySeconds: 10,
+		InitialDelaySeconds: 30,
 		PeriodSeconds:       10,
 		TimeoutSeconds:      5,
-		FailureThreshold:    30, // Allow up to 5 minutes for startup (30 * 10s)
-		SuccessThreshold:    1,
+		// ~10 minutes (30s initial + 60 * 10s). Matches the cluster startup
+		// probe's budget (buildStartupProbe). The previous 5-minute budget was
+		// too tight for a 5.26 Enterprise boot (JVM + APOC copy + store
+		// recovery) under the CI CPU limit (100m) on a slow/contended runner:
+		// the startup probe would exhaust before Neo4j bound :7474, the kubelet
+		// would kill and restart the pod, and it CrashLooped instead of ever
+		// reaching Ready. The cluster pods survived the same runner because
+		// they had the larger budget.
+		FailureThreshold: 60,
+		SuccessThreshold: 1,
 	}
 }
 
