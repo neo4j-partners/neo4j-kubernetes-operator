@@ -224,8 +224,25 @@ func (r *Neo4jEnterpriseClusterReconciler) reconcileScaleDownDrain(ctx context.C
 
 	if current <= desired {
 		// Not scaling down (or scaled back up mid-drain) — cancel any hold so
-		// replicas reconcile normally. Servers not yet cordoned are untouched.
-		return r.setDrainServers(ctx, cluster, nil)
+		// replicas reconcile normally, and reset a stale ServersPendingDrain
+		// condition (e.g. a prior ScaleDownBlocked) so aborting clears it.
+		// Servers not yet cordoned are untouched.
+		return r.clearScaleDownState(ctx, cluster)
+	}
+
+	// Engage the replica hold THIS reconcile, before we touch Neo4j. The hold is
+	// gated on the draining annotation; if we returned on a connect/SHOW SERVERS
+	// error below WITHOUT a hold already in place, this same reconcile's
+	// StatefulSet apply would lower replicas and delete pods before any drain
+	// ran. So if no drain is recorded yet, seed the annotation with the
+	// to-be-removed pod NAMES (derived from STS ordinals — no Neo4j needed).
+	// They only need to be non-empty to hold; once SHOW SERVERS succeeds they
+	// are replaced by real serverIds (and evicted from the set — they never
+	// match a live server, which is keyed by id).
+	if !scaleDownDrainInProgress(cluster) {
+		if err := r.setDrainServers(ctx, cluster, provisionalDrainHoldNames(cluster.Name, current, desired)); err != nil {
+			return err
+		}
 	}
 
 	nc, err := r.createNeo4jClient(ctx, cluster)
@@ -241,25 +258,30 @@ func (r *Neo4jEnterpriseClusterReconciler) reconcileScaleDownDrain(ctx context.C
 		return nil
 	}
 
-	// Drain-target id set = persisted ∪ (currently removable by ordinal). The
-	// union absorbs further scale-downs mid-drain.
-	idSet := map[string]bool{}
-	for _, id := range drainServerIDsFromAnnotation(cluster) {
-		idSet[id] = true
-	}
-	if current > desired {
-		for _, id := range initialRemovedServerIDs(servers, cluster.Name, desired) {
-			idSet[id] = true
-		}
-	}
-	if len(idSet) == 0 {
-		return r.setDrainServers(ctx, cluster, nil)
-	}
-
 	live := map[string]neo4jclient.ServerInfo{}
 	for _, s := range servers {
 		live[serverIdentifier(s)] = s
 	}
+
+	// Drain-target id set = (currently removable by ordinal) ∪ (persisted ids
+	// still present as live servers). The union absorbs further scale-downs
+	// mid-drain; keeping a persisted id only while it's still a live server
+	// covers a Deallocating server whose address went NULL (initialRemoved can't
+	// derive its ordinal, but its id row persists) AND evicts both the
+	// provisional pod-name hold seeded above and servers already Dropped + gone.
+	idSet := map[string]bool{}
+	for _, id := range initialRemovedServerIDs(servers, cluster.Name, desired) {
+		idSet[id] = true
+	}
+	for _, id := range drainServerIDsFromAnnotation(cluster) {
+		if s, ok := live[id]; ok && !strings.EqualFold(s.State, "dropped") {
+			idSet[id] = true
+		}
+	}
+	if len(idSet) == 0 {
+		return r.clearScaleDownState(ctx, cluster)
+	}
+
 	var active []neo4jclient.ServerInfo
 	for id := range idSet {
 		s, present := live[id]
@@ -381,6 +403,31 @@ func (r *Neo4jEnterpriseClusterReconciler) reconcileScaleDownDrain(ctx context.C
 	r.setScaleDownConditionPersisted(ctx, cluster, metav1.ConditionTrue, ConditionReasonServersPendingDrain,
 		fmt.Sprintf("Scale-down to %d server(s) in progress: draining %d server(s)", desired, len(active)))
 	return nil
+}
+
+// provisionalDrainHoldNames returns the StatefulSet pod names of the servers a
+// scale-down will remove (ordinals [desired, current)). Used ONLY to seed the
+// draining annotation so the replica hold engages before the operator can reach
+// Neo4j; once SHOW SERVERS succeeds these are replaced by real serverIds.
+func provisionalDrainHoldNames(clusterName string, current, desired int) []string {
+	var names []string
+	for ord := desired; ord < current; ord++ {
+		names = append(names, fmt.Sprintf("%s-server-%d", clusterName, ord))
+	}
+	return names
+}
+
+// clearScaleDownState releases the replica hold (clears the draining annotation)
+// and, when the ServersPendingDrain condition is currently True (e.g. a prior
+// ScaleDownBlocked or in-progress), resets it to False — so aborting a
+// scale-down (scaling back up, or a no-op) never leaves a stale Blocked/InProgress
+// status. Both halves are no-ops when already clear, so it is safe to call every
+// reconcile.
+func (r *Neo4jEnterpriseClusterReconciler) clearScaleDownState(ctx context.Context, cluster *neo4jv1beta1.Neo4jEnterpriseCluster) error {
+	if c := findCondition(cluster.Status.Conditions, ConditionTypeServersPendingDrain); c != nil && c.Status == metav1.ConditionTrue {
+		r.setScaleDownConditionPersisted(ctx, cluster, metav1.ConditionFalse, ConditionReasonNoServersPendingDrain, "Scale-down not in progress")
+	}
+	return r.setDrainServers(ctx, cluster, nil)
 }
 
 // setDrainServers sets (or clears, when ids is empty) the draining-servers

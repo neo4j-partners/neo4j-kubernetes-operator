@@ -70,6 +70,16 @@ func TestServerIdentifierPrefersID(t *testing.T) {
 	assert.Equal(t, "a:7687", serverIdentifier(neo4jclient.ServerInfo{Address: "a:7687"}))
 }
 
+func TestProvisionalDrainHoldNames(t *testing.T) {
+	// 4 -> 2: removes ordinals 2,3. Seeds the replica hold before Neo4j is
+	// reachable so pods aren't deleted ahead of the drain (#210 Bugbot high).
+	assert.Equal(t, []string{"c-server-2", "c-server-3"}, provisionalDrainHoldNames("c", 4, 2))
+	// No scale-down (current == desired) → nothing to hold.
+	assert.Empty(t, provisionalDrainHoldNames("c", 3, 3))
+	// Single server removed.
+	assert.Equal(t, []string{"c-server-2"}, provisionalDrainHoldNames("c", 3, 2))
+}
+
 func TestPlanScaleDownStep(t *testing.T) {
 	a := func(n int) string { return "c-server-" + strconv.Itoa(n) }
 
