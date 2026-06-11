@@ -78,4 +78,14 @@ func TestServersPendingDrain(t *testing.T) {
 		servers := []neo4jclient.ServerInfo{srv("10.0.0.9:7687", "Enabled"), srv(addr(3), "Enabled")}
 		assert.Equal(t, []string{addr(3)}, serversPendingDrain(servers, cluster, 3))
 	})
+
+	t.Run("reports serverId (not name/address) — name often empty", func(t *testing.T) {
+		// Matches the real shape: ordinal lives in the address, the reportable
+		// identifier is the serverId, and name is blank.
+		servers := []neo4jclient.ServerInfo{
+			{ID: "uuid-3", Name: "", Address: addr(3), State: "Enabled"},
+		}
+		assert.Equal(t, []string{"uuid-3"}, serversPendingDrain(servers, cluster, 3),
+			"DEALLOCATE/DROP SERVER take the serverId, not the bolt address")
+	})
 }

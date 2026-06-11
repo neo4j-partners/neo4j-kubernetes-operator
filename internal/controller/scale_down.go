@@ -69,7 +69,14 @@ func serversPendingDrain(servers []neo4jclient.ServerInfo, clusterName string, d
 		case "dropped", "deallocated":
 			continue
 		}
-		id := s.Name
+		// Report the serverId — it's always populated and is what
+		// DEALLOCATE/DROP SERVER accept. The `name` column is often empty
+		// (defaults to the id) and the bolt `address` (…:7687) is NOT a valid
+		// server-management argument. Fall back only if id is somehow missing.
+		id := s.ID
+		if id == "" {
+			id = s.Name
+		}
 		if id == "" {
 			id = s.Address
 		}
