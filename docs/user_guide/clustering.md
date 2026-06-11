@@ -347,6 +347,28 @@ kubectl patch neo4jenterprisecluster my-cluster --type='merge' -p='{"spec":{"top
 kubectl edit neo4jenterprisecluster my-cluster
 ```
 
+> **Scaling down requires manual server drain (for now).** Reducing
+> `spec.topology.servers` lowers the StatefulSet replica count, but the
+> operator does **not yet** deallocate and drop the removed Neo4j servers
+> automatically (tracked in issue #173). Until it does, the removed servers linger in
+> `SHOW SERVERS` and any databases allocated to them can be left
+> **under-replicated**. The operator surfaces this as a `ServersPendingDrain`
+> condition (`status.conditions`) and a `ScaleDownPendingDrain` warning event.
+> To complete a scale-down safely, drain the removed servers yourself before/
+> after the replica reduction:
+>
+> ```cypher
+> -- on the system database, for each removed server (by id from SHOW SERVERS):
+> DEALLOCATE DATABASES FROM SERVER '<server-id>';   -- wait until SHOW SERVERS shows 'Deallocated'
+> DROP SERVER '<server-id>';
+> ```
+>
+> If `DEALLOCATE` fails because a database's topology can no longer be
+> satisfied by the remaining servers, reduce that database's topology first
+> (`ALTER DATABASE … SET TOPOLOGY …`) or add servers — do not force-remove a
+> server hosting the only/majority primary of a database (that path is
+> disaster recovery, not scaling).
+
 ### Rolling Upgrades
 
 ```yaml

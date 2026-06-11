@@ -19,6 +19,13 @@ const (
 
 	// ConditionTypeDatabasesHealthy indicates all expected user databases are online.
 	ConditionTypeDatabasesHealthy = "DatabasesHealthy"
+
+	// ConditionTypeServersPendingDrain indicates the cluster still has Neo4j
+	// servers registered beyond spec.topology.servers (i.e. a scale-down whose
+	// removed servers have not yet been deallocated + dropped). True means
+	// databases may be under-replicated on those servers; the operator does not
+	// yet auto-drain them (#173).
+	ConditionTypeServersPendingDrain = "ServersPendingDrain"
 )
 
 // Reason constants for the Ready condition across all CRDs.
@@ -43,6 +50,8 @@ const (
 	ConditionReasonAllDatabasesOnline     = "AllDatabasesOnline"
 	ConditionReasonDatabaseOffline        = "DatabaseOffline"
 	ConditionReasonDiagnosticsUnavailable = "DiagnosticsUnavailable"
+	ConditionReasonServersPendingDrain    = "ServersPendingDrain"
+	ConditionReasonNoServersPendingDrain  = "NoServersPendingDrain"
 )
 
 // SetReadyCondition sets the standard "Ready" condition on a conditions slice.
