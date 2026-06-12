@@ -104,9 +104,9 @@ func (r *RollingUpgradeOrchestrator) updateUpgradeStatus(
 	ctx context.Context,
 	cluster *neo4jv1beta1.Neo4jEnterpriseCluster,
 	phase, currentStep, lastError string,
-) {
+) error {
 	if cluster.Status.UpgradeStatus == nil {
-		return
+		return nil
 	}
 
 	// Refetch + RetryOnConflict on every status write. The upgrade runs across
@@ -142,6 +142,7 @@ func (r *RollingUpgradeOrchestrator) updateUpgradeStatus(
 	if err != nil {
 		log.FromContext(ctx).Error(err, "Failed to update cluster status in updateUpgradeStatus")
 	}
+	return err
 }
 
 func (r *RollingUpgradeOrchestrator) validateVersionCompatibility(currentVersion, targetVersion string) error {

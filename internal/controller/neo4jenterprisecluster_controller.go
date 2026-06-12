@@ -1732,6 +1732,32 @@ func (r *Neo4jEnterpriseClusterReconciler) handleRollingUpgrade(ctx context.Cont
 	if cluster.Status.UpgradeStatus != nil {
 		phase = cluster.Status.UpgradeStatus.Phase
 	}
+
+	// Target changed mid-flight (user edited the tag again): re-stage from ANY
+	// active phase, not just Rolling — a tag change during Stabilizing or
+	// Verifying would otherwise verify the new spec tag against servers
+	// running the old target, burning a full deadline cycle into Failed before
+	// converging. Staging is idempotent; already-on-target pods re-verify
+	// instantly during the walk. (LegacyInProgress is excluded: it routes to
+	// Staging below regardless, and its TargetVersion may predate the field.)
+	if upgradeStateMachineActive(cluster) && phase != upgradePhaseLegacyInProgress &&
+		cluster.Status.UpgradeStatus.TargetVersion != cluster.Spec.Image.Tag {
+		logger.Info("Upgrade target changed mid-flight; re-staging",
+			"previousTarget", cluster.Status.UpgradeStatus.TargetVersion, "newTarget", cluster.Spec.Image.Tag)
+		now := metav1.Now()
+		newTarget := cluster.Spec.Image.Tag
+		if err := r.patchUpgradeStatus(ctx, cluster, func(us *neo4jv1beta1.UpgradeStatus) {
+			us.Phase = upgradePhaseStaging
+			us.TargetVersion = newTarget
+			us.StepStartTime = &now
+			us.CurrentStep = "Re-staging: upgrade target changed mid-flight"
+			us.Message = us.CurrentStep
+		}); err != nil {
+			logger.Error(err, "Failed to persist re-staging transition")
+		}
+		return ctrl.Result{RequeueAfter: upgradeTransitionRequeue}, nil
+	}
+
 	switch phase {
 	case upgradePhaseStaging:
 		return r.stepUpgradeStaging(ctx, cluster)

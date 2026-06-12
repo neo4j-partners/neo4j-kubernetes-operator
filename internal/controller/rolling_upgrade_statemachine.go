@@ -362,25 +362,8 @@ func (r *Neo4jEnterpriseClusterReconciler) stepUpgradeRolling(
 	logger := log.FromContext(ctx).WithName("rolling-upgrade")
 	orch := NewRollingUpgradeOrchestrator(r.Client, cluster.Name, cluster.Namespace)
 	us := cluster.Status.UpgradeStatus
-
-	// Target changed mid-roll (user edited the tag again): go back to Staging
-	// so the walk restarts against the new template. Already-updated pods
-	// re-verify instantly; pods not yet rolled go straight to the new target.
-	if us.TargetVersion != cluster.Spec.Image.Tag {
-		logger.Info("Upgrade target changed mid-roll; re-staging",
-			"previousTarget", us.TargetVersion, "newTarget", cluster.Spec.Image.Tag)
-		now := metav1.Now()
-		newTarget := cluster.Spec.Image.Tag
-		if err := r.patchUpgradeStatus(ctx, cluster, func(s *neo4jv1beta1.UpgradeStatus) {
-			s.Phase = upgradePhaseStaging
-			s.TargetVersion = newTarget
-			s.StepStartTime = &now
-			s.CurrentStep = "Re-staging: upgrade target changed mid-roll"
-		}); err != nil {
-			logger.Error(err, "Failed to persist re-staging transition")
-		}
-		return ctrl.Result{RequeueAfter: upgradeTransitionRequeue}, nil
-	}
+	// Mid-flight target changes are handled centrally in handleRollingUpgrade
+	// (re-stage from any active phase) before this step is dispatched.
 
 	live, err := orch.getServerStatefulSet(ctx, cluster)
 	if err != nil {
@@ -403,13 +386,20 @@ func (r *Neo4jEnterpriseClusterReconciler) stepUpgradeRolling(
 			"Scale-down deferred until the rolling upgrade completes")
 	}
 
-	// Resolve the partition: live StatefulSet is authoritative; fall back to
-	// the persisted hint, then to a full freeze.
+	// Resolve the partition: the machine's persisted currentPartition is
+	// authoritative — the live StatefulSet value can be a STALE informer read
+	// (e.g. partition=0 left by a PREVIOUS completed upgrade, observed just
+	// after Staging re-froze it) and trusting it could fast-forward the walk.
+	// The persisted value is at worst one step BEHIND the StatefulSet (crash
+	// between the STS write and the status patch), which converges safely:
+	// the step's gates re-verify and the partition write is idempotent. Fall
+	// back to the live value (legacy resume without the field), then to a
+	// full freeze.
 	partition := replicas
-	if live.Spec.UpdateStrategy.RollingUpdate != nil && live.Spec.UpdateStrategy.RollingUpdate.Partition != nil {
-		partition = *live.Spec.UpdateStrategy.RollingUpdate.Partition
-	} else if us.CurrentPartition != nil {
+	if us.CurrentPartition != nil {
 		partition = *us.CurrentPartition
+	} else if live.Spec.UpdateStrategy.RollingUpdate != nil && live.Spec.UpdateStrategy.RollingUpdate.Partition != nil {
+		partition = *live.Spec.UpdateStrategy.RollingUpdate.Partition
 	}
 
 	obs := upgradeRollObservation{
@@ -582,12 +572,19 @@ func (r *Neo4jEnterpriseClusterReconciler) stepUpgradeVerifying(
 
 	// Completed: stamps CompletionTime, LastUpgradeTime and Status.Version on
 	// a refetched object (see updateUpgradeStatus), then the cluster phase +
-	// version in one write (#207 fix pattern).
+	// version in one write (#207 fix pattern). The Completed persist GATES the
+	// Ready write: if it fails, retry the (idempotent) verification next
+	// reconcile rather than reporting Ready while upgradeStatus still says
+	// Verifying — that combination would keep the upgrade branch blocking
+	// normal reconciliation with no record of why.
 	startTime := time.Now()
 	if us := cluster.Status.UpgradeStatus; us != nil && us.StartTime != nil {
 		startTime = us.StartTime.Time
 	}
-	orch.updateUpgradeStatus(ctx, cluster, upgradePhaseCompleted, "Rolling upgrade completed successfully", "")
+	if err := orch.updateUpgradeStatus(ctx, cluster, upgradePhaseCompleted, "Rolling upgrade completed successfully", ""); err != nil {
+		logger.Error(err, "Failed to persist Completed upgrade phase; retrying")
+		return ctrl.Result{RequeueAfter: upgradeTransitionRequeue}, nil
+	}
 	_ = r.updateClusterStatusWithVersion(ctx, cluster, "Ready", "Rolling upgrade completed successfully", cluster.Spec.Image.Tag)
 
 	orch.upgradeMetrics.RecordUpgrade(ctx, true, time.Since(startTime))
@@ -613,7 +610,9 @@ func (r *Neo4jEnterpriseClusterReconciler) failUpgrade(
 		startTime = us.StartTime.Time
 	}
 	orch := NewRollingUpgradeOrchestrator(r.Client, cluster.Name, cluster.Namespace)
-	orch.upgradeMetrics.RecordUpgrade(ctx, false, time.Since(startTime))
+	// Metric recorded only after the terminal phase persists (below) — a
+	// failed persist retries this whole routing and would double-count.
+	recordFailureMetric := func() { orch.upgradeMetrics.RecordUpgrade(ctx, false, time.Since(startTime)) }
 
 	if cluster.Spec.UpgradeStrategy != nil && cluster.Spec.UpgradeStrategy.AutoPauseOnFailure {
 		if err := r.patchUpgradeStatus(ctx, cluster, func(s *neo4jv1beta1.UpgradeStatus) {
@@ -622,8 +621,14 @@ func (r *Neo4jEnterpriseClusterReconciler) failUpgrade(
 			s.CurrentStep = "Upgrade paused due to failure - manual intervention required"
 			s.Message = s.CurrentStep
 		}); err != nil {
-			logger.Error(err, "Failed to persist Paused upgrade phase")
+			// The terminal phase MUST land before any other side effect: if it
+			// doesn't, upgradeStateMachineActive keeps treating the upgrade as
+			// mid-flight and the steps keep driving after we reported a pause.
+			// Requeue and re-route the same failure next reconcile.
+			logger.Error(err, "Failed to persist Paused upgrade phase; retrying")
+			return ctrl.Result{RequeueAfter: upgradeStepRequeue}, nil
 		}
+		recordFailureMetric()
 		_ = r.updateClusterStatus(ctx, cluster, "Paused", "Upgrade paused due to failure - manual intervention required")
 		r.Recorder.Event(cluster, corev1.EventTypeWarning, EventReasonUpgradePaused,
 			fmt.Sprintf("Upgrade paused: %v", cause))
@@ -636,8 +641,12 @@ func (r *Neo4jEnterpriseClusterReconciler) failUpgrade(
 		s.CurrentStep = "Rolling upgrade failed"
 		s.Message = s.CurrentStep
 	}); err != nil {
-		logger.Error(err, "Failed to persist Failed upgrade phase")
+		// Same gating as the Paused branch: without the persisted Failed phase
+		// the machine stays active; retry the failure routing next reconcile.
+		logger.Error(err, "Failed to persist Failed upgrade phase; retrying")
+		return ctrl.Result{RequeueAfter: upgradeStepRequeue}, nil
 	}
+	recordFailureMetric()
 	r.Recorder.Eventf(cluster, corev1.EventTypeWarning, EventReasonUpgradeFailed,
 		"Rolling upgrade failed: %v", cause)
 	_ = r.updateClusterStatus(ctx, cluster, "Failed", fmt.Sprintf("Rolling upgrade failed: %v", cause))

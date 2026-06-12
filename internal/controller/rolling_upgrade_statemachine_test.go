@@ -190,31 +190,84 @@ func TestStepUpgradeRolling_LowersPartitionFromFullFreeze(t *testing.T) {
 	assert.Equal(t, upgradePhaseRolling, latest.Status.UpgradeStatus.Phase)
 }
 
-// TestStepUpgradeRolling_TargetChangedMidRollRestages pins the mid-roll
+// TestHandleRollingUpgrade_TargetChangedMidFlightRestages pins the mid-flight
 // retarget behavior: editing the image tag again sends the machine back to
-// Staging with the new target rather than finishing against a stale one.
-func TestStepUpgradeRolling_TargetChangedMidRollRestages(t *testing.T) {
+// Staging with the new target from ANY active phase (Rolling, Stabilizing,
+// Verifying) rather than finishing — or failing verification — against a
+// stale one. The check lives in the dispatcher (handleRollingUpgrade).
+func TestHandleRollingUpgrade_TargetChangedMidFlightRestages(t *testing.T) {
 	scheme := makeUpgradeScheme()
-	cluster := clusterForUpgrade("retarget", "default", "5.26.0-enterprise", "5.26.2-enterprise", 3)
+	for _, phase := range []string{upgradePhaseRolling, upgradePhaseStabilizing, upgradePhaseVerifying} {
+		t.Run(phase, func(t *testing.T) {
+			cluster := clusterForUpgrade("retarget", "default", "5.26.0-enterprise", "5.26.2-enterprise", 3)
+			now := metav1.Now()
+			cluster.Status.UpgradeStatus = &neo4jv1beta1.UpgradeStatus{
+				Phase:         phase,
+				TargetVersion: "5.26.1-enterprise", // walk started against .1, spec now wants .2
+				StartTime:     &now,
+				StepStartTime: &now,
+			}
+
+			fc := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster).WithStatusSubresource(cluster).Build()
+			r := &Neo4jEnterpriseClusterReconciler{Client: fc, Recorder: record.NewFakeRecorder(10)}
+
+			res, err := r.handleRollingUpgrade(context.Background(), cluster)
+			require.NoError(t, err)
+			assert.Equal(t, upgradeTransitionRequeue, res.RequeueAfter)
+
+			latest := &neo4jv1beta1.Neo4jEnterpriseCluster{}
+			require.NoError(t, fc.Get(context.Background(), types.NamespacedName{Name: "retarget", Namespace: "default"}, latest))
+			assert.Equal(t, upgradePhaseStaging, latest.Status.UpgradeStatus.Phase)
+			assert.Equal(t, "5.26.2-enterprise", latest.Status.UpgradeStatus.TargetVersion)
+		})
+	}
+}
+
+// TestStepUpgradeRolling_PersistedPartitionBeatsStaleLiveRead pins the
+// partition-resolution preference: the machine's persisted currentPartition is
+// authoritative over the live StatefulSet value, which can be a stale informer
+// read (e.g. partition=0 left by a previous completed upgrade observed just
+// after Staging re-froze it). Trusting the stale 0 would fast-forward the walk.
+func TestStepUpgradeRolling_PersistedPartitionBeatsStaleLiveRead(t *testing.T) {
+	scheme := makeUpgradeScheme()
+	const replicas int32 = 3
+	cluster := clusterForUpgrade("stale", "default", "5.26.0-enterprise", "5.26.1-enterprise", replicas)
 	now := metav1.Now()
 	cluster.Status.UpgradeStatus = &neo4jv1beta1.UpgradeStatus{
-		Phase:         upgradePhaseRolling,
-		TargetVersion: "5.26.1-enterprise", // walk started against .1, spec now wants .2
-		StartTime:     &now,
-		StepStartTime: &now,
+		Phase:            upgradePhaseRolling,
+		TargetVersion:    "5.26.1-enterprise",
+		StartTime:        &now,
+		StepStartTime:    &now,
+		CurrentPartition: ptr.To(replicas), // machine just froze at full
+		Progress:         &neo4jv1beta1.UpgradeProgress{Total: replicas, Pending: replicas},
 	}
 
-	fc := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster).WithStatusSubresource(cluster).Build()
+	sts := serverSTSForUpgrade("stale", "default", "neo4j:5.26.1-enterprise", replicas)
+	sts.Generation = 2
+	// Stale read: partition still 0 from a PREVIOUS completed upgrade, status
+	// settled — with live-first resolution this looked like a finished walk.
+	sts.Spec.UpdateStrategy.RollingUpdate.Partition = ptr.To(int32(0))
+	sts.Status = appsv1.StatefulSetStatus{
+		ObservedGeneration: 2,
+		ReadyReplicas:      replicas,
+		UpdatedReplicas:    0, // nothing rolled to the new revision yet
+	}
+
+	fc := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster, sts).WithStatusSubresource(cluster).Build()
 	r := &Neo4jEnterpriseClusterReconciler{Client: fc, Recorder: record.NewFakeRecorder(10)}
 
 	res, err := r.stepUpgradeRolling(context.Background(), cluster)
 	require.NoError(t, err)
-	assert.Equal(t, upgradeTransitionRequeue, res.RequeueAfter)
+	assert.Equal(t, upgradeStepRequeue, res.RequeueAfter)
 
 	latest := &neo4jv1beta1.Neo4jEnterpriseCluster{}
-	require.NoError(t, fc.Get(context.Background(), types.NamespacedName{Name: "retarget", Namespace: "default"}, latest))
-	assert.Equal(t, upgradePhaseStaging, latest.Status.UpgradeStatus.Phase)
-	assert.Equal(t, "5.26.2-enterprise", latest.Status.UpgradeStatus.TargetVersion)
+	require.NoError(t, fc.Get(context.Background(), types.NamespacedName{Name: "stale", Namespace: "default"}, latest))
+	// Persisted partition (replicas) wins: with UpdatedReplicas=0 and a full
+	// freeze the planner lowers to replicas-1 — it must NOT jump to
+	// Stabilizing as a stale live partition=0 would suggest.
+	assert.Equal(t, upgradePhaseRolling, latest.Status.UpgradeStatus.Phase)
+	require.NotNil(t, latest.Status.UpgradeStatus.CurrentPartition)
+	assert.Equal(t, replicas-1, *latest.Status.UpgradeStatus.CurrentPartition)
 }
 
 // TestFailUpgrade_RoutesPausedAndFailed pins the failure routing: autoPause →
