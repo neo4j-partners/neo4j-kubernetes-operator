@@ -2529,6 +2529,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#retracting-a-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Retracting a release
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2843,6 +2854,17 @@
     <span class="md-ellipsis">
       
         Cutting a release (runbook)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#retracting-a-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Retracting a release
       
     </span>
   </a>
@@ -3225,9 +3247,11 @@ from the tag.</p>
 <p><strong>Tag and push</strong> from <code>main</code>:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>git<span class="w"> </span>tag<span class="w"> </span>v1.12.0<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>v1.12.0
 </span></code></pre></div>
-<p>This fans out to <strong>Release</strong> (multi-arch signed images + GitHub release +
-kubectl bundles + OLM CSV), <strong>Pages — Docs</strong> (<code>/v1.12/</code> + <code>/latest/</code>), and
-<strong>Pages — Helm Repo</strong> (<code>/charts/</code>).</p>
+<p>This fires <strong>Release</strong> only. The versioned docs (<code>/vX.Y/</code> + <code>/latest/</code>) and
+the classic Helm repo (<code>/charts/</code>) are published by the Release workflow's
+final jobs <strong>after every gate and artifact exists</strong> — a failed release
+publishes nothing (#245). Push-to-main docs (<code>/main/</code>) are unaffected. Any
+job failure auto-files an incident issue with the failed jobs and run link.</p>
 <p><strong>After the workflows finish:</strong></p>
 <ol>
 <li>Paste the <strong>What's Changed</strong> section into the GitHub release body (above the
@@ -3246,6 +3270,19 @@ kubectl bundles + OLM CSV), <strong>Pages — Docs</strong> (<code>/v1.12/</code
    naming the released version and asking the reporter to re-verify against it
    — reporter-filed issues stay open until verified on a pinned release.</li>
 </ol>
+<h3 id="retracting-a-release">Retracting a release<a class="headerlink" href="#retracting-a-release" title="Anchor link to this section">&para;</a></h3>
+<p><code>release-retract.yml</code> (manual dispatch, #246) safely unpublishes a dire
+release. Doctrine: <strong>retract and supersede — never reuse a version</strong> (registry
+layers, Helm caches, OLM catalogs and Rekor cache immutably). <strong>Always run
+with <code>dry-run: true</code> first</strong>: the dry-run doubles as the grace-window probe,
+printing either "window OPEN" (tag delete-and-re-cut still safe — nothing
+published) or "window CLOSED at <surface>" (retract + ship vX.Y.Z+1).
+Execution repoints the moving image tags at <code>previous-good-tag</code>, banners the
+GitHub release as RETRACTED, removes the chart from both channels, republishes
+docs from the previous good tag, and files a retraction-record issue with the
+manual follow-ups (notably: a MERGED OperatorHub PR can only be superseded,
+never yanked). Deleting the pinned image or the git tag are explicit opt-in
+flags, default off.</p>
 <h2 id="publishing-to-github-pages">Publishing to GitHub Pages<a class="headerlink" href="#publishing-to-github-pages" title="Anchor link to this section">&para;</a></h2>
 <p>Both Pages workflows write to the <strong><code>gh-pages</code></strong> branch and share a <code>gh-pages</code>
 <a href="https://docs.github.com/actions/using-jobs/using-concurrency">concurrency group</a>
