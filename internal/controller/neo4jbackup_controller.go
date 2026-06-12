@@ -1232,6 +1232,12 @@ func (r *Neo4jBackupReconciler) buildBackupCommand(ctx context.Context, backup *
 		if backup.Spec.Options.TempPath != "" {
 			// User-controlled path into a /bin/sh -c command — quote (#219).
 			cmd += " --temp-path=" + shellQuote(backup.Spec.Options.TempPath)
+			// neo4j-admin refuses a staging path that doesn't exist
+			// ("Storage staging path does not exist") and nothing else
+			// creates a bare tempPath — the restore path has had this
+			// prelude since the wave hardening; the backup path didn't,
+			// which broke the shipped MinIO example (#256).
+			cmd = "mkdir -p " + shellQuote(backup.Spec.Options.TempPath) + " && " + cmd
 		} else if backup.Spec.Options.TempStorage != nil {
 			cmd += " --temp-path=/tmp/neo4j-staging"
 		}
@@ -1287,16 +1293,25 @@ func (r *Neo4jBackupReconciler) buildBackupCommand(ctx context.Context, backup *
 	// — unparseable. Strip the trailing `*` here so validate sees the
 	// canonical parent name.
 	if backup.Spec.Options != nil && backup.Spec.Options.Validate != nil && *backup.Spec.Options.Validate {
-		validateDBArg := dbName
-		if allDatabases {
-			validateDBArg = "*"
+		// `neo4j-admin backup validate` exists only on CalVer images — on
+		// 5.26 the CLI rejects the subcommand ("Unmatched arguments"), the
+		// `|| true` swallowed it, and the user silently got no validation
+		// (#255). Skip the clause and say so loudly instead.
+		if !version.IsCalver {
+			r.Recorder.Event(backup, corev1.EventTypeWarning, "BackupValidateUnsupported",
+				fmt.Sprintf("options.validate requires a CalVer (2025.x+) Neo4j image — `neo4j-admin backup validate` does not exist on %s; skipping validation", cluster.Spec.Image.Tag))
 		} else {
-			validateDBArg = strings.TrimSuffix(validateDBArg, "*")
+			validateDBArg := dbName
+			if allDatabases {
+				validateDBArg = "*"
+			} else {
+				validateDBArg = strings.TrimSuffix(validateDBArg, "*")
+			}
+			// toPath carries user-controlled spec fields — quote it (#219). The
+			// database arg is double-quoted by design (validated name or literal
+			// glob that neo4j-admin, not the shell, must expand).
+			cmd += fmt.Sprintf(` && (neo4j-admin backup validate --from-path=%s --database="%s" || true)`, shellQuote(toPath), validateDBArg)
 		}
-		// toPath carries user-controlled spec fields — quote it (#219). The
-		// database arg is double-quoted by design (validated name or literal
-		// glob that neo4j-admin, not the shell, must expand).
-		cmd += fmt.Sprintf(` && (neo4j-admin backup validate --from-path=%s --database="%s" || true)`, shellQuote(toPath), validateDBArg)
 	}
 
 	if backup.Spec.Storage.Type == "pvc" {

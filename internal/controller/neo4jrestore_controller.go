@@ -905,6 +905,32 @@ func (r *Neo4jRestoreReconciler) createRestoreJob(ctx context.Context, restore *
 
 	jobName := restore.Name + "-restore"
 
+	// Fresh attempt after a terminal failure (#254): the Failed guard only
+	// lets a NEW generation through, but the previous attempt's failed Job
+	// still exists under this name — Create would hit AlreadyExists, the
+	// race fallback below would adopt the FAILED Job, and the retry would
+	// instantly re-fail. Delete the stale Job first and wait (bounded) for
+	// the name to free. Scoped to phase==Failed so the same-attempt race
+	// tolerance (two reconciles during the stopCluster window) is untouched.
+	if restore.Status.Phase == StatusFailed {
+		stale := &batchv1.Job{}
+		if err := r.Get(ctx, types.NamespacedName{Name: jobName, Namespace: restore.Namespace}, stale); err == nil {
+			if jobConditionTrue(stale, batchv1.JobFailed) {
+				log.FromContext(ctx).Info("Deleting stale failed restore Job for fresh attempt", "job", jobName)
+				policy := metav1.DeletePropagationBackground
+				if delErr := r.Delete(ctx, stale, &client.DeleteOptions{PropagationPolicy: &policy}); delErr != nil && !errors.IsNotFound(delErr) {
+					return nil, fmt.Errorf("failed to delete stale restore Job %q for retry: %w", jobName, delErr)
+				}
+				for i := 0; i < 20; i++ {
+					if getErr := r.Get(ctx, types.NamespacedName{Name: jobName, Namespace: restore.Namespace}, &batchv1.Job{}); errors.IsNotFound(getErr) {
+						break
+					}
+					time.Sleep(500 * time.Millisecond)
+				}
+			}
+		}
+	}
+
 	// Resolve source.type=backup into a concrete StorageLocation + per-run
 	// subfolder once, then swap it onto a shallow restore copy so every
 	// downstream builder (command, env vars, volumes, volume mounts) sees
@@ -1501,8 +1527,11 @@ func (r *Neo4jRestoreReconciler) buildRestoreCommand(ctx context.Context, restor
 	}
 	cmd := preludeCmd + neo4j.GetRestoreCommand(version, restore.Spec.DatabaseName, backupPath)
 
-	// Add --overwrite-destination flag if force is specified
-	if restore.Spec.Force {
+	// Confirm overwriting an existing database. Both spec.force and
+	// options.replaceExisting are accepted — the preflight error text and
+	// the API reference promise both (#253; previously only force was
+	// wired, so the documented replaceExisting path failed at the Job).
+	if restoreOverwriteConfirmed(restore) {
 		cmd += " --overwrite-destination=true"
 	}
 
@@ -1647,7 +1676,7 @@ func (r *Neo4jRestoreReconciler) buildPITRRestoreCommand(ctx context.Context, re
 
 	cmd := preludeCmd + neo4j.GetRestoreCommand(version, restore.Spec.DatabaseName, backupPath)
 
-	if restore.Spec.Force {
+	if restoreOverwriteConfirmed(restore) {
 		cmd += " --overwrite-destination=true"
 	}
 
@@ -2614,14 +2643,41 @@ func (r *Neo4jRestoreReconciler) startClusterCypherRestore(
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
 	}
 
-	// Database ABSENT: `CREATE DATABASE … OPTIONS{seedURI} WAIT` is
-	// SYNCHRONOUS — it blocks until the database is online (or fails fast on a
-	// bad/unreachable seed). It's a single atomic operation, so we keep it
-	// inline and mark Completed directly on success.
+	// Database ABSENT: `CREATE DATABASE … OPTIONS{seedURI} WAIT` blocks
+	// until the operation finishes — but FINISHED IS NOT SEEDED (#251): on a
+	// failed seed download (unreachable URI, missing endpoint config) the
+	// statement returns without a driver error and leaves the allocation
+	// offline with the failure in SHOW DATABASE's statusMessage. Verify the
+	// actual allocation state before declaring success; the statusMessage
+	// is the actionable detail the user needs.
 	if createErr := neo4jClient.CreateDatabaseWithSeedURIOptions(ctx, restore.Spec.DatabaseName, seedURI, false); createErr != nil {
 		logger.Error(createErr, "CREATE DATABASE OPTIONS{seedURI} failed")
 		r.updateRestoreStatus(ctx, restore, StatusFailed, fmt.Sprintf("CREATE DATABASE OPTIONS{seedURI} failed: %v", createErr))
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, createErr
+	}
+
+	if failMsg, ferr := neo4jClient.DatabaseSeedFailureMessage(ctx, restore.Spec.DatabaseName); ferr == nil && failMsg != "" {
+		// Explicit allocation failure (e.g. "Object not found at the path:
+		// s3://…") — fail NOW with Neo4j's own diagnosis instead of either
+		// declaring false success or burning the full poll budget.
+		msg := fmt.Sprintf("Database %q was created but the seed FAILED: %s — fix the cause, DROP DATABASE %s IF EXISTS, and re-trigger the restore",
+			restore.Spec.DatabaseName, failMsg, restore.Spec.DatabaseName)
+		logger.Error(nil, "Cluster Cypher restore seed failed", "statusMessage", failMsg)
+		r.updateRestoreStatus(ctx, restore, StatusFailed, msg)
+		r.Recorder.Event(restore, corev1.EventTypeWarning, EventReasonRestoreFailed, msg)
+		return ctrl.Result{}, nil
+	}
+	if online, total, _, stateErr := neo4jClient.DatabaseOnlineState(ctx, restore.Spec.DatabaseName); stateErr != nil || total == 0 || online != total {
+		// Not online yet but no explicit failure either — a large seed can
+		// outlive the statement's internal wait. Hand off to the requeue
+		// poll (bounded by spec.timeout), which Completes on online and
+		// Fails at the deadline with the live diagnosis.
+		if err := r.markCypherRestoreIssued(ctx, restore); err != nil {
+			return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
+		}
+		r.updateRestoreStatus(ctx, restore, StatusRunning,
+			fmt.Sprintf("Database %q created; waiting for the seed to converge online", restore.Spec.DatabaseName))
+		return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
 	}
 
 	completion := metav1.Now()
@@ -2763,6 +2819,14 @@ func (r *Neo4jRestoreReconciler) pollClusterRestoreOnline(ctx context.Context, r
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
 	}
 	defer func() { _ = neo4jClient.Close() }()
+
+	if failMsg, ferr := neo4jClient.DatabaseSeedFailureMessage(ctx, restore.Spec.DatabaseName); ferr == nil && failMsg != "" {
+		msg := fmt.Sprintf("Restore of %q failed: %s — fix the cause, DROP DATABASE %s IF EXISTS, and re-trigger",
+			restore.Spec.DatabaseName, failMsg, restore.Spec.DatabaseName)
+		r.updateRestoreStatus(ctx, restore, StatusFailed, msg)
+		r.Recorder.Event(restore, corev1.EventTypeWarning, EventReasonRestoreFailed, msg)
+		return ctrl.Result{}, nil
+	}
 
 	online, total, diag, stateErr := neo4jClient.DatabaseOnlineState(ctx, restore.Spec.DatabaseName)
 	if stateErr == nil && total > 0 && online == total {
@@ -3194,4 +3258,15 @@ func isPodReady(pod *corev1.Pod) bool {
 	}
 
 	return false
+}
+
+// restoreOverwriteConfirmed reports whether the user confirmed restoring over
+// an existing database — via spec.force OR options.replaceExisting. The two
+// are equivalent confirmations everywhere (cluster recreate gate, preflight
+// error text, API reference); the Job command must honor both too.
+func restoreOverwriteConfirmed(restore *neo4jv1beta1.Neo4jRestore) bool {
+	if restore.Spec.Force {
+		return true
+	}
+	return restore.Spec.Options != nil && restore.Spec.Options.ReplaceExisting
 }

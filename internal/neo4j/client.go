@@ -1986,6 +1986,39 @@ func (c *Client) RecreateDatabaseWithSeedURI(
 // (currentStatus + statusMessage per row) for logging on timeout. It runs a
 // single bounded SHOW DATABASE, so callers can poll it across reconciles
 // without holding a worker (see pollClusterRestoreOnline).
+// DatabaseSeedFailureMessage returns the first non-empty statusMessage among
+// the database's OFFLINE allocations — Neo4j's explicit "this allocation
+// failed and here's why" signal (e.g. "Object not found at the path: s3://…"
+// for a bad seed URI). Empty string = no explicit failure recorded (the
+// database may be online, starting, or simply absent).
+func (c *Client) DatabaseSeedFailureMessage(ctx context.Context, databaseName string) (string, error) {
+	session := c.driver.NewSession(ctx, neo4j.SessionConfig{
+		AccessMode:   neo4j.AccessModeRead,
+		DatabaseName: "system",
+	})
+	defer session.Close(ctx)
+
+	timeoutCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	result, err := session.Run(timeoutCtx,
+		"SHOW DATABASE $name YIELD currentStatus, statusMessage",
+		map[string]any{"name": databaseName})
+	if err != nil {
+		return "", fmt.Errorf("SHOW DATABASE %q: %w", databaseName, err)
+	}
+	for result.Next(timeoutCtx) {
+		rec := result.Record()
+		cur, _ := rec.Get("currentStatus")
+		msg, _ := rec.Get("statusMessage")
+		m := fmt.Sprintf("%v", msg)
+		if fmt.Sprintf("%v", cur) == "offline" && m != "" && m != "<nil>" {
+			return m, nil
+		}
+	}
+	return "", result.Err()
+}
+
 func (c *Client) DatabaseOnlineState(ctx context.Context, databaseName string) (online, total int, diag string, err error) {
 	session := c.driver.NewSession(ctx, neo4j.SessionConfig{
 		AccessMode:   neo4j.AccessModeRead,
