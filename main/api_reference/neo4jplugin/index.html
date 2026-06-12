@@ -4095,7 +4095,7 @@
 <tr>
 <td><code>url</code></td>
 <td><code>string</code></td>
-<td>Direct URL for "url" source type</td>
+<td>Direct URL for "url" and "custom" source types. <strong>Must be <code>https://</code></strong> — the controller-side validator rejects <code>http://</code>, <code>file://</code>, and every other scheme (plugin JARs are downloaded over the network and a non-https scheme has no transport integrity). Host internal plugins on an https mirror, e.g. with a cert-manager certificate.</td>
 </tr>
 <tr>
 <td><code>checksum</code></td>
