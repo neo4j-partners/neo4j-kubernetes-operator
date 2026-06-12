@@ -12,13 +12,17 @@ metadata:
   namespace: prod
 spec:
   clusterRef: prod-cluster
-  # spec.name defaults to metadata.name; both are "analytics_reader"-style.
-  # Each privilege MUST end with `TO <name>` so the controller can derive
-  # the matching REVOKE if the privilege is later removed from the spec.
+  # Neo4j role names may contain only letters, digits and underscores —
+  # hyphens (the Kubernetes naming convention used by metadata.name above)
+  # are NOT valid. Set spec.name to the underscore form explicitly; users
+  # then reference THIS name (not the CR name) in their spec.roles.
+  name: analytics_reader
+  # Each privilege MUST end with `TO <spec.name>` so the controller can
+  # derive the matching REVOKE if the privilege is later removed.
   privileges:
-    - "GRANT ACCESS ON DATABASE analytics TO analytics-reader"
-    - "GRANT MATCH {*} ON GRAPH analytics NODES * TO analytics-reader"
-    - "DENY WRITE ON GRAPH analytics TO analytics-reader"
+    - "GRANT ACCESS ON DATABASE analytics TO analytics_reader"
+    - "GRANT MATCH {*} ON GRAPH analytics NODES * TO analytics_reader"
+    - "DENY WRITE ON GRAPH analytics TO analytics_reader"
 ---
 # ── App-user password Secret (create this BEFORE you apply this manifest) ──────
 # Not defined inline: `kubectl apply -f` would re-apply it every run and OVERWRITE
@@ -42,4 +46,4 @@ spec:
   passwordSecretRef:
     name: analytics-reader-creds
   roles:
-    - analytics-reader   # references the Neo4jRole above by spec.name
+    - analytics_reader   # the Neo4j role name (the Neo4jRole's spec.name, NOT its metadata.name)

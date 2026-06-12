@@ -21,5 +21,5 @@ spec:
   username: alice   # RoleBinding usernames must match ^[a-zA-Z][a-zA-Z0-9_.\-]*$ (no @)
   roles:
     - editor
-    - analytics-reader          # may reference a Neo4jRole; pending until it exists
+    - analytics_reader          # the Neo4j role name (a Neo4jRole's spec.name); pending until it exists
   # enforceExclusive: true      # uncomment to revoke any role not in .spec.roles
