@@ -581,7 +581,11 @@ func (r *Neo4jEnterpriseStandaloneReconciler) reconcileService(ctx context.Conte
 			}
 			clientSvc.Spec.Type = desiredClient.Spec.Type
 			clientSvc.Spec.Selector = desiredClient.Spec.Selector
-			clientSvc.Spec.Ports = desiredClient.Spec.Ports
+			// Preserve API-assigned NodePorts across reconciles (#228
+			// review) — same helper the cluster controller uses; a bare
+			// assign would churn node ports on every loop for
+			// type=NodePort/LoadBalancer.
+			clientSvc.Spec.Ports = mergeServicePorts(clientSvc.Spec.Ports, desiredClient.Spec.Ports)
 			clientSvc.Spec.LoadBalancerIP = desiredClient.Spec.LoadBalancerIP
 			clientSvc.Spec.LoadBalancerSourceRanges = desiredClient.Spec.LoadBalancerSourceRanges
 			clientSvc.Spec.ExternalTrafficPolicy = desiredClient.Spec.ExternalTrafficPolicy
