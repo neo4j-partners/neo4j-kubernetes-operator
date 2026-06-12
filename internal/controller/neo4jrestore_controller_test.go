@@ -271,16 +271,16 @@ var _ = Describe("Neo4jRestore Controller", func() {
 				return err == nil
 			}, timeout, interval).Should(BeTrue())
 
-			// The controller should reject this restore due to non-existent cluster
-			// — Phase=Failed plus a condition whose message references the missing
-			// cluster (the controller emits a Ready=False condition with the
-			// formatted "Failed to get target cluster: ..." message, not a typed
-			// ClusterNotFound condition).
+			// A missing target is TRANSIENT (#218): kubectl apply -f dir/
+			// commonly creates the restore before its target CR, so the
+			// controller waits in Pending (message referencing the missing
+			// target) instead of pinning a terminal Failed.
 			Eventually(func() bool {
 				if err := k8sClient.Get(ctx, restoreLookupKey, createdRestore); err != nil {
 					return false
 				}
-				return hasFailedConditionMatching(createdRestore, "cluster", "not found")
+				return createdRestore.Status.Phase == "Pending" &&
+					strings.Contains(createdRestore.Status.Message, "not found")
 			}, timeout, interval).Should(BeTrue())
 
 			// Clean up
