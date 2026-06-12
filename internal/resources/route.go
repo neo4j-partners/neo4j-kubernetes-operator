@@ -129,7 +129,7 @@ func BuildRouteForStandalone(standalone *neo4jv1beta1.Neo4jEnterpriseStandalone)
 	return buildRoute(
 		fmt.Sprintf("%s-route", standalone.Name),
 		standalone.Namespace,
-		fmt.Sprintf("%s-service", standalone.Name),
+		fmt.Sprintf("%s-client", standalone.Name), // canonical client Service (#215)
 		map[string]string{
 			"app.kubernetes.io/name":       "neo4j",
 			"app.kubernetes.io/instance":   standalone.Name,

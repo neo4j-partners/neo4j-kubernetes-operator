@@ -175,7 +175,7 @@ var _ = Describe("Neo4jEnterpriseStandalone Controller", func() {
 			Eventually(func() bool {
 				service := &corev1.Service{}
 				err := k8sClient.Get(ctx, types.NamespacedName{
-					Name:      standaloneName + "-service",
+					Name:      standaloneName + "-client",
 					Namespace: namespaceName,
 				}, service)
 				return err == nil
@@ -436,7 +436,7 @@ var _ = Describe("Neo4jEnterpriseStandalone Controller", func() {
 			Eventually(func() bool {
 				service := &corev1.Service{}
 				err := k8sClient.Get(ctx, types.NamespacedName{
-					Name:      standaloneName + "-service",
+					Name:      standaloneName + "-client",
 					Namespace: namespaceName,
 				}, service)
 				if err != nil {
@@ -446,6 +446,22 @@ var _ = Describe("Neo4jEnterpriseStandalone Controller", func() {
 				// Verify service type is LoadBalancer
 				return service.Spec.Type == corev1.ServiceTypeLoadBalancer
 			}, timeout, interval).Should(BeTrue())
+		})
+
+		It("Should keep the deprecated {name}-service alias as a ClusterIP shim (#215)", func() {
+			Expect(k8sClient.Create(ctx, standalone)).Should(Succeed())
+			alias := &corev1.Service{}
+			Eventually(func() bool {
+				if err := k8sClient.Get(ctx, types.NamespacedName{
+					Name:      standaloneName + "-service",
+					Namespace: namespaceName,
+				}, alias); err != nil {
+					return false
+				}
+				return alias.Spec.Type == corev1.ServiceTypeClusterIP &&
+					alias.Annotations["neo4j.com/deprecated-alias-of"] == standaloneName+"-client"
+			}, timeout, interval).Should(BeTrue(),
+				"the legacy name must survive one release as a ClusterIP-only alias")
 		})
 
 		It("Should create service with NodePort type", func() {
@@ -461,7 +477,7 @@ var _ = Describe("Neo4jEnterpriseStandalone Controller", func() {
 			Eventually(func() bool {
 				service := &corev1.Service{}
 				err := k8sClient.Get(ctx, types.NamespacedName{
-					Name:      standaloneName + "-service",
+					Name:      standaloneName + "-client",
 					Namespace: namespaceName,
 				}, service)
 				if err != nil {
@@ -492,7 +508,7 @@ var _ = Describe("Neo4jEnterpriseStandalone Controller", func() {
 			Eventually(func() bool {
 				service := &corev1.Service{}
 				err := k8sClient.Get(ctx, types.NamespacedName{
-					Name:      standaloneName + "-service",
+					Name:      standaloneName + "-client",
 					Namespace: namespaceName,
 				}, service)
 				if err != nil {
@@ -684,7 +700,7 @@ var _ = Describe("Neo4jEnterpriseStandalone Controller", func() {
 			Eventually(func() bool {
 				service := &corev1.Service{}
 				err := k8sClient.Get(ctx, types.NamespacedName{
-					Name:      standaloneName + "-service",
+					Name:      standaloneName + "-client",
 					Namespace: namespaceName,
 				}, service)
 				return err == nil && service.Spec.Type == corev1.ServiceTypeClusterIP
@@ -713,7 +729,7 @@ var _ = Describe("Neo4jEnterpriseStandalone Controller", func() {
 			Eventually(func() bool {
 				service := &corev1.Service{}
 				err := k8sClient.Get(ctx, types.NamespacedName{
-					Name:      standaloneName + "-service",
+					Name:      standaloneName + "-client",
 					Namespace: namespaceName,
 				}, service)
 				if err != nil {

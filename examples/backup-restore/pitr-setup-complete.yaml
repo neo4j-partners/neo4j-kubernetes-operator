@@ -145,10 +145,10 @@ spec:
                 echo "=== PITR Post-Restore Validation ==="
                 # -a points cypher-shell at the standalone's service — the hook
                 # Job runs in its own pod, so omitting it dials localhost.
-                cypher-shell -a neo4j://recovery-standalone-service:7687 \
+                cypher-shell -a neo4j://recovery-standalone-client:7687 \
                   -u neo4j -p "$NEO4J_PASSWORD" -d production-db \
                   "CALL db.ping() YIELD success RETURN success"
-                cypher-shell -a neo4j://recovery-standalone-service:7687 \
+                cypher-shell -a neo4j://recovery-standalone-client:7687 \
                   -u neo4j -p "$NEO4J_PASSWORD" -d production-db \
                   "MATCH (n) RETURN labels(n)[0] as label, count(n) as count ORDER BY label"
                 echo "PITR validation completed successfully"

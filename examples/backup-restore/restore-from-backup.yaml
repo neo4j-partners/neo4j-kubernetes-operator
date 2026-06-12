@@ -67,8 +67,8 @@ spec:
                 echo "Validating restored database..."
                 # -a is required: the hook Job runs in its own pod, so
                 # cypher-shell must be pointed at the instance's service
-                # (<standalone-name>-service) — without it, it dials localhost.
-                cypher-shell -a neo4j://staging-standalone-service:7687 \
+                # (<standalone-name>-client) — without it, it dials localhost.
+                cypher-shell -a neo4j://staging-standalone-client:7687 \
                   -u neo4j -p "$NEO4J_PASSWORD" -d myapp \
                   "MATCH (n) RETURN count(n) as nodeCount"
                 echo "Database validation completed"

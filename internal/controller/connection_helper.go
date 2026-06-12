@@ -21,7 +21,9 @@ func clusterServiceExternalIP(ctx context.Context, c client.Client, cluster *neo
 // standaloneServiceExternalIP is the standalone counterpart — resolves the
 // `{name}-service` Service.
 func standaloneServiceExternalIP(ctx context.Context, c client.Client, standalone *neo4jv1beta1.Neo4jEnterpriseStandalone) string {
-	return serviceExternalIP(ctx, c, standalone.Namespace, fmt.Sprintf("%s-service", standalone.Name))
+	// External exposure lives on the canonical {name}-client Service (#215);
+	// the deprecated {name}-service alias is ClusterIP-only.
+	return serviceExternalIP(ctx, c, standalone.Namespace, fmt.Sprintf("%s-client", standalone.Name))
 }
 
 // serviceExternalIP returns the first ingress entry's IP (or hostname) from
@@ -122,7 +124,7 @@ func GenerateStandaloneConnectionExamples(name, namespace string, serviceType co
 	examples := &neo4jv1beta1.ConnectionExamples{}
 
 	// Port forwarding example (always available)
-	serviceName := fmt.Sprintf("%s-service", name)
+	serviceName := fmt.Sprintf("%s-client", name) // canonical client Service (#215)
 	examples.PortForward = fmt.Sprintf("kubectl port-forward -n %s svc/%s 7474:7474 7687:7687", namespace, serviceName)
 
 	// Determine the base URL based on service type

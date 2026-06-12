@@ -34,7 +34,7 @@ spec:
     enabled: true
 ```
 
-For standalone deployments, the metrics port is added to the `<standalone>-service` Service and a `ServiceMonitor` named `<standalone>-monitoring` is created automatically.
+For standalone deployments, the metrics port is added to the `<standalone>-client` Service and a `ServiceMonitor` named `<standalone>-monitoring` is created automatically.
 
 ### Full configuration example
 
@@ -69,7 +69,7 @@ scrape_configs:
           - <cluster>-metrics.<namespace>.svc.cluster.local:2004
 ```
 
-Note: for standalone deployments, scrape `<standalone>-service.<namespace>.svc.cluster.local:2004` (the metrics port is added to the same Service that serves Bolt/HTTP).
+Note: for standalone deployments, scrape `<standalone>-client.<namespace>.svc.cluster.local:2004` (the metrics port is added to the same Service that serves Bolt/HTTP). Scrape configs still pointing at the legacy `<standalone>-service` name keep working this release, but that alias is deprecated and will be removed next release — switch to `-client`.
 
 ### Operator's own metrics (TokenReview-authenticated)
 

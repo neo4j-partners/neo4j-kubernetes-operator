@@ -19,8 +19,10 @@ package controller
 import (
 	"context"
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"reflect"
 	"sort"
@@ -553,26 +555,64 @@ func (r *Neo4jEnterpriseStandaloneReconciler) reconcileService(ctx context.Conte
 	}
 	logger.Info("Successfully created or updated headless Service", "name", headless.Name)
 
-	// Create client-facing Service using the standalone configuration
-	service := r.createService(standalone)
-
-	// Set owner reference
-	if err := controllerutil.SetControllerReference(standalone, service, r.Scheme); err != nil {
-		return fmt.Errorf("failed to set owner reference: %w", err)
-	}
-
-	// Create or update Service with retry logic to handle resource version conflicts
+	// Create the canonical client-facing Service ({name}-client, #215) with
+	// an ASSERTIVE mutate — the historical no-op mutate meant spec.service
+	// changes never applied to existing Services (#203's headless lesson).
+	// ClusterIP is immutable → only set on create.
+	desiredClient := r.createService(standalone)
+	clientSvc := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: desiredClient.Name, Namespace: desiredClient.Namespace}}
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		_, err := controllerutil.CreateOrUpdate(ctx, r.Client, service, func() error {
-			// Service updates for standalone deployments
+		_, err := controllerutil.CreateOrUpdate(ctx, r.Client, clientSvc, func() error {
+			if err := controllerutil.SetControllerReference(standalone, clientSvc, r.Scheme); err != nil {
+				return err
+			}
+			clientSvc.Labels = desiredClient.Labels
+			clientSvc.Annotations = desiredClient.Annotations
+			clientSvc.Spec.Type = desiredClient.Spec.Type
+			clientSvc.Spec.Selector = desiredClient.Spec.Selector
+			clientSvc.Spec.Ports = desiredClient.Spec.Ports
+			clientSvc.Spec.LoadBalancerIP = desiredClient.Spec.LoadBalancerIP
+			clientSvc.Spec.LoadBalancerSourceRanges = desiredClient.Spec.LoadBalancerSourceRanges
+			clientSvc.Spec.ExternalTrafficPolicy = desiredClient.Spec.ExternalTrafficPolicy
+			clientSvc.Spec.SessionAffinity = desiredClient.Spec.SessionAffinity
 			return nil
 		})
 		return err
 	})
 	if err != nil {
-		return fmt.Errorf("failed to create or update Service: %w", err)
+		return fmt.Errorf("failed to create or update client Service: %w", err)
 	}
-	logger.Info("Successfully created or updated Service", "name", service.Name)
+	logger.Info("Successfully created or updated client Service", "name", clientSvc.Name)
+
+	// Deprecated {name}-service alias (#215): plain ClusterIP shim so existing
+	// in-cluster connection strings survive one release. The assertive mutate
+	// also CONVERTS a pre-rename LoadBalancer/NodePort {name}-service to
+	// ClusterIP (external exposure moves to {name}-client — release-noted).
+	desiredAlias := r.createAliasService(standalone)
+	aliasSvc := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: desiredAlias.Name, Namespace: desiredAlias.Namespace}}
+	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		_, err := controllerutil.CreateOrUpdate(ctx, r.Client, aliasSvc, func() error {
+			if err := controllerutil.SetControllerReference(standalone, aliasSvc, r.Scheme); err != nil {
+				return err
+			}
+			aliasSvc.Labels = desiredAlias.Labels
+			if aliasSvc.Annotations == nil {
+				aliasSvc.Annotations = map[string]string{}
+			}
+			for k, v := range desiredAlias.Annotations {
+				aliasSvc.Annotations[k] = v
+			}
+			aliasSvc.Spec.Type = desiredAlias.Spec.Type
+			aliasSvc.Spec.Selector = desiredAlias.Spec.Selector
+			aliasSvc.Spec.Ports = desiredAlias.Spec.Ports
+			return nil
+		})
+		return err
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create or update deprecated alias Service: %w", err)
+	}
+	logger.Info("Successfully created or updated deprecated alias Service", "name", aliasSvc.Name)
 
 	// Reconcile OpenShift Route if requested
 	if err := r.reconcileRoute(ctx, standalone); err != nil {
@@ -778,7 +818,7 @@ func (r *Neo4jEnterpriseStandaloneReconciler) reconcileStatefulSet(ctx context.C
 	logger := log.FromContext(ctx)
 
 	// Create StatefulSet using the standalone configuration
-	statefulSet := r.createStatefulSet(standalone)
+	statefulSet := r.createStatefulSet(ctx, standalone)
 
 	// Stamp a hash of the rendered neo4j.conf onto the desired pod template so a
 	// conf change rolls the pod through the NORMAL template-apply path below
@@ -1401,6 +1441,72 @@ func buildStandaloneStartupProbe() *corev1.Probe {
 }
 
 // createService creates a Service for the standalone deployment
+// tlsCertHasClientSAN reports whether the issued TLS Secret's certificate
+// already carries the canonical "{name}-client" SAN (#215). Used to gate the
+// one-time rolling restart after the naming migration: Neo4j loads its
+// keystore at startup, so until the pod restarts it presents the pre-rename
+// cert — and connections to the canonical name would fail hostname
+// verification. Restarting BEFORE cert-manager has re-issued would just load
+// the old cert again, so the roll is deferred until the SAN is present.
+// Best-effort: any read/parse problem reports false (no restart yet).
+func (r *Neo4jEnterpriseStandaloneReconciler) tlsCertHasClientSAN(ctx context.Context, standalone *neo4jv1beta1.Neo4jEnterpriseStandalone) bool {
+	secret := &corev1.Secret{}
+	if err := r.Get(ctx, types.NamespacedName{Name: fmt.Sprintf("%s-tls-secret", standalone.Name), Namespace: standalone.Namespace}, secret); err != nil {
+		return false
+	}
+	block, _ := pem.Decode(secret.Data["tls.crt"])
+	if block == nil {
+		return false
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return false
+	}
+	want := fmt.Sprintf("%s-client", standalone.Name)
+	for _, dns := range cert.DNSNames {
+		if dns == want || strings.HasPrefix(dns, want+".") {
+			return true
+		}
+	}
+	return false
+}
+
+// createAliasService builds the DEPRECATED {name}-service alias (#215): a
+// plain ClusterIP carrying the client ports so existing in-cluster DNS
+// connection strings keep working for one release after the rename to
+// {name}-client. It deliberately does NOT carry spec.service (type/LB) — the
+// canonical Service owns external exposure. Removed in the release after the
+// rename; the annotation makes the migration discoverable via kubectl.
+func (r *Neo4jEnterpriseStandaloneReconciler) createAliasService(standalone *neo4jv1beta1.Neo4jEnterpriseStandalone) *corev1.Service {
+	ports := []corev1.ServicePort{
+		{Name: "http", Port: 7474, TargetPort: intstr.FromInt(7474), Protocol: corev1.ProtocolTCP},
+		{Name: "bolt", Port: 7687, TargetPort: intstr.FromInt(7687), Protocol: corev1.ProtocolTCP},
+	}
+	if standalone.Spec.TLS != nil && standalone.Spec.TLS.Mode == "cert-manager" {
+		ports = append(ports, corev1.ServicePort{Name: "https", Port: 7473, TargetPort: intstr.FromInt(7473), Protocol: corev1.ProtocolTCP})
+	}
+	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-service", standalone.Name),
+			Namespace: standalone.Namespace,
+			Annotations: map[string]string{
+				"neo4j.com/deprecated-alias-of": fmt.Sprintf("%s-client", standalone.Name),
+			},
+			Labels: map[string]string{
+				"app.kubernetes.io/name":       "neo4j",
+				"app.kubernetes.io/instance":   standalone.Name,
+				"app.kubernetes.io/component":  "standalone",
+				"app.kubernetes.io/managed-by": "neo4j-operator",
+			},
+		},
+		Spec: corev1.ServiceSpec{
+			Type:     corev1.ServiceTypeClusterIP,
+			Selector: map[string]string{"app": standalone.Name},
+			Ports:    ports,
+		},
+	}
+}
+
 func (r *Neo4jEnterpriseStandaloneReconciler) createService(standalone *neo4jv1beta1.Neo4jEnterpriseStandalone) *corev1.Service {
 	// Determine service type from spec
 	serviceType := corev1.ServiceTypeClusterIP
@@ -1454,7 +1560,12 @@ func (r *Neo4jEnterpriseStandaloneReconciler) createService(standalone *neo4jv1b
 
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        fmt.Sprintf("%s-service", standalone.Name),
+			// {name}-client is the CANONICAL client-facing Service for both
+			// kinds since #215 (clusters always used it). It carries the full
+			// spec.service configuration (type/LB/annotations). The legacy
+			// {name}-service name survives one release as a ClusterIP alias —
+			// see createAliasService.
+			Name:        fmt.Sprintf("%s-client", standalone.Name),
 			Namespace:   standalone.Namespace,
 			Annotations: annotations,
 			Labels: map[string]string{
@@ -1507,11 +1618,20 @@ func standalonePrometheusAnnotations(standalone *neo4jv1beta1.Neo4jEnterpriseSta
 }
 
 // createStatefulSet creates a StatefulSet for the standalone deployment
-func (r *Neo4jEnterpriseStandaloneReconciler) createStatefulSet(standalone *neo4jv1beta1.Neo4jEnterpriseStandalone) *appsv1.StatefulSet {
+func (r *Neo4jEnterpriseStandaloneReconciler) createStatefulSet(ctx context.Context, standalone *neo4jv1beta1.Neo4jEnterpriseStandalone) *appsv1.StatefulSet {
 	replicas := int32(1)
 	annotations := map[string]string{}
 	for k, v := range standalonePrometheusAnnotations(standalone) {
 		annotations[k] = v
+	}
+
+	// #215 naming migration: once cert-manager has re-issued the TLS cert
+	// with the canonical {name}-client SAN, stamp the template so the pod
+	// rolls ONCE and the running server starts presenting it. Gated on the
+	// SAN actually being in the Secret — restarting earlier would reload the
+	// old cert and leave canonical-name connections failing hostname checks.
+	if standalone.Spec.TLS != nil && standalone.Spec.TLS.Mode == "cert-manager" && r.tlsCertHasClientSAN(ctx, standalone) {
+		annotations["neo4j.com/tls-cert-sans"] = "client-v1"
 	}
 
 	ports := []corev1.ContainerPort{
@@ -1754,9 +1874,9 @@ func (r *Neo4jEnterpriseStandaloneReconciler) updateStatus(ctx context.Context, 
 	externalIP := standaloneServiceExternalIP(ctx, r.Client, standalone)
 
 	latestStandalone.Status.Endpoints = &neo4jv1beta1.EndpointStatus{
-		Bolt:               fmt.Sprintf("%s://%s-service.%s.svc.cluster.local:7687", boltScheme, standalone.Name, standalone.Namespace),
-		HTTP:               fmt.Sprintf("http://%s-service.%s.svc.cluster.local:7474", standalone.Name, standalone.Namespace),
-		HTTPS:              fmt.Sprintf("https://%s-service.%s.svc.cluster.local:7473", standalone.Name, standalone.Namespace),
+		Bolt:               fmt.Sprintf("%s://%s-client.%s.svc.cluster.local:7687", boltScheme, standalone.Name, standalone.Namespace),
+		HTTP:               fmt.Sprintf("http://%s-client.%s.svc.cluster.local:7474", standalone.Name, standalone.Namespace),
+		HTTPS:              fmt.Sprintf("https://%s-client.%s.svc.cluster.local:7473", standalone.Name, standalone.Namespace),
 		ConnectionExamples: GenerateStandaloneConnectionExamples(standalone.Name, standalone.Namespace, serviceType, externalIP, hasTLS),
 	}
 
@@ -2106,7 +2226,14 @@ func (r *Neo4jEnterpriseStandaloneReconciler) reconcileTLSCertificate(ctx contex
 
 // createTLSCertificate creates a TLS certificate for the standalone deployment
 func (r *Neo4jEnterpriseStandaloneReconciler) createTLSCertificate(standalone *neo4jv1beta1.Neo4jEnterpriseStandalone) *certmanagerv1.Certificate {
+	// Dual SANs during the #215 naming migration: {name}-client is canonical;
+	// the legacy {name}-service names stay until the alias Service is removed
+	// so connections via either name pass hostname verification.
 	dnsNames := []string{
+		fmt.Sprintf("%s-client", standalone.Name),
+		fmt.Sprintf("%s-client.%s", standalone.Name, standalone.Namespace),
+		fmt.Sprintf("%s-client.%s.svc", standalone.Name, standalone.Namespace),
+		fmt.Sprintf("%s-client.%s.svc.cluster.local", standalone.Name, standalone.Namespace),
 		fmt.Sprintf("%s-service", standalone.Name),
 		fmt.Sprintf("%s-service.%s", standalone.Name, standalone.Namespace),
 		fmt.Sprintf("%s-service.%s.svc", standalone.Name, standalone.Namespace),
@@ -2174,7 +2301,7 @@ func (r *Neo4jEnterpriseStandaloneReconciler) createIngress(standalone *neo4jv1b
 			PathType: &pathType,
 			Backend: networkingv1.IngressBackend{
 				Service: &networkingv1.IngressServiceBackend{
-					Name: fmt.Sprintf("%s-service", standalone.Name),
+					Name: fmt.Sprintf("%s-client", standalone.Name),
 					Port: networkingv1.ServiceBackendPort{
 						Number: 7474,
 					},

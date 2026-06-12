@@ -178,7 +178,7 @@ Hooks to run before or after the restore Job. **Hooks run only for `Neo4jEnterpr
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `job` | [`RestoreHookJob`](#restorehookjob) | ❌ | Kubernetes Job to run as a hook. The hook Job runs in its own pod — commands like `cypher-shell` must be pointed at the instance's service explicitly (e.g. `cypher-shell -a neo4j://<standalone>-service:7687 …`), otherwise they dial localhost inside the hook pod. |
+| `job` | [`RestoreHookJob`](#restorehookjob) | ❌ | Kubernetes Job to run as a hook. The hook Job runs in its own pod — commands like `cypher-shell` must be pointed at the instance's service explicitly (e.g. `cypher-shell -a neo4j://<standalone>-client:7687 …`), otherwise they dial localhost inside the hook pod. |
 | `cypherStatements` | `[]string` | ❌ | Cypher statements the operator executes over Bolt against the standalone instance (pre-restore: before the instance is stopped; post-restore: after the database is registered/started) |
 
 ### RestoreHookJob

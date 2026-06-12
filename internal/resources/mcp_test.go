@@ -184,7 +184,7 @@ func TestBuildMCPDeploymentForStandalone_STDIOAuth(t *testing.T) {
 	assert.Empty(t, container.Ports)
 
 	// STDIO: credentials MUST be injected.
-	assertEnvValue(t, container.Env, "NEO4J_URI", "neo4j+ssc://graph-standalone-service.default.svc.cluster.local:7687")
+	assertEnvValue(t, container.Env, "NEO4J_URI", "neo4j+ssc://graph-standalone-client.default.svc.cluster.local:7687")
 	assertEnvValue(t, container.Env, "NEO4J_TRANSPORT_MODE", "stdio")
 	assertEnvSecretRef(t, container.Env, "NEO4J_USERNAME", "mcp-auth", "user")
 	assertEnvSecretRef(t, container.Env, "NEO4J_PASSWORD", "mcp-auth", "pass")

@@ -767,9 +767,9 @@ The `Neo4jEnterpriseClusterStatus` represents the observed state of the cluster.
 
 Service endpoints and connection information populated by the controller on
 every status update. Schema is shared between `Neo4jEnterpriseCluster` and
-`Neo4jEnterpriseStandalone`; the cluster controller resolves URLs against
-the `{cluster}-client` ClusterIP, the standalone controller against the
-`{name}-service` ClusterIP.
+`Neo4jEnterpriseStandalone`; both controllers resolve URLs against the
+`{name}-client` ClusterIP (the legacy standalone `{name}-service` name remains
+as a deprecated alias for one release).
 
 | Field | Type | Description |
 |---|---|---|

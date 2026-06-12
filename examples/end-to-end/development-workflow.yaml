@@ -92,7 +92,7 @@ spec:
 # Run these from your dev machine or CI pipeline against the standalone's Bolt
 # endpoint (use the routing scheme; bolt+s:// if TLS is enabled):
 #
-#   kubectl -n neo4j-dev port-forward svc/dev-instance-neo4j-service 7687:7687 &
+#   kubectl -n neo4j-dev port-forward svc/dev-instance-client 7687:7687 &
 #   cypher-shell -a neo4j://localhost:7687 -u neo4j -p "$PASSWORD" -d devdb \
 #     -f ./seed-data.cypher          # load sample data
 #   cypher-shell -a neo4j://localhost:7687 -u neo4j -p "$PASSWORD" -d devdb \
