@@ -3483,7 +3483,7 @@ file URL at a release tag (no download or extract step needed):</p>
 </span><span id="__span-16-13"><a id="__codelineno-16-13" name="__codelineno-16-13" href="#__codelineno-16-13"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods
 </span><span id="__span-16-14"><a id="__codelineno-16-14" name="__codelineno-16-14" href="#__codelineno-16-14"></a>
 </span><span id="__span-16-15"><a id="__codelineno-16-15" name="__codelineno-16-15" href="#__codelineno-16-15"></a><span class="c1"># Access Neo4j Browser</span>
-</span><span id="__span-16-16"><a id="__codelineno-16-16" name="__codelineno-16-16" href="#__codelineno-16-16"></a>kubectl<span class="w"> </span>port-forward<span class="w"> </span>svc/standalone-neo4j-service<span class="w"> </span><span class="m">7474</span>:7474<span class="w"> </span><span class="m">7687</span>:7687
+</span><span id="__span-16-16"><a id="__codelineno-16-16" name="__codelineno-16-16" href="#__codelineno-16-16"></a>kubectl<span class="w"> </span>port-forward<span class="w"> </span>svc/standalone-neo4j-client<span class="w"> </span><span class="m">7474</span>:7474<span class="w"> </span><span class="m">7687</span>:7687
 </span></code></pre></div>
 <p>Browse all available examples at
 <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/tree/main/examples">https://github.com/neo4j-partners/neo4j-kubernetes-operator/tree/main/examples</a>.</p>
@@ -3502,7 +3502,7 @@ file URL at a release tag (no download or extract step needed):</p>
 </span><span id="__span-17-11"><a id="__codelineno-17-11" name="__codelineno-17-11" href="#__codelineno-17-11"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods
 </span><span id="__span-17-12"><a id="__codelineno-17-12" name="__codelineno-17-12" href="#__codelineno-17-12"></a>
 </span><span id="__span-17-13"><a id="__codelineno-17-13" name="__codelineno-17-13" href="#__codelineno-17-13"></a><span class="c1"># Access Neo4j Browser</span>
-</span><span id="__span-17-14"><a id="__codelineno-17-14" name="__codelineno-17-14" href="#__codelineno-17-14"></a>kubectl<span class="w"> </span>port-forward<span class="w"> </span>svc/standalone-neo4j-service<span class="w"> </span><span class="m">7474</span>:7474<span class="w"> </span><span class="m">7687</span>:7687
+</span><span id="__span-17-14"><a id="__codelineno-17-14" name="__codelineno-17-14" href="#__codelineno-17-14"></a>kubectl<span class="w"> </span>port-forward<span class="w"> </span>svc/standalone-neo4j-client<span class="w"> </span><span class="m">7474</span>:7474<span class="w"> </span><span class="m">7687</span>:7687
 </span></code></pre></div>
 <h2 id="uninstalling-the-operator">Uninstalling the Operator<a class="headerlink" href="#uninstalling-the-operator" title="Anchor link to this section">&para;</a></h2>
 <blockquote>

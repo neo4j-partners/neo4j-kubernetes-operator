@@ -3935,7 +3935,7 @@
 <td><code>job</code></td>
 <td><a href="#restorehookjob"><code>RestoreHookJob</code></a></td>
 <td>❌</td>
-<td>Kubernetes Job to run as a hook. The hook Job runs in its own pod — commands like <code>cypher-shell</code> must be pointed at the instance's service explicitly (e.g. <code>cypher-shell -a neo4j://&lt;standalone&gt;-service:7687 …</code>), otherwise they dial localhost inside the hook pod.</td>
+<td>Kubernetes Job to run as a hook. The hook Job runs in its own pod — commands like <code>cypher-shell</code> must be pointed at the instance's service explicitly (e.g. <code>cypher-shell -a neo4j://&lt;standalone&gt;-client:7687 …</code>), otherwise they dial localhost inside the hook pod.</td>
 </tr>
 <tr>
 <td><code>cypherStatements</code></td>

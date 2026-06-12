@@ -3352,7 +3352,7 @@
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">monitoring</span><span class="p">:</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </span></code></pre></div>
-<p>For standalone deployments, the metrics port is added to the <code>&lt;standalone&gt;-service</code> Service and a <code>ServiceMonitor</code> named <code>&lt;standalone&gt;-monitoring</code> is created automatically.</p>
+<p>For standalone deployments, the metrics port is added to the <code>&lt;standalone&gt;-client</code> Service and a <code>ServiceMonitor</code> named <code>&lt;standalone&gt;-monitoring</code> is created automatically.</p>
 <h3 id="full-configuration-example">Full configuration example<a class="headerlink" href="#full-configuration-example" title="Anchor link to this section">&para;</a></h3>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">spec</span><span class="p">:</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="nt">monitoring</span><span class="p">:</span>
@@ -3376,7 +3376,7 @@
 </span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">targets</span><span class="p">:</span>
 </span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;cluster&gt;-metrics.&lt;namespace&gt;.svc.cluster.local:2004</span>
 </span></code></pre></div>
-<p>Note: for standalone deployments, scrape <code>&lt;standalone&gt;-service.&lt;namespace&gt;.svc.cluster.local:2004</code> (the metrics port is added to the same Service that serves Bolt/HTTP).</p>
+<p>Note: for standalone deployments, scrape <code>&lt;standalone&gt;-client.&lt;namespace&gt;.svc.cluster.local:2004</code> (the metrics port is added to the same Service that serves Bolt/HTTP). Scrape configs still pointing at the legacy <code>&lt;standalone&gt;-service</code> name keep working this release, but that alias is deprecated and will be removed next release — switch to <code>-client</code>.</p>
 <h3 id="operators-own-metrics-tokenreview-authenticated">Operator's own metrics (TokenReview-authenticated)<a class="headerlink" href="#operators-own-metrics-tokenreview-authenticated" title="Anchor link to this section">&para;</a></h3>
 <p>The Neo4j <em>operator</em> exposes its own Prometheus metrics on port 8080 of the operator pod. As of v1.10 the operator's metrics endpoint defaults to <strong>HTTPS with TokenReview-based authentication</strong> (<code>metrics.secure=true</code> in the helm chart) — anonymous scrapes are rejected with 401/403. To scrape the operator's own metrics:</p>
 <ol>

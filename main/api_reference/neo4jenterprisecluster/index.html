@@ -6369,9 +6369,9 @@ for details.</p>
 <h3 id="endpointstatus">EndpointStatus<a class="headerlink" href="#endpointstatus" title="Anchor link to this section">&para;</a></h3>
 <p>Service endpoints and connection information populated by the controller on
 every status update. Schema is shared between <code>Neo4jEnterpriseCluster</code> and
-<code>Neo4jEnterpriseStandalone</code>; the cluster controller resolves URLs against
-the <code>{cluster}-client</code> ClusterIP, the standalone controller against the
-<code>{name}-service</code> ClusterIP.</p>
+<code>Neo4jEnterpriseStandalone</code>; both controllers resolve URLs against the
+<code>{name}-client</code> ClusterIP (the legacy standalone <code>{name}-service</code> name remains
+as a deprecated alias for one release).</p>
 <table>
 <thead>
 <tr>

@@ -3359,7 +3359,7 @@
 </span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">  </span><span class="nt">monitoring</span><span class="p">:</span>
 </span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
 </span></code></pre></div>
-<p>For standalone, the metrics port is added to the existing <code>my-standalone-service</code> Service — no separate metrics Service is created.</p>
+<p>For standalone, the metrics port is added to the existing <code>my-standalone-client</code> Service — no separate metrics Service is created. (The legacy <code>my-standalone-service</code> alias still works this release but is deprecated.)</p>
 <h3 id="verify-metrics-are-exposed">Verify metrics are exposed<a class="headerlink" href="#verify-metrics-are-exposed" title="Anchor link to this section">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Port-forward to any Neo4j pod and check the /metrics endpoint</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>kubectl<span class="w"> </span>port-forward<span class="w"> </span>pod/my-cluster-server-0<span class="w"> </span><span class="m">2004</span>:2004<span class="w"> </span><span class="p">&amp;</span>

@@ -3220,8 +3220,14 @@ and standalone.</p>
 <tr>
 <td>Client-facing (your apps connect here)</td>
 <td><code>{name}-client</code></td>
-<td><code>{name}-service</code></td>
+<td><code>{name}-client</code></td>
 <td><code>bolt 7687</code>, <code>http 7474</code>, <code>https 7473</code> (TLS); standalone also exposes <code>metrics 2004</code> here when monitoring is on</td>
+</tr>
+<tr>
+<td>Deprecated alias (standalone only, removed next release)</td>
+<td>—</td>
+<td><code>{name}-service</code></td>
+<td>same client ports, ClusterIP only</td>
 </tr>
 <tr>
 <td>Headless (stable per-pod DNS)</td>
@@ -3245,10 +3251,24 @@ and standalone.</p>
 </table>
 <p>Notes:</p>
 <ul>
-<li><strong>Client-service name differs by kind</strong> (<code>-client</code> for clusters, <code>-service</code>
-  for standalone). This is intentional and load-bearing — use the right name
-  for the kind you deployed. A pod's stable address is always
+<li><strong>The client-facing Service is <code>{name}-client</code> for both kinds.</strong> Standalone
+  deployments previously used <code>{name}-service</code>; that name still resolves for
+  <strong>one more release</strong> as a deprecated ClusterIP-only alias (annotated
+  <code>neo4j.com/deprecated-alias-of</code>) and will then be removed — update any saved
+  connection strings, NetworkPolicies, and dashboards to <code>{name}-client</code> now.
+  A pod's stable address is always
   <code>{name}-0.{name}-headless.&lt;namespace&gt;.svc.cluster.local</code>.</li>
+<li><strong>External exposure moves to <code>{name}-client</code> on upgrade</strong>: <code>spec.service</code>
+  settings (<code>type: LoadBalancer</code> / <code>NodePort</code>, annotations,
+  <code>loadBalancerSourceRanges</code>) are now applied to the standalone <code>{name}-client</code>
+  Service, not the alias. A pre-existing LoadBalancer external IP therefore
+  <strong>re-provisions once</strong> when you upgrade — expect a new external IP/hostname
+  and update DNS accordingly.</li>
+<li><strong>One-time TLS pod restart</strong>: with <code>spec.tls</code> enabled, the issued certificate
+  now carries SANs for both the <code>{name}-client</code> and legacy <code>{name}-service</code>
+  names. After the certificate is re-issued on upgrade, the operator
+  automatically restarts the standalone pod once so the running server presents
+  the new SANs.</li>
 <li><strong>The standalone headless service exposes <code>bolt</code>/<code>http</code>/<code>backup</code> (and <code>https</code>
   under TLS)</strong> for direct per-pod addressing, mirroring the cluster headless
   service. It does <strong>not</strong> expose the clustering ports (<code>6000/7000/7688/7689</code>):
@@ -3261,7 +3281,7 @@ and standalone.</p>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>kubectl<span class="w"> </span>port-forward<span class="w"> </span>svc/my-cluster-client<span class="w"> </span><span class="m">7474</span>:7474<span class="w"> </span><span class="m">7687</span>:7687
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1"># For Neo4jEnterpriseStandalone</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>kubectl<span class="w"> </span>port-forward<span class="w"> </span>svc/my-standalone-service<span class="w"> </span><span class="m">7474</span>:7474<span class="w"> </span><span class="m">7687</span>:7687
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>kubectl<span class="w"> </span>port-forward<span class="w"> </span>svc/my-standalone-client<span class="w"> </span><span class="m">7474</span>:7474<span class="w"> </span><span class="m">7687</span>:7687
 </span></code></pre></div>
 <p>Access Neo4j Browser at: http://localhost:7474</p>
 <h2 id="service-configuration">Service Configuration<a class="headerlink" href="#service-configuration" title="Anchor link to this section">&para;</a></h2>
