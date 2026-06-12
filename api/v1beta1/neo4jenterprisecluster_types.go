@@ -783,12 +783,17 @@ type CloudBlock struct {
 	ForcePathStyle bool `json:"forcePathStyle,omitempty"`
 }
 
-// CloudIdentity defines cloud identity configuration
+// CloudIdentity defines cloud identity (IRSA / Workload Identity / Managed
+// Identity) configuration for backup/restore Job pods.
 type CloudIdentity struct {
 	// +kubebuilder:validation:Enum=aws;gcp;azure
 	// +kubebuilder:validation:Required
 	Provider string `json:"provider"`
 
+	// ServiceAccount is RESERVED and currently a no-op (#220): backup Jobs
+	// always run as the operator-managed "neo4j-backup-sa" (restore Jobs:
+	// "neo4j-restore-sa"). Bind your cloud IAM role via
+	// autoCreate.annotations, which the operator applies to that SA.
 	ServiceAccount string `json:"serviceAccount,omitempty"`
 
 	AutoCreate *AutoCreateSpec `json:"autoCreate,omitempty"`
@@ -796,6 +801,10 @@ type CloudIdentity struct {
 
 // AutoCreateSpec defines auto-creation of service accounts
 type AutoCreateSpec struct {
+	// Enabled is RESERVED and currently a no-op (#220): the operator always
+	// ensures the backup/restore ServiceAccount exists. Only Annotations is
+	// honored — use it for IRSA ("eks.amazonaws.com/role-arn") or Workload
+	// Identity ("iam.gke.io/gcp-service-account") bindings.
 	// +kubebuilder:default=true
 	Enabled bool `json:"enabled,omitempty"`
 

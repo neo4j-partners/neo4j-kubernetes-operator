@@ -48,7 +48,10 @@ type Neo4jRestoreSpec struct {
 	// Stop cluster before restore (required for some restore operations)
 	StopCluster bool `json:"stopCluster,omitempty"`
 
-	// Timeout for restore operation
+	// Timeout bounds the cluster Cypher restore's online-convergence wait
+	// (Go duration, e.g. "30m"). Defaults to 5m when unset — increase for
+	// large stores seeded from object storage. The standalone Job path is
+	// bounded by the Job's own backoff/active-deadline semantics instead.
 	Timeout string `json:"timeout,omitempty"`
 }
 
@@ -117,7 +120,9 @@ type RestoreOptionsSpec struct {
 	// Replace existing database
 	ReplaceExisting bool `json:"replaceExisting,omitempty"`
 
-	// Verify backup before restore
+	// VerifyBackup is RESERVED and currently a no-op (#220) — accepted for
+	// backward compatibility but not read by the operator. Verify artifacts
+	// at backup time via Neo4jBackup.spec.options.validate instead.
 	VerifyBackup bool `json:"verifyBackup,omitempty"`
 
 	// Additional neo4j-admin restore arguments
