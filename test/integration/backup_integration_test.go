@@ -424,8 +424,12 @@ var _ = Describe("Backup Integration Tests", Label("extended"), Ordered, func() 
 		Expect(container.Args).To(HaveLen(2), "container Args must be [-c, <command>]")
 		// Rule 40: all runs of one CR share `<base>/<chain-root>/`; the
 		// chain-root is the CR name by default. PVC target → /backup/<name>/.
-		Expect(container.Args[1]).To(MatchRegexp(`--to-path=/backup/`+backup.Name+`/?`),
-			"--to-path must be the shared per-CR directory /backup/<chain-root>/ (chain-root = CR name)")
+		// The path is single-quoted since the rule-44 hardening (shellQuote on
+		// every user-influenced segment of the /bin/sh -c payload) — the
+		// quoting is load-bearing against shell injection, so assert it
+		// rather than tolerate it.
+		Expect(container.Args[1]).To(ContainSubstring(`--to-path='/backup/`+backup.Name+`/'`),
+			"--to-path must be the shell-quoted shared per-CR directory '/backup/<chain-root>/' (chain-root = CR name)")
 		Expect(container.Args[1]).ToNot(ContainSubstring("${BACKUP_RUN_ID}"),
 			"rule 40: --to-path must NOT include a ${BACKUP_RUN_ID} per-run subfolder — "+
 				"diff backups chain off the prior full in the SAME directory; per-run "+
