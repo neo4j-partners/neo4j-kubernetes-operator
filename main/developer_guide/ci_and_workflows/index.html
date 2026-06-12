@@ -2436,6 +2436,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#install-confidence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Install Confidence
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#release" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2745,6 +2756,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#install-confidence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Install Confidence
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#release" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2910,8 +2932,13 @@ gate that blocks merge. Jobs:</p>
 <ol>
 <li><strong>Generated Artifacts In Sync (<code>check-drift</code>)</strong> — runs <code>make check-drift</code>
    (<code>sync-all</code> + <code>bundle</code>, then <code>git diff --exit-code</code>). Fails if any committed
-   CRD, RBAC, deepcopy, Helm CRD, or OLM bundle file is stale. Fix locally with
-   <code>make sync-all</code> and commit the result.</li>
+   CRD, RBAC, deepcopy, Helm CRD, or OLM bundle file is stale (untracked
+   generated files fail it too). Fix locally with <code>make sync-all</code> and commit
+   the result. The same job then runs <code>make helm-lint</code> and
+   <code>make check-csv-coverage</code> — both used to be ship-prep-only, which let a
+   chart template error or a CSV missing a new CRD hide until release time.
+   Static and seconds-fast; the failure summary distinguishes drift failures
+   from lint/coverage failures.</li>
 <li><strong>Unit Tests</strong> — <code>make test-unit</code> (race-enabled, envtest-backed controller
    suite + plain unit tests). No external cluster required. The job runs the
    suite through <a href="../makefile_reference/#make-gotestsum">gotestsum</a>
@@ -3059,12 +3086,46 @@ so there's no single shared variable):</p>
    lane).</li>
 </ol>
 <p>Bump both in the same PR — the bump is itself a tested change.</p>
+<h2 id="install-confidence">Install Confidence<a class="headerlink" href="#install-confidence" title="Anchor link to this section">&para;</a></h2>
+<p><strong><code>scripts/install-confidence.sh</code> — the install/upgrade/uninstall matrix on a
+throwaway Kind cluster.</strong> Run locally with <code>make install-confidence</code> (~10–15
+min; needs kind, helm, kubectl, docker), or dispatch
+<strong><code>install-confidence.yml</code></strong> manually. It builds the operator image from the
+working tree, loads it into a fresh Kind cluster, and walks five legs:</p>
+<ol>
+<li><strong>Helm install, cluster mode</strong> — default values, then a smoke
+   <code>Neo4jEnterpriseStandalone</code> CR proving the operator actually reconciles
+   (StatefulSet appears).</li>
+<li><strong>Helm install, namespaces mode + <code>rbac.perNamespaceRoles</code></strong> — asserts the
+   manager permissions land as a namespaced <code>Role</code> in the watched namespace and
+   NO manager ClusterRole is created.</li>
+<li><strong>Helm upgrade from the previously published chart</strong> — installs the latest
+   released chart, applies the new CRDs with
+   <code>kubectl apply --server-side -f config/crd/bases/</code> (the step real users must
+   run — Helm never upgrades <code>crds/</code>), upgrades to the working-tree chart, and
+   probes a new-in-this-release CRD field to prove the refresh took.
+   <code>PREV_CHART_VERSION=&lt;x.y.z&gt;</code> pins the starting chart (empty = latest
+   published).</li>
+<li><strong>Documented-order uninstall with a live CR</strong> — CRs first (finalizers need
+   the running operator), then <code>helm uninstall</code>, then CRDs; asserts nothing
+   wedges.</li>
+<li><strong>kubectl server-side apply path</strong> — install, re-apply (idempotence), and
+   ordered teardown of the non-Helm manifests.</li>
+</ol>
+<p>The same matrix runs as a <strong>blocking job in <code>release.yml</code></strong> — a release tag
+cannot publish an image or chart if any leg fails. Use the local run (or the
+dispatch workflow) to catch problems before tagging instead of failing the tag.</p>
 <h2 id="release">Release<a class="headerlink" href="#release" title="Anchor link to this section">&para;</a></h2>
 <p><strong><code>release.yml</code> — tag-driven release pipeline.</strong> Push a <code>vX.Y.Z</code> tag (or dispatch
 with a tag input). Jobs:</p>
 <ol>
 <li><strong>determine-tag / validate-release</strong> — resolve the tag and run build/test
-   validation.</li>
+   validation, including <code>make check-drift</code> (a tag on a commit that bypassed
+   per-PR CI must not ship stale generated artifacts).</li>
+<li><strong>install-confidence</strong> — the full <a href="#install-confidence">install/upgrade/uninstall
+   matrix</a> on Kind, in parallel with validate-release.
+   <strong>Blocking</strong>: <code>build-and-push</code> depends on it, so a broken install path
+   fails the release before anything is published.</li>
 <li><strong>build-and-push</strong> — multi-arch (<code>linux/amd64,linux/arm64</code>) image to
    <code>ghcr.io/neo4j-partners/neo4j-kubernetes-operator</code>, <strong>signed with Sigstore
    Cosign keyless</strong> (<code>id-token: write</code> OIDC — no long-lived secrets).</li>
@@ -3083,8 +3144,11 @@ from the tag.</p>
 <p><strong>Before tagging</strong> (on an up-to-date, green <code>main</code>):</p>
 <ol>
 <li><code>make ship-prep</code> — regenerates everything, builds the bundle, and runs
-   <code>helm-lint</code> + <code>check-csv-coverage</code> (more than CI's drift gate). Review
-   <code>git status</code> and commit anything regenerated.</li>
+   <code>helm-lint</code> + <code>check-csv-coverage</code>. Review <code>git status</code> and commit anything
+   regenerated.</li>
+<li>(Recommended) <code>make install-confidence</code> — the same install/upgrade/uninstall
+   matrix the release workflow runs as a blocking gate. Running it locally
+   first means a failure costs you minutes, not a dead tag.</li>
 <li>If there are breaking changes or notable upgrade steps, add/extend the
    <code>Upgrading from vX to vY</code> section in
    <a href="../../user_guide/migration_guide/"><code>migration_guide.md</code></a>.</li>
@@ -3109,7 +3173,8 @@ kubectl bundles + OLM CSV), <strong>Pages — Docs</strong> (<code>/v1.12/</code
 <li><code>helm repo update &amp;&amp; helm search repo neo4j-operator/neo4j-operator --versions</code> — new version listed.</li>
 <li>Docs <code>/latest/</code> and <code>/v1.12/</code> load and the version dropdown shows the release.</li>
 <li><code>cosign verify ghcr.io/neo4j-partners/neo4j-kubernetes-operator:v1.12.0 …</code> succeeds.</li>
-<li>(Optional, highest-confidence) <code>helm install</code> the published chart on a fresh Kind cluster.</li>
+<li>The release run's <strong>Install Confidence Gate</strong> job is green (it ran
+     automatically — no manual fresh-Kind <code>helm install</code> needed).</li>
 </ol>
 <h2 id="publishing-to-github-pages">Publishing to GitHub Pages<a class="headerlink" href="#publishing-to-github-pages" title="Anchor link to this section">&para;</a></h2>
 <p>Both Pages workflows write to the <strong><code>gh-pages</code></strong> branch and share a <code>gh-pages</code>

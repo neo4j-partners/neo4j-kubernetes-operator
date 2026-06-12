@@ -2988,6 +2988,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#installupgradeuninstall-matrix-install-confidence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Install/upgrade/uninstall matrix (install-confidence)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#github-actions-integration" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3958,6 +3969,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#installupgradeuninstall-matrix-install-confidence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Install/upgrade/uninstall matrix (install-confidence)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#github-actions-integration" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4921,6 +4943,18 @@ sidecar. Tests verify the Job spawned by a <code>Neo4jBackup</code> CR:</p>
 </span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="p">})</span>
 </span></code></pre></div>
 <h2 id="cicd-testing">CI/CD Testing<a class="headerlink" href="#cicd-testing" title="Anchor link to this section">&para;</a></h2>
+<h3 id="installupgradeuninstall-matrix-install-confidence">Install/upgrade/uninstall matrix (install-confidence)<a class="headerlink" href="#installupgradeuninstall-matrix-install-confidence" title="Anchor link to this section">&para;</a></h3>
+<p>Beyond unit and integration tests, the <strong>install paths themselves</strong> are tested:
+<code>make install-confidence</code> runs a five-leg helm/kubectl install, upgrade (with
+the mandatory server-side CRD refresh), and ordered-uninstall matrix on a
+throwaway Kind cluster. It runs automatically as a <strong>blocking job in the
+release workflow</strong> and is manually dispatchable (<code>install-confidence.yml</code>).
+Run it locally before tagging — see
+<a href="../ci_and_workflows/#install-confidence">CI &amp; Workflows → Install Confidence</a>
+for the legs and
+<a href="../makefile_reference/#make-install-confidence">the Makefile reference</a> for
+usage. Per-PR CI also lints the chart and checks OperatorHub CSV coverage in
+the drift job, so chart template errors fail at PR time, not release time.</p>
 <h3 id="github-actions-integration">GitHub Actions Integration<a class="headerlink" href="#github-actions-integration" title="Anchor link to this section">&para;</a></h3>
 <p>Tests run automatically in CI with:</p>
 <ul>
