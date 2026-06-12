@@ -37,8 +37,10 @@ spec:
         cloud:
           provider: aws
   options:
-    verifyBackup: true
     replaceExisting: true
+    # Hooks run only on standalone targets (this example). preRestore Cypher
+    # hooks run BEFORE the instance is stopped; postRestore hooks run AFTER
+    # the restored database is registered/started.
     preRestore:
       cypherStatements:
         - "CALL db.checkpoint()"
@@ -85,7 +87,6 @@ spec:
         cloud:
           provider: aws
   options:
-    verifyBackup: true
     replaceExisting: true
     preRestore:
       job:
@@ -117,7 +118,10 @@ spec:
               - "-c"
               - |
                 echo "Running post-restore validation..."
-                cypher-shell -u neo4j -p $NEO4J_PASSWORD -d critical-app \
+                # -a points cypher-shell at the standalone's service — the hook
+                # Job runs in its own pod, so omitting it dials localhost.
+                cypher-shell -a neo4j://dr-standalone-service:7687 \
+                  -u neo4j -p "$NEO4J_PASSWORD" -d critical-app \
                   "MATCH (n) RETURN labels(n)[0] as label, count(n) as count ORDER BY label"
                 echo "Validation completed successfully"
             env:

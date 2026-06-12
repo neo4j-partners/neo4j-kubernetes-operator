@@ -37,7 +37,7 @@ spec:
     path: incremental/orders      # Path/prefix within the bucket
     cloud:
       provider: aws
-      credentialsSecretRef: aws-backup-credentials  # Secret with AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY
+      credentialsSecretRef: aws-backup-credentials  # Secret with AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_REGION
   retention:
     maxAge: "3d"
     maxCount: 12  # Keep last 12 incremental backups

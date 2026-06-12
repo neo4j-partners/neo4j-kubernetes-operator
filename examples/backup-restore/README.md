@@ -27,7 +27,7 @@ kubectl apply -f backup-pvc-simple.yaml
 kubectl get neo4jbackup simple-backup -w
 ```
 
-**🎯 Success:** Status shows `Completed` with `BackupSuccessful` condition.
+**🎯 Success:** Status shows phase `Completed`, with the `Ready` condition `True` (reason `BackupSucceeded`). Note this applies to **one-shot** backups only — scheduled backups stay in phase `Scheduled` and record their runs in `status.history[]` instead.
 
 ### Choose Your Path:
 - **🟢 New to backups?** Continue with [PVC examples](#basic-backups) below
@@ -58,10 +58,8 @@ kubectl get neo4jbackup simple-backup -w
 
 ### 1. PVC Backup Example
 ```bash
-# Create storage class if needed
-kubectl apply -f storage-class-fast.yaml
-
-# Run PVC backup
+# Run PVC backup (the operator provisions the PVC using your cluster's
+# default StorageClass — see the comments in the example to pin one)
 kubectl apply -f backup-pvc-simple.yaml
 
 # Monitor progress
@@ -71,10 +69,12 @@ kubectl describe neo4jbackup simple-backup
 
 ### 2. S3 Backup Example
 ```bash
-# Create AWS credentials secret
-kubectl create secret generic aws-credentials \
+# Create AWS credentials secret — all three keys are required (the backup Job
+# reads AWS_REGION as a non-optional env var)
+kubectl create secret generic aws-backup-credentials \
   --from-literal=AWS_ACCESS_KEY_ID=your-access-key \
-  --from-literal=AWS_SECRET_ACCESS_KEY=your-secret-key
+  --from-literal=AWS_SECRET_ACCESS_KEY=your-secret-key \
+  --from-literal=AWS_REGION=us-east-1
 
 # Run S3 backup
 kubectl apply -f backup-s3-basic.yaml
@@ -100,8 +100,14 @@ kubectl get neo4jbackup daily-backup -o jsonpath='{.status.history}'
 # Set up complete PITR environment
 kubectl apply -f pitr-setup-complete.yaml
 
-# Wait for base backup to complete
-kubectl wait --for=condition=Ready neo4jbackup/pitr-base-backup --timeout=600s
+# Wait for the first scheduled run to succeed. Do NOT use
+# `kubectl wait --for=condition=Ready` here — scheduled backups never leave
+# phase Scheduled (only one-shot backups reach Completed/Ready), so that wait
+# hangs forever. Poll status.history instead:
+until kubectl get neo4jbackup pitr-base-backup \
+    -o jsonpath='{.status.history[*].status}' | grep -q Succeeded; do
+  sleep 10
+done
 
 # Perform PITR restore
 kubectl apply -f restore-pitr-basic.yaml
@@ -113,22 +119,42 @@ kubectl get neo4jrestore pitr-restore -w
 ## Storage Configuration
 
 ### AWS S3
-```bash
-# Using IAM roles (recommended)
-kubectl annotate serviceaccount neo4j-operator \
-  eks.amazonaws.com/role-arn=arn:aws:iam::ACCOUNT:role/neo4j-backup-role
 
-# Using access keys
-kubectl create secret generic aws-credentials \
+**Using IAM roles / IRSA (recommended).** Backup and restore Jobs run as the
+operator-managed `neo4j-backup-sa` / `neo4j-restore-sa` ServiceAccounts — *not*
+the operator's own SA. Don't `kubectl annotate` anything manually; declare the
+role binding in the backup spec and the operator applies it to `neo4j-backup-sa`
+on every reconcile:
+
+```yaml
+spec:
+  storage:
+    type: s3
+    bucket: my-neo4j-backups
+    cloud:
+      provider: aws
+      identity:
+        provider: aws
+        autoCreate:
+          annotations:
+            eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT:role/neo4j-backup-role
+```
+
+```bash
+# Using access keys (all three keys required)
+kubectl create secret generic aws-backup-credentials \
   --from-literal=AWS_ACCESS_KEY_ID=your-key \
-  --from-literal=AWS_SECRET_ACCESS_KEY=your-secret
+  --from-literal=AWS_SECRET_ACCESS_KEY=your-secret \
+  --from-literal=AWS_REGION=us-east-1
 ```
 
 ### Google Cloud Storage
 ```bash
-# Create service account key secret
+# Create service account key secret — the key MUST be named
+# GOOGLE_APPLICATION_CREDENTIALS_JSON and contain the JSON as a string value
+# (not a file path):
 kubectl create secret generic gcs-credentials \
-  --from-file=service-account.json=path/to/service-account.json
+  --from-literal=GOOGLE_APPLICATION_CREDENTIALS_JSON="$(cat path/to/service-account.json)"
 ```
 
 ### Azure Blob Storage
@@ -205,7 +231,7 @@ az storage blob delete-batch --source your-container --pattern "neo4j-backups/*"
 
 1. **Test Regularly**: Test backup and restore procedures in non-production environments
 2. **Monitor Storage**: Set up monitoring for storage usage and backup completion
-3. **Verify Backups**: Enable backup verification to ensure data integrity
+3. **Validate Backups**: Set `spec.options.validate: true` to run `neo4j-admin backup validate` after each backup (result recorded on `status.history[].validation`)
 4. **Secure Credentials**: Use proper secret management for cloud credentials
 5. **Plan Retention**: Implement appropriate retention policies for your use case
 6. **Document Procedures**: Document your backup and restore procedures
@@ -214,7 +240,7 @@ az storage blob delete-batch --source your-container --pattern "neo4j-backups/*"
 ## Troubleshooting
 
 For detailed troubleshooting information, see:
-- [Backup and Restore Troubleshooting Guide](../../docs/user_guide/guides/troubleshooting_backup_restore.md)
+- [Backup and Restore Troubleshooting Guide](../../docs/user_guide/troubleshooting/backup_restore.md)
 - [Backup and Restore User Guide](../../docs/user_guide/guides/backup_restore.md)
 
 ## Support

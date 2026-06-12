@@ -1,14 +1,19 @@
 # ============================================================
 # Destructive restore: overwrite an EXISTING database from a backup.
 #
-#   - force: true            overwrites the existing database (drop + recreate)
-#   - replaceExisting: true  replace rather than fail if the database exists
+#   - force: true            confirms overwriting the existing database
+#   - replaceExisting: true  equivalent option-level confirmation
 #   - source.type: backup    pulls from a Neo4jBackup CR's latest successful run
 #
+# On a CLUSTER target the operator restores via Cypher
+# (dbms.recreateDatabase with a seedURI — no Job, no downtime for other
+# databases). Restoring over an EXISTING database REQUIRES force: true or
+# options.replaceExisting: true — without either the restore fails with an
+# actionable message instead of silently wiping the database.
+#
+# Hooks (spec.options.{preRestore,postRestore}) run ONLY on standalone
+# targets (the Job-based path) — they are intentionally absent here.
 # For point-in-time recovery, see restore-pitr-basic.yaml.
-# Hooks live under spec.options.{preRestore,postRestore} and accept either
-# `cypherStatements:` (run via Bolt) or a `job:` template — there is no
-# free-form `type: script` hook.
 # ============================================================
 apiVersion: neo4j.neo4j.com/v1beta1
 kind: Neo4jRestore
@@ -18,17 +23,15 @@ metadata:
 spec:
   clusterRef: my-neo4j-cluster
   databaseName: orders
-  # Force restore over an existing database
+  # Confirm the destructive overwrite of the existing database
   force: true
   source:
     type: backup
     backupRef: full-backup
   options:
-    # Verify the backup before applying it
-    verifyBackup: true
     # Replace the existing database rather than failing if it exists
     replaceExisting: true
-    postRestore:
-      cypherStatements:
-        - "CALL db.awaitIndexes()"
-        - "CALL dbms.security.clearAuthCache()"
+  # spec.timeout bounds how long the operator waits for the re-seeded
+  # database to converge online across the cluster (default 5m — raise it
+  # for multi-GB stores seeded from object storage).
+  timeout: "30m"

@@ -21,7 +21,8 @@ Key implementation details:
 - For cloud storage, `--to-path` uses native cloud URIs: `s3://`, `gs://`, `azb://`.
 - For PVC storage, `--to-path` uses the local path within the mounted PVC.
 - RBAC: Only a `neo4j-backup-sa` ServiceAccount is created. No Role or RoleBinding is created because the backup Job requires no Kubernetes API access.
-- Cloud retention: The operator logs a notice to configure bucket lifecycle rules on the cloud provider side. PVC retention uses `find` + `rm` in a cleanup Job.
+- Retention: cloud storage (S3/GCS/Azure) is pruned by **your bucket's lifecycle rules**, not the operator. For PVC storage, the operator runs a cleanup Job **only when the Neo4jBackup CR is deleted** — see [RetentionPolicy](#retentionpolicy).
+- `target.kind: Cluster` backs up **every database** on the instance in one `neo4j-admin database backup "*"` invocation — one `.backup` artifact per database lands in the chain directory. Restore is per-database: create one `Neo4jRestore` per database you want back (an all-databases restore mode is tracked in [#222](https://github.com/neo4j-partners/neo4j-kubernetes-operator/issues/222)).
 
 ## Spec
 
@@ -31,12 +32,12 @@ The `Neo4jBackupSpec` defines the desired state of a Neo4j backup configuration.
 |-------|------|----------|-------------|
 | `target` | [`BackupTarget`](#backuptarget) | ✅ | What to back up |
 | `storage` | [`StorageLocation`](#storagelocation) | ✅ | Where to store the backup |
-| `schedule` | `string` | ❌ | Cron expression for automated backups (e.g., `"0 2 * * *"`) |
+| `schedule` | `string` | ❌ | Cron expression for automated backups (e.g., `"0 2 * * *"`). Plain 5-field UTC syntax only — `TZ=`/`CRON_TZ=` prefixes are **rejected** (Kubernetes refuses timezone-embedded CronJob schedules). Scheduled backup names are limited to **40 characters** (the generated `<name>-backup-cron` CronJob must fit Kubernetes' 52-char CronJob-name limit). Removing `schedule` from an existing CR **deletes the CronJob** (the CR becomes a one-shot backup). |
 | `cloud` | [`*CloudBlock`](#cloudblock) | ❌ | Top-level cloud provider configuration (used for workload identity) |
 | `retention` | [`*RetentionPolicy`](#retentionpolicy) | ❌ | Backup retention policy |
 | `options` | [`*BackupOptions`](#backupoptions) | ❌ | Backup-specific options |
-| `suspend` | `bool` | ❌ | Suspend the backup schedule without deleting the resource |
-| `chainFromBackup` | `string` | ❌ | Names another `Neo4jBackup` CR in the **same namespace** whose `<base>/<cr-name>/` directory this CR should write into instead of its own. Used to compose mixed-cadence workflows (e.g. a daily `FULL` CR plus an hourly `DIFF` CR that chains off the daily's artifacts). See [Chaining mixed-cadence backups](#chaining-mixed-cadence-backups). |
+| `suspend` | `bool` | ❌ | Suspend backups without deleting the resource. For scheduled backups, the operator propagates this to `CronJob.spec.suspend`, so Kubernetes stops firing scheduled Jobs; setting it back to `false` resumes the schedule. `suspend: true` also pauses one-shot backups that haven't run yet. |
+| `chainFromBackup` | `string` | ❌ | Names another `Neo4jBackup` CR in the **same namespace** whose `<base>/<cr-name>/` directory this CR should write into instead of its own. Used to compose mixed-cadence workflows (e.g. a daily `FULL` CR plus an hourly `DIFF` CR that chains off the daily's artifacts). Must be a DNS-1123 name (validator-enforced). See [Chaining mixed-cadence backups](#chaining-mixed-cadence-backups). |
 
 ## Type Definitions
 
@@ -46,7 +47,7 @@ Defines what to back up. The `kind` field controls how `name` and `clusterRef` a
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `kind` | `string` | ✅ | Type of resource to back up: `"Cluster"`, `"Database"`, or `"ShardedDatabase"` |
+| `kind` | `string` | ✅ | Type of resource to back up: `"Cluster"` (every database on the instance — `neo4j-admin` is invoked with the `"*"` glob, producing one artifact per database), `"Database"` (a single database), or `"ShardedDatabase"` |
 | `name` | `string` | ✅ | When `kind=Cluster`: name of the `Neo4jEnterpriseCluster` or `Neo4jEnterpriseStandalone`. When `kind=Database`: name of the Neo4j database (e.g., `"neo4j"`, `"mydb"`). When `kind=ShardedDatabase`: the logical sharded-database name (e.g. `"products"`); the operator backs up all shards (`products-g000`, `products-p000`, …) in one `neo4j-admin` invocation via a glob. |
 | `clusterRef` | `string` | ✅ when `kind=Database` or `kind=ShardedDatabase` | Name of the `Neo4jEnterpriseCluster` or `Neo4jEnterpriseStandalone` that owns the database. Unused when `kind=Cluster`. |
 | `namespace` | `string` | ❌ | Namespace of the target resource (defaults to the backup namespace) |
@@ -76,8 +77,8 @@ Defines where to store backups.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `type` | `string` | ✅ | Storage type: `"s3"`, `"gcs"`, `"azure"`, `"pvc"` |
-| `bucket` | `string` | ❌ | Bucket or container name (required for cloud storage types) |
-| `path` | `string` | ❌ | Path within the bucket or PVC |
+| `bucket` | `string` | ❌ | Bucket or container name (required for cloud storage types). Restricted to `A-Z a-z 0-9 . _ / -` — the validator rejects other characters (the value is interpolated into the Job's shell command). |
+| `path` | `string` | ❌ | Path within the bucket or PVC. Same `A-Z a-z 0-9 . _ / -` charset restriction as `bucket`. Defaults to `backups` for cloud storage when empty. |
 | `pvc` | [`*PVCSpec`](#pvcspec) | ❌ | PVC configuration (required when `type=pvc`) |
 | `cloud` | [`*CloudBlock`](#cloudblock) | ❌ | Cloud provider configuration including optional credentials secret |
 
@@ -150,16 +151,16 @@ Cloud identity configuration for workload identity scenarios (no static credenti
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `provider` | `string` | ✅ | Identity provider: `"aws"`, `"gcp"`, `"azure"` |
-| `serviceAccount` | `string` | ❌ | Name of an existing ServiceAccount to use. When absent and `autoCreate.enabled=true`, the operator creates `neo4j-backup-sa`. |
-| `autoCreate` | [`*AutoCreateSpec`](#autocreatespec) | ❌ | Auto-create ServiceAccount with workload-identity annotations |
+| `serviceAccount` | `string` | ❌ | **RESERVED — currently a no-op.** Backup Jobs always run as the operator-managed `neo4j-backup-sa` (restore Jobs: `neo4j-restore-sa`); this field is accepted for backward compatibility but not read. Bind your cloud IAM role via `autoCreate.annotations` instead. |
+| `autoCreate` | [`*AutoCreateSpec`](#autocreatespec) | ❌ | Workload-identity annotations for the operator-managed ServiceAccount |
 
 ### AutoCreateSpec
 
-Controls automatic ServiceAccount creation with workload-identity annotations.
+Carries workload-identity annotations for the operator-managed ServiceAccount.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `enabled` | `bool` | ❌ | Enable auto-creation of the `neo4j-backup-sa` ServiceAccount (default: `true`) |
+| `enabled` | `bool` | ❌ | **RESERVED — currently a no-op.** The operator always ensures the backup/restore ServiceAccount exists; only `annotations` is honored. |
 | `annotations` | `map[string]string` | ❌ | Annotations applied to the `neo4j-backup-sa` ServiceAccount on every reconcile. Use this to attach workload-identity annotations. |
 
 The annotations in `autoCreate.annotations` are applied to the `neo4j-backup-sa` ServiceAccount on **every reconcile**, so they stay in sync with the desired state.
@@ -169,19 +170,16 @@ The annotations in `autoCreate.annotations` are applied to the `neo4j-backup-sa`
 ```yaml
 # AWS IRSA
 autoCreate:
-  enabled: true
   annotations:
     eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/neo4j-backup-role
 
 # GKE Workload Identity
 autoCreate:
-  enabled: true
   annotations:
     iam.gke.io/gcp-service-account: neo4j-backup@my-project.iam.gserviceaccount.com
 
 # Azure Workload Identity
 autoCreate:
-  enabled: true
   annotations:
     azure.workload.identity/client-id: 00000000-0000-0000-0000-000000000000
 ```
@@ -202,11 +200,15 @@ Backup retention configuration.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `maxAge` | `string` | ❌ | Maximum age of backups to retain (e.g., `"30d"`, `"4w"`) |
-| `maxCount` | `int32` | ❌ | Maximum number of backups to retain |
-| `deletePolicy` | `string` | ❌ | Action for expired backups: `"Delete"` (default) or `"Archive"` |
+| `maxAge` | `string` | ❌ | Maximum age of artifacts to retain. Accepted units: `d` (days), `h` (hours), `m` (minutes), `s` (seconds) — e.g. `"30d"`, `"168h"`, `"90m"`. `"4w"` is **rejected** by the validator. |
+| `maxCount` | `int32` | ❌ | Maximum number of `.backup` artifacts to retain |
+| `deletePolicy` | `string` | ❌ | `"Delete"` (default). `"Archive"` is **RESERVED — currently a no-op** (no archival logic exists; accepted for backward compatibility). |
 
-> **Cloud storage retention**: For cloud storage targets the operator logs a notice to configure bucket lifecycle rules on the cloud provider side. Automated deletion of cloud objects is not performed by the operator.
+**How retention actually works** (read this before relying on it):
+
+- **Cloud storage (S3/GCS/Azure)**: the operator never deletes cloud objects. Configure **bucket lifecycle rules** on the provider side; `retention` on a cloud-backed CR is advisory only.
+- **PVC storage**: retention is enforced by a cleanup Job that runs **only when the Neo4jBackup CR is deleted** — it is *not* a continuous pruning loop. The Job prunes `*.backup` **files** inside this CR's chain directory (`/backup/<chain-root>/`) only, **oldest-first by file mtime**, and **always keeps the newest artifact** even if it has aged out. Other CRs' chain directories on a shared PVC are never touched.
+- **DIFF-orphaning caveat**: artifact filenames don't encode FULL vs DIFF, so pruning can orphan differential artifacts whose parent FULL ages out (making them unrestorable). The operator emits a `BackupRetentionCaveat` Warning event when retention is configured on a CR that can produce DIFFs. Prefer `options.backupType: FULL` on CRs that use retention, or prune chains with `neo4j-admin backup aggregate`.
 
 ### BackupOptions
 
@@ -215,13 +217,13 @@ Fine-grained backup execution options.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `resources` | [`*corev1.ResourceRequirements`](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/) | ❌ | CPU/memory requests + limits on the backup Job's container. When unset, the operator applies a Burstable default (request 100m CPU / 512Mi memory, limit 1 CPU / 2Gi memory) sized for small databases and CI. Tune upward for large production databases. |
-| `compress` | `bool` | ❌ | Compress the backup (default: `true`) |
+| `compress` | `*bool` | ❌ | Compress the backup (default: `true`). Pointer type so an explicit `false` survives updates (a plain bool would silently snap back to the default). |
 | `backupType` | `string` | ❌ | Backup type: `"FULL"`, `"DIFF"`, `"AUTO"` (default) |
 | `preferDiffAsParent` | `bool` | ❌ | Use the latest differential backup as the parent when creating a new differential backup (default: `false`). Maps to `--prefer-diff-as-parent`. **Requires CalVer 2025.04+** — an error is returned at runtime if the target version does not support this flag. |
-| `tempPath` | `string` | ❌ | Local directory path for temporary files during backup. When `tempStorage` is configured, this is set automatically. Only set manually if you are mounting your own volume. Maps to `--temp-path`. |
+| `tempPath` | `string` | ❌ | Local directory path for temporary files during backup. When `tempStorage` is configured, this is set automatically. Only set manually if you are mounting your own volume. Maps to `--temp-path`. Must be an **absolute** path restricted to `A-Z a-z 0-9 . _ / -` (validator-enforced). |
 | `tempStorage` | [`*TempStorageSpec`](#tempstoragespec) | ❌ | Provisions a PVC for temporary staging files during cloud backups. The operator mounts this PVC and passes `--temp-path` automatically. Recommended for large databases to avoid filling ephemeral disk. |
 | `pageCache` | `string` | ❌ | Page cache size hint (e.g., `"4G"`). Must match pattern `^[0-9]+[KMG]?$` |
-| `verify` | `bool` | ❌ | Verify backup integrity after creation |
+| `verify` | `bool` | ❌ | **RESERVED — currently a no-op.** Accepted for backward compatibility but not read by the operator. For real artifact verification use `validate` (below). |
 | `validate` | `*bool` | ❌ | When `true`, runs `neo4j-admin backup validate` against the artifacts **after** the backup succeeds, recording per-shard recoverability into `status.history[].validation`. Appended with `\|\| true` so validate failures don't fail the Job (the backup already succeeded). Pointer type preserves an explicit `true` or `false` across updates; nil (default) skips validate. |
 | `parallelDownload` | `bool` | ❌ | Enable parallel download for remote backups |
 | `remoteAddressResolution` | `*bool` | ❌ | Resolve remote addresses via the cluster discovery service (useful in multi-homed environments). Pointer type: when unset and `target.kind=ShardedDatabase` on Neo4j 2025.09+, the operator defaults this to `true` to match the canonical upstream sharded-backup invocation; otherwise unset. Set explicitly (`true` or `false`) to override in either direction. |
@@ -248,15 +250,30 @@ The `Neo4jBackupStatus` represents the observed state of the backup.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `conditions` | `[]metav1.Condition` | Current backup conditions |
-| `phase` | `string` | Current backup phase |
+| `conditions` | `[]metav1.Condition` | Current backup conditions. The operator maintains a single `Ready` condition derived from `phase` (`Completed` → `True` with reason `BackupSucceeded`; `Failed`/`Suspended`/`Invalid` → `False`; everything else → `Unknown`). |
+| `phase` | `string` | Current backup phase — see [Backup Phases](#backup-phases) |
 | `message` | `string` | Human-readable message about the current state |
 | `observedGeneration` | `int64` | The `.metadata.generation` most recently observed by the controller |
 | `lastRunTime` | `*metav1.Time` | When the last backup Job started |
-| `lastSuccessTime` | `*metav1.Time` | When the last successful backup completed |
+| `lastSuccessTime` | `*metav1.Time` | When a **one-shot** backup completed (set on the `Completed` phase transition). **Never set for scheduled backups** — they don't pass through `Completed`; read `status.history[]` instead. |
 | `nextRunTime` | `*metav1.Time` | When the next scheduled backup will run |
 | `stats` | [`*BackupStats`](#backupstats) | Statistics from the most recent backup run |
-| `history` | [`[]BackupRun`](#backuprun) | History of recent backup runs |
+| `history` | [`[]BackupRun`](#backuprun) | History of recent backup runs. For scheduled backups this is the **authoritative record** of run outcomes. |
+
+### Backup Phases
+
+| Phase | Meaning |
+|-------|---------|
+| `Pending` | A transient precondition isn't met yet — e.g. the `chainFromBackup` parent CR doesn't exist yet, another Job in the same chain is still running, or the sharded-backup preflight couldn't connect to the cluster. The controller requeues and retries. |
+| `Waiting` | The target cluster/standalone CR doesn't exist yet (common with `kubectl apply -f dir/` ordering) or isn't `Ready`. Transient — the controller requeues. |
+| `Scheduled` | A CronJob has been created for `spec.schedule`. **This is the steady state for scheduled backups** — they never transition to `Completed`; per-run outcomes accumulate in `status.history[]`. |
+| `Suspended` | `spec.suspend: true` — the CronJob is suspended and one-shot runs are paused. |
+| `Running` | A one-shot backup Job is executing. |
+| `Completed` | The one-shot backup Job succeeded. Terminal — re-running requires deleting and recreating the CR. |
+| `Failed` | The one-shot backup Job failed terminally (Job `Failed` condition, after retries) or a non-transient error occurred (e.g. chain target/storage mismatch). Terminal for one-shot backups. |
+| `Invalid` | The spec failed validation (clear aggregated message in `status.message`). Recoverable — fixing the spec re-triggers reconcile. |
+
+> **Don't `kubectl wait --for=condition=Ready` on a scheduled backup** — it stays in `Scheduled` (Ready=`Unknown`) forever. Poll `status.history[*].status` for `Succeeded` instead.
 
 ### BackupStats
 
@@ -273,13 +290,13 @@ Represents a single backup Job execution.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `runID` | `string` | Unique identifier for this run, populated from the backing Job's `metadata.uid`. Stable for the lifetime of the Job; a new value for every retry. Used by the operator to dedupe history entries across reconciles and by users to correlate a history entry with the actual Job (and its logs / audit trail). |
+| `runID` | `string` | Unique identifier for this run, populated from the backing Job's **`metadata.name`** (not its opaque UID) — e.g. `<backup>-backup` for one-shots, `<backup>-backup-cron-<unix-seconds>` for CronJob children. Used by the operator to dedupe history entries across reconciles and by users to correlate a history entry with the actual Job (`kubectl logs job/<runID>`). |
 | `startTime` | `metav1.Time` | When the backup run started |
 | `completionTime` | `*metav1.Time` | When the run completed (`nil` if still running) |
 | `status` | `string` | Run status: `"Running"`, `"Succeeded"`, `"Failed"` |
 | `error` | `string` | Error message if the backup failed |
 | `stats` | [`*BackupStats`](#backupstats) | Backup statistics for this run |
-| `backupsPath` | `string` | The shared per-CR directory under `spec.storage.path` where this run wrote its `.backup` artifact. **Same value for every run of one CR** — all runs accumulate in this directory so `neo4j-admin` can chain differential backups off the prior full. Value is the Neo4jBackup CR name (or the `chainFromBackup` chain-root name when set). Use the `runID` field (Job UID) for per-run identity. |
+| `backupsPath` | `string` | The shared per-CR directory under `spec.storage.path` where this run wrote its `.backup` artifact. **Same value for every run of one CR** — all runs accumulate in this directory so `neo4j-admin` can chain differential backups off the prior full. Value is the Neo4jBackup CR name (or the `chainFromBackup` chain-root name when set). Use the `runID` field (Job name) for per-run identity. |
 | `artifactFilename` | `string` | Filename of the `.backup` artifact produced by this standard-DB run (e.g. `"neo4j-2026-06-08T01-18-06.backup"`). Populated by parsing the Job's Pod log after completion; empty when logs couldn't be fetched or the pattern didn't match. Used by the cluster PVC-restore path to build a per-restore seed URL. |
 | `shardArtifacts` | [`[]ShardArtifact`](#shardartifact) | Per-shard `.backup` files produced by a sharded backup run (`target.kind=ShardedDatabase`). Empty for non-sharded runs. |
 | `validation` | [`*BackupValidationResult`](#backupvalidationresult) | Per-shard outcome of the optional `neo4j-admin backup validate` step (only when `options.validate=true` and the operator could parse the output). |
@@ -401,7 +418,6 @@ spec:
     identity:
       provider: aws
       autoCreate:
-        enabled: true
         annotations:
           eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/neo4j-backup-role
   schedule: "0 2 * * *"   # Daily at 2 AM UTC
@@ -527,7 +543,7 @@ spec:
     path: backups/manual/
   options:
     compress: true
-    verify: true
+    validate: true   # runs `neo4j-admin backup validate` after the backup
     backupType: DIFF
 ```
 
@@ -554,13 +570,11 @@ spec:
     identity:
       provider: gcp
       autoCreate:
-        enabled: true
         annotations:
           iam.gke.io/gcp-service-account: neo4j-backup@my-project.iam.gserviceaccount.com
   schedule: "0 3 * * 0"   # Weekly on Sunday at 3 AM
   retention:
     maxCount: 12
-    deletePolicy: Archive
   options:
     backupType: AUTO
     pageCache: "8G"
@@ -620,7 +634,6 @@ spec:
     identity:
       provider: azure
       autoCreate:
-        enabled: true
         annotations:
           azure.workload.identity/client-id: 00000000-0000-0000-0000-000000000000
   schedule: "0 1 * * *"
@@ -680,11 +693,13 @@ kubectl get neo4jbackup daily-cluster-backup -w
 # Check logs from the most recent backup Job
 kubectl logs -n neo4j -l neo4j.com/backup=daily-cluster-backup --tail=100
 
-# Check backup phase
+# Check backup phase (scheduled backups stay in "Scheduled"; only one-shot
+# backups reach "Completed")
 kubectl get neo4jbackup daily-cluster-backup -o jsonpath='{.status.phase}'
 
-# Check last success time
-kubectl get neo4jbackup daily-cluster-backup -o jsonpath='{.status.lastSuccessTime}'
+# Check run outcomes — for scheduled backups, status.history is the record
+# (lastSuccessTime is only set for one-shot backups)
+kubectl get neo4jbackup daily-cluster-backup -o jsonpath='{.status.history[*].status}'
 ```
 
 For more information on backup operations, see the [Backup and Restore Guide](../user_guide/guides/backup_restore.md).

@@ -77,13 +77,21 @@ spec:
 
 ### PVC-backed seeds
 
-When a seed source resolves to a backup stored on a PVC, the operator spawns a short-lived `backup-seed-proxy-<owner>` Deployment + Service that mounts the backup PVC read-only and serves the `.backup` files over HTTP. Neo4j then fetches each file via `URLConnectionSeedProvider` at the exact `.backup` filename. The proxy is owner-referenced to the consuming CR and garbage-collected when that CR is deleted.
+When a seed source resolves to a backup stored on a PVC, the operator spawns a short-lived `backup-seed-proxy-<owner>` Deployment + Service that mounts the backup PVC read-only and serves the `.backup` files over HTTP. Neo4j then fetches each file via `URLConnectionSeedProvider` at the exact `.backup` filename.
+
+Lifecycle and hardening:
+
+- A **NetworkPolicy** restricts the proxy's ingress to the target cluster's server pods (effective on enforcing CNIs; a no-op elsewhere).
+- The proxy stack (Deployment + Service + NetworkPolicy) is **torn down automatically as soon as the seed completes**: when a `Neo4jRestore` reaches `Completed`/`Failed`, or when the `Neo4jShardedDatabase` becomes `Ready`. It does not keep serving the backup PVC for the lifetime of the owning CR.
+- The proxy is also owner-referenced to the consuming CR, so deleting the CR removes any leftovers.
 
 ## Authentication Methods
 
 ### 1. System-Wide Authentication (Recommended)
 
-Use cloud-native authentication mechanisms that don't require explicit credentials:
+Use cloud-native authentication mechanisms that don't require explicit credentials.
+
+> **Where the identity must be bound:** `CREATE DATABASE … OPTIONS { seedURI }` runs inside the Neo4j JVM **on the server pods** — not in a backup/restore Job. Under pod identity (IRSA / GKE Workload Identity / Azure Workload Identity) the IAM binding therefore goes on the **server pods' ServiceAccount**, not on the `neo4j-backup-sa` used by backup Jobs (`Neo4jBackup`'s `cloud.identity.autoCreate.annotations` only annotates the Job SA and has no effect on seeding).
 
 **AWS S3:**
 
@@ -155,6 +163,7 @@ spec:
 
 - `AWS_SESSION_TOKEN` (for temporary credentials)
 - `AWS_REGION`
+- `AWS_ENDPOINT_URL_S3` — required for **MinIO / S3-compatible** stores. The `endpointURL`/`forcePathStyle` fields on `Neo4jBackup`/`Neo4jRestore` only affect their **Job pods**; the server pods doing seedURI fetches read the SDK's standard env vars, so put the endpoint in the Secret you project via `spec.extraEnvFrom`.
 
 ### Google Cloud Storage
 **Required:**

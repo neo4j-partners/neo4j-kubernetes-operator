@@ -34,17 +34,19 @@ Backup Jobs run as the auto-created `neo4j-backup-sa` ServiceAccount in the same
 
 | `target.kind` | `target.name` | `target.clusterRef` | Backs up |
 |---|---|---|---|
-| `Cluster` | the **instance** name — a `Neo4jEnterpriseCluster` **or** `Neo4jEnterpriseStandalone` (auto-detected) | *(unused — leave unset)* | every database on the instance |
+| `Cluster` | the **instance** name — a `Neo4jEnterpriseCluster` **or** `Neo4jEnterpriseStandalone` (auto-detected) | *(unused — leave unset)* | every database on the instance (`neo4j-admin database backup "*"` — one `.backup` artifact per database) |
 | `Database` | the **database** name (e.g. `neo4j`) | the owning instance name | a single database |
 | `ShardedDatabase` | the logical sharded-DB name (e.g. `products`) | the owning cluster | all shards in one `neo4j-admin` run |
 
 There is **no `kind: Standalone`** — a standalone is just an instance. To back one up, use `kind: Cluster` with `name: <standalone-name>` (whole instance), or `kind: Database` with `name: <database>` + `clusterRef: <standalone-name>` (one database). Key gotcha: for `kind: Cluster`, `name` is the **instance** name and `clusterRef` is unused; for `kind: Database`/`ShardedDatabase`, `name` is the **database** and `clusterRef` is the instance that owns it.
 
+**Restore is single-database** even when the backup was cluster-wide: a `kind: Cluster` backup leaves one artifact per database in the chain directory, and you create one `Neo4jRestore` per database you want back (the standalone restore Job's filename glob, and the cluster seedURI, naturally select the requested database's artifact). An all-databases restore mode is tracked in [#222](https://github.com/neo4j-partners/neo4j-kubernetes-operator/issues/222).
+
 ### Storage Layout
 
 All runs of a single `Neo4jBackup` CR write to the **same directory**: `<storage.path>/<cr-name>/`. This is what `neo4j-admin` requires for differential backup chaining — every diff run reads the prior full from the same directory to compute the delta. Per-run identity is preserved by the timestamp `neo4j-admin` embeds in each artifact filename (`<dbname>-YYYY-MM-DDThh-mm-ss.backup`).
 
-Each scheduled run appends to `status.history[]` with a unique `runID` (Job UID) and the captured artifact filename. To list runs:
+Each scheduled run appends to `status.history[]` with a unique `runID` (the Job **name**, e.g. `daily-backup-backup-cron-1764806400` — handy for `kubectl logs job/<runID>`) and the captured artifact filename. To list runs:
 
 ```bash
 kubectl get neo4jbackup daily-backup -o jsonpath='{.status.history[*].runID}'
@@ -89,7 +91,16 @@ Cloud backup Jobs need permission to write to your bucket. The operator supports
 | On-prem Kubernetes (no cloud IAM) | Explicit credentials via `credentialsSecretRef` |
 | Compliance requires no long-lived keys | Workload Identity |
 
-**Security recommendation**: Prefer Workload Identity in production. Explicit credentials work everywhere and are simpler to set up initially, but rotate them regularly and store them only in Kubernetes Secrets.
+**Recommendation: use pod identity (IRSA / GKE Workload Identity / Azure Workload Identity) wherever your platform supports it.** Leaving `credentialsSecretRef` empty (or omitting the whole `cloud` credentials block) means the cloud SDK's **default credential chain** is used — which picks up the pod identity automatically. No long-lived keys, nothing to rotate. Explicit credentials work everywhere and are simpler to set up initially, but rotate them regularly and store them only in Kubernetes Secrets.
+
+**Which ServiceAccount needs the IAM binding?** It depends on *where* the cloud access happens:
+
+| Operation | Runs on | Bind the IAM role to |
+|---|---|---|
+| `Neo4jBackup` / standalone `Neo4jRestore` (Job paths) | a backup/restore **Job pod** | the operator-managed `neo4j-backup-sa` / `neo4j-restore-sa` — via `cloud.identity.autoCreate.annotations` on the CR |
+| Cluster `Neo4jRestore` (Cypher path), `Neo4jDatabase` `seedURI`, sharded `seedBackupRef` seeding | the Neo4j **server pods** (the JVM fetches the seed itself) | the **cluster's server pods' ServiceAccount** — the Job SA annotation does nothing here |
+
+With **static credentials** the equivalent split applies: Job paths read the Secret referenced by `credentialsSecretRef`; the seedURI paths need the same Secret projected onto the server pods via the cluster/standalone CR's `spec.extraEnvFrom` (the operator checks this and emits a copy-pasteable fix, or auto-patches under the `neo4j.com/auto-inherit-seed-creds: "true"` annotation).
 
 ---
 
@@ -235,7 +246,15 @@ kubectl run minio-client --rm -it --restart=Never \
 | Path-style not working | `forcePathStyle` missing | Confirm `forcePathStyle: true` in spec |
 | `SSL handshake failed` | TLS mismatch | Use `http://` for in-cluster; mount CA for self-signed certs |
 
-> **Restoring from MinIO / S3-compatible storage uses the same two fields.** Set `endpointURL` and `forcePathStyle` on the `Neo4jRestore` `spec.source.storage.cloud` block (and they apply equally to `Neo4jDatabase` `seedURI` seeding) — the operator injects `AWS_ENDPOINT_URL_S3` and the path-style JVM flag into the restore Job and the seeding pods exactly as it does for backup.
+> **Restoring from MinIO / S3-compatible storage uses the same two fields — but only on Job paths.** Set `endpointURL` and `forcePathStyle` on the `Neo4jRestore` `spec.source.storage.cloud` block: the operator injects `AWS_ENDPOINT_URL_S3` and the path-style JVM flag into backup and **standalone restore Job pods** only. They are **not** injected into the Neo4j server pods — so for the cluster Cypher restore path and `Neo4jDatabase`/`Neo4jShardedDatabase` `seedURI` seeding (where the server JVM fetches the seed itself), add `AWS_ENDPOINT_URL_S3` as an extra key in the credentials Secret you project via the cluster's `spec.extraEnvFrom`:
+>
+> ```bash
+> kubectl create secret generic minio-backup-credentials \
+>   --from-literal=AWS_ACCESS_KEY_ID=minioadmin \
+>   --from-literal=AWS_SECRET_ACCESS_KEY=minioadmin \
+>   --from-literal=AWS_REGION=us-east-1 \
+>   --from-literal=AWS_ENDPOINT_URL_S3=http://minio.minio.svc:9000
+> ```
 
 Full examples with scheduled incremental backups: [`examples/backup-restore/backup-minio.yaml`](https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/backup-restore/backup-minio.yaml).
 
@@ -696,13 +715,16 @@ spec:
     deletePolicy: Delete
 ```
 
-**Schedule:** Daily at 2 AM UTC — adjust as needed. Retention keeps 7 days' worth of backups.
+**Schedule:** Daily at 2 AM UTC — adjust as needed. The schedule must be plain 5-field UTC cron — `TZ=`/`CRON_TZ=` prefixes are rejected (Kubernetes refuses timezone-embedded CronJob schedules). Scheduled backup names are limited to 40 characters.
 
-> **Cloud storage retention note**: The `retention` settings above control how many backup records the operator tracks and attempts to clean up in PVC storage. For cloud storage (S3, GCS, Azure), **retention cleanup is handled by your bucket's lifecycle rules**, not the operator. The operator logs a notice when PVC retention cleanup is skipped for cloud-backed backups. Configure lifecycle rules directly in your cloud provider:
+> **What `retention` actually does** — read this before relying on it:
 >
-> - **S3**: [S3 Lifecycle Rules](https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lifecycle-mgmt.html)
-> - **GCS**: [Object Lifecycle Management](https://cloud.google.com/storage/docs/lifecycle)
-> - **Azure**: [Blob Lifecycle Management](https://learn.microsoft.com/en-us/azure/storage/blobs/lifecycle-management-overview)
+> - **Cloud storage (S3, GCS, Azure)**: the operator never deletes cloud objects. **Retention cleanup is handled by your bucket's lifecycle rules**, not the operator (which logs a notice to that effect). Configure lifecycle rules directly in your cloud provider:
+>   - **S3**: [S3 Lifecycle Rules](https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lifecycle-mgmt.html)
+>   - **GCS**: [Object Lifecycle Management](https://cloud.google.com/storage/docs/lifecycle)
+>   - **Azure**: [Blob Lifecycle Management](https://learn.microsoft.com/en-us/azure/storage/blobs/lifecycle-management-overview)
+> - **PVC storage**: retention is enforced by a cleanup Job that runs **only when the Neo4jBackup CR is deleted** — it is *not* a continuous pruning loop. The Job prunes `*.backup` **files** in this CR's chain directory only, oldest-first by mtime, and **always keeps the newest artifact**. `maxAge` accepts `d`/`h`/`m`/`s` units (`"4w"` is rejected). `deletePolicy: Archive` is a reserved no-op.
+> - **DIFF caveat**: filenames don't encode FULL vs DIFF, so pruning can orphan diffs whose parent FULL ages out — the operator emits a `BackupRetentionCaveat` warning event when this applies. Prefer `backupType: FULL` on CRs that use retention.
 
 #### Weekly Backup with Long Retention
 
@@ -735,14 +757,13 @@ spec:
   retention:
     maxAge: "90d"
     maxCount: 12
-    deletePolicy: Archive
 ```
 
-**Best for:** Enterprise compliance, long-term archival. Configure GCS Lifecycle Management to expire objects after 90 days.
+**Best for:** Enterprise compliance, long-term archival. For cloud storage the `retention` block is advisory — configure GCS Lifecycle Management to expire (or transition to archival storage classes) objects after 90 days. There is no operator-side archive action (`deletePolicy: Archive` is a reserved no-op).
 
 ### Suspended Backups
 
-Temporarily pause a scheduled backup without deleting the resource:
+Temporarily pause a scheduled backup without deleting the resource. The operator propagates `suspend: true` to the CronJob's own `spec.suspend`, so Kubernetes stops firing scheduled Jobs entirely; flipping it back to `false` resumes the schedule. `suspend: true` also pauses a one-shot backup that hasn't run yet. (Separately: removing `spec.schedule` from a CR deletes its CronJob — the CR becomes a one-shot backup.)
 
 ```yaml
 apiVersion: neo4j.neo4j.com/v1beta1
@@ -781,17 +802,27 @@ The operator picks the right restore method based on the target kind. The Neo4j 
 **Cluster path (Cypher)** — works with both cloud and PVC backups:
 
 - **Cloud-backed backup** (S3 / GCS / Azure): the operator passes the exact `.backup` **file** URI of the latest successful run (`s3://bucket/<path>/<backup-cr-name>/<dbname>-<timestamp>.backup`) as `seedURI` — `CloudSeedProvider` seeds a single database from one file, not a directory. When that file is a differential, Neo4j resolves and applies the full + differential chain from the same directory automatically. The cluster's pods must have the cloud credentials Secret projected via `spec.extraEnvFrom` — the operator emits an actionable error if they don't, or auto-patches under annotation `neo4j.com/auto-inherit-seed-creds=true`.
-- **PVC-backed backup**: the operator spawns an in-cluster busybox httpd proxy (`backup-seed-proxy-<restore-name>`) mounting the backup PVC RO at `/backup`, then passes the per-run `.backup` file URL as `seedURI` (`http://backup-seed-proxy-<restore-name>:8080/<backup-cr-name>/<filename>`). Neo4j's `URLConnectionSeedProvider` fetches it. The proxy Deployment + Service are owned by the `Neo4jRestore` CR and GC'd when it's deleted. No credentials required.
+- **PVC-backed backup**: the operator spawns an in-cluster busybox httpd proxy (`backup-seed-proxy-<restore-name>`) mounting the backup PVC RO at `/backup`, then passes the per-run `.backup` file URL as `seedURI` (`http://backup-seed-proxy-<restore-name>:8080/<backup-cr-name>/<filename>`). Neo4j's `URLConnectionSeedProvider` fetches it. The operator also creates a **NetworkPolicy restricting the proxy's ingress to the target cluster's server pods** (effective on enforcing CNIs), and **tears the whole proxy stack down automatically** (Deployment + Service + NetworkPolicy) as soon as the restore reaches `Completed` or `Failed` — it doesn't keep serving the backup PVC for the lifetime of the CR. No credentials required.
+- Restoring over an **existing** database requires the explicit opt-in `spec.force: true` (or `spec.options.replaceExisting: true`) — recreate wipes and replaces the live contents, so the operator refuses without it.
 - `dbms.recreateDatabase` preserves user/role privileges on the existing database; no `DROP DATABASE` needed.
 - For new databases, the operator emits `CREATE DATABASE … OPTIONS { seedURI: '…' } WAIT`.
-- Both forms block until the new state is online — when the restore returns, the database is ready.
+- Both forms finish with the database online. For the recreate path the operator polls until every allocation reports `online`, bounded by **`spec.timeout`** (default 5m) — raise it for multi-GB stores seeded from object storage.
 
 **Standalone path (Job)**:
 
 - The operator spawns a Kubernetes Job that mounts the backup PVC (or streams from cloud storage), runs `neo4j-admin database restore --from-path=<latest-file>`, then automatically runs `CREATE DATABASE` or `START DATABASE` over Bolt.
 - The `<latest-file>` is resolved at Pod startup via shell substitution (`ls <dir>/<dbname>-*.backup | tail -1`), so the most recent run in the chain wins by default.
+- Use `stopCluster: true`: the operator scales the instance down for the offline restore and back up afterwards. With `stopCluster: false` it **refuses to start the Job while any server pod is running** (it never writes into a live data volume).
 
-**No manual post-restore Cypher is required** for either path.
+**No manual post-restore Cypher is required** for either path — with one exception: if the backup included users/roles metadata (`includeMetadata`), `neo4j-admin database restore` writes a `restore_metadata.cypher` script under the data directory (`/data/scripts/<dbname>/restore_metadata.cypher`) and the operator does **not** run it. Re-apply users/roles manually:
+
+```bash
+kubectl exec <instance>-server-0 -c neo4j -- bash -c \
+  'cypher-shell -u neo4j -p "$NEO4J_PASSWORD" -d system \
+     -f /data/scripts/<dbname>/restore_metadata.cypher'
+```
+
+**Retrying a finished restore**: `Completed`/`Failed` are terminal for the current spec generation. Edit the spec (any change that bumps the generation — typically `source.backupRef`) to issue a fresh attempt; changing `backupRef` re-resolves the pinned `status.resolvedSource` instead of reusing the old snapshot. Or delete and recreate the CR.
 
 ### Simple Restore Examples
 
@@ -809,13 +840,11 @@ spec:
     type: backup
     backupRef: daily-backup
   options:
-    verifyBackup: true
-    replaceExisting: true
-  force: false
-  stopCluster: true
+    replaceExisting: true   # required — "neo4j" already exists on the cluster
+  timeout: "30m"            # cluster online-convergence budget (default 5m)
 ```
 
-After the Job completes, the operator automatically runs `START DATABASE neo4j` (or `CREATE DATABASE neo4j` if it was a new database). **You do not need to run any Cypher manually.**
+On a cluster target this runs entirely over Cypher (no Job, `stopCluster` is ignored) and finishes with the database online. On a standalone target the operator runs the restore Job and then automatically issues `START DATABASE neo4j` (or `CREATE DATABASE neo4j` for a new database). **You do not need to run any Cypher manually.**
 
 **Best for:** Quick recovery from an existing `Neo4jBackup` resource.
 
@@ -847,12 +876,11 @@ spec:
     # latest file via `ls … | tail -1`.
     backupPath: daily-backup/myapp-db-2025-06-01T02-00-00.backup
   options:
-    verifyBackup: true
     replaceExisting: true
     tempStorage:
       size: "50Gi"
   force: true
-  stopCluster: true   # ignored on cluster targets (Cypher path); honored on standalone
+  stopCluster: true   # ignored on cluster targets (Cypher path); required on standalone
 ```
 
 **Best for:** Cross-cluster recovery, disaster recovery from a known directory in storage (no `Neo4jBackup` CR available in this namespace).
@@ -881,9 +909,8 @@ spec:
     type: backup
     backupRef: standalone-backup
   options:
-    verifyBackup: true
     replaceExisting: true
-  stopCluster: true
+  stopCluster: true   # required: with false the operator refuses while pods are running
 ```
 
 ---
@@ -902,7 +929,7 @@ kind: Neo4jRestore
 metadata:
   name: pitr-restore
 spec:
-  clusterRef: recovery-cluster
+  clusterRef: recovery-standalone   # Neo4jEnterpriseStandalone (PITR is standalone-only)
   databaseName: production-db
   source:
     type: pitr
@@ -919,7 +946,6 @@ spec:
           provider: aws
           credentialsSecretRef: aws-backup-creds
   options:
-    verifyBackup: true
     replaceExisting: true
   force: true
   stopCluster: true
@@ -936,7 +962,7 @@ kind: Neo4jRestore
 metadata:
   name: pitr-storage-restore
 spec:
-  clusterRef: disaster-recovery
+  clusterRef: dr-standalone   # Neo4jEnterpriseStandalone (PITR is standalone-only)
   databaseName: critical-app
   source:
     type: pitr
@@ -960,7 +986,7 @@ spec:
           provider: gcp
           credentialsSecretRef: gcs-backup-creds
   options:
-    verifyBackup: true
+    replaceExisting: true
   force: true
   stopCluster: true
 ```
@@ -971,6 +997,13 @@ spec:
 
 Pre and post-restore hooks execute custom operations at key points in the restore lifecycle.
 
+**Hooks run only for `Neo4jEnterpriseStandalone` targets** (the Job-based restore path) — cluster targets restore via Cypher and never invoke hooks. The ordering is:
+
+1. **preRestore** hooks — run **before the instance is stopped**, so Cypher hooks like `CALL db.checkpoint()` hit a live Bolt endpoint.
+2. Instance scale-down (`stopCluster: true`), restore Job, scale-up.
+3. Automatic `CREATE DATABASE` / `START DATABASE`.
+4. **postRestore** hooks — run **after the restored database is registered and started**, so Cypher hooks like `CALL db.awaitIndexes()` target a live database.
+
 #### Restore with Cypher Hooks
 
 ```yaml
@@ -979,13 +1012,12 @@ kind: Neo4jRestore
 metadata:
   name: restore-with-hooks
 spec:
-  clusterRef: my-cluster
+  clusterRef: my-standalone   # Neo4jEnterpriseStandalone — hooks are standalone-only
   databaseName: myapp
   source:
     type: backup
     backupRef: production-backup
   options:
-    verifyBackup: true
     replaceExisting: true
     preRestore:
       cypherStatements:
@@ -998,9 +1030,9 @@ spec:
   stopCluster: true
 ```
 
-Note: The operator still automatically runs `CREATE DATABASE` or `START DATABASE` after the restore Job and post-restore hooks complete.
-
 #### Restore with Job Hooks
+
+Hook Jobs run in their own pods — anything that talks to Neo4j (e.g. `cypher-shell`) must address the instance's service explicitly (`-a neo4j://<standalone>-service:7687`), or it will try to connect to localhost inside the hook pod.
 
 ```yaml
 apiVersion: neo4j.neo4j.com/v1beta1
@@ -1008,13 +1040,12 @@ kind: Neo4jRestore
 metadata:
   name: restore-with-job-hooks
 spec:
-  clusterRef: staging-cluster
+  clusterRef: staging-standalone   # Neo4jEnterpriseStandalone — hooks are standalone-only
   databaseName: app-data
   source:
     type: backup
     backupRef: staging-backup
   options:
-    verifyBackup: true
     preRestore:
       job:
         template:
@@ -1023,8 +1054,8 @@ spec:
             command: ["/bin/sh"]
             args: ["-c", "/scripts/pre-restore.sh"]
             env:
-              - name: CLUSTER_NAME
-                value: staging-cluster
+              - name: INSTANCE_NAME
+                value: staging-standalone
               - name: DATABASE_NAME
                 value: app-data
         timeout: "10m"
@@ -1037,7 +1068,7 @@ spec:
             args: ["-c", "/scripts/validate-restore.sh"]
             env:
               - name: NEO4J_URI
-                value: "neo4j://staging-cluster:7687"
+                value: "neo4j://staging-standalone-service:7687"
               - name: NEO4J_PASSWORD
                 valueFrom:
                   secretKeyRef:
@@ -1060,10 +1091,13 @@ kubectl get neo4jbackups
 # Get detailed backup status
 kubectl describe neo4jbackup daily-backup
 
-# View backup history
+# View backup history — for SCHEDULED backups this is the authoritative record:
+# they stay in phase "Scheduled" (never "Completed") and don't set
+# status.lastSuccessTime; each run appends here instead.
 kubectl get neo4jbackup daily-backup -o jsonpath='{.status.history}'
 
-# Check backup job logs
+# Check backup job logs (one-shot: <name>-backup; scheduled runs: use the
+# history entry's runID, which is the Job name)
 kubectl logs job/daily-backup-backup
 ```
 

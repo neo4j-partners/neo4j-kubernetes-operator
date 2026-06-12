@@ -14,25 +14,26 @@ kubectl get jobs -l app.kubernetes.io/component=backup
 
 **Diagnosis:**
 ```bash
-# Check backup resource status
+# Check backup resource status — status.phase tells you which stage it's in:
+#   Invalid   → spec failed validation (message has the details)
+#   Waiting   → target cluster missing or not Ready yet (transient)
+#   Pending   → transient precondition (chain parent missing, chain busy,
+#               sharded preflight couldn't connect) — retried automatically
+#   Failed    → terminal for one-shot backups
 kubectl get neo4jbackup
 kubectl describe neo4jbackup production-backup
 
 # Check operator logs for backup controller errors
 kubectl logs -n neo4j-operator-system deployment/neo4j-operator-controller-manager | grep -i backup
-
-# Verify RBAC permissions (default backup job service account)
-kubectl auth can-i create pods/exec --as=system:serviceaccount:<namespace>:neo4j-backup-sa
 ```
 
 **Common Causes & Solutions:**
 
-1. **Missing RBAC Permissions**:
+1. **Missing ServiceAccount**:
    ```bash
-# The operator automatically creates RBAC - check if it exists
+# The operator automatically creates the backup ServiceAccount — check it exists.
+# (No Role/RoleBinding is created: the backup Job needs no Kubernetes API access.)
 kubectl get serviceaccount neo4j-backup-sa
-kubectl get role neo4j-backup-role
-kubectl get rolebinding neo4j-backup-rolebinding
 
 # If missing, trigger operator reconciliation with a no-op annotation change
 kubectl annotate neo4jenterprisecluster production-cluster troubleshooting.neo4j.com/reconcile="$(date +%s)" --overwrite
@@ -80,7 +81,7 @@ kubectl logs <cluster>-server-0 -c neo4j | grep -i backup
    # `kubectl exec` into any server pod to inspect the bound PVC.
    kubectl exec <cluster>-server-0 -c neo4j -- df -h /data
    ```
-   Increase `Neo4jBackup.spec.storage.pvc.size` (only effective when the operator provisions the PVC — see [bring-your-own PVC](../guides/backup_restore.md#pvc-ownership-auto-provision-vs-bring-your-own) otherwise) or set `retention.maxCount` / `retention.maxAge` to prune old runs.
+   Increase `Neo4jBackup.spec.storage.pvc.size` (only effective when the operator provisions the PVC — see [bring-your-own PVC](../guides/backup_restore.md#pvc-ownership-auto-provision-vs-bring-your-own) otherwise). Note that `retention.maxCount` / `retention.maxAge` do **not** prune continuously — PVC retention runs only when the Neo4jBackup CR is deleted, so a long-lived scheduled CR accumulates artifacts until then. Prune manually (or via a recurring `neo4j-admin backup aggregate`) if the volume fills.
 
 2. **Database Lock Issues**:
    ```bash
@@ -92,7 +93,7 @@ kubectl logs <cluster>-server-0 -c neo4j | grep -i backup
    ```
 
 3. **Memory Issues in Backup Process**:
-   Backup pod resources are fixed by the operator. Prefer off-peak scheduling, smaller backup scope, or larger cluster nodes.
+   Backup pod resources default to a Burstable profile (request 100m CPU / 512Mi, limit 1 CPU / 2Gi) but **are tunable** via `spec.options.resources` (standard `requests`/`limits`). Raise them for large databases; `spec.options.pageCache` controls the page-cache hint passed to `neo4j-admin`.
 
 ### Cloud Storage Issues
 
@@ -111,15 +112,16 @@ kubectl run backup-auth-check --rm -it --image=amazon/aws-cli --serviceaccount=<
 
 1. **IAM Role Issues**:
    ```yaml
-   # Use IAM roles for service accounts (IRSA) on the Neo4jBackup CR
+   # Use IAM roles for service accounts (IRSA) on the Neo4jBackup CR.
+   # The annotations land on the operator-managed neo4j-backup-sa.
    apiVersion: neo4j.neo4j.com/v1beta1
    kind: Neo4jBackup
    spec:
      cloud:
        provider: aws
        identity:
+         provider: aws
          autoCreate:
-           enabled: true
            annotations:
              eks.amazonaws.com/role-arn: "arn:aws:iam::123456789:role/Neo4jBackupRole"
    ```
@@ -163,14 +165,15 @@ kubectl run backup-auth-check --rm -it --image=google/cloud-sdk:slim --serviceac
 **Solutions:**
 ```yaml
 # Use Workload Identity on the Neo4jBackup CR
+# (annotations land on the operator-managed neo4j-backup-sa)
 apiVersion: neo4j.neo4j.com/v1beta1
 kind: Neo4jBackup
 spec:
   cloud:
     provider: gcp
     identity:
+      provider: gcp
       autoCreate:
-        enabled: true
         annotations:
           iam.gke.io/gcp-service-account: "neo4j-backup@project.iam.gserviceaccount.com"
 ```
@@ -211,10 +214,10 @@ kubectl get neo4jbackup production-backup -o yaml | grep -A 10 schedule
    ```
 
 2. **Timezone Issues**:
+   Schedules run in **UTC** — there is no `spec.timezone` field, and `TZ=`/`CRON_TZ=` prefixes in the schedule string are **rejected by the validator** (Kubernetes refuses timezone-embedded CronJob schedules). Convert your local time to UTC:
    ```yaml
    spec:
-     schedule: "0 2 * * *"
-     timezone: "UTC"          # Explicitly set timezone
+     schedule: "0 2 * * *"    # 02:00 UTC — adjust the hour for your timezone
    ```
 
 3. **Backup Window Conflicts**:
@@ -246,9 +249,13 @@ kubectl logs -n neo4j-operator-system deployment/neo4j-operator-controller-manag
    # Verify backup exists
    kubectl get neo4jbackup production-backup
 
-   # Check backup completion status
+   # Check backup completion status. One-shot backups reach phase "Completed";
+   # scheduled backups stay in "Scheduled" — check status.history for a
+   # Succeeded run instead.
    kubectl get neo4jbackup production-backup -o jsonpath='{.status.phase}'
+   kubectl get neo4jbackup production-backup -o jsonpath='{.status.history[*].status}'
    ```
+   A restore whose referenced backup has no Succeeded run yet sits in `Pending` ("Waiting for backup to complete") and retries automatically — that is not an error.
 
 2. **Target Cluster Issues**:
    ```bash
@@ -453,24 +460,26 @@ kubectl top pod production-cluster-server-0
 
 ### Backup Health Monitoring
 
-**Prometheus Metrics:**
+**Prometheus Metrics** (exported by the operator):
 ```yaml
-# Monitor backup success rate
-neo4j_backup_success_total
-neo4j_backup_failure_total
-neo4j_backup_duration_seconds
+# Backup attempts, labelled by result ("success"/"failure")
+neo4j_operator_backup_total{cluster_name, namespace, result}
+# Backup duration histogram
+neo4j_operator_backup_duration_seconds{cluster_name, namespace}
+# Size of the latest backup in bytes
+neo4j_operator_backup_size_bytes{cluster_name, namespace}
 
 # Alert rules
 groups:
 - name: neo4j-backup
   rules:
   - alert: BackupFailure
-    expr: increase(neo4j_backup_failure_total[24h]) > 0
+    expr: increase(neo4j_operator_backup_total{result="failure"}[24h]) > 0
     labels:
       severity: critical
     annotations:
       summary: "Neo4j backup failed"
-      description: "Backup for cluster {{ $labels.cluster }} failed"
+      description: "Backup for cluster {{ $labels.cluster_name }} failed"
 ```
 
 **Log Monitoring:**
@@ -498,18 +507,26 @@ BACKUP_NAME="production-backup"
 NAMESPACE="default"
 
 validate_backup() {
+  # One-shot backups reach phase "Completed". Scheduled backups stay in
+  # "Scheduled" forever — check status.history for a Succeeded run instead.
   local backup_status=$(kubectl get neo4jbackup $BACKUP_NAME -n $NAMESPACE -o jsonpath='{.status.phase}')
 
-  if [ "$backup_status" != "Succeeded" ]; then
+  if [ "$backup_status" = "Scheduled" ]; then
+    local last_run=$(kubectl get neo4jbackup $BACKUP_NAME -n $NAMESPACE \
+      -o jsonpath='{.status.history[-1].status}')
+    if [ "$last_run" != "Succeeded" ]; then
+      echo "❌ Last scheduled run not successful: ${last_run:-no runs yet}"
+      return 1
+    fi
+  elif [ "$backup_status" != "Completed" ]; then
     echo "❌ Backup failed or incomplete: $backup_status"
     return 1
   fi
 
-  # Check backup size
-  local backup_size=$(kubectl get neo4jbackup $BACKUP_NAME -n $NAMESPACE -o jsonpath='{.status.backupSize}')
-  if [ "$backup_size" -lt 1000000 ]; then  # Less than 1MB
-    echo "⚠️  Backup size suspiciously small: $backup_size bytes"
-  fi
+  # Check backup size (human-readable string such as "2.5GB", parsed by
+  # neo4j-admin output; empty if the Pod log couldn't be read)
+  local backup_size=$(kubectl get neo4jbackup $BACKUP_NAME -n $NAMESPACE -o jsonpath='{.status.stats.size}')
+  echo "ℹ️  Latest backup size: ${backup_size:-unknown}"
 
   echo "✅ Backup validation passed"
   return 0
