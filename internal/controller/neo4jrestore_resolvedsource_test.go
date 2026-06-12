@@ -216,3 +216,77 @@ func TestValidateRestore_MissingCRWithoutSnapshotPointsAtStorage(t *testing.T) {
 	require.Error(t, err)
 	assert.True(t, strings.Contains(err.Error(), "source.type=storage"))
 }
+
+// --- #227 pre-release items 3 + 4 ---
+
+// TestLatestSucceededArtifactFilename_NewestRunWithoutFilenameIsRefused pins
+// #227 item 3: when the MOST RECENT Succeeded run has no captured
+// ArtifactFilename, the resolver must error actionably instead of silently
+// falling through to an OLDER Succeeded run (which would restore stale data
+// under a green status).
+func TestLatestSucceededArtifactFilename_NewestRunWithoutFilenameIsRefused(t *testing.T) {
+	backup := backupCRForRestore("nightly", "default", false)
+	backup.Status.History = []neo4jv1beta1.BackupRun{
+		{RunID: "nightly-backup-new", Status: "Succeeded", ArtifactFilename: ""}, // newest — capture missed
+		{RunID: "nightly-backup-old", Status: "Succeeded", ArtifactFilename: "neo4j-2026-06-10T10-00-00.backup"},
+	}
+	r := newResolvedSourceReconciler(t, backup)
+
+	_, err := r.latestSucceededArtifactFilename(context.Background(), "nightly", "default")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "nightly-backup-new", "error must name the run whose filename capture missed")
+	assert.Contains(t, err.Error(), "type=storage", "error must point at the explicit-path escape hatch")
+	assert.NotContains(t, err.Error(), "2026-06-10", "must not leak/choose the older artifact")
+}
+
+// TestLatestSucceededArtifactFilename_NewestSucceededWins pins the happy path:
+// the newest Succeeded run's filename is returned even when older runs exist,
+// and Failed runs ahead of it are skipped.
+func TestLatestSucceededArtifactFilename_NewestSucceededWins(t *testing.T) {
+	backup := backupCRForRestore("nightly", "default", false)
+	backup.Status.History = []neo4jv1beta1.BackupRun{
+		{RunID: "nightly-backup-failed", Status: "Failed"},
+		{RunID: "nightly-backup-new", Status: "Succeeded", ArtifactFilename: "neo4j-2026-06-11T10-00-00.backup"},
+		{RunID: "nightly-backup-old", Status: "Succeeded", ArtifactFilename: "neo4j-2026-06-10T10-00-00.backup"},
+	}
+	r := newResolvedSourceReconciler(t, backup)
+
+	fn, err := r.latestSucceededArtifactFilename(context.Background(), "nightly", "default")
+	require.NoError(t, err)
+	assert.Equal(t, "neo4j-2026-06-11T10-00-00.backup", fn)
+}
+
+// TestUpdateRestoreStatus_PersistsCallerTimestamps pins #227 item 4: the
+// status writer refetches the CR, so StartTime/CompletionTime stamped on the
+// caller's in-memory object were silently dropped. They must be carried over —
+// and an already-persisted value must not be moved by a later requeue.
+func TestUpdateRestoreStatus_PersistsCallerTimestamps(t *testing.T) {
+	restore := restoreWithBackupRef("r1", "default", "nightly")
+	r := newResolvedSourceReconciler(t, restore)
+	ctx := context.Background()
+
+	start := metav1.NewTime(time.Now().Add(-2 * time.Minute).Truncate(time.Second))
+	completion := metav1.NewTime(time.Now().Truncate(time.Second))
+	restore.Status.StartTime = &start
+	restore.Status.CompletionTime = &completion
+
+	r.updateRestoreStatus(ctx, restore, StatusCompleted, "done")
+
+	persisted := &neo4jv1beta1.Neo4jRestore{}
+	require.NoError(t, r.Get(ctx, client.ObjectKeyFromObject(restore), persisted))
+	require.NotNil(t, persisted.Status.StartTime, "StartTime must survive the refetch-based status writer")
+	require.NotNil(t, persisted.Status.CompletionTime, "CompletionTime must survive the refetch-based status writer")
+	assert.True(t, persisted.Status.StartTime.Equal(&start))
+	assert.True(t, persisted.Status.CompletionTime.Equal(&completion))
+
+	// A second write with different in-memory stamps must NOT move the
+	// persisted timestamps (earlier persisted values win).
+	later := metav1.NewTime(time.Now().Add(time.Hour))
+	restore.Status.StartTime = &later
+	restore.Status.CompletionTime = &later
+	r.updateRestoreStatus(ctx, restore, StatusCompleted, "done again")
+
+	require.NoError(t, r.Get(ctx, client.ObjectKeyFromObject(restore), persisted))
+	assert.True(t, persisted.Status.StartTime.Equal(&start), "persisted StartTime must not be moved by a requeue")
+	assert.True(t, persisted.Status.CompletionTime.Equal(&completion), "persisted CompletionTime must not be moved by a requeue")
+}

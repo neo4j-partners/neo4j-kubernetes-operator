@@ -200,7 +200,7 @@ Backup retention configuration.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `maxAge` | `string` | ❌ | Maximum age of artifacts to retain. Accepted units: `d` (days), `h` (hours), `m` (minutes), `s` (seconds) — e.g. `"30d"`, `"168h"`, `"90m"`. `"4w"` is **rejected** by the validator. |
+| `maxAge` | `string` | ❌ | Maximum age of artifacts to retain. A **single** unit of `d` (days), `h` (hours), `m` (minutes), or `s` (seconds) — e.g. `"30d"`, `"168h"`, `"90m"`. Compound values (`"1h30m"`) and `"4w"` are **rejected** by the validator (the runtime applies exactly what validates). |
 | `maxCount` | `int32` | ❌ | Maximum number of `.backup` artifacts to retain |
 | `deletePolicy` | `string` | ❌ | `"Delete"` (default). `"Archive"` is **RESERVED — currently a no-op** (no archival logic exists; accepted for backward compatibility). |
 

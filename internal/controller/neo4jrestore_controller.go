@@ -2913,6 +2913,11 @@ func (r *Neo4jRestoreReconciler) latestSucceededArtifactFilename(ctx context.Con
 			if fn := backup.Status.History[i].ArtifactFilename; fn != "" {
 				return fn, nil
 			}
+			// The NEWEST Succeeded run has no captured filename (Pod-log
+			// capture is best-effort, rule 67). Refusing to fall through to
+			// an OLDER run — that would silently restore stale data under a
+			// green status (#227 item 3). Fail actionably instead.
+			return "", fmt.Errorf("the most recent Succeeded run %q of Neo4jBackup %q has no captured ArtifactFilename (Pod-log capture is best-effort and can miss) — restoring an older run silently is refused; restore via type=storage with source.backupPath pointing at the exact .backup file, or re-run the backup", backup.Status.History[i].RunID, backupRef)
 		}
 	}
 	return "", fmt.Errorf("Neo4jBackup %q has no Succeeded run with a captured ArtifactFilename — re-run the backup with a recent operator version (Pod-log capture required for cluster restores), or copy the .backup file to storage and restore via type=storage with source.backupPath pointing at the file", backupRef)
@@ -3105,6 +3110,17 @@ func (r *Neo4jRestoreReconciler) updateRestoreStatus(ctx context.Context, restor
 		latest.Status.Phase = phase
 		latest.Status.Message = message
 		latest.Status.ObservedGeneration = latest.Generation
+		// Carry the caller's timestamps: callers stamp StartTime/CompletionTime
+		// on their (possibly stale) in-memory object before funneling through
+		// this writer, which refetches — without this copy the stamps were
+		// silently dropped on the cluster Cypher path (#227 item 4). Earlier
+		// persisted values win so a requeue can't move a timestamp.
+		if restore.Status.StartTime != nil && latest.Status.StartTime == nil {
+			latest.Status.StartTime = restore.Status.StartTime
+		}
+		if restore.Status.CompletionTime != nil && latest.Status.CompletionTime == nil {
+			latest.Status.CompletionTime = restore.Status.CompletionTime
+		}
 		condStatus, condReason := PhaseToConditionStatus(phase)
 		SetReadyCondition(&latest.Status.Conditions, latest.Generation, condStatus, condReason, message)
 		return r.Status().Update(ctx, latest)

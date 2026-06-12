@@ -599,7 +599,8 @@ func TestIsValidMaxAge(t *testing.T) {
 		{"24h", true},
 		{"90m", true},
 		{"45s", true},
-		{"1h30m", true}, // valid Go duration
+		{"1h30m", false}, // compound durations rejected — parseFindTimeArg can't apply them (#227 item 8)
+		{"1.5h", false},  // fractional Go duration — same reason
 		{"7days", false},
 		{"0d", false},
 		{"abc", false},

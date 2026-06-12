@@ -723,7 +723,7 @@ spec:
 >   - **S3**: [S3 Lifecycle Rules](https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lifecycle-mgmt.html)
 >   - **GCS**: [Object Lifecycle Management](https://cloud.google.com/storage/docs/lifecycle)
 >   - **Azure**: [Blob Lifecycle Management](https://learn.microsoft.com/en-us/azure/storage/blobs/lifecycle-management-overview)
-> - **PVC storage**: retention is enforced by a cleanup Job that runs **only when the Neo4jBackup CR is deleted** — it is *not* a continuous pruning loop. The Job prunes `*.backup` **files** in this CR's chain directory only, oldest-first by mtime, and **always keeps the newest artifact**. `maxAge` accepts `d`/`h`/`m`/`s` units (`"4w"` is rejected). `deletePolicy: Archive` is a reserved no-op.
+> - **PVC storage**: retention is enforced by a cleanup Job that runs **only when the Neo4jBackup CR is deleted** — it is *not* a continuous pruning loop. The Job prunes `*.backup` **files** in this CR's chain directory only, oldest-first by mtime, and **always keeps the newest artifact**. `maxAge` accepts a **single** `d`/`h`/`m`/`s` unit (`"30d"`, `"24h"`; compound values like `"1h30m"` and `"4w"` are rejected). `deletePolicy: Archive` is a reserved no-op.
 > - **DIFF caveat**: filenames don't encode FULL vs DIFF, so pruning can orphan diffs whose parent FULL ages out — the operator emits a `BackupRetentionCaveat` warning event when this applies. Prefer `backupType: FULL` on CRs that use retention.
 
 #### Weekly Backup with Long Retention
