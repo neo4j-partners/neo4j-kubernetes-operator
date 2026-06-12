@@ -60,6 +60,13 @@ jobs:
     - name: Validate build
       run: make build
 
+    # Belt-and-braces: tags are normally cut from a green main, but a tag on
+    # any other commit would bypass the per-PR drift gate entirely — and a
+    # release with stale generated artifacts ships a chart/bundle that doesn't
+    # match the code.
+    - name: Verify generated artifacts in sync
+      run: make check-drift
+
     - name: Generate manifests
       run: make manifests
 
@@ -73,10 +80,41 @@ jobs:
         path: config/crd/bases/
         retention-days: 1
 
+  # The full install/upgrade/uninstall matrix on Kind (scripts/
+  # install-confidence.sh). Blocking by design: a release cannot be tagged
+  # with a broken helm install, CRD-refresh upgrade, or uninstall path.
+  # Runs in parallel with validate-release; adds ~10-15 min to the release
+  # only on the critical path if it's the slower of the two.
+  install-confidence:
+    name: Install Confidence Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v6
+
+    - name: Setup Go environment
+      uses: ./.github/actions/setup-go
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Install kind
+      run: go install sigs.k8s.io/kind@v0.24.0
+
+    - name: Set up Helm
+      uses: azure/setup-helm@v5
+      with:
+        version: 3.16.0
+
+    - name: Run install-confidence matrix
+      run: make install-confidence
+
   build-and-push:
     name: Build and Push Container
     runs-on: ubuntu-latest
-    needs: [validate-release, determine-tag]
+    needs: [validate-release, install-confidence, determine-tag]
     permissions:
       contents: read
       packages: write
