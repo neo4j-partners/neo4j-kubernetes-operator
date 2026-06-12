@@ -1594,6 +1594,10 @@ func (r *Neo4jEnterpriseStandaloneReconciler) createService(standalone *neo4jv1b
 				"app.kubernetes.io/instance":   standalone.Name,
 				"app.kubernetes.io/component":  "standalone",
 				"app.kubernetes.io/managed-by": "neo4j-operator",
+				// Selected by the ServiceMonitor — present ONLY on the
+				// canonical Service so Prometheus doesn't discover the
+				// deprecated alias too and double-scrape the pod (#228).
+				"neo4j.com/metrics-endpoint": "true",
 			},
 		},
 		Spec: corev1.ServiceSpec{
@@ -2394,6 +2398,12 @@ func (r *Neo4jEnterpriseStandaloneReconciler) reconcileServiceMonitor(ctx contex
 			"matchLabels": map[string]any{
 				"app.kubernetes.io/name":     "neo4j",
 				"app.kubernetes.io/instance": standalone.Name,
+				// Canonical client Service only — the deprecated
+				// {name}-service alias carries the same name/instance
+				// labels (and the metrics port for legacy static scrape
+				// configs), so without this Prometheus would scrape the
+				// pod twice (#228).
+				"neo4j.com/metrics-endpoint": "true",
 			},
 		},
 		"endpoints": []map[string]any{
