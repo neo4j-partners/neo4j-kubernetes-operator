@@ -715,12 +715,22 @@ func runManager(ctx context.Context, settings managerSettings, selection watchNa
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		return fmt.Errorf("unable to set up health check: %w", err)
 	}
-	if err := mgr.AddReadyzCheck("readyz", createReadinessCheck(settings.skipCacheWait)); err != nil {
+
+	// started closes when the manager runs our signal Runnable — which
+	// controller-runtime does only after every informer cache has synced.
+	// It drives both the readiness probe (readyz genuinely reflects cache
+	// sync instead of always returning OK) and the startup-feedback loop's
+	// exit condition (#236: the loop previously ticked forever).
+	started := newManagerStartedSignal()
+	if err := mgr.Add(started); err != nil {
+		return fmt.Errorf("unable to add startup signal runnable: %w", err)
+	}
+	if err := mgr.AddReadyzCheck("readyz", createReadinessCheck(settings.skipCacheWait, started.ch)); err != nil {
 		return fmt.Errorf("unable to set up ready check: %w", err)
 	}
 
 	setupLog.Info("starting manager")
-	go startupFeedback(ctx, settings.operatorMode, settings.metricsAddr, settings.probeAddr, settings.skipCacheWait)
+	go startupFeedback(ctx, settings.operatorMode, settings.metricsAddr, settings.probeAddr, settings.skipCacheWait, started.ch)
 
 	if settings.skipCacheWait {
 		setupLog.Info("skipping cache sync wait - starting immediately")
@@ -882,27 +892,57 @@ func getSelectiveResourceCache() map[client.Object]cache.ByObject {
 	}
 }
 
-// createReadinessCheck creates a readiness check that can optionally skip cache sync
-func createReadinessCheck(skipCacheWait bool) healthz.Checker {
+// managerStartedSignal is a manager Runnable whose only job is to close its
+// channel when the manager starts it. controller-runtime starts plain
+// (non-leader-election) runnables only AFTER every informer cache has synced,
+// so the closed channel is a faithful "caches synced, manager running"
+// signal. NeedLeaderElection()=false means standby replicas (leader election
+// lost/pending) also report Ready — a standby is healthy, just not leading.
+type managerStartedSignal struct{ ch chan struct{} }
+
+func newManagerStartedSignal() *managerStartedSignal {
+	return &managerStartedSignal{ch: make(chan struct{})}
+}
+
+func (s *managerStartedSignal) Start(ctx context.Context) error {
+	close(s.ch)
+	<-ctx.Done() // block until shutdown so the runnable group treats us as long-running
+	return nil
+}
+
+func (s *managerStartedSignal) NeedLeaderElection() bool { return false }
+
+// createReadinessCheck creates a readiness check that can optionally skip cache sync.
+//
+// The comprehensive variant previously logged two INFO lines per kubelet
+// probe (every ~10s, forever) and unconditionally returned nil — log spam
+// with no verification (#236). It now returns an error until the manager
+// has actually started (caches synced) and is silent on the happy path.
+func createReadinessCheck(skipCacheWait bool, started <-chan struct{}) healthz.Checker {
 	if skipCacheWait {
 		setupLog.Info("using simplified readiness check (skipCacheWait=true)")
 		return healthz.Ping
 	}
 
-	setupLog.Info("using comprehensive readiness check with cache sync verification")
+	setupLog.Info("using readiness check gated on cache sync")
 	return func(_ *http.Request) error {
-		// Enhanced readiness check that provides detailed logging
-		setupLog.Info("readiness check triggered", "timestamp", time.Now().Format(time.RFC3339))
-
-		// Standard readiness check that waits for cache sync
-		// The controller-runtime manager will handle cache sync status internally
-		setupLog.Info("readiness check completed successfully")
-		return nil
+		select {
+		case <-started:
+			return nil
+		default:
+			return fmt.Errorf("manager still starting: informer caches not yet synced")
+		}
 	}
 }
 
-// startupFeedback provides startup feedback based on mode and cache strategy
-func startupFeedback(ctx context.Context, mode OperatorMode, metricsAddr, probeAddr string, skipCacheWait bool) {
+// startupFeedback provides startup feedback based on mode and cache strategy.
+//
+// The waiting loops exit as soon as `started` closes (the manager signal
+// runnable runs once caches are synced) with a single "startup complete"
+// line. Previously the production loop had NO exit condition besides ctx
+// cancellation and logged "still waiting for startup to complete" every 15s
+// for the operator's entire lifetime (#236).
+func startupFeedback(ctx context.Context, mode OperatorMode, metricsAddr, probeAddr string, skipCacheWait bool, started <-chan struct{}) {
 	defer func() {
 		if r := recover(); r != nil {
 			setupLog.Error(nil, "startup feedback goroutine panicked", "panic", r)
@@ -910,6 +950,13 @@ func startupFeedback(ctx context.Context, mode OperatorMode, metricsAddr, probeA
 	}()
 
 	setupLog.Info("starting startup feedback goroutine", "mode", mode, "skipCacheWait", skipCacheWait)
+
+	logStarted := func() {
+		setupLog.Info("manager startup complete - informer caches synced",
+			"metrics_endpoint", "http://localhost"+metricsAddr+"/metrics",
+			"health_endpoint", "http://localhost"+probeAddr+"/healthz",
+			"ready_endpoint", "http://localhost"+probeAddr+"/readyz")
+	}
 
 	switch mode {
 	case ProductionMode:
@@ -919,8 +966,13 @@ func startupFeedback(ctx context.Context, mode OperatorMode, metricsAddr, probeA
 			}
 			setupLog.Info("manager starting with cache optimizations")
 		} else {
-			if !sleepWithContext(ctx, 5*time.Second) {
+			select {
+			case <-started:
+				logStarted()
 				return
+			case <-ctx.Done():
+				return
+			case <-time.After(5 * time.Second):
 			}
 			setupLog.Info("manager is starting - waiting for informer caches to sync (this may take 30-60 seconds)")
 
@@ -931,6 +983,9 @@ func startupFeedback(ctx context.Context, mode OperatorMode, metricsAddr, probeA
 			for {
 				select {
 				case <-ctx.Done():
+					return
+				case <-started:
+					logStarted()
 					return
 				case <-ticker.C:
 					attempts++
@@ -973,6 +1028,9 @@ func startupFeedback(ctx context.Context, mode OperatorMode, metricsAddr, probeA
 			for {
 				select {
 				case <-ctx.Done():
+					return
+				case <-started:
+					logStarted()
 					return
 				case <-ticker.C:
 					attempts++

@@ -4,6 +4,7 @@ import (
 	"context"
 	"reflect"
 	"testing"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -94,5 +95,87 @@ func TestWatchNamespaceSelectionEqual(t *testing.T) {
 	}
 	if watchNamespaceSelectionEqual(left, watchNamespaceSelection{namespaces: []string{"b", "c"}}) {
 		t.Fatalf("expected selections to differ")
+	}
+}
+
+// --- #236: startup feedback must terminate; readyz must reflect cache sync ---
+
+func TestCreateReadinessCheck_GatedOnStartedChannel(t *testing.T) {
+	started := make(chan struct{})
+	check := createReadinessCheck(false, started)
+
+	if err := check(nil); err == nil {
+		t.Fatal("readyz must fail before the manager has started (caches not synced)")
+	}
+	close(started)
+	if err := check(nil); err != nil {
+		t.Fatalf("readyz must succeed after the started signal: %v", err)
+	}
+}
+
+func TestCreateReadinessCheck_SkipCacheWaitIsPing(t *testing.T) {
+	started := make(chan struct{}) // never closed
+	check := createReadinessCheck(true, started)
+	if err := check(nil); err != nil {
+		t.Fatalf("skipCacheWait readiness must be unconditional Ping: %v", err)
+	}
+}
+
+func TestManagerStartedSignal_ClosesOnStartAndBlocks(t *testing.T) {
+	s := newManagerStartedSignal()
+	if s.NeedLeaderElection() {
+		t.Fatal("signal must opt out of leader election so standby replicas report Ready")
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- s.Start(ctx) }()
+
+	select {
+	case <-s.ch:
+		// closed promptly — good
+	case <-time.After(2 * time.Second):
+		t.Fatal("started channel was not closed by Start")
+	}
+
+	select {
+	case <-done:
+		t.Fatal("Start must block until context cancellation (long-running runnable)")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Start returned error on shutdown: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Start did not return after context cancellation")
+	}
+}
+
+// TestStartupFeedback_ExitsWhenStarted pins the #236 fix: the production-mode
+// feedback loop must RETURN once the started signal fires instead of ticking
+// "still waiting for startup to complete" for the operator's lifetime.
+func TestStartupFeedback_ExitsWhenStarted(t *testing.T) {
+	started := make(chan struct{})
+	close(started) // manager already started — feedback must exit immediately
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	returned := make(chan struct{})
+	go func() {
+		startupFeedback(ctx, ProductionMode, ":8080", ":8081", false, started)
+		close(returned)
+	}()
+
+	select {
+	case <-returned:
+		// exited via the started signal, not the ctx timeout — proven by
+		// returning well before the 3s ctx deadline
+	case <-time.After(2 * time.Second):
+		t.Fatal("startupFeedback did not exit after the started signal (the #236 infinite loop)")
 	}
 }
