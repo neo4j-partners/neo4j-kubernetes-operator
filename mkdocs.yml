@@ -113,11 +113,13 @@ nav:
 
   - Configure & Deploy:
       - Configuration: user_guide/configuration.md
+      - Examples Catalog: user_guide/examples_gallery.md
       - Resource Sizing: user_guide/guides/resource_sizing.md
       - Clustering: user_guide/clustering.md
       - Topology Placement: user_guide/topology_placement.md
       - Property Sharding: user_guide/property_sharding.md
       - External Access (LB / NodePort / Ingress / Route): user_guide/external_access.md
+      - Plugin Management: user_guide/guides/plugins.md
       - Seed URI: user_guide/guides/seed-uri.md
       - Aura Fleet Management: user_guide/aura_fleet_management.md
       - MCP Client Setup: user_guide/guides/mcp_client_setup.md
