@@ -24,6 +24,7 @@ import (
 	"time"
 
 	cron "github.com/robfig/cron/v3"
+	apivalidation "k8s.io/apimachinery/pkg/api/validation"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 
 	neo4jv1beta1 "github.com/priyolahiri/neo4j-kubernetes-operator/api/v1beta1"
@@ -140,6 +141,30 @@ func (v *BackupValidator) Validate(backup *neo4jv1beta1.Neo4jBackup) field.Error
 		))
 	}
 
+	// chainFromBackup names another Neo4jBackup CR and feeds the Job command's
+	// path segment — constrain it to a DNS-1123 label (#219). The CronJob path
+	// builds its command before validateChainParent's existence check, so a
+	// shell-metacharacter value must be rejected up front.
+	if backup.Spec.ChainFromBackup != "" {
+		if msgs := apivalidation.NameIsDNSSubdomain(backup.Spec.ChainFromBackup, false); len(msgs) > 0 {
+			allErrs = append(allErrs, field.Invalid(
+				field.NewPath("spec", "chainFromBackup"),
+				backup.Spec.ChainFromBackup,
+				"must be a valid resource name: "+msgs[0],
+			))
+		}
+	}
+
+	// tempPath is interpolated into the Job's /bin/sh -c command (#219).
+	if backup.Spec.Options != nil && backup.Spec.Options.TempPath != "" {
+		tp := backup.Spec.Options.TempPath
+		if !strings.HasPrefix(tp, "/") || !storageShellSafe.MatchString(tp) {
+			allErrs = append(allErrs, field.Invalid(
+				field.NewPath("spec", "options", "tempPath"), tp,
+				"must be an absolute path containing only letters, digits, '.', '_', '-' and '/'"))
+		}
+	}
+
 	return allErrs
 }
 
@@ -247,8 +272,30 @@ func (v *BackupValidator) validateStorageConfiguration(storage *neo4jv1beta1.Sto
 		))
 	}
 
+	// Charset fail-fast for fields interpolated into the backup Job's
+	// `/bin/sh -c` command (#219). The command builder also shell-quotes
+	// them (defense-in-depth); rejecting suspicious input here surfaces a
+	// clear phase=Invalid instead of a runtime neo4j-admin error.
+	if storage.Bucket != "" && !storageShellSafe.MatchString(storage.Bucket) {
+		allErrs = append(allErrs, field.Invalid(
+			storagePath.Child("bucket"), storage.Bucket,
+			"bucket may only contain letters, digits, '.', '_', '-' and '/'"))
+	}
+	if storage.Path != "" && !storageShellSafe.MatchString(storage.Path) {
+		allErrs = append(allErrs, field.Invalid(
+			storagePath.Child("path"), storage.Path,
+			"path may only contain letters, digits, '.', '_', '-' and '/'"))
+	}
+
 	return allErrs
 }
+
+// storageShellSafe is the allowlist for storage/bucket/path/tempPath segments
+// that end up inside the backup Job's shell command. Intentionally
+// conservative: covers S3/GCS bucket grammar, Azure storage-account/container
+// (incl. the account/container '/' form) and POSIX paths, while excluding
+// every shell metacharacter.
+var storageShellSafe = regexp.MustCompile(`^[A-Za-z0-9._/\-]+$`)
 
 // validateStorageType validates storage type for Neo4j 5.26+ features
 func (v *BackupValidator) validateStorageType(storageType string) error {

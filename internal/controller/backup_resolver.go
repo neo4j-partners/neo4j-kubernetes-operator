@@ -89,5 +89,15 @@ func ResolveBackupRef(ctx context.Context, c client.Reader, backupRef, namespace
 			resolved.Cloud = cb
 		}
 	}
+	// Mirror the WRITE side's path defaulting (buildToPath): an empty
+	// storage.path means the backup Job wrote to
+	// "<scheme>://<bucket>/backups/<chain>/", so the resolved location must
+	// carry "backups" too — otherwise every consumer (restore --from-path,
+	// cluster seedURI, sharded seed) reads "<scheme>://<bucket>/<chain>/"
+	// and the restore fails file-not-found (#218). PVC consumers ignore
+	// Path, so unconditional defaulting is safe.
+	if resolved.Path == "" {
+		resolved.Path = defaultBackupStoragePath
+	}
 	return resolved, succeeded.BackupsPath, nil
 }

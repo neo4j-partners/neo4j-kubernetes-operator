@@ -10,6 +10,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 
 	neo4jv1beta1 "github.com/priyolahiri/neo4j-kubernetes-operator/api/v1beta1"
 )
@@ -35,7 +36,7 @@ var _ = Describe("Backup API Tests", func() {
 				Spec: neo4jv1beta1.Neo4jBackupSpec{
 					Target:  neo4jv1beta1.BackupTarget{Kind: "Cluster", Name: "test-cluster"},
 					Storage: neo4jv1beta1.StorageLocation{Type: "pvc", Path: "/backups/full"},
-					Options: &neo4jv1beta1.BackupOptions{BackupType: "FULL", Compress: true, PageCache: "2G"},
+					Options: &neo4jv1beta1.BackupOptions{BackupType: "FULL", Compress: ptr.To(true), PageCache: "2G"},
 				},
 			}
 			Expect(k8sClient.Create(ctx, backup)).To(Succeed())
@@ -72,7 +73,7 @@ var _ = Describe("Backup API Tests", func() {
 					Cloud:   &neo4jv1beta1.CloudBlock{Provider: "aws"},
 					Options: &neo4jv1beta1.BackupOptions{
 						BackupType: "AUTO",
-						Compress:   true,
+						Compress:   ptr.To(true),
 					},
 				},
 			}

@@ -177,6 +177,14 @@ func (r *Neo4jBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	// the check lived inside handleScheduledBackup, so suspend=true was a no-op
 	// for one-time backups (issue #116).
 	if backup.Spec.Suspend {
+		// Propagate the suspend to the CronJob itself (#217): returning early
+		// here without touching it left Kubernetes spawning scheduled Jobs
+		// while the CR reported "Suspended". Resume is handled by
+		// createBackupCronJob, which always asserts suspend=false.
+		if err := r.suspendBackupCronJob(ctx, backup); err != nil {
+			logger.Error(err, "Failed to suspend backup CronJob")
+			return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
+		}
 		r.updateBackupStatus(ctx, backup, "Suspended", "Backup is suspended")
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
 	}
@@ -415,8 +423,16 @@ func jobToBackupRun(job *batchv1.Job, backupsPath string) (neo4jv1beta1.BackupRu
 	}
 	run.CompletionTime = job.Status.CompletionTime
 
+	// Terminal state comes from Job CONDITIONS, not pod counters. The Job has
+	// BackoffLimit=3, so job.Status.Failed counts failed pod ATTEMPTS — it is
+	// >0 while the Job is still retrying a transient failure (node eviction,
+	// image-pull blip). Recording "Failed" at that point is permanent: the
+	// run is deduped by RunID and never corrected when a retry succeeds, so
+	// an eventually-successful run stays Failed in history and
+	// ResolveBackupRef skips it, breaking backupRef restores/seeds. Mirrors
+	// the restore controller's condition-based check.
 	switch {
-	case job.Status.Succeeded > 0:
+	case jobConditionTrue(job, batchv1.JobComplete) || job.Status.Succeeded > 0:
 		run.Status = "Succeeded"
 		if job.Status.StartTime != nil && job.Status.CompletionTime != nil {
 			run.Stats = &neo4jv1beta1.BackupStats{
@@ -424,10 +440,11 @@ func jobToBackupRun(job *batchv1.Job, backupsPath string) (neo4jv1beta1.BackupRu
 			}
 		}
 		return run, true
-	case job.Status.Failed > 0:
+	case jobConditionTrue(job, batchv1.JobFailed):
 		run.Status = "Failed"
 		return run, true
 	default:
+		// Pods may have failed attempts, but the Job is still retrying.
 		return run, false
 	}
 }
@@ -465,6 +482,16 @@ func backupRunAlreadyRecorded(history []neo4jv1beta1.BackupRun, run neo4jv1beta1
 
 func (r *Neo4jBackupReconciler) handleOneTimeBackup(ctx context.Context, backup *neo4jv1beta1.Neo4jBackup, cluster *neo4jv1beta1.Neo4jEnterpriseCluster) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
+
+	// If this CR previously had spec.schedule and the user removed it, the
+	// CronJob must go with it — otherwise it keeps firing scheduled backups
+	// while the CR claims to be a one-shot (#217). Cheap NotFound no-op in
+	// the common case. Runs before the terminal guard so a Completed CR
+	// still sheds a leftover CronJob.
+	if err := r.cleanupOrphanedCronJob(ctx, backup); err != nil {
+		logger.Error(err, "Failed to delete orphaned backup CronJob")
+		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
+	}
 
 	// One-time backups are terminal once Completed or Failed. Without this
 	// guard the controller would re-create a fresh Job every time the
@@ -524,8 +551,13 @@ func (r *Neo4jBackupReconciler) handleOneTimeBackup(ctx context.Context, backup 
 func (r *Neo4jBackupReconciler) handleExistingBackupJob(ctx context.Context, backup *neo4jv1beta1.Neo4jBackup, job *batchv1.Job) (ctrl.Result, error) {
 	backupM := metrics.NewBackupMetrics(backup.Name, backup.Namespace)
 
-	// Check job status
-	if job.Status.Succeeded > 0 {
+	// Terminal state from Job CONDITIONS, not pod counters: with
+	// BackoffLimit=3, job.Status.Failed counts failed pod attempts and is >0
+	// while the Job is still retrying a transient failure. Flipping the CR to
+	// Failed at that point is PERMANENT (the one-shot terminal guard never
+	// re-enters), so the Job's eventual success would never be recorded.
+	// Mirrors the restore controller's condition-based check.
+	if jobConditionTrue(job, batchv1.JobComplete) || job.Status.Succeeded > 0 {
 		// Backup completed successfully
 		r.updateBackupStatus(ctx, backup, "Completed", "Backup completed successfully")
 		r.Recorder.Event(backup, corev1.EventTypeNormal, EventReasonBackupCompleted, "Backup completed successfully")
@@ -537,12 +569,13 @@ func (r *Neo4jBackupReconciler) handleExistingBackupJob(ctx context.Context, bac
 		return ctrl.Result{}, nil
 	}
 
-	if job.Status.Failed > 0 {
-		// Backup failed — flip phase AND record the failed run in
-		// status.history (recheck gap 2). Before this, failed one-shot
-		// Jobs flipped phase=Failed but never appeared in history, so the
-		// only signal of past failures was the metrics counter and the
-		// transient Job object (which TTL'd out after 5 minutes).
+	if jobConditionTrue(job, batchv1.JobFailed) {
+		// Backup failed terminally (retry budget exhausted) — flip phase AND
+		// record the failed run in status.history (recheck gap 2). Before
+		// this, failed one-shot Jobs flipped phase=Failed but never appeared
+		// in history, so the only signal of past failures was the metrics
+		// counter and the transient Job object (which TTL'd out after 5
+		// minutes).
 		r.updateBackupStatus(ctx, backup, "Failed", "Backup job failed")
 		r.Recorder.Event(backup, corev1.EventTypeWarning, EventReasonBackupFailed, "Backup job failed")
 		backupM.RecordBackup(ctx, false, jobDuration(job), 0)
@@ -550,7 +583,7 @@ func (r *Neo4jBackupReconciler) handleExistingBackupJob(ctx context.Context, bac
 		return ctrl.Result{}, nil
 	}
 
-	// Job is still running
+	// Job is still running (possibly retrying a failed pod attempt).
 	r.updateBackupStatus(ctx, backup, "Running", "Backup job is running")
 	return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
 }
@@ -883,6 +916,43 @@ func (r *Neo4jBackupReconciler) createBackupJob(ctx context.Context, backup *neo
 	return job, nil
 }
 
+// suspendBackupCronJob sets spec.suspend=true on the CR's CronJob (if any) so
+// Kubernetes stops spawning scheduled Jobs while the CR is suspended (#217).
+// Missing CronJob is a no-op (one-time backups, or never scheduled).
+func (r *Neo4jBackupReconciler) suspendBackupCronJob(ctx context.Context, backup *neo4jv1beta1.Neo4jBackup) error {
+	cronJob := &batchv1.CronJob{}
+	err := r.Get(ctx, types.NamespacedName{Name: backup.Name + "-backup-cron", Namespace: backup.Namespace}, cronJob)
+	if errors.IsNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if cronJob.Spec.Suspend != nil && *cronJob.Spec.Suspend {
+		return nil // already suspended
+	}
+	suspend := true
+	cronJob.Spec.Suspend = &suspend
+	return r.Update(ctx, cronJob)
+}
+
+// cleanupOrphanedCronJob deletes the CR's CronJob when spec.schedule has been
+// removed (scheduled → one-shot conversion). Without this the CronJob keeps
+// firing scheduled backups forever while the CR claims to be a one-shot
+// (#217). Background propagation so child Jobs/pods are GC'd too.
+func (r *Neo4jBackupReconciler) cleanupOrphanedCronJob(ctx context.Context, backup *neo4jv1beta1.Neo4jBackup) error {
+	cronJob := &batchv1.CronJob{}
+	err := r.Get(ctx, types.NamespacedName{Name: backup.Name + "-backup-cron", Namespace: backup.Namespace}, cronJob)
+	if errors.IsNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	log.FromContext(ctx).Info("Deleting orphaned backup CronJob: spec.schedule was removed", "cronJob", cronJob.Name)
+	return client.IgnoreNotFound(r.Delete(ctx, cronJob, client.PropagationPolicy(metav1.DeletePropagationBackground)))
+}
+
 func (r *Neo4jBackupReconciler) createBackupCronJob(ctx context.Context, backup *neo4jv1beta1.Neo4jBackup, cluster *neo4jv1beta1.Neo4jEnterpriseCluster) (*batchv1.CronJob, error) {
 	cronJobName := backup.Name + "-backup-cron"
 
@@ -945,6 +1015,11 @@ func (r *Neo4jBackupReconciler) createBackupCronJob(ctx context.Context, backup 
 		labels := backupLabels(backup, "backup-cron")
 		cronJob.Labels = labels
 		cronJob.Spec.Schedule = backup.Spec.Schedule
+		// This path only runs while the CR is NOT suspended (the suspend
+		// branch in Reconcile returns earlier, after suspendBackupCronJob),
+		// so asserting false here is the resume side of #217.
+		resumed := false
+		cronJob.Spec.Suspend = &resumed
 		// ConcurrencyPolicy=Forbid prevents a slow run from overlapping
 		// with the next scheduled run — two concurrent neo4j-admin backup
 		// invocations against the same cluster double the network/disk
@@ -1087,14 +1162,15 @@ func (r *Neo4jBackupReconciler) buildBackupCommand(ctx context.Context, backup *
 		if backup.Spec.Options.BackupType != "" {
 			cmd += " --type=" + backup.Spec.Options.BackupType
 		}
-		if !backup.Spec.Options.Compress {
+		if !backup.Spec.Options.CompressEffective() {
 			cmd += " --compress=false"
 		}
 		if backup.Spec.Options.PageCache != "" {
 			cmd += " --pagecache=" + backup.Spec.Options.PageCache
 		}
 		if backup.Spec.Options.TempPath != "" {
-			cmd += " --temp-path=" + backup.Spec.Options.TempPath
+			// User-controlled path into a /bin/sh -c command — quote (#219).
+			cmd += " --temp-path=" + shellQuote(backup.Spec.Options.TempPath)
 		} else if backup.Spec.Options.TempStorage != nil {
 			cmd += " --temp-path=/tmp/neo4j-staging"
 		}
@@ -1156,11 +1232,15 @@ func (r *Neo4jBackupReconciler) buildBackupCommand(ctx context.Context, backup *
 		} else {
 			validateDBArg = strings.TrimSuffix(validateDBArg, "*")
 		}
-		cmd += fmt.Sprintf(` && (neo4j-admin backup validate --from-path=%s --database="%s" || true)`, toPath, validateDBArg)
+		// toPath carries user-controlled spec fields — quote it (#219). The
+		// database arg is double-quoted by design (validated name or literal
+		// glob that neo4j-admin, not the shell, must expand).
+		cmd += fmt.Sprintf(` && (neo4j-admin backup validate --from-path=%s --database="%s" || true)`, shellQuote(toPath), validateDBArg)
 	}
 
 	if backup.Spec.Storage.Type == "pvc" {
-		cmd = fmt.Sprintf("mkdir -p %s && %s", toPath, cmd)
+		// chainFromBackup feeds the PVC path segment — quote it too (#219).
+		cmd = fmt.Sprintf("mkdir -p %s && %s", shellQuote(toPath), cmd)
 	}
 
 	return cmd, nil
@@ -1181,11 +1261,18 @@ func (r *Neo4jBackupReconciler) buildBackupCommand(ctx context.Context, backup *
 // CRs intentionally sharing one directory via the chainFromBackup link.
 // Two unrelated CRs still stay isolated because they each get their own
 // chain-root segment.
+// defaultBackupStoragePath is the bucket-relative directory used when
+// spec.storage.path is empty. The SAME default must be applied wherever a
+// backup's StorageLocation is consumed (ResolveBackupRef) — a writer/reader
+// mismatch makes every defaulted-path cloud backup unrestorable via
+// backupRef (#218).
+const defaultBackupStoragePath = "backups"
+
 func (r *Neo4jBackupReconciler) buildToPath(backup *neo4jv1beta1.Neo4jBackup) string {
 	st := backup.Spec.Storage
 	p := st.Path
 	if p == "" {
-		p = "backups"
+		p = defaultBackupStoragePath
 	}
 	crSegment := chainRoot(backup)
 	switch st.Type {

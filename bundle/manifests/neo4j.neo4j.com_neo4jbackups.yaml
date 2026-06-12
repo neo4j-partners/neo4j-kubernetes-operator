@@ -164,7 +164,15 @@ spec:
                     type: string
                   compress:
                     default: true
-                    description: 'Compress the backup (default: true)'
+                    description: |-
+                      Compress the backup (default: true).
+                      Pointer, not plain bool: `bool` + `omitempty` + a kubebuilder default
+                      silently re-applies the default when the user sets `false` (any spec
+                      round-trip through the Go client — e.g. the finalizer-add Update —
+                      drops the zero value and the API server re-defaults it), so the user
+                      could never disable compression. Same invariant as
+                      Neo4jShardedDatabase.IfNotExists (rule 66). Callers use
+                      CompressEffective(), never dereference.
                     type: boolean
                   includeMetadata:
                     description: |-

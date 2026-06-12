@@ -172,6 +172,11 @@ func (in *BackupOptions) DeepCopyInto(out *BackupOptions) {
 		*out = new(v1.ResourceRequirements)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.Compress != nil {
+		in, out := &in.Compress, &out.Compress
+		*out = new(bool)
+		**out = **in
+	}
 	if in.RemoteAddressResolution != nil {
 		in, out := &in.RemoteAddressResolution, &out.RemoteAddressResolution
 		*out = new(bool)

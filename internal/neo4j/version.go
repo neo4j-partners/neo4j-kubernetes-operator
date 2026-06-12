@@ -178,7 +178,14 @@ func GetBackupCommand(version *Version, databaseName string, backupPath string, 
 	if fromAddresses != "" {
 		cmd += " --from=" + fromAddresses
 	}
-	cmd += " --to-path=" + backupPath
+	// backupPath is assembled from user-controlled spec fields
+	// (storage.bucket, storage.path, chainFromBackup) and the whole command
+	// runs via `/bin/sh -c` in a pod holding cloud credentials — single-quote
+	// it so no metacharacter in those fields can escape into the shell
+	// (defense-in-depth; the validator also rejects suspicious charsets).
+	// Unlike GetRestoreCommand's from-path, to-path is never a deliberate
+	// command substitution, so unconditional quoting is safe.
+	cmd += " --to-path=" + shellQuoteArg(backupPath)
 
 	if allDatabases {
 		cmd += ` "*"`

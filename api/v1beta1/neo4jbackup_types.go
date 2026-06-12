@@ -137,9 +137,16 @@ type BackupOptions struct {
 	// +optional
 	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
 
-	// Compress the backup (default: true)
+	// Compress the backup (default: true).
+	// Pointer, not plain bool: `bool` + `omitempty` + a kubebuilder default
+	// silently re-applies the default when the user sets `false` (any spec
+	// round-trip through the Go client — e.g. the finalizer-add Update —
+	// drops the zero value and the API server re-defaults it), so the user
+	// could never disable compression. Same invariant as
+	// Neo4jShardedDatabase.IfNotExists (rule 66). Callers use
+	// CompressEffective(), never dereference.
 	// +kubebuilder:default=true
-	Compress bool `json:"compress,omitempty"`
+	Compress *bool `json:"compress,omitempty"`
 
 	// Verify backup integrity after creation
 	Verify bool `json:"verify,omitempty"`
@@ -212,6 +219,15 @@ type BackupOptions struct {
 
 	// KeepFailed preserves failed backup artifacts for debugging instead of deleting them.
 	KeepFailed bool `json:"keepFailed,omitempty"`
+}
+
+// CompressEffective resolves the Compress pointer: nil (unset) means the
+// documented default of true. Callers MUST use this instead of dereferencing.
+func (o *BackupOptions) CompressEffective() bool {
+	if o == nil || o.Compress == nil {
+		return true
+	}
+	return *o.Compress
 }
 
 // TempStorageSpec provisions temporary staging storage for cloud backup/restore.

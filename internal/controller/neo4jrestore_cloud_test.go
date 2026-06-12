@@ -7,8 +7,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	neo4jv1beta1 "github.com/priyolahiri/neo4j-kubernetes-operator/api/v1beta1"
@@ -818,4 +821,171 @@ func TestBuildLocalRestoreFilePath_EmptyDatabaseNameSkips(t *testing.T) {
 	}
 	got := buildLocalRestoreFilePath(restore, "/backup/x")
 	assert.Empty(t, got, "empty dbname must skip shell-side resolution")
+}
+
+// TestResolveRestoreSource_BackupRefEmptyStoragePathDefaulted pins #218: the
+// backup WRITE side (buildToPath) defaults an empty storage.path to
+// "backups", so the artifacts live at s3://bucket/backups/<chain>/. The
+// resolver must mirror that default — without it the restore read
+// s3://bucket/<chain>/ and every defaulted-path cloud backup was
+// unrestorable via backupRef (file-not-found with no hint).
+func TestResolveRestoreSource_BackupRefEmptyStoragePathDefaulted(t *testing.T) {
+	backup := &neo4jv1beta1.Neo4jBackup{
+		ObjectMeta: metav1.ObjectMeta{Name: "defaulted", Namespace: "neo4j"},
+		Spec: neo4jv1beta1.Neo4jBackupSpec{
+			Storage: neo4jv1beta1.StorageLocation{
+				Type:   "s3",
+				Bucket: "prod-bucket",
+				// Path deliberately empty — perfectly valid spec; the
+				// validator only requires bucket.
+				Cloud: &neo4jv1beta1.CloudBlock{Provider: "aws"},
+			},
+		},
+		Status: neo4jv1beta1.Neo4jBackupStatus{
+			History: []neo4jv1beta1.BackupRun{
+				{RunID: "run-1", Status: "Succeeded", BackupsPath: "defaulted"},
+			},
+		},
+	}
+	r := &Neo4jRestoreReconciler{
+		Client: fake.NewClientBuilder().WithScheme(newTestScheme()).WithObjects(backup).Build(),
+	}
+	restore := &neo4jv1beta1.Neo4jRestore{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "neo4j"},
+		Spec: neo4jv1beta1.Neo4jRestoreSpec{
+			Source: neo4jv1beta1.RestoreSource{Type: "backup", BackupRef: "defaulted"},
+		},
+	}
+
+	src, err := r.resolveRestoreSource(context.Background(), restore)
+	require.NoError(t, err)
+	require.NotNil(t, src.Storage)
+	assert.Equal(t, "backups", src.Storage.Path,
+		"resolver must mirror buildToPath's empty-path default")
+
+	tmp := &neo4jv1beta1.Neo4jRestore{Spec: neo4jv1beta1.Neo4jRestoreSpec{Source: src}}
+	assert.Equal(t,
+		"s3://prod-bucket/backups/defaulted",
+		r.buildRestoreFromPath(tmp),
+		"restore must read from the SAME location the backup Job wrote to")
+}
+
+// TestStopCluster_PreservesOriginalReplicasOnReEntry pins #218: startRestore
+// can re-enter after a successful stop (Pending route while the referenced
+// backup finishes). stopCluster must NOT overwrite the recorded original
+// replica count with the now-current 0 — startCluster would "restore" zero
+// replicas and the instance would never come back.
+func TestStopCluster_PreservesOriginalReplicasOnReEntry(t *testing.T) {
+	sts := &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "sa",
+			Namespace: "ns",
+			Annotations: map[string]string{
+				// First pass already recorded the true original count.
+				"neo4j.neo4j.com/original-replicas": "3",
+			},
+		},
+		Spec: appsv1.StatefulSetSpec{Replicas: ptr.To(int32(0))}, // already stopped
+	}
+	standalone := &neo4jv1beta1.Neo4jEnterpriseStandalone{ObjectMeta: metav1.ObjectMeta{Name: "sa", Namespace: "ns"}}
+	fc := fake.NewClientBuilder().WithScheme(newTestScheme()).WithObjects(sts, standalone).Build()
+	r := &Neo4jRestoreReconciler{Client: fc}
+
+	// stopCluster's pod-wait loop returns immediately: no pods exist.
+	cluster := standaloneAsCluster(standalone)
+	require.NoError(t, r.stopCluster(context.Background(), cluster))
+
+	latest := &appsv1.StatefulSet{}
+	require.NoError(t, fc.Get(context.Background(), types.NamespacedName{Name: "sa", Namespace: "ns"}, latest))
+	assert.Equal(t, "3", latest.Annotations["neo4j.neo4j.com/original-replicas"],
+		"re-entry must not overwrite the original replica count with the current (0) value")
+}
+
+// TestRestoreAlreadyStoppedInstance pins the #218 re-entry guard for
+// checkDatabaseExists: only the restore that holds the in-progress marker
+// skips the Bolt preflight.
+func TestRestoreAlreadyStoppedInstance(t *testing.T) {
+	standalone := &neo4jv1beta1.Neo4jEnterpriseStandalone{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "sa", Namespace: "ns",
+			Annotations: map[string]string{RestoreInProgressAnnotation: "my-restore"},
+		},
+	}
+	fc := fake.NewClientBuilder().WithScheme(newTestScheme()).WithObjects(standalone).Build()
+	r := &Neo4jRestoreReconciler{Client: fc}
+	cluster := standaloneAsCluster(standalone)
+
+	mine := &neo4jv1beta1.Neo4jRestore{ObjectMeta: metav1.ObjectMeta{Name: "my-restore", Namespace: "ns"}}
+	other := &neo4jv1beta1.Neo4jRestore{ObjectMeta: metav1.ObjectMeta{Name: "other-restore", Namespace: "ns"}}
+	assert.True(t, r.restoreAlreadyStoppedInstance(context.Background(), mine, cluster))
+	assert.False(t, r.restoreAlreadyStoppedInstance(context.Background(), other, cluster))
+}
+
+// TestRestoreAdminSecretName pins the #218 nil-Auth fix: a standalone target
+// without spec.auth must resolve the default secret name, not panic.
+func TestRestoreAdminSecretName(t *testing.T) {
+	noAuth := standaloneAsCluster(&neo4jv1beta1.Neo4jEnterpriseStandalone{
+		ObjectMeta: metav1.ObjectMeta{Name: "sa", Namespace: "ns"},
+	})
+	assert.Equal(t, DefaultAdminSecretName, restoreAdminSecretName(noAuth))
+
+	withAuth := &neo4jv1beta1.Neo4jEnterpriseCluster{
+		Spec: neo4jv1beta1.Neo4jEnterpriseClusterSpec{
+			Auth: &neo4jv1beta1.AuthSpec{AdminSecret: "custom-secret"},
+		},
+	}
+	assert.Equal(t, "custom-secret", restoreAdminSecretName(withAuth))
+}
+
+// TestHookJobSpecForPhase pins #218: the phase strings used by callers and
+// the hook lookup must agree — the historical "pre-restore" vs "pre" mismatch
+// made every spec.options.*.job hook a silent no-op.
+func TestHookJobSpecForPhase(t *testing.T) {
+	pre := &neo4jv1beta1.RestoreHookJob{}
+	post := &neo4jv1beta1.RestoreHookJob{}
+	restore := &neo4jv1beta1.Neo4jRestore{
+		Spec: neo4jv1beta1.Neo4jRestoreSpec{
+			Options: &neo4jv1beta1.RestoreOptionsSpec{
+				PreRestore:  &neo4jv1beta1.RestoreHooks{Job: pre},
+				PostRestore: &neo4jv1beta1.RestoreHooks{Job: post},
+			},
+		},
+	}
+	assert.Same(t, pre, hookJobSpecForPhase(restore, hookPhasePreRestore))
+	assert.Same(t, post, hookJobSpecForPhase(restore, hookPhasePostRestore))
+	assert.Nil(t, hookJobSpecForPhase(restore, "pre"), "legacy short phase must not match")
+	assert.Nil(t, hookJobSpecForPhase(&neo4jv1beta1.Neo4jRestore{}, hookPhasePreRestore))
+}
+
+// TestClearStaleRestoreAttemptState pins the #218 retry-semantics helpers: a
+// fresh attempt clears the one-shot recreate marker and a retargeted
+// backupRef drops the pinned source.
+func TestClearStaleRestoreAttemptState(t *testing.T) {
+	restore := &neo4jv1beta1.Neo4jRestore{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "r", Namespace: "ns",
+			Annotations: map[string]string{AnnotationCypherRestoreIssued: "2026-01-01T00:00:00Z"},
+		},
+		Status: neo4jv1beta1.Neo4jRestoreStatus{
+			ResolvedSource: &neo4jv1beta1.ResolvedRestoreSource{
+				BackupRef: "old-backup",
+				Storage:   &neo4jv1beta1.StorageLocation{Type: "s3", Bucket: "b"},
+			},
+		},
+	}
+	fc := fake.NewClientBuilder().WithScheme(newTestScheme()).WithObjects(restore).WithStatusSubresource(restore).Build()
+	r := &Neo4jRestoreReconciler{Client: fc}
+
+	require.NoError(t, r.clearCypherRestoreIssued(context.Background(), restore))
+	require.NoError(t, r.clearResolvedSource(context.Background(), restore))
+
+	latest := &neo4jv1beta1.Neo4jRestore{}
+	require.NoError(t, fc.Get(context.Background(), types.NamespacedName{Name: "r", Namespace: "ns"}, latest))
+	_, hasAnno := latest.Annotations[AnnotationCypherRestoreIssued]
+	assert.False(t, hasAnno, "stale recreate marker must be cleared for a fresh attempt")
+	assert.Nil(t, latest.Status.ResolvedSource, "pinned source for the old backupRef must be dropped")
+
+	// Idempotent on already-clean objects.
+	require.NoError(t, r.clearCypherRestoreIssued(context.Background(), restore))
+	require.NoError(t, r.clearResolvedSource(context.Background(), restore))
 }
