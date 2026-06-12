@@ -3707,7 +3707,7 @@
 <td><code>maxAge</code></td>
 <td><code>string</code></td>
 <td>❌</td>
-<td>Maximum age of artifacts to retain. Accepted units: <code>d</code> (days), <code>h</code> (hours), <code>m</code> (minutes), <code>s</code> (seconds) — e.g. <code>"30d"</code>, <code>"168h"</code>, <code>"90m"</code>. <code>"4w"</code> is <strong>rejected</strong> by the validator.</td>
+<td>Maximum age of artifacts to retain. A <strong>single</strong> unit of <code>d</code> (days), <code>h</code> (hours), <code>m</code> (minutes), or <code>s</code> (seconds) — e.g. <code>"30d"</code>, <code>"168h"</code>, <code>"90m"</code>. Compound values (<code>"1h30m"</code>) and <code>"4w"</code> are <strong>rejected</strong> by the validator (the runtime applies exactly what validates).</td>
 </tr>
 <tr>
 <td><code>maxCount</code></td>
