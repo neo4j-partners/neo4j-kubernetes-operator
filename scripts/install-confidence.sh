@@ -83,7 +83,17 @@ step "=== creating Kind cluster '$CLUSTER' (timeout 120s)"
 cleanup
 kind create cluster --name "$CLUSTER" --wait 120s >/dev/null
 step "loading image into Kind (~30-60s)"
-kind load docker-image "$IMG" --name "$CLUSTER"
+# kind restarts containerd inside the node right after cluster-Ready (the
+# CNI config landing triggers it); a load started in that window fails with
+# 'containerd.sock: connection refused' or 'content digest not found'
+# (reproduced deterministically on Docker 29 + kind v0.29). Retry with a
+# settle delay instead of racing it.
+for attempt in 1 2 3; do
+  kind load docker-image "$IMG" --name "$CLUSTER" && break
+  [ "$attempt" = 3 ] && fail "kind load failed after 3 attempts"
+  step "  kind load attempt $attempt failed (containerd still settling); retrying in 10s"
+  sleep 10
+done
 
 wait_operator() { # $1 = namespace — visible rollout wait, 180s timeout
   step "waiting for operator rollout in '$1' (timeout 180s)"
