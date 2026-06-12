@@ -132,7 +132,9 @@ spec:
                               Only effective when EndpointURL is set.
                             type: boolean
                           identity:
-                            description: CloudIdentity defines cloud identity configuration
+                            description: |-
+                              CloudIdentity defines cloud identity (IRSA / Workload Identity / Managed
+                              Identity) configuration for backup/restore Job pods.
                             properties:
                               autoCreate:
                                 description: AutoCreateSpec defines auto-creation
@@ -144,6 +146,11 @@ spec:
                                     type: object
                                   enabled:
                                     default: true
+                                    description: |-
+                                      Enabled is RESERVED and currently a no-op (#220): the operator always
+                                      ensures the backup/restore ServiceAccount exists. Only Annotations is
+                                      honored — use it for IRSA ("eks.amazonaws.com/role-arn") or Workload
+                                      Identity ("iam.gke.io/gcp-service-account") bindings.
                                     type: boolean
                                 type: object
                               provider:
@@ -153,6 +160,11 @@ spec:
                                 - azure
                                 type: string
                               serviceAccount:
+                                description: |-
+                                  ServiceAccount is RESERVED and currently a no-op (#220): backup Jobs
+                                  always run as the operator-managed "neo4j-backup-sa" (restore Jobs:
+                                  "neo4j-restore-sa"). Bind your cloud IAM role via
+                                  autoCreate.annotations, which the operator applies to that SA.
                                 type: string
                             required:
                             - provider

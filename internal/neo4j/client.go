@@ -2037,7 +2037,11 @@ func (c *Client) CreateDatabaseWithSeedURIOptions(
 	if ifNotExists {
 		ine = " IF NOT EXISTS"
 	}
-	query := fmt.Sprintf("CREATE DATABASE `%s`%s OPTIONS { seedURI: $uri } WAIT", databaseName, ine)
+	// `existingData: 'use'` is REQUIRED alongside seedURI — without it Neo4j
+	// rejects the statement with "OPTIONS specify 'seedURI' expecting
+	// 'existingData' to be present" (found live on 5.26 during #218
+	// verification; the Neo4jDatabase seed path has carried it since #191).
+	query := fmt.Sprintf("CREATE DATABASE `%s`%s OPTIONS { existingData: 'use', seedURI: $uri } WAIT", databaseName, ine)
 	if _, err := session.Run(ctx, query, map[string]any{"uri": seedURI}); err != nil {
 		return fmt.Errorf("CREATE DATABASE %q OPTIONS{seedURI}: %w", databaseName, err)
 	}

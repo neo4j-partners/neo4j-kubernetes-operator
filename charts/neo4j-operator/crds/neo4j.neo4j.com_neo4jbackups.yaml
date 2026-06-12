@@ -114,7 +114,9 @@ spec:
                       Only effective when EndpointURL is set.
                     type: boolean
                   identity:
-                    description: CloudIdentity defines cloud identity configuration
+                    description: |-
+                      CloudIdentity defines cloud identity (IRSA / Workload Identity / Managed
+                      Identity) configuration for backup/restore Job pods.
                     properties:
                       autoCreate:
                         description: AutoCreateSpec defines auto-creation of service
@@ -126,6 +128,11 @@ spec:
                             type: object
                           enabled:
                             default: true
+                            description: |-
+                              Enabled is RESERVED and currently a no-op (#220): the operator always
+                              ensures the backup/restore ServiceAccount exists. Only Annotations is
+                              honored — use it for IRSA ("eks.amazonaws.com/role-arn") or Workload
+                              Identity ("iam.gke.io/gcp-service-account") bindings.
                             type: boolean
                         type: object
                       provider:
@@ -135,6 +142,11 @@ spec:
                         - azure
                         type: string
                       serviceAccount:
+                        description: |-
+                          ServiceAccount is RESERVED and currently a no-op (#220): backup Jobs
+                          always run as the operator-managed "neo4j-backup-sa" (restore Jobs:
+                          "neo4j-restore-sa"). Bind your cloud IAM role via
+                          autoCreate.annotations, which the operator applies to that SA.
                         type: string
                     required:
                     - provider
@@ -327,7 +339,12 @@ spec:
                       parses validate's stdout into BackupRun.Validation.
                     type: boolean
                   verify:
-                    description: Verify backup integrity after creation
+                    description: |-
+                      Verify is RESERVED and currently a no-op (#220) — it is accepted for
+                      backward compatibility but the operator does not read it. For real
+                      artifact verification use options.validate, which runs
+                      `neo4j-admin backup validate` and records the result in
+                      status.history[].validation.
                     type: boolean
                 type: object
               retention:
@@ -335,7 +352,10 @@ spec:
                 properties:
                   deletePolicy:
                     default: Delete
-                    description: Delete policy for expired backups
+                    description: |-
+                      Delete policy for expired backups. Only "Delete" is implemented;
+                      "Archive" is RESERVED and currently behaves as a no-op (#220) — no
+                      archival logic exists. Accepted for backward compatibility.
                     enum:
                     - Delete
                     - Archive
@@ -384,7 +404,9 @@ spec:
                           Only effective when EndpointURL is set.
                         type: boolean
                       identity:
-                        description: CloudIdentity defines cloud identity configuration
+                        description: |-
+                          CloudIdentity defines cloud identity (IRSA / Workload Identity / Managed
+                          Identity) configuration for backup/restore Job pods.
                         properties:
                           autoCreate:
                             description: AutoCreateSpec defines auto-creation of service
@@ -396,6 +418,11 @@ spec:
                                 type: object
                               enabled:
                                 default: true
+                                description: |-
+                                  Enabled is RESERVED and currently a no-op (#220): the operator always
+                                  ensures the backup/restore ServiceAccount exists. Only Annotations is
+                                  honored — use it for IRSA ("eks.amazonaws.com/role-arn") or Workload
+                                  Identity ("iam.gke.io/gcp-service-account") bindings.
                                 type: boolean
                             type: object
                           provider:
@@ -405,6 +432,11 @@ spec:
                             - azure
                             type: string
                           serviceAccount:
+                            description: |-
+                              ServiceAccount is RESERVED and currently a no-op (#220): backup Jobs
+                              always run as the operator-managed "neo4j-backup-sa" (restore Jobs:
+                              "neo4j-restore-sa"). Bind your cloud IAM role via
+                              autoCreate.annotations, which the operator applies to that SA.
                             type: string
                         required:
                         - provider
