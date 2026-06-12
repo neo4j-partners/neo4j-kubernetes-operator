@@ -123,7 +123,6 @@ spec:
   clusterRef: prod-cluster
   copyOf: editor                # honoured at create time only
   privileges:
-    - "DENY DROP ON GRAPH * TO junior_editor"
     - "DENY DELETE ON GRAPH * NODES Customer TO junior_editor"
 ```
 
@@ -142,7 +141,7 @@ spec:
   privileges:
     - "GRANT MATCH {*} ON GRAPH * TO editor"
     - "GRANT WRITE ON GRAPH * TO editor"
-    - "DENY DROP ON GRAPH * TO editor"
+    - "DENY DELETE ON GRAPH * TO editor"
 ```
 
 The built-in `editor` is not dropped when this CR is deleted; only its privilege drift reconciliation stops.

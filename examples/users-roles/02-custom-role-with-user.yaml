@@ -4,7 +4,23 @@
 # and "who can do it" as a Neo4jUser referencing the role by name. The
 # user controller watches Neo4jRole, so the user reconciles automatically
 # when the role lands.
+#
+# The role's privileges target the `analytics` database, so the example
+# creates it too — Neo4j rejects graph privileges (e.g. DENY WRITE ON
+# GRAPH) against a database that doesn't exist yet.
 
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jDatabase
+metadata:
+  name: analytics
+  namespace: prod
+spec:
+  clusterRef: prod-cluster
+  name: analytics
+  ifNotExists: true
+  wait: true
+
+---
 apiVersion: neo4j.neo4j.com/v1beta1
 kind: Neo4jRole
 metadata:

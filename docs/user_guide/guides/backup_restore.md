@@ -240,7 +240,7 @@ spec:
 
 ```bash
 kubectl run minio-client --rm -it --restart=Never \
-  --image=minio/mc -- /bin/sh -c "
+  --image=minio/mc --command -- /bin/sh -c "
     mc alias set local http://minio.minio.svc:9000 minioadmin minioadmin
     mc ls local/neo4j-backups/cluster/"
 ```

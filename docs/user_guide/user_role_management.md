@@ -113,7 +113,7 @@ spec:
   privileges:
     - "GRANT MATCH {*} ON GRAPH * TO editor"
     - "GRANT WRITE ON GRAPH * TO editor"
-    - "DENY DROP ON GRAPH * TO editor"   # extra restriction
+    - "DENY DELETE ON GRAPH * TO editor"   # extra restriction (DELETE = remove graph data; DROP is for schema objects)
 ```
 
 Adopted built-in roles are never dropped on CR delete; only their privileges are reconciled.
@@ -215,7 +215,7 @@ spec:
   clusterRef: prod-cluster
   copyOf: editor                 # honoured ONLY at creation time
   privileges:
-    - "DENY DROP ON GRAPH * TO junior_editor"
+    - "DENY DELETE ON GRAPH * TO junior_editor"
 ```
 
 `copyOf` is consulted only when the role does not yet exist. Once created, `.privileges` is the source of truth for ongoing reconciliation.

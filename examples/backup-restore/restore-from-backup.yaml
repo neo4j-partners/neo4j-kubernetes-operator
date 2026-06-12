@@ -16,7 +16,9 @@ metadata:
     environment: development
     restore-type: backup-reference
 spec:
-  clusterRef: single-node-standalone   # Neo4jEnterpriseStandalone (hooks are standalone-only)
+  # Matches the CR created by examples/standalone/single-node-standalone.yaml —
+  # change to YOUR instance name. (Hooks are standalone-only.)
+  clusterRef: standalone-neo4j
   databaseName: neo4j
   source:
     type: backup

@@ -18,4 +18,6 @@ spec:
   privileges:
     - "GRANT MATCH {*} ON GRAPH * TO editor"
     - "GRANT WRITE ON GRAPH * TO editor"
-    - "DENY DROP ON GRAPH * TO editor"
+    # DELETE is the graph privilege for removing nodes/relationships
+    # (DROP applies to schema objects like databases and indexes, not graphs).
+    - "DENY DELETE ON GRAPH * TO editor"

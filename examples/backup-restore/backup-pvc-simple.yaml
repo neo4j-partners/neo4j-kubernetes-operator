@@ -17,7 +17,9 @@ spec:
     #   name: <database-name>        # e.g. "neo4j"
     #   clusterRef: <instance-name>  # the cluster/standalone that owns it
     kind: Cluster
-    name: my-neo4j        # your Neo4jEnterpriseCluster or Neo4jEnterpriseStandalone name
+    # Matches the CR created by examples/standalone/single-node-standalone.yaml —
+    # change to YOUR Neo4jEnterpriseCluster or Neo4jEnterpriseStandalone name.
+    name: standalone-neo4j
   storage:
     type: pvc
     pvc:

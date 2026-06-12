@@ -1,10 +1,10 @@
 # Read-only application user bound to the built-in `reader` role.
 #
 # Apply order is irrelevant: the operator converges. If you apply the
-# Neo4jUser before the Secret exists, the user reports Failed (validation)
-# but converges to Ready automatically once the Secret lands; applied
-# before the cluster is Ready, it waits in Pending until the cluster
-# transitions.
+# Neo4jUser before the Secret exists, the user waits in Pending (reason
+# SecretPending) and converges to Ready automatically once the Secret
+# lands; applied before the cluster is Ready, it likewise waits in
+# Pending until the cluster transitions.
 
 # ── App-user password Secret (create this BEFORE you apply this manifest) ──────
 # Not defined inline: `kubectl apply -f` would re-apply it every run and OVERWRITE

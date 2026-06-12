@@ -8,14 +8,16 @@
 # Quick MinIO setup (for testing — not production-hardened):
 #
 #   kubectl create namespace minio
-#   kubectl apply -n minio -f https://raw.githubusercontent.com/minio/minio/master/docs/orchestration/kubernetes/minio-standalone.yaml
+#   kubectl -n minio create deployment minio --image=quay.io/minio/minio \
+#     -- /bin/sh -c 'minio server /data --console-address :9001'
+#   kubectl -n minio expose deployment minio --port=9000 --target-port=9000
 #
 # Or with the MinIO Operator (recommended for production):
 #   https://min.io/docs/minio/kubernetes/upstream/
 #
 # Once MinIO is running, create a bucket and access credentials:
 #   kubectl run minio-client --rm -it --restart=Never \
-#     --image=minio/mc -- /bin/sh -c "
+#     --image=minio/mc --command -- /bin/sh -c "
 #       mc alias set local http://minio.minio.svc:9000 minioadmin minioadmin;
 #       mc mb local/neo4j-backups"
 #
@@ -121,9 +123,10 @@ spec:
   options:
     backupType: DIFF
     compress: true
-    # preferDiffAsParent chains diff backups without needing a new FULL each time.
-    # Requires Neo4j CalVer 2025.04+. Remove this field for 5.26.x.
-    preferDiffAsParent: true
+    # preferDiffAsParent chains diff backups without needing a new FULL each
+    # time. Requires Neo4j CalVer 2025.04+ — uncomment it there; on 5.26.x it
+    # is rejected (the operator fails the backup rather than silently ignore it).
+    # preferDiffAsParent: true
 
   retention:
     maxAge: "7d"
@@ -171,7 +174,7 @@ spec:
 #
 # 2. Verify the backup reached MinIO:
 #      kubectl run minio-client --rm -it --restart=Never \
-#        --image=minio/mc -- /bin/sh -c "
+#        --image=minio/mc --command -- /bin/sh -c "
 #          mc alias set local http://minio.minio.svc:9000 minioadmin minioadmin;
 #          mc ls local/neo4j-backups/cluster/"
 #
