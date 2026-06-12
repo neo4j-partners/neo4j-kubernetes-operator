@@ -804,6 +804,32 @@ The operator picks the right restore method based on the target kind. The Neo4j 
 - **Cloud-backed backup** (S3 / GCS / Azure): the operator passes the exact `.backup` **file** URI of the latest successful run (`s3://bucket/<path>/<backup-cr-name>/<dbname>-<timestamp>.backup`) as `seedURI` — `CloudSeedProvider` seeds a single database from one file, not a directory. When that file is a differential, Neo4j resolves and applies the full + differential chain from the same directory automatically. The cluster's pods must have the cloud credentials Secret projected via `spec.extraEnvFrom` — the operator emits an actionable error if they don't, or auto-patches under annotation `neo4j.com/auto-inherit-seed-creds=true`.
 - **PVC-backed backup**: the operator spawns an in-cluster busybox httpd proxy (`backup-seed-proxy-<restore-name>`) mounting the backup PVC RO at `/backup`, then passes the per-run `.backup` file URL as `seedURI` (`http://backup-seed-proxy-<restore-name>:8080/<backup-cr-name>/<filename>`). Neo4j's `URLConnectionSeedProvider` fetches it. The operator also creates a **NetworkPolicy restricting the proxy's ingress to the target cluster's server pods** (effective on enforcing CNIs), and **tears the whole proxy stack down automatically** (Deployment + Service + NetworkPolicy) as soon as the restore reaches `Completed` or `Failed` — it doesn't keep serving the backup PVC for the lifetime of the CR. No credentials required.
 - Restoring over an **existing** database requires the explicit opt-in `spec.force: true` (or `spec.options.replaceExisting: true`) — recreate wipes and replaces the live contents, so the operator refuses without it.
+
+> **S3-compatible endpoints (MinIO, on-prem object stores):** the seed
+> download runs inside the Neo4j server JVMs, which need the custom endpoint
+> configuration in addition to the credentials. Add both to the cluster CR
+> before restoring:
+>
+> ```yaml
+> spec:
+>   env:
+>   - name: AWS_ENDPOINT_URL_S3
+>     value: "http://minio.minio.svc:9000"   # your S3-compatible endpoint
+>   - name: JAVA_TOOL_OPTIONS
+>     value: "-Daws.s3.forcePathStyle=true"
+> ```
+>
+> (Triggers one rolling restart. Real AWS S3 — including IRSA/Workload
+> Identity — needs none of this.)
+
+> **After any cluster restore, confirm the database is online:**
+>
+> ```cypher
+> SHOW DATABASE <name> YIELD name, currentStatus, statusMessage;
+> ```
+>
+> `currentStatus: offline` with a populated `statusMessage` means the seed
+> failed — the message names the exact cause (e.g. an unreachable seed URI).
 - `dbms.recreateDatabase` preserves user/role privileges on the existing database; no `DROP DATABASE` needed.
 - For new databases, the operator emits `CREATE DATABASE … OPTIONS { seedURI: '…' } WAIT`.
 - Both forms finish with the database online. For the recreate path the operator polls until every allocation reports `online`, bounded by **`spec.timeout`** (default 5m) — raise it for multi-GB stores seeded from object storage.
@@ -923,10 +949,13 @@ spec:
   source:
     type: backup
     backupRef: standalone-backup
-  options:
-    replaceExisting: true
+  force: true          # confirms overwriting the existing database
   stopCluster: true   # required: with false the operator refuses while pods are running
 ```
+
+> On standalone targets, **`spec.force: true`** is the flag that confirms
+> overwriting an existing database. (`options.replaceExisting` applies to
+> cluster targets.)
 
 ---
 
@@ -1032,8 +1061,8 @@ spec:
   source:
     type: backup
     backupRef: production-backup
+  force: true   # confirms overwriting the existing database (standalone target)
   options:
-    replaceExisting: true
     preRestore:
       cypherStatements:
         - "CALL db.checkpoint()"
