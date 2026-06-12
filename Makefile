@@ -401,6 +401,10 @@ ship-prep: sync-all bundle helm-lint check-csv-coverage ## One-stop pre-release:
 	@echo ""
 	@echo "Ship-prep complete. Review 'git status' and commit any changes before tagging a release."
 
+.PHONY: install-confidence
+install-confidence: kustomize ## Pre-release gate: helm install/upgrade/uninstall + kubectl-apply matrix on a throwaway Kind cluster (~10-15 min).
+	@./scripts/install-confidence.sh
+
 .PHONY: check-drift
 check-drift: sync-all bundle ## CI gate: regenerate everything and fail if anything is out of date.
 	@echo "Verifying generated files are committed..."
