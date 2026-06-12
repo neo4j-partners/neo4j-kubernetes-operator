@@ -290,3 +290,78 @@ func TestUpdateRestoreStatus_PersistsCallerTimestamps(t *testing.T) {
 	assert.True(t, persisted.Status.StartTime.Equal(&start), "persisted StartTime must not be moved by a requeue")
 	assert.True(t, persisted.Status.CompletionTime.Equal(&completion), "persisted CompletionTime must not be moved by a requeue")
 }
+
+// Pins the #227 stale-online guard: dbms.recreateDatabase is asynchronous, so
+// an all-online SHOW DATABASE right after issue can be the PRE-recreate
+// allocations. Acceptance requires a prior offline observation or the grace
+// window to have elapsed.
+func TestCypherRestoreOnlineAcceptable_StaleOnlineGuard(t *testing.T) {
+	now := time.Now()
+	stamp := func(issuedAgo time.Duration) map[string]string {
+		return map[string]string{
+			AnnotationCypherRestoreIssued: now.Add(-issuedAgo).UTC().Format(time.RFC3339),
+		}
+	}
+	restore := func(ann map[string]string) *neo4jv1beta1.Neo4jRestore {
+		r := restoreWithBackupRef("r1", "default", "nightly")
+		r.Annotations = ann
+		return r
+	}
+
+	// Fresh issue, no offline observation: all-online is suspect — refuse.
+	assert.False(t, cypherRestoreOnlineAcceptable(restore(stamp(time.Second)), now),
+		"all-online 1s after issue without an offline observation must be refused")
+
+	// Offline was observed: trust the next all-online immediately.
+	ann := stamp(time.Second)
+	ann[AnnotationCypherRestoreObservedOffline] = "true"
+	assert.True(t, cypherRestoreOnlineAcceptable(restore(ann), now),
+		"observed-offline marker must unlock acceptance inside the grace window")
+
+	// Grace window elapsed: accept even without an offline observation
+	// (small store seeded entirely between two polls).
+	assert.True(t, cypherRestoreOnlineAcceptable(restore(stamp(cypherRestoreStaleOnlineGrace+time.Second)), now),
+		"all-online past the grace window must be accepted")
+
+	// Missing or malformed issue stamps fail open (deadline logic tolerates
+	// them too; blocking forever would be worse than the race).
+	assert.True(t, cypherRestoreOnlineAcceptable(restore(nil), now))
+	assert.True(t, cypherRestoreOnlineAcceptable(restore(map[string]string{
+		AnnotationCypherRestoreIssued: "not-a-timestamp",
+	}), now))
+}
+
+// clearCypherRestoreIssued must clear BOTH cypher-restore markers — a stale
+// observed-offline annotation surviving into a fresh attempt would defeat the
+// stale-online guard on the next recreate.
+func TestClearCypherRestoreIssued_AlsoClearsObservedOffline(t *testing.T) {
+	restore := restoreWithBackupRef("r1", "default", "nightly")
+	restore.Annotations = map[string]string{
+		AnnotationCypherRestoreIssued:          time.Now().UTC().Format(time.RFC3339),
+		AnnotationCypherRestoreObservedOffline: "true",
+	}
+	r := newResolvedSourceReconciler(t, restore)
+	ctx := context.Background()
+
+	require.NoError(t, r.clearCypherRestoreIssued(ctx, restore))
+
+	persisted := &neo4jv1beta1.Neo4jRestore{}
+	require.NoError(t, r.Get(ctx, client.ObjectKeyFromObject(restore), persisted))
+	assert.NotContains(t, persisted.Annotations, AnnotationCypherRestoreIssued)
+	assert.NotContains(t, persisted.Annotations, AnnotationCypherRestoreObservedOffline)
+	assert.NotContains(t, restore.Annotations, AnnotationCypherRestoreObservedOffline, "in-memory copy must be cleared too")
+}
+
+// markCypherRestoreObservedOffline persists the marker and is idempotent.
+func TestMarkCypherRestoreObservedOffline(t *testing.T) {
+	restore := restoreWithBackupRef("r1", "default", "nightly")
+	r := newResolvedSourceReconciler(t, restore)
+	ctx := context.Background()
+
+	require.NoError(t, r.markCypherRestoreObservedOffline(ctx, restore))
+	require.NoError(t, r.markCypherRestoreObservedOffline(ctx, restore))
+
+	persisted := &neo4jv1beta1.Neo4jRestore{}
+	require.NoError(t, r.Get(ctx, client.ObjectKeyFromObject(restore), persisted))
+	assert.Equal(t, "true", persisted.Annotations[AnnotationCypherRestoreObservedOffline])
+}

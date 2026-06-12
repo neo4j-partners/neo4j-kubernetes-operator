@@ -135,10 +135,28 @@ const (
 	//      one SHOW DATABASE per reconcile and requeues.
 	AnnotationCypherRestoreIssued = "neo4j.com/cypher-restore-issued"
 
+	// AnnotationCypherRestoreObservedOffline records that a poll reconcile
+	// saw the database NOT fully online after the recreate was issued —
+	// i.e. the asynchronous recreate has visibly taken effect. Guards the
+	// stale-online race (#227): `dbms.recreateDatabase` returns before the
+	// old allocations transition offline, so a poll landing in that window
+	// would see the PRE-recreate database fully online and wrongly declare
+	// the restore Completed before the seed even started.
+	AnnotationCypherRestoreObservedOffline = "neo4j.com/cypher-restore-observed-offline"
+
 	// cypherRestoreOnlineTimeout bounds how long pollClusterRestoreOnline will
 	// wait (across requeues) for an asynchronously-recreated database to
 	// converge to online before marking the restore Failed.
 	cypherRestoreOnlineTimeout = 5 * time.Minute
+
+	// cypherRestoreStaleOnlineGrace is how long after the recreate was issued
+	// an all-online observation is treated as suspect when no poll has yet
+	// seen the database offline. Past this window an all-online answer is
+	// accepted even without an offline observation — covering small stores
+	// whose entire offline→seed→online cycle fits between two polls. Costs
+	// at most one extra requeue on tiny restores; prevents false Completed
+	// on every recreate that polls early.
+	cypherRestoreStaleOnlineGrace = 30 * time.Second
 )
 
 // +kubebuilder:rbac:groups=neo4j.neo4j.com,resources=neo4jrestores,verbs=get;list;watch;create;update;patch;delete
@@ -2741,25 +2759,83 @@ func (r *Neo4jRestoreReconciler) markCypherRestoreIssued(ctx context.Context, re
 	return nil
 }
 
-// clearCypherRestoreIssued removes the one-shot recreate marker so a fresh
-// attempt (spec bump after Completed/Failed) re-issues the restore instead of
-// short-circuiting into the poll phase with stale state (#218). Idempotent.
+// cypherRestoreOnlineAcceptable reports whether an all-online SHOW DATABASE
+// answer can be trusted as the restored database (vs. the pre-recreate
+// allocations the asynchronous recreate hasn't torn down yet, #227). True
+// when a prior poll already observed the database offline, or when the
+// stale-online grace window past the issue timestamp has elapsed. Missing or
+// malformed issue stamps fail open — the deadline logic already tolerates
+// them, and blocking acceptance forever would be worse than the race.
+func cypherRestoreOnlineAcceptable(restore *neo4jv1beta1.Neo4jRestore, now time.Time) bool {
+	if restore.Annotations[AnnotationCypherRestoreObservedOffline] == "true" {
+		return true
+	}
+	raw, ok := restore.Annotations[AnnotationCypherRestoreIssued]
+	if !ok {
+		return true
+	}
+	issuedAt, perr := time.Parse(time.RFC3339, raw)
+	if perr != nil {
+		return true
+	}
+	return now.Sub(issuedAt) >= cypherRestoreStaleOnlineGrace
+}
+
+// markCypherRestoreObservedOffline stamps the observed-offline annotation
+// (idempotent, conflict-retried) once a poll has seen the database not fully
+// online — proof the asynchronous recreate took effect.
+func (r *Neo4jRestoreReconciler) markCypherRestoreObservedOffline(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore) error {
+	if restore.Annotations[AnnotationCypherRestoreObservedOffline] == "true" {
+		return nil
+	}
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		latest := &neo4jv1beta1.Neo4jRestore{}
+		if err := r.Get(ctx, client.ObjectKeyFromObject(restore), latest); err != nil {
+			return err
+		}
+		if latest.Annotations == nil {
+			latest.Annotations = map[string]string{}
+		}
+		if latest.Annotations[AnnotationCypherRestoreObservedOffline] == "true" {
+			return nil
+		}
+		latest.Annotations[AnnotationCypherRestoreObservedOffline] = "true"
+		return r.Update(ctx, latest)
+	})
+	if err != nil {
+		return err
+	}
+	if restore.Annotations == nil {
+		restore.Annotations = map[string]string{}
+	}
+	restore.Annotations[AnnotationCypherRestoreObservedOffline] = "true"
+	return nil
+}
+
+// clearCypherRestoreIssued removes the one-shot recreate marker (and the
+// observed-offline marker that depends on it) so a fresh attempt (spec bump
+// after Completed/Failed) re-issues the restore instead of short-circuiting
+// into the poll phase with stale state (#218). Idempotent.
 func (r *Neo4jRestoreReconciler) clearCypherRestoreIssued(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore) error {
 	err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
 		latest := &neo4jv1beta1.Neo4jRestore{}
 		if err := r.Get(ctx, client.ObjectKeyFromObject(restore), latest); err != nil {
 			return err
 		}
-		if _, ok := latest.Annotations[AnnotationCypherRestoreIssued]; !ok {
+		_, hasIssued := latest.Annotations[AnnotationCypherRestoreIssued]
+		_, hasOffline := latest.Annotations[AnnotationCypherRestoreObservedOffline]
+		if !hasIssued && !hasOffline {
 			return nil
 		}
 		delete(latest.Annotations, AnnotationCypherRestoreIssued)
+		delete(latest.Annotations, AnnotationCypherRestoreObservedOffline)
 		return r.Update(ctx, latest)
 	})
 	if err != nil {
 		return err
 	}
 	delete(restore.Annotations, AnnotationCypherRestoreIssued)
+	delete(restore.Annotations, AnnotationCypherRestoreObservedOffline)
 	return nil
 }
 
@@ -2848,6 +2924,16 @@ func (r *Neo4jRestoreReconciler) pollClusterRestoreOnline(ctx context.Context, r
 
 	online, total, diag, stateErr := neo4jClient.DatabaseOnlineState(ctx, restore.Spec.DatabaseName)
 	if stateErr == nil && total > 0 && online == total {
+		// Stale-online guard (#227): `dbms.recreateDatabase` is asynchronous —
+		// right after issue, SHOW DATABASE can still report the PRE-recreate
+		// allocations fully online. Accept all-online only once a prior poll
+		// observed the database offline (the recreate visibly took effect) or
+		// the grace window past issue has elapsed.
+		if !cypherRestoreOnlineAcceptable(restore, time.Now()) {
+			logger.V(1).Info("Poll: all-online within the stale-online grace window without an offline observation — likely the pre-recreate allocations; requeueing",
+				"database", restore.Spec.DatabaseName, "grace", cypherRestoreStaleOnlineGrace.String())
+			return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
+		}
 		completion := metav1.Now()
 		restore.Status.CompletionTime = &completion
 		r.updateRestoreStatus(ctx, restore, StatusCompleted,
@@ -2855,6 +2941,12 @@ func (r *Neo4jRestoreReconciler) pollClusterRestoreOnline(ctx context.Context, r
 		r.Recorder.Event(restore, corev1.EventTypeNormal, EventReasonRestoreCompleted,
 			fmt.Sprintf("Cluster Cypher restore completed for database %q", restore.Spec.DatabaseName))
 		return ctrl.Result{}, nil
+	}
+
+	// Not fully online: the recreate has visibly taken effect — record it so
+	// the next all-online observation is trusted immediately (no grace wait).
+	if merr := r.markCypherRestoreObservedOffline(ctx, restore); merr != nil {
+		logger.V(1).Info("Failed to stamp observed-offline annotation; the grace window still guards acceptance", "error", merr.Error())
 	}
 
 	if expired {
