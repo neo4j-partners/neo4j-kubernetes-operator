@@ -7,7 +7,8 @@ resources:
   - ../../default
 
 images:
-  - name: controller
+  # Match the BASE's already-transformed image name (see prod overlay note).
+  - name: ghcr.io/neo4j-partners/neo4j-kubernetes-operator
     newName: ghcr.io/neo4j-partners/neo4j-kubernetes-operator
     newTag: latest
 

@@ -4,12 +4,12 @@
 
 ### Quick Install (Complete Operator)
 ```bash
-kubectl apply -f https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases/download/__TAG__/neo4j-kubernetes-operator-complete.yaml
+kubectl apply --server-side -f https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases/download/__TAG__/neo4j-kubernetes-operator-complete.yaml
 ```
 
 ### CRDs Only
 ```bash
-kubectl apply -f https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases/download/__TAG__/neo4j-kubernetes-operator.yaml
+kubectl apply --server-side -f https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases/download/__TAG__/neo4j-kubernetes-operator.yaml
 ```
 
 ## Helm
@@ -68,6 +68,10 @@ cosign verify ghcr.io/neo4j-partners/neo4j-kubernetes-operator:__TAG__ \
 |-------|-------------|
 | `neo4j-kubernetes-operator-complete.yaml` | Complete operator install (CRDs + RBAC + Deployment) |
 | `neo4j-kubernetes-operator.yaml` | CRDs only |
+
+`kubectl apply --server-side` is the recommended apply form for both assets (the largest CRDs exceed client-side apply's last-applied annotation limit).
+
+**Helm users**: apply the CRD asset (`neo4j-kubernetes-operator.yaml`) before `helm upgrade` — Helm never upgrades CRDs.
 
 ## Documentation
 

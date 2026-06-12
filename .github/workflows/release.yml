@@ -257,6 +257,13 @@ jobs:
         kind: Kustomization
         resources:
         - ../../default
+        # Pin the released image EXPLICITLY. Previously the pin worked only
+        # as a side effect of \`make bundle-release\` mutating
+        # config/manager/kustomization.yaml earlier in this job — one step
+        # reorder away from shipping :latest.
+        images:
+        - name: ghcr.io/neo4j-partners/neo4j-kubernetes-operator
+          newTag: "${TAG_NAME}"
         patches:
         - path: version-patch.yaml
           target:
@@ -266,6 +273,11 @@ jobs:
         ./bin/kustomize build config/overlays/release-temp \
           > release-artifacts/neo4j-kubernetes-operator-complete.yaml
         rm -rf config/overlays/release-temp
+        # Assert the pin actually landed — fail the release rather than ship
+        # an artifact pointing at :latest.
+        grep -q "image: ghcr.io/neo4j-partners/neo4j-kubernetes-operator:${TAG_NAME}" \
+          release-artifacts/neo4j-kubernetes-operator-complete.yaml || {
+          echo "ERROR: complete.yaml is not pinned to ${TAG_NAME}" >&2; exit 1; }
 
     # Hand the OperatorHub bundle off to the submit-operatorhub job via the
     # GHA artifact store. The two jobs run on separate runners with no shared

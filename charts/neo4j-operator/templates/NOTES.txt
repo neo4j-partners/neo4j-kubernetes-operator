@@ -24,6 +24,13 @@ Check the operator logs:
 Verify CRDs are installed:
   kubectl get crds | grep neo4j
 
+## Lifecycle
+
+Upgrading? Apply the new release's CRDs first (helm does not upgrade CRDs):
+  kubectl apply --server-side -f https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases/download/<version>/neo4j-kubernetes-operator.yaml
+
+Uninstalling? Delete all Neo4j CRs FIRST (finalizers need the running operator), then helm uninstall.
+
 ## Quick Start
 
 {{- /* spec.image is an object (repo/tag), not a string. Split the
@@ -77,7 +84,7 @@ Verify CRDs are installed:
 ## Metrics
 
 Metrics are exposed at:
-  http://{{ include "neo4j-operator.fullname" . }}-metrics.{{ .Release.Namespace }}:{{ .Values.metrics.service.port }}/metrics
+  {{ if .Values.metrics.secure }}https{{ else }}http{{ end }}://{{ include "neo4j-operator.fullname" . }}-metrics.{{ .Release.Namespace }}:{{ .Values.metrics.service.port }}/metrics
 
 {{- if .Values.metrics.serviceMonitor.enabled }}
 ServiceMonitor has been created for Prometheus Operator integration.

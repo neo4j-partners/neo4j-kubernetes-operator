@@ -67,11 +67,10 @@ Create the name of the service account to use
 Get the namespace for leader election
 */}}
 {{- define "neo4j-operator.leaderElectionNamespace" -}}
-{{- if .Values.leaderElection.namespace }}
-{{- .Values.leaderElection.namespace }}
-{{- else }}
+{{/* Always the release namespace: controller-runtime puts the lease in the
+     pod's own namespace and the binary exposes no flag to move it, so a
+     configurable value here only relocated the RBAC away from the lease. */}}
 {{- .Release.Namespace }}
-{{- end }}
 {{- end }}
 
 {{/*
@@ -122,6 +121,19 @@ discovery needs a cluster-scoped namespace list/watch a Role can't grant).
 Failing fast is deliberate: someone who set perNamespaceRoles=true to forbid
 ClusterRoles must never be silently handed one.
 */}}
+{{/*
+Validate operatorMode up front: a typo (e.g. "Cluster") previously fell through
+every mode gate and rendered a ZERO-RBAC, watch-everything install.
+*/}}
+{{- define "neo4j-operator.validateMode" -}}
+{{- if not (has .Values.operatorMode (list "cluster" "namespace" "namespaces")) }}
+{{- fail (printf "operatorMode must be one of cluster|namespace|namespaces, got %q" .Values.operatorMode) }}
+{{- end }}
+{{- if and .Values.rbac.perNamespaceRoles (ne .Values.operatorMode "namespaces") }}
+{{- fail "rbac.perNamespaceRoles=true requires operatorMode=namespaces — refusing to silently emit a ClusterRole for an install that asked for namespace-scoped RBAC" }}
+{{- end }}
+{{- end }}
+
 {{- define "neo4j-operator.perNamespaceRoles" -}}
 {{- if and .Values.rbac.create (eq .Values.operatorMode "namespaces") .Values.rbac.perNamespaceRoles -}}
 {{- if empty .Values.watchNamespaces -}}
@@ -191,7 +203,5 @@ Get container args based on configuration
 - --metrics-bind-address=0
 {{- end }}
 - --health-probe-bind-address=:8081
-{{- if .Values.webhook.enabled }}
-- --webhook-port={{ .Values.webhook.port }}
-{{- end }}
+
 {{- end }}

@@ -179,6 +179,9 @@ metrics:
     # for newer clusters you need a manually-created Secret of type
     # kubernetes.io/service-account-token referencing a SA bound to the
     # `metrics-reader` ClusterRole. Set this to that Secret's name.
+    # REQUIRED when metrics.secure=true and the ServiceMonitor is enabled —
+    # the chart fails the render otherwise (an unauthenticated scrape of the
+    # TokenReview-secured endpoint gets 401, silently).
     bearerTokenSecret:
       name: ""
       key: "token"
@@ -186,19 +189,15 @@ metrics:
 # Leader election configuration
 leaderElection:
   enabled: true
-  namespace: ""  # Uses Release.Namespace if not specified
+  # NOTE: the lease always lives in the release namespace — the operator binary
+  # has no flag to relocate it, so a configurable namespace here would move the
+  # RBAC away from where leader election actually happens and break it. The
+  # former `namespace` value was removed for that reason.
 
-# WARNING: This project does NOT use admission webhooks. All validation is
-# performed inline during reconciliation in internal/validation/.
-# This section MUST remain disabled. Do not enable it.
-webhook:
-  enabled: false  # DO NOT enable — webhooks are not implemented
-  port: 9443
-  certManager:
-    enabled: false
-    issuerRef:
-      name: ""
-      kind: ""
+# This project does NOT use admission webhooks (all validation is inline in
+# internal/validation/). The former `webhook:` values block was removed: with
+# webhook.enabled=true the chart rendered a --webhook-port flag the binary
+# doesn't define, crash-looping the operator.
 
 # NetworkPolicy for the operator pod itself.
 #
@@ -262,8 +261,6 @@ config:
   requeueInterval: 30s
   # Cache sync timeout
   cacheSyncTimeout: 2m
-  # Enable webhook (requires cert-manager)
-  enableWebhooks: false
 
 # Neo4j-specific configuration
 neo4j:

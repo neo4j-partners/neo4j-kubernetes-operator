@@ -39,16 +39,31 @@ helm install neo4j-operator neo4j-operator/neo4j-operator \
 ```
 
 **Upgrade**:
+
+> **Apply the new release's CRDs before `helm upgrade` — this step is
+> mandatory.** Helm installs the contents of a chart's `crds/` directory only
+> on first install and never upgrades them; `helm upgrade` silently leaves the
+> old CRDs in place. Running a new operator against stale CRD schemas means
+> any fields added in the new release are **silently pruned** by the API
+> server — your manifests apply cleanly but the new fields never reach the
+> operator.
+
 ```bash
+# 1. Refresh the CRDs from the release you are upgrading to (mandatory)
+kubectl apply --server-side -f https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases/download/<version>/neo4j-kubernetes-operator.yaml
+
+# 2. Upgrade the chart
 helm repo update
 helm upgrade neo4j-operator neo4j-operator/neo4j-operator \
   --namespace neo4j-operator-system
 ```
 
-**Uninstall**:
-```bash
-helm uninstall neo4j-operator --namespace neo4j-operator-system
-```
+> **Avoid `--reuse-values` as a blanket habit.** It pins every value from the
+> previous release and discards any new chart defaults introduced by the
+> upgrade. Prefer re-passing your overrides explicitly (`-f my-values.yaml` or
+> `--set ...`) so new defaults take effect.
+
+**Uninstall**: see [Uninstalling the Operator](#uninstalling-the-operator) — Neo4j custom resources must be deleted **before** the operator is removed, or their finalizers will deadlock.
 
 ### Method 2: OCI Registry
 
@@ -78,14 +93,18 @@ For environments where running `helm` is inconvenient, every release also publis
 ```bash
 RELEASE_VERSION=v1.10.2  # Replace with desired version
 
-kubectl apply -f https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases/download/${RELEASE_VERSION}/neo4j-kubernetes-operator-complete.yaml
+kubectl apply --server-side -f https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases/download/${RELEASE_VERSION}/neo4j-kubernetes-operator-complete.yaml
 ```
+
+Use `--server-side`: the largest CRDs in the bundle exceed the 256 KiB
+`last-applied-configuration` annotation limit that client-side `kubectl apply`
+relies on, so server-side apply is the recommended form.
 
 To always pull the latest published release:
 
 ```bash
 RELEASE_VERSION=$(gh release list --repo neo4j-partners/neo4j-kubernetes-operator --limit 1 --json tagName --jq '.[0].tagName')
-kubectl apply -f https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases/download/${RELEASE_VERSION}/neo4j-kubernetes-operator-complete.yaml
+kubectl apply --server-side -f https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases/download/${RELEASE_VERSION}/neo4j-kubernetes-operator-complete.yaml
 ```
 
 **What this installs**:
@@ -104,10 +123,22 @@ gh release list --repo neo4j-partners/neo4j-kubernetes-operator
 
 **CRDs only** (manage the operator deployment separately):
 ```bash
-kubectl apply -f https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases/download/${RELEASE_VERSION}/neo4j-kubernetes-operator.yaml
+kubectl apply --server-side -f https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases/download/${RELEASE_VERSION}/neo4j-kubernetes-operator.yaml
 ```
 
 **Supported architectures**: linux/amd64, linux/arm64
+
+**Upgrade**:
+
+Upgrading a Method 3 install is just applying the new release's complete
+bundle (server-side). It includes the updated CRDs, and the operator
+Deployment rolls to the new image automatically:
+
+```bash
+RELEASE_VERSION=v1.11.0  # The version you are upgrading to
+
+kubectl apply --server-side -f https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases/download/${RELEASE_VERSION}/neo4j-kubernetes-operator-complete.yaml
+```
 
 ### Method 4: Helm from Cloned Repository
 
@@ -237,8 +268,8 @@ After cloning the repository, you have access to these make targets:
 | `make install` | Install CRDs into your cluster |
 | `make deploy-prod` | Deploy operator with production configuration |
 | `make deploy-dev` | Deploy with development configuration |
-| `make undeploy-prod/undeploy-dev` | Remove operator deployment |
-| `make uninstall` | Remove CRDs (also removes all Neo4j instances) |
+| `make undeploy-prod/undeploy-dev` | Remove the operator Deployment + RBAC only (keeps CRDs and namespace) |
+| `make uninstall` | Remove CRDs — separate, destructive step (also removes all Neo4j instances) |
 
 ### Development & Testing
 | Target | Description |
@@ -314,24 +345,65 @@ kubectl port-forward svc/standalone-neo4j-service 7474:7474 7687:7687
 
 ## Uninstalling the Operator
 
+The order below matters and is the same for **every** install method. Neo4j
+custom resources carry finalizers that only the **running** operator can
+remove — if you delete the operator (or the CRDs) first, every remaining CR
+wedges in `Terminating` forever.
+
 > **Warning**: Deleting CRDs cascades to every Neo4j instance the operator manages. Back up first.
+
+**Step 1 — Delete all Neo4j custom resources and wait for them to disappear**
+(the operator must still be running to strip their finalizers):
+
+```bash
+# List everything the operator manages — this must come back EMPTY before step 2
+kubectl get neo4jenterpriseclusters,neo4jenterprisestandalones,neo4jdatabases,neo4jshardeddatabases,neo4jbackups,neo4jrestores,neo4jusers,neo4jroles,neo4jrolebindings,neo4jauthrules,neo4jplugins -A
+
+# Delete them (repeat per namespace, or script over the list above), e.g.:
+kubectl delete neo4jenterpriseclusters,neo4jenterprisestandalones,neo4jdatabases,neo4jshardeddatabases,neo4jbackups,neo4jrestores,neo4jusers,neo4jroles,neo4jrolebindings,neo4jauthrules,neo4jplugins --all -n <namespace>
+
+# Re-run the `kubectl get ... -A` above and wait until no resources are listed
+```
+
+**Step 2 — Remove the operator** (only once step 1 shows no remaining CRs):
 
 ```bash
 # Helm install — Methods 1, 2, 4
 helm uninstall neo4j-operator --namespace neo4j-operator-system
 
-# kubectl-apply install — Method 3
-kubectl delete -f https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases/download/v1.10.2/neo4j-kubernetes-operator-complete.yaml
+# kubectl-apply install — Method 3: delete the Deployment + RBAC, NOT the bundle file (see warning below)
+kubectl delete deployment neo4j-operator-controller-manager -n neo4j-operator-system
+kubectl get clusterrolebinding,clusterrole -o name | grep neo4j-operator | xargs kubectl delete
 
-# git-clone + make install — Method 5
+# git-clone + make install — Method 5 (removes Deployment + RBAC, keeps CRDs and namespace)
 make undeploy-prod   # or undeploy-dev
+```
 
-# CRDs (any install method) — only after all Neo4j instances are deleted
+> **Do not run `kubectl delete -f neo4j-kubernetes-operator-complete.yaml`.**
+> It deletes the CRDs and namespace in file order while CRs may still exist,
+> which wedges every live CR in `Terminating` (their finalizers can no longer
+> be removed once the operator is gone). Use the explicit steps above instead.
+
+**Step 3 — Optionally delete the CRDs and namespace.** This destroys the
+definitions of all remaining Neo4j custom resources — skip it if you plan to
+reinstall:
+
+```bash
 kubectl get crd -o name | grep neo4j.neo4j.com | xargs kubectl delete
 
-# Namespace (optional)
 kubectl delete namespace neo4j-operator-system
 ```
+
+**Escape hatch — a CR is already stuck in `Terminating`** (operator removed
+before the CR was deleted). Strip its finalizers manually:
+
+```bash
+kubectl patch <kind>/<name> -n <namespace> -p '{"metadata":{"finalizers":[]}}' --type=merge
+```
+
+> **Caveat**: removing finalizers skips the operator's cleanup logic — data
+> the finalizer would have cleaned up (databases, backup artifacts, child
+> resources) may be orphaned.
 
 ## Troubleshooting Installation
 

@@ -365,6 +365,10 @@ docker-push: ## Push docker image with the manager.
 .PHONY: helm-sync-crds
 helm-sync-crds: manifests ## Sync generated CRDs into Helm chart crds/ directory
 	@echo "Syncing CRDs to Helm chart..."
+	@# rm-then-copy so DELETING a CRD from config/crd/bases also removes the
+	@# stale chart copy — a bare cp left removed CRDs installing forever (no
+	@# diff, gate green).
+	rm -f charts/neo4j-operator/crds/*.yaml
 	cp config/crd/bases/*.yaml charts/neo4j-operator/crds/
 	@echo "Helm chart CRDs synced."
 
@@ -405,15 +409,30 @@ check-drift: sync-all bundle ## CI gate: regenerate everything and fail if anyth
 	@# belt-and-braces — if someone bypasses `make bundle` and calls
 	@# operator-sdk directly (which restamps with time.Now()), we still
 	@# tolerate the resulting createdAt: diff rather than failing CI.
+	@# `api` is in the pathspec so a stale committed zz_generated.deepcopy.go
+	@# fails the gate — unit tests run against REGENERATED code (test-unit
+	@# depends on generate) while docker-build compiles the committed file,
+	@# so without this a wrong DeepCopyInto could ship in a release image.
 	@if ! git diff --exit-code --quiet -I'^    createdAt:' -- \
-	    config/crd config/rbac config/samples config/manifests \
+	    api config/crd config/rbac config/samples config/manifests \
 	    charts/neo4j-operator bundle; then \
 	    echo ""; \
 	    echo "ERROR: generated files are out of date." >&2; \
 	    echo "Run 'make sync-all bundle' locally and commit the result." >&2; \
 	    git --no-pager diff --stat -I'^    createdAt:' -- \
-	        config/crd config/rbac config/samples config/manifests \
+	        api config/crd config/rbac config/samples config/manifests \
 	        charts/neo4j-operator bundle >&2; \
+	    exit 1; \
+	fi
+	@# git diff never sees UNTRACKED files — a brand-new generated file (new
+	@# CRD base, new chart crd, new bundle manifest) must also fail the gate.
+	@UNTRACKED=$$(git status --porcelain -- \
+	    api config/crd config/rbac config/samples config/manifests \
+	    charts/neo4j-operator bundle | grep '^??' || true); \
+	if [ -n "$$UNTRACKED" ]; then \
+	    echo ""; \
+	    echo "ERROR: regeneration produced untracked files — commit them:" >&2; \
+	    echo "$$UNTRACKED" >&2; \
 	    exit 1; \
 	fi
 	@echo "All generated artifacts are in sync."
@@ -555,13 +574,24 @@ deploy-namespace-scoped: manifests kustomize ## Deploy controller with namespace
 undeploy-namespace-scoped: kustomize ## Undeploy namespace-scoped controller
 	$(KUSTOMIZE) build config/overlays/namespace-scoped | $(KUBECTL) delete --ignore-not-found=true -f -
 
+# undeploy-* remove the operator DEPLOYMENT + RBAC only. CRDs and the
+# namespace are explicitly EXCLUDED: deleting CRDs cascades to every Neo4j CR,
+# and with the operator gone in the same delete no controller can strip the
+# CR finalizers — CRDs and namespaces wedge in Terminating forever. Remove
+# CRDs separately via `make uninstall` AFTER all Neo4j CRs are deleted.
 .PHONY: undeploy-dev
-undeploy-dev: kustomize ## Undeploy development controller from the K8s cluster.
-	$(KUSTOMIZE) build config/overlays/dev | $(KUBECTL) delete --ignore-not-found=true -f -
+undeploy-dev: kustomize ## Undeploy development controller (keeps CRDs + namespace).
+	$(KUSTOMIZE) build config/overlays/dev | \
+	    $(KUBECTL) delete -f - --dry-run=client -o name 2>/dev/null | \
+	    grep -vE '^customresourcedefinition|^namespace/' | \
+	    xargs -r $(KUBECTL) delete --ignore-not-found=true
 
 .PHONY: undeploy-prod
-undeploy-prod: kustomize ## Undeploy production controller from the K8s cluster.
-	$(KUSTOMIZE) build config/overlays/prod | $(KUBECTL) delete --ignore-not-found=true -f -
+undeploy-prod: kustomize ## Undeploy production controller (keeps CRDs + namespace).
+	$(KUSTOMIZE) build config/overlays/prod | \
+	    $(KUBECTL) delete -f - --dry-run=client -o name 2>/dev/null | \
+	    grep -vE '^customresourcedefinition|^namespace/' | \
+	    xargs -r $(KUBECTL) delete --ignore-not-found=true
 
 ##@ Dependencies
 
@@ -651,21 +681,21 @@ ln -sf $(1)-$(3) $(1)
 endef
 
 .PHONY: operator-sdk
-OPERATOR_SDK ?= $(LOCALBIN)/operator-sdk
-operator-sdk: ## Download operator-sdk locally if necessary.
-ifeq (,$(wildcard $(OPERATOR_SDK)))
-ifeq (, $(shell which operator-sdk 2>/dev/null))
+# Version-suffixed binary + symlink, NO PATH fallback: bundle metadata embeds
+# the operator-sdk version (bundle/metadata/annotations.yaml, bundle.Dockerfile),
+# so "whatever is on PATH" produced tool-version drift between machines — a
+# brew-installed v1.42 regenerated different bytes than the pinned v1.39.1.
+# The sentinel also makes OPERATOR_SDK_VERSION bumps actually re-download.
+OPERATOR_SDK ?= $(LOCALBIN)/operator-sdk-$(OPERATOR_SDK_VERSION)
+operator-sdk: $(OPERATOR_SDK) ## Download operator-sdk locally if necessary.
+$(OPERATOR_SDK): $(LOCALBIN)
 	@{ \
 	set -e ;\
-	mkdir -p $(dir $(OPERATOR_SDK)) ;\
 	OS=$(shell go env GOOS) && ARCH=$(shell go env GOARCH) && \
 	curl -sSLo $(OPERATOR_SDK) https://github.com/operator-framework/operator-sdk/releases/download/$(OPERATOR_SDK_VERSION)/operator-sdk_$${OS}_$${ARCH} ;\
 	chmod +x $(OPERATOR_SDK) ;\
+	ln -sf $(notdir $(OPERATOR_SDK)) $(LOCALBIN)/operator-sdk ;\
 	}
-else
-OPERATOR_SDK = $(shell which operator-sdk)
-endif
-endif
 
 # SKIP_MANIFESTS=true lets CI reuse pre-generated CRD manifests from a prior job
 # instead of re-running controller-gen, ensuring the released artifacts are byte-for-byte
@@ -733,21 +763,18 @@ bundle-push: ## Push the bundle image.
 	$(MAKE) docker-push IMG=$(BUNDLE_IMG)
 
 .PHONY: opm
-OPM = $(LOCALBIN)/opm
-opm: ## Download opm locally if necessary.
-ifeq (,$(wildcard $(OPM)))
-ifeq (,$(shell which opm 2>/dev/null))
+OPM_VERSION ?= v1.23.0
+# Version-suffixed sentinel, no PATH fallback — same reproducibility rationale
+# as operator-sdk above.
+OPM = $(LOCALBIN)/opm-$(OPM_VERSION)
+opm: $(OPM) ## Download opm locally if necessary.
+$(OPM): $(LOCALBIN)
 	@{ \
 	set -e ;\
-	mkdir -p $(dir $(OPM)) ;\
 	OS=$(shell go env GOOS) && ARCH=$(shell go env GOARCH) && \
-	curl -sSLo $(OPM) https://github.com/operator-framework/operator-registry/releases/download/v1.23.0/$${OS}-$${ARCH}-opm ;\
+	curl -sSLo $(OPM) https://github.com/operator-framework/operator-registry/releases/download/$(OPM_VERSION)/$${OS}-$${ARCH}-opm ;\
 	chmod +x $(OPM) ;\
 	}
-else
-OPM = $(shell which opm)
-endif
-endif
 
 # A comma-separated list of bundle images (e.g. make catalog-build BUNDLE_IMGS=example.com/operator-bundle:v0.1.0,example.com/operator-bundle:v0.2.0).
 # These images MUST exist in a registry and be pull-able.
