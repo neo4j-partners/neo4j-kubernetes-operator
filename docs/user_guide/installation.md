@@ -221,6 +221,22 @@ kubectl apply -k .
 
 For local development (Kind cluster + local image build) use `make dev-cluster` followed by `make operator-setup`. See the [developer guide](../developer_guide/development.md) for the full inner-loop workflow.
 
+## Verifying Image Signatures
+
+All release images are multi-arch and signed with [Sigstore Cosign](https://docs.sigstore.dev/cosign/overview/)
+keyless signing — signatures are recorded in the public Rekor transparency
+log. Security teams can verify any release tag before admitting it:
+
+```bash
+cosign verify ghcr.io/priyolahiri/neo4j-kubernetes-operator:<tag> \
+  --certificate-identity-regexp='github.com/priyolahiri' \
+  --certificate-oidc-issuer='https://token.actions.githubusercontent.com'
+```
+
+For the full list of quality gates every release passes (integration matrices,
+the blocking install/upgrade/uninstall gate), see
+[Supported Neo4j Versions → Release quality](version_support.md#release-quality-the-gates-every-release-passes).
+
 ## Verifying the Installation
 
 After installation, verify that the operator is running:

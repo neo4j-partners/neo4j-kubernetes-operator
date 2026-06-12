@@ -121,6 +121,40 @@ are supported by Neo4j at once for ~1.5 years. The operator mirrors that:
                                                                   (2 anchors again)
 ```
 
+## Release quality: the gates every release passes
+
+"Validated" isn't a claim, it's a pipeline. A release of this operator cannot
+be published unless all of the following pass — they are wired as blocking
+gates, not conventions:
+
+| Gate | What it proves | When it runs |
+|---|---|---|
+| Unit suite + drift gate | Code behavior pinned by ~thousands of unit tests; CRDs, RBAC, Helm chart, and OLM bundle are regenerated and diffed — published manifests always match the code | Every PR, and again on the release tag |
+| Core integration suite | Reconcile contracts (cluster formation, standalone lifecycle, databases, backups) against real Neo4j on Kubernetes — on **both** supported lines (5.26 LTS *and* the pinned CalVer) | Every runtime-affecting PR |
+| Extended integration suite | The full matrix: scaling with drain, split-brain recovery, the complete backup/restore matrix (PVC, cloud, chains, hooks), sharding | Nightly, and on the exact commit being tagged |
+| Install-confidence gate | Five legs on a fresh cluster: Helm install in cluster **and** namespace-scoped RBAC modes (with a live smoke deployment), Helm upgrade **from the previous published release** including the mandatory CRD refresh, documented-order uninstall with live resources, and the kubectl server-side-apply path | Inside the release pipeline — `build-and-push` is blocked until it passes |
+| Signed supply chain | Multi-arch (`amd64`/`arm64`) images signed with Sigstore Cosign keyless signing; OLM bundle validated with operator-sdk | Every release |
+
+Verify an image signature yourself:
+
+```bash
+cosign verify ghcr.io/priyolahiri/neo4j-kubernetes-operator:<tag> \
+  --certificate-identity-regexp='github.com/priyolahiri' \
+  --certificate-oidc-issuer='https://token.actions.githubusercontent.com'
+```
+
+### Platform compatibility
+
+- **Kubernetes**: 1.32+ (CI runs the matrix on upstream Kubernetes via Kind).
+- **Managed clouds (EKS, GKE, AKS)**: supported; cloud backups/restores
+  authenticate via each cloud's workload identity (IRSA / GKE Workload
+  Identity / Azure Workload Identity) or explicit credential Secrets — see
+  [Backup & Restore](guides/backup_restore.md) for per-cloud setup.
+- **OpenShift**: install via OLM/OperatorHub; the chart's security contexts
+  can defer to SCCs (`podSecurityContextEnabled: false`).
+- **NetworkPolicy**: enforced policies require a CNI that implements them
+  (e.g. Calico, Cilium); Flannel ignores NetworkPolicies silently.
+
 ## For maintainers
 
 **Validation gates in code:**

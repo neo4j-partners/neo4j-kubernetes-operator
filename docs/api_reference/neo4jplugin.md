@@ -506,7 +506,7 @@ spec:
 - Automatically applies default security settings
 - User security configuration can override defaults
 - Automatically configured settings:
-  - `NEO4J_DBMS_SECURITY_PROCEDURES_UNRESTRICTED=gds.*,apoc.load.*`
+  - `dbms.security.procedures.unrestricted=gds.*` and `dbms.security.procedures.allowlist=gds.*` (additive — merged with, never replacing, existing values)
 
 ### Examples with Automatic Security
 

@@ -62,6 +62,18 @@ cosign verify ghcr.io/priyolahiri/neo4j-kubernetes-operator:__TAG__ \
   --certificate-oidc-issuer='https://token.actions.githubusercontent.com'
 ```
 
+## How this release was validated
+
+Every release must pass, mechanically — a failure in any gate blocks publication:
+
+- **Unit suite + generated-artifact drift gate** — CRDs, RBAC, Helm chart, and the OLM bundle are regenerated and diffed on every PR; a release cannot ship manifests that don't match the code.
+- **Core integration suite on both supported Neo4j lines** — Neo4j 5.26 LTS *and* the pinned CalVer release, on every runtime-affecting PR.
+- **Extended integration suite on the release commit** — the full matrix (clustering, scaling, split-brain recovery, the complete backup/restore matrix, sharding) runs against the exact commit being tagged.
+- **Install-confidence gate (blocking, inside the release pipeline)** — a five-leg matrix on a fresh Kubernetes cluster: Helm install (cluster and namespace-scoped RBAC modes), Helm upgrade **from the previous published release** including the CRD refresh, documented-order uninstall with live resources, and the kubectl server-side-apply path. A release that cannot cleanly install, upgrade, or uninstall cannot be published.
+- **Signed supply chain** — multi-arch images signed with Sigstore Cosign (verification command above); OLM bundle validated with operator-sdk.
+
+See [Supported Neo4j Versions](https://priyolahiri.github.io/neo4j-kubernetes-operator/user_guide/version_support/) for what "validated" means per Neo4j line, and [CI/CD & Workflows](https://priyolahiri.github.io/neo4j-kubernetes-operator/developer_guide/ci_and_workflows/) for the gate machinery.
+
 ## Release Assets
 
 | Asset | Description |

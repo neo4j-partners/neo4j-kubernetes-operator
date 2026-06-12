@@ -257,6 +257,11 @@ from the tag.
 2. (Recommended) `make install-confidence` — the same install/upgrade/uninstall
    matrix the release workflow runs as a blocking gate. Running it locally
    first means a failure costs you minutes, not a dead tag.
+2b. **Dispatch the extended suite on the final main** and wait for green:
+   `gh workflow run integration-tests.yml --ref main`. The extended lane runs
+   nightly, not per-PR — a PR that only core lanes validated can carry a stale
+   extended-lane expectation (or a real regression) that would otherwise
+   surface AFTER the release. Tag the exact commit the suite validated.
 3. If there are breaking changes or notable upgrade steps, add/extend the
    `Upgrading from vX to vY` section in
    [`migration_guide.md`](../user_guide/migration_guide.md).
@@ -287,6 +292,11 @@ kubectl bundles + OLM CSV), **Pages — Docs** (`/v1.12/` + `/latest/`), and
    - `cosign verify ghcr.io/priyolahiri/neo4j-kubernetes-operator:v1.12.0 …` succeeds.
    - The release run's **Install Confidence Gate** job is green (it ran
      automatically — no manual fresh-Kind `helm install` needed).
+   - The **submit-operatorhub** job opened a PR on
+     k8s-operatorhub/community-operators (check the fork's branches if not).
+7. Comment on every issue the release fixes that was reported by someone else,
+   naming the released version and asking the reporter to re-verify against it
+   — reporter-filed issues stay open until verified on a pinned release.
 
 ## Publishing to GitHub Pages
 
