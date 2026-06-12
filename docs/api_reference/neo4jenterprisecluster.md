@@ -119,6 +119,7 @@ Defines the cluster server topology and role constraints.
 | Field | Type | Description |
 |---|---|---|
 | `servers` | `int32` | **Required**. Number of Neo4j servers (minimum: 2, maximum: 100) |
+| `minSystemPrimaries` | `*int32` | System-database primary count written to `dbms.cluster.minimum_initial_system_primaries_count` at cluster formation, and the floor the cluster can later be scaled down to. Default: `min(3, servers)`. Validator: must be ≥ 2 and ≤ `servers`; an even value draws a warning (an even voting set has no clean write-quorum majority — prefer 3, 5, …). Note this is a bootstrap **floor**, not a cap: Neo4j makes **all** initially-joined servers system primaries; the setting only defines how many must be present to bootstrap and the minimum the system database can shrink to |
 | `serverModeConstraint` | `string` | Global server mode constraint: `"NONE"` (default), `"PRIMARY"`, `"SECONDARY"` |
 | `serverRoles` | [`[]ServerRoleHint`](#serverrolehint) | Per-server role constraints (overrides global constraint) |
 | `placement` | [`*PlacementConfig`](#placementconfig) | Advanced placement and scheduling configuration |

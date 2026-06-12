@@ -33,6 +33,42 @@ kubectl get neo4jenterprisecluster <name> -o jsonpath='{.status.upgradeStatus}'
 kubectl logs -n neo4j-operator deployment/neo4j-operator-controller-manager -f | grep -i upgrade
 ```
 
+### Upgrade phases and resumability
+
+The upgrade runs as a requeue-driven state machine whose state is persisted in
+`status.upgradeStatus`, so you can follow it with `kubectl` and it survives
+operator restarts:
+
+| Phase | What's happening |
+|---|---|
+| `Staging` | Pre-upgrade health check, version-compatibility check, StatefulSet frozen (partition = replica count), new image applied to the template |
+| `Rolling` | Pods restart one at a time, highest ordinal first; after each pod, Kubernetes readiness **and** Neo4j cluster membership (`SHOW SERVERS`) are verified before the partition is lowered |
+| `Stabilizing` | All pods updated; the operator waits for consistently stable cluster health and consensus |
+| `Verifying` | Every server's reported version is checked against the target before the upgrade is declared done |
+| `Completed` / `Failed` / `Paused` | Terminal. `Paused` means a health check failed with `autoPauseOnFailure: true` — the cluster is left as-is for you to investigate |
+
+Two status fields drive the machine and are useful when watching a long
+upgrade: `currentPartition` (which StatefulSet partition step the rollout is
+on — counts down toward 0) and `stepStartTime` (when the current step began;
+each per-pod step is bounded by `upgradeTimeout`/`healthCheckTimeout`).
+
+**Resumability.** Because the phase and partition are persisted in status, an
+operator restart (or leader change) mid-upgrade resumes exactly where it left
+off — already-rolled pods are not rolled again. Upgrades that were interrupted
+under an older operator version (`phase: InProgress`) are adopted and resumed
+automatically.
+
+**Changing the target mid-upgrade.** If you patch `spec.image.tag` again while
+an upgrade is running, the state machine retargets to the new image: pods not
+yet rolled go straight to the new version, and pods already rolled to the
+intermediate version are rolled again. You don't need to wait for the first
+upgrade to finish.
+
+**Version verification across SemVer/CalVer.** The `Verifying` phase compares
+each server's `SHOW SERVERS` version against the image tag, normalizing
+Neo4j's kernel alias (the `2025.01.x` CalVer releases report kernel `5.27.x` —
+both are accepted as the same version).
+
 ### First upgrade after operator deployment
 
 If `status.version` is not yet set on the cluster resource (e.g. immediately after the operator is first deployed against an existing cluster), the version-compatibility check is skipped and the upgrade proceeds. Downgrade protection is applied on all subsequent upgrades.

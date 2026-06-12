@@ -59,6 +59,81 @@ Remove or correct any flagged keys. (The operator's own rendered config is fully
 > **Single-node Cluster CRDs**: removed in v1.6-alpha. If you still have a `Neo4jEnterpriseCluster` with `topology.servers: 1`, migrate to `Neo4jEnterpriseStandalone` — same data via a backup/restore round-trip. For step-by-step alpha-era guidance, see the [v1.6-alpha migration section](#upgrading-to-v160-alpha-api-stabilization) below or the older versions of this doc in git history.
 
 
+## Upgrading from v1.11.x to v1.12.0
+
+### 0. Refresh CRDs before upgrading the operator (always required)
+
+Helm installs CRDs from the chart's `crds/` directory **once** and never
+upgrades them. Before `helm upgrade`, apply the new release's CRDs:
+
+```bash
+kubectl apply --server-side -f \
+  https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases/download/v1.12.0/neo4j-kubernetes-operator.yaml
+```
+
+`--server-side` is required — the larger CRDs exceed the client-side-apply
+annotation limit. See [Installation → Upgrading](installation.md) for the full
+procedure and the documented uninstall order.
+
+### 1. Standalone client Service renamed: `{name}-service` → `{name}-client`
+
+**What changed.** Standalone instances historically exposed their client
+Service as `{name}-service` while clusters used `{name}-client`. v1.12 unifies
+on **`{name}-client` for both kinds**. The canonical Service now carries your
+full `spec.service` configuration (type, NodePort, annotations).
+
+**Compatibility shim (one release only).** `{name}-service` is kept as a
+**ClusterIP-only** alias annotated `neo4j.com/deprecated-alias-of`, so saved
+in-cluster connection strings keep working. **It is removed in the next
+release** — update clients, dashboards, NetworkPolicies, and automation to
+`{name}-client` during this cycle.
+
+**One-time effects on upgrade:**
+
+- If your standalone used `spec.service.type: LoadBalancer` or `NodePort`, that
+  exposure **moves to `{name}-client`** — the LoadBalancer is re-provisioned
+  once and its **external IP may change**. Update DNS records accordingly.
+- TLS standalones get a re-issued certificate carrying **both** name sets as
+  SANs, and the pod **restarts once** (automatically, only after the new
+  certificate is in place) so Neo4j loads the new keystore.
+- `status.endpoints` now reports `{name}-client` hostnames.
+
+See [External Access](external_access.md) for the services table and migration
+notes.
+
+### 2. Plugin `url`/`custom` sources must be `https://`
+
+**What changed.** The validator now rejects any `Neo4jPlugin`
+`spec.source.url` whose scheme isn't `https` (`http://`, `file://`, `ftp://`
+etc. all fail with `field.Invalid`). Plugin JARs are downloaded over the
+network and the recorded checksum is not enforced at download time on the
+entrypoint path, so a cleartext URL had neither transport nor content
+integrity.
+
+**Who is affected.** Existing `Neo4jPlugin` CRs with an `http://` source URL —
+they will fail validation (and stop reconciling) after the operator upgrade.
+
+**Action required.** Audit plugin CRs before upgrading:
+
+```bash
+kubectl get neo4jplugins -A -o json | \
+  jq -r '.items[] | select(.spec.source.url // "" | startswith("http://")) | "\(.metadata.namespace)/\(.metadata.name): \(.spec.source.url)"'
+```
+
+Re-host flagged JARs on an https endpoint (an in-cluster mirror with a
+cert-manager certificate works) or switch to `installMode: PreBaked` with the
+JAR baked into a custom image.
+
+### 3. Rolling upgrades now run as a resumable state machine
+
+Not a breaking change, but visible: during a Neo4j version upgrade,
+`status.upgradeStatus.phase` now progresses through
+`Staging → Rolling → Stabilizing → Verifying → Completed`, and the upgrade
+**survives operator restarts** (it resumes where it left off instead of
+starting over). An upgrade interrupted under v1.11 (`InProgress`) is adopted
+and resumed automatically. See the [Upgrade guide](guides/upgrades.md) for
+phase semantics and monitoring.
+
 ## Upgrading from v1.10.x to v1.11.x
 
 This section covers the breaking and behavioural changes landing in v1.11.x (since `v1.10.0`).

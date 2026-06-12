@@ -895,7 +895,22 @@ spec:
 
 #### Restore to a Standalone Instance
 
-`clusterRef` can reference a `Neo4jEnterpriseStandalone` as well as a `Neo4jEnterpriseCluster`:
+`clusterRef` can reference a `Neo4jEnterpriseStandalone` as well as a
+`Neo4jEnterpriseCluster` — the operator auto-detects the kind and routes to the
+standalone path. Unlike the cluster path (Cypher `seedURI`, no downtime), a
+standalone restore is **Job-based and takes the instance offline**:
+
+1. The operator scales the standalone StatefulSet to 0 (`stopCluster: true` is
+   required — with `false` it refuses while pods are running).
+2. A restore Job mounts the data PVC and the backup source and runs
+   `neo4j-admin database restore`. From a chain directory it picks the
+   **latest** `.backup` file automatically; from a read-only backup PVC it
+   extracts via a temp dir (`--temp-path`) since the source mount is RO.
+3. The StatefulSet is scaled back up, and once the instance is `Ready` the
+   operator brings the database online (`CREATE DATABASE`/`START DATABASE`).
+
+Pre/post restore hooks (`spec.hooks`) run only on this standalone path — see
+[Restore with Hooks](#restore-with-hooks).
 
 ```yaml
 apiVersion: neo4j.neo4j.com/v1beta1

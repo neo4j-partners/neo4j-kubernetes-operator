@@ -67,7 +67,7 @@ The operator uses a **ME/OTHER bootstrap strategy** with `Parallel` pod manageme
 ### Key Configuration
 
 - **Bootstrap strategy**: server-0 uses `me` (preferred bootstrapper); all other servers use `other` (join when ready)
-- **Minimum primaries**: Set to `TOTAL_SERVERS` on initial formation — all servers must mutually discover each other before RAFT elects a leader, preventing premature solo bootstrap
+- **Minimum primaries**: Set to `min(3, servers)` on initial formation (override with `spec.topology.minSystemPrimaries`) — that many servers must mutually discover each other before RAFT elects a leader, preventing premature solo bootstrap. Note it's a bootstrap **floor**, not a cap: all initially-joined servers become system primaries
 - **On restart** (data already exists): minimum primaries check is skipped so servers rejoin immediately without blocking StatefulSet rolling updates
 - **Pod Management**: `Parallel` — all pods start simultaneously
 
@@ -76,13 +76,13 @@ The operator uses a **ME/OTHER bootstrap strategy** with `Parallel` pod manageme
 1. **All server pods start in parallel** — Single StatefulSet with `Parallel` pod management
 2. **Servers discover each other** — Via static pod FQDNs in the LIST endpoint list (port 6000)
 3. **RAFT coordination** — server-0's `me` hint makes it the preferred bootstrapper; others wait with `other` hint
-4. **All N servers must see each other** — `dbms.cluster.minimum_initial_system_primaries_count=N` prevents any single node from forming a solo cluster (split-brain)
+4. **A quorum of servers must see each other** — `dbms.cluster.minimum_initial_system_primaries_count` (default `min(3, servers)`, override via `spec.topology.minSystemPrimaries`) prevents any single node from forming a solo cluster (split-brain)
 5. **Cluster forms once quorum reached** — RAFT elects server-0 as bootstrap leader; others join
 6. **Servers self-organize** — Neo4j automatically assigns primary and secondary roles per database
 
 ### Benefits
 
-- **Split-brain prevention** — All servers must be mutually visible before formation completes
+- **Split-brain prevention** — A quorum of servers must be mutually visible before formation completes
 - **Reliable formation** — Deterministic peer addresses (one FQDN per pod) unlike K8S ClusterIP which returns a single VIP
 - **Fast restarts** — Minimum primaries check skipped on pod restarts so rolling updates aren't blocked
 
