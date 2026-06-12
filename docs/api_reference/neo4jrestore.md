@@ -154,7 +154,7 @@ Additional restore execution options.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `replaceExisting` | `bool` | ❌ | Replace an existing database (default: `false`). Equivalent confirmation to top-level `force` for cluster restores of an existing database. |
+| `replaceExisting` | `bool` | ❌ | Replace an existing database (default: `false`). Equivalent confirmation to top-level `force` for **cluster** restores of an existing database. For **standalone** restores, use `spec.force` instead. |
 | `verifyBackup` | `bool` | ❌ | **RESERVED — currently a no-op.** Accepted for backward compatibility but not read by the operator. Verify artifacts at backup time via `Neo4jBackup.spec.options.validate` instead. |
 | `additionalArgs` | `[]string` | ❌ | Additional arguments passed verbatim to `neo4j-admin database restore` |
 | `tempPath` | `string` | ❌ | Local directory for temporary files during restore. When `tempStorage` is configured this is set automatically to the mount path; only set manually if you mount your own volume by other means. |
