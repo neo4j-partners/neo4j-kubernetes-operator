@@ -142,11 +142,22 @@ var _ = Describe("Neo4jEnterpriseStandalone Integration Tests", Label("core"), f
 			}, sts)).To(Succeed())
 			Expect(*sts.Spec.Replicas).To(Equal(int32(1)))
 
-			By("Verifying Service was created")
+			By("Verifying canonical client Service was created")
+			// {name}-client is the canonical Service since the #215 rename.
+			// Asserting -client (not the one-release -service alias) so this
+			// spec survives the alias removal next release.
 			svc := &corev1.Service{}
 			Expect(k8sClient.Get(ctx, types.NamespacedName{
-				Name: standaloneName + "-service", Namespace: namespaceName,
+				Name: standaloneName + "-client", Namespace: namespaceName,
 			}, svc)).To(Succeed())
+
+			By("Verifying deprecated -service alias exists with the deprecation annotation")
+			alias := &corev1.Service{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name: standaloneName + "-service", Namespace: namespaceName,
+			}, alias)).To(Succeed())
+			Expect(alias.Annotations).To(HaveKeyWithValue("neo4j.com/deprecated-alias-of", standaloneName+"-client"))
+			Expect(alias.Spec.Type).To(Equal(corev1.ServiceTypeClusterIP))
 
 			By("Verifying standalone status is Ready")
 			updated := &neo4jv1beta1.Neo4jEnterpriseStandalone{}

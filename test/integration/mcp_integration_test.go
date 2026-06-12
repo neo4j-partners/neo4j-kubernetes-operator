@@ -368,8 +368,9 @@ var _ = Describe("MCP Integration Tests", Label("extended"), func() {
 
 				neo4jURI := findEnvVar(container.Env, "NEO4J_URI")
 				// Standalone MCP URI uses the routing scheme for parity with
-				// the cluster builder; see internal/resources/mcp.go.
-				expectedURI := fmt.Sprintf("neo4j://%s-service.%s.svc.cluster.local:7687", standaloneName, namespace.Name)
+				// the cluster builder, and targets the canonical {name}-client
+				// Service (#215 rename); see internal/resources/mcp.go.
+				expectedURI := fmt.Sprintf("neo4j://%s-client.%s.svc.cluster.local:7687", standaloneName, namespace.Name)
 				if neo4jURI == nil || neo4jURI.Value != expectedURI {
 					return fmt.Errorf("expected NEO4J_URI=%s", expectedURI)
 				}
