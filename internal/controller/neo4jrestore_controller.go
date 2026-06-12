@@ -1178,6 +1178,60 @@ func (r *Neo4jRestoreReconciler) ensureRestoreServiceAccount(ctx context.Context
 	return err
 }
 
+// warnIfSeedEndpointNotProjected emits a Warning event when the resolved
+// backup storage declares a custom S3 endpoint (MinIO, Ceph RGW, R2) but the
+// target cluster's server pods verifiably lack AWS_ENDPOINT_URL_S3 (#252).
+// The cluster Cypher restore makes the SERVER JVM fetch the seed; the
+// CloudBlock's endpointURL only ever reaches backup/restore JOB pods, so
+// without the env var the AWS SDK targets s3.amazonaws.com and the seed
+// fails ("Object not found" / region errors) — a confusing failure when the
+// backup itself succeeded against the same bucket.
+//
+// Warning, not Failed: the check inspects spec.env and the contents of
+// extraEnvFrom-referenced Secrets/ConfigMaps, and stays SILENT when any
+// referenced source is unreadable — exotic-but-valid setups must not be
+// blocked on an incomplete view. #251's fail-fast still surfaces the real
+// seed failure if the warning goes unheeded.
+func (r *Neo4jRestoreReconciler) warnIfSeedEndpointNotProjected(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore, cluster *neo4jv1beta1.Neo4jEnterpriseCluster, cloud *neo4jv1beta1.CloudBlock) {
+	const endpointEnvVar = "AWS_ENDPOINT_URL_S3"
+	if cloud == nil || cloud.EndpointURL == "" || r.Recorder == nil {
+		return
+	}
+	for _, e := range cluster.Spec.Env {
+		if e.Name == endpointEnvVar {
+			return
+		}
+	}
+	for _, ef := range cluster.Spec.ExtraEnvFrom {
+		prefix := ef.Prefix
+		if ef.SecretRef != nil {
+			s := &corev1.Secret{}
+			if err := r.Get(ctx, types.NamespacedName{Name: ef.SecretRef.Name, Namespace: cluster.Namespace}, s); err != nil {
+				return // can't disprove — stay silent
+			}
+			for k := range s.Data {
+				if prefix+k == endpointEnvVar {
+					return
+				}
+			}
+		}
+		if ef.ConfigMapRef != nil {
+			cm := &corev1.ConfigMap{}
+			if err := r.Get(ctx, types.NamespacedName{Name: ef.ConfigMapRef.Name, Namespace: cluster.Namespace}, cm); err != nil {
+				return
+			}
+			for k := range cm.Data {
+				if prefix+k == endpointEnvVar {
+					return
+				}
+			}
+		}
+	}
+	r.Recorder.Event(restore, corev1.EventTypeWarning, EventReasonSeedEndpointNotProjected,
+		fmt.Sprintf("The backup's storage uses a custom S3 endpoint (%s), but cluster %q's server pods have no %s in their environment. The cluster Cypher restore makes the server JVM fetch the seed itself — without the endpoint, the AWS SDK targets s3.amazonaws.com and the seed fails even though the backup succeeded. Add %s=%s as a key in the credentials Secret projected via the cluster's spec.extraEnvFrom (or as a spec.env entry).",
+			cloud.EndpointURL, cluster.Name, endpointEnvVar, endpointEnvVar, cloud.EndpointURL))
+}
+
 // serviceAccountAnnotationConflicts returns a description per annotation key
 // whose existing value on the shared ServiceAccount differs from the value
 // this CR is about to write — i.e. an overwrite that likely belongs to
@@ -2614,6 +2668,12 @@ func (r *Neo4jRestoreReconciler) startClusterCypherRestore(
 					fmt.Sprintf("Waiting for cluster %q server pods to roll out seed credentials Secret %q", cluster.Name, storage.Cloud.CredentialsSecretRef))
 				return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
 			}
+		}
+		// Custom S3 endpoint (MinIO & friends): the SERVER JVM fetches the
+		// seed, and endpointURL only reaches Job pods — warn when the
+		// endpoint is verifiably absent from the server pods' env (#252).
+		if storage.Type == "s3" {
+			r.warnIfSeedEndpointNotProjected(ctx, restore, cluster, storage.Cloud)
 		}
 	case "pvc":
 		// Cluster + PVC restore: spawn the in-cluster HTTP proxy in front

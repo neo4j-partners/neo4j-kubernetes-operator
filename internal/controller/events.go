@@ -47,14 +47,19 @@ const (
 	// namespace ServiceAccount; last writer wins and the others' cloud
 	// access breaks (#227).
 	EventReasonServiceAccountAnnotationConflict = "ServiceAccountAnnotationConflict"
-	EventReasonBackupStarted                    = "BackupStarted"
-	EventReasonBackupCompleted                  = "BackupCompleted"
-	EventReasonBackupFailed                     = "BackupFailed"
-	EventReasonRestoreStarted                   = "RestoreStarted"
-	EventReasonRestoreCompleted                 = "RestoreCompleted"
-	EventReasonRestoreFailed                    = "RestoreFailed"
-	EventReasonRestoreFromChainParent           = "RestoreFromChainParent"
-	EventReasonDatabaseCreateFailed             = "DatabaseCreateFailed"
+	// EventReasonSeedEndpointNotProjected — a cluster Cypher restore
+	// resolved to a custom S3 endpoint (MinIO etc.) but the server pods
+	// verifiably lack AWS_ENDPOINT_URL_S3, so the server-side seed fetch
+	// will target s3.amazonaws.com and fail (#252).
+	EventReasonSeedEndpointNotProjected = "SeedEndpointNotProjected"
+	EventReasonBackupStarted            = "BackupStarted"
+	EventReasonBackupCompleted          = "BackupCompleted"
+	EventReasonBackupFailed             = "BackupFailed"
+	EventReasonRestoreStarted           = "RestoreStarted"
+	EventReasonRestoreCompleted         = "RestoreCompleted"
+	EventReasonRestoreFailed            = "RestoreFailed"
+	EventReasonRestoreFromChainParent   = "RestoreFromChainParent"
+	EventReasonDatabaseCreateFailed     = "DatabaseCreateFailed"
 )
 
 // Database events
