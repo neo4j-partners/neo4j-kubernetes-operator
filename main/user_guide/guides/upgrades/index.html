@@ -1253,6 +1253,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#upgrade-phases-and-resumability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Upgrade phases and resumability
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#first-upgrade-after-operator-deployment" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2586,6 +2597,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#upgrade-phases-and-resumability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Upgrade phases and resumability
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#first-upgrade-after-operator-deployment" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2674,6 +2696,58 @@
 </span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="c1"># Operator logs</span>
 </span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>neo4j-operator<span class="w"> </span>deployment/neo4j-operator-controller-manager<span class="w"> </span>-f<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span>upgrade
 </span></code></pre></div>
+<h3 id="upgrade-phases-and-resumability">Upgrade phases and resumability<a class="headerlink" href="#upgrade-phases-and-resumability" title="Anchor link to this section">&para;</a></h3>
+<p>The upgrade runs as a requeue-driven state machine whose state is persisted in
+<code>status.upgradeStatus</code>, so you can follow it with <code>kubectl</code> and it survives
+operator restarts:</p>
+<table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>What's happening</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Staging</code></td>
+<td>Pre-upgrade health check, version-compatibility check, StatefulSet frozen (partition = replica count), new image applied to the template</td>
+</tr>
+<tr>
+<td><code>Rolling</code></td>
+<td>Pods restart one at a time, highest ordinal first; after each pod, Kubernetes readiness <strong>and</strong> Neo4j cluster membership (<code>SHOW SERVERS</code>) are verified before the partition is lowered</td>
+</tr>
+<tr>
+<td><code>Stabilizing</code></td>
+<td>All pods updated; the operator waits for consistently stable cluster health and consensus</td>
+</tr>
+<tr>
+<td><code>Verifying</code></td>
+<td>Every server's reported version is checked against the target before the upgrade is declared done</td>
+</tr>
+<tr>
+<td><code>Completed</code> / <code>Failed</code> / <code>Paused</code></td>
+<td>Terminal. <code>Paused</code> means a health check failed with <code>autoPauseOnFailure: true</code> — the cluster is left as-is for you to investigate</td>
+</tr>
+</tbody>
+</table>
+<p>Two status fields drive the machine and are useful when watching a long
+upgrade: <code>currentPartition</code> (which StatefulSet partition step the rollout is
+on — counts down toward 0) and <code>stepStartTime</code> (when the current step began;
+each per-pod step is bounded by <code>upgradeTimeout</code>/<code>healthCheckTimeout</code>).</p>
+<p><strong>Resumability.</strong> Because the phase and partition are persisted in status, an
+operator restart (or leader change) mid-upgrade resumes exactly where it left
+off — already-rolled pods are not rolled again. Upgrades that were interrupted
+under an older operator version (<code>phase: InProgress</code>) are adopted and resumed
+automatically.</p>
+<p><strong>Changing the target mid-upgrade.</strong> If you patch <code>spec.image.tag</code> again while
+an upgrade is running, the state machine retargets to the new image: pods not
+yet rolled go straight to the new version, and pods already rolled to the
+intermediate version are rolled again. You don't need to wait for the first
+upgrade to finish.</p>
+<p><strong>Version verification across SemVer/CalVer.</strong> The <code>Verifying</code> phase compares
+each server's <code>SHOW SERVERS</code> version against the image tag, normalizing
+Neo4j's kernel alias (the <code>2025.01.x</code> CalVer releases report kernel <code>5.27.x</code> —
+both are accepted as the same version).</p>
 <h3 id="first-upgrade-after-operator-deployment">First upgrade after operator deployment<a class="headerlink" href="#first-upgrade-after-operator-deployment" title="Anchor link to this section">&para;</a></h3>
 <p>If <code>status.version</code> is not yet set on the cluster resource (e.g. immediately after the operator is first deployed against an existing cluster), the version-compatibility check is skipped and the upgrade proceeds. Downgrade protection is applied on all subsequent upgrades.</p>
 <h2 id="upgrade-strategy">Upgrade Strategy<a class="headerlink" href="#upgrade-strategy" title="Anchor link to this section">&para;</a></h2>

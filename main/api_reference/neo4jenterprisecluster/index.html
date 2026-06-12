@@ -4639,6 +4639,11 @@ cluster reaches <code>Ready</code> — see <a href="../neo4jrestore/"><code>Neo4
 <td><strong>Required</strong>. Number of Neo4j servers (minimum: 2, maximum: 100)</td>
 </tr>
 <tr>
+<td><code>minSystemPrimaries</code></td>
+<td><code>*int32</code></td>
+<td>System-database primary count written to <code>dbms.cluster.minimum_initial_system_primaries_count</code> at cluster formation, and the floor the cluster can later be scaled down to. Default: <code>min(3, servers)</code>. Validator: must be ≥ 2 and ≤ <code>servers</code>; an even value draws a warning (an even voting set has no clean write-quorum majority — prefer 3, 5, …). Note this is a bootstrap <strong>floor</strong>, not a cap: Neo4j makes <strong>all</strong> initially-joined servers system primaries; the setting only defines how many must be present to bootstrap and the minimum the system database can shrink to</td>
+</tr>
+<tr>
 <td><code>serverModeConstraint</code></td>
 <td><code>string</code></td>
 <td>Global server mode constraint: <code>"NONE"</code> (default), <code>"PRIMARY"</code>, <code>"SECONDARY"</code></td>

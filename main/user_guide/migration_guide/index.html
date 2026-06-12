@@ -650,6 +650,67 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#upgrading-from-v111x-to-v1120" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Upgrading from v1.11.x to v1.12.0
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Upgrading from v1.11.x to v1.12.0">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#0-refresh-crds-before-upgrading-the-operator-always-required" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0. Refresh CRDs before upgrading the operator (always required)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#1-standalone-client-service-renamed-name-service-name-client" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Standalone client Service renamed: {name}-service → {name}-client
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-plugin-urlcustom-sources-must-be-https" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Plugin url/custom sources must be https://
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-rolling-upgrades-now-run-as-a-resumable-state-machine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Rolling upgrades now run as a resumable state machine
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#upgrading-from-v110x-to-v111x" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2873,6 +2934,67 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#upgrading-from-v111x-to-v1120" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Upgrading from v1.11.x to v1.12.0
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Upgrading from v1.11.x to v1.12.0">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#0-refresh-crds-before-upgrading-the-operator-always-required" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0. Refresh CRDs before upgrading the operator (always required)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#1-standalone-client-service-renamed-name-service-name-client" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Standalone client Service renamed: {name}-service → {name}-client
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-plugin-urlcustom-sources-must-be-https" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Plugin url/custom sources must be https://
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-rolling-upgrades-now-run-as-a-resumable-state-machine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Rolling upgrades now run as a resumable state machine
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#upgrading-from-v110x-to-v111x" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3187,6 +3309,62 @@
 <blockquote>
 <p><strong>Single-node Cluster CRDs</strong>: removed in v1.6-alpha. If you still have a <code>Neo4jEnterpriseCluster</code> with <code>topology.servers: 1</code>, migrate to <code>Neo4jEnterpriseStandalone</code> — same data via a backup/restore round-trip. For step-by-step alpha-era guidance, see the <a href="#upgrading-to-v160-alpha-api-stabilization">v1.6-alpha migration section</a> below or the older versions of this doc in git history.</p>
 </blockquote>
+<h2 id="upgrading-from-v111x-to-v1120">Upgrading from v1.11.x to v1.12.0<a class="headerlink" href="#upgrading-from-v111x-to-v1120" title="Anchor link to this section">&para;</a></h2>
+<h3 id="0-refresh-crds-before-upgrading-the-operator-always-required">0. Refresh CRDs before upgrading the operator (always required)<a class="headerlink" href="#0-refresh-crds-before-upgrading-the-operator-always-required" title="Anchor link to this section">&para;</a></h3>
+<p>Helm installs CRDs from the chart's <code>crds/</code> directory <strong>once</strong> and never
+upgrades them. Before <code>helm upgrade</code>, apply the new release's CRDs:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>--server-side<span class="w"> </span>-f<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span>https://github.com/neo4j-partners/neo4j-kubernetes-operator/releases/download/v1.12.0/neo4j-kubernetes-operator.yaml
+</span></code></pre></div>
+<p><code>--server-side</code> is required — the larger CRDs exceed the client-side-apply
+annotation limit. See <a href="../installation/">Installation → Upgrading</a> for the full
+procedure and the documented uninstall order.</p>
+<h3 id="1-standalone-client-service-renamed-name-service-name-client">1. Standalone client Service renamed: <code>{name}-service</code> → <code>{name}-client</code><a class="headerlink" href="#1-standalone-client-service-renamed-name-service-name-client" title="Anchor link to this section">&para;</a></h3>
+<p><strong>What changed.</strong> Standalone instances historically exposed their client
+Service as <code>{name}-service</code> while clusters used <code>{name}-client</code>. v1.12 unifies
+on <strong><code>{name}-client</code> for both kinds</strong>. The canonical Service now carries your
+full <code>spec.service</code> configuration (type, NodePort, annotations).</p>
+<p><strong>Compatibility shim (one release only).</strong> <code>{name}-service</code> is kept as a
+<strong>ClusterIP-only</strong> alias annotated <code>neo4j.com/deprecated-alias-of</code>, so saved
+in-cluster connection strings keep working. <strong>It is removed in the next
+release</strong> — update clients, dashboards, NetworkPolicies, and automation to
+<code>{name}-client</code> during this cycle.</p>
+<p><strong>One-time effects on upgrade:</strong></p>
+<ul>
+<li>If your standalone used <code>spec.service.type: LoadBalancer</code> or <code>NodePort</code>, that
+  exposure <strong>moves to <code>{name}-client</code></strong> — the LoadBalancer is re-provisioned
+  once and its <strong>external IP may change</strong>. Update DNS records accordingly.</li>
+<li>TLS standalones get a re-issued certificate carrying <strong>both</strong> name sets as
+  SANs, and the pod <strong>restarts once</strong> (automatically, only after the new
+  certificate is in place) so Neo4j loads the new keystore.</li>
+<li><code>status.endpoints</code> now reports <code>{name}-client</code> hostnames.</li>
+</ul>
+<p>See <a href="../external_access/">External Access</a> for the services table and migration
+notes.</p>
+<h3 id="2-plugin-urlcustom-sources-must-be-https">2. Plugin <code>url</code>/<code>custom</code> sources must be <code>https://</code><a class="headerlink" href="#2-plugin-urlcustom-sources-must-be-https" title="Anchor link to this section">&para;</a></h3>
+<p><strong>What changed.</strong> The validator now rejects any <code>Neo4jPlugin</code>
+<code>spec.source.url</code> whose scheme isn't <code>https</code> (<code>http://</code>, <code>file://</code>, <code>ftp://</code>
+etc. all fail with <code>field.Invalid</code>). Plugin JARs are downloaded over the
+network and the recorded checksum is not enforced at download time on the
+entrypoint path, so a cleartext URL had neither transport nor content
+integrity.</p>
+<p><strong>Who is affected.</strong> Existing <code>Neo4jPlugin</code> CRs with an <code>http://</code> source URL —
+they will fail validation (and stop reconciling) after the operator upgrade.</p>
+<p><strong>Action required.</strong> Audit plugin CRs before upgrading:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>neo4jplugins<span class="w"> </span>-A<span class="w"> </span>-o<span class="w"> </span>json<span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">&#39;.items[] | select(.spec.source.url // &quot;&quot; | startswith(&quot;http://&quot;)) | &quot;\(.metadata.namespace)/\(.metadata.name): \(.spec.source.url)&quot;&#39;</span>
+</span></code></pre></div>
+<p>Re-host flagged JARs on an https endpoint (an in-cluster mirror with a
+cert-manager certificate works) or switch to <code>installMode: PreBaked</code> with the
+JAR baked into a custom image.</p>
+<h3 id="3-rolling-upgrades-now-run-as-a-resumable-state-machine">3. Rolling upgrades now run as a resumable state machine<a class="headerlink" href="#3-rolling-upgrades-now-run-as-a-resumable-state-machine" title="Anchor link to this section">&para;</a></h3>
+<p>Not a breaking change, but visible: during a Neo4j version upgrade,
+<code>status.upgradeStatus.phase</code> now progresses through
+<code>Staging → Rolling → Stabilizing → Verifying → Completed</code>, and the upgrade
+<strong>survives operator restarts</strong> (it resumes where it left off instead of
+starting over). An upgrade interrupted under v1.11 (<code>InProgress</code>) is adopted
+and resumed automatically. See the <a href="../guides/upgrades/">Upgrade guide</a> for
+phase semantics and monitoring.</p>
 <h2 id="upgrading-from-v110x-to-v111x">Upgrading from v1.10.x to v1.11.x<a class="headerlink" href="#upgrading-from-v110x-to-v111x" title="Anchor link to this section">&para;</a></h2>
 <p>This section covers the breaking and behavioural changes landing in v1.11.x (since <code>v1.10.0</code>).</p>
 <h3 id="1-removed-spec-fields-crd-validation-will-reject-manifests-using-them">1. Removed spec fields (CRD validation will reject manifests using them)<a class="headerlink" href="#1-removed-spec-fields-crd-validation-will-reject-manifests-using-them" title="Anchor link to this section">&para;</a></h3>
@@ -3218,16 +3396,16 @@
 </tbody>
 </table>
 <p><strong>Action</strong>: grep your manifests for these fields and migrate before upgrading the operator:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>grep<span class="w"> </span>-rE<span class="w"> </span><span class="s1">&#39;spec:.*\b(jwt|ui|restoreFrom|license):&#39;</span><span class="w"> </span>path/to/manifests/
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>grep<span class="w"> </span>-rE<span class="w"> </span><span class="s1">&#39;spec:.*\b(jwt|ui|restoreFrom|license):&#39;</span><span class="w"> </span>path/to/manifests/
 </span></code></pre></div>
 <h3 id="2-specauthpasswordpolicy-and-specauthkerberos-are-removed-from-the-crd">2. <code>spec.auth.passwordPolicy</code> and <code>spec.auth.kerberos</code> are removed from the CRD<a class="headerlink" href="#2-specauthpasswordpolicy-and-specauthkerberos-are-removed-from-the-crd" title="Anchor link to this section">&para;</a></h3>
 <p>Both blocks were always schema-only — the operator never wired either through to Neo4j config. Both have been removed from the CRD entirely. Manifests still carrying <code>spec.auth.passwordPolicy</code> or <code>spec.auth.kerberos</code> will be rejected by the API server after the upgrade.</p>
 <p><strong>Action for <code>passwordPolicy</code></strong>: set the equivalent Neo4j config keys directly in <code>spec.config</code>:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="nt">auth</span><span class="p">:</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">    </span><span class="nt">adminSecret</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j-admin-secret</span>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span><span class="nt">config</span><span class="p">:</span>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">    </span><span class="nt">dbms.security.auth_minimum_password_length</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;12&quot;</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">spec</span><span class="p">:</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">auth</span><span class="p">:</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">    </span><span class="nt">adminSecret</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j-admin-secret</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">  </span><span class="nt">config</span><span class="p">:</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">    </span><span class="nt">dbms.security.auth_minimum_password_length</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;12&quot;</span>
 </span></code></pre></div>
 <p><strong>Action for <code>kerberos</code></strong>: there is no drop-in <code>spec.config</code> replacement. Neo4j Kerberos requires the separate <a href="https://neo4j.com/docs/kerberos-add-on/current/">Neo4j Kerberos Add-On</a> (a plugin JAR + its own <code>kerberos.conf</code> + <code>krb5.conf</code> files), and the operator does not assemble that bundle today. See the <a href="../security/#kerberos-authentication">Security Guide § Kerberos Authentication</a> for the current state.</p>
 <p>Also: the operator's earlier validator that required <code>dbms.security.kerberos.service_principal</code> and <code>dbms.security.kerberos.keytab</code> keys in <code>spec.config</code> whenever <code>kerberos</code> appeared in <code>authenticationProviders</code> has been removed. Those keys aren't actually part of Neo4j's Kerberos configuration surface (which lives in <code>kerberos.conf</code>, not <code>neo4j.conf</code>); the validator was enforcing a wrong model.</p>
@@ -3256,11 +3434,11 @@
 </table>
 <p>The original <code>primary</code> / <code>secondary</code> shape was inherited from a pre-server-architecture design. Neo4j 5.26+ uses a single <code>{cluster}-server</code> StatefulSet where roles are assigned at runtime via <code>serverModeConstraint</code>; the old labels were structurally meaningless and the call site was hardcoding <code>secondaries=0</code> regardless of cluster state. Per-server primary/secondary state is exposed separately via <code>neo4j_operator_server_health</code> (populated from <code>SHOW SERVERS</code> when monitoring is enabled).</p>
 <p><strong>Action</strong>: update PromQL queries / Grafana dashboards filtering on the old labels:</p>
-<div class="language-promql highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Before</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="nv">neo4j_operator_cluster_replicas_total</span><span class="p">{</span><span class="nl">role</span><span class="o">=</span><span class="p">&quot;</span><span class="s">primary</span><span class="p">&quot;}</span>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># After</span>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="nv">neo4j_operator_cluster_replicas_total</span><span class="p">{</span><span class="nl">role</span><span class="o">=</span><span class="p">&quot;</span><span class="s">desired</span><span class="p">&quot;}</span>
+<div class="language-promql highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Before</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="nv">neo4j_operator_cluster_replicas_total</span><span class="p">{</span><span class="nl">role</span><span class="o">=</span><span class="p">&quot;</span><span class="s">primary</span><span class="p">&quot;}</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="c1"># After</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="nv">neo4j_operator_cluster_replicas_total</span><span class="p">{</span><span class="nl">role</span><span class="o">=</span><span class="p">&quot;</span><span class="s">desired</span><span class="p">&quot;}</span>
 </span></code></pre></div>
 <h3 id="4-env-var-removals-from-specconfig-now-actually-take-effect">4. Env-var removals from <code>spec.config</code> now actually take effect<a class="headerlink" href="#4-env-var-removals-from-specconfig-now-actually-take-effect" title="Anchor link to this section">&para;</a></h3>
 <p>Previously, removing a key from <code>spec.config</code> did not remove the corresponding <code>NEO4J_*</code> env var from the live StatefulSet — the cluster controller's <code>envVarsEqual</code> was a one-directional subset check that didn't detect "name dropped from desired". Pods continued running with the stale setting until something else triggered a template-replacing restart.</p>
@@ -3277,19 +3455,19 @@
 </ul>
 <p><strong>Caveat</strong>: <code>StatefulSet.spec.serviceName</code> is <strong>immutable after creation</strong>. Existing standalones upgraded in place will keep their old (empty) <code>serviceName</code> and will NOT get the headless service routing the backup Job depends on — backups against them will continue to fail with <code>Connection refused</code> on <code>:6362</code>.</p>
 <p><strong>Action for existing standalones</strong>: delete and recreate the <code>Neo4jEnterpriseStandalone</code> CR (PVC retention applies — <code>spec.storage.retentionPolicy=Retain</code> preserves the data PVC across the delete/recreate cycle, so the new StatefulSet picks up the same data volume). New deployments get the headless routing automatically with no extra steps.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># 1. (Optional but recommended) take a backup with a Neo4jBackup CR</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="c1">#    targeting the standalone, OR cordon/quiesce application traffic.</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="c1"># 2. Set retentionPolicy=Retain so the data volume survives the delete.</span>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>neo4jenterprisestandalone<span class="w"> </span>&lt;name&gt;<span class="w"> </span>--type<span class="o">=</span>merge<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">    </span>-p<span class="w"> </span><span class="s1">&#39;{&quot;spec&quot;:{&quot;storage&quot;:{&quot;retentionPolicy&quot;:&quot;Retain&quot;}}}&#39;</span>
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="c1"># 3. Delete the CR. The PVC stays because of Retain.</span>
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>neo4jenterprisestandalone<span class="w"> </span>&lt;name&gt;
-</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>
-</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="c1"># 4. Re-apply the same manifest. The operator creates the new STS with</span>
-</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="c1">#    spec.serviceName=&lt;name&gt;-headless + the headless Service; the pod</span>
-</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="c1">#    attaches to the existing PVC.</span>
-</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>&lt;name&gt;.yaml
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># 1. (Optional but recommended) take a backup with a Neo4jBackup CR</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="c1">#    targeting the standalone, OR cordon/quiesce application traffic.</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="c1"># 2. Set retentionPolicy=Retain so the data volume survives the delete.</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>neo4jenterprisestandalone<span class="w"> </span>&lt;name&gt;<span class="w"> </span>--type<span class="o">=</span>merge<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">    </span>-p<span class="w"> </span><span class="s1">&#39;{&quot;spec&quot;:{&quot;storage&quot;:{&quot;retentionPolicy&quot;:&quot;Retain&quot;}}}&#39;</span>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="c1"># 3. Delete the CR. The PVC stays because of Retain.</span>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>neo4jenterprisestandalone<span class="w"> </span>&lt;name&gt;
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="c1"># 4. Re-apply the same manifest. The operator creates the new STS with</span>
+</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="c1">#    spec.serviceName=&lt;name&gt;-headless + the headless Service; the pod</span>
+</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="c1">#    attaches to the existing PVC.</span>
+</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>&lt;name&gt;.yaml
 </span></code></pre></div>
 <p>Backups against the recreated standalone work end-to-end after step 4.</p>
 <h3 id="6-specbackups-and-the-backup-sidecar-are-removed">6. <code>spec.backups</code> and the backup sidecar are removed<a class="headerlink" href="#6-specbackups-and-the-backup-sidecar-are-removed" title="Anchor link to this section">&para;</a></h3>
@@ -3324,25 +3502,25 @@
 <p><strong>Action:</strong></p>
 <ol>
 <li>Grep your manifests and remove the legacy blocks:
-   <div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>grep<span class="w"> </span>-rE<span class="w"> </span><span class="s1">&#39;^\s*(backups|backupStorage):&#39;</span><span class="w"> </span>path/to/manifests/
+   <div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>grep<span class="w"> </span>-rE<span class="w"> </span><span class="s1">&#39;^\s*(backups|backupStorage):&#39;</span><span class="w"> </span>path/to/manifests/
 </span></code></pre></div></li>
 <li>For each former <code>spec.backups</code> destination, create a <code>Neo4jBackup</code> CR. A daily scheduled cluster backup to S3:
-   <div class="language-yaml highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1beta1</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Neo4jBackup</span>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="nt">metadata</span><span class="p">:</span>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">daily-backup</span>
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">  </span><span class="nt">target</span><span class="p">:</span>
-</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">    </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Cluster</span><span class="w">        </span><span class="c1"># or Standalone</span>
-</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-cluster</span>
-</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="w">  </span><span class="nt">storage</span><span class="p">:</span>
-</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">s3</span>
-</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="w">    </span><span class="nt">bucket</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j-backups</span>
-</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="w">    </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">production/</span>
-</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="w">  </span><span class="nt">schedule</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;0</span><span class="nv"> </span><span class="s">2</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*&quot;</span><span class="w">  </span><span class="c1"># omit for a one-shot backup</span>
-</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="w">  </span><span class="nt">retention</span><span class="p">:</span>
-</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="w">    </span><span class="nt">maxAge</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;30d&quot;</span>
-</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a><span class="w">    </span><span class="nt">maxCount</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30</span>
+   <div class="language-yaml highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1beta1</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Neo4jBackup</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="nt">metadata</span><span class="p">:</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">daily-backup</span>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="nt">spec</span><span class="p">:</span>
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="w">  </span><span class="nt">target</span><span class="p">:</span>
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="w">    </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Cluster</span><span class="w">        </span><span class="c1"># or Standalone</span>
+</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-cluster</span>
+</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="w">  </span><span class="nt">storage</span><span class="p">:</span>
+</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">s3</span>
+</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="w">    </span><span class="nt">bucket</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j-backups</span>
+</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="w">    </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">production/</span>
+</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a><span class="w">  </span><span class="nt">schedule</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;0</span><span class="nv"> </span><span class="s">2</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*&quot;</span><span class="w">  </span><span class="c1"># omit for a one-shot backup</span>
+</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a><span class="w">  </span><span class="nt">retention</span><span class="p">:</span>
+</span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a><span class="w">    </span><span class="nt">maxAge</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;30d&quot;</span>
+</span><span id="__span-9-16"><a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a><span class="w">    </span><span class="nt">maxCount</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30</span>
 </span></code></pre></div>
    For Workload Identity (IRSA / GKE WI / Azure WI), set <code>spec.cloud.identity.autoCreate.annotations</code> on the <code>Neo4jBackup</code> — the operator annotates the auto-created <code>neo4j-backup-sa</code> ServiceAccount.</li>
 <li><strong>Standalone pods will roll once</strong> on upgrade as the sidecar container is dropped from the pod template (one-time restart; PVC data is untouched).</li>
@@ -3362,11 +3540,11 @@
 <p>v1.7.0-alpha graduates the API from <code>v1alpha1</code> to <code>v1beta1</code>, signaling field stability. The API schema is unchanged — only the version identifier changes. Additionally, TLS bolt enforcement and standalone health probes are introduced.</p>
 <h3 id="api-version-change">API version change<a class="headerlink" href="#api-version-change" title="Anchor link to this section">&para;</a></h3>
 <p>All manifests must update their <code>apiVersion</code> field:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Before (v1.6.0-alpha and earlier)</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1alpha1</span>
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="c1"># After (v1.7.0-alpha)</span>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1beta1</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Before (v1.6.0-alpha and earlier)</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1alpha1</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="c1"># After (v1.7.0-alpha)</span>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1beta1</span>
 </span></code></pre></div>
 <p>This applies to <strong>all</strong> operator CRDs:</p>
 <ul>
@@ -3399,25 +3577,25 @@
 <ol>
 <li>Update all manifests: <code>apiVersion: neo4j.neo4j.com/v1alpha1</code> → <code>apiVersion: neo4j.neo4j.com/v1beta1</code></li>
 <li>Apply updated CRDs before deploying the new operator version:
-   <div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># If using Helm</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>helm<span class="w"> </span>upgrade<span class="w"> </span>neo4j-operator<span class="w"> </span>./charts/neo4j-operator<span class="w"> </span>--namespace<span class="w"> </span>neo4j-operator-system
-</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
-</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="c1"># If using make targets</span>
-</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>make<span class="w"> </span>install<span class="w">   </span><span class="c1"># Updates CRDs</span>
-</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>make<span class="w"> </span>deploy-prod<span class="w">  </span><span class="c1"># or deploy-dev</span>
+   <div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># If using Helm</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>helm<span class="w"> </span>upgrade<span class="w"> </span>neo4j-operator<span class="w"> </span>./charts/neo4j-operator<span class="w"> </span>--namespace<span class="w"> </span>neo4j-operator-system
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="c1"># If using make targets</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>make<span class="w"> </span>install<span class="w">   </span><span class="c1"># Updates CRDs</span>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>make<span class="w"> </span>deploy-prod<span class="w">  </span><span class="c1"># or deploy-dev</span>
 </span></code></pre></div></li>
 <li>If TLS is enabled, update client connection strings from <code>bolt://</code> to <code>bolt+s://</code> or <code>bolt+ssc://</code></li>
 <li>Replace <code>dbms.logs.query.enabled</code> with <code>db.logs.query.enabled</code> in <code>spec.config</code></li>
 <li>Expect a one-time rolling restart of standalone pods (new health probes added to StatefulSet)</li>
 </ol>
 <h3 id="batch-update-with-sed">Batch update with sed<a class="headerlink" href="#batch-update-with-sed" title="Anchor link to this section">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Update all YAML manifests in your deployment directory</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>find<span class="w"> </span>/path/to/manifests<span class="w"> </span>-name<span class="w"> </span><span class="s1">&#39;*.yaml&#39;</span><span class="w"> </span>-exec<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">  </span>sed<span class="w"> </span>-i<span class="w"> </span><span class="s1">&#39;s|neo4j.neo4j.com/v1alpha1|neo4j.neo4j.com/v1beta1|g&#39;</span><span class="w"> </span><span class="o">{}</span><span class="w"> </span>+
-</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>
-</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="c1"># Update deprecated config key</span>
-</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>find<span class="w"> </span>/path/to/manifests<span class="w"> </span>-name<span class="w"> </span><span class="s1">&#39;*.yaml&#39;</span><span class="w"> </span>-exec<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="w">  </span>sed<span class="w"> </span>-i<span class="w"> </span><span class="s1">&#39;s|dbms.logs.query.enabled|db.logs.query.enabled|g&#39;</span><span class="w"> </span><span class="o">{}</span><span class="w"> </span>+
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Update all YAML manifests in your deployment directory</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>find<span class="w"> </span>/path/to/manifests<span class="w"> </span>-name<span class="w"> </span><span class="s1">&#39;*.yaml&#39;</span><span class="w"> </span>-exec<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">  </span>sed<span class="w"> </span>-i<span class="w"> </span><span class="s1">&#39;s|neo4j.neo4j.com/v1alpha1|neo4j.neo4j.com/v1beta1|g&#39;</span><span class="w"> </span><span class="o">{}</span><span class="w"> </span>+
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="c1"># Update deprecated config key</span>
+</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>find<span class="w"> </span>/path/to/manifests<span class="w"> </span>-name<span class="w"> </span><span class="s1">&#39;*.yaml&#39;</span><span class="w"> </span>-exec<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="w">  </span>sed<span class="w"> </span>-i<span class="w"> </span><span class="s1">&#39;s|dbms.logs.query.enabled|db.logs.query.enabled|g&#39;</span><span class="w"> </span><span class="o">{}</span><span class="w"> </span>+
 </span></code></pre></div>
 <hr />
 <h2 id="upgrading-to-v160-alpha-api-stabilization">Upgrading to v1.6.0-alpha (API Stabilization)<a class="headerlink" href="#upgrading-to-v160-alpha-api-stabilization" title="Anchor link to this section">&para;</a></h2>
@@ -3454,24 +3632,24 @@
 </tbody>
 </table>
 <p>Example — before:
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1alpha1</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Neo4jRestore</span>
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">  </span><span class="nt">targetCluster</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-cluster</span>
-</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="w">  </span><span class="nt">databaseName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j</span>
-</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="w">  </span><span class="nt">source</span><span class="p">:</span>
-</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">backup</span>
-</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="w">    </span><span class="nt">backupRef</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">daily-backup</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1alpha1</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Neo4jRestore</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="nt">spec</span><span class="p">:</span>
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="w">  </span><span class="nt">targetCluster</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-cluster</span>
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="w">  </span><span class="nt">databaseName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j</span>
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="w">  </span><span class="nt">source</span><span class="p">:</span>
+</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">backup</span>
+</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="w">    </span><span class="nt">backupRef</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">daily-backup</span>
 </span></code></pre></div></p>
 <p>After:
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1alpha1</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Neo4jRestore</span>
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="w">  </span><span class="nt">clusterRef</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-cluster</span>
-</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="w">  </span><span class="nt">databaseName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j</span>
-</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="w">  </span><span class="nt">source</span><span class="p">:</span>
-</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">backup</span>
-</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="w">    </span><span class="nt">backupRef</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">daily-backup</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1alpha1</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Neo4jRestore</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="nt">spec</span><span class="p">:</span>
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">  </span><span class="nt">clusterRef</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-cluster</span>
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">  </span><span class="nt">databaseName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j</span>
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="w">  </span><span class="nt">source</span><span class="p">:</span>
+</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">backup</span>
+</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="w">    </span><span class="nt">backupRef</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">daily-backup</span>
 </span></code></pre></div></p>
 <h3 id="removed-fields">Removed fields<a class="headerlink" href="#removed-fields" title="Anchor link to this section">&para;</a></h3>
 <table>
@@ -3502,53 +3680,53 @@
 </table>
 <p>Example — migrating deprecated auth fields:</p>
 <p>Before:
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="w">  </span><span class="nt">auth</span><span class="p">:</span>
-</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">    </span><span class="nt">provider</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ldap</span>
-</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="w">    </span><span class="nt">secretRef</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ldap-config</span>
-</span></code></pre></div></p>
-<p>After:
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="w">  </span><span class="nt">auth</span><span class="p">:</span>
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">    </span><span class="nt">authenticationProviders</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;ldap&quot;</span><span class="p p-Indicator">]</span>
-</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">    </span><span class="nt">authorizationProviders</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;ldap&quot;</span><span class="p p-Indicator">]</span>
-</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">    </span><span class="nt">ldap</span><span class="p">:</span>
-</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="w">      </span><span class="nt">host</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;ldap://ldap.example.com:389&quot;</span>
-</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="w">      </span><span class="nt">authentication</span><span class="p">:</span>
-</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="w">        </span><span class="nt">userDNTemplate</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;uid={0},ou=users,dc=example,dc=com&quot;</span>
-</span></code></pre></div></p>
-<p>Example — migrating standalone persistence:</p>
-<p>Before:
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="w">  </span><span class="nt">storage</span><span class="p">:</span>
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="w">    </span><span class="nt">className</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">standard</span>
-</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="w">    </span><span class="nt">size</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;10Gi&quot;</span>
-</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="w">  </span><span class="nt">persistence</span><span class="p">:</span>
-</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="w">    </span><span class="nt">retentionPolicy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Delete</span>
-</span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="w">    </span><span class="nt">accessModes</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;ReadWriteOnce&quot;</span><span class="p p-Indicator">]</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="w">  </span><span class="nt">auth</span><span class="p">:</span>
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="w">    </span><span class="nt">provider</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ldap</span>
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="w">    </span><span class="nt">secretRef</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ldap-config</span>
 </span></code></pre></div></p>
 <p>After:
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="w">  </span><span class="nt">storage</span><span class="p">:</span>
-</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="w">    </span><span class="nt">className</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">standard</span>
-</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="w">    </span><span class="nt">size</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;10Gi&quot;</span>
-</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="w">    </span><span class="nt">retentionPolicy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Delete</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="w">  </span><span class="nt">auth</span><span class="p">:</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="w">    </span><span class="nt">authenticationProviders</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;ldap&quot;</span><span class="p p-Indicator">]</span>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="w">    </span><span class="nt">authorizationProviders</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;ldap&quot;</span><span class="p p-Indicator">]</span>
+</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="w">    </span><span class="nt">ldap</span><span class="p">:</span>
+</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="w">      </span><span class="nt">host</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;ldap://ldap.example.com:389&quot;</span>
+</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="w">      </span><span class="nt">authentication</span><span class="p">:</span>
+</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="w">        </span><span class="nt">userDNTemplate</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;uid={0},ou=users,dc=example,dc=com&quot;</span>
 </span></code></pre></div></p>
-<p>Example — migrating standalone route:</p>
+<p>Example — migrating standalone persistence:</p>
 <p>Before:
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="w">  </span><span class="nt">route</span><span class="p">:</span>
-</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="w">    </span><span class="nt">host</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.apps.example.com</span>
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="w">  </span><span class="nt">storage</span><span class="p">:</span>
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="w">    </span><span class="nt">className</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">standard</span>
+</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="w">    </span><span class="nt">size</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;10Gi&quot;</span>
+</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="w">  </span><span class="nt">persistence</span><span class="p">:</span>
+</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="w">    </span><span class="nt">retentionPolicy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Delete</span>
+</span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a><span class="w">    </span><span class="nt">accessModes</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;ReadWriteOnce&quot;</span><span class="p p-Indicator">]</span>
 </span></code></pre></div></p>
 <p>After:
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="w">  </span><span class="nt">service</span><span class="p">:</span>
-</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ClusterIP</span>
-</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="w">    </span><span class="nt">route</span><span class="p">:</span>
-</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="w">      </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-18-6"><a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a><span class="w">      </span><span class="nt">host</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.apps.example.com</span>
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="w">  </span><span class="nt">storage</span><span class="p">:</span>
+</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="w">    </span><span class="nt">className</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">standard</span>
+</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="w">    </span><span class="nt">size</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;10Gi&quot;</span>
+</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="w">    </span><span class="nt">retentionPolicy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Delete</span>
+</span></code></pre></div></p>
+<p>Example — migrating standalone route:</p>
+<p>Before:
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="nt">spec</span><span class="p">:</span>
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="w">  </span><span class="nt">route</span><span class="p">:</span>
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="w">    </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="w">    </span><span class="nt">host</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.apps.example.com</span>
+</span></code></pre></div></p>
+<p>After:
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="nt">spec</span><span class="p">:</span>
+</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="w">  </span><span class="nt">service</span><span class="p">:</span>
+</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ClusterIP</span>
+</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="w">    </span><span class="nt">route</span><span class="p">:</span>
+</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="w">      </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a><span class="w">      </span><span class="nt">host</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.apps.example.com</span>
 </span></code></pre></div></p>
 <h3 id="unified-secret-reference-type">Unified secret reference type<a class="headerlink" href="#unified-secret-reference-type" title="Anchor link to this section">&para;</a></h3>
 <p><code>TrustStoreSpec</code>, <code>AuraTokenSecretRef</code>, and <code>KerberosKeytabSpec</code> have been replaced by a single <code>SecretKeyRef</code> type with <code>name</code> and <code>key</code> fields. The JSON structure for <code>AuraFleetManagement.tokenSecretRef</code> is unchanged (fields were already <code>name</code>/<code>key</code>). For <code>trustStore</code> and <code>kerberos.keytab</code>, the <code>secretRef</code> field is now <code>name</code>.</p>

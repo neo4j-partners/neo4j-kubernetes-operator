@@ -5312,7 +5312,22 @@
 <p><strong>Which run a restore picks</strong>: a cluster restore seeds from the <strong>latest successful artifact of the referenced <code>Neo4jBackup</code> CR</strong> (standalone uses <code>tail -1</code> of the timestamped glob in that CR's directory). In a FULL+DIFF chain, reference the <strong>DIFF CR</strong> for the latest state or the <strong>FULL CR</strong> to roll back to the last full snapshot — restoring via the FULL CR does <em>not</em> apply the newer diffs (and emits a <code>RestoreFromChainParent</code> warning). To pin to an arbitrary earlier run, set <code>source.type: storage</code> with <code>backupPath</code> pointing at the exact <code>.backup</code> file, or keep a point-in-time snapshot of the directory (cloud lifecycle rules / versioning).</p>
 </blockquote>
 <h4 id="restore-to-a-standalone-instance">Restore to a Standalone Instance<a class="headerlink" href="#restore-to-a-standalone-instance" title="Anchor link to this section">&para;</a></h4>
-<p><code>clusterRef</code> can reference a <code>Neo4jEnterpriseStandalone</code> as well as a <code>Neo4jEnterpriseCluster</code>:</p>
+<p><code>clusterRef</code> can reference a <code>Neo4jEnterpriseStandalone</code> as well as a
+<code>Neo4jEnterpriseCluster</code> — the operator auto-detects the kind and routes to the
+standalone path. Unlike the cluster path (Cypher <code>seedURI</code>, no downtime), a
+standalone restore is <strong>Job-based and takes the instance offline</strong>:</p>
+<ol>
+<li>The operator scales the standalone StatefulSet to 0 (<code>stopCluster: true</code> is
+   required — with <code>false</code> it refuses while pods are running).</li>
+<li>A restore Job mounts the data PVC and the backup source and runs
+   <code>neo4j-admin database restore</code>. From a chain directory it picks the
+   <strong>latest</strong> <code>.backup</code> file automatically; from a read-only backup PVC it
+   extracts via a temp dir (<code>--temp-path</code>) since the source mount is RO.</li>
+<li>The StatefulSet is scaled back up, and once the instance is <code>Ready</code> the
+   operator brings the database online (<code>CREATE DATABASE</code>/<code>START DATABASE</code>).</li>
+</ol>
+<p>Pre/post restore hooks (<code>spec.hooks</code>) run only on this standalone path — see
+<a href="#restore-with-hooks">Restore with Hooks</a>.</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-34-1"><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1beta1</span>
 </span><span id="__span-34-2"><a id="__codelineno-34-2" name="__codelineno-34-2" href="#__codelineno-34-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Neo4jRestore</span>
 </span><span id="__span-34-3"><a id="__codelineno-34-3" name="__codelineno-34-3" href="#__codelineno-34-3"></a><span class="nt">metadata</span><span class="p">:</span>

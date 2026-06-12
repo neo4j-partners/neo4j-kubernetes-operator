@@ -3586,7 +3586,7 @@
 <h3 id="key-configuration">Key Configuration<a class="headerlink" href="#key-configuration" title="Anchor link to this section">&para;</a></h3>
 <ul>
 <li><strong>Bootstrap strategy</strong>: server-0 uses <code>me</code> (preferred bootstrapper); all other servers use <code>other</code> (join when ready)</li>
-<li><strong>Minimum primaries</strong>: Set to <code>TOTAL_SERVERS</code> on initial formation — all servers must mutually discover each other before RAFT elects a leader, preventing premature solo bootstrap</li>
+<li><strong>Minimum primaries</strong>: Set to <code>min(3, servers)</code> on initial formation (override with <code>spec.topology.minSystemPrimaries</code>) — that many servers must mutually discover each other before RAFT elects a leader, preventing premature solo bootstrap. Note it's a bootstrap <strong>floor</strong>, not a cap: all initially-joined servers become system primaries</li>
 <li><strong>On restart</strong> (data already exists): minimum primaries check is skipped so servers rejoin immediately without blocking StatefulSet rolling updates</li>
 <li><strong>Pod Management</strong>: <code>Parallel</code> — all pods start simultaneously</li>
 </ul>
@@ -3595,13 +3595,13 @@
 <li><strong>All server pods start in parallel</strong> — Single StatefulSet with <code>Parallel</code> pod management</li>
 <li><strong>Servers discover each other</strong> — Via static pod FQDNs in the LIST endpoint list (port 6000)</li>
 <li><strong>RAFT coordination</strong> — server-0's <code>me</code> hint makes it the preferred bootstrapper; others wait with <code>other</code> hint</li>
-<li><strong>All N servers must see each other</strong> — <code>dbms.cluster.minimum_initial_system_primaries_count=N</code> prevents any single node from forming a solo cluster (split-brain)</li>
+<li><strong>A quorum of servers must see each other</strong> — <code>dbms.cluster.minimum_initial_system_primaries_count</code> (default <code>min(3, servers)</code>, override via <code>spec.topology.minSystemPrimaries</code>) prevents any single node from forming a solo cluster (split-brain)</li>
 <li><strong>Cluster forms once quorum reached</strong> — RAFT elects server-0 as bootstrap leader; others join</li>
 <li><strong>Servers self-organize</strong> — Neo4j automatically assigns primary and secondary roles per database</li>
 </ol>
 <h3 id="benefits">Benefits<a class="headerlink" href="#benefits" title="Anchor link to this section">&para;</a></h3>
 <ul>
-<li><strong>Split-brain prevention</strong> — All servers must be mutually visible before formation completes</li>
+<li><strong>Split-brain prevention</strong> — A quorum of servers must be mutually visible before formation completes</li>
 <li><strong>Reliable formation</strong> — Deterministic peer addresses (one FQDN per pod) unlike K8S ClusterIP which returns a single VIP</li>
 <li><strong>Fast restarts</strong> — Minimum primaries check skipped on pod restarts so rolling updates aren't blocked</li>
 </ul>
