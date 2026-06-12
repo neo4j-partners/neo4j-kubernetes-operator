@@ -3381,10 +3381,19 @@
 </ul>
 <p><code>seedBackupRef</code> is also mutually exclusive with <code>seedURI</code> / <code>seedURIs</code>.</p>
 <h3 id="pvc-backed-seeds">PVC-backed seeds<a class="headerlink" href="#pvc-backed-seeds" title="Anchor link to this section">&para;</a></h3>
-<p>When a seed source resolves to a backup stored on a PVC, the operator spawns a short-lived <code>backup-seed-proxy-&lt;owner&gt;</code> Deployment + Service that mounts the backup PVC read-only and serves the <code>.backup</code> files over HTTP. Neo4j then fetches each file via <code>URLConnectionSeedProvider</code> at the exact <code>.backup</code> filename. The proxy is owner-referenced to the consuming CR and garbage-collected when that CR is deleted.</p>
+<p>When a seed source resolves to a backup stored on a PVC, the operator spawns a short-lived <code>backup-seed-proxy-&lt;owner&gt;</code> Deployment + Service that mounts the backup PVC read-only and serves the <code>.backup</code> files over HTTP. Neo4j then fetches each file via <code>URLConnectionSeedProvider</code> at the exact <code>.backup</code> filename.</p>
+<p>Lifecycle and hardening:</p>
+<ul>
+<li>A <strong>NetworkPolicy</strong> restricts the proxy's ingress to the target cluster's server pods (effective on enforcing CNIs; a no-op elsewhere).</li>
+<li>The proxy stack (Deployment + Service + NetworkPolicy) is <strong>torn down automatically as soon as the seed completes</strong>: when a <code>Neo4jRestore</code> reaches <code>Completed</code>/<code>Failed</code>, or when the <code>Neo4jShardedDatabase</code> becomes <code>Ready</code>. It does not keep serving the backup PVC for the lifetime of the owning CR.</li>
+<li>The proxy is also owner-referenced to the consuming CR, so deleting the CR removes any leftovers.</li>
+</ul>
 <h2 id="authentication-methods">Authentication Methods<a class="headerlink" href="#authentication-methods" title="Anchor link to this section">&para;</a></h2>
 <h3 id="1-system-wide-authentication-recommended">1. System-Wide Authentication (Recommended)<a class="headerlink" href="#1-system-wide-authentication-recommended" title="Anchor link to this section">&para;</a></h3>
-<p>Use cloud-native authentication mechanisms that don't require explicit credentials:</p>
+<p>Use cloud-native authentication mechanisms that don't require explicit credentials.</p>
+<blockquote>
+<p><strong>Where the identity must be bound:</strong> <code>CREATE DATABASE … OPTIONS { seedURI }</code> runs inside the Neo4j JVM <strong>on the server pods</strong> — not in a backup/restore Job. Under pod identity (IRSA / GKE Workload Identity / Azure Workload Identity) the IAM binding therefore goes on the <strong>server pods' ServiceAccount</strong>, not on the <code>neo4j-backup-sa</code> used by backup Jobs (<code>Neo4jBackup</code>'s <code>cloud.identity.autoCreate.annotations</code> only annotates the Job SA and has no effect on seeding).</p>
+</blockquote>
 <p><strong>AWS S3:</strong></p>
 <ul>
 <li>IAM roles for service accounts (IRSA)</li>
@@ -3448,6 +3457,7 @@
 <ul>
 <li><code>AWS_SESSION_TOKEN</code> (for temporary credentials)</li>
 <li><code>AWS_REGION</code></li>
+<li><code>AWS_ENDPOINT_URL_S3</code> — required for <strong>MinIO / S3-compatible</strong> stores. The <code>endpointURL</code>/<code>forcePathStyle</code> fields on <code>Neo4jBackup</code>/<code>Neo4jRestore</code> only affect their <strong>Job pods</strong>; the server pods doing seedURI fetches read the SDK's standard env vars, so put the endpoint in the Secret you project via <code>spec.extraEnvFrom</code>.</li>
 </ul>
 <h3 id="google-cloud-storage">Google Cloud Storage<a class="headerlink" href="#google-cloud-storage" title="Anchor link to this section">&para;</a></h3>
 <p><strong>Required:</strong></p>

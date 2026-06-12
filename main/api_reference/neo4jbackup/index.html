@@ -2306,6 +2306,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#backup-phases" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Backup Phases
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#backupstats" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3046,6 +3057,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#backup-phases" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Backup Phases
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#backupstats" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3286,7 +3308,8 @@
 <li>For cloud storage, <code>--to-path</code> uses native cloud URIs: <code>s3://</code>, <code>gs://</code>, <code>azb://</code>.</li>
 <li>For PVC storage, <code>--to-path</code> uses the local path within the mounted PVC.</li>
 <li>RBAC: Only a <code>neo4j-backup-sa</code> ServiceAccount is created. No Role or RoleBinding is created because the backup Job requires no Kubernetes API access.</li>
-<li>Cloud retention: The operator logs a notice to configure bucket lifecycle rules on the cloud provider side. PVC retention uses <code>find</code> + <code>rm</code> in a cleanup Job.</li>
+<li>Retention: cloud storage (S3/GCS/Azure) is pruned by <strong>your bucket's lifecycle rules</strong>, not the operator. For PVC storage, the operator runs a cleanup Job <strong>only when the Neo4jBackup CR is deleted</strong> — see <a href="#retentionpolicy">RetentionPolicy</a>.</li>
+<li><code>target.kind: Cluster</code> backs up <strong>every database</strong> on the instance in one <code>neo4j-admin database backup "*"</code> invocation — one <code>.backup</code> artifact per database lands in the chain directory. Restore is per-database: create one <code>Neo4jRestore</code> per database you want back (an all-databases restore mode is tracked in <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/issues/222">#222</a>).</li>
 </ul>
 <h2 id="spec">Spec<a class="headerlink" href="#spec" title="Anchor link to this section">&para;</a></h2>
 <p>The <code>Neo4jBackupSpec</code> defines the desired state of a Neo4j backup configuration.</p>
@@ -3316,7 +3339,7 @@
 <td><code>schedule</code></td>
 <td><code>string</code></td>
 <td>❌</td>
-<td>Cron expression for automated backups (e.g., <code>"0 2 * * *"</code>)</td>
+<td>Cron expression for automated backups (e.g., <code>"0 2 * * *"</code>). Plain 5-field UTC syntax only — <code>TZ=</code>/<code>CRON_TZ=</code> prefixes are <strong>rejected</strong> (Kubernetes refuses timezone-embedded CronJob schedules). Scheduled backup names are limited to <strong>40 characters</strong> (the generated <code>&lt;name&gt;-backup-cron</code> CronJob must fit Kubernetes' 52-char CronJob-name limit). Removing <code>schedule</code> from an existing CR <strong>deletes the CronJob</strong> (the CR becomes a one-shot backup).</td>
 </tr>
 <tr>
 <td><code>cloud</code></td>
@@ -3340,13 +3363,13 @@
 <td><code>suspend</code></td>
 <td><code>bool</code></td>
 <td>❌</td>
-<td>Suspend the backup schedule without deleting the resource</td>
+<td>Suspend backups without deleting the resource. For scheduled backups, the operator propagates this to <code>CronJob.spec.suspend</code>, so Kubernetes stops firing scheduled Jobs; setting it back to <code>false</code> resumes the schedule. <code>suspend: true</code> also pauses one-shot backups that haven't run yet.</td>
 </tr>
 <tr>
 <td><code>chainFromBackup</code></td>
 <td><code>string</code></td>
 <td>❌</td>
-<td>Names another <code>Neo4jBackup</code> CR in the <strong>same namespace</strong> whose <code>&lt;base&gt;/&lt;cr-name&gt;/</code> directory this CR should write into instead of its own. Used to compose mixed-cadence workflows (e.g. a daily <code>FULL</code> CR plus an hourly <code>DIFF</code> CR that chains off the daily's artifacts). See <a href="#chaining-mixed-cadence-backups">Chaining mixed-cadence backups</a>.</td>
+<td>Names another <code>Neo4jBackup</code> CR in the <strong>same namespace</strong> whose <code>&lt;base&gt;/&lt;cr-name&gt;/</code> directory this CR should write into instead of its own. Used to compose mixed-cadence workflows (e.g. a daily <code>FULL</code> CR plus an hourly <code>DIFF</code> CR that chains off the daily's artifacts). Must be a DNS-1123 name (validator-enforced). See <a href="#chaining-mixed-cadence-backups">Chaining mixed-cadence backups</a>.</td>
 </tr>
 </tbody>
 </table>
@@ -3367,7 +3390,7 @@
 <td><code>kind</code></td>
 <td><code>string</code></td>
 <td>✅</td>
-<td>Type of resource to back up: <code>"Cluster"</code>, <code>"Database"</code>, or <code>"ShardedDatabase"</code></td>
+<td>Type of resource to back up: <code>"Cluster"</code> (every database on the instance — <code>neo4j-admin</code> is invoked with the <code>"*"</code> glob, producing one artifact per database), <code>"Database"</code> (a single database), or <code>"ShardedDatabase"</code></td>
 </tr>
 <tr>
 <td><code>name</code></td>
@@ -3427,13 +3450,13 @@
 <td><code>bucket</code></td>
 <td><code>string</code></td>
 <td>❌</td>
-<td>Bucket or container name (required for cloud storage types)</td>
+<td>Bucket or container name (required for cloud storage types). Restricted to <code>A-Z a-z 0-9 . _ / -</code> — the validator rejects other characters (the value is interpolated into the Job's shell command).</td>
 </tr>
 <tr>
 <td><code>path</code></td>
 <td><code>string</code></td>
 <td>❌</td>
-<td>Path within the bucket or PVC</td>
+<td>Path within the bucket or PVC. Same <code>A-Z a-z 0-9 . _ / -</code> charset restriction as <code>bucket</code>. Defaults to <code>backups</code> for cloud storage when empty.</td>
 </tr>
 <tr>
 <td><code>pvc</code></td>
@@ -3583,18 +3606,18 @@
 <td><code>serviceAccount</code></td>
 <td><code>string</code></td>
 <td>❌</td>
-<td>Name of an existing ServiceAccount to use. When absent and <code>autoCreate.enabled=true</code>, the operator creates <code>neo4j-backup-sa</code>.</td>
+<td><strong>RESERVED — currently a no-op.</strong> Backup Jobs always run as the operator-managed <code>neo4j-backup-sa</code> (restore Jobs: <code>neo4j-restore-sa</code>); this field is accepted for backward compatibility but not read. Bind your cloud IAM role via <code>autoCreate.annotations</code> instead.</td>
 </tr>
 <tr>
 <td><code>autoCreate</code></td>
 <td><a href="#autocreatespec"><code>*AutoCreateSpec</code></a></td>
 <td>❌</td>
-<td>Auto-create ServiceAccount with workload-identity annotations</td>
+<td>Workload-identity annotations for the operator-managed ServiceAccount</td>
 </tr>
 </tbody>
 </table>
 <h3 id="autocreatespec">AutoCreateSpec<a class="headerlink" href="#autocreatespec" title="Anchor link to this section">&para;</a></h3>
-<p>Controls automatic ServiceAccount creation with workload-identity annotations.</p>
+<p>Carries workload-identity annotations for the operator-managed ServiceAccount.</p>
 <table>
 <thead>
 <tr>
@@ -3609,7 +3632,7 @@
 <td><code>enabled</code></td>
 <td><code>bool</code></td>
 <td>❌</td>
-<td>Enable auto-creation of the <code>neo4j-backup-sa</code> ServiceAccount (default: <code>true</code>)</td>
+<td><strong>RESERVED — currently a no-op.</strong> The operator always ensures the backup/restore ServiceAccount exists; only <code>annotations</code> is honored.</td>
 </tr>
 <tr>
 <td><code>annotations</code></td>
@@ -3623,21 +3646,18 @@
 <p><strong>Workload identity annotation examples:</strong></p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># AWS IRSA</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nt">autoCreate</span><span class="p">:</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span><span class="nt">annotations</span><span class="p">:</span>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">    </span><span class="nt">eks.amazonaws.com/role-arn</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">arn:aws:iam::123456789012:role/neo4j-backup-role</span>
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="c1"># GKE Workload Identity</span>
-</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="nt">autoCreate</span><span class="p">:</span>
-</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">  </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="w">  </span><span class="nt">annotations</span><span class="p">:</span>
-</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="w">    </span><span class="nt">iam.gke.io/gcp-service-account</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j-backup@my-project.iam.gserviceaccount.com</span>
-</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>
-</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="c1"># Azure Workload Identity</span>
-</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="nt">autoCreate</span><span class="p">:</span>
-</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="w">  </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="w">  </span><span class="nt">annotations</span><span class="p">:</span>
-</span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="w">    </span><span class="nt">azure.workload.identity/client-id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">00000000-0000-0000-0000-000000000000</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span><span class="nt">annotations</span><span class="p">:</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">    </span><span class="nt">eks.amazonaws.com/role-arn</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">arn:aws:iam::123456789012:role/neo4j-backup-role</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="c1"># GKE Workload Identity</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="nt">autoCreate</span><span class="p">:</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">  </span><span class="nt">annotations</span><span class="p">:</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">    </span><span class="nt">iam.gke.io/gcp-service-account</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j-backup@my-project.iam.gserviceaccount.com</span>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="c1"># Azure Workload Identity</span>
+</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="nt">autoCreate</span><span class="p">:</span>
+</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="w">  </span><span class="nt">annotations</span><span class="p">:</span>
+</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="w">    </span><span class="nt">azure.workload.identity/client-id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">00000000-0000-0000-0000-000000000000</span>
 </span></code></pre></div>
 <h3 id="pvcspec">PVCSpec<a class="headerlink" href="#pvcspec" title="Anchor link to this section">&para;</a></h3>
 <p>PVC configuration for local storage.</p>
@@ -3687,25 +3707,28 @@
 <td><code>maxAge</code></td>
 <td><code>string</code></td>
 <td>❌</td>
-<td>Maximum age of backups to retain (e.g., <code>"30d"</code>, <code>"4w"</code>)</td>
+<td>Maximum age of artifacts to retain. Accepted units: <code>d</code> (days), <code>h</code> (hours), <code>m</code> (minutes), <code>s</code> (seconds) — e.g. <code>"30d"</code>, <code>"168h"</code>, <code>"90m"</code>. <code>"4w"</code> is <strong>rejected</strong> by the validator.</td>
 </tr>
 <tr>
 <td><code>maxCount</code></td>
 <td><code>int32</code></td>
 <td>❌</td>
-<td>Maximum number of backups to retain</td>
+<td>Maximum number of <code>.backup</code> artifacts to retain</td>
 </tr>
 <tr>
 <td><code>deletePolicy</code></td>
 <td><code>string</code></td>
 <td>❌</td>
-<td>Action for expired backups: <code>"Delete"</code> (default) or <code>"Archive"</code></td>
+<td><code>"Delete"</code> (default). <code>"Archive"</code> is <strong>RESERVED — currently a no-op</strong> (no archival logic exists; accepted for backward compatibility).</td>
 </tr>
 </tbody>
 </table>
-<blockquote>
-<p><strong>Cloud storage retention</strong>: For cloud storage targets the operator logs a notice to configure bucket lifecycle rules on the cloud provider side. Automated deletion of cloud objects is not performed by the operator.</p>
-</blockquote>
+<p><strong>How retention actually works</strong> (read this before relying on it):</p>
+<ul>
+<li><strong>Cloud storage (S3/GCS/Azure)</strong>: the operator never deletes cloud objects. Configure <strong>bucket lifecycle rules</strong> on the provider side; <code>retention</code> on a cloud-backed CR is advisory only.</li>
+<li><strong>PVC storage</strong>: retention is enforced by a cleanup Job that runs <strong>only when the Neo4jBackup CR is deleted</strong> — it is <em>not</em> a continuous pruning loop. The Job prunes <code>*.backup</code> <strong>files</strong> inside this CR's chain directory (<code>/backup/&lt;chain-root&gt;/</code>) only, <strong>oldest-first by file mtime</strong>, and <strong>always keeps the newest artifact</strong> even if it has aged out. Other CRs' chain directories on a shared PVC are never touched.</li>
+<li><strong>DIFF-orphaning caveat</strong>: artifact filenames don't encode FULL vs DIFF, so pruning can orphan differential artifacts whose parent FULL ages out (making them unrestorable). The operator emits a <code>BackupRetentionCaveat</code> Warning event when retention is configured on a CR that can produce DIFFs. Prefer <code>options.backupType: FULL</code> on CRs that use retention, or prune chains with <code>neo4j-admin backup aggregate</code>.</li>
+</ul>
 <h3 id="backupoptions">BackupOptions<a class="headerlink" href="#backupoptions" title="Anchor link to this section">&para;</a></h3>
 <p>Fine-grained backup execution options.</p>
 <table>
@@ -3726,9 +3749,9 @@
 </tr>
 <tr>
 <td><code>compress</code></td>
-<td><code>bool</code></td>
+<td><code>*bool</code></td>
 <td>❌</td>
-<td>Compress the backup (default: <code>true</code>)</td>
+<td>Compress the backup (default: <code>true</code>). Pointer type so an explicit <code>false</code> survives updates (a plain bool would silently snap back to the default).</td>
 </tr>
 <tr>
 <td><code>backupType</code></td>
@@ -3746,7 +3769,7 @@
 <td><code>tempPath</code></td>
 <td><code>string</code></td>
 <td>❌</td>
-<td>Local directory path for temporary files during backup. When <code>tempStorage</code> is configured, this is set automatically. Only set manually if you are mounting your own volume. Maps to <code>--temp-path</code>.</td>
+<td>Local directory path for temporary files during backup. When <code>tempStorage</code> is configured, this is set automatically. Only set manually if you are mounting your own volume. Maps to <code>--temp-path</code>. Must be an <strong>absolute</strong> path restricted to <code>A-Z a-z 0-9 . _ / -</code> (validator-enforced).</td>
 </tr>
 <tr>
 <td><code>tempStorage</code></td>
@@ -3764,7 +3787,7 @@
 <td><code>verify</code></td>
 <td><code>bool</code></td>
 <td>❌</td>
-<td>Verify backup integrity after creation</td>
+<td><strong>RESERVED — currently a no-op.</strong> Accepted for backward compatibility but not read by the operator. For real artifact verification use <code>validate</code> (below).</td>
 </tr>
 <tr>
 <td><code>validate</code></td>
@@ -3859,12 +3882,12 @@
 <tr>
 <td><code>conditions</code></td>
 <td><code>[]metav1.Condition</code></td>
-<td>Current backup conditions</td>
+<td>Current backup conditions. The operator maintains a single <code>Ready</code> condition derived from <code>phase</code> (<code>Completed</code> → <code>True</code> with reason <code>BackupSucceeded</code>; <code>Failed</code>/<code>Suspended</code>/<code>Invalid</code> → <code>False</code>; everything else → <code>Unknown</code>).</td>
 </tr>
 <tr>
 <td><code>phase</code></td>
 <td><code>string</code></td>
-<td>Current backup phase</td>
+<td>Current backup phase — see <a href="#backup-phases">Backup Phases</a></td>
 </tr>
 <tr>
 <td><code>message</code></td>
@@ -3884,7 +3907,7 @@
 <tr>
 <td><code>lastSuccessTime</code></td>
 <td><code>*metav1.Time</code></td>
-<td>When the last successful backup completed</td>
+<td>When a <strong>one-shot</strong> backup completed (set on the <code>Completed</code> phase transition). <strong>Never set for scheduled backups</strong> — they don't pass through <code>Completed</code>; read <code>status.history[]</code> instead.</td>
 </tr>
 <tr>
 <td><code>nextRunTime</code></td>
@@ -3899,10 +3922,56 @@
 <tr>
 <td><code>history</code></td>
 <td><a href="#backuprun"><code>[]BackupRun</code></a></td>
-<td>History of recent backup runs</td>
+<td>History of recent backup runs. For scheduled backups this is the <strong>authoritative record</strong> of run outcomes.</td>
 </tr>
 </tbody>
 </table>
+<h3 id="backup-phases">Backup Phases<a class="headerlink" href="#backup-phases" title="Anchor link to this section">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Pending</code></td>
+<td>A transient precondition isn't met yet — e.g. the <code>chainFromBackup</code> parent CR doesn't exist yet, another Job in the same chain is still running, or the sharded-backup preflight couldn't connect to the cluster. The controller requeues and retries.</td>
+</tr>
+<tr>
+<td><code>Waiting</code></td>
+<td>The target cluster/standalone CR doesn't exist yet (common with <code>kubectl apply -f dir/</code> ordering) or isn't <code>Ready</code>. Transient — the controller requeues.</td>
+</tr>
+<tr>
+<td><code>Scheduled</code></td>
+<td>A CronJob has been created for <code>spec.schedule</code>. <strong>This is the steady state for scheduled backups</strong> — they never transition to <code>Completed</code>; per-run outcomes accumulate in <code>status.history[]</code>.</td>
+</tr>
+<tr>
+<td><code>Suspended</code></td>
+<td><code>spec.suspend: true</code> — the CronJob is suspended and one-shot runs are paused.</td>
+</tr>
+<tr>
+<td><code>Running</code></td>
+<td>A one-shot backup Job is executing.</td>
+</tr>
+<tr>
+<td><code>Completed</code></td>
+<td>The one-shot backup Job succeeded. Terminal — re-running requires deleting and recreating the CR.</td>
+</tr>
+<tr>
+<td><code>Failed</code></td>
+<td>The one-shot backup Job failed terminally (Job <code>Failed</code> condition, after retries) or a non-transient error occurred (e.g. chain target/storage mismatch). Terminal for one-shot backups.</td>
+</tr>
+<tr>
+<td><code>Invalid</code></td>
+<td>The spec failed validation (clear aggregated message in <code>status.message</code>). Recoverable — fixing the spec re-triggers reconcile.</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Don't <code>kubectl wait --for=condition=Ready</code> on a scheduled backup</strong> — it stays in <code>Scheduled</code> (Ready=<code>Unknown</code>) forever. Poll <code>status.history[*].status</code> for <code>Succeeded</code> instead.</p>
+</blockquote>
 <h3 id="backupstats">BackupStats<a class="headerlink" href="#backupstats" title="Anchor link to this section">&para;</a></h3>
 <table>
 <thead>
@@ -3949,7 +4018,7 @@
 <tr>
 <td><code>runID</code></td>
 <td><code>string</code></td>
-<td>Unique identifier for this run, populated from the backing Job's <code>metadata.uid</code>. Stable for the lifetime of the Job; a new value for every retry. Used by the operator to dedupe history entries across reconciles and by users to correlate a history entry with the actual Job (and its logs / audit trail).</td>
+<td>Unique identifier for this run, populated from the backing Job's <strong><code>metadata.name</code></strong> (not its opaque UID) — e.g. <code>&lt;backup&gt;-backup</code> for one-shots, <code>&lt;backup&gt;-backup-cron-&lt;unix-seconds&gt;</code> for CronJob children. Used by the operator to dedupe history entries across reconciles and by users to correlate a history entry with the actual Job (<code>kubectl logs job/&lt;runID&gt;</code>).</td>
 </tr>
 <tr>
 <td><code>startTime</code></td>
@@ -3979,7 +4048,7 @@
 <tr>
 <td><code>backupsPath</code></td>
 <td><code>string</code></td>
-<td>The shared per-CR directory under <code>spec.storage.path</code> where this run wrote its <code>.backup</code> artifact. <strong>Same value for every run of one CR</strong> — all runs accumulate in this directory so <code>neo4j-admin</code> can chain differential backups off the prior full. Value is the Neo4jBackup CR name (or the <code>chainFromBackup</code> chain-root name when set). Use the <code>runID</code> field (Job UID) for per-run identity.</td>
+<td>The shared per-CR directory under <code>spec.storage.path</code> where this run wrote its <code>.backup</code> artifact. <strong>Same value for every run of one CR</strong> — all runs accumulate in this directory so <code>neo4j-admin</code> can chain differential backups off the prior full. Value is the Neo4jBackup CR name (or the <code>chainFromBackup</code> chain-root name when set). Use the <code>runID</code> field (Job name) for per-run identity.</td>
 </tr>
 <tr>
 <td><code>artifactFilename</code></td>
@@ -4158,18 +4227,17 @@
 </span><span id="__span-5-18"><a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a><span class="w">    </span><span class="nt">identity</span><span class="p">:</span>
 </span><span id="__span-5-19"><a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="w">      </span><span class="nt">provider</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">aws</span>
 </span><span id="__span-5-20"><a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a><span class="w">      </span><span class="nt">autoCreate</span><span class="p">:</span>
-</span><span id="__span-5-21"><a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a><span class="w">        </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-5-22"><a id="__codelineno-5-22" name="__codelineno-5-22" href="#__codelineno-5-22"></a><span class="w">        </span><span class="nt">annotations</span><span class="p">:</span>
-</span><span id="__span-5-23"><a id="__codelineno-5-23" name="__codelineno-5-23" href="#__codelineno-5-23"></a><span class="w">          </span><span class="nt">eks.amazonaws.com/role-arn</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">arn:aws:iam::123456789012:role/neo4j-backup-role</span>
-</span><span id="__span-5-24"><a id="__codelineno-5-24" name="__codelineno-5-24" href="#__codelineno-5-24"></a><span class="w">  </span><span class="nt">schedule</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;0</span><span class="nv"> </span><span class="s">2</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*&quot;</span><span class="w">   </span><span class="c1"># Daily at 2 AM UTC</span>
-</span><span id="__span-5-25"><a id="__codelineno-5-25" name="__codelineno-5-25" href="#__codelineno-5-25"></a><span class="w">  </span><span class="nt">retention</span><span class="p">:</span>
-</span><span id="__span-5-26"><a id="__codelineno-5-26" name="__codelineno-5-26" href="#__codelineno-5-26"></a><span class="w">    </span><span class="nt">maxAge</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;30d&quot;</span>
-</span><span id="__span-5-27"><a id="__codelineno-5-27" name="__codelineno-5-27" href="#__codelineno-5-27"></a><span class="w">    </span><span class="nt">maxCount</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30</span>
-</span><span id="__span-5-28"><a id="__codelineno-5-28" name="__codelineno-5-28" href="#__codelineno-5-28"></a><span class="w">  </span><span class="nt">options</span><span class="p">:</span>
-</span><span id="__span-5-29"><a id="__codelineno-5-29" name="__codelineno-5-29" href="#__codelineno-5-29"></a><span class="w">    </span><span class="nt">compress</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-5-30"><a id="__codelineno-5-30" name="__codelineno-5-30" href="#__codelineno-5-30"></a><span class="w">    </span><span class="nt">backupType</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">FULL</span>
-</span><span id="__span-5-31"><a id="__codelineno-5-31" name="__codelineno-5-31" href="#__codelineno-5-31"></a><span class="w">    </span><span class="nt">tempStorage</span><span class="p">:</span>
-</span><span id="__span-5-32"><a id="__codelineno-5-32" name="__codelineno-5-32" href="#__codelineno-5-32"></a><span class="w">      </span><span class="nt">size</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;50Gi&quot;</span>
+</span><span id="__span-5-21"><a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a><span class="w">        </span><span class="nt">annotations</span><span class="p">:</span>
+</span><span id="__span-5-22"><a id="__codelineno-5-22" name="__codelineno-5-22" href="#__codelineno-5-22"></a><span class="w">          </span><span class="nt">eks.amazonaws.com/role-arn</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">arn:aws:iam::123456789012:role/neo4j-backup-role</span>
+</span><span id="__span-5-23"><a id="__codelineno-5-23" name="__codelineno-5-23" href="#__codelineno-5-23"></a><span class="w">  </span><span class="nt">schedule</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;0</span><span class="nv"> </span><span class="s">2</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*&quot;</span><span class="w">   </span><span class="c1"># Daily at 2 AM UTC</span>
+</span><span id="__span-5-24"><a id="__codelineno-5-24" name="__codelineno-5-24" href="#__codelineno-5-24"></a><span class="w">  </span><span class="nt">retention</span><span class="p">:</span>
+</span><span id="__span-5-25"><a id="__codelineno-5-25" name="__codelineno-5-25" href="#__codelineno-5-25"></a><span class="w">    </span><span class="nt">maxAge</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;30d&quot;</span>
+</span><span id="__span-5-26"><a id="__codelineno-5-26" name="__codelineno-5-26" href="#__codelineno-5-26"></a><span class="w">    </span><span class="nt">maxCount</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30</span>
+</span><span id="__span-5-27"><a id="__codelineno-5-27" name="__codelineno-5-27" href="#__codelineno-5-27"></a><span class="w">  </span><span class="nt">options</span><span class="p">:</span>
+</span><span id="__span-5-28"><a id="__codelineno-5-28" name="__codelineno-5-28" href="#__codelineno-5-28"></a><span class="w">    </span><span class="nt">compress</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-5-29"><a id="__codelineno-5-29" name="__codelineno-5-29" href="#__codelineno-5-29"></a><span class="w">    </span><span class="nt">backupType</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">FULL</span>
+</span><span id="__span-5-30"><a id="__codelineno-5-30" name="__codelineno-5-30" href="#__codelineno-5-30"></a><span class="w">    </span><span class="nt">tempStorage</span><span class="p">:</span>
+</span><span id="__span-5-31"><a id="__codelineno-5-31" name="__codelineno-5-31" href="#__codelineno-5-31"></a><span class="w">      </span><span class="nt">size</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;50Gi&quot;</span>
 </span></code></pre></div>
 <h3 id="scheduled-s3-backup-with-static-credentials">Scheduled S3 Backup with Static Credentials<a class="headerlink" href="#scheduled-s3-backup-with-static-credentials" title="Anchor link to this section">&para;</a></h3>
 <p>Uses an explicit Kubernetes Secret for AWS credentials instead of IRSA.</p>
@@ -4270,7 +4338,7 @@
 </span><span id="__span-9-16"><a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a><span class="w">    </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">backups/manual/</span>
 </span><span id="__span-9-17"><a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a><span class="w">  </span><span class="nt">options</span><span class="p">:</span>
 </span><span id="__span-9-18"><a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a><span class="w">    </span><span class="nt">compress</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-9-19"><a id="__codelineno-9-19" name="__codelineno-9-19" href="#__codelineno-9-19"></a><span class="w">    </span><span class="nt">verify</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-9-19"><a id="__codelineno-9-19" name="__codelineno-9-19" href="#__codelineno-9-19"></a><span class="w">    </span><span class="nt">validate</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">   </span><span class="c1"># runs `neo4j-admin backup validate` after the backup</span>
 </span><span id="__span-9-20"><a id="__codelineno-9-20" name="__codelineno-9-20" href="#__codelineno-9-20"></a><span class="w">    </span><span class="nt">backupType</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">DIFF</span>
 </span></code></pre></div>
 <h3 id="gcs-backup-with-gke-workload-identity">GCS Backup with GKE Workload Identity<a class="headerlink" href="#gcs-backup-with-gke-workload-identity" title="Anchor link to this section">&para;</a></h3>
@@ -4294,18 +4362,16 @@
 </span><span id="__span-10-18"><a id="__codelineno-10-18" name="__codelineno-10-18" href="#__codelineno-10-18"></a><span class="w">    </span><span class="nt">identity</span><span class="p">:</span>
 </span><span id="__span-10-19"><a id="__codelineno-10-19" name="__codelineno-10-19" href="#__codelineno-10-19"></a><span class="w">      </span><span class="nt">provider</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gcp</span>
 </span><span id="__span-10-20"><a id="__codelineno-10-20" name="__codelineno-10-20" href="#__codelineno-10-20"></a><span class="w">      </span><span class="nt">autoCreate</span><span class="p">:</span>
-</span><span id="__span-10-21"><a id="__codelineno-10-21" name="__codelineno-10-21" href="#__codelineno-10-21"></a><span class="w">        </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-10-22"><a id="__codelineno-10-22" name="__codelineno-10-22" href="#__codelineno-10-22"></a><span class="w">        </span><span class="nt">annotations</span><span class="p">:</span>
-</span><span id="__span-10-23"><a id="__codelineno-10-23" name="__codelineno-10-23" href="#__codelineno-10-23"></a><span class="w">          </span><span class="nt">iam.gke.io/gcp-service-account</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j-backup@my-project.iam.gserviceaccount.com</span>
-</span><span id="__span-10-24"><a id="__codelineno-10-24" name="__codelineno-10-24" href="#__codelineno-10-24"></a><span class="w">  </span><span class="nt">schedule</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;0</span><span class="nv"> </span><span class="s">3</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">0&quot;</span><span class="w">   </span><span class="c1"># Weekly on Sunday at 3 AM</span>
-</span><span id="__span-10-25"><a id="__codelineno-10-25" name="__codelineno-10-25" href="#__codelineno-10-25"></a><span class="w">  </span><span class="nt">retention</span><span class="p">:</span>
-</span><span id="__span-10-26"><a id="__codelineno-10-26" name="__codelineno-10-26" href="#__codelineno-10-26"></a><span class="w">    </span><span class="nt">maxCount</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">12</span>
-</span><span id="__span-10-27"><a id="__codelineno-10-27" name="__codelineno-10-27" href="#__codelineno-10-27"></a><span class="w">    </span><span class="nt">deletePolicy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Archive</span>
-</span><span id="__span-10-28"><a id="__codelineno-10-28" name="__codelineno-10-28" href="#__codelineno-10-28"></a><span class="w">  </span><span class="nt">options</span><span class="p">:</span>
-</span><span id="__span-10-29"><a id="__codelineno-10-29" name="__codelineno-10-29" href="#__codelineno-10-29"></a><span class="w">    </span><span class="nt">backupType</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">AUTO</span>
-</span><span id="__span-10-30"><a id="__codelineno-10-30" name="__codelineno-10-30" href="#__codelineno-10-30"></a><span class="w">    </span><span class="nt">pageCache</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;8G&quot;</span>
-</span><span id="__span-10-31"><a id="__codelineno-10-31" name="__codelineno-10-31" href="#__codelineno-10-31"></a><span class="w">    </span><span class="nt">tempStorage</span><span class="p">:</span>
-</span><span id="__span-10-32"><a id="__codelineno-10-32" name="__codelineno-10-32" href="#__codelineno-10-32"></a><span class="w">      </span><span class="nt">size</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;50Gi&quot;</span>
+</span><span id="__span-10-21"><a id="__codelineno-10-21" name="__codelineno-10-21" href="#__codelineno-10-21"></a><span class="w">        </span><span class="nt">annotations</span><span class="p">:</span>
+</span><span id="__span-10-22"><a id="__codelineno-10-22" name="__codelineno-10-22" href="#__codelineno-10-22"></a><span class="w">          </span><span class="nt">iam.gke.io/gcp-service-account</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j-backup@my-project.iam.gserviceaccount.com</span>
+</span><span id="__span-10-23"><a id="__codelineno-10-23" name="__codelineno-10-23" href="#__codelineno-10-23"></a><span class="w">  </span><span class="nt">schedule</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;0</span><span class="nv"> </span><span class="s">3</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">0&quot;</span><span class="w">   </span><span class="c1"># Weekly on Sunday at 3 AM</span>
+</span><span id="__span-10-24"><a id="__codelineno-10-24" name="__codelineno-10-24" href="#__codelineno-10-24"></a><span class="w">  </span><span class="nt">retention</span><span class="p">:</span>
+</span><span id="__span-10-25"><a id="__codelineno-10-25" name="__codelineno-10-25" href="#__codelineno-10-25"></a><span class="w">    </span><span class="nt">maxCount</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">12</span>
+</span><span id="__span-10-26"><a id="__codelineno-10-26" name="__codelineno-10-26" href="#__codelineno-10-26"></a><span class="w">  </span><span class="nt">options</span><span class="p">:</span>
+</span><span id="__span-10-27"><a id="__codelineno-10-27" name="__codelineno-10-27" href="#__codelineno-10-27"></a><span class="w">    </span><span class="nt">backupType</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">AUTO</span>
+</span><span id="__span-10-28"><a id="__codelineno-10-28" name="__codelineno-10-28" href="#__codelineno-10-28"></a><span class="w">    </span><span class="nt">pageCache</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;8G&quot;</span>
+</span><span id="__span-10-29"><a id="__codelineno-10-29" name="__codelineno-10-29" href="#__codelineno-10-29"></a><span class="w">    </span><span class="nt">tempStorage</span><span class="p">:</span>
+</span><span id="__span-10-30"><a id="__codelineno-10-30" name="__codelineno-10-30" href="#__codelineno-10-30"></a><span class="w">      </span><span class="nt">size</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;50Gi&quot;</span>
 </span></code></pre></div>
 <h3 id="gcs-backup-with-static-service-account-credentials">GCS Backup with Static Service Account Credentials<a class="headerlink" href="#gcs-backup-with-static-service-account-credentials" title="Anchor link to this section">&para;</a></h3>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1beta1</span>
@@ -4354,17 +4420,16 @@
 </span><span id="__span-12-18"><a id="__codelineno-12-18" name="__codelineno-12-18" href="#__codelineno-12-18"></a><span class="w">    </span><span class="nt">identity</span><span class="p">:</span>
 </span><span id="__span-12-19"><a id="__codelineno-12-19" name="__codelineno-12-19" href="#__codelineno-12-19"></a><span class="w">      </span><span class="nt">provider</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">azure</span>
 </span><span id="__span-12-20"><a id="__codelineno-12-20" name="__codelineno-12-20" href="#__codelineno-12-20"></a><span class="w">      </span><span class="nt">autoCreate</span><span class="p">:</span>
-</span><span id="__span-12-21"><a id="__codelineno-12-21" name="__codelineno-12-21" href="#__codelineno-12-21"></a><span class="w">        </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-12-22"><a id="__codelineno-12-22" name="__codelineno-12-22" href="#__codelineno-12-22"></a><span class="w">        </span><span class="nt">annotations</span><span class="p">:</span>
-</span><span id="__span-12-23"><a id="__codelineno-12-23" name="__codelineno-12-23" href="#__codelineno-12-23"></a><span class="w">          </span><span class="nt">azure.workload.identity/client-id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">00000000-0000-0000-0000-000000000000</span>
-</span><span id="__span-12-24"><a id="__codelineno-12-24" name="__codelineno-12-24" href="#__codelineno-12-24"></a><span class="w">  </span><span class="nt">schedule</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;0</span><span class="nv"> </span><span class="s">1</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*&quot;</span>
-</span><span id="__span-12-25"><a id="__codelineno-12-25" name="__codelineno-12-25" href="#__codelineno-12-25"></a><span class="w">  </span><span class="nt">retention</span><span class="p">:</span>
-</span><span id="__span-12-26"><a id="__codelineno-12-26" name="__codelineno-12-26" href="#__codelineno-12-26"></a><span class="w">    </span><span class="nt">maxAge</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;14d&quot;</span>
-</span><span id="__span-12-27"><a id="__codelineno-12-27" name="__codelineno-12-27" href="#__codelineno-12-27"></a><span class="w">  </span><span class="nt">options</span><span class="p">:</span>
-</span><span id="__span-12-28"><a id="__codelineno-12-28" name="__codelineno-12-28" href="#__codelineno-12-28"></a><span class="w">    </span><span class="nt">compress</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-12-29"><a id="__codelineno-12-29" name="__codelineno-12-29" href="#__codelineno-12-29"></a><span class="w">    </span><span class="nt">backupType</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">FULL</span>
-</span><span id="__span-12-30"><a id="__codelineno-12-30" name="__codelineno-12-30" href="#__codelineno-12-30"></a><span class="w">    </span><span class="nt">tempStorage</span><span class="p">:</span>
-</span><span id="__span-12-31"><a id="__codelineno-12-31" name="__codelineno-12-31" href="#__codelineno-12-31"></a><span class="w">      </span><span class="nt">size</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;50Gi&quot;</span>
+</span><span id="__span-12-21"><a id="__codelineno-12-21" name="__codelineno-12-21" href="#__codelineno-12-21"></a><span class="w">        </span><span class="nt">annotations</span><span class="p">:</span>
+</span><span id="__span-12-22"><a id="__codelineno-12-22" name="__codelineno-12-22" href="#__codelineno-12-22"></a><span class="w">          </span><span class="nt">azure.workload.identity/client-id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">00000000-0000-0000-0000-000000000000</span>
+</span><span id="__span-12-23"><a id="__codelineno-12-23" name="__codelineno-12-23" href="#__codelineno-12-23"></a><span class="w">  </span><span class="nt">schedule</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;0</span><span class="nv"> </span><span class="s">1</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*&quot;</span>
+</span><span id="__span-12-24"><a id="__codelineno-12-24" name="__codelineno-12-24" href="#__codelineno-12-24"></a><span class="w">  </span><span class="nt">retention</span><span class="p">:</span>
+</span><span id="__span-12-25"><a id="__codelineno-12-25" name="__codelineno-12-25" href="#__codelineno-12-25"></a><span class="w">    </span><span class="nt">maxAge</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;14d&quot;</span>
+</span><span id="__span-12-26"><a id="__codelineno-12-26" name="__codelineno-12-26" href="#__codelineno-12-26"></a><span class="w">  </span><span class="nt">options</span><span class="p">:</span>
+</span><span id="__span-12-27"><a id="__codelineno-12-27" name="__codelineno-12-27" href="#__codelineno-12-27"></a><span class="w">    </span><span class="nt">compress</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-12-28"><a id="__codelineno-12-28" name="__codelineno-12-28" href="#__codelineno-12-28"></a><span class="w">    </span><span class="nt">backupType</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">FULL</span>
+</span><span id="__span-12-29"><a id="__codelineno-12-29" name="__codelineno-12-29" href="#__codelineno-12-29"></a><span class="w">    </span><span class="nt">tempStorage</span><span class="p">:</span>
+</span><span id="__span-12-30"><a id="__codelineno-12-30" name="__codelineno-12-30" href="#__codelineno-12-30"></a><span class="w">      </span><span class="nt">size</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;50Gi&quot;</span>
 </span></code></pre></div>
 <h3 id="azure-backup-with-static-credentials">Azure Backup with Static Credentials<a class="headerlink" href="#azure-backup-with-static-credentials" title="Anchor link to this section">&para;</a></h3>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1beta1</span>
@@ -4408,11 +4473,13 @@
 </span><span id="__span-14-13"><a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a><span class="c1"># Check logs from the most recent backup Job</span>
 </span><span id="__span-14-14"><a id="__codelineno-14-14" name="__codelineno-14-14" href="#__codelineno-14-14"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>neo4j<span class="w"> </span>-l<span class="w"> </span>neo4j.com/backup<span class="o">=</span>daily-cluster-backup<span class="w"> </span>--tail<span class="o">=</span><span class="m">100</span>
 </span><span id="__span-14-15"><a id="__codelineno-14-15" name="__codelineno-14-15" href="#__codelineno-14-15"></a>
-</span><span id="__span-14-16"><a id="__codelineno-14-16" name="__codelineno-14-16" href="#__codelineno-14-16"></a><span class="c1"># Check backup phase</span>
-</span><span id="__span-14-17"><a id="__codelineno-14-17" name="__codelineno-14-17" href="#__codelineno-14-17"></a>kubectl<span class="w"> </span>get<span class="w"> </span>neo4jbackup<span class="w"> </span>daily-cluster-backup<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.phase}&#39;</span>
-</span><span id="__span-14-18"><a id="__codelineno-14-18" name="__codelineno-14-18" href="#__codelineno-14-18"></a>
-</span><span id="__span-14-19"><a id="__codelineno-14-19" name="__codelineno-14-19" href="#__codelineno-14-19"></a><span class="c1"># Check last success time</span>
-</span><span id="__span-14-20"><a id="__codelineno-14-20" name="__codelineno-14-20" href="#__codelineno-14-20"></a>kubectl<span class="w"> </span>get<span class="w"> </span>neo4jbackup<span class="w"> </span>daily-cluster-backup<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.lastSuccessTime}&#39;</span>
+</span><span id="__span-14-16"><a id="__codelineno-14-16" name="__codelineno-14-16" href="#__codelineno-14-16"></a><span class="c1"># Check backup phase (scheduled backups stay in &quot;Scheduled&quot;; only one-shot</span>
+</span><span id="__span-14-17"><a id="__codelineno-14-17" name="__codelineno-14-17" href="#__codelineno-14-17"></a><span class="c1"># backups reach &quot;Completed&quot;)</span>
+</span><span id="__span-14-18"><a id="__codelineno-14-18" name="__codelineno-14-18" href="#__codelineno-14-18"></a>kubectl<span class="w"> </span>get<span class="w"> </span>neo4jbackup<span class="w"> </span>daily-cluster-backup<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.phase}&#39;</span>
+</span><span id="__span-14-19"><a id="__codelineno-14-19" name="__codelineno-14-19" href="#__codelineno-14-19"></a>
+</span><span id="__span-14-20"><a id="__codelineno-14-20" name="__codelineno-14-20" href="#__codelineno-14-20"></a><span class="c1"># Check run outcomes — for scheduled backups, status.history is the record</span>
+</span><span id="__span-14-21"><a id="__codelineno-14-21" name="__codelineno-14-21" href="#__codelineno-14-21"></a><span class="c1"># (lastSuccessTime is only set for one-shot backups)</span>
+</span><span id="__span-14-22"><a id="__codelineno-14-22" name="__codelineno-14-22" href="#__codelineno-14-22"></a>kubectl<span class="w"> </span>get<span class="w"> </span>neo4jbackup<span class="w"> </span>daily-cluster-backup<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.history[*].status}&#39;</span>
 </span></code></pre></div>
 <p>For more information on backup operations, see the <a href="../../user_guide/guides/backup_restore/">Backup and Restore Guide</a>.</p>
 
