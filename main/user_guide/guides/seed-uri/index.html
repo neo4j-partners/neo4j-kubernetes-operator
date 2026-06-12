@@ -3517,7 +3517,7 @@
 <ul>
 <li><code>AWS_SESSION_TOKEN</code> (for temporary credentials)</li>
 <li><code>AWS_REGION</code></li>
-<li><code>AWS_ENDPOINT_URL_S3</code> — required for <strong>MinIO / S3-compatible</strong> stores. The <code>endpointURL</code>/<code>forcePathStyle</code> fields on <code>Neo4jBackup</code>/<code>Neo4jRestore</code> only affect their <strong>Job pods</strong>; the server pods doing seedURI fetches read the SDK's standard env vars, so put the endpoint in the Secret you project via <code>spec.extraEnvFrom</code>.</li>
+<li><code>AWS_ENDPOINT_URL_S3</code> — required for <strong>MinIO / S3-compatible</strong> stores. The <code>endpointURL</code>/<code>forcePathStyle</code> fields on <code>Neo4jBackup</code>/<code>Neo4jRestore</code> only affect their <strong>Job pods</strong>; the server pods doing seedURI fetches read the SDK's standard env vars, so put the endpoint in the Secret you project via <code>spec.extraEnvFrom</code>. (Cluster restores that resolve to a custom-endpoint backup emit a <code>SeedEndpointNotProjected</code> Warning event when the operator can verify the endpoint is missing from the server pods.)</li>
 </ul>
 <h3 id="google-cloud-storage">Google Cloud Storage<a class="headerlink" href="#google-cloud-storage" title="Anchor link to this section">&para;</a></h3>
 <p><strong>Required:</strong></p>

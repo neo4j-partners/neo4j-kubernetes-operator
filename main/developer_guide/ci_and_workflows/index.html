@@ -3197,6 +3197,14 @@ working tree, loads it into a fresh Kind cluster, and walks five legs:</p>
 <p>The same matrix runs as a <strong>blocking job in <code>release.yml</code></strong> — a release tag
 cannot publish an image or chart if any leg fails. Use the local run (or the
 dispatch workflow) to catch problems before tagging instead of failing the tag.</p>
+<p><strong>Output contract</strong> (#247): every sub-step prints a <code>[HH:MM:SS +elapsed]</code>
+prefix and waits pre-announce their timeout (helm <code>--wait</code> 180s/300s,
+rollout 180s, smoke poll 60s) — so a watcher can always tell <em>slow</em> from
+<em>stuck</em>. The docker build logs to <code>/tmp/ic-build.log</code> (tailed on failure).
+On any failure the script dumps cluster diagnostics — pods, the operator
+Deployment + its logs, recent events, helm releases — before exiting, and in
+Actions a verdict table (every passed check + the failing one) lands in the
+step summary on both pass and fail.</p>
 <h2 id="release">Release<a class="headerlink" href="#release" title="Anchor link to this section">&para;</a></h2>
 <p><strong><code>release.yml</code> — tag-driven release pipeline.</strong> Push a <code>vX.Y.Z</code> tag (or dispatch
 with a tag input). Jobs:</p>

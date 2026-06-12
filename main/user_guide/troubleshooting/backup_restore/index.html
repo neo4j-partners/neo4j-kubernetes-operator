@@ -2839,6 +2839,16 @@
 </span><span id="__span-9-21"><a id="__codelineno-9-21" name="__codelineno-9-21" href="#__codelineno-9-21"></a><span class="p">}</span>
 </span></code></pre></div></p>
 </li>
+<li>
+<p><strong>Identity conflicts between CRs</strong> — backups that worked start failing
+   auth after another backup/restore CR was added: <code>neo4j-backup-sa</code> /
+   <code>neo4j-restore-sa</code> are shared per namespace, and two CRs declaring
+   different <code>identity.autoCreate.annotations</code> overwrite each other (last
+   writer wins). Look for a <code>ServiceAccountAnnotationConflict</code> Warning
+   event (<code>kubectl get events --field-selector reason=ServiceAccountAnnotationConflict</code>).
+   Fix: one identity per namespace with access to all backup locations, or
+   split the CRs across namespaces.</p>
+</li>
 </ol>
 <h4 id="google-cloud-storage-issues">Google Cloud Storage Issues<a class="headerlink" href="#google-cloud-storage-issues" title="Anchor link to this section">&para;</a></h4>
 <p><strong>Service Account Problems:</strong>
@@ -3185,16 +3195,20 @@
 <li><a href="../../security/">Security Guide</a></li>
 <li><a href="../split-brain-recovery/">Split-Brain Recovery</a></li>
 </ul>
-<h2 id="restore-reports-completed-but-the-database-is-offline-unavailable">Restore reports Completed but the database is offline / unavailable<a class="headerlink" href="#restore-reports-completed-but-the-database-is-offline-unavailable" title="Anchor link to this section">&para;</a></h2>
-<p><strong>Symptom:</strong> <code>Neo4jRestore</code> shows <code>phase: Completed</code>, but connecting to the
-database fails with "database is unavailable", and:</p>
-<div class="language-cypher highlight"><pre><span></span><code><span id="__span-39-1"><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a><span class="n">SHOW</span><span class="w"> </span><span class="n">DATABASE</span><span class="w"> </span><span class="p">&lt;</span><span class="n">name</span><span class="p">&gt;</span><span class="w"> </span><span class="k">YIELD</span><span class="w"> </span><span class="n">name</span><span class="p">,</span><span class="w"> </span><span class="n">currentStatus</span><span class="p">,</span><span class="w"> </span><span class="n">requestedStatus</span><span class="p">,</span><span class="w"> </span><span class="n">statusMessage</span><span class="p">;</span>
+<h2 id="cluster-restore-fails-with-the-seed-failed">Cluster restore fails with "the seed FAILED: …"<a class="headerlink" href="#cluster-restore-fails-with-the-seed-failed" title="Anchor link to this section">&para;</a></h2>
+<p><strong>Symptom:</strong> a cluster-target <code>Neo4jRestore</code> goes <code>Failed</code> with a message like:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-39-1"><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a>Database &quot;mydb&quot; was created but the seed FAILED: Object not found at the
+</span><span id="__span-39-2"><a id="__codelineno-39-2" name="__codelineno-39-2" href="#__codelineno-39-2"></a>path: s3://… — fix the cause, DROP DATABASE mydb IF EXISTS, and re-trigger
+</span><span id="__span-39-3"><a id="__codelineno-39-3" name="__codelineno-39-3" href="#__codelineno-39-3"></a>the restore
 </span></code></pre></div>
-<p>shows <code>currentStatus: offline</code> with a populated <code>statusMessage</code>.</p>
-<p><strong>Cause:</strong> the seed download failed on the server pods; the <code>statusMessage</code>
-names the real cause. The most common one: <code>Object not found at the path:
-s3://…</code> on an <strong>S3-compatible endpoint</strong> (MinIO, on-prem) — the server JVMs
-are missing the endpoint configuration. Add to the cluster CR:</p>
+<p>The quoted part is Neo4j's own <code>statusMessage</code> — it names the real cause.</p>
+<p><strong>Most common cause:</strong> <code>Object not found at the path: s3://…</code> on an
+<strong>S3-compatible endpoint</strong> (MinIO, on-prem) — the server JVMs are missing the
+endpoint configuration. The cluster Cypher restore makes the <em>server</em> pods
+fetch the seed, and the <code>endpointURL</code> field on the backup only reaches
+backup/restore <em>Job</em> pods. The operator emits a <code>SeedEndpointNotProjected</code>
+Warning event on the restore when it can verify the endpoint is missing.
+Add to the cluster CR:</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-40-1"><a id="__codelineno-40-1" name="__codelineno-40-1" href="#__codelineno-40-1"></a><span class="nt">spec</span><span class="p">:</span>
 </span><span id="__span-40-2"><a id="__codelineno-40-2" name="__codelineno-40-2" href="#__codelineno-40-2"></a><span class="w">  </span><span class="nt">env</span><span class="p">:</span>
 </span><span id="__span-40-3"><a id="__codelineno-40-3" name="__codelineno-40-3" href="#__codelineno-40-3"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">AWS_ENDPOINT_URL_S3</span>
@@ -3204,18 +3218,36 @@ are missing the endpoint configuration. Add to the cluster CR:</p>
 </span></code></pre></div>
 <p><strong>Recovery:</strong> fix the cause, <code>DROP DATABASE &lt;name&gt; IF EXISTS</code> (it holds no
 data), then re-trigger the restore (see the next section).</p>
-<h2 id="retrying-a-failed-restore-does-nothing-or-re-fails-instantly">Retrying a Failed restore does nothing (or re-fails instantly)<a class="headerlink" href="#retrying-a-failed-restore-does-nothing-or-re-fails-instantly" title="Anchor link to this section">&para;</a></h2>
-<p><strong>Symptom:</strong> after a <code>Failed</code> restore you change the spec (new generation) to
-retry, but the restore immediately returns to <code>Failed</code> without a new Job pod
-running.</p>
-<p><strong>Cause:</strong> the previous failed Job still exists under the same name, and the
-retry re-reads its Failed state.</p>
-<p><strong>Fix:</strong> delete the old Job first, then bump the spec:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-41-1"><a id="__codelineno-41-1" name="__codelineno-41-1" href="#__codelineno-41-1"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>job<span class="w"> </span>&lt;restore-name&gt;-restore
-</span><span id="__span-41-2"><a id="__codelineno-41-2" name="__codelineno-41-2" href="#__codelineno-41-2"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>neo4jrestore<span class="w"> </span>&lt;restore-name&gt;<span class="w"> </span>--type<span class="o">=</span>merge<span class="w"> </span>-p<span class="w"> </span><span class="s1">&#39;{&quot;spec&quot;:{&quot;timeout&quot;:&quot;10m&quot;}}&#39;</span>
+<blockquote>
+<p>Operator <strong>v1.12.0 only</strong>: a failed seed was reported as <code>phase: Completed</code>
+with the database left <code>offline</code> — check <code>SHOW DATABASE &lt;name&gt; YIELD
+statusMessage</code> for the cause. From v1.12.1 the restore fails fast with the
+message above.</p>
+</blockquote>
+<h2 id="retrying-a-finished-restore">Retrying a finished restore<a class="headerlink" href="#retrying-a-finished-restore" title="Anchor link to this section">&para;</a></h2>
+<p><code>Completed</code>/<code>Failed</code> are terminal for the current spec generation. Any spec
+change that bumps the generation issues a fresh attempt:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-41-1"><a id="__codelineno-41-1" name="__codelineno-41-1" href="#__codelineno-41-1"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>neo4jrestore<span class="w"> </span>&lt;restore-name&gt;<span class="w"> </span>--type<span class="o">=</span>merge<span class="w"> </span>-p<span class="w"> </span><span class="s1">&#39;{&quot;spec&quot;:{&quot;timeout&quot;:&quot;10m&quot;}}&#39;</span>
 </span></code></pre></div>
-<p>(Cluster-target restores use the Cypher path — no Job — so a plain spec bump
-suffices there.)</p>
+<blockquote>
+<p>Operator <strong>v1.12.0 only</strong>: on standalone (Job-based) targets the previous
+failed Job blocked the retry — delete it first with
+<code>kubectl delete job &lt;restore-name&gt;-restore</code>. From v1.12.1 the operator
+replaces the stale Job itself; the spec bump alone suffices on all targets.</p>
+</blockquote>
+<h2 id="restore-stuck-pending-on-waiting-for-backup-seed-proxy">Restore stuck Pending on "Waiting for backup-seed-proxy"<a class="headerlink" href="#restore-stuck-pending-on-waiting-for-backup-seed-proxy" title="Anchor link to this section">&para;</a></h2>
+<p><strong>Symptom:</strong> a PVC-backed cluster restore stays <code>Pending</code> with
+<code>Waiting for backup-seed-proxy Deployment to become Ready (…)</code>, then goes
+<code>Failed</code> after the wait budget (3 minutes by default; <code>spec.timeout</code>
+overrides) with the proxy pod's condition in the message.</p>
+<p><strong>Cause:</strong> the operator serves the backup PVC to the server pods through a
+small HTTP proxy Deployment, and that proxy can't start. The parenthesised
+diagnosis names the reason; the most common is the backup PVC being
+<strong>ReadWriteOnce and still attached to another pod/node</strong> (e.g. a backup Job
+pod that hasn't terminated, or a node that still holds the volume).</p>
+<p><strong>Fix:</strong> release the PVC (wait for / delete the pod holding it), or move the
+backups to RWX storage or object storage. Then re-trigger the restore with a
+spec bump.</p>
 
 
 

@@ -3705,7 +3705,7 @@
 <td><code>timeout</code></td>
 <td><code>string</code></td>
 <td>❌</td>
-<td>Go duration (e.g. <code>"30m"</code>, <code>"2h"</code>). For <strong>cluster</strong> targets this bounds the online-convergence wait after <code>dbms.recreateDatabase</code> is issued (default <strong>5m</strong> when unset) — raise it for multi-GB stores seeded from object storage.</td>
+<td>Go duration (e.g. <code>"30m"</code>, <code>"2h"</code>). For <strong>cluster</strong> targets this bounds the online-convergence wait after <code>dbms.recreateDatabase</code> is issued (default <strong>5m</strong> when unset) — raise it for multi-GB stores seeded from object storage. For <strong>PVC-backed cluster restores</strong> it also bounds the wait for the backup-seed-proxy Deployment to become Ready (default <strong>3m</strong> when unset); on expiry the restore fails with the proxy pod's condition (e.g. an RWO backup PVC still attached elsewhere).</td>
 </tr>
 </tbody>
 </table>
