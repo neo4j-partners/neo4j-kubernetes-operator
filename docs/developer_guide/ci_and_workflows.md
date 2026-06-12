@@ -22,8 +22,13 @@ gate that blocks merge. Jobs:
 
 1. **Generated Artifacts In Sync (`check-drift`)** — runs `make check-drift`
    (`sync-all` + `bundle`, then `git diff --exit-code`). Fails if any committed
-   CRD, RBAC, deepcopy, Helm CRD, or OLM bundle file is stale. Fix locally with
-   `make sync-all` and commit the result.
+   CRD, RBAC, deepcopy, Helm CRD, or OLM bundle file is stale (untracked
+   generated files fail it too). Fix locally with `make sync-all` and commit
+   the result. The same job then runs `make helm-lint` and
+   `make check-csv-coverage` — both used to be ship-prep-only, which let a
+   chart template error or a CSV missing a new CRD hide until release time.
+   Static and seconds-fast; the failure summary distinguishes drift failures
+   from lint/coverage failures.
 2. **Unit Tests** — `make test-unit` (race-enabled, envtest-backed controller
    suite + plain unit tests). No external cluster required. The job runs the
    suite through [gotestsum](makefile_reference.md#make-gotestsum)
@@ -183,17 +188,53 @@ so there's no single shared variable):
 
 Bump both in the same PR — the bump is itself a tested change.
 
+## Install Confidence
+
+**`scripts/install-confidence.sh` — the install/upgrade/uninstall matrix on a
+throwaway Kind cluster.** Run locally with `make install-confidence` (~10–15
+min; needs kind, helm, kubectl, docker), or dispatch
+**`install-confidence.yml`** manually. It builds the operator image from the
+working tree, loads it into a fresh Kind cluster, and walks five legs:
+
+1. **Helm install, cluster mode** — default values, then a smoke
+   `Neo4jEnterpriseStandalone` CR proving the operator actually reconciles
+   (StatefulSet appears).
+2. **Helm install, namespaces mode + `rbac.perNamespaceRoles`** — asserts the
+   manager permissions land as a namespaced `Role` in the watched namespace and
+   NO manager ClusterRole is created.
+3. **Helm upgrade from the previously published chart** — installs the latest
+   released chart, applies the new CRDs with
+   `kubectl apply --server-side -f config/crd/bases/` (the step real users must
+   run — Helm never upgrades `crds/`), upgrades to the working-tree chart, and
+   probes a new-in-this-release CRD field to prove the refresh took.
+   `PREV_CHART_VERSION=<x.y.z>` pins the starting chart (empty = latest
+   published).
+4. **Documented-order uninstall with a live CR** — CRs first (finalizers need
+   the running operator), then `helm uninstall`, then CRDs; asserts nothing
+   wedges.
+5. **kubectl server-side apply path** — install, re-apply (idempotence), and
+   ordered teardown of the non-Helm manifests.
+
+The same matrix runs as a **blocking job in `release.yml`** — a release tag
+cannot publish an image or chart if any leg fails. Use the local run (or the
+dispatch workflow) to catch problems before tagging instead of failing the tag.
+
 ## Release
 
 **`release.yml` — tag-driven release pipeline.** Push a `vX.Y.Z` tag (or dispatch
 with a tag input). Jobs:
 
 1. **determine-tag / validate-release** — resolve the tag and run build/test
-   validation.
-2. **build-and-push** — multi-arch (`linux/amd64,linux/arm64`) image to
+   validation, including `make check-drift` (a tag on a commit that bypassed
+   per-PR CI must not ship stale generated artifacts).
+2. **install-confidence** — the full [install/upgrade/uninstall
+   matrix](#install-confidence) on Kind, in parallel with validate-release.
+   **Blocking**: `build-and-push` depends on it, so a broken install path
+   fails the release before anything is published.
+3. **build-and-push** — multi-arch (`linux/amd64,linux/arm64`) image to
    `ghcr.io/priyolahiri/neo4j-kubernetes-operator`, **signed with Sigstore
    Cosign keyless** (`id-token: write` OIDC — no long-lived secrets).
-3. **create-release** — assembles the kubectl-applyable bundles
+4. **create-release** — assembles the kubectl-applyable bundles
    (`neo4j-kubernetes-operator-complete.yaml`, `…operator.yaml`), stamps the OLM
    CSV via `make bundle-release` (with a guard that refuses to publish if
    `createdAt:` is still the dev placeholder), renders the release body from
@@ -211,12 +252,15 @@ from the tag.
 **Before tagging** (on an up-to-date, green `main`):
 
 1. `make ship-prep` — regenerates everything, builds the bundle, and runs
-   `helm-lint` + `check-csv-coverage` (more than CI's drift gate). Review
-   `git status` and commit anything regenerated.
-2. If there are breaking changes or notable upgrade steps, add/extend the
+   `helm-lint` + `check-csv-coverage`. Review `git status` and commit anything
+   regenerated.
+2. (Recommended) `make install-confidence` — the same install/upgrade/uninstall
+   matrix the release workflow runs as a blocking gate. Running it locally
+   first means a failure costs you minutes, not a dead tag.
+3. If there are breaking changes or notable upgrade steps, add/extend the
    `Upgrading from vX to vY` section in
    [`migration_guide.md`](../user_guide/migration_guide.md).
-3. Draft the **What's Changed** notes — `git log <last-tag>..HEAD --pretty=oneline`
+4. Draft the **What's Changed** notes — `git log <last-tag>..HEAD --pretty=oneline`
    is a good starting point. (The release workflow renders only the
    boilerplate from `.github/release-notes-template.md`; the changelog is
    hand-written.)
@@ -233,15 +277,16 @@ kubectl bundles + OLM CSV), **Pages — Docs** (`/v1.12/` + `/latest/`), and
 
 **After the workflows finish:**
 
-4. Paste the **What's Changed** section into the GitHub release body (above the
+5. Paste the **What's Changed** section into the GitHub release body (above the
    generated boilerplate).
-5. Verify:
+6. Verify:
    - `gh run list` — Release, Pages — Docs, Pages — Helm Repo all green.
    - `gh release view v1.12.0` — has `…-complete.yaml` and `…operator.yaml` assets.
    - `helm repo update && helm search repo neo4j-operator/neo4j-operator --versions` — new version listed.
    - Docs `/latest/` and `/v1.12/` load and the version dropdown shows the release.
    - `cosign verify ghcr.io/priyolahiri/neo4j-kubernetes-operator:v1.12.0 …` succeeds.
-   - (Optional, highest-confidence) `helm install` the published chart on a fresh Kind cluster.
+   - The release run's **Install Confidence Gate** job is green (it ran
+     automatically — no manual fresh-Kind `helm install` needed).
 
 ## Publishing to GitHub Pages
 

@@ -655,6 +655,20 @@ It("Should use optimal resource patterns", func() {
 
 ## CI/CD Testing
 
+### Install/upgrade/uninstall matrix (install-confidence)
+
+Beyond unit and integration tests, the **install paths themselves** are tested:
+`make install-confidence` runs a five-leg helm/kubectl install, upgrade (with
+the mandatory server-side CRD refresh), and ordered-uninstall matrix on a
+throwaway Kind cluster. It runs automatically as a **blocking job in the
+release workflow** and is manually dispatchable (`install-confidence.yml`).
+Run it locally before tagging — see
+[CI & Workflows → Install Confidence](ci_and_workflows.md#install-confidence)
+for the legs and
+[the Makefile reference](makefile_reference.md#make-install-confidence) for
+usage. Per-PR CI also lints the chart and checks OperatorHub CSV coverage in
+the drift job, so chart template errors fail at PR time, not release time.
+
 ### GitHub Actions Integration
 
 Tests run automatically in CI with:

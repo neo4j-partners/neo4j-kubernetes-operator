@@ -42,6 +42,7 @@ make deploy-dev           # Deploy to development namespace
 # Pre-release / sync (after touching API types or +kubebuilder markers)
 make sync-all             # Regenerate all artifacts (CRDs, RBAC, helm chart, kustomize lists)
 make ship-prep            # sync-all + bundle + helm lint + CSV coverage check
+make install-confidence   # Pre-release gate: helm install/upgrade/uninstall matrix on Kind (~10-15 min)
 make check-drift          # CI gate: fails if any generated file is stale
 make bundle-release       # Bundle + real createdAt: timestamp (release workflow only)
 make install-hooks        # One-time: install pre-commit hooks (runs check-drift before commit)
@@ -137,6 +138,11 @@ Chains: `manifests` → `generate` → `sync-kustomize` → `sync-editor-viewer-
 **Description**: Pre-release one-shot. Runs `sync-all` plus `bundle`, `helm-lint`, and `check-csv-coverage`.
 **Usage**: `make ship-prep`
 **When to run**: before tagging a release. Verifies the Helm chart lints, the OperatorHub bundle validates, and every CRD is registered in the CSV.
+
+### `make install-confidence`
+**Description**: Pre-release confidence gate. Runs `scripts/install-confidence.sh`: builds the operator image from the working tree, creates a throwaway Kind cluster, and walks the five-leg install/upgrade/uninstall matrix — helm install (cluster mode + smoke CR), helm install (`namespaces` mode + `rbac.perNamespaceRoles`, asserting no manager ClusterRole), helm upgrade from the previously published chart including the mandatory server-side CRD refresh, documented-order uninstall with a live CR, and the kubectl server-side-apply path. ~10–15 minutes; needs kind, helm, kubectl, docker.
+**Usage**: `make install-confidence` (optionally `PREV_CHART_VERSION=1.11.2 make install-confidence` to pin the upgrade-from chart).
+**When to run**: before tagging a release. The same matrix runs automatically as a blocking job in `release.yml`, so a local run turns a would-be dead tag into a minutes-cheap local failure. Also dispatchable in CI via the `Install Confidence` workflow. See [CI & Workflows → Install Confidence](ci_and_workflows.md#install-confidence).
 
 ### `make check-drift`
 **Description**: Regenerate every artifact and `git diff --exit-code` to fail if anything is stale. Used as a CI gate (`.github/workflows/ci.yml`).
