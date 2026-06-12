@@ -16,6 +16,7 @@ import (
 	"strings"
 	"testing"
 
+	batchv1 "k8s.io/api/batch/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	neo4jv1beta1 "github.com/neo4j-partners/neo4j-kubernetes-operator/api/v1beta1"
@@ -116,5 +117,45 @@ func TestRestoreOverwriteConfirmed(t *testing.T) {
 				t.Errorf("restoreOverwriteConfirmed = %v, want %v", got, tc.want)
 			}
 		})
+	}
+}
+
+// Retention-on-delete field findings: the cleanup Job was (1) owner-ref'd to
+// the CR being deleted — the GC raced (and beat) the prune script — and
+// (2) built on `find -printf`, which busybox/alpine find doesn't implement,
+// so even a surviving Job died under `set -e`. Verified live: maxCount=2 with
+// 7 artifacts pruned nothing.
+func TestBuildRetentionScript_BusyboxPortable(t *testing.T) {
+	policy := &neo4jv1beta1.RetentionPolicy{MaxCount: 2, MaxAge: "7d"}
+	script := buildRetentionScript(policy, "chain")
+	if strings.Contains(script, "-printf") {
+		t.Errorf("retention script must not use find -printf (unsupported on busybox/alpine):\n%s", script)
+	}
+	if !strings.Contains(script, "stat -c '%Y %n'") {
+		t.Errorf("expected busybox-portable stat -c mtime listing:\n%s", script)
+	}
+	if !strings.Contains(script, "MAX_COUNT=2") {
+		t.Errorf("maxCount not rendered:\n%s", script)
+	}
+}
+
+func TestCleanupJobHasNoOwnerReference(t *testing.T) {
+	r := newShardedTestReconciler(t)
+	backup := fieldFindingsBackup(nil)
+	backup.Spec.Retention = &neo4jv1beta1.RetentionPolicy{MaxCount: 2}
+	backup.Spec.Options = &neo4jv1beta1.BackupOptions{BackupType: "FULL"}
+
+	if err := r.cleanupBackupArtifacts(context.Background(), backup); err != nil {
+		t.Fatalf("cleanupBackupArtifacts: %v", err)
+	}
+	jobs := &batchv1.JobList{}
+	if err := r.List(context.Background(), jobs); err != nil {
+		t.Fatalf("list jobs: %v", err)
+	}
+	if len(jobs.Items) != 1 {
+		t.Fatalf("expected exactly one cleanup Job, got %d", len(jobs.Items))
+	}
+	if len(jobs.Items[0].OwnerReferences) != 0 {
+		t.Errorf("cleanup Job must NOT be owner-ref'd to the CR being deleted (GC races the prune script); got: %v", jobs.Items[0].OwnerReferences)
 	}
 }

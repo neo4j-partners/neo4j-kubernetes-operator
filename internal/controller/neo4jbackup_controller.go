@@ -1763,9 +1763,10 @@ func (r *Neo4jBackupReconciler) cleanupBackupArtifacts(ctx context.Context, back
 		},
 	}
 
-	if err := controllerutil.SetControllerReference(backup, cleanupJob, r.Scheme); err != nil {
-		return err
-	}
+	// Deliberately NO owner reference: this Job is created while the CR's
+	// finalizer is completing — owner-ref'ing it to the dying CR hands it to
+	// the garbage collector immediately, which deletes the Job before (or
+	// while) the prune script runs. The 300s TTL is the cleanup mechanism.
 	if err := r.Create(ctx, cleanupJob); err != nil {
 		return fmt.Errorf("failed to create cleanup job: %w", err)
 	}
@@ -1809,7 +1810,10 @@ if [ "$FILE_COUNT" -gt "$MAX_COUNT" ]; then
     echo "Deleting $TO_DELETE oldest artifacts (keeping $MAX_COUNT)"
     # Oldest-first by filesystem mtime — never coupled to the filename's
     # timestamp format.
-    find "$BACKUP_DIR" -maxdepth 1 -type f -name '*.backup' -printf '%%T@ %%p\n' | \
+    # busybox/alpine find lacks GNU printf-style output — stat -c '%%Y %%n'
+    # is the portable mtime listing (the previous GNU-only form made the
+    # whole script die under set -e, so retention never pruned anything).
+    find "$BACKUP_DIR" -maxdepth 1 -type f -name '*.backup' -exec stat -c '%%Y %%n' {} + | \
         sort -n | \
         head -n "$TO_DELETE" | \
         cut -d' ' -f2- | \
@@ -1826,7 +1830,7 @@ fi
 # Delete backup artifacts older than %s — but always keep the newest one,
 # even if it has aged out (a retention policy must never delete the ONLY
 # remaining backup).
-NEWEST=$(find "$BACKUP_DIR" -maxdepth 1 -type f -name '*.backup' -printf '%%T@ %%p\n' | sort -rn | head -n1 | cut -d' ' -f2-)
+NEWEST=$(find "$BACKUP_DIR" -maxdepth 1 -type f -name '*.backup' -exec stat -c '%%Y %%n' {} + | sort -rn | head -n1 | cut -d' ' -f2-)
 find "$BACKUP_DIR" -maxdepth 1 -type f -name '*.backup' %s -print | while IFS= read -r f; do
     [ "$f" = "$NEWEST" ] && continue
     rm -f "$f"
