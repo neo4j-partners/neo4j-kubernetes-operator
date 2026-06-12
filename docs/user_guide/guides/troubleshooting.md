@@ -39,7 +39,7 @@ kubectl logs -n neo4j-operator-system deployment/neo4j-operator-controller-manag
 kubectl port-forward svc/<cluster-name>-client 7474:7474 7687:7687
 
 # For standalone deployments
-kubectl port-forward svc/<standalone-name>-service 7474:7474 7687:7687
+kubectl port-forward svc/<standalone-name>-client 7474:7474 7687:7687
 ```
 
 ## Common Issues and Solutions
@@ -205,8 +205,9 @@ kubectl describe svc <service-name>
    # For clusters
    service: <cluster-name>-client
 
-   # For standalone
-   service: <standalone-name>-service
+   # For standalone (`<standalone-name>-service` still resolves this release
+   # but is deprecated — use `-client`)
+   service: <standalone-name>-client
    ```
 
 2. **Verify Network Policies:**

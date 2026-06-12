@@ -588,7 +588,7 @@ func mcpNeo4jURIForStandalone(standalone *neo4jv1beta1.Neo4jEnterpriseStandalone
 	// Single-member topologies still respond to dbms.routing.getRoutingTable
 	// (the lone server is reported as both reader and writer), so neo4j://
 	// works identically to bolt:// here.
-	serviceName := fmt.Sprintf("%s-service", standalone.Name)
+	serviceName := fmt.Sprintf("%s-client", standalone.Name) // canonical client Service (#215)
 	if standalone.Spec.TLS != nil && standalone.Spec.TLS.Mode == CertManagerMode {
 		return fmt.Sprintf("neo4j+ssc://%s.%s.svc.cluster.local:7687", serviceName, standalone.Namespace)
 	}

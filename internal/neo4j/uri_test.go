@@ -77,17 +77,17 @@ func TestBuildConnectionURIForStandalone(t *testing.T) {
 		{
 			name:     "TLS disabled → neo4j://",
 			tls:      &neo4jv1beta1.TLSSpec{Mode: "disabled"},
-			expected: "neo4j://my-standalone-service.my-ns.svc.cluster.local:7687",
+			expected: "neo4j://my-standalone-client.my-ns.svc.cluster.local:7687",
 		},
 		{
 			name:     "TLS nil → neo4j://",
 			tls:      nil,
-			expected: "neo4j://my-standalone-service.my-ns.svc.cluster.local:7687",
+			expected: "neo4j://my-standalone-client.my-ns.svc.cluster.local:7687",
 		},
 		{
 			name:     "TLS cert-manager → neo4j+s://",
 			tls:      &neo4jv1beta1.TLSSpec{Mode: "cert-manager"},
-			expected: "neo4j+s://my-standalone-service.my-ns.svc.cluster.local:7687",
+			expected: "neo4j+s://my-standalone-client.my-ns.svc.cluster.local:7687",
 		},
 	}
 	for _, tc := range cases {

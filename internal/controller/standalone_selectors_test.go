@@ -14,6 +14,7 @@ package controller
 // unexported).
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -34,7 +35,7 @@ func TestStandalonePodSelector_MatchesStatefulSetPodTemplate(t *testing.T) {
 	}
 
 	r := &Neo4jEnterpriseStandaloneReconciler{}
-	sts := r.createStatefulSet(standalone)
+	sts := r.createStatefulSet(context.Background(), standalone)
 	require.NotNil(t, sts)
 
 	selector := resources.StandalonePodSelector(standalone.Name)
@@ -66,7 +67,7 @@ func TestPVCSelectorByInstance_MatchesStandaloneVolumeClaimTemplate(t *testing.T
 	}
 
 	r := &Neo4jEnterpriseStandaloneReconciler{}
-	sts := r.createStatefulSet(standalone)
+	sts := r.createStatefulSet(context.Background(), standalone)
 	require.NotEmpty(t, sts.Spec.VolumeClaimTemplates)
 
 	selector := resources.PVCSelectorByInstance(standalone.Name)

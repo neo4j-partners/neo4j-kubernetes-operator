@@ -419,14 +419,16 @@ Detailed conditions about the deployment state.
 #### `endpoints` (EndpointStatus)
 Connection endpoints for the Neo4j instance. The bolt scheme reflects the TLS configuration: `bolt+s://` when TLS is enabled, `bolt://` when disabled. `connectionExamples` is populated from `spec.service.type` and the LoadBalancer-assigned external IP (when applicable).
 
+Endpoints are resolved against the `{name}-client` Service. Connection strings saved against the legacy `{name}-service` name still resolve this release (it remains as a deprecated ClusterIP-only alias) but will stop working next release — update them to `{name}-client`.
+
 ```yaml
 # TLS disabled, ClusterIP
 endpoints:
-  bolt: "bolt://standalone-neo4j-service.default.svc.cluster.local:7687"
-  http: "http://standalone-neo4j-service.default.svc.cluster.local:7474"
-  https: "https://standalone-neo4j-service.default.svc.cluster.local:7473"
+  bolt: "bolt://standalone-neo4j-client.default.svc.cluster.local:7687"
+  http: "http://standalone-neo4j-client.default.svc.cluster.local:7474"
+  https: "https://standalone-neo4j-client.default.svc.cluster.local:7473"
   connectionExamples:
-    portForward: "kubectl port-forward -n default svc/standalone-neo4j-service 7474:7474 7687:7687"
+    portForward: "kubectl port-forward -n default svc/standalone-neo4j-client 7474:7474 7687:7687"
     browserURL: "http://localhost:7474"
     boltURI: "bolt://localhost:7687"
     neo4jURI: "neo4j://localhost:7687"
@@ -440,11 +442,11 @@ endpoints:
 # TLS enabled (cert-manager) — connection examples use bolt+ssc:// since
 # cert-manager-issued certs are typically not trusted by external clients.
 endpoints:
-  bolt: "bolt+s://standalone-neo4j-service.default.svc.cluster.local:7687"
-  http: "http://standalone-neo4j-service.default.svc.cluster.local:7474"
-  https: "https://standalone-neo4j-service.default.svc.cluster.local:7473"
+  bolt: "bolt+s://standalone-neo4j-client.default.svc.cluster.local:7687"
+  http: "http://standalone-neo4j-client.default.svc.cluster.local:7474"
+  https: "https://standalone-neo4j-client.default.svc.cluster.local:7473"
   connectionExamples:
-    portForward: "kubectl port-forward -n default svc/standalone-neo4j-service 7473:7473 7687:7687"
+    portForward: "kubectl port-forward -n default svc/standalone-neo4j-client 7473:7473 7687:7687"
     browserURL: "https://localhost:7473"
     boltURI: "bolt+ssc://localhost:7687"
     neo4jURI: "neo4j+ssc://localhost:7687"
@@ -753,7 +755,7 @@ kubectl describe neo4jenterprisestandalone dev-neo4j
 kubectl logs -l app=dev-neo4j
 
 # Port forward for local access
-kubectl port-forward svc/dev-neo4j-service 7474:7474 7687:7687
+kubectl port-forward svc/dev-neo4j-client 7474:7474 7687:7687
 ```
 
 ### Scaling and Updates

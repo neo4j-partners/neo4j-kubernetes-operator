@@ -2478,7 +2478,8 @@ func buildConnectionURIForStandalone(standalone *neo4jv1beta1.Neo4jEnterpriseSta
 	}
 
 	// Use service for connection (standalone service naming pattern)
-	host := fmt.Sprintf("%s-service.%s.svc.cluster.local", standalone.Name, standalone.Namespace)
+	// {name}-client is the canonical client Service for both kinds (#215).
+	host := fmt.Sprintf("%s-client.%s.svc.cluster.local", standalone.Name, standalone.Namespace)
 	port := 7687
 
 	return fmt.Sprintf("%s://%s:%d", scheme, host, port)

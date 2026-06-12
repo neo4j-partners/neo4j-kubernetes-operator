@@ -20,17 +20,32 @@ and standalone.
 
 | Service | `Neo4jEnterpriseCluster` | `Neo4jEnterpriseStandalone` | Ports |
 |---|---|---|---|
-| Client-facing (your apps connect here) | `{name}-client` | `{name}-service` | `bolt 7687`, `http 7474`, `https 7473` (TLS); standalone also exposes `metrics 2004` here when monitoring is on |
+| Client-facing (your apps connect here) | `{name}-client` | `{name}-client` | `bolt 7687`, `http 7474`, `https 7473` (TLS); standalone also exposes `metrics 2004` here when monitoring is on |
+| Deprecated alias (standalone only, removed next release) | — | `{name}-service` | same client ports, ClusterIP only |
 | Headless (stable per-pod DNS) | `{name}-headless` | `{name}-headless` | `bolt 7687`, `http 7474`, `backup 6362`, `https 7473` (TLS) |
 | Discovery / internals (cluster only) | `{name}-discovery`, `{name}-internals` | — | clustering ports (`6000/7000/7688/7689`) |
 | Metrics (cluster only; standalone folds metrics into its client service) | `{name}-metrics` (`2004`) | — | `2004` |
 
 Notes:
 
-- **Client-service name differs by kind** (`-client` for clusters, `-service`
-  for standalone). This is intentional and load-bearing — use the right name
-  for the kind you deployed. A pod's stable address is always
+- **The client-facing Service is `{name}-client` for both kinds.** Standalone
+  deployments previously used `{name}-service`; that name still resolves for
+  **one more release** as a deprecated ClusterIP-only alias (annotated
+  `neo4j.com/deprecated-alias-of`) and will then be removed — update any saved
+  connection strings, NetworkPolicies, and dashboards to `{name}-client` now.
+  A pod's stable address is always
   `{name}-0.{name}-headless.<namespace>.svc.cluster.local`.
+- **External exposure moves to `{name}-client` on upgrade**: `spec.service`
+  settings (`type: LoadBalancer` / `NodePort`, annotations,
+  `loadBalancerSourceRanges`) are now applied to the standalone `{name}-client`
+  Service, not the alias. A pre-existing LoadBalancer external IP therefore
+  **re-provisions once** when you upgrade — expect a new external IP/hostname
+  and update DNS accordingly.
+- **One-time TLS pod restart**: with `spec.tls` enabled, the issued certificate
+  now carries SANs for both the `{name}-client` and legacy `{name}-service`
+  names. After the certificate is re-issued on upgrade, the operator
+  automatically restarts the standalone pod once so the running server presents
+  the new SANs.
 - **The standalone headless service exposes `bolt`/`http`/`backup` (and `https`
   under TLS)** for direct per-pod addressing, mirroring the cluster headless
   service. It does **not** expose the clustering ports (`6000/7000/7688/7689`):
@@ -47,7 +62,7 @@ The fastest way to access Neo4j during development:
 kubectl port-forward svc/my-cluster-client 7474:7474 7687:7687
 
 # For Neo4jEnterpriseStandalone
-kubectl port-forward svc/my-standalone-service 7474:7474 7687:7687
+kubectl port-forward svc/my-standalone-client 7474:7474 7687:7687
 ```
 
 Access Neo4j Browser at: http://localhost:7474

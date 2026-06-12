@@ -101,7 +101,7 @@ For development, testing, or simple workloads that don't require high availabili
 4.  **Access Neo4j Browser:**
 
     ```bash
-    kubectl port-forward svc/standalone-neo4j-service 7474:7474 7687:7687
+    kubectl port-forward svc/standalone-neo4j-client 7474:7474 7687:7687
     ```
 
     Open http://localhost:7474 in your browser.
@@ -192,7 +192,7 @@ Once the pods are in the `Running` state, you can access your deployment using `
 ### For Standalone Deployments
 ```bash
 # For standalone deployment
-kubectl port-forward service/standalone-neo4j-service 7474:7474 7687:7687
+kubectl port-forward service/standalone-neo4j-client 7474:7474 7687:7687
 ```
 
 ### For Cluster Deployments

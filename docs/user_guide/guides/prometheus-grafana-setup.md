@@ -61,7 +61,7 @@ spec:
     enabled: true
 ```
 
-For standalone, the metrics port is added to the existing `my-standalone-service` Service — no separate metrics Service is created.
+For standalone, the metrics port is added to the existing `my-standalone-client` Service — no separate metrics Service is created. (The legacy `my-standalone-service` alias still works this release but is deprecated.)
 
 ### Verify metrics are exposed
 

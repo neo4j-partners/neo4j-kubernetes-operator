@@ -1032,7 +1032,7 @@ spec:
 
 #### Restore with Job Hooks
 
-Hook Jobs run in their own pods — anything that talks to Neo4j (e.g. `cypher-shell`) must address the instance's service explicitly (`-a neo4j://<standalone>-service:7687`), or it will try to connect to localhost inside the hook pod.
+Hook Jobs run in their own pods — anything that talks to Neo4j (e.g. `cypher-shell`) must address the instance's service explicitly (`-a neo4j://<standalone>-client:7687`), or it will try to connect to localhost inside the hook pod. (The legacy `<standalone>-service` name still resolves this release but is deprecated — update saved hook commands to `-client`.)
 
 ```yaml
 apiVersion: neo4j.neo4j.com/v1beta1
@@ -1068,7 +1068,7 @@ spec:
             args: ["-c", "/scripts/validate-restore.sh"]
             env:
               - name: NEO4J_URI
-                value: "neo4j://staging-standalone-service:7687"
+                value: "neo4j://staging-standalone-client:7687"
               - name: NEO4J_PASSWORD
                 valueFrom:
                   secretKeyRef:

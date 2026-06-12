@@ -18,7 +18,7 @@ kubectl create secret generic neo4j-admin-secret \
 ```bash
 kubectl apply -f examples/standalone/single-node-standalone.yaml
 kubectl get neo4jenterprisestandalone
-kubectl port-forward svc/standalone-neo4j-service 7474:7474 7687:7687
+kubectl port-forward svc/standalone-neo4j-client 7474:7474 7687:7687
 ```
 
 > For external access (LoadBalancer / NodePort / Ingress / OpenShift Route), see
