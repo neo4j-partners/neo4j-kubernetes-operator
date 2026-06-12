@@ -18,6 +18,7 @@ package validation
 
 import (
 	"fmt"
+	"net/url"
 	"regexp"
 	"strings"
 
@@ -268,6 +269,36 @@ func (v *PluginValidator) validatePluginSource(source *neo4jv1beta1.PluginSource
 			sourcePath.Child("url"),
 			"URL must be specified for custom and url source types",
 		))
+	}
+
+	// Supply-chain: transport integrity. The JAR is fetched over the network
+	// (Neo4j entrypoint or the VerifiedDownload init container) and the
+	// recorded checksum is not enforced at download time on the entrypoint
+	// path (see below), so cleartext http would leave a network attacker free
+	// to swap the JAR. Only https is accepted — file:/ftp:/etc. give no
+	// transport integrity either and the downloaders don't support them.
+	if (source.Type == "custom" || source.Type == "url") && source.URL != "" {
+		parsed, err := url.Parse(source.URL)
+		switch {
+		case err != nil:
+			allErrs = append(allErrs, field.Invalid(
+				sourcePath.Child("url"),
+				source.URL,
+				fmt.Sprintf("must be a valid URL: %v", err),
+			))
+		case !strings.EqualFold(parsed.Scheme, "https"):
+			allErrs = append(allErrs, field.Invalid(
+				sourcePath.Child("url"),
+				source.URL,
+				"URL scheme must be https — plugin JARs are downloaded over the network and a non-https scheme has no transport integrity. Host the plugin on an https endpoint (an in-cluster mirror with a cert-manager certificate works)",
+			))
+		case parsed.Host == "":
+			allErrs = append(allErrs, field.Invalid(
+				sourcePath.Child("url"),
+				source.URL,
+				"URL must include a host",
+			))
+		}
 	}
 
 	// Supply-chain: any source that fetches a JAR from an arbitrary URL

@@ -691,3 +691,104 @@ func hasErrContaining(errs field.ErrorList, sub string) bool {
 	}
 	return false
 }
+
+// TestPluginValidator_URLSchemeAllowlist pins the https-only URL scheme rule
+// for url/custom plugin sources (#208, audit P0.3). Plugin JARs are fetched
+// over the network and the recorded checksum is not enforced at download time
+// on the entrypoint path, so a cleartext http URL would let a network attacker
+// swap the JAR with no transport AND no content integrity.
+func TestPluginValidator_URLSchemeAllowlist(t *testing.T) {
+	validator := NewPluginValidator()
+
+	const validSHA256 = "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+
+	base := func(src *neo4jv1beta1.PluginSource) *neo4jv1beta1.Neo4jPlugin {
+		return &neo4jv1beta1.Neo4jPlugin{
+			ObjectMeta: metav1.ObjectMeta{Name: "p"},
+			Spec: neo4jv1beta1.Neo4jPluginSpec{
+				ClusterRef: "c",
+				Name:       "apoc",
+				Version:    "5.26.0",
+				Enabled:    true,
+				Source:     src,
+			},
+		}
+	}
+
+	tests := []struct {
+		name    string
+		source  *neo4jv1beta1.PluginSource
+		wantErr bool
+		errSubs string
+	}{
+		{
+			name:   "https url passes",
+			source: &neo4jv1beta1.PluginSource{Type: "url", URL: "https://repo.example.com/apoc.jar", Checksum: validSHA256},
+		},
+		{
+			name:   "https with port and path passes",
+			source: &neo4jv1beta1.PluginSource{Type: "custom", URL: "https://mirror.internal:8443/plugins/apoc.jar", Checksum: validSHA256},
+		},
+		{
+			name:   "uppercase HTTPS scheme passes",
+			source: &neo4jv1beta1.PluginSource{Type: "url", URL: "HTTPS://repo.example.com/apoc.jar", Checksum: validSHA256},
+		},
+		{
+			name:    "http rejected (cleartext)",
+			source:  &neo4jv1beta1.PluginSource{Type: "url", URL: "http://repo.example.com/apoc.jar", Checksum: validSHA256},
+			wantErr: true, errSubs: "scheme must be https",
+		},
+		{
+			name:    "http rejected for custom type too",
+			source:  &neo4jv1beta1.PluginSource{Type: "custom", URL: "http://repo.example.com/apoc.jar", Checksum: validSHA256},
+			wantErr: true, errSubs: "scheme must be https",
+		},
+		{
+			name:    "file scheme rejected",
+			source:  &neo4jv1beta1.PluginSource{Type: "url", URL: "file:///plugins/apoc.jar", Checksum: validSHA256},
+			wantErr: true, errSubs: "scheme must be https",
+		},
+		{
+			name:    "ftp scheme rejected",
+			source:  &neo4jv1beta1.PluginSource{Type: "url", URL: "ftp://repo.example.com/apoc.jar", Checksum: validSHA256},
+			wantErr: true, errSubs: "scheme must be https",
+		},
+		{
+			name:    "scheme-relative URL rejected",
+			source:  &neo4jv1beta1.PluginSource{Type: "url", URL: "//repo.example.com/apoc.jar", Checksum: validSHA256},
+			wantErr: true, errSubs: "scheme must be https",
+		},
+		{
+			name:    "unparseable URL rejected",
+			source:  &neo4jv1beta1.PluginSource{Type: "url", URL: "https://repo example com/ap oc.jar%zz", Checksum: validSHA256},
+			wantErr: true, errSubs: "must be a valid URL",
+		},
+		{
+			name:    "https with empty host rejected",
+			source:  &neo4jv1beta1.PluginSource{Type: "url", URL: "https:///apoc.jar", Checksum: validSHA256},
+			wantErr: true, errSubs: "must include a host",
+		},
+		{
+			name:   "official source has no URL and is unaffected",
+			source: &neo4jv1beta1.PluginSource{Type: "official"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			errs := validator.Validate(base(tt.source)).Errors
+			if tt.wantErr {
+				if len(errs) == 0 {
+					t.Fatalf("expected an error, got none")
+				}
+				if tt.errSubs != "" && !strings.Contains(errs.ToAggregate().Error(), tt.errSubs) {
+					t.Errorf("expected error to contain %q, got %v", tt.errSubs, errs)
+				}
+				return
+			}
+			if len(errs) > 0 {
+				t.Fatalf("expected no errors, got %v", errs)
+			}
+		})
+	}
+}

@@ -98,7 +98,7 @@ kind: Neo4jPlugin
 | Field | Type | Description |
 |-------|------|-------------|
 | `type` | `string` | Source type: "official", "community", "custom", "url" (default: `official`) |
-| `url` | `string` | Direct URL for "url" source type |
+| `url` | `string` | Direct URL for "url" and "custom" source types. **Must be `https://`** — the controller-side validator rejects `http://`, `file://`, and every other scheme (plugin JARs are downloaded over the network and a non-https scheme has no transport integrity). Host internal plugins on an https mirror, e.g. with a cert-manager certificate. |
 | `checksum` | `string` | Checksum for verification. **Required** by the controller-side validator for `type: url` and `type: custom`. Must match `^(sha256:[a-f0-9]{64}\|sha512:[a-f0-9]{128})$`. SHA1 and MD5 are rejected. See [Supply-chain](#supply-chain). |
 | `authSecret` | `string` | Secret containing auth for private repositories/URLs |
 | `registry` | [`PluginRegistry`](#pluginregistry) | Registry configuration for custom sources |
