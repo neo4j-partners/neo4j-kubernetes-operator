@@ -288,6 +288,12 @@ func (r *Neo4jShardedDatabaseReconciler) Reconcile(ctx context.Context, req ctrl
 	// branch (otherwise the controller would re-drop on every poll cycle
 	// since IF EXISTS makes the drop idempotent).
 	ready := true
+	// Seeding is complete once the sharded DB is operational — tear down the
+	// PVC seed proxy stack (if any) so the backup PVC stops being served
+	// cluster-wide (#219). Idempotent NotFound no-op after the first pass.
+	if err := r.teardownPVCSeedProxy(ctx, &shardedDatabase); err != nil {
+		logger.Error(err, "Failed to tear down seed proxy after sharded DB became Ready (non-fatal)")
+	}
 	if err := r.updateStatus(ctx, &shardedDatabase, "Ready", "Sharded database is operational", &ready); err != nil {
 		logger.Error(err, "Failed to update status to Ready")
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err

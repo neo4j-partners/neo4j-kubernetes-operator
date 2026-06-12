@@ -5,10 +5,14 @@ import (
 	stderrors "errors"
 	"testing"
 
+	"strings"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
@@ -988,4 +992,52 @@ func TestClearStaleRestoreAttemptState(t *testing.T) {
 	// Idempotent on already-clean objects.
 	require.NoError(t, r.clearCypherRestoreIssued(context.Background(), restore))
 	require.NoError(t, r.clearResolvedSource(context.Background(), restore))
+}
+
+// TestPVCSeedProxyLifecycle pins #219: the proxy stack (Deployment + Service
+// + NetworkPolicy) is restricted to the target cluster's pods and is torn
+// down once the seed is no longer needed — it serves the ENTIRE backup PVC
+// unauthenticated and previously ran for the lifetime of the owning CR.
+func TestPVCSeedProxyLifecycle(t *testing.T) {
+	scheme := newTestScheme()
+	restore := &neo4jv1beta1.Neo4jRestore{
+		ObjectMeta: metav1.ObjectMeta{Name: "r", Namespace: "ns", UID: "uid-r"},
+		Spec:       neo4jv1beta1.Neo4jRestoreSpec{ClusterRef: "prod"},
+	}
+	fc := fake.NewClientBuilder().WithScheme(scheme).WithObjects(restore).Build()
+
+	available, err := ensurePVCSeedProxyResources(context.Background(), fc, scheme, restore, restore.Name, "backup-pvc")
+	require.NoError(t, err)
+	assert.False(t, available, "freshly created proxy is not yet ready")
+	require.NoError(t, ensurePVCSeedProxyNetworkPolicy(context.Background(), fc, scheme, restore, restore.Name, "prod"))
+
+	np := &networkingv1.NetworkPolicy{}
+	require.NoError(t, fc.Get(context.Background(), types.NamespacedName{Name: "backup-seed-proxy-r", Namespace: "ns"}, np))
+	require.Len(t, np.Spec.Ingress, 1)
+	require.Len(t, np.Spec.Ingress[0].From, 1)
+	assert.Equal(t, "prod", np.Spec.Ingress[0].From[0].PodSelector.MatchLabels["neo4j.com/cluster"],
+		"only the target cluster's server pods may reach the proxy")
+
+	require.NoError(t, teardownPVCSeedProxyResources(context.Background(), fc, "ns", "r"))
+	for _, obj := range []struct {
+		name string
+		o    interface {
+			GetName() string
+		}
+	}{} {
+		_ = obj
+	}
+	dep := &appsv1.Deployment{}
+	assert.Error(t, fc.Get(context.Background(), types.NamespacedName{Name: "backup-seed-proxy-r", Namespace: "ns"}, dep), "Deployment torn down")
+	svc := &corev1.Service{}
+	assert.Error(t, fc.Get(context.Background(), types.NamespacedName{Name: "backup-seed-proxy-r", Namespace: "ns"}, svc), "Service torn down")
+	npAfter := &networkingv1.NetworkPolicy{}
+	assert.Error(t, fc.Get(context.Background(), types.NamespacedName{Name: "backup-seed-proxy-r", Namespace: "ns"}, npAfter), "NetworkPolicy torn down")
+
+	// Idempotent teardown + name-length validation.
+	require.NoError(t, teardownPVCSeedProxyResources(context.Background(), fc, "ns", "r"))
+	longName := strings.Repeat("x", 60)
+	_, err = ensurePVCSeedProxyResources(context.Background(), fc, scheme, restore, longName, "backup-pvc")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "63-character")
 }

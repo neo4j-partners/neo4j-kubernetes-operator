@@ -1674,8 +1674,14 @@ func (r *Neo4jBackupReconciler) cleanupBackupArtifacts(ctx context.Context, back
 		return nil
 	}
 
-	// PVC storage: create a cleanup Job using alpine.
-	script := buildRetentionScript(backup.Spec.Retention)
+	// PVC storage: create a cleanup Job using alpine. Warn when the CR can
+	// produce differential artifacts: filename-level pruning can orphan DIFFs
+	// whose parent FULL ages out (see buildRetentionScript).
+	if backup.Spec.Options == nil || backup.Spec.Options.BackupType != "FULL" {
+		r.Recorder.Event(backup, corev1.EventTypeWarning, EventReasonBackupRetentionCaveat,
+			"Retention pruning on a chain that may contain differential artifacts can orphan DIFFs whose parent FULL ages out; prefer backupType=FULL with retention, or prune via neo4j-admin backup aggregate")
+	}
+	script := buildRetentionScript(backup.Spec.Retention, chainRoot(backup))
 	cleanupJobName := fmt.Sprintf("%s-cleanup-%d", backup.Name, time.Now().Unix())
 	backoffLimit := int32(1)
 
@@ -1725,35 +1731,48 @@ func (r *Neo4jBackupReconciler) cleanupBackupArtifacts(ctx context.Context, back
 	return nil
 }
 
-// buildRetentionScript generates a shell script that enforces the given retention
-// policy against directories under /backup.
-func buildRetentionScript(policy *neo4jv1beta1.RetentionPolicy) string {
-	script := `#!/bin/sh
+// buildRetentionScript generates a shell script that enforces the given
+// retention policy against this CR's chain directory.
+//
+// Layout awareness (#217): since rule 40, all runs of one CR accumulate as
+// `<dbname>-<timestamp>.backup` FILES in the single shared
+// /backup/<chain-root>/ directory. The previous script still implemented the
+// pre-rule-40 per-run-SUBFOLDER model — it counted and rm -rf'd depth-1
+// DIRECTORIES under /backup, i.e. entire chain roots: maxAge deleted a whole
+// chain including the newest FULL, and on a shared PVC maxCount could delete
+// ANOTHER CR's chain.
+//
+// The rewritten script prunes `*.backup` files inside this CR's chain dir
+// only, oldest-first by mtime, and always keeps the newest file. Limitation
+// (documented): artifact filenames don't encode FULL vs DIFF, so pruning can
+// orphan differential artifacts whose parent FULL ages out — chain-aware
+// retention requires `neo4j-admin backup aggregate`. Prefer backupType=FULL
+// on CRs that use retention, or bucket lifecycle rules on cloud storage.
+func buildRetentionScript(policy *neo4jv1beta1.RetentionPolicy, chainDir string) string {
+	script := fmt.Sprintf(`#!/bin/sh
 set -e
-BACKUP_DIR="/backup"
+BACKUP_DIR=%s
 echo "Backup retention enforcement in $BACKUP_DIR"
-`
+[ -d "$BACKUP_DIR" ] || { echo "chain directory missing; nothing to prune"; exit 0; }
+`, shellQuote("/backup/"+chainDir))
 
 	if policy.MaxCount > 0 {
 		script += fmt.Sprintf(`
 MAX_COUNT=%d
-FILE_COUNT=$(find "$BACKUP_DIR" -maxdepth 1 -mindepth 1 -type d | wc -l)
-echo "Found $FILE_COUNT backup directories"
+FILE_COUNT=$(find "$BACKUP_DIR" -maxdepth 1 -type f -name '*.backup' | wc -l)
+echo "Found $FILE_COUNT backup artifacts"
 if [ "$FILE_COUNT" -gt "$MAX_COUNT" ]; then
     TO_DELETE=$((FILE_COUNT - MAX_COUNT))
-    echo "Deleting $TO_DELETE oldest backups (keeping $MAX_COUNT)"
-    # Sort by filesystem mtime, not by directory name. The directory name
-    # happens to encode a YYYYMMDD-HHMMSS timestamp today, but coupling
-    # retention's "oldest first" semantics to that naming convention is
-    # fragile — anyone who renames the timestamp format silently breaks
-    # retention. GNU find's -printf is available because the backup
-    # container is Linux-only.
-    find "$BACKUP_DIR" -maxdepth 1 -mindepth 1 -type d -printf '%%T@ %%p\n' | \
+    echo "Deleting $TO_DELETE oldest artifacts (keeping $MAX_COUNT)"
+    # Oldest-first by filesystem mtime — never coupled to the filename's
+    # timestamp format.
+    find "$BACKUP_DIR" -maxdepth 1 -type f -name '*.backup' -printf '%%T@ %%p\n' | \
         sort -n | \
         head -n "$TO_DELETE" | \
         cut -d' ' -f2- | \
-        xargs -r rm -rf
-    echo "Deleted $TO_DELETE old backup directories"
+        tr '\n' '\0' | \
+        xargs -0 -r rm -f
+    echo "Deleted $TO_DELETE old backup artifacts"
 fi
 `, policy.MaxCount)
 	}
@@ -1761,9 +1780,15 @@ fi
 	if policy.MaxAge != "" {
 		findArg := parseFindTimeArg(policy.MaxAge)
 		script += fmt.Sprintf(`
-# Delete backup directories older than %s
-find "$BACKUP_DIR" -maxdepth 1 -mindepth 1 -type d %s -exec rm -rf {} +
-echo "Removed backup directories older than %s"
+# Delete backup artifacts older than %s — but always keep the newest one,
+# even if it has aged out (a retention policy must never delete the ONLY
+# remaining backup).
+NEWEST=$(find "$BACKUP_DIR" -maxdepth 1 -type f -name '*.backup' -printf '%%T@ %%p\n' | sort -rn | head -n1 | cut -d' ' -f2-)
+find "$BACKUP_DIR" -maxdepth 1 -type f -name '*.backup' %s -print | while IFS= read -r f; do
+    [ "$f" = "$NEWEST" ] && continue
+    rm -f "$f"
+done
+echo "Removed backup artifacts older than %s"
 `, policy.MaxAge, findArg, policy.MaxAge)
 	}
 

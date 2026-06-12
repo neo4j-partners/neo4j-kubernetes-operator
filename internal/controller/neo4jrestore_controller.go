@@ -237,6 +237,12 @@ func (r *Neo4jRestoreReconciler) handleDeletion(ctx context.Context, restore *ne
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
 	}
 
+	// Tear down the PVC seed proxy stack (owner-ref GC would also get it,
+	// but explicit deletion is immediate and covers orphaned policies).
+	if err := teardownPVCSeedProxyResources(ctx, r.Client, restore.Namespace, restore.Name); err != nil {
+		logger.Error(err, "Failed to tear down seed proxy during finalizer cleanup (non-fatal)")
+	}
+
 	// Release the cluster controller's hold on STS replicas if this restore
 	// died mid-cycle (e.g. user deleted the CR while stopCluster was in
 	// progress). Without this the target cluster is permanently un-scalable.
@@ -2606,6 +2612,9 @@ func (r *Neo4jRestoreReconciler) startClusterCypherRestore(
 
 	completion := metav1.Now()
 	restore.Status.CompletionTime = &completion
+	if terr := teardownPVCSeedProxyResources(ctx, r.Client, restore.Namespace, restore.Name); terr != nil {
+		logger.Error(terr, "Failed to tear down seed proxy after restore completion (non-fatal)")
+	}
 	r.updateRestoreStatus(ctx, restore, StatusCompleted,
 		fmt.Sprintf("Database %q restored via cluster Cypher path (seedURI=%s)", restore.Spec.DatabaseName, seedURI))
 	r.Recorder.Event(restore, corev1.EventTypeNormal, EventReasonRestoreCompleted,
@@ -2733,6 +2742,11 @@ func (r *Neo4jRestoreReconciler) pollClusterRestoreOnline(ctx context.Context, r
 	if stateErr == nil && total > 0 && online == total {
 		completion := metav1.Now()
 		restore.Status.CompletionTime = &completion
+		// The seed is done — tear down the PVC seed proxy (if any) so the
+		// backup PVC stops being served cluster-wide (#219). Idempotent.
+		if err := teardownPVCSeedProxyResources(ctx, r.Client, restore.Namespace, restore.Name); err != nil {
+			logger.Error(err, "Failed to tear down seed proxy after restore completion (non-fatal)")
+		}
 		r.updateRestoreStatus(ctx, restore, StatusCompleted,
 			fmt.Sprintf("Database %q restored via cluster Cypher path (%d/%d allocations online)", restore.Spec.DatabaseName, online, total))
 		r.Recorder.Event(restore, corev1.EventTypeNormal, EventReasonRestoreCompleted,
@@ -2744,6 +2758,9 @@ func (r *Neo4jRestoreReconciler) pollClusterRestoreOnline(ctx context.Context, r
 		detail := diag
 		if stateErr != nil {
 			detail = stateErr.Error()
+		}
+		if err := teardownPVCSeedProxyResources(ctx, r.Client, restore.Namespace, restore.Name); err != nil {
+			logger.Error(err, "Failed to tear down seed proxy after restore failure (non-fatal)")
 		}
 		r.updateRestoreStatus(ctx, restore, StatusFailed,
 			fmt.Sprintf("Restore did not converge to online within %s (%d/%d allocations online); last status: %s",
@@ -2842,6 +2859,14 @@ func (r *Neo4jRestoreReconciler) resolveClusterPVCRestoreURI(
 	// Neo4jRestore CR is the owner so the proxy is GC'd when the restore
 	// is deleted.
 	proxyAvailable, err := ensurePVCSeedProxyResources(ctx, r.Client, r.Scheme, restore, restore.Name, storage.PVC.Name)
+	if err == nil {
+		// Restrict the proxy (which serves the whole backup PVC) to the
+		// target cluster's server pods (#219). Best-effort: only enforcing
+		// CNIs apply it.
+		if npErr := ensurePVCSeedProxyNetworkPolicy(ctx, r.Client, r.Scheme, restore, restore.Name, restore.Spec.ClusterRef); npErr != nil {
+			log.FromContext(ctx).Error(npErr, "Failed to ensure seed-proxy NetworkPolicy (non-fatal)")
+		}
+	}
 	if err != nil {
 		return "", ctrl.Result{}, fmt.Errorf("ensure PVC seed proxy: %w", err)
 	}

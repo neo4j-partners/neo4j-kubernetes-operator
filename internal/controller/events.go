@@ -35,7 +35,10 @@ const (
 
 // Backup and restore events
 const (
-	EventReasonBackupScheduled        = "BackupScheduled"
+	EventReasonBackupScheduled = "BackupScheduled"
+	// EventReasonBackupRetentionCaveat — retention pruning configured on a CR
+	// whose chain may contain differential artifacts (#217).
+	EventReasonBackupRetentionCaveat  = "BackupRetentionCaveat"
 	EventReasonBackupStarted          = "BackupStarted"
 	EventReasonBackupCompleted        = "BackupCompleted"
 	EventReasonBackupFailed           = "BackupFailed"

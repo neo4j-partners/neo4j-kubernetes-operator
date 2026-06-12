@@ -13,6 +13,8 @@ package controller
 import (
 	"context"
 
+	"sigs.k8s.io/controller-runtime/pkg/log"
+
 	neo4jv1beta1 "github.com/neo4j-partners/neo4j-kubernetes-operator/api/v1beta1"
 )
 
@@ -31,5 +33,19 @@ func (r *Neo4jShardedDatabaseReconciler) ensurePVCSeedProxy(
 	shardedDB *neo4jv1beta1.Neo4jShardedDatabase,
 	backupPVCName string,
 ) (proxyAvailable bool, err error) {
-	return ensurePVCSeedProxyResources(ctx, r.Client, r.Scheme, shardedDB, shardedDB.Name, backupPVCName)
+	available, err := ensurePVCSeedProxyResources(ctx, r.Client, r.Scheme, shardedDB, shardedDB.Name, backupPVCName)
+	if err == nil {
+		// Restrict the proxy to the target cluster's server pods (#219).
+		if npErr := ensurePVCSeedProxyNetworkPolicy(ctx, r.Client, r.Scheme, shardedDB, shardedDB.Name, shardedDB.Spec.ClusterRef); npErr != nil {
+			log.FromContext(ctx).Error(npErr, "Failed to ensure seed-proxy NetworkPolicy (non-fatal)")
+		}
+	}
+	return available, err
+}
+
+// teardownPVCSeedProxy removes the proxy stack once the sharded database has
+// finished seeding (#219) — the proxy otherwise serves the whole backup PVC
+// for the lifetime of the (long-lived) sharded DB CR.
+func (r *Neo4jShardedDatabaseReconciler) teardownPVCSeedProxy(ctx context.Context, shardedDB *neo4jv1beta1.Neo4jShardedDatabase) error {
+	return teardownPVCSeedProxyResources(ctx, r.Client, shardedDB.Namespace, shardedDB.Name)
 }

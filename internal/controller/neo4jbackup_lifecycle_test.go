@@ -217,3 +217,19 @@ func TestParseFindTimeArg_Units(t *testing.T) {
 	assert.Equal(t, "-mmin +2", parseFindTimeArg("90s"))
 	assert.Equal(t, "-mtime +7", parseFindTimeArg("bogus"))
 }
+
+// TestBuildRetentionScript_FileLevelChainScoped pins the #217 retention
+// rewrite: pruning operates on *.backup FILES inside THIS CR's chain dir —
+// the old script rm -rf'd depth-1 DIRECTORIES under /backup (entire chain
+// roots, including other CRs' chains on a shared PVC).
+func TestBuildRetentionScript_FileLevelChainScoped(t *testing.T) {
+	script := buildRetentionScript(&neo4jv1beta1.RetentionPolicy{MaxCount: 5, MaxAge: "7d"}, "daily-prod")
+
+	assert.Contains(t, script, "'/backup/daily-prod'", "pruning must be scoped to the CR's chain dir")
+	assert.Contains(t, script, "-name '*.backup'", "pruning must target artifact FILES, not directories")
+	assert.Contains(t, script, "-type f", "must never rm -rf directories")
+	assert.NotContains(t, script, "-type d", "the pre-rule-40 directory model must be gone")
+	assert.Contains(t, script, "NEWEST=", "maxAge must always keep the newest artifact")
+	assert.Contains(t, script, "rm -f", "file-level deletion only")
+	assert.NotContains(t, script, "rm -rf", "recursive deletion of chains must be gone")
+}

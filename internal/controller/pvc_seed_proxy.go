@@ -16,6 +16,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -103,6 +104,11 @@ func ensurePVCSeedProxyResources(
 	if ownerName == "" {
 		ownerName = owner.GetName()
 	}
+	// DNS-1035 label limit — a too-long owner name previously failed deep
+	// inside Service creation with an opaque error (#219).
+	if name := pvcSeedProxyName(ownerName); len(name) > 63 {
+		return false, fmt.Errorf("PVC seed proxy name %q exceeds the 63-character Service name limit; shorten the owning CR's name (max %d chars)", name, 63-len("backup-seed-proxy-"))
+	}
 	namespace := owner.GetNamespace()
 	logger := log.FromContext(ctx).WithValues("proxy", pvcSeedProxyName(ownerName))
 
@@ -132,6 +138,90 @@ func ensurePVCSeedProxyResources(
 	}
 
 	return existing.Status.ReadyReplicas > 0, nil
+}
+
+// teardownPVCSeedProxyResources deletes the proxy Deployment + Service (and
+// its NetworkPolicy) once the seed is no longer needed (#219). The proxy
+// serves the ENTIRE backup PVC unauthenticated inside the cluster, and its
+// owner CR (a Neo4jRestore users keep as a record, or a long-lived sharded
+// DB) typically outlives the restore by months — owner-ref GC alone left it
+// running indefinitely. Idempotent; NotFound is success.
+func teardownPVCSeedProxyResources(ctx context.Context, c client.Client, namespace, ownerName string) error {
+	name := pvcSeedProxyName(ownerName)
+	dep := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace}}
+	if err := c.Delete(ctx, dep, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil && !apierrors.IsNotFound(err) {
+		return fmt.Errorf("delete proxy Deployment: %w", err)
+	}
+	svc := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace}}
+	if err := c.Delete(ctx, svc); err != nil && !apierrors.IsNotFound(err) {
+		return fmt.Errorf("delete proxy Service: %w", err)
+	}
+	np := &networkingv1.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace}}
+	if err := c.Delete(ctx, np); err != nil && !apierrors.IsNotFound(err) {
+		return fmt.Errorf("delete proxy NetworkPolicy: %w", err)
+	}
+	return nil
+}
+
+// ensurePVCSeedProxyNetworkPolicy restricts proxy ingress to the target
+// cluster's server pods on the proxy port (#219): without it, busybox httpd
+// serves the ENTIRE backup PVC (directory listings included) to any pod in
+// the cluster. Effective only on enforcing CNIs; harmless no-op elsewhere.
+// targetClusterName may be empty (unknown target) — then no policy is
+// emitted, preserving previous behavior.
+func ensurePVCSeedProxyNetworkPolicy(ctx context.Context, c client.Client, scheme *runtime.Scheme, owner client.Object, ownerName, targetClusterName string) error {
+	if targetClusterName == "" {
+		return nil
+	}
+	name := pvcSeedProxyName(ownerName)
+	key := types.NamespacedName{Name: name, Namespace: owner.GetNamespace()}
+	existing := &networkingv1.NetworkPolicy{}
+	if err := c.Get(ctx, key, existing); err == nil {
+		return nil
+	} else if !apierrors.IsNotFound(err) {
+		return err
+	}
+	np := &networkingv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: owner.GetNamespace(),
+			Labels: map[string]string{
+				"app.kubernetes.io/name":       "backup-seed-proxy",
+				"app.kubernetes.io/managed-by": "neo4j-operator",
+				"app.kubernetes.io/instance":   ownerName,
+			},
+		},
+		Spec: networkingv1.NetworkPolicySpec{
+			PodSelector: metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"app.kubernetes.io/name":     "backup-seed-proxy",
+					"app.kubernetes.io/instance": ownerName,
+				},
+			},
+			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
+			Ingress: []networkingv1.NetworkPolicyIngressRule{
+				{
+					From: []networkingv1.NetworkPolicyPeer{
+						{
+							PodSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{"neo4j.com/cluster": targetClusterName},
+							},
+						},
+					},
+					Ports: []networkingv1.NetworkPolicyPort{
+						{
+							Protocol: func() *corev1.Protocol { p := corev1.ProtocolTCP; return &p }(),
+							Port:     func() *intstr.IntOrString { v := intstr.FromInt(pvcSeedProxyPort); return &v }(),
+						},
+					},
+				},
+			},
+		},
+	}
+	if err := controllerutil.SetControllerReference(owner, np, scheme); err != nil {
+		return fmt.Errorf("set owner reference on proxy NetworkPolicy: %w", err)
+	}
+	return c.Create(ctx, np)
 }
 
 // ensurePVCSeedProxyService creates (idempotent) the ClusterIP Service in
