@@ -76,7 +76,7 @@ main() {
     # Step 1: Destroy existing environment
     log_section "Cleaning Up Existing Environment"
     log_info "Destroying any existing dev and test clusters..."
-    make dev-destroy 2>/dev/null || true
+    FORCE=true make dev-destroy 2>/dev/null || true
     make test-destroy 2>/dev/null || true
     sleep 2
 

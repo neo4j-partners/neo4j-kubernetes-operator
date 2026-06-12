@@ -8,7 +8,7 @@ Back up and restore Neo4j Enterprise clusters and standalone instances via the `
 kubectl create secret generic neo4j-admin-secret \
   --from-literal=username=neo4j --from-literal=password=admin123
 
-kubectl apply -f examples/backup-restore/backup-pvc-simple.yaml
+kubectl apply -f https://raw.githubusercontent.com/priyolahiri/neo4j-kubernetes-operator/main/examples/backup-restore/backup-pvc-simple.yaml
 kubectl get neo4jbackups simple-backup -w
 ```
 

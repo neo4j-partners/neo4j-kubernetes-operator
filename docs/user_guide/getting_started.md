@@ -7,8 +7,9 @@ This guide will walk you through the process of deploying your first Neo4j Enter
 *   A Kubernetes cluster (v1.32+)
 *   `kubectl` installed and configured
 *   Neo4j Enterprise Edition — **5.26 LTS or any CalVer release** (2025.x, 2026.x, …); evaluation license acceptable for testing. See [Supported Neo4j Versions](version_support.md) for the full support policy.
-*   Go 1.26+ (for building from source)
 *   cert-manager 1.20+ (optional, for TLS-enabled deployments)
+
+Building from source additionally needs Go 1.26+ — see the [Installation Guide](installation.md) for that path.
 
 > **Neo4j version:** the examples below pin `5.26.0-enterprise`, but every one
 > works on a CalVer release too — just change the image `tag` (e.g.
@@ -52,17 +53,11 @@ For detailed information about modes, configuration options, and caching strateg
 
 ### Quick Mode Selection
 
-```bash
-# Production deployment (uses local image by default)
-make deploy-prod
-
-# Development deployment (uses local image by default)
-make deploy-dev
-
-# Alternative: Registry-based deployment
-make deploy-prod-registry  # Requires ghcr.io access
-make deploy-dev-registry   # Requires registry access for dev image
-```
+The Helm install above runs in production mode by default; set
+`developmentMode: true` in your values for development mode. Contributors
+working from a clone of this repository can instead use the `make`
+deployment targets (`make deploy-prod`, `make deploy-dev`) — see the
+[Makefile reference](../developer_guide/makefile_reference.md).
 
 **⚠️ Important:** The operator must always run in-cluster, even for development. This ensures proper DNS resolution and cluster connectivity required for Neo4j cluster formation.
 
@@ -88,7 +83,7 @@ For development, testing, or simple workloads that don't require high availabili
 2.  **Deploy the standalone instance:**
 
     ```bash
-    kubectl apply -f examples/standalone/single-node-standalone.yaml
+    kubectl apply -f https://raw.githubusercontent.com/priyolahiri/neo4j-kubernetes-operator/main/examples/standalone/single-node-standalone.yaml
     ```
 
 3.  **Check deployment status:**
@@ -123,7 +118,7 @@ For production workloads requiring high availability and clustering:
 2.  **Deploy the minimal cluster:**
 
     ```bash
-    kubectl apply -f examples/clusters/minimal-cluster.yaml
+    kubectl apply -f https://raw.githubusercontent.com/priyolahiri/neo4j-kubernetes-operator/main/examples/clusters/minimal-cluster.yaml
     ```
 
 3.  **Monitor deployment (2-3 minutes expected):**
@@ -146,10 +141,10 @@ For production workloads requiring high availability and clustering:
 
     ```bash
     # Five-server production cluster (TLS via cert-manager)
-    kubectl apply -f examples/clusters/multi-server-cluster.yaml
+    kubectl apply -f https://raw.githubusercontent.com/priyolahiri/neo4j-kubernetes-operator/main/examples/clusters/multi-server-cluster.yaml
 
     # Three-server cluster, no TLS (simplest for local testing)
-    kubectl apply -f examples/clusters/three-node-simple.yaml
+    kubectl apply -f https://raw.githubusercontent.com/priyolahiri/neo4j-kubernetes-operator/main/examples/clusters/three-node-simple.yaml
     ```
 
 3.  **Monitor deployment (3-5 minutes expected):**

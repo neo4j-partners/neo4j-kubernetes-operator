@@ -310,10 +310,13 @@ EOF
     esac
 done
 
-# Ensure we're not in a pipe that could mask errors
-if [[ -t 0 ]]; then
+# The TTY guard exists to protect the interactive confirm() prompts — with
+# FORCE=true every prompt is bypassed, so non-TTY (CI, make demo-fast,
+# scripted runs) is safe and must work; refusing here made dev-destroy
+# silently skip cleanup behind an ERROR that '|| true' swallowed.
+if [[ -t 0 || "${FORCE}" == "true" ]]; then
     main "$@"
 else
-    log_error "This script should not be run in a pipeline for safety reasons"
+    log_error "Interactive confirmation needs a TTY. Re-run with FORCE=true to skip prompts (e.g. FORCE=true hack/cleanup-dev.sh)"
     exit 1
 fi

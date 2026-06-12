@@ -323,13 +323,10 @@ show_connection_info() {
 
     log_section "Connection Information"
 
-    # Standalone uses different service naming
-    local client_service
-    if [[ "${resource_type}" == "standalone" ]]; then
-        client_service="${cluster_name}-service"
-    else
-        client_service="${cluster_name}-client"
-    fi
+    # {name}-client is the canonical client Service for BOTH kinds since the
+    # v1.12 naming unification (#215); the {name}-service alias is deprecated
+    # and removed in the next release — never show it to demo viewers.
+    local client_service="${cluster_name}-client"
     local bolt_port="7687"
     local http_port="7474"
     local https_port="7473"
@@ -721,10 +718,10 @@ demonstrate_standalone_external_access() {
     log_demo "  • Secure TLS connections"
 
     log_info "Setting up port-forward to standalone..."
-    log_command "kubectl port-forward svc/${CLUSTER_NAME_SINGLE}-service -n ${DEMO_NAMESPACE} 7473:7473 7687:7687 &"
+    log_command "kubectl port-forward svc/${CLUSTER_NAME_SINGLE}-client -n ${DEMO_NAMESPACE} 7473:7473 7687:7687 &"
 
     # Start port-forward in background
-    kubectl port-forward svc/${CLUSTER_NAME_SINGLE}-service -n ${DEMO_NAMESPACE} 7473:7473 7687:7687 >/dev/null 2>&1 &
+    kubectl port-forward svc/${CLUSTER_NAME_SINGLE}-client -n ${DEMO_NAMESPACE} 7473:7473 7687:7687 >/dev/null 2>&1 &
     local pf_pid=$!
 
     sleep 3
@@ -1604,7 +1601,7 @@ demo_cleanup() {
     kubectl delete secret neo4j-admin-secret -n "${DEMO_NAMESPACE}" --ignore-not-found=true 2>/dev/null
     kubectl delete secret demo-reader-creds -n "${DEMO_NAMESPACE}" --ignore-not-found=true 2>/dev/null
     kubectl delete svc -l "neo4j.com/cluster=${CLUSTER_NAME_MULTI}" -n "${DEMO_NAMESPACE}" --ignore-not-found=true 2>/dev/null
-    kubectl delete svc "${CLUSTER_NAME_SINGLE}-service" -n "${DEMO_NAMESPACE}" --ignore-not-found=true 2>/dev/null
+    kubectl delete svc "${CLUSTER_NAME_SINGLE}-client" -n "${DEMO_NAMESPACE}" --ignore-not-found=true 2>/dev/null
     kubectl delete configmap "${CLUSTER_NAME_SINGLE}-config" -n "${DEMO_NAMESPACE}" --ignore-not-found=true 2>/dev/null
     kubectl delete pvc -l "app=${CLUSTER_NAME_SINGLE}" -n "${DEMO_NAMESPACE}" --ignore-not-found=true 2>/dev/null
     kubectl delete pvc -l "neo4j.com/cluster=${CLUSTER_NAME_MULTI}" -n "${DEMO_NAMESPACE}" --ignore-not-found=true 2>/dev/null
