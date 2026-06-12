@@ -1041,3 +1041,24 @@ func TestPVCSeedProxyLifecycle(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "63-character")
 }
+
+// TestShardedSeedConsumableGate pins the #224 review fix: once a sharded DB
+// is Ready (and no destructive re-trigger is pending), seed resolution is
+// skipped — re-resolving would re-create the PVC seed proxy that the Ready
+// transition tears down, oscillating Ready→Pending forever.
+func TestShardedSeedConsumableGate(t *testing.T) {
+	mk := func(ready *bool, replace bool, lastGen, gen int64) bool {
+		sd := &neo4jv1beta1.Neo4jShardedDatabase{}
+		sd.Generation = gen
+		sd.Spec.ReplaceExisting = replace
+		sd.Status.ShardingReady = ready
+		sd.Status.LastDestructiveRestoreGeneration = lastGen
+		return sd.Status.ShardingReady == nil || !*sd.Status.ShardingReady ||
+			(sd.Spec.ReplaceExisting && sd.Status.LastDestructiveRestoreGeneration < sd.Generation)
+	}
+	assert.True(t, mk(nil, false, 0, 1), "never seeded: consumable")
+	assert.True(t, mk(ptr.To(false), false, 0, 1), "not ready yet: consumable")
+	assert.False(t, mk(ptr.To(true), false, 0, 1), "Ready steady state: NOT consumable")
+	assert.True(t, mk(ptr.To(true), true, 1, 2), "destructive re-trigger pending: consumable")
+	assert.False(t, mk(ptr.To(true), true, 2, 2), "destructive already done at this generation: NOT consumable")
+}

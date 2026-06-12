@@ -183,7 +183,19 @@ func (r *Neo4jShardedDatabaseReconciler) Reconcile(ctx context.Context, req ctrl
 	//     for the restore controller.
 	//   - Anything else (missing CR, PVC storage, unsupported type) →
 	//     permanent; route to Failed.
-	resolved, seedErr := r.resolveShardedSeed(ctx, &shardedDatabase)
+	// Seed resolution only matters while the seed can still be CONSUMED:
+	// initial creation (not ShardingReady yet) or a pending destructive
+	// replaceExisting re-trigger (rule 64). Once the sharded DB is Ready,
+	// resolving again would re-create the PVC seed proxy that the Ready
+	// transition just tore down — oscillating Ready→Pending and re-exposing
+	// the backup PVC on every periodic reconcile (#224 review).
+	seedConsumable := shardedDatabase.Status.ShardingReady == nil || !*shardedDatabase.Status.ShardingReady ||
+		(shardedDatabase.Spec.ReplaceExisting && shardedDatabase.Status.LastDestructiveRestoreGeneration < shardedDatabase.Generation)
+	var resolved *ResolvedShardedSeed
+	var seedErr error
+	if seedConsumable {
+		resolved, seedErr = r.resolveShardedSeed(ctx, &shardedDatabase)
+	}
 	if resolved != nil || seedErr != nil {
 		if seedErr != nil {
 			if stderrors.Is(seedErr, ErrBackupNotReady) {
