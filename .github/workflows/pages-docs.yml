@@ -4,7 +4,13 @@ name: Pages — Docs
 # gh-pages branch as a versioned subdirectory using mike.
 #
 #   - Push to main         → publishes to /main/ alias  (rolling preview)
-#   - Push of v* tag       → publishes to /vX.Y/ and updates the /latest/ alias
+#   - workflow_call from release.yml (after every release gate has passed)
+#     → publishes /vX.Y/ and updates the /latest/ alias. The versioned
+#     publication deliberately has NO tag trigger of its own: publishing on
+#     tag push ran in PARALLEL with the release gates, so a failed release
+#     left /vX.Y/ + latest advertising a version that never shipped (#245,
+#     observed live on the first v1.12.0 tag). The called workflow inherits
+#     the caller's GITHUB_REF (the tag), so the derivation below is unchanged.
 #
 # The chart-publishing workflow (pages-helm.yml) writes to /charts/ on the
 # same gh-pages branch; concurrency: gh-pages serialises pushes between the
@@ -20,8 +26,7 @@ on:
   push:
     branches:
       - main
-    tags:
-      - 'v*'
+  workflow_call: {}
   workflow_dispatch:
     inputs:
       version-alias:

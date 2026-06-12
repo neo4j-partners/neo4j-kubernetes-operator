@@ -1,0 +1,300 @@
+# Release retraction (#246): safely unpublish a dire release.
+#
+# Doctrine: RETRACT AND SUPERSEDE, never reuse a version — registry layers,
+# Helm repo caches, OLM catalogs and the Rekor transparency log all cache
+# immutably; a version string must never mean two different builds. The fix
+# always ships as the next patch version.
+#
+# ALWAYS run with dry-run=true first: the dry-run is also the GRACE-WINDOW
+# PROBE — it enumerates which surfaces already carry the version and prints
+# either "window OPEN" (tag delete-and-re-cut is still safe) or "window
+# CLOSED at <surface>" (retract here, supersede with vX.Y.Z+1).
+name: Release Retract
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to retract (e.g. v1.12.1)'
+        required: true
+        type: string
+      previous-good-tag:
+        description: 'Tag to repoint moving image tags / latest docs at (e.g. v1.12.0). Required unless dry-run.'
+        required: false
+        default: ''
+        type: string
+      reason:
+        description: 'Why this release is being retracted (lands in the release banner and the record issue)'
+        required: true
+        type: string
+      dry-run:
+        description: 'Probe and print the plan only — no changes (ALWAYS run this first)'
+        required: false
+        default: true
+        type: boolean
+      repoint-moving-tags:
+        description: 'Repoint X.Y and X image tags at previous-good-tag (the silent-exposure channel)'
+        required: false
+        default: true
+        type: boolean
+      retract-release:
+        description: 'Mark the GitHub release RETRACTED (title banner + prerelease flag)'
+        required: false
+        default: true
+        type: boolean
+      remove-helm-classic:
+        description: 'Remove the chart version from the classic gh-pages Helm index'
+        required: false
+        default: true
+        type: boolean
+      remove-oci-chart:
+        description: 'Delete the chart version from the OCI registry'
+        required: false
+        default: true
+        type: boolean
+      retract-docs:
+        description: 'Republish /vX.Y/ + latest docs from previous-good-tag'
+        required: false
+        default: true
+        type: boolean
+      delete-pinned-image:
+        description: 'DELETE the vX.Y.Z image from ghcr (breaks running clusters that re-pull — security-dire only)'
+        required: false
+        default: false
+        type: boolean
+      delete-git-tag:
+        description: 'Delete the git tag (default keep — honest history; forks/caches have it anyway)'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write    # gh-pages edits, tag deletion
+  packages: write    # image tag repoint / deletion
+  issues: write      # retraction record
+
+concurrency:
+  group: gh-pages
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE: ghcr.io/neo4j-partners/neo4j-kubernetes-operator
+  ORG: neo4j-partners
+  PKG_OPERATOR: neo4j-kubernetes-operator
+  PKG_CHART: charts%2Fneo4j-operator
+  PAGES_BASE_URL: https://neo4j-partners.github.io/neo4j-kubernetes-operator
+
+jobs:
+  retract:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Compute versions
+      id: v
+      run: |
+        TAG="${{ inputs.tag }}"
+        CLEAN="${TAG#v}"
+        MINOR="${TAG%.*}"             # vX.Y.Z -> vX.Y
+        MAJOR="${MINOR%.*}"           # vX.Y   -> vX
+        echo "tag=$TAG"      >> "$GITHUB_OUTPUT"
+        echo "clean=$CLEAN"  >> "$GITHUB_OUTPUT"
+        echo "minor=$MINOR"  >> "$GITHUB_OUTPUT"
+        echo "major=${MAJOR#v}" >> "$GITHUB_OUTPUT"
+        PREV="${{ inputs.previous-good-tag }}"
+        echo "prev=$PREV" >> "$GITHUB_OUTPUT"
+        echo "prevclean=${PREV#v}" >> "$GITHUB_OUTPUT"
+        if [ "${{ inputs.dry-run }}" != "true" ] && [ -z "$PREV" ]; then
+          echo "::error::previous-good-tag is required for execution (only dry-run may omit it)"
+          exit 1
+        fi
+
+    # ── PROBE (always runs; in dry-run this is the entire job) ─────────────
+    - name: Probe surfaces / grace window
+      id: probe
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        TAG="${{ steps.v.outputs.tag }}"; CLEAN="${{ steps.v.outputs.clean }}"; MINOR="${{ steps.v.outputs.minor }}"
+        closed=""
+        probe() { printf '%-22s %s\n' "$1:" "$2"; }
+
+        # image tag on ghcr
+        if gh api "orgs/${ORG}/packages/container/${PKG_OPERATOR}/versions" --paginate \
+             --jq '.[].metadata.container.tags[]' 2>/dev/null | grep -qx "$TAG"; then
+          probe "image ${TAG}" "PUBLISHED"; closed="${closed} image"
+          echo "image=true" >> "$GITHUB_OUTPUT"
+        else
+          probe "image ${TAG}" "absent"; echo "image=false" >> "$GITHUB_OUTPUT"
+        fi
+
+        # GitHub release
+        if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+          probe "github release" "PUBLISHED"; closed="${closed} release"
+          echo "release=true" >> "$GITHUB_OUTPUT"
+        else
+          probe "github release" "absent"; echo "release=false" >> "$GITHUB_OUTPUT"
+        fi
+
+        # classic helm index
+        if curl -fsS "${PAGES_BASE_URL}/charts/index.yaml" 2>/dev/null | grep -q "version: ${CLEAN}$"; then
+          probe "helm classic ${CLEAN}" "PUBLISHED"; closed="${closed} helm-classic"
+          echo "helmclassic=true" >> "$GITHUB_OUTPUT"
+        else
+          probe "helm classic ${CLEAN}" "absent"; echo "helmclassic=false" >> "$GITHUB_OUTPUT"
+        fi
+
+        # OCI chart
+        if gh api "orgs/${ORG}/packages/container/${PKG_CHART}/versions" --paginate \
+             --jq '.[].metadata.container.tags[]' 2>/dev/null | grep -qx "$CLEAN"; then
+          probe "oci chart ${CLEAN}" "PUBLISHED"; closed="${closed} oci-chart"
+          echo "ocichart=true" >> "$GITHUB_OUTPUT"
+        else
+          probe "oci chart ${CLEAN}" "absent"; echo "ocichart=false" >> "$GITHUB_OUTPUT"
+        fi
+
+        # versioned docs
+        if curl -fsS -o /dev/null "${PAGES_BASE_URL}/${MINOR}/" 2>/dev/null; then
+          probe "docs /${MINOR}/" "PUBLISHED"; closed="${closed} docs"
+          echo "docs=true" >> "$GITHUB_OUTPUT"
+        else
+          probe "docs /${MINOR}/" "absent"; echo "docs=false" >> "$GITHUB_OUTPUT"
+        fi
+
+        # OperatorHub submission
+        PR=$(gh pr list --repo k8s-operatorhub/community-operators \
+              --search "neo4j-kubernetes-operator ${CLEAN} in:title" --state all \
+              --json number,state,url --jq '.[0] | "\(.state) \(.url)"' 2>/dev/null || true)
+        probe "operatorhub PR" "${PR:-none found}"
+        case "$PR" in
+          MERGED*) closed="${closed} operatorhub(MERGED)";;
+        esac
+        echo "ohpr=${PR}" >> "$GITHUB_OUTPUT"
+
+        echo ""
+        if [ -z "$closed" ]; then
+          echo "GRACE WINDOW: OPEN — no public artifact carries ${TAG}; tag delete-and-re-cut is safe."
+        else
+          echo "GRACE WINDOW: CLOSED at:${closed} — retract these surfaces and SUPERSEDE with the next patch version. Never re-cut ${TAG}."
+        fi
+
+    - name: Dry-run — stop here
+      if: inputs.dry-run == true
+      run: echo "Dry-run complete. Review the probe above, then re-run with dry-run=false and previous-good-tag set."
+
+    # ── EXECUTION ──────────────────────────────────────────────────────────
+    - name: Repoint moving image tags at previous good
+      if: inputs.dry-run == false && inputs.repoint-moving-tags == true && steps.probe.outputs.image == 'true'
+      run: |
+        echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+        PREVCLEAN="${{ steps.v.outputs.prevclean }}"
+        MINORCLEAN="${{ steps.v.outputs.minor }}"; MINORCLEAN="${MINORCLEAN#v}"
+        MAJOR="${{ steps.v.outputs.major }}"
+        for t in "$MINORCLEAN" "$MAJOR"; do
+          echo "repointing ${IMAGE}:${t} -> ${IMAGE}:${PREVCLEAN}"
+          docker buildx imagetools create -t "${IMAGE}:${t}" "${IMAGE}:${PREVCLEAN}"
+        done
+
+    - name: Retract GitHub release
+      if: inputs.dry-run == false && inputs.retract-release == true && steps.probe.outputs.release == 'true'
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        TAG="${{ steps.v.outputs.tag }}"
+        CUR_TITLE=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json name --jq .name)
+        gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body --jq .body > /tmp/body.md
+        {
+          echo "> [!CAUTION]"
+          echo "> **RETRACTED ($(date -u +%Y-%m-%d)):** ${{ inputs.reason }}"
+          echo "> Do not install this version. Use ${{ steps.v.outputs.prev }} or the next patch release."
+          echo ""
+          cat /tmp/body.md
+        } > /tmp/newbody.md
+        gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" \
+          --title "⚠️ RETRACTED — ${CUR_TITLE}" \
+          --prerelease \
+          --notes-file /tmp/newbody.md
+
+    - name: Remove chart from classic Helm repo
+      if: inputs.dry-run == false && inputs.remove-helm-classic == true && steps.probe.outputs.helmclassic == 'true'
+      run: |
+        CLEAN="${{ steps.v.outputs.clean }}"
+        git clone --depth 1 --branch gh-pages \
+          "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" /tmp/ghp
+        cd /tmp/ghp/charts
+        rm -f "neo4j-operator-${CLEAN}.tgz"
+        # Regenerate the index from the remaining tarballs (full regen — all
+        # surviving versions are present in this directory).
+        curl -fsSL https://get.helm.sh/helm-v3.16.0-linux-amd64.tar.gz | tar xz -C /tmp linux-amd64/helm
+        /tmp/linux-amd64/helm repo index . --url "${PAGES_BASE_URL}/charts"
+        cd /tmp/ghp
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git add charts && git commit -m "retract: remove neo4j-operator ${CLEAN} from Helm index (${{ inputs.reason }})" && git push
+
+    - name: Delete OCI chart version
+      if: inputs.dry-run == false && inputs.remove-oci-chart == true && steps.probe.outputs.ocichart == 'true'
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        CLEAN="${{ steps.v.outputs.clean }}"
+        ID=$(gh api "orgs/${ORG}/packages/container/${PKG_CHART}/versions" --paginate \
+              --jq ".[] | select(.metadata.container.tags[]? == \"${CLEAN}\") | .id" | head -1)
+        [ -n "$ID" ] && gh api -X DELETE "orgs/${ORG}/packages/container/${PKG_CHART}/versions/${ID}" \
+          && echo "deleted OCI chart version ${CLEAN} (id ${ID})"
+
+    - name: Republish docs from previous good
+      if: inputs.dry-run == false && inputs.retract-docs == true && steps.probe.outputs.docs == 'true'
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        # /vX.Y/ + latest re-derive from the previous good tag via the
+        # dispatchable docs workflow (handles both same-minor patch retracts
+        # and new-minor retracts; for a new minor the alias now points at the
+        # previous content rather than dangling).
+        PREVMINOR="${{ steps.v.outputs.prev }}"; PREVMINOR="${PREVMINOR%.*}"
+        gh workflow run pages-docs.yml --repo "$GITHUB_REPOSITORY" --ref "${{ steps.v.outputs.prev }}" \
+          -f version-alias="${{ steps.v.outputs.minor }}" -f update-latest=true
+        echo "dispatched docs republish of ${{ steps.v.outputs.minor }} + latest from ${{ steps.v.outputs.prev }}"
+
+    - name: Delete pinned image (security-dire only)
+      if: inputs.dry-run == false && inputs.delete-pinned-image == true && steps.probe.outputs.image == 'true'
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        TAG="${{ steps.v.outputs.tag }}"; CLEAN="${{ steps.v.outputs.clean }}"
+        for t in "$TAG" "$CLEAN"; do
+          ID=$(gh api "orgs/${ORG}/packages/container/${PKG_OPERATOR}/versions" --paginate \
+                --jq ".[] | select(.metadata.container.tags[]? == \"${t}\") | .id" | head -1)
+          [ -n "$ID" ] && gh api -X DELETE "orgs/${ORG}/packages/container/${PKG_OPERATOR}/versions/${ID}" \
+            && echo "deleted image version ${t} (id ${ID})"
+        done
+
+    - name: Delete git tag
+      if: inputs.dry-run == false && inputs.delete-git-tag == true
+      run: |
+        git clone --depth 1 "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" /tmp/repo
+        cd /tmp/repo && git push origin ":refs/tags/${{ steps.v.outputs.tag }}"
+
+    - name: File retraction record
+      if: inputs.dry-run == false
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        {
+          echo "**Retracted:** ${{ steps.v.outputs.tag }}"
+          echo "**Superseded by / repointed to:** ${{ steps.v.outputs.prev }}"
+          echo "**Reason:** ${{ inputs.reason }}"
+          echo "**Run:** ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          echo ""
+          echo "Surfaces at probe time: image=${{ steps.probe.outputs.image }} release=${{ steps.probe.outputs.release }} helm-classic=${{ steps.probe.outputs.helmclassic }} oci-chart=${{ steps.probe.outputs.ocichart }} docs=${{ steps.probe.outputs.docs }}"
+          echo "OperatorHub: ${{ steps.probe.outputs.ohpr }}"
+          echo ""
+          echo "**Manual follow-ups:**"
+          echo "- [ ] If the OperatorHub PR was MERGED: submit a superseding bundle or channel-graph edit (cannot be yanked)."
+          echo "- [ ] Ship the superseding patch release."
+          echo "- [ ] Notify the team channel."
+        } > /tmp/record.md
+        gh issue create --repo "$GITHUB_REPOSITORY" \
+          --title "RETRACTION RECORD: ${{ steps.v.outputs.tag }}" \
+          --label bug \
+          --body-file /tmp/record.md

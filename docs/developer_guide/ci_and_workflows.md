@@ -276,9 +276,11 @@ from the tag.
 git tag v1.12.0 && git push origin v1.12.0
 ```
 
-This fans out to **Release** (multi-arch signed images + GitHub release +
-kubectl bundles + OLM CSV), **Pages — Docs** (`/v1.12/` + `/latest/`), and
-**Pages — Helm Repo** (`/charts/`).
+This fires **Release** only. The versioned docs (`/vX.Y/` + `/latest/`) and
+the classic Helm repo (`/charts/`) are published by the Release workflow's
+final jobs **after every gate and artifact exists** — a failed release
+publishes nothing (#245). Push-to-main docs (`/main/`) are unaffected. Any
+job failure auto-files an incident issue with the failed jobs and run link.
 
 **After the workflows finish:**
 
@@ -297,6 +299,21 @@ kubectl bundles + OLM CSV), **Pages — Docs** (`/v1.12/` + `/latest/`), and
 7. Comment on every issue the release fixes that was reported by someone else,
    naming the released version and asking the reporter to re-verify against it
    — reporter-filed issues stay open until verified on a pinned release.
+
+### Retracting a release
+
+`release-retract.yml` (manual dispatch, #246) safely unpublishes a dire
+release. Doctrine: **retract and supersede — never reuse a version** (registry
+layers, Helm caches, OLM catalogs and Rekor cache immutably). **Always run
+with `dry-run: true` first**: the dry-run doubles as the grace-window probe,
+printing either "window OPEN" (tag delete-and-re-cut still safe — nothing
+published) or "window CLOSED at <surface>" (retract + ship vX.Y.Z+1).
+Execution repoints the moving image tags at `previous-good-tag`, banners the
+GitHub release as RETRACTED, removes the chart from both channels, republishes
+docs from the previous good tag, and files a retraction-record issue with the
+manual follow-ups (notably: a MERGED OperatorHub PR can only be superseded,
+never yanked). Deleting the pinned image or the git tag are explicit opt-in
+flags, default off.
 
 ## Publishing to GitHub Pages
 

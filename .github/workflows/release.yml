@@ -376,6 +376,61 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # Versioned docs + classic Helm repo publish ONLY after every gate and
+  # artifact above exists (#245) — these used to fire on the tag push, in
+  # parallel with the gates. The called workflows inherit this run's
+  # GITHUB_REF (the tag), so their version derivation is unchanged.
+  publish-docs:
+    name: Publish Versioned Docs
+    needs: [create-release]
+    permissions:
+      contents: write
+    uses: ./.github/workflows/pages-docs.yml
+
+  publish-helm:
+    name: Publish Helm Repo (classic)
+    needs: [create-release]
+    permissions:
+      contents: write
+    uses: ./.github/workflows/pages-helm.yml
+
+  # Incident reporter (#245): if ANY job in the release failed, open an issue
+  # with the failed jobs and a link — a failed tag should never be silent.
+  # With publication ordered behind the gates there is nothing to roll back;
+  # this job is the paper trail.
+  release-failure-incident:
+    name: Release Failure Incident
+    if: failure()
+    needs: [determine-tag, validate-release, install-confidence, build-and-push, create-release, submit-operatorhub, publish-docs, publish-helm]
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      actions: read
+    steps:
+    - name: File incident issue
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        TAG: ${{ needs.determine-tag.outputs.tag_name }}
+      run: |
+        FAILED=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs" \
+          --jq '[.jobs[] | select(.conclusion=="failure") | .name] | join(", ")')
+        {
+          echo "Release run for \`${TAG}\` failed before completing publication."
+          echo ""
+          echo "**Failed job(s):** ${FAILED:-see run}"
+          echo "**Run:** ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          echo ""
+          echo "Publication is ordered behind the gates (#245), so nothing user-facing"
+          echo "was published by this run unless create-release succeeded. If the tag"
+          echo "needs to move: re-cutting is safe only while the grace window is open —"
+          echo "run the release-retract workflow in dry-run mode to check (#246)."
+        } > /tmp/incident.md
+        gh issue create \
+          --repo "${GITHUB_REPOSITORY}" \
+          --title "Release ${TAG} failed: ${FAILED:-unknown job}" \
+          --label bug \
+          --body-file /tmp/incident.md
+
   submit-operatorhub:
     name: Submit to OperatorHub
     runs-on: ubuntu-latest

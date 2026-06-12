@@ -14,14 +14,13 @@ rules:
     max-spaces-inside-empty: 0
   indentation:
     spaces: 2
-    indent-sequences: true
+    indent-sequences: whatever  # workflows use 4-space sequences; syntax coverage matters, style does not
     check-multi-line-strings: false
 
 ignore: |
   /config/
   /charts/
   /hack/
-  /.github/workflows/
   /dev-data/
   *.yaml.tmpl
   *.yml.tmpl

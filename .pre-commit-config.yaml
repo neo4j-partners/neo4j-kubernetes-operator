@@ -7,7 +7,7 @@ repos:
       - id: end-of-file-fixer
       - id: check-yaml
         args: ['--allow-multiple-documents']
-        exclude: ^(config/manager/|\.github/workflows/|charts/).*\.ya?ml$
+        exclude: ^(config/manager/|charts/).*\.ya?ml$
       # - id: check-added-large-files
       #   args: ['--maxkb=1000']  # Limit to 1MB
       - id: check-case-conflict
