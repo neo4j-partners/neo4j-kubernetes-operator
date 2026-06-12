@@ -40,6 +40,13 @@ jobs:
 
     # Both were ship-prep-only, meaning a chart template error or a CSV
     # missing a new CRD only surfaced at release time. Static, seconds-fast.
+    # Helm is preinstalled on ubuntu-latest, but pin it anyway so the lint
+    # doesn't silently track whatever version the runner image ships.
+    - name: Setup Helm
+      uses: azure/setup-helm@v4
+      with:
+        version: v3.16.0
+
     - name: Helm lint
       run: make helm-lint
 
