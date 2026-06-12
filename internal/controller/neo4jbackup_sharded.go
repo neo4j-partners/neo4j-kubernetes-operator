@@ -108,13 +108,15 @@ func (r *Neo4jBackupReconciler) shardedPreflightGlobSafety(ctx context.Context, 
 
 	client, err := neo4jclient.NewClientForEnterprise(cluster, r.Client, cluster.Spec.Auth.AdminSecret)
 	if err != nil {
-		return fmt.Errorf("failed to open Neo4j client for glob-safety check: %w", err)
+		// Connect failures are indistinguishable from a cluster that is
+		// momentarily unreachable — transient (#217), not a glob violation.
+		return fmt.Errorf("failed to open Neo4j client for glob-safety check: %v: %w", err, errBackupTransient)
 	}
 	defer client.Close()
 
 	dbs, err := client.GetDatabases(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to list databases for glob-safety check: %w", err)
+		return fmt.Errorf("failed to list databases for glob-safety check: %v: %w", err, errBackupTransient)
 	}
 
 	logical := backup.Spec.Target.Name

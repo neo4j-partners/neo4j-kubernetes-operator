@@ -15,6 +15,7 @@ import (
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	neo4jv1beta1 "github.com/neo4j-partners/neo4j-kubernetes-operator/api/v1beta1"
@@ -139,19 +140,35 @@ func EnsureSeedCredsProjected(
 
 	// Opt-in confirmed. Append the entry and Update. The owning controller
 	// will pick up the spec change on its next reconcile and roll out the
-	// StatefulSet.
-	target.SetExtraEnvFrom(append(target.GetExtraEnvFrom(), corev1.EnvFromSource{
-		SecretRef: &corev1.SecretEnvSource{
-			LocalObjectReference: corev1.LocalObjectReference{Name: credsSecretName},
-		},
-	}))
-	annotations := target.GetAnnotations()
-	if annotations == nil {
-		annotations = map[string]string{}
-	}
-	annotations[AutoInheritedFromAnnotation] = credsSecretName
-	target.SetAnnotations(annotations)
-	if err := c.Update(ctx, target); err != nil {
+	// StatefulSet. Refetch-inside-RetryOnConflict is mandatory here (#218):
+	// the owning controller rewrites its CR every reconcile (env-var
+	// ownership annotation), so an Update from the reconcile-start object
+	// conflicts routinely — and the caller previously pinned that retryable
+	// conflict as terminal Failed.
+	if err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+		if err := c.Get(ctx, client.ObjectKeyFromObject(target), target); err != nil {
+			return err
+		}
+		// Re-check on the fresh copy: a concurrent reconcile may have
+		// already projected the Secret.
+		for _, ef := range target.GetExtraEnvFrom() {
+			if ef.SecretRef != nil && ef.SecretRef.Name == credsSecretName {
+				return nil
+			}
+		}
+		target.SetExtraEnvFrom(append(target.GetExtraEnvFrom(), corev1.EnvFromSource{
+			SecretRef: &corev1.SecretEnvSource{
+				LocalObjectReference: corev1.LocalObjectReference{Name: credsSecretName},
+			},
+		}))
+		annotations := target.GetAnnotations()
+		if annotations == nil {
+			annotations = map[string]string{}
+		}
+		annotations[AutoInheritedFromAnnotation] = credsSecretName
+		target.SetAnnotations(annotations)
+		return c.Update(ctx, target)
+	}); err != nil {
 		return false, fmt.Errorf("auto-inherit seed credentials Secret %q onto %s %q: %w", credsSecretName, target.TargetKindLabel(), target.GetName(), err)
 	}
 	return true, nil

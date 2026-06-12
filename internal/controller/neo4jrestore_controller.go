@@ -178,9 +178,17 @@ func (r *Neo4jRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{Requeue: true}, nil
 	}
 
-	// Get target cluster
+	// Get target cluster. Not-found is TRANSIENT (#218): `kubectl apply -f
+	// dir/` commonly creates the Neo4jRestore before its target CR, and a
+	// terminal Failed here is pinned by the previously-failed guard below
+	// even after the target appears.
 	targetCluster, err := r.getClusterRef(ctx, restore)
 	if err != nil {
+		if errors.IsNotFound(err) || strings.Contains(err.Error(), "not found") {
+			logger.Info("Restore target not found yet; waiting", "error", err.Error())
+			r.updateRestoreStatus(ctx, restore, StatusPending, fmt.Sprintf("Waiting for target to appear: %v", err))
+			return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
+		}
 		logger.Error(err, "Failed to get target cluster")
 		r.updateRestoreStatus(ctx, restore, StatusFailed, fmt.Sprintf("Failed to get target cluster: %v", err))
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, err
@@ -768,24 +776,42 @@ func (r *Neo4jRestoreReconciler) validateRestore(ctx context.Context, restore *n
 			restore.Spec.DatabaseName, validation.MaxDatabaseNameLength)
 	}
 
+	// spec.source.pointInTime is implemented by the standalone Job path
+	// (--restore-until) for EVERY source type — but the cluster Cypher path
+	// never reads it (#218). Silently returning latest-state when the user
+	// asked for a point in time is worse than failing: reject up front.
+	if restore.Spec.Source.PointInTime != nil {
+		if isCluster, _, terr := r.isRestoreTargetTrueCluster(ctx, restore); terr == nil && isCluster {
+			return fmt.Errorf("source.pointInTime is not supported for cluster targets (clusterRef %q resolves to a Neo4jEnterpriseCluster) — the cluster restore path seeds from a backup artifact and cannot replay to a point in time. For cluster point-in-time recovery, create a Neo4jDatabase with spec.seedConfig.restoreUntil instead", restore.Spec.ClusterRef)
+		}
+	}
+
 	// Sharded databases must NOT be restored via Neo4jRestore — the Cypher
 	// shape (`CREATE DATABASE … SET GRAPH SHARD … SET PROPERTY SHARDS …`)
 	// is owned by Neo4jShardedDatabase, and the destructive restore path
 	// is gated by `replaceExisting=true` + `force=true` (rule 63) on that
 	// CR. Detect via Neo4jShardedDatabase lookup in the same namespace.
-	shardedDB := &neo4jv1beta1.Neo4jShardedDatabase{}
-	if err := r.Get(ctx, types.NamespacedName{Name: restore.Spec.DatabaseName, Namespace: restore.Namespace}, shardedDB); err == nil {
-		return fmt.Errorf(
-			"database %q is a Neo4jShardedDatabase — use the Neo4jShardedDatabase restore path instead:\n"+
-				"  spec:\n"+
-				"    seedBackupRef: %q\n"+
-				"    replaceExisting: true\n"+
-				"    force: true\n"+
-				"Sharded restores require the SET GRAPH SHARD / SET PROPERTY SHARDS clauses that only CREATE DATABASE accepts; dbms.recreateDatabase doesn't support sharded topology",
-			restore.Spec.DatabaseName, restore.Spec.Source.BackupRef,
-		)
-	} else if !errors.IsNotFound(err) {
+	// Match by the DATABASE name (Neo4jShardedDatabase.spec.name), not just
+	// the CR name — a sharded DB whose CR is named differently previously
+	// escaped this guard into the unsupported recreate path (#218). List is
+	// namespace-scoped and sharded CRs are rare, so this stays cheap.
+	shardedList := &neo4jv1beta1.Neo4jShardedDatabaseList{}
+	if err := r.List(ctx, shardedList, client.InNamespace(restore.Namespace)); err != nil {
 		return fmt.Errorf("failed to check whether %q is a Neo4jShardedDatabase: %w", restore.Spec.DatabaseName, err)
+	}
+	for i := range shardedList.Items {
+		sd := &shardedList.Items[i]
+		if sd.Name == restore.Spec.DatabaseName || sd.Spec.Name == restore.Spec.DatabaseName {
+			return fmt.Errorf(
+				"database %q is a Neo4jShardedDatabase (CR %q) — use the Neo4jShardedDatabase restore path instead:\n"+
+					"  spec:\n"+
+					"    seedBackupRef: %q\n"+
+					"    replaceExisting: true\n"+
+					"    force: true\n"+
+					"Sharded restores require the SET GRAPH SHARD / SET PROPERTY SHARDS clauses that only CREATE DATABASE accepts; dbms.recreateDatabase doesn't support sharded topology",
+				restore.Spec.DatabaseName, sd.Name, restore.Spec.Source.BackupRef,
+			)
+		}
 	}
 
 	return nil
@@ -3006,17 +3032,20 @@ func podTemplateReferencesSecretEnvFrom(tmpl *corev1.PodTemplateSpec, secretName
 }
 
 func (r *Neo4jRestoreReconciler) cleanupRestoreJobs(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore) error {
-	// Delete associated jobs
+	// Delete associated jobs. No component filter: hook Jobs carry
+	// component=<phase>-hook and previously leaked (they now also carry an
+	// ownerRef, so this is belt-and-braces). Background propagation: a bare
+	// API delete of a batch Job ORPHANS its pods (#218).
 	jobList := &batchv1.JobList{}
 	if err := r.List(ctx, jobList, client.InNamespace(restore.Namespace), client.MatchingLabels{
-		"app.kubernetes.io/instance":  restore.Name,
-		"app.kubernetes.io/component": "restore",
+		"app.kubernetes.io/instance": restore.Name,
+		"app.kubernetes.io/name":     "neo4j-restore",
 	}); err != nil {
 		return err
 	}
 
 	for _, job := range jobList.Items {
-		if err := r.Delete(ctx, &job); err != nil && !errors.IsNotFound(err) {
+		if err := r.Delete(ctx, &job, client.PropagationPolicy(metav1.DeletePropagationBackground)); err != nil && !errors.IsNotFound(err) {
 			return err
 		}
 	}
