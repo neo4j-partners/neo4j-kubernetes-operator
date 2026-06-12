@@ -159,3 +159,44 @@ func TestCleanupJobHasNoOwnerReference(t *testing.T) {
 		t.Errorf("cleanup Job must NOT be owner-ref'd to the CR being deleted (GC races the prune script); got: %v", jobs.Items[0].OwnerReferences)
 	}
 }
+
+// #227: PVC-backed backup Jobs must serialize on the chain directory via
+// flock — the operator's Job-creation gate can't stop two CronJob children
+// (FULL parent + DIFF child sharing the dir via chainFromBackup) firing into
+// the same reconcile gap. The lock is fd-based (no nested quoting) and held
+// for the whole command chain; cloud targets have no shared fs to lock.
+func TestBuildBackupCommand_PVCChainDirFlock(t *testing.T) {
+	r := newShardedTestReconciler(t)
+	backup := fieldFindingsBackup(nil)
+
+	cmd, err := r.buildBackupCommand(context.Background(), backup, fieldFindingsCluster("5.26.0-enterprise"))
+	if err != nil {
+		t.Fatalf("buildBackupCommand: %v", err)
+	}
+	wantPrefix := "mkdir -p '/backup/bk/' && exec 9>'/backup/bk/.chain.lock' && flock -w 3600 9 && "
+	if !strings.HasPrefix(cmd, wantPrefix) {
+		t.Fatalf("PVC backup command must take the chain-dir flock before neo4j-admin:\nwant prefix %q\ngot %q", wantPrefix, cmd)
+	}
+
+	// A DIFF child chained into another CR's dir locks the PARENT's chain
+	// root — that's the directory the two CRs contend on.
+	backup.Spec.ChainFromBackup = "daily-full"
+	cmd, err = r.buildBackupCommand(context.Background(), backup, fieldFindingsCluster("5.26.0-enterprise"))
+	if err != nil {
+		t.Fatalf("buildBackupCommand (chained): %v", err)
+	}
+	if !strings.Contains(cmd, "exec 9>'/backup/daily-full/.chain.lock'") {
+		t.Fatalf("chained backup must lock the parent chain root, got %q", cmd)
+	}
+
+	// Cloud targets: no flock (nothing to lock on object storage).
+	backup = fieldFindingsBackup(nil)
+	backup.Spec.Storage = neo4jv1beta1.StorageLocation{Type: "s3", Bucket: "bkt"}
+	cmd, err = r.buildBackupCommand(context.Background(), backup, fieldFindingsCluster("5.26.0-enterprise"))
+	if err != nil {
+		t.Fatalf("buildBackupCommand (s3): %v", err)
+	}
+	if strings.Contains(cmd, "flock") {
+		t.Fatalf("cloud backup must not attempt flock, got %q", cmd)
+	}
+}

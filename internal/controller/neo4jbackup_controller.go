@@ -1341,11 +1341,31 @@ func (r *Neo4jBackupReconciler) buildBackupCommand(ctx context.Context, backup *
 
 	if backup.Spec.Storage.Type == "pvc" {
 		// chainFromBackup feeds the PVC path segment — quote it too (#219).
-		cmd = fmt.Sprintf("mkdir -p %s && %s", shellQuote(toPath), cmd)
+		//
+		// flock on the chain directory (#227): the operator's
+		// waitForChainConcurrencyClear gate runs at Job-CREATION time, but
+		// two CronJobs (a FULL parent + a DIFF child sharing the dir via
+		// chainFromBackup) can still fire their children within the same
+		// reconcile gap and run concurrently — a DIFF reading the chain
+		// while the FULL rewrites it corrupts the chain. The lock is held
+		// by the Job shell (fd 9, auto-released on exit) for the backup AND
+		// the optional validate step; a contender waits up to
+		// chainLockWaitSeconds, then fails the Job (retried per
+		// backoffLimit). PVC-only: cloud chain dirs have no shared
+		// filesystem to lock — there the creation-time gate remains the
+		// only guard. The dot-file never matches the retention pruner's
+		// '*.backup' patterns.
+		lockPath := shellQuote(strings.TrimSuffix(toPath, "/") + "/.chain.lock")
+		cmd = fmt.Sprintf("mkdir -p %s && exec 9>%s && flock -w %d 9 && %s",
+			shellQuote(toPath), lockPath, chainLockWaitSeconds, cmd)
 	}
 
 	return cmd, nil
 }
+
+// chainLockWaitSeconds bounds how long a backup Job waits on the chain-dir
+// flock before giving up (1h — a DIFF queued behind a large in-flight FULL).
+const chainLockWaitSeconds = 3600
 
 // buildToPath returns the --to-path value passed to neo4j-admin. All runs
 // of a single Neo4jBackup CR share this directory — it's how neo4j-admin
