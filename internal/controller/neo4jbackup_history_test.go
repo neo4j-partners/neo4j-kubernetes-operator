@@ -100,9 +100,15 @@ func TestJobToBackupRun(t *testing.T) {
 	})
 
 	t.Run("failed Job → BackupRun without Duration", func(t *testing.T) {
+		// Terminal failure = JobFailed CONDITION; the Failed pod counter alone
+		// means "still retrying" since the #217 fix (BackoffLimit=3).
 		job := &batchv1.Job{
 			ObjectMeta: metav1.ObjectMeta{Name: "my-backup-backup"},
-			Status:     batchv1.JobStatus{Failed: 3, StartTime: &start},
+			Status: batchv1.JobStatus{
+				Failed:     3,
+				StartTime:  &start,
+				Conditions: []batchv1.JobCondition{{Type: batchv1.JobFailed, Status: "True"}},
+			},
 		}
 		run, ok := jobToBackupRun(job, "my-backup")
 		if !ok {
@@ -419,7 +425,12 @@ func TestRecordOneShotBackupRun_FailedJobAppendsToHistory(t *testing.T) {
 			UID:  types.UID("uid-fail"),
 			Name: "my-backup-backup",
 		},
-		Status: batchv1.JobStatus{Failed: 3, StartTime: &start},
+		// Terminal failure = JobFailed condition (#217); counter alone = retrying.
+		Status: batchv1.JobStatus{
+			Failed:     3,
+			StartTime:  &start,
+			Conditions: []batchv1.JobCondition{{Type: batchv1.JobFailed, Status: "True"}},
+		},
 	}
 	backup := &neo4jv1beta1.Neo4jBackup{
 		ObjectMeta: metav1.ObjectMeta{Name: "b", Namespace: ns},
