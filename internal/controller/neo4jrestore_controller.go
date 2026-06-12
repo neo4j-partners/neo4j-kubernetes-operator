@@ -3049,10 +3049,15 @@ func (r *Neo4jRestoreReconciler) pollClusterRestoreOnline(ctx context.Context, r
 		return ctrl.Result{}, nil
 	}
 
-	// Not fully online: the recreate has visibly taken effect — record it so
-	// the next all-online observation is trusted immediately (no grace wait).
-	if merr := r.markCypherRestoreObservedOffline(ctx, restore); merr != nil {
-		logger.V(1).Info("Failed to stamp observed-offline annotation; the grace window still guards acceptance", "error", merr.Error())
+	// Stamp the offline observation ONLY on a positive answer from SHOW
+	// DATABASE saying the database is not fully online (or has no rows —
+	// mid-recreate drop). A query ERROR is not evidence the recreate took
+	// effect — stamping on it would let the next stale all-online answer
+	// bypass the grace guard (Bugbot, PR #265).
+	if stateErr == nil {
+		if merr := r.markCypherRestoreObservedOffline(ctx, restore); merr != nil {
+			logger.V(1).Info("Failed to stamp observed-offline annotation; the grace window still guards acceptance", "error", merr.Error())
+		}
 	}
 
 	if expired {
@@ -3174,7 +3179,7 @@ func (r *Neo4jRestoreReconciler) resolveClusterPVCRestoreURI(
 		// kept the restore Pending forever with no diagnosis. Anchor a
 		// deadline on the first wait and surface the proxy's live condition
 		// while waiting; fail with it once the budget is spent.
-		waitStart, werr := r.markSeedProxyWaitStarted(ctx, restore)
+		waitStart, haveAnchor := r.seedProxyWaitStart(ctx, restore)
 		diagnosis := pvcSeedProxyDiagnosis(ctx, r.Client, restore.Namespace, restore.Name)
 		budget := seedProxyWaitTimeout
 		if restore.Spec.Timeout != "" {
@@ -3182,7 +3187,7 @@ func (r *Neo4jRestoreReconciler) resolveClusterPVCRestoreURI(
 				budget = d
 			}
 		}
-		if werr == nil && time.Since(waitStart) > budget {
+		if haveAnchor && time.Since(waitStart) > budget {
 			msg := fmt.Sprintf("backup-seed-proxy Deployment did not become Ready within %s: %s — a common cause is the backup PVC (%s) being ReadWriteOnce and still attached to another pod/node; fix the cause and re-trigger the restore by bumping the spec",
 				budget, diagnosis, storage.PVC.Name)
 			r.updateRestoreStatus(ctx, restore, StatusFailed, msg)
@@ -3201,6 +3206,25 @@ func (r *Neo4jRestoreReconciler) resolveClusterPVCRestoreURI(
 	}
 
 	return pvcSeedProxyURL(restore.Name, restore.Namespace, backupsPath, filename), ctrl.Result{}, nil
+}
+
+// seedProxyWaitStart resolves the deadline anchor for the seed-proxy wait.
+// Normally the persisted annotation stamp; if persisting it keeps FAILING,
+// fall back to status.StartTime (set when the restore attempt began) so a
+// broken annotation write can't reopen the unbounded wait #227 removed
+// (Bugbot, PR #265). The fallback is conservative — StartTime predates the
+// proxy wait, so it can only expire the wait EARLIER, never extend it.
+// Returns (anchor, false) only when no anchor exists at all.
+func (r *Neo4jRestoreReconciler) seedProxyWaitStart(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore) (time.Time, bool) {
+	if t, err := r.markSeedProxyWaitStarted(ctx, restore); err == nil {
+		return t, true
+	} else {
+		log.FromContext(ctx).V(1).Info("Failed to persist seed-proxy wait anchor; falling back to status.startTime for the deadline", "error", err.Error())
+	}
+	if restore.Status.StartTime != nil {
+		return restore.Status.StartTime.Time, true
+	}
+	return time.Time{}, false
 }
 
 // markSeedProxyWaitStarted stamps (idempotently, conflict-retried) the

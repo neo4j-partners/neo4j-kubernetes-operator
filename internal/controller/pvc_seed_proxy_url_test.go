@@ -18,12 +18,18 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	neo4jv1beta1 "github.com/neo4j-partners/neo4j-kubernetes-operator/api/v1beta1"
 )
@@ -91,4 +97,43 @@ func TestSeedProxyWaitStarted_AnchorLifecycle(t *testing.T) {
 	require.NoError(t, r.Get(ctx, client.ObjectKeyFromObject(restore), persisted))
 	assert.NotContains(t, persisted.Annotations, AnnotationSeedProxyWaitStarted)
 	assert.NotContains(t, restore.Annotations, AnnotationSeedProxyWaitStarted)
+}
+
+// Bugbot PR #265 (medium): a persistently failing annotation write must not
+// reopen the unbounded proxy wait — the anchor falls back to
+// status.startTime, and only a restore with no anchor at all skips expiry.
+func TestSeedProxyWaitStart_FallsBackToStartTimeOnPersistFailure(t *testing.T) {
+	restore := restoreWithBackupRef("r1", "default", "nightly")
+	started := metav1.NewTime(time.Now().Add(-10 * time.Minute))
+	restore.Status.StartTime = &started
+
+	scheme := runtime.NewScheme()
+	require.NoError(t, clientgoscheme.AddToScheme(scheme))
+	require.NoError(t, neo4jv1beta1.AddToScheme(scheme))
+	failingClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(restore).
+		WithInterceptorFuncs(interceptor.Funcs{
+			Update: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+				return errors.New("injected: annotation write always fails")
+			},
+		}).
+		Build()
+	r := &Neo4jRestoreReconciler{Client: failingClient, Scheme: scheme, RequeueAfter: time.Second}
+
+	anchor, have := r.seedProxyWaitStart(context.Background(), restore)
+	require.True(t, have, "StartTime fallback must provide an anchor")
+	assert.True(t, anchor.Equal(started.Time), "fallback anchor must be status.startTime")
+
+	// No annotation, no StartTime: no anchor (expiry skipped this reconcile).
+	restore.Status.StartTime = nil
+	_, have = r.seedProxyWaitStart(context.Background(), restore)
+	assert.False(t, have)
+
+	// Happy path unaffected: with a working client the stamp is the anchor.
+	rOK := newResolvedSourceReconciler(t, restoreWithBackupRef("r2", "default", "nightly"))
+	r2 := restoreWithBackupRef("r2", "default", "nightly")
+	anchor, have = rOK.seedProxyWaitStart(context.Background(), r2)
+	require.True(t, have)
+	assert.WithinDuration(t, time.Now(), anchor, time.Minute)
 }
