@@ -21,7 +21,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 
 	cron "github.com/robfig/cron/v3"
 	apivalidation "k8s.io/apimachinery/pkg/api/validation"
@@ -64,14 +63,13 @@ func ValidateScheduledBackupName(name string) error {
 var maxAgeShorthand = regexp.MustCompile(`^[1-9][0-9]*[dhms]$`)
 
 // isValidMaxAge reports whether a retention maxAge is one the operator can
-// actually apply: either the "<n>{d|h|m|s}" shorthand or a value Go's
-// time.ParseDuration accepts. (time.ParseDuration alone rejects "7d"/"30d".)
+// actually apply: exactly the "<n>{d|h|m|s}" single-unit shorthand that
+// parseFindTimeArg understands. Compound Go durations like "1h30m" used to be
+// accepted here (via time.ParseDuration) but the runtime parser can't read
+// them and silently fell back to 7 days — a validated value MUST be applied
+// as written (#227 item 8).
 func isValidMaxAge(maxAge string) bool {
-	if maxAgeShorthand.MatchString(maxAge) {
-		return true
-	}
-	_, err := time.ParseDuration(maxAge)
-	return err == nil
+	return maxAgeShorthand.MatchString(maxAge)
 }
 
 // BackupValidator validates Neo4j backup configuration for Neo4j 5.26+ compatibility
@@ -502,16 +500,16 @@ func (v *BackupValidator) validateRetentionPolicy(retention *neo4jv1beta1.Retent
 	retentionPath := field.NewPath("spec", "retention")
 
 	// Validate max age format if specified. The runtime (parseFindTimeArg in
-	// the backup controller) accepts a day/hour/minute/second shorthand like
-	// "7d", "30d", "24h" — which Go's time.ParseDuration rejects (no "d"
-	// unit). Accept the shorthand the runtime understands, and also tolerate
-	// any value time.ParseDuration accepts, so the validator never rejects a
-	// maxAge the operator can actually apply.
+	// the backup controller) understands a SINGLE-unit day/hour/minute/second
+	// shorthand like "7d", "30d", "24h". Compound Go durations ("1h30m") are
+	// rejected here: the runtime can't apply them and used to fall back
+	// silently to 7 days — anything the validator passes must be applied
+	// exactly as written.
 	if retention.MaxAge != "" && !isValidMaxAge(retention.MaxAge) {
 		allErrs = append(allErrs, field.Invalid(
 			retentionPath.Child("maxAge"),
 			retention.MaxAge,
-			"invalid duration format. Use a value like '7d', '30d', '24h', or '90m'",
+			"must be a single-unit duration like '7d', '30d', '24h', '90m', or '45s' (compound values such as '1h30m' are not supported)",
 		))
 	}
 
