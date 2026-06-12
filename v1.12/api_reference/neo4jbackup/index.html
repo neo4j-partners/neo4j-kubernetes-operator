@@ -3829,7 +3829,7 @@
 <td><code>tempPath</code></td>
 <td><code>string</code></td>
 <td>❌</td>
-<td>Local directory path for temporary files during backup. When <code>tempStorage</code> is configured, this is set automatically. Only set manually if you are mounting your own volume. Maps to <code>--temp-path</code>. Must be an <strong>absolute</strong> path restricted to <code>A-Z a-z 0-9 . _ / -</code> (validator-enforced).</td>
+<td>Local directory path for temporary files during backup. When <code>tempStorage</code> is configured, this is set automatically. Only set manually if you are mounting your own volume. Maps to <code>--temp-path</code>. Must be an <strong>absolute</strong> path restricted to <code>A-Z a-z 0-9 . _ / -</code> (validator-enforced). The directory must already exist in the container — for staging, prefer <code>tempStorage</code>, which mounts a volume at the path.</td>
 </tr>
 <tr>
 <td><code>tempStorage</code></td>
@@ -3853,7 +3853,7 @@
 <td><code>validate</code></td>
 <td><code>*bool</code></td>
 <td>❌</td>
-<td>When <code>true</code>, runs <code>neo4j-admin backup validate</code> against the artifacts <strong>after</strong> the backup succeeds, recording per-shard recoverability into <code>status.history[].validation</code>. Appended with <code>\|\| true</code> so validate failures don't fail the Job (the backup already succeeded). Pointer type preserves an explicit <code>true</code> or <code>false</code> across updates; nil (default) skips validate.</td>
+<td>When <code>true</code>, runs <code>neo4j-admin backup validate</code> against the artifacts <strong>after</strong> the backup succeeds, recording per-shard recoverability into <code>status.history[].validation</code>. Appended with <code>\|\| true</code> so validate failures don't fail the Job (the backup already succeeded). Pointer type preserves an explicit <code>true</code> or <code>false</code> across updates; nil (default) skips validate. Requires a CalVer (2025.x+) Neo4j image — on 5.26 the <code>neo4j-admin backup validate</code> subcommand does not exist, so the option has no effect and <code>validation</code> stays empty.</td>
 </tr>
 <tr>
 <td><code>parallelDownload</code></td>
