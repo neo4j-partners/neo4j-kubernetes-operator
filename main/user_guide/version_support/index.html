@@ -638,6 +638,34 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#release-quality-the-gates-every-release-passes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Release quality: the gates every release passes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Release quality: the gates every release passes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#platform-compatibility" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Platform compatibility
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#for-maintainers" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -730,6 +758,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -790,6 +822,34 @@
     
   
     Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../examples_gallery/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples Catalog
   
 
     
@@ -930,6 +990,34 @@
     
   
     External Access (LB / NodePort / Ingress / Route)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guides/plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugin Management
   
 
     
@@ -2678,6 +2766,34 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#release-quality-the-gates-every-release-passes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Release quality: the gates every release passes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Release quality: the gates every release passes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#platform-compatibility" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Platform compatibility
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#for-maintainers" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2878,6 +2994,63 @@ are supported by Neo4j at once for ~1.5 years. The operator mirrors that:</p>
 </span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>                             add new LTS                          drop 5.26 here
 </span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>                                                                  (2 anchors again)
 </span></code></pre></div>
+<h2 id="release-quality-the-gates-every-release-passes">Release quality: the gates every release passes<a class="headerlink" href="#release-quality-the-gates-every-release-passes" title="Anchor link to this section">&para;</a></h2>
+<p>"Validated" isn't a claim, it's a pipeline. A release of this operator cannot
+be published unless all of the following pass — they are wired as blocking
+gates, not conventions:</p>
+<table>
+<thead>
+<tr>
+<th>Gate</th>
+<th>What it proves</th>
+<th>When it runs</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Unit suite + drift gate</td>
+<td>Code behavior pinned by ~thousands of unit tests; CRDs, RBAC, Helm chart, and OLM bundle are regenerated and diffed — published manifests always match the code</td>
+<td>Every PR, and again on the release tag</td>
+</tr>
+<tr>
+<td>Core integration suite</td>
+<td>Reconcile contracts (cluster formation, standalone lifecycle, databases, backups) against real Neo4j on Kubernetes — on <strong>both</strong> supported lines (5.26 LTS <em>and</em> the pinned CalVer)</td>
+<td>Every runtime-affecting PR</td>
+</tr>
+<tr>
+<td>Extended integration suite</td>
+<td>The full matrix: scaling with drain, split-brain recovery, the complete backup/restore matrix (PVC, cloud, chains, hooks), sharding</td>
+<td>Nightly, and on the exact commit being tagged</td>
+</tr>
+<tr>
+<td>Install-confidence gate</td>
+<td>Five legs on a fresh cluster: Helm install in cluster <strong>and</strong> namespace-scoped RBAC modes (with a live smoke deployment), Helm upgrade <strong>from the previous published release</strong> including the mandatory CRD refresh, documented-order uninstall with live resources, and the kubectl server-side-apply path</td>
+<td>Inside the release pipeline — <code>build-and-push</code> is blocked until it passes</td>
+</tr>
+<tr>
+<td>Signed supply chain</td>
+<td>Multi-arch (<code>amd64</code>/<code>arm64</code>) images signed with Sigstore Cosign keyless signing; OLM bundle validated with operator-sdk</td>
+<td>Every release</td>
+</tr>
+</tbody>
+</table>
+<p>Verify an image signature yourself:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>cosign<span class="w"> </span>verify<span class="w"> </span>ghcr.io/neo4j-partners/neo4j-kubernetes-operator:&lt;tag&gt;<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span>--certificate-identity-regexp<span class="o">=</span><span class="s1">&#39;github.com/neo4j-partners&#39;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span>--certificate-oidc-issuer<span class="o">=</span><span class="s1">&#39;https://token.actions.githubusercontent.com&#39;</span>
+</span></code></pre></div>
+<h3 id="platform-compatibility">Platform compatibility<a class="headerlink" href="#platform-compatibility" title="Anchor link to this section">&para;</a></h3>
+<ul>
+<li><strong>Kubernetes</strong>: 1.32+ (CI runs the matrix on upstream Kubernetes via Kind).</li>
+<li><strong>Managed clouds (EKS, GKE, AKS)</strong>: supported; cloud backups/restores
+  authenticate via each cloud's workload identity (IRSA / GKE Workload
+  Identity / Azure Workload Identity) or explicit credential Secrets — see
+  <a href="../guides/backup_restore/">Backup &amp; Restore</a> for per-cloud setup.</li>
+<li><strong>OpenShift</strong>: install via OLM/OperatorHub; the chart's security contexts
+  can defer to SCCs (<code>podSecurityContextEnabled: false</code>).</li>
+<li><strong>NetworkPolicy</strong>: enforced policies require a CNI that implements them
+  (e.g. Calico, Cilium); Flannel ignores NetworkPolicies silently.</li>
+</ul>
 <h2 id="for-maintainers">For maintainers<a class="headerlink" href="#for-maintainers" title="Anchor link to this section">&para;</a></h2>
 <p><strong>Validation gates in code:</strong></p>
 <ul>

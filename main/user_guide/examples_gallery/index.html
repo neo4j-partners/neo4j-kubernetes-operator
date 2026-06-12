@@ -12,13 +12,13 @@
         <meta name="author" content="Neo4j Partners">
       
       
-        <link rel="canonical" href="https://neo4j-partners.github.io/neo4j-kubernetes-operator/main/user_guide/getting_started/">
+        <link rel="canonical" href="https://neo4j-partners.github.io/neo4j-kubernetes-operator/main/user_guide/examples_gallery/">
       
       
-        <link rel="prev" href="../..">
+        <link rel="prev" href="../configuration/">
       
       
-        <link rel="next" href="../installation/">
+        <link rel="next" href="../guides/resource_sizing/">
       
       
         
@@ -29,7 +29,7 @@
     
     
       
-        <title>Quickstart - Neo4j Kubernetes Operator</title>
+        <title>Examples Catalog - Neo4j Kubernetes Operator</title>
       
     
     
@@ -82,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#getting-started" class="md-skip">
+        <a href="#examples-catalog" class="md-skip">
           Skip to content
         </a>
       
@@ -122,7 +122,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Quickstart
+              Examples Catalog
             
           </span>
         </div>
@@ -299,10 +299,8 @@
       
   
   
-    
   
   
-  
     
     
       
@@ -329,11 +327,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
         
           
           <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
@@ -354,7 +352,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_2">
             <span class="md-nav__icon md-icon"></span>
             
@@ -369,37 +367,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Quickstart
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../getting_started/" class="md-nav__link">
         
   
   
@@ -415,259 +386,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#prerequisites" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Prerequisites
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#installation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Installation
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#operator-modes" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Operator Modes
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Operator Modes">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#quick-mode-selection" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Quick Mode Selection
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#choosing-your-deployment-type" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Choosing Your Deployment Type
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#deploying-a-standalone-instance-development" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Deploying a Standalone Instance (Development)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#deploying-a-cluster-production" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Deploying a Cluster (Production)
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Deploying a Cluster (Production)">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#option-1-minimal-cluster-recommended-for-testing" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Option 1: Minimal Cluster (Recommended for Testing)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#option-2-multi-server-cluster-recommended-for-production" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Option 2: Multi-Server Cluster (Recommended for Production)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#option-3-custom-configuration" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Option 3: Custom Configuration
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#what-happens-next" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What Happens Next?
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#accessing-your-deployment" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Accessing Your Deployment
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Accessing Your Deployment">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#for-standalone-deployments" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        For Standalone Deployments
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#for-cluster-deployments" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        For Cluster Deployments
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#creating-databases" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Creating Databases
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Creating Databases">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#basic-database-creation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Basic Database Creation
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#database-from-existing-backup-seed-uri" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Database from Existing Backup (Seed URI)
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#next-steps" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Next Steps
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#browse-the-examples" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Browse the examples
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -852,8 +570,10 @@
       
   
   
+    
   
   
+  
     
     
       
@@ -888,11 +608,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
         
           
           <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
@@ -913,7 +633,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_3">
             <span class="md-nav__icon md-icon"></span>
             
@@ -956,10 +676,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../examples_gallery/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples Catalog
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -975,6 +722,147 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#standalone" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Standalone
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#clusters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Clusters
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#external-access" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        External Access
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#databases-sharding" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Databases &amp; Sharding
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#backup-restore" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Backup &amp; Restore
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#users-roles-auth" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Users, Roles &amp; Auth
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#plugins" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plugins
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fleet-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fleet Management
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#end-to-end" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        End-to-End
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See also
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -2817,10 +2705,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#prerequisites" class="md-nav__link">
+  <a href="#standalone" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Prerequisites
+        Standalone
       
     </span>
   </a>
@@ -2828,10 +2716,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#installation" class="md-nav__link">
+  <a href="#clusters" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Installation
+        Clusters
       
     </span>
   </a>
@@ -2839,38 +2727,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#operator-modes" class="md-nav__link">
+  <a href="#external-access" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Operator Modes
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Operator Modes">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#quick-mode-selection" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Quick Mode Selection
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#choosing-your-deployment-type" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Choosing Your Deployment Type
+        External Access
       
     </span>
   </a>
@@ -2878,10 +2738,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#deploying-a-standalone-instance-development" class="md-nav__link">
+  <a href="#databases-sharding" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Deploying a Standalone Instance (Development)
+        Databases &amp; Sharding
       
     </span>
   </a>
@@ -2889,149 +2749,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#deploying-a-cluster-production" class="md-nav__link">
+  <a href="#backup-restore" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Deploying a Cluster (Production)
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Deploying a Cluster (Production)">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#option-1-minimal-cluster-recommended-for-testing" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Option 1: Minimal Cluster (Recommended for Testing)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#option-2-multi-server-cluster-recommended-for-production" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Option 2: Multi-Server Cluster (Recommended for Production)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#option-3-custom-configuration" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Option 3: Custom Configuration
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#what-happens-next" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What Happens Next?
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#accessing-your-deployment" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Accessing Your Deployment
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Accessing Your Deployment">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#for-standalone-deployments" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        For Standalone Deployments
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#for-cluster-deployments" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        For Cluster Deployments
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#creating-databases" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Creating Databases
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Creating Databases">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#basic-database-creation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Basic Database Creation
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#database-from-existing-backup-seed-uri" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Database from Existing Backup (Seed URI)
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#next-steps" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Next Steps
+        Backup &amp; Restore
       
     </span>
   </a>
@@ -3039,10 +2760,65 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#browse-the-examples" class="md-nav__link">
+  <a href="#users-roles-auth" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Browse the examples
+        Users, Roles &amp; Auth
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#plugins" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plugins
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fleet-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fleet Management
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#end-to-end" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        End-to-End
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See also
       
     </span>
   </a>
@@ -3066,7 +2842,7 @@
 
 
   
-    <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/edit/main/docs/user_guide/getting_started.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+    <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/edit/main/docs/user_guide/examples_gallery.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
     </a>
@@ -3074,281 +2850,517 @@
   
 
 
-<h1 id="getting-started">Getting Started<a class="headerlink" href="#getting-started" title="Anchor link to this section">&para;</a></h1>
-<p>This guide will walk you through the process of deploying your first Neo4j Enterprise instance on Kubernetes using the Neo4j Enterprise Operator. You can choose between clustered and standalone deployments based on your needs.</p>
-<h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Anchor link to this section">&para;</a></h2>
-<ul>
-<li>A Kubernetes cluster (v1.32+)</li>
-<li><code>kubectl</code> installed and configured</li>
-<li>Neo4j Enterprise Edition — <strong>5.26 LTS or any CalVer release</strong> (2025.x, 2026.x, …); evaluation license acceptable for testing. See <a href="../version_support/">Supported Neo4j Versions</a> for the full support policy.</li>
-<li>Go 1.26+ (for building from source)</li>
-<li>cert-manager 1.20+ (optional, for TLS-enabled deployments)</li>
-</ul>
-<blockquote>
-<p><strong>Neo4j version:</strong> the examples below pin <code>5.26.0-enterprise</code>, but every one
-works on a CalVer release too — just change the image <code>tag</code> (e.g.
-<code>2026.04-enterprise</code>). The operator auto-detects CalVer (discovery mode,
-Cypher 25, etc.); nothing else in the manifest changes. For the CalVer-only
-default Cypher 25 language on a database, see
-<a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/databases/database-2025x.yaml"><code>examples/databases/database-2025x.yaml</code></a>.</p>
-</blockquote>
-<h2 id="installation">Installation<a class="headerlink" href="#installation" title="Anchor link to this section">&para;</a></h2>
-<p>The recommended path is the Helm chart repository (available from v1.8.0 onwards):</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>helm<span class="w"> </span>repo<span class="w"> </span>add<span class="w"> </span>neo4j-operator<span class="w"> </span>https://neo4j-partners.github.io/neo4j-kubernetes-operator/charts
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>helm<span class="w"> </span>repo<span class="w"> </span>update
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>helm<span class="w"> </span>install<span class="w"> </span>neo4j-operator<span class="w"> </span>neo4j-operator/neo4j-operator<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span>--namespace<span class="w"> </span>neo4j-operator-system<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">  </span>--create-namespace
+<h1 id="examples-catalog">Examples Catalog<a class="headerlink" href="#examples-catalog" title="Anchor link to this section">&para;</a></h1>
+<p>The repository ships a catalog of ready-to-apply YAML manifests under
+<a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/tree/main/examples"><code>examples/</code></a>
+— one file per scenario, covering every CRD the operator manages. Use them as
+copy-paste starting points: pick the closest match, copy it, and adjust image
+tag, storage, and resources for your environment.</p>
+<p>Apply an example straight from GitHub without cloning the repo:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Pin to a release tag for production; use main for the latest examples</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>https://raw.githubusercontent.com/neo4j-partners/neo4j-kubernetes-operator/main/examples/clusters/minimal-cluster.yaml
 </span></code></pre></div>
-<p>For pre-v1.8.0 releases, the chart is also published to the OCI registry:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>helm<span class="w"> </span>install<span class="w"> </span>neo4j-operator<span class="w"> </span>oci://ghcr.io/neo4j-partners/charts/neo4j-operator<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span>--version<span class="w"> </span>&lt;release-version&gt;<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span>--namespace<span class="w"> </span>neo4j-operator-system<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span>--create-namespace
+<p>Or from a local clone:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>examples/clusters/minimal-cluster.yaml
 </span></code></pre></div>
-<p>For all installation methods (kubectl-apply bundle, source clone, <code>make</code> targets for contributor workflows), see the full <a href="../installation/">Installation Guide</a>.</p>
-<h2 id="operator-modes">Operator Modes<a class="headerlink" href="#operator-modes" title="Anchor link to this section">&para;</a></h2>
-<p>The Neo4j Operator supports two operational modes:</p>
-<ul>
-<li><strong>Production Mode</strong> (default): Optimized for stability, security, and monitoring in production environments</li>
-<li><strong>Development Mode</strong>: Optimized for rapid development, debugging, and local testing</li>
-</ul>
-<p>For detailed information about modes, configuration options, and caching strategies, see the <a href="../operator-modes/">Operator Modes Guide</a>.</p>
-<h3 id="quick-mode-selection">Quick Mode Selection<a class="headerlink" href="#quick-mode-selection" title="Anchor link to this section">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Production deployment (uses local image by default)</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>make<span class="w"> </span>deploy-prod
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="c1"># Development deployment (uses local image by default)</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>make<span class="w"> </span>deploy-dev
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="c1"># Alternative: Registry-based deployment</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>make<span class="w"> </span>deploy-prod-registry<span class="w">  </span><span class="c1"># Requires ghcr.io access</span>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>make<span class="w"> </span>deploy-dev-registry<span class="w">   </span><span class="c1"># Requires registry access for dev image</span>
+<div class="admonition note">
+<p class="admonition-title">Create Secrets out-of-band first</p>
+<p>The examples intentionally do <strong>not</strong> define credential Secrets inline —
+re-applying a manifest would overwrite a real password with the placeholder.
+Most examples expect an admin Secret to exist before you apply them:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>kubectl<span class="w"> </span>create<span class="w"> </span>secret<span class="w"> </span>generic<span class="w"> </span>neo4j-admin-secret<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">username</span><span class="o">=</span>neo4j<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">password</span><span class="o">=</span><span class="s1">&#39;&lt;your-secure-password&gt;&#39;</span>
 </span></code></pre></div>
-<p><strong>⚠️ Important:</strong> The operator must always run in-cluster, even for development. This ensures proper DNS resolution and cluster connectivity required for Neo4j cluster formation.</p>
-<h2 id="choosing-your-deployment-type">Choosing Your Deployment Type<a class="headerlink" href="#choosing-your-deployment-type" title="Anchor link to this section">&para;</a></h2>
-<p>The Neo4j Enterprise Operator supports two deployment types:</p>
-<ul>
-<li><strong>Neo4jEnterpriseStandalone</strong>: Single-node deployments for development, testing, and simple production workloads</li>
-<li><strong>Neo4jEnterpriseCluster</strong>: Clustered deployments (minimum 2 servers) for production with high availability and automatic failover</li>
-</ul>
-<h2 id="deploying-a-standalone-instance-development">Deploying a Standalone Instance (Development)<a class="headerlink" href="#deploying-a-standalone-instance-development" title="Anchor link to this section">&para;</a></h2>
-<p>For development, testing, or simple workloads that don't require high availability:</p>
-<ol>
-<li>
-<p><strong>Create admin credentials:</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>kubectl<span class="w"> </span>create<span class="w"> </span>secret<span class="w"> </span>generic<span class="w"> </span>neo4j-admin-secret<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">username</span><span class="o">=</span>neo4j<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">password</span><span class="o">=</span>your-secure-password
-</span></code></pre></div>
-</li>
-<li>
-<p><strong>Deploy the standalone instance:</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>examples/standalone/single-node-standalone.yaml
-</span></code></pre></div>
-</li>
-<li>
-<p><strong>Check deployment status:</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>neo4jenterprisestandalone
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods
-</span></code></pre></div>
-</li>
-<li>
-<p><strong>Access Neo4j Browser:</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>kubectl<span class="w"> </span>port-forward<span class="w"> </span>svc/standalone-neo4j-client<span class="w"> </span><span class="m">7474</span>:7474<span class="w"> </span><span class="m">7687</span>:7687
-</span></code></pre></div>
-<p>Open http://localhost:7474 in your browser.</p>
-</li>
-</ol>
-<h2 id="deploying-a-cluster-production">Deploying a Cluster (Production)<a class="headerlink" href="#deploying-a-cluster-production" title="Anchor link to this section">&para;</a></h2>
-<p>For production workloads requiring high availability and clustering:</p>
-<h3 id="option-1-minimal-cluster-recommended-for-testing">Option 1: Minimal Cluster (Recommended for Testing)<a class="headerlink" href="#option-1-minimal-cluster-recommended-for-testing" title="Anchor link to this section">&para;</a></h3>
-<ol>
-<li>
-<p><strong>Create admin credentials:</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>kubectl<span class="w"> </span>create<span class="w"> </span>secret<span class="w"> </span>generic<span class="w"> </span>neo4j-admin-secret<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">username</span><span class="o">=</span>neo4j<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">password</span><span class="o">=</span>your-secure-password
-</span></code></pre></div>
-</li>
-<li>
-<p><strong>Deploy the minimal cluster:</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>examples/clusters/minimal-cluster.yaml
-</span></code></pre></div>
-</li>
-<li>
-<p><strong>Monitor deployment (2-3 minutes expected):</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/name<span class="o">=</span>neo4j<span class="w"> </span>-w
-</span></code></pre></div>
-</li>
-</ol>
-<h3 id="option-2-multi-server-cluster-recommended-for-production">Option 2: Multi-Server Cluster (Recommended for Production)<a class="headerlink" href="#option-2-multi-server-cluster-recommended-for-production" title="Anchor link to this section">&para;</a></h3>
-<ol>
-<li>
-<p><strong>Create admin credentials:</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>kubectl<span class="w"> </span>create<span class="w"> </span>secret<span class="w"> </span>generic<span class="w"> </span>neo4j-admin-secret<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">username</span><span class="o">=</span>neo4j<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">password</span><span class="o">=</span>your-secure-password
-</span></code></pre></div>
-</li>
-<li>
-<p><strong>Deploy the cluster:</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Five-server production cluster (TLS via cert-manager)</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>examples/clusters/multi-server-cluster.yaml
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="c1"># Three-server cluster, no TLS (simplest for local testing)</span>
-</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>examples/clusters/three-node-simple.yaml
-</span></code></pre></div>
-</li>
-<li>
-<p><strong>Monitor deployment (3-5 minutes expected):</strong></p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/name<span class="o">=</span>neo4j<span class="w"> </span>-w
-</span></code></pre></div>
-</li>
-</ol>
-<h3 id="option-3-custom-configuration">Option 3: Custom Configuration<a class="headerlink" href="#option-3-custom-configuration" title="Anchor link to this section">&para;</a></h3>
-<p>If you need a custom configuration, create your own manifest based on our examples:</p>
-<ol>
-<li><strong>Browse the examples directory:</strong></li>
-<li><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/clusters/minimal-cluster.yaml">Minimal cluster</a> - 2 servers (minimum cluster topology)</li>
-<li><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/clusters/multi-server-cluster.yaml">Multi-server cluster</a> - Production HA with TLS</li>
-<li><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/clusters/three-node-cluster.yaml">Three-node cluster</a> - Three servers with TLS</li>
-<li>
-<p><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/clusters/production-optimized-cluster.yaml">Production optimized cluster</a> - Production with advanced features</p>
-</li>
-<li>
-<p><strong>Copy and customize an example:</strong>
-   <div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>cp<span class="w"> </span>examples/clusters/minimal-cluster.yaml<span class="w"> </span>my-cluster.yaml
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="c1"># Edit my-cluster.yaml to customize settings</span>
-</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>my-cluster.yaml
-</span></code></pre></div></p>
-</li>
-</ol>
-<p>See the <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/tree/main/examples">Examples README</a> for detailed customization guidance.</p>
-<h3 id="what-happens-next">What Happens Next?<a class="headerlink" href="#what-happens-next" title="Anchor link to this section">&para;</a></h3>
-<p>The operator creates a StatefulSet, per-pod PersistentVolumeClaims, headless + client Services, and a ConfigMap with the rendered Neo4j configuration. All Pods start in parallel; cluster formation typically takes 2-3 minutes for a 2-server cluster, 3-5 minutes for larger topologies.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-w
-</span></code></pre></div>
-<h2 id="accessing-your-deployment">Accessing Your Deployment<a class="headerlink" href="#accessing-your-deployment" title="Anchor link to this section">&para;</a></h2>
-<p>Once the pods are in the <code>Running</code> state, you can access your deployment using <code>kubectl port-forward</code>:</p>
-<h3 id="for-standalone-deployments">For Standalone Deployments<a class="headerlink" href="#for-standalone-deployments" title="Anchor link to this section">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># For standalone deployment</span>
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>kubectl<span class="w"> </span>port-forward<span class="w"> </span>service/standalone-neo4j-client<span class="w"> </span><span class="m">7474</span>:7474<span class="w"> </span><span class="m">7687</span>:7687
-</span></code></pre></div>
-<h3 id="for-cluster-deployments">For Cluster Deployments<a class="headerlink" href="#for-cluster-deployments" title="Anchor link to this section">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># For minimal cluster</span>
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>kubectl<span class="w"> </span>port-forward<span class="w"> </span>service/minimal-cluster-client<span class="w"> </span><span class="m">7474</span>:7474<span class="w"> </span><span class="m">7687</span>:7687
-</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>
-</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="c1"># For multi-server cluster (multi-server-cluster.yaml deploys a CR named &quot;multi-primary-cluster&quot;)</span>
-</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>kubectl<span class="w"> </span>port-forward<span class="w"> </span>service/multi-primary-cluster-client<span class="w"> </span><span class="m">7474</span>:7474<span class="w"> </span><span class="m">7687</span>:7687
-</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>
-</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="c1"># For your custom cluster (replace with your cluster name)</span>
-</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a>kubectl<span class="w"> </span>port-forward<span class="w"> </span>service/YOUR-CLUSTER-NAME-client<span class="w"> </span><span class="m">7474</span>:7474<span class="w"> </span><span class="m">7687</span>:7687
-</span></code></pre></div>
-<p>You can then access the Neo4j Browser at <code>http://localhost:7474</code>.</p>
-<h2 id="creating-databases">Creating Databases<a class="headerlink" href="#creating-databases" title="Anchor link to this section">&para;</a></h2>
-<p>Once your cluster is running, you can create and manage databases using the Neo4jDatabase CRD:</p>
-<h3 id="basic-database-creation">Basic Database Creation<a class="headerlink" href="#basic-database-creation" title="Anchor link to this section">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Create a simple database</span>
-</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>-<span class="w"> </span><span class="s">&lt;&lt;EOF</span>
-</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="s">apiVersion: neo4j.neo4j.com/v1beta1</span>
-</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="s">kind: Neo4jDatabase</span>
-</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="s">metadata:</span>
-</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="s">  name: my-database</span>
-</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="s">spec:</span>
-</span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a><span class="s">  clusterRef: minimal-cluster  # or your cluster name</span>
-</span><span id="__span-17-9"><a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a><span class="s">  name: mydb</span>
-</span><span id="__span-17-10"><a id="__codelineno-17-10" name="__codelineno-17-10" href="#__codelineno-17-10"></a><span class="s">  wait: true</span>
-</span><span id="__span-17-11"><a id="__codelineno-17-11" name="__codelineno-17-11" href="#__codelineno-17-11"></a><span class="s">  ifNotExists: true</span>
-</span><span id="__span-17-12"><a id="__codelineno-17-12" name="__codelineno-17-12" href="#__codelineno-17-12"></a><span class="s">EOF</span>
-</span></code></pre></div>
-<h3 id="database-from-existing-backup-seed-uri">Database from Existing Backup (Seed URI)<a class="headerlink" href="#database-from-existing-backup-seed-uri" title="Anchor link to this section">&para;</a></h3>
-<p>If you have existing Neo4j backups in cloud storage, you can create databases directly from them:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="c1"># Create database from S3 backup</span>
-</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>-<span class="w"> </span><span class="s">&lt;&lt;EOF</span>
-</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="s">apiVersion: neo4j.neo4j.com/v1beta1</span>
-</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="s">kind: Neo4jDatabase</span>
-</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="s">metadata:</span>
-</span><span id="__span-18-6"><a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a><span class="s">  name: restored-database</span>
-</span><span id="__span-18-7"><a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a><span class="s">spec:</span>
-</span><span id="__span-18-8"><a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a><span class="s">  clusterRef: minimal-cluster</span>
-</span><span id="__span-18-9"><a id="__codelineno-18-9" name="__codelineno-18-9" href="#__codelineno-18-9"></a><span class="s">  name: restored-db</span>
-</span><span id="__span-18-10"><a id="__codelineno-18-10" name="__codelineno-18-10" href="#__codelineno-18-10"></a><span class="s">  seedURI: &quot;s3://my-backups/database.backup&quot;</span>
-</span><span id="__span-18-11"><a id="__codelineno-18-11" name="__codelineno-18-11" href="#__codelineno-18-11"></a><span class="s">  topology:</span>
-</span><span id="__span-18-12"><a id="__codelineno-18-12" name="__codelineno-18-12" href="#__codelineno-18-12"></a><span class="s">    primaries: 1</span>
-</span><span id="__span-18-13"><a id="__codelineno-18-13" name="__codelineno-18-13" href="#__codelineno-18-13"></a><span class="s">    secondaries: 1</span>
-</span><span id="__span-18-14"><a id="__codelineno-18-14" name="__codelineno-18-14" href="#__codelineno-18-14"></a><span class="s">  wait: true</span>
-</span><span id="__span-18-15"><a id="__codelineno-18-15" name="__codelineno-18-15" href="#__codelineno-18-15"></a><span class="s">  ifNotExists: true</span>
-</span><span id="__span-18-16"><a id="__codelineno-18-16" name="__codelineno-18-16" href="#__codelineno-18-16"></a><span class="s">EOF</span>
-</span></code></pre></div>
-<p>For large datasets that need horizontal scaling, see the <a href="../property_sharding/">Property Sharding guide</a> (Neo4j 2025.12+, via <code>Neo4jShardedDatabase</code>).</p>
-<p>See also:</p>
-<ul>
-<li><a href="../../api_reference/neo4jdatabase/">Neo4jDatabase API Reference</a></li>
-<li><a href="../guides/seed-uri/">Database Seed URI Guide</a></li>
-<li><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/tree/main/examples/databases">Database Examples</a></li>
-</ul>
-<h2 id="next-steps">Next Steps<a class="headerlink" href="#next-steps" title="Anchor link to this section">&para;</a></h2>
-<p>Now that you have Neo4j running on Kubernetes:</p>
-<ol>
-<li><strong>Explore the Neo4j Browser</strong> - Create some sample data and run queries</li>
-<li><strong>Create databases</strong> - Use the Neo4jDatabase CRD to create and manage databases</li>
-<li><strong>Connect your applications</strong> - Use the Bolt endpoint (port 7687) for programmatic access</li>
-<li><strong>Configure monitoring</strong> - Set up monitoring and alerting for your deployment</li>
-<li><strong>Plan backups</strong> - Implement backup strategies for data protection</li>
-<li><strong>Scale your deployment</strong> - For clusters, you can scale up/down based on your needs</li>
-</ol>
-<h2 id="browse-the-examples">Browse the examples<a class="headerlink" href="#browse-the-examples" title="Anchor link to this section">&para;</a></h2>
-<p>Ready-to-apply YAML manifests for every CRD live under <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/tree/main/examples"><code>examples/</code></a>:</p>
+<p>Each file's header comments list any additional Secrets it needs
+(cloud credentials, LDAP bind accounts, Aura tokens, …) with the exact
+<code>kubectl create secret</code> command.</p>
+</div>
+<div class="admonition tip">
+<p class="admonition-title">Neo4j version</p>
+<p>Most examples pin <code>5.26.0-enterprise</code> (the LTS), but every one works on a
+CalVer release too — just change the image <code>tag</code> (e.g. <code>2026.04-enterprise</code>);
+the operator auto-detects CalVer. Property sharding examples require
+Neo4j 2025.12+.</p>
+</div>
+<p>All GitHub links below point at the <code>main</code> branch.</p>
+<h2 id="standalone">Standalone<a class="headerlink" href="#standalone" title="Anchor link to this section">&para;</a></h2>
+<p>Single-node <code>Neo4jEnterpriseStandalone</code> deployments for development, testing, and simple production workloads.</p>
 <table>
 <thead>
 <tr>
-<th>Directory</th>
-<th>What's in it</th>
+<th>Example</th>
+<th>What it shows</th>
+<th>Notable fields</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/tree/main/examples/standalone"><code>standalone/</code></a></td>
-<td>Single-node <code>Neo4jEnterpriseStandalone</code> examples</td>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/standalone/single-node-standalone.yaml"><code>single-node-standalone.yaml</code></a></td>
+<td>Minimal single-node deployment; also works as a <code>Neo4jDatabase</code> target via <code>clusterRef</code></td>
+<td><code>storage.size</code>, <code>resources</code>, default-StorageClass inheritance</td>
 </tr>
 <tr>
-<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/tree/main/examples/clusters"><code>clusters/</code></a></td>
-<td><code>Neo4jEnterpriseCluster</code> topologies (minimal, prod, TLS, fleet-managed)</td>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/standalone/tls-standalone.yaml"><code>tls-standalone.yaml</code></a></td>
+<td>Standalone with cert-manager TLS and native auth</td>
+<td><code>tls.mode: cert-manager</code>, <code>tls.issuerRef</code>, heap/pagecache <code>config</code></td>
 </tr>
 <tr>
-<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/tree/main/examples/databases"><code>databases/</code></a></td>
-<td><code>Neo4jDatabase</code> examples (basic, seed URI, custom topology)</td>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/standalone/ldap-standalone.yaml"><code>ldap-standalone.yaml</code></a></td>
+<td>LDAP + native authentication on a standalone instance</td>
+<td><code>auth.ldap</code>, <code>authorization.systemAccountSecretRef</code></td>
 </tr>
 <tr>
-<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/tree/main/examples/users-roles"><code>users-roles/</code></a></td>
-<td><code>Neo4jUser</code>, <code>Neo4jRole</code>, <code>Neo4jRoleBinding</code>, <code>Neo4jAuthRule</code></td>
-</tr>
-<tr>
-<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/tree/main/examples/plugins"><code>plugins/</code></a></td>
-<td><code>Neo4jPlugin</code> examples (APOC, GDS, Bloom, GenAI, …)</td>
-</tr>
-<tr>
-<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/tree/main/examples/backup-restore"><code>backup-restore/</code></a></td>
-<td><code>Neo4jBackup</code>, <code>Neo4jRestore</code> (PVC, S3, GCS, Azure, PITR)</td>
-</tr>
-<tr>
-<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/tree/main/examples/property_sharding"><code>property_sharding/</code></a></td>
-<td><code>Neo4jShardedDatabase</code> setups</td>
-</tr>
-<tr>
-<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/tree/main/examples/security"><code>security/</code></a></td>
-<td>NetworkPolicy + Kyverno conformance policies</td>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/standalone/standalone-with-trusted-ca.yaml"><code>standalone-with-trusted-ca.yaml</code></a></td>
+<td>Trusting an internal CA (e.g. a corporate OIDC IdP cert) via the operator's JKS truststore; bundles the cert-manager <code>Certificate</code></td>
+<td><code>trustedCASecrets</code>, CalVer image tag</td>
 </tr>
 </tbody>
 </table>
-<p>For more advanced topics, see:</p>
+<h2 id="clusters">Clusters<a class="headerlink" href="#clusters" title="Anchor link to this section">&para;</a></h2>
+<p><code>Neo4jEnterpriseCluster</code> topologies from a 2-server minimum to production-tuned multi-zone deployments.</p>
+<table>
+<thead>
+<tr>
+<th>Example</th>
+<th>What it shows</th>
+<th>Notable fields</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/clusters/minimal-cluster.yaml"><code>minimal-cluster.yaml</code></a></td>
+<td>Smallest possible cluster — 2 servers that self-organize</td>
+<td><code>topology.servers: 2</code>, optional <code>serverModeConstraint</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/clusters/three-node-simple.yaml"><code>three-node-simple.yaml</code></a></td>
+<td>3 servers with TLS disabled — simplest HA setup for local testing without cert-manager</td>
+<td><code>topology.servers: 3</code>, <code>tls.mode: disabled</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/clusters/three-node-cluster.yaml"><code>three-node-cluster.yaml</code></a></td>
+<td>3-server HA cluster with cert-manager TLS and production sizing</td>
+<td><code>tls.mode: cert-manager</code>, <code>resources</code> (4Gi/1 CPU requests)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/clusters/tls-cluster.yaml"><code>tls-cluster.yaml</code></a></td>
+<td>Minimal 2-server cluster with cert-manager TLS</td>
+<td><code>tls.issuerRef</code>, <code>auth.authenticationProviders</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/clusters/multi-server-cluster.yaml"><code>multi-server-cluster.yaml</code></a></td>
+<td>5-server production cluster with TLS and automatic role organization (CR name: <code>multi-primary-cluster</code>)</td>
+<td><code>topology.servers: 5</code>, production <code>resources</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/clusters/production-optimized-cluster.yaml"><code>production-optimized-cluster.yaml</code></a></td>
+<td>Production tuning — transaction memory limits, JVM settings, data retention; bundles a <code>Neo4jDatabase</code></td>
+<td><code>storage.retentionPolicy: Retain</code>, tuned <code>config</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/clusters/cluster-with-read-replicas.yaml"><code>cluster-with-read-replicas.yaml</code></a></td>
+<td>5 servers sized for read-heavy workloads so databases can run secondary (read) replicas</td>
+<td><code>topology.servers: 5</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/clusters/topology-placement-cluster.yaml"><code>topology-placement-cluster.yaml</code></a></td>
+<td>Multi-zone placement with spread constraints and hard anti-affinity</td>
+<td><code>topology.placement.topologySpread</code>, <code>placement.antiAffinity</code>, <code>availabilityZones</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/clusters/auth-example.yaml"><code>auth-example.yaml</code></a></td>
+<td>One cluster with native auth, plus commented LDAP and OIDC/SSO <code>auth:</code> variants to swap in</td>
+<td><code>auth.adminSecret</code>, commented <code>auth.ldap</code> / <code>auth.oidc</code> blocks</td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/clusters/cluster-with-trusted-cas.yaml"><code>cluster-with-trusted-cas.yaml</code></a></td>
+<td>Trusting internal CAs declaratively (cert-manager <code>Certificate</code> → Secret → JVM truststore)</td>
+<td><code>trustedCASecrets</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/clusters/storage-expansion.yaml"><code>storage-expansion.yaml</code></a></td>
+<td>Online PVC expansion walkthrough — patch <code>storage.size</code> on a running cluster</td>
+<td><code>storage.size</code>, requires <code>allowVolumeExpansion: true</code> StorageClass</td>
+</tr>
+</tbody>
+</table>
+<h2 id="external-access">External Access<a class="headerlink" href="#external-access" title="Anchor link to this section">&para;</a></h2>
+<p>Exposing a cluster outside Kubernetes via the four supported Service exposure modes. These paths need real cluster networking — validate them in your own environment.</p>
+<table>
+<thead>
+<tr>
+<th>Example</th>
+<th>What it shows</th>
+<th>Notable fields</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/clusters/loadbalancer-cluster.yaml"><code>loadbalancer-cluster.yaml</code></a></td>
+<td>LoadBalancer Service for cloud environments (AWS, GCP, Azure)</td>
+<td><code>service.type: LoadBalancer</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/clusters/nodeport-cluster.yaml"><code>nodeport-cluster.yaml</code></a></td>
+<td>NodePort exposure for on-premises or development environments</td>
+<td><code>service.type: NodePort</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/clusters/ingress-cluster.yaml"><code>ingress-cluster.yaml</code></a></td>
+<td>Neo4j Browser behind an Ingress controller (e.g. nginx) with cert-manager TLS</td>
+<td><code>service.ingress</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/clusters/route-cluster.yaml"><code>route-cluster.yaml</code></a></td>
+<td>OpenShift Route with edge TLS termination over a ClusterIP Service</td>
+<td><code>service.route.enabled</code>, <code>route.tls.termination</code>, <code>securityContext</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="databases-sharding">Databases &amp; Sharding<a class="headerlink" href="#databases-sharding" title="Anchor link to this section">&para;</a></h2>
+<p><code>Neo4jDatabase</code> creation, topology, and seed-from-backup, plus <code>Neo4jShardedDatabase</code> property sharding (Neo4j 2025.12+).</p>
+<table>
+<thead>
+<tr>
+<th>Example</th>
+<th>What it shows</th>
+<th>Notable fields</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/databases/database-2025x.yaml"><code>database-2025x.yaml</code></a></td>
+<td>CalVer-only default Cypher language on a database</td>
+<td><code>defaultCypherLanguage: "25"</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/databases/database-standalone.yaml"><code>database-standalone.yaml</code></a></td>
+<td>Two databases created on a <code>Neo4jEnterpriseStandalone</code> via the same <code>clusterRef</code> field</td>
+<td><code>clusterRef</code>, <code>ifNotExists</code>, <code>wait</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/databases/database-with-topology.yaml"><code>database-with-topology.yaml</code></a></td>
+<td>Custom database topology distributed across cluster servers</td>
+<td><code>topology.primaries: 2</code>, <code>topology.secondaries: 1</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/databases/database-from-s3-seed.yaml"><code>database-from-s3-seed.yaml</code></a></td>
+<td>Seeding a database from an S3 backup with explicit credentials</td>
+<td><code>seedURI: s3://…</code>, <code>seedCredentials.secretRef</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/databases/database-from-gcs-seed.yaml"><code>database-from-gcs-seed.yaml</code></a></td>
+<td>Seeding from Google Cloud Storage using workload identity, with point-in-time <code>restoreUntil</code></td>
+<td><code>seedURI: gs://…</code>, <code>seedConfig.restoreUntil: "txId:…"</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/databases/database-from-azure-seed.yaml"><code>database-from-azure-seed.yaml</code></a></td>
+<td>Seeding from Azure Blob Storage — storage-key and SAS-token auth variants</td>
+<td><code>seedURI: azb://…</code>, <code>seedCredentials.secretRef</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/databases/database-from-http-seed.yaml"><code>database-from-http-seed.yaml</code></a></td>
+<td>Seeding over HTTPS (authenticated), HTTP, and FTP — three variants</td>
+<td><code>seedURI: https://…</code>, <code>seedCredentials</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/databases/database-dump-vs-backup-seed.yaml"><code>database-dump-vs-backup-seed.yaml</code></a></td>
+<td>Side-by-side comparison of seeding from <code>.dump</code> vs <code>.backup</code> files</td>
+<td><code>seedURI</code>, <code>seedConfig.config</code> (compression, validation, buffer size)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/property_sharding/basic-property-sharding.yaml"><code>basic-property-sharding.yaml</code></a></td>
+<td>Minimal working property-sharding setup — cluster + <code>Neo4jShardedDatabase</code></td>
+<td><code>propertySharding.enabled</code>, 4Gi+ memory per server</td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/property_sharding/development-property-sharding.yaml"><code>development-property-sharding.yaml</code></a></td>
+<td>Property sharding at minimum viable resources for dev/learning</td>
+<td><code>propertySharding</code>, dedicated namespace</td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/property_sharding/advanced-property-sharding.yaml"><code>advanced-property-sharding.yaml</code></a></td>
+<td>Production-grade sharding — high-performance sizing, TLS, monitoring</td>
+<td><code>propertySharding</code>, <code>tls</code>, <code>monitoring</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/property_sharding/property-sharding-with-backup.yaml"><code>property-sharding-with-backup.yaml</code></a></td>
+<td>Backing up a sharded database with a <code>Neo4jBackup</code> CR</td>
+<td><code>Neo4jShardedDatabase</code> + <code>Neo4jBackup</code> target</td>
+</tr>
+</tbody>
+</table>
+<h2 id="backup-restore">Backup &amp; Restore<a class="headerlink" href="#backup-restore" title="Anchor link to this section">&para;</a></h2>
+<p>Job-per-CR <code>Neo4jBackup</code> (one-shot and scheduled) and <code>Neo4jRestore</code> scenarios. See the <a href="../guides/backup_restore/">Backup &amp; Restore guide</a> for the concepts.</p>
+<table>
+<thead>
+<tr>
+<th>Example</th>
+<th>What it shows</th>
+<th>Notable fields</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/backup-restore/backup-pvc-simple.yaml"><code>backup-pvc-simple.yaml</code></a></td>
+<td>One-shot backup of every database on an instance to a PVC</td>
+<td><code>target.kind: Cluster</code>, <code>storage.type: pvc</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/backup-restore/backup-s3-basic.yaml"><code>backup-s3-basic.yaml</code></a></td>
+<td>S3 backup — explicit-credentials and IRSA/workload-identity variants</td>
+<td><code>storage.cloud.credentialsSecretRef</code>, <code>cloud.identity.autoCreate</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/backup-restore/backup-scheduled-daily.yaml"><code>backup-scheduled-daily.yaml</code></a></td>
+<td>Scheduled daily backup to S3 (plus a weekly variant)</td>
+<td><code>schedule: "0 2 * * *"</code> (flat cron string), <code>retention</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/backup-restore/backup-incremental.yaml"><code>backup-incremental.yaml</code></a></td>
+<td>Incremental (AUTO) backups of one database every 6 hours</td>
+<td><code>target.kind: Database</code>, <code>options.backupType: AUTO</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/backup-restore/backup-with-type.yaml"><code>backup-with-type.yaml</code></a></td>
+<td>Explicit FULL backups with compression, page-cache sizing, and retention</td>
+<td><code>options.backupType: FULL</code>, <code>options.pageCache</code>, <code>retention.maxAge/maxCount</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/backup-restore/backup-minio.yaml"><code>backup-minio.yaml</code></a></td>
+<td>Backups to MinIO / any S3-compatible store — full, scheduled, and external-TLS-endpoint variants</td>
+<td><code>cloud.endpointURL</code>, <code>cloud.forcePathStyle: true</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/backup-restore/restore-from-backup.yaml"><code>restore-from-backup.yaml</code></a></td>
+<td>Restore from a <code>Neo4jBackup</code> reference, with pre/post Cypher hooks and a post-restore validation Job variant (hooks are standalone-only)</td>
+<td><code>source.backupRef</code>, <code>options.preRestore</code>/<code>postRestore</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/backup-restore/restore-overwrite.yaml"><code>restore-overwrite.yaml</code></a></td>
+<td>Destructive restore over an existing database on a cluster (Cypher/seedURI path — no Job)</td>
+<td><code>force: true</code>, <code>options.replaceExisting: true</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/backup-restore/restore-pitr-basic.yaml"><code>restore-pitr-basic.yaml</code></a></td>
+<td>Point-in-time recovery on a standalone target, plus an advanced storage-based variant with hooks</td>
+<td><code>source.type: pitr</code>, <code>pointInTime</code>, <code>pitr.logStorage</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/backup-restore/pitr-setup-complete.yaml"><code>pitr-setup-complete.yaml</code></a></td>
+<td>End-to-end PITR environment — base backup with validation, log-retention notes, and the restore</td>
+<td><code>options.validate</code>, <code>options.includeMetadata</code>, <code>source.type: pitr</code></td>
+</tr>
+</tbody>
+</table>
+<div class="admonition warning">
+<p class="admonition-title">PITR is standalone-only via <code>Neo4jRestore</code></p>
+<p><code>source.type: pitr</code> runs <code>neo4j-admin database restore --restore-until</code> as a
+Job and applies only to <code>Neo4jEnterpriseStandalone</code> targets. For a cluster,
+do point-in-time recovery by creating a <code>Neo4jDatabase</code> with
+<code>seedConfig.restoreUntil</code> instead — see the database seed examples above.</p>
+</div>
+<h2 id="users-roles-auth">Users, Roles &amp; Auth<a class="headerlink" href="#users-roles-auth" title="Anchor link to this section">&para;</a></h2>
+<p>Declarative user, role, and access management via <code>Neo4jUser</code>, <code>Neo4jRole</code>, <code>Neo4jRoleBinding</code>, and <code>Neo4jAuthRule</code>. Numbered for a natural reading order; see <a href="../user_role_management/">User &amp; Role Management</a>.</p>
+<table>
+<thead>
+<tr>
+<th>Example</th>
+<th>What it shows</th>
+<th>Notable fields</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/users-roles/01-readonly-user.yaml"><code>01-readonly-user.yaml</code></a></td>
+<td>Read-only application user bound to the built-in <code>reader</code> role</td>
+<td><code>passwordSecretRef</code>, <code>roles: [reader]</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/users-roles/02-custom-role-with-user.yaml"><code>02-custom-role-with-user.yaml</code></a></td>
+<td>The canonical pattern — privileges on a <code>Neo4jRole</code>, user references it by name</td>
+<td><code>Neo4jRole.spec.privileges</code> (GRANT/DENY ending in <code>TO &lt;role&gt;</code>)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/users-roles/03-suspended-user.yaml"><code>03-suspended-user.yaml</code></a></td>
+<td>Suspending a user during a security incident without deleting the CR</td>
+<td><code>accountStatus: suspended</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/users-roles/04-external-auth.yaml"><code>04-external-auth.yaml</code></a></td>
+<td>User authenticated only via OIDC and LDAP providers — no native password</td>
+<td><code>externalAuth[].provider/id</code>, no <code>passwordSecretRef</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/users-roles/05-adopt-builtin.yaml"><code>05-adopt-builtin.yaml</code></a></td>
+<td>Adopting the built-in <code>editor</code> role to tighten its privileges (never dropped on CR delete)</td>
+<td><code>adoptBuiltin: true</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/users-roles/06-rolebinding-sso-user.yaml"><code>06-rolebinding-sso-user.yaml</code></a></td>
+<td>Granting roles to an externally-provisioned (SSO/LDAP) user the operator does not manage</td>
+<td><code>Neo4jRoleBinding.spec.roles</code>, optional <code>enforceExclusive</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/users-roles/07-authrule-abac.yaml"><code>07-authrule-abac.yaml</code></a></td>
+<td>Attribute-based access control — mapping OIDC token claims to roles at login (Neo4j 2026.03+)</td>
+<td><code>Neo4jAuthRule</code> condition expressions over token claims</td>
+</tr>
+</tbody>
+</table>
+<h2 id="plugins">Plugins<a class="headerlink" href="#plugins" title="Anchor link to this section">&para;</a></h2>
+<p><code>Neo4jPlugin</code> examples — <code>clusterRef</code> can point at either a cluster or a standalone.</p>
+<table>
+<thead>
+<tr>
+<th>Example</th>
+<th>What it shows</th>
+<th>Notable fields</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/plugins/apoc-plugin-example.yaml"><code>apoc-plugin-example.yaml</code></a></td>
+<td>APOC with env-var-based configuration (the 5.26+ way — APOC config no longer lives in <code>neo4j.conf</code>)</td>
+<td><code>config.apoc.*</code> → <code>NEO4J_APOC_*</code> env vars</td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/plugins/gds-plugin-example.yaml"><code>gds-plugin-example.yaml</code></a></td>
+<td>Graph Data Science with automatic procedure allowlisting</td>
+<td><code>source.type: community</code>, <code>gds.enterprise.license_file</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/plugins/bloom-plugin-example.yaml"><code>bloom-plugin-example.yaml</code></a></td>
+<td>Bloom with its required <code>neo4j.conf</code> settings</td>
+<td><code>dbms.bloom.license_file</code>, role restriction</td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/plugins/genai-plugin-example.yaml"><code>genai-plugin-example.yaml</code></a></td>
+<td>GenAI plugin for vector embeddings and AI integrations (download needs internet egress)</td>
+<td><code>name: genai</code>, <code>source.type: official</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/plugins/standalone-plugin-example.yaml"><code>standalone-plugin-example.yaml</code></a></td>
+<td>GDS on a standalone deployment, with a plugin dependency declaration</td>
+<td><code>dependencies[].versionConstraint</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/plugins/cluster-plugin-example.yaml"><code>cluster-plugin-example.yaml</code></a></td>
+<td><strong>Deprecated</strong> legacy APOC config approach, kept for reference — use <code>apoc-plugin-example.yaml</code> instead</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<h2 id="security">Security<a class="headerlink" href="#security" title="Anchor link to this section">&para;</a></h2>
+<p>Workload-namespace NetworkPolicies and Kyverno conformance policies (the operator validates inline; these are defence-in-depth at admission time).</p>
+<table>
+<thead>
+<tr>
+<th>Example</th>
+<th>What it shows</th>
+<th>Notable fields</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/security/networkpolicy-cluster.yaml"><code>networkpolicy-cluster.yaml</code></a></td>
+<td>Hand-applied NetworkPolicy for a cluster namespace — Bolt/HTTP for clients, discovery/RAFT pod-to-pod, metrics for the operator, default-deny egress</td>
+<td>Ports 7687/7474/7473, 6000/7000, 2004</td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/security/networkpolicy-standalone.yaml"><code>networkpolicy-standalone.yaml</code></a></td>
+<td>Same shape for the single-pod standalone case (no intra-cluster ports)</td>
+<td><code>podSelector</code> on <code>app: &lt;standalone-name&gt;</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/security/policies/01-enterprise-image.yaml"><code>policies/01-enterprise-image.yaml</code></a></td>
+<td>Kyverno audit: image tag must be an Enterprise image</td>
+<td><code>validationFailureAction: Audit</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/security/policies/02-tls-required.yaml"><code>policies/02-tls-required.yaml</code></a></td>
+<td>Kyverno audit: flags CRs with TLS disabled</td>
+<td><code>spec.tls.mode</code> check</td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/security/policies/03-monitoring-enabled.yaml"><code>policies/03-monitoring-enabled.yaml</code></a></td>
+<td>Kyverno audit: recommends <code>spec.monitoring</code> so diagnostics and health conditions populate</td>
+<td><code>spec.monitoring</code> check</td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/security/policies/04-runAsNonRoot-not-disabled.yaml"><code>policies/04-runAsNonRoot-not-disabled.yaml</code></a></td>
+<td>Kyverno audit: catches <code>securityContext</code> overrides that disable <code>runAsNonRoot</code></td>
+<td><code>spec.securityContext</code> check</td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/security/policies/05-resource-limits.yaml"><code>policies/05-resource-limits.yaml</code></a></td>
+<td>Kyverno audit: requires memory and CPU limits (Enterprise needs ≥ 1.5Gi)</td>
+<td><code>spec.resources.limits</code> check</td>
+</tr>
+</tbody>
+</table>
+<h2 id="fleet-management">Fleet Management<a class="headerlink" href="#fleet-management" title="Anchor link to this section">&para;</a></h2>
+<p>Registering self-managed deployments with <a href="../aura_fleet_management/">Aura Fleet Management</a> so they appear in the Aura console. Requires a token from your Aura tenant.</p>
+<table>
+<thead>
+<tr>
+<th>Example</th>
+<th>What it shows</th>
+<th>Notable fields</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/fleet-management/cluster-with-fleet-management.yaml"><code>cluster-with-fleet-management.yaml</code></a></td>
+<td>3-server cluster registered with Aura Fleet Management</td>
+<td><code>auraFleetManagement.enabled</code>, <code>tokenSecretRef.name/key</code></td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/fleet-management/standalone-with-fleet-management.yaml"><code>standalone-with-fleet-management.yaml</code></a></td>
+<td>Single-node deployment registered with Aura Fleet Management</td>
+<td><code>auraFleetManagement.enabled</code>, <code>tokenSecretRef.name</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="end-to-end">End-to-End<a class="headerlink" href="#end-to-end" title="Anchor link to this section">&para;</a></h2>
+<p>Multi-resource scenarios that compose the CRDs above into complete environments.</p>
+<table>
+<thead>
+<tr>
+<th>Example</th>
+<th>What it shows</th>
+<th>Notable fields</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/end-to-end/complete-deployment.yaml"><code>complete-deployment.yaml</code></a></td>
+<td>Full production stack — namespace, TLS cluster, two databases, two backups, a plugin, and Prometheus <code>ServiceMonitor</code> wiring</td>
+<td>Cluster + <code>Neo4jDatabase</code> + <code>Neo4jBackup</code> + <code>Neo4jPlugin</code> + monitoring</td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/end-to-end/development-workflow.yaml"><code>development-workflow.yaml</code></a></td>
+<td>Lightweight dev setup — standalone instance plus a dev database and a separate integration-test database, with cypher-shell workflow notes</td>
+<td>Standalone + two <code>Neo4jDatabase</code> CRs</td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/end-to-end/disaster-recovery.yaml"><code>disaster-recovery.yaml</code></a></td>
+<td>DR proactive phase — scheduled compressed off-site S3 backup, with recovery-phase restore snippets in comments</td>
+<td><code>Neo4jBackup</code> every 4 hours, commented <code>Neo4jRestore</code> recipes</td>
+</tr>
+<tr>
+<td><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/examples/end-to-end/multi-tenancy.yaml"><code>multi-tenancy.yaml</code></a></td>
+<td>Logical multi-tenancy — one shared cluster, a database per tenant, per-tenant backup cadence; honest about what it does <em>not</em> isolate</td>
+<td>Cluster + four <code>Neo4jDatabase</code> + three <code>Neo4jBackup</code> CRs</td>
+</tr>
+</tbody>
+</table>
+<h2 id="see-also">See also<a class="headerlink" href="#see-also" title="Anchor link to this section">&para;</a></h2>
 <ul>
-<li><a href="../configuration/">Configuration Guide</a> - Advanced configuration options</li>
-<li><a href="../security/">Security Guide</a> - Authentication, TLS, and security best practices</li>
-<li><a href="../performance/">Performance Guide</a> - Optimization and scaling strategies</li>
-<li><a href="../migration_guide/">Migration Guide</a> - Migrating from previous versions</li>
+<li><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/tree/main/examples">Examples README</a> — prerequisites, customization, and topology guidance</li>
+<li><a href="../getting_started/">Getting Started</a> — first deployment walkthrough</li>
+<li><a href="../configuration/">Configuration Guide</a> — every spec field explained</li>
 </ul>
 
 
@@ -3387,7 +3399,7 @@ default Cypher 25 language on a database, see
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../.." class="md-footer__link md-footer__link--prev" aria-label="Previous: Home">
+          <a href="../configuration/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Configuration">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -3397,20 +3409,20 @@ default Cypher 25 language on a database, see
                 Previous
               </span>
               <div class="md-ellipsis">
-                Home
+                Configuration
               </div>
             </div>
           </a>
         
         
           
-          <a href="../installation/" class="md-footer__link md-footer__link--next" aria-label="Next: Installation">
+          <a href="../guides/resource_sizing/" class="md-footer__link md-footer__link--next" aria-label="Next: Resource Sizing">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Installation
+                Resource Sizing
               </div>
             </div>
             <div class="md-footer__button md-icon">

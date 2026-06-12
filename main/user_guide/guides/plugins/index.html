@@ -12,13 +12,13 @@
         <meta name="author" content="Neo4j Partners">
       
       
-        <link rel="canonical" href="https://neo4j-partners.github.io/neo4j-kubernetes-operator/main/user_guide/guides/seed-uri/">
+        <link rel="canonical" href="https://neo4j-partners.github.io/neo4j-kubernetes-operator/main/user_guide/guides/plugins/">
       
       
-        <link rel="prev" href="../plugins/">
+        <link rel="prev" href="../../external_access/">
       
       
-        <link rel="next" href="../../aura_fleet_management/">
+        <link rel="next" href="../seed-uri/">
       
       
         
@@ -29,7 +29,7 @@
     
     
       
-        <title>Seed URI - Neo4j Kubernetes Operator</title>
+        <title>Plugin Management - Neo4j Kubernetes Operator</title>
       
     
     
@@ -82,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#neo4j-database-seed-uri-feature-guide" class="md-skip">
+        <a href="#plugin-management" class="md-skip">
           Skip to content
         </a>
       
@@ -122,7 +122,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Seed URI
+              Plugin Management
             
           </span>
         </div>
@@ -844,34 +844,6 @@
                 
   
   
-  
-  
-    <li class="md-nav__item">
-      <a href="../plugins/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Plugin Management
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
     
   
   
@@ -891,7 +863,7 @@
   <span class="md-ellipsis">
     
   
-    Seed URI
+    Plugin Management
   
 
     
@@ -909,7 +881,7 @@
   <span class="md-ellipsis">
     
   
-    Seed URI
+    Plugin Management
   
 
     
@@ -935,10 +907,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#overview" class="md-nav__link">
+  <a href="#overview-choosing-an-install-mode" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Overview
+        Overview: choosing an install mode
       
     </span>
   </a>
@@ -946,33 +918,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#supported-uri-schemes" class="md-nav__link">
+  <a href="#quick-starts" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Supported URI Schemes
+        Quick starts
       
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#basic-usage" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Basic Usage
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Basic Usage">
+    <nav class="md-nav" aria-label="Quick starts">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#simple-seed-uri-database" class="md-nav__link">
+  <a href="#apoc-works-offline" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Simple Seed URI Database
+        APOC (works offline)
       
     </span>
   </a>
@@ -980,10 +941,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#seeding-a-sharded-database" class="md-nav__link">
+  <a href="#graph-data-science-gds" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Seeding a Sharded Database
+        Graph Data Science (GDS)
       
     </span>
   </a>
@@ -991,10 +952,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#pvc-backed-seeds" class="md-nav__link">
+  <a href="#bloom-commercial-license-required" class="md-nav__link">
     <span class="md-ellipsis">
       
-        PVC-backed seeds
+        Bloom (commercial license required)
       
     </span>
   </a>
@@ -1007,22 +968,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#authentication-methods" class="md-nav__link">
+  <a href="#custom-and-url-plugins" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Authentication Methods
+        Custom and URL plugins
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Authentication Methods">
+    <nav class="md-nav" aria-label="Custom and URL plugins">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#1-system-wide-authentication-recommended" class="md-nav__link">
+  <a href="#1-the-url-must-be-https" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. System-Wide Authentication (Recommended)
+        1. The URL must be https://
       
     </span>
   </a>
@@ -1030,10 +991,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#2-explicit-credentials-via-secrets" class="md-nav__link">
+  <a href="#2-a-checksum-is-required" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. Explicit Credentials via Secrets
+        2. A checksum is required
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#private-endpoints-authsecret" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Private endpoints (authSecret)
       
     </span>
   </a>
@@ -1046,22 +1018,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#credential-requirements-by-provider" class="md-nav__link">
+  <a href="#supply-chain-security" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Credential Requirements by Provider
+        Supply-chain security
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Credential Requirements by Provider">
+    <nav class="md-nav" aria-label="Supply-chain security">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#amazon-s3" class="md-nav__link">
+  <a href="#installmode-prebaked-recommended-for-production" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Amazon S3
+        installMode: PreBaked (recommended for production)
       
     </span>
   </a>
@@ -1069,10 +1041,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#google-cloud-storage" class="md-nav__link">
+  <a href="#installmode-verifieddownload" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Google Cloud Storage
+        installMode: VerifiedDownload
       
     </span>
   </a>
@@ -1080,21 +1052,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#azure-blob-storage" class="md-nav__link">
+  <a href="#duplicate-cr-protection-all-modes" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Azure Blob Storage
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#httphttpsftp" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        HTTP/HTTPS/FTP
+        Duplicate-CR protection (all modes)
       
     </span>
   </a>
@@ -1107,110 +1068,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#advanced-configuration" class="md-nav__link">
+  <a href="#plugin-configuration" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Advanced Configuration
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Advanced Configuration">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#point-in-time-recovery-neo4j-2025x-only" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Point-in-Time Recovery (Neo4j 2025.x only)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#cloudseedprovider-options" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        CloudSeedProvider Options
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#file-format-considerations" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        File Format Considerations
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="File Format Considerations">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#backup-files-backup-recommended" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Backup Files (.backup) - Recommended
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#dump-files-dump-legacy" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Dump Files (.dump) - Legacy
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#database-topology-with-seed-uris" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Database Topology with Seed URIs
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#conflict-prevention" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Conflict Prevention
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#status-and-events" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Status and Events
+        Plugin configuration
       
     </span>
   </a>
@@ -1230,10 +1091,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#common-issues" class="md-nav__link">
+  <a href="#validator-rejections-statusphase-invalid" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Common Issues
+        Validator rejections (status.phase: Invalid)
       
     </span>
   </a>
@@ -1241,10 +1102,32 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#debugging-commands" class="md-nav__link">
+  <a href="#verifying-the-plugin-landed" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Debugging Commands
+        Verifying the plugin landed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#events-to-look-for" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Events to look for
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#other-common-issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Other common issues
       
     </span>
   </a>
@@ -1257,43 +1140,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#security-best-practices" class="md-nav__link">
+  <a href="#see-also" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Security Best Practices
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#examples" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Examples
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#neo4j-version-compatibility" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Neo4j Version Compatibility
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#migration-from-s3seedprovider" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Migration from S3SeedProvider
+        See also
       
     </span>
   </a>
@@ -1304,6 +1154,34 @@
   
 </nav>
       
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../seed-uri/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Seed URI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -2950,10 +2828,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#overview" class="md-nav__link">
+  <a href="#overview-choosing-an-install-mode" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Overview
+        Overview: choosing an install mode
       
     </span>
   </a>
@@ -2961,33 +2839,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#supported-uri-schemes" class="md-nav__link">
+  <a href="#quick-starts" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Supported URI Schemes
+        Quick starts
       
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#basic-usage" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Basic Usage
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Basic Usage">
+    <nav class="md-nav" aria-label="Quick starts">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#simple-seed-uri-database" class="md-nav__link">
+  <a href="#apoc-works-offline" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Simple Seed URI Database
+        APOC (works offline)
       
     </span>
   </a>
@@ -2995,10 +2862,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#seeding-a-sharded-database" class="md-nav__link">
+  <a href="#graph-data-science-gds" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Seeding a Sharded Database
+        Graph Data Science (GDS)
       
     </span>
   </a>
@@ -3006,10 +2873,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#pvc-backed-seeds" class="md-nav__link">
+  <a href="#bloom-commercial-license-required" class="md-nav__link">
     <span class="md-ellipsis">
       
-        PVC-backed seeds
+        Bloom (commercial license required)
       
     </span>
   </a>
@@ -3022,22 +2889,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#authentication-methods" class="md-nav__link">
+  <a href="#custom-and-url-plugins" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Authentication Methods
+        Custom and URL plugins
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Authentication Methods">
+    <nav class="md-nav" aria-label="Custom and URL plugins">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#1-system-wide-authentication-recommended" class="md-nav__link">
+  <a href="#1-the-url-must-be-https" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. System-Wide Authentication (Recommended)
+        1. The URL must be https://
       
     </span>
   </a>
@@ -3045,10 +2912,21 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#2-explicit-credentials-via-secrets" class="md-nav__link">
+  <a href="#2-a-checksum-is-required" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. Explicit Credentials via Secrets
+        2. A checksum is required
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#private-endpoints-authsecret" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Private endpoints (authSecret)
       
     </span>
   </a>
@@ -3061,22 +2939,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#credential-requirements-by-provider" class="md-nav__link">
+  <a href="#supply-chain-security" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Credential Requirements by Provider
+        Supply-chain security
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Credential Requirements by Provider">
+    <nav class="md-nav" aria-label="Supply-chain security">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#amazon-s3" class="md-nav__link">
+  <a href="#installmode-prebaked-recommended-for-production" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Amazon S3
+        installMode: PreBaked (recommended for production)
       
     </span>
   </a>
@@ -3084,10 +2962,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#google-cloud-storage" class="md-nav__link">
+  <a href="#installmode-verifieddownload" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Google Cloud Storage
+        installMode: VerifiedDownload
       
     </span>
   </a>
@@ -3095,21 +2973,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#azure-blob-storage" class="md-nav__link">
+  <a href="#duplicate-cr-protection-all-modes" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Azure Blob Storage
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#httphttpsftp" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        HTTP/HTTPS/FTP
+        Duplicate-CR protection (all modes)
       
     </span>
   </a>
@@ -3122,110 +2989,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#advanced-configuration" class="md-nav__link">
+  <a href="#plugin-configuration" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Advanced Configuration
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Advanced Configuration">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#point-in-time-recovery-neo4j-2025x-only" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Point-in-Time Recovery (Neo4j 2025.x only)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#cloudseedprovider-options" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        CloudSeedProvider Options
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#file-format-considerations" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        File Format Considerations
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="File Format Considerations">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#backup-files-backup-recommended" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Backup Files (.backup) - Recommended
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#dump-files-dump-legacy" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Dump Files (.dump) - Legacy
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#database-topology-with-seed-uris" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Database Topology with Seed URIs
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#conflict-prevention" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Conflict Prevention
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#status-and-events" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Status and Events
+        Plugin configuration
       
     </span>
   </a>
@@ -3245,10 +3012,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#common-issues" class="md-nav__link">
+  <a href="#validator-rejections-statusphase-invalid" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Common Issues
+        Validator rejections (status.phase: Invalid)
       
     </span>
   </a>
@@ -3256,10 +3023,32 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#debugging-commands" class="md-nav__link">
+  <a href="#verifying-the-plugin-landed" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Debugging Commands
+        Verifying the plugin landed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#events-to-look-for" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Events to look for
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#other-common-issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Other common issues
       
     </span>
   </a>
@@ -3272,43 +3061,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#security-best-practices" class="md-nav__link">
+  <a href="#see-also" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Security Best Practices
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#examples" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Examples
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#neo4j-version-compatibility" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Neo4j Version Compatibility
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#migration-from-s3seedprovider" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Migration from S3SeedProvider
+        See also
       
     </span>
   </a>
@@ -3332,7 +3088,7 @@
 
 
   
-    <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/edit/main/docs/user_guide/guides/seed-uri.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+    <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/edit/main/docs/user_guide/guides/plugins.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
     </a>
@@ -3340,382 +3096,323 @@
   
 
 
-<h1 id="neo4j-database-seed-uri-feature-guide">Neo4j Database Seed URI Feature Guide<a class="headerlink" href="#neo4j-database-seed-uri-feature-guide" title="Anchor link to this section">&para;</a></h1>
-<p>This guide explains how to create Neo4j databases from existing backups or dumps using the seed URI feature in the Neo4j Kubernetes Operator.</p>
-<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Anchor link to this section">&para;</a></h2>
-<p>The seed URI feature allows you to create new Neo4j databases by restoring them from existing backup files stored in cloud storage or accessible via HTTP/FTP. This is useful for:</p>
-<ul>
-<li><strong>Database Migration</strong>: Moving databases between environments</li>
-<li><strong>Testing with Production Data</strong>: Creating test databases from production backups</li>
-<li><strong>Disaster Recovery</strong>: Restoring databases to specific points in time</li>
-<li><strong>Development Environment Setup</strong>: Seeding development databases with sample data</li>
-</ul>
-<h2 id="supported-uri-schemes">Supported URI Schemes<a class="headerlink" href="#supported-uri-schemes" title="Anchor link to this section">&para;</a></h2>
-<p>The operator registers Neo4j's modern seed providers via <code>dbms.databases.seed_from_uri_providers</code> (set automatically on both cluster and standalone pods). The registered providers are version-gated:</p>
-<ul>
-<li><code>CloudSeedProvider</code>, <code>FileSeedProvider</code>, <code>URLConnectionSeedProvider</code> — always registered (all supported Neo4j versions).</li>
-<li><code>ServerSeedProvider</code> — registered only on Neo4j <strong>2026.04+</strong> (the class is not present in earlier releases).</li>
-<li>The deprecated <code>S3SeedProvider</code> is <strong>never</strong> registered — <code>CloudSeedProvider</code> handles <code>s3://</code> via the cloud SDK's default credential chain.</li>
-</ul>
-<p>These providers cover the following URI schemes:</p>
+<h1 id="plugin-management">Plugin Management<a class="headerlink" href="#plugin-management" title="Anchor link to this section">&para;</a></h1>
+<p>Install and manage Neo4j plugins (APOC, Graph Data Science, Bloom, GenAI, N10s, GraphQL, and custom JARs) declaratively via the <code>Neo4jPlugin</code> CRD. Works against both <code>Neo4jEnterpriseCluster</code> and <code>Neo4jEnterpriseStandalone</code> — the controller auto-detects the target from <code>spec.clusterRef</code>.</p>
+<p>This guide is task-oriented. For the full field reference, see the <a href="../../../api_reference/neo4jplugin/">Neo4jPlugin API Reference</a>.</p>
+<h2 id="overview-choosing-an-install-mode">Overview: choosing an install mode<a class="headerlink" href="#overview-choosing-an-install-mode" title="Anchor link to this section">&para;</a></h2>
+<p>The Neo4j Enterprise Docker entrypoint resolves the <code>NEO4J_PLUGINS</code> environment variable at pod startup. <strong>APOC core is bundled in the image</strong> — the entrypoint just copies the JAR from <code>/var/lib/neo4j/labs/</code> to <code>/plugins/</code>, no internet needed. <strong>Every other plugin</strong> (<code>graph-data-science</code>, <code>bloom</code>, <code>genai</code>, <code>n10s</code>, <code>graphql</code>, <code>apoc-extended</code>) is <strong>downloaded from the internet on every pod start</strong> when installed this way.</p>
+<p><code>spec.installMode</code> controls how the JAR reaches the pod:</p>
 <table>
 <thead>
 <tr>
-<th>Scheme</th>
-<th>Provider</th>
-<th>Example</th>
+<th>Mode</th>
+<th>How the JAR arrives</th>
+<th>Egress required</th>
+<th>Artifact pinned?</th>
+<th>When to use</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>s3://</code></td>
-<td>CloudSeedProvider</td>
-<td><code>s3://my-bucket/backup.backup</code></td>
+<td><code>Managed</code> (default)</td>
+<td>Operator adds the plugin to <code>NEO4J_PLUGINS</code>; the Neo4j entrypoint installs it at pod start</td>
+<td>Yes — except APOC core (bundled in the image)</td>
+<td>No — a restart can pull a different artifact</td>
+<td>APOC anywhere; other plugins in dev/test where re-download on restart is acceptable</td>
 </tr>
 <tr>
-<td><code>gs://</code></td>
-<td>CloudSeedProvider</td>
-<td><code>gs://my-bucket/backup.backup</code></td>
+<td><code>PreBaked</code></td>
+<td>You build a custom image with the JAR in <code>/plugins/</code>; operator writes <strong>only</strong> the plugin's configuration, never touches <code>NEO4J_PLUGINS</code></td>
+<td>None</td>
+<td>Yes — pinned, signed, scannable image</td>
+<td><strong>Recommended for production</strong> and air-gapped clusters</td>
 </tr>
 <tr>
-<td><code>azb://</code></td>
-<td>CloudSeedProvider</td>
-<td><code>azb://account.blob.core.windows.net/container/backup.backup</code></td>
-</tr>
-<tr>
-<td><code>https://</code></td>
-<td>URLConnectionSeedProvider</td>
-<td><code>https://backup-server.com/backup.backup</code></td>
-</tr>
-<tr>
-<td><code>http://</code></td>
-<td>URLConnectionSeedProvider</td>
-<td><code>http://backup-server.com/backup.backup</code></td>
-</tr>
-<tr>
-<td><code>ftp://</code></td>
-<td>URLConnectionSeedProvider</td>
-<td><code>ftp://ftp.server.com/backup.backup</code></td>
-</tr>
-<tr>
-<td><code>file://</code></td>
-<td>FileSeedProvider</td>
-<td><code>file:///path/backup.backup</code></td>
+<td><code>VerifiedDownload</code></td>
+<td>Operator injects an init container that downloads <code>source.url</code>, verifies it against <code>source.checksum</code>, and writes the JAR to <code>/plugins</code> <strong>before</strong> Neo4j starts</td>
+<td>Yes (https to your mirror or the vendor)</td>
+<td>Yes — checksum enforced at download time</td>
+<td>Production when you can't build custom images but must pin the exact artifact</td>
 </tr>
 </tbody>
 </table>
-<p>The <code>seedURI</code> must point at the <strong>exact <code>.backup</code> file</strong>, never a directory — Neo4j seeds a single database from one backup file. (For a DIFF backup, the single DIFF-file URI is sufficient; Neo4j resolves the full parent chain from the same directory.)</p>
-<h2 id="basic-usage">Basic Usage<a class="headerlink" href="#basic-usage" title="Anchor link to this section">&para;</a></h2>
-<h3 id="simple-seed-uri-database">Simple Seed URI Database<a class="headerlink" href="#simple-seed-uri-database" title="Anchor link to this section">&para;</a></h3>
+<p>Regardless of mode, the operator always writes the plugin's required configuration (security allowlists, unrestricted procedures, plugin settings) and triggers a rolling restart of the target StatefulSet to apply changes.</p>
+<blockquote>
+<p><strong>Multi-controller coexistence</strong>: the plugin controller merges plugin names into <code>NEO4J_PLUGINS</code> additively — it never overwrites entries added by other controllers (e.g. the Aura Fleet Management reconciler). Installing APOC via <code>Neo4jPlugin</code> alongside <code>spec.auraFleetManagement</code> on the cluster yields <code>["apoc","fleet-management"]</code>, and neither entry is removed on subsequent reconciles. Fleet Management itself is managed via the cluster/standalone CRD, not via <code>Neo4jPlugin</code>.</p>
+</blockquote>
+<h2 id="quick-starts">Quick starts<a class="headerlink" href="#quick-starts" title="Anchor link to this section">&para;</a></h2>
+<h3 id="apoc-works-offline">APOC (works offline)<a class="headerlink" href="#apoc-works-offline" title="Anchor link to this section">&para;</a></h3>
+<p>APOC core is pre-bundled in the Neo4j Enterprise image, so this works with no internet egress:</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1beta1</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Neo4jDatabase</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Neo4jPlugin</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="nt">metadata</span><span class="p">:</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-database</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">apoc-plugin</span>
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">  </span><span class="nt">clusterRef</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-cluster</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mydb</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">  </span><span class="c1"># Seed from S3 backup using system-wide authentication</span>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">  </span><span class="nt">seedURI</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;s3://my-backups/database.backup&quot;</span>
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">  </span><span class="c1"># Optional: specify database topology</span>
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">  </span><span class="nt">topology</span><span class="p">:</span>
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="w">    </span><span class="nt">primaries</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span>
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="w">    </span><span class="nt">secondaries</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
-</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="w">  </span><span class="nt">wait</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="w">  </span><span class="nt">ifNotExists</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">  </span><span class="nt">clusterRef</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-cluster</span><span class="w">        </span><span class="c1"># Neo4jEnterpriseCluster OR Neo4jEnterpriseStandalone</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">apoc</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">  </span><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;5.26.0&quot;</span><span class="w">             </span><span class="c1"># match your Neo4j version</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">  </span><span class="nt">source</span><span class="p">:</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">official</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">  </span><span class="nt">config</span><span class="p">:</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">    </span><span class="c1"># APOC settings become NEO4J_APOC_* environment variables (see &quot;Plugin configuration&quot;)</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">    </span><span class="nt">apoc.export.file.enabled</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="w">    </span><span class="nt">apoc.import.file.enabled</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="w">    </span><span class="nt">apoc.load.json.enabled</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="w">  </span><span class="nt">security</span><span class="p">:</span>
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="w">    </span><span class="nt">allowedProcedures</span><span class="p">:</span>
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;apoc.load.*&quot;</span>
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;apoc.export.*&quot;</span>
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;apoc.import.*&quot;</span>
 </span></code></pre></div>
-<h3 id="seeding-a-sharded-database">Seeding a Sharded Database<a class="headerlink" href="#seeding-a-sharded-database" title="Anchor link to this section">&para;</a></h3>
-<p><code>Neo4jShardedDatabase</code> supports three mutually-exclusive seed sources (<code>seedURI</code>, <code>seedURIs</code>, and <code>seedBackupRef</code> — the validator rejects combining them):</p>
-<ul>
-<li><strong><code>seedURI</code></strong> — a single URI; Neo4j expects per-shard backup artifacts named with shard suffixes (e.g. <code>&lt;db&gt;-g000</code>, <code>&lt;db&gt;-p000</code>).</li>
-<li><strong><code>seedURIs</code></strong> — a per-shard map keyed by shard name, for multi-location backups:</li>
-</ul>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">seedURIs</span><span class="p">:</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">mydb-g000</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;s3://my-backups/mydb-g000.backup&quot;</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span><span class="nt">mydb-p000</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;s3://my-backups/mydb-p000.backup&quot;</span>
+<p>Wait for <code>status.phase: Ready</code>:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>neo4jplugin<span class="w"> </span>apoc-plugin<span class="w"> </span>-w
 </span></code></pre></div>
-<ul>
-<li><strong><code>seedBackupRef</code></strong> — names a <code>Neo4jBackup</code> CR (same namespace) whose most-recent Succeeded run is resolved into a concrete seed at reconcile time. Supports both <strong>cloud</strong> backups (resolved to <code>seedURI</code>) and <strong>PVC</strong>-backed backups (resolved to per-shard URLs served through an in-cluster HTTP proxy — see <a href="#pvc-backed-seeds">PVC-backed seeds</a>). If the referenced backup has no Succeeded run yet, the sharded database stays in <code>Pending</code> and the reconciler requeues (it does not fail).</li>
-</ul>
-<p><code>seedBackupRef</code> is also mutually exclusive with <code>seedURI</code> / <code>seedURIs</code>.</p>
-<h3 id="pvc-backed-seeds">PVC-backed seeds<a class="headerlink" href="#pvc-backed-seeds" title="Anchor link to this section">&para;</a></h3>
-<p>When a seed source resolves to a backup stored on a PVC, the operator spawns a short-lived <code>backup-seed-proxy-&lt;owner&gt;</code> Deployment + Service that mounts the backup PVC read-only and serves the <code>.backup</code> files over HTTP. Neo4j then fetches each file via <code>URLConnectionSeedProvider</code> at the exact <code>.backup</code> filename.</p>
-<p>Lifecycle and hardening:</p>
-<ul>
-<li>A <strong>NetworkPolicy</strong> restricts the proxy's ingress to the target cluster's server pods (effective on enforcing CNIs; a no-op elsewhere).</li>
-<li>The proxy stack (Deployment + Service + NetworkPolicy) is <strong>torn down automatically as soon as the seed completes</strong>: when a <code>Neo4jRestore</code> reaches <code>Completed</code>/<code>Failed</code>, or when the <code>Neo4jShardedDatabase</code> becomes <code>Ready</code>. It does not keep serving the backup PVC for the lifetime of the owning CR.</li>
-<li>The proxy is also owner-referenced to the consuming CR, so deleting the CR removes any leftovers.</li>
-</ul>
-<h2 id="authentication-methods">Authentication Methods<a class="headerlink" href="#authentication-methods" title="Anchor link to this section">&para;</a></h2>
-<h3 id="1-system-wide-authentication-recommended">1. System-Wide Authentication (Recommended)<a class="headerlink" href="#1-system-wide-authentication-recommended" title="Anchor link to this section">&para;</a></h3>
-<p>Use cloud-native authentication mechanisms that don't require explicit credentials.</p>
-<blockquote>
-<p><strong>Where the identity must be bound:</strong> <code>CREATE DATABASE … OPTIONS { seedURI }</code> runs inside the Neo4j JVM <strong>on the server pods</strong> — not in a backup/restore Job. Under pod identity (IRSA / GKE Workload Identity / Azure Workload Identity) the IAM binding therefore goes on the <strong>server pods' ServiceAccount</strong>, not on the <code>neo4j-backup-sa</code> used by backup Jobs (<code>Neo4jBackup</code>'s <code>cloud.identity.autoCreate.annotations</code> only annotates the Job SA and has no effect on seeding).</p>
-</blockquote>
-<p><strong>AWS S3:</strong></p>
-<ul>
-<li>IAM roles for service accounts (IRSA)</li>
-<li>EC2 instance profiles</li>
-<li>Environment variables on nodes</li>
-</ul>
-<p><strong>Google Cloud Storage:</strong></p>
-<ul>
-<li>Workload Identity</li>
-<li>Service account keys via mounted volumes</li>
-<li>Compute Engine default service accounts</li>
-</ul>
-<p><strong>Azure Blob Storage:</strong></p>
-<ul>
-<li>Managed identities</li>
-<li>Service principal environment variables</li>
-</ul>
-<h3 id="2-explicit-credentials-via-secrets">2. Explicit Credentials via Secrets<a class="headerlink" href="#2-explicit-credentials-via-secrets" title="Anchor link to this section">&para;</a></h3>
-<p>For environments where system-wide authentication isn't available, you can reference a credentials Secret with <code>spec.seedCredentials.secretRef</code>:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Secret</span>
+<h3 id="graph-data-science-gds">Graph Data Science (GDS)<a class="headerlink" href="#graph-data-science-gds" title="Anchor link to this section">&para;</a></h3>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1beta1</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Neo4jPlugin</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="nt">metadata</span><span class="p">:</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">backup-credentials</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="nt">data</span><span class="p">:</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">  </span><span class="nt">AWS_ACCESS_KEY_ID</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;base64-encoded-key&gt;</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">  </span><span class="nt">AWS_SECRET_ACCESS_KEY</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;base64-encoded-secret&gt;</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="nn">---</span>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1beta1</span>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Neo4jDatabase</span>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="nt">metadata</span><span class="p">:</span>
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-database</span>
-</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="w">  </span><span class="nt">clusterRef</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-cluster</span>
-</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mydb</span>
-</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="w">  </span><span class="nt">seedURI</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;s3://my-backups/database.backup&quot;</span>
-</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>
-</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="w">  </span><span class="nt">seedCredentials</span><span class="p">:</span>
-</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="w">    </span><span class="nt">secretRef</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">backup-credentials</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gds-plugin</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="nt">spec</span><span class="p">:</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">  </span><span class="nt">clusterRef</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-cluster</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">graph-data-science</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">  </span><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;2.10.0&quot;</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">  </span><span class="nt">source</span><span class="p">:</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">community</span>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="w">  </span><span class="nt">config</span><span class="p">:</span>
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="w">    </span><span class="c1"># GDS Enterprise license (optional). Mount the license file at</span>
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="w">    </span><span class="c1"># /licenses/gds.license via the cluster/standalone spec.extraVolumes +</span>
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="w">    </span><span class="c1"># spec.extraVolumeMounts (e.g. from a Secret).</span>
+</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="w">    </span><span class="nt">gds.enterprise.license_file</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;/licenses/gds.license&quot;</span>
+</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="w">  </span><span class="nt">security</span><span class="p">:</span>
+</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="w">    </span><span class="nt">allowedProcedures</span><span class="p">:</span>
+</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;gds.*&quot;</span>
+</span></code></pre></div>
+<p>The operator automatically adds the security configuration GDS needs: <code>dbms.security.procedures.unrestricted=gds.*</code> and the matching procedure allowlist. With <code>Managed</code> mode the GDS JAR is downloaded by the Neo4j entrypoint at pod start — in production prefer <code>PreBaked</code> or <code>VerifiedDownload</code> (see <a href="#supply-chain-security">Supply-chain security</a>).</p>
+<h3 id="bloom-commercial-license-required">Bloom (commercial license required)<a class="headerlink" href="#bloom-commercial-license-required" title="Anchor link to this section">&para;</a></h3>
+<p>Bloom needs a commercial license. Mount the license file via the cluster/standalone CR's <code>spec.extraVolumes</code> + <code>spec.extraVolumeMounts</code> (e.g. from a Secret), then:</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1beta1</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Neo4jPlugin</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="nt">metadata</span><span class="p">:</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">bloom-plugin</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="nt">spec</span><span class="p">:</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">  </span><span class="nt">clusterRef</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-cluster</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">bloom</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">  </span><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;2.15.0&quot;</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">  </span><span class="nt">source</span><span class="p">:</span>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">official</span>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="w">  </span><span class="nt">config</span><span class="p">:</span>
+</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="w">    </span><span class="nt">dbms.bloom.license_file</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;/licenses/bloom.license&quot;</span>
+</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="w">    </span><span class="c1"># Optional: restrict Bloom access to specific roles</span>
+</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="w">    </span><span class="nt">dbms.bloom.authorization_role</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;admin,architect&quot;</span>
+</span></code></pre></div>
+<p>Bloom's required settings are applied automatically — no manual security configuration needed:</p>
+<ul>
+<li><code>dbms.security.procedures.unrestricted=bloom.*</code></li>
+<li><code>dbms.security.http_auth_allowlist=/,/browser.*,/bloom.*</code></li>
+<li><code>server.unmanaged_extension_classes=com.neo4j.bloom.server=/bloom</code></li>
+</ul>
+<p>After the rolling restart, Bloom is served at <code>http(s)://&lt;neo4j-host&gt;:&lt;http-port&gt;/bloom/</code>.</p>
+<p>More examples (GenAI, standalone targets, multi-plugin setups): <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/tree/main/examples/plugins">examples/plugins/</a>.</p>
+<h2 id="custom-and-url-plugins">Custom and URL plugins<a class="headerlink" href="#custom-and-url-plugins" title="Anchor link to this section">&para;</a></h2>
+<p>For plugins not in Neo4j's official/community catalogs, use <code>source.type: url</code> (direct download) or <code>source.type: custom</code> (private registry). Two rules are <strong>enforced by the controller-side validator</strong> — a CR that violates them goes to <code>status.phase: Invalid</code> and stops reconciling until you fix the spec:</p>
+<h3 id="1-the-url-must-be-https">1. The URL must be <code>https://</code><a class="headerlink" href="#1-the-url-must-be-https" title="Anchor link to this section">&para;</a></h3>
+<p><code>http://</code>, <code>file://</code>, and every other scheme is rejected. Plugin JARs are fetched over the network, and a non-https scheme has no transport integrity — a network attacker could swap the JAR in transit. If you host plugins internally, serve them from an https endpoint (an in-cluster mirror with a cert-manager certificate works).</p>
+<h3 id="2-a-checksum-is-required">2. A checksum is required<a class="headerlink" href="#2-a-checksum-is-required" title="Anchor link to this section">&para;</a></h3>
+<p>For <code>type: url</code> and <code>type: custom</code>, <code>source.checksum</code> is mandatory and must match:</p>
+<ul>
+<li><code>sha256:</code> followed by exactly 64 hex characters, <strong>or</strong></li>
+<li><code>sha512:</code> followed by exactly 128 hex characters.</li>
+</ul>
+<p>SHA1, MD5, and unprefixed hex are rejected — supply-chain protection demands a collision-resistant hash, and verification tooling should never have to guess the algorithm. Compute one locally:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>shasum<span class="w"> </span>-a<span class="w"> </span><span class="m">256</span><span class="w"> </span>my-plugin-2.0.0.jar
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="c1"># abcd1234...  my-plugin-2.0.0.jar</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="c1"># → checksum: &quot;sha256:abcd1234...&quot;</span>
+</span></code></pre></div>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1beta1</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Neo4jPlugin</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="nt">metadata</span><span class="p">:</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">url-plugin</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="nt">spec</span><span class="p">:</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">  </span><span class="nt">clusterRef</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-cluster</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-custom-plugin</span>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="w">  </span><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;2.0.0&quot;</span>
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="w">  </span><span class="nt">source</span><span class="p">:</span>
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">url</span>
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="w">    </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;https://artifacts.example.com/plugins/my-plugin-2.0.0.jar&quot;</span>
+</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="w">    </span><span class="nt">checksum</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;sha256:abcd1234567890abcd1234567890abcd1234567890abcd1234567890abcd1234&quot;</span>
 </span></code></pre></div>
 <blockquote>
-<p><strong>Important — where the credentials must live:</strong> <code>CREATE DATABASE … OPTIONS { seedURI }</code> is executed by the Neo4j JVM <strong>on the server pods</strong>, so the cloud SDK's default credential chain resolves against the <em>server pods'</em> environment. For credentials to be visible there, the Secret must be projected onto the hosting cluster or standalone CR via <code>spec.extraEnvFrom</code>:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1beta1</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Neo4jEnterpriseCluster</span><span class="w">   </span><span class="c1"># or Neo4jEnterpriseStandalone</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="nt">metadata</span><span class="p">:</span>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-cluster</span>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">  </span><span class="nt">extraEnvFrom</span><span class="p">:</span>
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">secretRef</span><span class="p">:</span>
-</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">backup-credentials</span>
-</span></code></pre></div>
-<p>The operator validates this projection before seeding. If the Secret is missing from <code>extraEnvFrom</code>, it emits an actionable error with a copy-pasteable snippet. Add the annotation <code>neo4j.com/auto-inherit-seed-creds: "true"</code> on the hosting cluster/standalone CR to let the operator patch <code>spec.extraEnvFrom</code> automatically — note this triggers a rolling restart of the server pods. When relying on IRSA / GKE Workload Identity / Azure Workload Identity, no Secret projection is needed.</p>
+<p><strong>Important — when is the checksum enforced?</strong> In the default <code>Managed</code> mode the upstream Neo4j Docker entrypoint does <strong>not</strong> verify this checksum at download time. The operator records it (and surfaces it on the StatefulSet) for audit and out-of-band verification. If you need enforcement at the moment of download, use <code>installMode: VerifiedDownload</code> (below) or pin the artifact with <code>PreBaked</code>.</p>
 </blockquote>
-<h2 id="credential-requirements-by-provider">Credential Requirements by Provider<a class="headerlink" href="#credential-requirements-by-provider" title="Anchor link to this section">&para;</a></h2>
-<h3 id="amazon-s3">Amazon S3<a class="headerlink" href="#amazon-s3" title="Anchor link to this section">&para;</a></h3>
-<p><strong>Required:</strong></p>
-<ul>
-<li><code>AWS_ACCESS_KEY_ID</code></li>
-<li><code>AWS_SECRET_ACCESS_KEY</code></li>
-</ul>
-<p><strong>Optional:</strong></p>
-<ul>
-<li><code>AWS_SESSION_TOKEN</code> (for temporary credentials)</li>
-<li><code>AWS_REGION</code></li>
-<li><code>AWS_ENDPOINT_URL_S3</code> — required for <strong>MinIO / S3-compatible</strong> stores. The <code>endpointURL</code>/<code>forcePathStyle</code> fields on <code>Neo4jBackup</code>/<code>Neo4jRestore</code> only affect their <strong>Job pods</strong>; the server pods doing seedURI fetches read the SDK's standard env vars, so put the endpoint in the Secret you project via <code>spec.extraEnvFrom</code>.</li>
-</ul>
-<h3 id="google-cloud-storage">Google Cloud Storage<a class="headerlink" href="#google-cloud-storage" title="Anchor link to this section">&para;</a></h3>
-<p><strong>Required:</strong></p>
-<ul>
-<li><code>GOOGLE_APPLICATION_CREDENTIALS</code> (service account JSON key)</li>
-</ul>
-<p><strong>Optional:</strong></p>
-<ul>
-<li><code>GOOGLE_CLOUD_PROJECT</code></li>
-</ul>
-<h3 id="azure-blob-storage">Azure Blob Storage<a class="headerlink" href="#azure-blob-storage" title="Anchor link to this section">&para;</a></h3>
-<p><strong>Required:</strong></p>
-<ul>
-<li><code>AZURE_STORAGE_ACCOUNT</code></li>
-<li>Either <code>AZURE_STORAGE_KEY</code> OR <code>AZURE_STORAGE_SAS_TOKEN</code></li>
-</ul>
-<h3 id="httphttpsftp">HTTP/HTTPS/FTP<a class="headerlink" href="#httphttpsftp" title="Anchor link to this section">&para;</a></h3>
-<p><strong>Optional:</strong></p>
-<ul>
-<li><code>USERNAME</code></li>
-<li><code>PASSWORD</code></li>
-<li><code>AUTH_HEADER</code> (for custom authentication)</li>
-</ul>
-<h2 id="advanced-configuration">Advanced Configuration<a class="headerlink" href="#advanced-configuration" title="Anchor link to this section">&para;</a></h2>
-<h3 id="point-in-time-recovery-neo4j-2025x-only">Point-in-Time Recovery (Neo4j 2025.x only)<a class="headerlink" href="#point-in-time-recovery-neo4j-2025x-only" title="Anchor link to this section">&para;</a></h3>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">seedConfig</span><span class="p">:</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="c1"># Restore to specific timestamp</span>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span><span class="nt">restoreUntil</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;2025-01-15T10:30:00Z&quot;</span>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">  </span><span class="c1"># Or restore to specific transaction ID</span>
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">  </span><span class="nt">restoreUntil</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;txId:12345&quot;</span>
+<h3 id="private-endpoints-authsecret">Private endpoints (<code>authSecret</code>)<a class="headerlink" href="#private-endpoints-authsecret" title="Anchor link to this section">&para;</a></h3>
+<p>For authenticated mirrors or registries, reference a Secret via <code>source.authSecret</code>. With <code>VerifiedDownload</code>, the Secret should carry either a <code>token</code> key (sent as <code>Authorization: Bearer &lt;token&gt;</code>) or a <code>header</code> key (used verbatim as the full <code>Authorization:</code> header value). Custom registries additionally support <code>source.registry</code> with its own <code>authSecret</code> and TLS configuration — see the <a href="../../../api_reference/neo4jplugin/#pluginregistry">API reference</a>.</p>
+<h2 id="supply-chain-security">Supply-chain security<a class="headerlink" href="#supply-chain-security" title="Anchor link to this section">&para;</a></h2>
+<p>For a security reviewer, the question is: <em>what artifact runs in the pod, and who verified it?</em> The three modes answer it differently.</p>
+<h3 id="installmode-prebaked-recommended-for-production"><code>installMode: PreBaked</code> (recommended for production)<a class="headerlink" href="#installmode-prebaked-recommended-for-production" title="Anchor link to this section">&para;</a></h3>
+<p>Build a custom image with the JAR copied in, reference it from the cluster/standalone CR's image spec, and set <code>installMode: PreBaked</code> on the <code>Neo4jPlugin</code>:</p>
+<div class="language-dockerfile highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">FROM</span><span class="w"> </span><span class="s">neo4j:2025.01.0-enterprise</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="k">COPY</span><span class="w"> </span>graph-data-science-2.13.0.jar<span class="w"> </span>/var/lib/neo4j/plugins/
 </span></code></pre></div>
-<h3 id="cloudseedprovider-options">CloudSeedProvider Options<a class="headerlink" href="#cloudseedprovider-options" title="Anchor link to this section">&para;</a></h3>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">seedConfig</span><span class="p">:</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">config</span><span class="p">:</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">    </span><span class="c1"># Compression: gzip, lz4, none</span>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">    </span><span class="nt">compression</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;gzip&quot;</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">    </span><span class="c1"># Validation: strict, lenient</span>
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">    </span><span class="nt">validation</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;strict&quot;</span>
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>
-</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="w">    </span><span class="c1"># Buffer size for processing</span>
-</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="w">    </span><span class="nt">bufferSize</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;128MB&quot;</span>
+<p>The operator does <strong>not</strong> touch <code>NEO4J_PLUGINS</code> — no runtime fetch ever happens — but still writes the plugin's required configuration. You keep the declarative CRD UX while the artifact is pinned, signed, and scannable through your normal image pipeline. This is also the only fully offline option for non-APOC plugins.</p>
+<h3 id="installmode-verifieddownload"><code>installMode: VerifiedDownload</code><a class="headerlink" href="#installmode-verifieddownload" title="Anchor link to this section">&para;</a></h3>
+<p>When you can't bake images, <code>VerifiedDownload</code> closes the <code>Managed</code>-mode verification gap:</p>
+<ul>
+<li><strong>What is verified</strong>: the SHA-256/SHA-512 of the downloaded JAR against <code>spec.source.checksum</code>.</li>
+<li><strong>When</strong>: at pod startup, <strong>before</strong> Neo4j starts.</li>
+<li><strong>By what</strong>: an operator-injected init container on the target StatefulSet's pod template. It downloads <code>spec.source.url</code>, computes the digest, compares, and writes the JAR to the shared <code>/plugins</code> emptyDir. <code>NEO4J_PLUGINS</code> is <strong>not</strong> mutated for this plugin, so the entrypoint's own (unverified) download path is bypassed entirely and cannot race the verified JAR.</li>
+<li><strong>On mismatch</strong>: the init container exits non-zero and the pod stays <code>Pending</code>. <code>kubectl describe pod</code> shows the failure on the init container's <code>state.terminated.message</code>. Fix the URL or checksum; the next pod spawn re-runs the verification.</li>
+</ul>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1beta1</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Neo4jPlugin</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="nt">metadata</span><span class="p">:</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gds-verified</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="nt">spec</span><span class="p">:</span>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">  </span><span class="nt">clusterRef</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-cluster</span>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">graph-data-science</span>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="w">  </span><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;2.13.0&quot;</span>
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="w">  </span><span class="nt">installMode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">VerifiedDownload</span>
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="w">  </span><span class="nt">source</span><span class="p">:</span>
+</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">url</span>
+</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="w">    </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://github.com/neo4j/graph-data-science/releases/download/2.13.0/neo4j-graph-data-science-2.13.0.jar</span>
+</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="w">    </span><span class="nt">checksum</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855</span>
 </span></code></pre></div>
-<h2 id="file-format-considerations">File Format Considerations<a class="headerlink" href="#file-format-considerations" title="Anchor link to this section">&para;</a></h2>
-<h3 id="backup-files-backup-recommended">Backup Files (.backup) - Recommended<a class="headerlink" href="#backup-files-backup-recommended" title="Anchor link to this section">&para;</a></h3>
+<p>The validator enforces additional gates for this mode:</p>
 <ul>
-<li><strong>Performance</strong>: Much faster restore times</li>
-<li><strong>Features</strong>: Support for point-in-time recovery, compression</li>
-<li><strong>Use Cases</strong>: Production workloads, large datasets</li>
+<li><code>source.url</code> and <code>source.checksum</code> are <strong>mandatory</strong>.</li>
+<li><code>source.type</code> must be <code>url</code> or <code>custom</code> — <code>official</code>/<code>community</code> resolve via the Neo4j entrypoint's internal manifest and cannot be pointed at a verifiable URL.</li>
+<li><code>spec.dependencies</code> are <strong>rejected</strong> — each dependency must be its own <code>Neo4jPlugin</code> CR with its own <code>source.url</code> + <code>checksum</code>, so the entire chain is verified.</li>
 </ul>
-<h3 id="dump-files-dump-legacy">Dump Files (.dump) - Legacy<a class="headerlink" href="#dump-files-dump-legacy" title="Anchor link to this section">&para;</a></h3>
-<ul>
-<li><strong>Performance</strong>: Slower restore times for large datasets</li>
-<li><strong>Compatibility</strong>: Cross-version compatibility, human-readable</li>
-<li><strong>Use Cases</strong>: Development, testing, cross-version migrations</li>
-</ul>
-<p>The operator will warn when using dump files:
-<div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>Warning: Using dump file format. For better performance with large databases,
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>         consider using Neo4j backup format (.backup) instead.
-</span></code></pre></div></p>
-<h2 id="database-topology-with-seed-uris">Database Topology with Seed URIs<a class="headerlink" href="#database-topology-with-seed-uris" title="Anchor link to this section">&para;</a></h2>
-<p>You can specify how the restored database should be distributed across your cluster:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nt">topology</span><span class="p">:</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span><span class="nt">primaries</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span><span class="w">    </span><span class="c1"># Number of primary servers</span>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span><span class="nt">secondaries</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span><span class="w">  </span><span class="c1"># Number of secondary servers</span>
+<p><strong>Internal CAs</strong>: the owning cluster's (or standalone's) <code>spec.trustedCASecrets</code> certificates are mounted under <code>/etc/plugin-ca</code> and passed to the downloader, so an internal https mirror signed by your own CA works.</p>
+<p><strong>Air-gapped clusters</strong>: the init container image defaults to <code>curlimages/curl:8.5.0</code>, pulled from a public registry. Point it at an internal mirror via the operator Helm chart value:</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># values.yaml for the neo4j-operator chart</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="nt">pluginInitContainer</span><span class="p">:</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">registry.internal.example.com/mirror/curlimages/curl:8.5.0</span>
 </span></code></pre></div>
-<p>The operator validates that your topology doesn't exceed cluster capacity and provides warnings for suboptimal configurations.</p>
-<h2 id="conflict-prevention">Conflict Prevention<a class="headerlink" href="#conflict-prevention" title="Anchor link to this section">&para;</a></h2>
-<p>The operator prevents conflicting configurations:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span><span class="c1"># ERROR: Cannot specify both seedURI and initialData</span>
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span><span class="nt">seedURI</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;s3://my-backups/database.backup&quot;</span>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">  </span><span class="nt">initialData</span><span class="p">:</span>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">    </span><span class="nt">cypherStatements</span><span class="p">:</span>
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;CREATE</span><span class="nv"> </span><span class="s">(:Person</span><span class="nv"> </span><span class="s">{name:</span><span class="nv"> </span><span class="s">&#39;Alice&#39;})&quot;</span>
-</span></code></pre></div>
-<p>When <code>seedURI</code> is specified, <code>initialData</code> is ignored since the seed provides the initial data.</p>
-<h2 id="status-and-events">Status and Events<a class="headerlink" href="#status-and-events" title="Anchor link to this section">&para;</a></h2>
-<p>The operator provides detailed status and events during seed restoration:</p>
-<p><strong>Events:</strong></p>
+<p>Note that every pod restart re-runs the init container and re-downloads the JAR (≈ 30 MB for GDS) — budget bandwidth accordingly.</p>
+<h3 id="duplicate-cr-protection-all-modes">Duplicate-CR protection (all modes)<a class="headerlink" href="#duplicate-cr-protection-all-modes" title="Anchor link to this section">&para;</a></h3>
+<p>Two <code>Neo4jPlugin</code> CRs in the same namespace targeting the same <code>clusterRef</code> with the same plugin <code>name</code> would race on the same <code>/plugins</code> directory and <code>NEO4J_PLUGINS</code> value. The reconciler refuses the duplicate: the <strong>oldest CR wins</strong>, the newer one is set to <code>status.phase: Failed</code> with a message naming the older CR, and a <code>PluginDuplicate</code> Warning event is emitted. Delete the unwanted CR; the survivor takes over on its next watch event.</p>
+<h2 id="plugin-configuration">Plugin configuration<a class="headerlink" href="#plugin-configuration" title="Anchor link to this section">&para;</a></h2>
+<p><code>spec.config</code> is a string map of plugin settings. Where each entry lands depends on the plugin:</p>
 <ul>
-<li><code>DatabaseCreatedFromSeed</code>: Database successfully created from seed URI</li>
-<li><code>DataSeeded</code>: Database seeded from URI successfully</li>
-<li><code>ValidationWarning</code>: Validation warnings (e.g., suboptimal topology)</li>
+<li><strong>APOC</strong> (and APOC Extended): settings are applied as <strong>environment variables</strong>, not <code>neo4j.conf</code> — Neo4j 5.26+ no longer reads APOC settings from the config file. <code>apoc.export.file.enabled: "true"</code> becomes <code>NEO4J_APOC_EXPORT_FILE_ENABLED=true</code> on the StatefulSet.</li>
+<li><strong>GDS, Bloom, GenAI, and others</strong>: settings flow through Neo4j configuration — the ConfigMap for standalone targets, runtime configuration for clusters.</li>
+<li><strong>Procedure allowlisting</strong> (<code>dbms.security.procedures.unrestricted</code>, allowlists) always goes through <code>neo4j.conf</code>-level configuration, for APOC too — that's what <code>spec.security</code> drives.</li>
 </ul>
-<p><strong>Status Conditions:</strong></p>
-<ul>
-<li><code>Ready</code>: Database is ready and available</li>
-<li><code>ValidationFailed</code>: Configuration validation failed</li>
-<li><code>CreationFailed</code>: Database creation failed</li>
-</ul>
+<p>Validation on <code>spec.config</code>: keys may contain only letters, digits, dots, underscores and dashes; values may not contain newline or carriage-return characters (they are rendered into config lines / env vars, so a stray newline could forge an extra setting).</p>
+<p>Some plugins also receive <strong>automatic security configuration</strong> even with no <code>security</code> section — Bloom and GDS get their required unrestricted-procedures and allowlist entries applied by the operator; your own <code>security</code> settings override the automatic ones. See <a href="../../../api_reference/neo4jplugin/#automatic-security-configuration">Automatic Security Configuration</a>.</p>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Anchor link to this section">&para;</a></h2>
-<h3 id="common-issues">Common Issues<a class="headerlink" href="#common-issues" title="Anchor link to this section">&para;</a></h3>
-<ol>
-<li><strong>Authentication Failures</strong></li>
-<li>Verify credentials in referenced secret</li>
-<li>Check IAM roles/permissions for system-wide auth</li>
-<li>
-<p>Ensure workload identity is properly configured</p>
-</li>
-<li>
-<p><strong>URI Access Failures</strong></p>
-</li>
-<li>Verify the backup file exists at the specified URI</li>
-<li>Check network connectivity from Neo4j pods</li>
-<li>
-<p>Ensure URI format is correct</p>
-</li>
-<li>
-<p><strong>Validation Errors</strong></p>
-</li>
-<li>Check that referenced cluster exists and is ready</li>
-<li>Verify topology doesn't exceed cluster capacity</li>
-<li>
-<p>Ensure no conflicts between seedURI and initialData</p>
-</li>
-<li>
-<p><strong>Performance Issues</strong></p>
-</li>
-<li>Consider using .backup format instead of .dump</li>
-<li>Adjust bufferSize in seedConfig</li>
-<li>Ensure adequate resources for restoration</li>
-</ol>
-<h3 id="debugging-commands">Debugging Commands<a class="headerlink" href="#debugging-commands" title="Anchor link to this section">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Check database status</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>neo4jdatabase<span class="w"> </span>my-database<span class="w"> </span>-o<span class="w"> </span>yaml
-</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
-</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="c1"># View operator logs</span>
-</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>neo4j-operator-system<span class="w"> </span>deployment/neo4j-operator-controller-manager
-</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>
-</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="c1"># Check events</span>
-</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>neo4jdatabase<span class="w"> </span>my-database
-</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>
-</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="c1"># Verify database in Neo4j</span>
-</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-it<span class="w"> </span>&lt;neo4j-pod&gt;<span class="w"> </span>--<span class="w"> </span>cypher-shell<span class="w"> </span>-u<span class="w"> </span>neo4j<span class="w"> </span>-p<span class="w"> </span>&lt;password&gt;<span class="w"> </span><span class="s2">&quot;SHOW DATABASES&quot;</span>
-</span></code></pre></div>
-<h2 id="security-best-practices">Security Best Practices<a class="headerlink" href="#security-best-practices" title="Anchor link to this section">&para;</a></h2>
-<ol>
-<li><strong>Use System-Wide Authentication</strong>: Prefer IAM roles, workload identity, and managed identities over explicit credentials</li>
-<li><strong>Rotate Credentials</strong>: Regularly rotate any explicit credentials stored in secrets</li>
-<li><strong>Least Privilege</strong>: Grant minimal required permissions for backup access</li>
-<li><strong>Network Security</strong>: Use private endpoints and VPNs for sensitive backup access</li>
-<li><strong>Audit Access</strong>: Monitor and log backup access for compliance</li>
-</ol>
-<h2 id="examples">Examples<a class="headerlink" href="#examples" title="Anchor link to this section">&para;</a></h2>
-<p>See the <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/tree/main/examples/databases">examples/databases/</a> directory for comprehensive examples:</p>
-<ul>
-<li><code>database-from-s3-seed.yaml</code> - S3 with explicit credentials</li>
-<li><code>database-from-gcs-seed.yaml</code> - Google Cloud Storage with workload identity</li>
-<li><code>database-from-azure-seed.yaml</code> - Azure Blob Storage with both key and SAS token auth</li>
-<li><code>database-from-http-seed.yaml</code> - HTTP/HTTPS/FTP examples</li>
-<li><code>database-dump-vs-backup-seed.yaml</code> - Performance comparison between formats</li>
-</ul>
-<h2 id="neo4j-version-compatibility">Neo4j Version Compatibility<a class="headerlink" href="#neo4j-version-compatibility" title="Anchor link to this section">&para;</a></h2>
+<h3 id="validator-rejections-statusphase-invalid">Validator rejections (<code>status.phase: Invalid</code>)<a class="headerlink" href="#validator-rejections-statusphase-invalid" title="Anchor link to this section">&para;</a></h3>
+<p>A spec that fails structural validation lands in <code>Invalid</code> with a <code>ValidationFailed</code> Warning event, and is <strong>not requeued</strong> — edit the CR to retry. Common causes:</p>
 <table>
 <thead>
 <tr>
-<th>Feature</th>
-<th>Neo4j 5.26+</th>
-<th>Neo4j 2025.x</th>
+<th>Symptom in <code>status.message</code> / event</th>
+<th>Cause</th>
+<th>Fix</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>Basic seed URI</td>
-<td>✅</td>
-<td>✅</td>
+<td><code>URL scheme must be https</code></td>
+<td><code>source.url</code> uses <code>http://</code>, <code>file://</code>, etc.</td>
+<td>Host the JAR on an https endpoint (in-cluster mirror with a cert-manager certificate works)</td>
 </tr>
 <tr>
-<td>CloudSeedProvider</td>
-<td>✅</td>
-<td>✅</td>
+<td><code>checksum is required for url and custom source types</code></td>
+<td>Missing <code>source.checksum</code></td>
+<td><code>shasum -a 256 &lt;jar&gt;</code> and set <code>checksum: "sha256:&lt;digest&gt;"</code></td>
 </tr>
 <tr>
-<td>Point-in-time recovery</td>
-<td>❌</td>
-<td>✅</td>
+<td><code>checksum must be of the form sha256:&lt;64 hex chars&gt; or sha512:&lt;128 hex chars&gt;</code></td>
+<td>SHA1/MD5, unprefixed hex, wrong length</td>
+<td>Use a prefixed sha256/sha512 digest</td>
 </tr>
 <tr>
-<td>All URI schemes</td>
-<td>✅</td>
-<td>✅</td>
+<td><code>installMode: VerifiedDownload requires spec.source.url</code> / <code>...checksum</code></td>
+<td>VerifiedDownload without a source</td>
+<td>Add <code>source.url</code> + <code>source.checksum</code></td>
 </tr>
 <tr>
-<td>Topology specification</td>
-<td>✅</td>
-<td>✅</td>
+<td><code>VerifiedDownload requires source.type=url or source.type=custom</code></td>
+<td><code>official</code>/<code>community</code> with VerifiedDownload</td>
+<td>Point at a downloadable URL, or switch mode</td>
+</tr>
+<tr>
+<td><code>VerifiedDownload does not support spec.dependencies</code></td>
+<td>Dependencies on a VerifiedDownload CR</td>
+<td>Create each dependency as its own <code>Neo4jPlugin</code> CR</td>
 </tr>
 </tbody>
 </table>
-<h2 id="migration-from-s3seedprovider">Migration from S3SeedProvider<a class="headerlink" href="#migration-from-s3seedprovider" title="Anchor link to this section">&para;</a></h2>
-<p>The operator uses Neo4j's modern CloudSeedProvider instead of the deprecated S3SeedProvider:</p>
+<p>Compatibility-matrix notes (unknown plugin name, version below the recorded minimum) are <strong>advisory only</strong> — they surface as <code>ValidationWarning</code> events and never block installation.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>neo4jplugin<span class="w"> </span>&lt;name&gt;<span class="w">          </span><span class="c1"># status.message + events</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>events<span class="w"> </span>--field-selector<span class="w"> </span>involvedObject.name<span class="o">=</span>&lt;name&gt;
+</span></code></pre></div>
+<h3 id="verifying-the-plugin-landed">Verifying the plugin landed<a class="headerlink" href="#verifying-the-plugin-landed" title="Anchor link to this section">&para;</a></h3>
+<p>For <strong>clusters</strong>, check the <code>{cluster-name}-server</code> StatefulSet's environment variables:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>statefulset<span class="w"> </span>my-cluster-server<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.spec.template.spec.containers[?(@.name==&quot;neo4j&quot;)].env}&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>.
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="c1"># Expect NEO4J_PLUGINS to include your plugin, plus NEO4J_* config vars</span>
+</span></code></pre></div>
+<p>For <strong>standalone</strong>, check the StatefulSet (named after the standalone CR) the same way, and the <code>{standalone-name}-config</code> ConfigMap for <code>neo4j.conf</code>-level plugin settings (security allowlists etc.):</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>configmap<span class="w"> </span>my-standalone-config<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.data.neo4j\.conf}&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span>&lt;plugin&gt;
+</span></code></pre></div>
+<p>Then confirm Neo4j actually loaded the procedures:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>&lt;pod-name&gt;<span class="w"> </span>-c<span class="w"> </span>neo4j<span class="w"> </span>--<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="w">  </span>cypher-shell<span class="w"> </span>-u<span class="w"> </span>neo4j<span class="w"> </span>-p<span class="w"> </span>&lt;password&gt;<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">  </span><span class="s2">&quot;SHOW PROCEDURES YIELD name WHERE name STARTS WITH &#39;apoc&#39; RETURN name LIMIT 5&quot;</span>
+</span></code></pre></div>
+<h3 id="events-to-look-for">Events to look for<a class="headerlink" href="#events-to-look-for" title="Anchor link to this section">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Event reason</th>
+<th>Type</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>PluginInstalled</code></td>
+<td>Normal</td>
+<td>Plugin installed and verified</td>
+</tr>
+<tr>
+<td><code>PluginInstallFailed</code></td>
+<td>Warning</td>
+<td>Installation failed — see the event message</td>
+</tr>
+<tr>
+<td><code>PluginDuplicate</code></td>
+<td>Warning</td>
+<td>Another CR already owns this <code>(clusterRef, name)</code> pair — delete one</td>
+</tr>
+<tr>
+<td><code>ValidationFailed</code></td>
+<td>Warning</td>
+<td>Spec rejected by the validator (hard error, no requeue)</td>
+</tr>
+<tr>
+<td><code>ValidationWarning</code></td>
+<td>Warning</td>
+<td>Advisory compatibility note — does not block install</td>
+</tr>
+</tbody>
+</table>
+<h3 id="other-common-issues">Other common issues<a class="headerlink" href="#other-common-issues" title="Anchor link to this section">&para;</a></h3>
 <ul>
-<li>✅ <strong>Use</strong>: CloudSeedProvider with system-wide authentication</li>
-<li>❌ <strong>Don't Use</strong>: S3SeedProvider (deprecated in Neo4j 5.x)</li>
+<li><strong><code>status.phase: Waiting</code></strong>: the target cluster/standalone isn't functional yet — the plugin controller requeues until it is.</li>
+<li><strong>VerifiedDownload pod stuck <code>Pending</code></strong>: checksum mismatch or unreachable URL — <code>kubectl describe pod</code> and read the init container's termination message.</li>
+<li><strong>Plugin loads but procedures fail</strong>: check <code>spec.security.allowedProcedures</code> and whether the plugin needs unrestricted procedures; for license-bound plugins (Bloom, GDS Enterprise, GenAI) verify the license file is mounted (<code>kubectl exec &lt;pod&gt; -c neo4j -- ls /licenses/</code>).</li>
 </ul>
-<p>This approach provides better security, broader cloud support, and future compatibility.</p>
+<p>More general debugging recipes: <a href="../troubleshooting/">Troubleshooting Guide</a>.</p>
+<h2 id="see-also">See also<a class="headerlink" href="#see-also" title="Anchor link to this section">&para;</a></h2>
+<ul>
+<li><a href="../../../api_reference/neo4jplugin/">Neo4jPlugin API Reference</a> — every field, status phase, and the full supply-chain section</li>
+<li><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/tree/main/examples/plugins">Plugin examples</a> — APOC, GDS, Bloom, GenAI, cluster and standalone targets</li>
+<li><a href="../../aura_fleet_management/">Aura Fleet Management</a> — the fleet-management plugin is managed via the cluster CRD, not <code>Neo4jPlugin</code></li>
+<li><a href="../../configuration/">Configuration</a> — cluster/standalone <code>spec.config</code>, <code>extraVolumes</code>, <code>extraVolumeMounts</code> for license files</li>
+</ul>
 
 
 
@@ -3753,7 +3450,7 @@
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../plugins/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Plugin Management">
+          <a href="../../external_access/" class="md-footer__link md-footer__link--prev" aria-label="Previous: External Access (LB / NodePort / Ingress / Route)">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -3763,20 +3460,20 @@
                 Previous
               </span>
               <div class="md-ellipsis">
-                Plugin Management
+                External Access (LB / NodePort / Ingress / Route)
               </div>
             </div>
           </a>
         
         
           
-          <a href="../../aura_fleet_management/" class="md-footer__link md-footer__link--next" aria-label="Next: Aura Fleet Management">
+          <a href="../seed-uri/" class="md-footer__link md-footer__link--next" aria-label="Next: Seed URI">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Aura Fleet Management
+                Seed URI
               </div>
             </div>
             <div class="md-footer__button md-icon">

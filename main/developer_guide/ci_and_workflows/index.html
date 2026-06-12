@@ -593,6 +593,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -653,6 +657,34 @@
     
   
     Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user_guide/examples_gallery/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples Catalog
   
 
     
@@ -793,6 +825,34 @@
     
   
     External Access (LB / NodePort / Ingress / Route)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user_guide/guides/plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugin Management
   
 
     
@@ -3148,7 +3208,12 @@ from the tag.</p>
    regenerated.</li>
 <li>(Recommended) <code>make install-confidence</code> — the same install/upgrade/uninstall
    matrix the release workflow runs as a blocking gate. Running it locally
-   first means a failure costs you minutes, not a dead tag.</li>
+   first means a failure costs you minutes, not a dead tag.
+2b. <strong>Dispatch the extended suite on the final main</strong> and wait for green:
+   <code>gh workflow run integration-tests.yml --ref main</code>. The extended lane runs
+   nightly, not per-PR — a PR that only core lanes validated can carry a stale
+   extended-lane expectation (or a real regression) that would otherwise
+   surface AFTER the release. Tag the exact commit the suite validated.</li>
 <li>If there are breaking changes or notable upgrade steps, add/extend the
    <code>Upgrading from vX to vY</code> section in
    <a href="../../user_guide/migration_guide/"><code>migration_guide.md</code></a>.</li>
@@ -3175,6 +3240,11 @@ kubectl bundles + OLM CSV), <strong>Pages — Docs</strong> (<code>/v1.12/</code
 <li><code>cosign verify ghcr.io/neo4j-partners/neo4j-kubernetes-operator:v1.12.0 …</code> succeeds.</li>
 <li>The release run's <strong>Install Confidence Gate</strong> job is green (it ran
      automatically — no manual fresh-Kind <code>helm install</code> needed).</li>
+<li>The <strong>submit-operatorhub</strong> job opened a PR on
+     k8s-operatorhub/community-operators (check the fork's branches if not).</li>
+<li>Comment on every issue the release fixes that was reported by someone else,
+   naming the released version and asking the reporter to re-verify against it
+   — reporter-filed issues stay open until verified on a pinned release.</li>
 </ol>
 <h2 id="publishing-to-github-pages">Publishing to GitHub Pages<a class="headerlink" href="#publishing-to-github-pages" title="Anchor link to this section">&para;</a></h2>
 <p>Both Pages workflows write to the <strong><code>gh-pages</code></strong> branch and share a <code>gh-pages</code>

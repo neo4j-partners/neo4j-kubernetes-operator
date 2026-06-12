@@ -101,6 +101,10 @@
          <lastmod>2026-06-12</lastmod>
     </url>
     <url>
+         <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/main/user_guide/examples_gallery/</loc>
+         <lastmod>2026-06-12</lastmod>
+    </url>
+    <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/main/user_guide/external_access/</loc>
          <lastmod>2026-06-12</lastmod>
     </url>
@@ -174,6 +178,10 @@
     </url>
     <url>
          <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/main/user_guide/guides/performance/</loc>
+         <lastmod>2026-06-12</lastmod>
+    </url>
+    <url>
+         <loc>https://neo4j-partners.github.io/neo4j-kubernetes-operator/main/user_guide/guides/plugins/</loc>
          <lastmod>2026-06-12</lastmod>
     </url>
     <url>

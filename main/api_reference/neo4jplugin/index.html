@@ -593,6 +593,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -653,6 +657,34 @@
     
   
     Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user_guide/examples_gallery/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples Catalog
   
 
     
@@ -793,6 +825,34 @@
     
   
     External Access (LB / NodePort / Ingress / Route)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user_guide/guides/plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugin Management
   
 
     
@@ -4718,7 +4778,7 @@ the unwanted CR. The surviving CR reconciles on its next watch event
 <li>Automatically applies default security settings</li>
 <li>User security configuration can override defaults</li>
 <li>Automatically configured settings:</li>
-<li><code>NEO4J_DBMS_SECURITY_PROCEDURES_UNRESTRICTED=gds.*,apoc.load.*</code></li>
+<li><code>dbms.security.procedures.unrestricted=gds.*</code> and <code>dbms.security.procedures.allowlist=gds.*</code> (additive — merged with, never replacing, existing values)</li>
 </ul>
 <h3 id="examples-with-automatic-security">Examples with Automatic Security<a class="headerlink" href="#examples-with-automatic-security" title="Anchor link to this section">&para;</a></h3>
 <p><strong>Bloom Plugin (Zero Configuration)</strong>:
