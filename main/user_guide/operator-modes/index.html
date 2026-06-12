@@ -661,6 +661,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#feature-availability-by-rbac-shape" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Feature availability by RBAC shape
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#cluster-scope" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2929,6 +2940,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#feature-availability-by-rbac-shape" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Feature availability by RBAC shape
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#cluster-scope" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3234,6 +3256,53 @@ Explicit flags and Helm values always override the mode defaults.</p>
 <p>Note: <code>config/overlays/dev</code> sets the dev image, namespace, and <code>--mode=dev</code>. If you customize via Kustomize, keep <code>--mode=dev</code> in the manager args or use Helm <code>developmentMode: true</code>.</p>
 <h2 id="scope-and-rbac">Scope and RBAC<a class="headerlink" href="#scope-and-rbac" title="Anchor link to this section">&para;</a></h2>
 <p>Scope determines where the operator watches CRs, and RBAC determines what it can read/write.</p>
+<h3 id="feature-availability-by-rbac-shape">Feature availability by RBAC shape<a class="headerlink" href="#feature-availability-by-rbac-shape" title="Anchor link to this section">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Manager ClusterRole (<code>cluster</code>, or <code>namespaces</code> default)</th>
+<th>Namespaced Roles (<code>namespace</code>, or <code>namespaces</code> + <code>perNamespaceRoles</code>)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CR reconciliation (clusters, standalones, databases, backups, restores, users/roles, plugins)</td>
+<td>✅</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>TLS via <code>ClusterIssuer</code> (or namespaced <code>Issuer</code>)</td>
+<td>✅</td>
+<td>✅ — cert-manager does the cluster-scoped resolution</td>
+</tr>
+<tr>
+<td>External Secrets via <code>ClusterSecretStore</code> (or namespaced <code>SecretStore</code>)</td>
+<td>✅</td>
+<td>✅ — the external-secrets operator does the resolution</td>
+</tr>
+<tr>
+<td>Pattern-based <code>watchNamespaces</code> (<code>glob:</code>/<code>regex:</code>/<code>label:</code>)</td>
+<td>✅</td>
+<td>❌ — needs a cluster-scoped namespace list/watch; rejected at render time with <code>perNamespaceRoles</code></td>
+</tr>
+<tr>
+<td>Availability-zone auto-discovery (<code>spec.topology.placement</code>)</td>
+<td>✅</td>
+<td>Degraded: best-effort zone spread + <code>TopologyZoneDiscoveryDegraded</code> event. ✅ with <code>rbac.clusterScopedReads: true</code></td>
+</tr>
+<tr>
+<td><code>spec.topology.enforceDistribution: true</code></td>
+<td>✅</td>
+<td>❌ unless <code>spec.topology.availabilityZones</code> is set explicitly, or <code>rbac.clusterScopedReads: true</code></td>
+</tr>
+<tr>
+<td>Storage expansion (<code>allowVolumeExpansion</code> validation)</td>
+<td>✅</td>
+<td>❌ — fails with an RBAC error. ✅ with <code>rbac.clusterScopedReads: true</code></td>
+</tr>
+</tbody>
+</table>
 <h3 id="cluster-scope">Cluster Scope<a class="headerlink" href="#cluster-scope" title="Anchor link to this section">&para;</a></h3>
 <ul>
 <li><strong>RBAC</strong>: ClusterRole + ClusterRoleBinding</li>
@@ -3254,8 +3323,12 @@ Explicit flags and Helm values always override the mode defaults.</p>
 <li><strong>TLS via a <code>ClusterIssuer</code></strong> (incl. the default <code>issuerRef.kind: ClusterIssuer</code>) — fully supported. The operator only <em>references</em> the issuer in the <code>Certificate</code> it creates; <strong>cert-manager</strong> resolves the <code>ClusterIssuer</code> and issues the cert using its own permissions. The operator never reads the issuer itself, so no cluster-scoped RBAC is required on the operator. A namespaced <code>Issuer</code> works too.</li>
 <li><strong>External Secrets via a <code>ClusterSecretStore</code></strong> — fully supported, for the same reason: the operator only references the store in the <code>ExternalSecret</code> it creates; the <strong>external-secrets operator</strong> does the cluster-scoped resolution. A namespaced <code>SecretStore</code> works too.</li>
 </ul>
-<p><strong>The one behavioral difference: availability-zone auto-discovery.</strong> Listing cluster nodes is the only cluster-scoped read the operator itself performs, and a namespaced Role can't grant it. It's used solely to <em>enumerate</em> zones for <code>spec.topology.placement</code> (topology-spread / anti-affinity). In namespace scope the operator skips enumeration and applies <strong>best-effort zone spread via the zone label key</strong> (the Kubernetes scheduler still spreads across zones), emitting a <code>TopologyZoneDiscoveryDegraded</code> warning event — no stuck reconcile.</p>
-<p>The only case that needs action from you is <code>spec.topology.enforceDistribution: true</code> — a hard "N servers across ≥N zones" guarantee the operator can't verify without seeing the nodes. Set <code>spec.topology.availabilityZones</code> explicitly (no node read needed) and enforced distribution works in namespace scope too. See <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/issues/202">#202</a>.</p>
+<p><strong>The two behavioral differences: availability-zone auto-discovery and storage-expansion validation.</strong> The operator itself performs exactly two cluster-scoped reads, and a namespaced Role can't grant either:</p>
+<ul>
+<li><strong><code>nodes</code> (zone auto-discovery)</strong> — used solely to <em>enumerate</em> zones for <code>spec.topology.placement</code> (topology-spread / anti-affinity). Degrades gracefully: the operator skips enumeration and applies <strong>best-effort zone spread via the zone label key</strong> (the Kubernetes scheduler still spreads across zones), emitting a <code>TopologyZoneDiscoveryDegraded</code> warning event — no stuck reconcile. The only case that needs action from you is <code>spec.topology.enforceDistribution: true</code> — a hard "N servers across ≥N zones" guarantee the operator can't verify without seeing the nodes. Set <code>spec.topology.availabilityZones</code> explicitly (no node read needed) and enforced distribution works in namespace scope too. See <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/issues/202">#202</a>.</li>
+<li><strong><code>storageclasses</code> (storage expansion)</strong> — before expanding PVCs the operator validates the StorageClass has <code>allowVolumeExpansion: true</code> (a deliberate safety check it will not skip). Without the read, growing <code>spec.storage.size</code> fails the reconcile with a clear RBAC error instead of patching PVCs blind.</li>
+</ul>
+<p><strong>Opt back in with <code>rbac.clusterScopedReads: true</code></strong> — a minimal read-only ClusterRole (<code>nodes</code> + <code>storageclasses</code>, get/list/watch only) bound to the operator's ServiceAccount, restoring both features while manager permissions stay namespaced. Default <code>false</code> so ClusterRole-free installs stay ClusterRole-free.</p>
 <h3 id="multi-namespace-scope">Multi-Namespace Scope<a class="headerlink" href="#multi-namespace-scope" title="Anchor link to this section">&para;</a></h3>
 <ul>
 <li><strong>RBAC</strong>: ClusterRole + ClusterRoleBinding (default), or per-namespace Roles — see below.</li>
@@ -3293,7 +3366,7 @@ Explicit flags and Helm values always override the mode defaults.</p>
 <li><strong>Every <code>watchNamespaces</code> entry must be a plain namespace name.</strong> A glob/regex/label/prefix pattern (<code>team-*</code>, <code>regex:…</code>, <code>label:…</code>) is <strong>rejected</strong> — pattern matching needs a cluster-scoped namespace list/watch a Role cannot grant. Use <code>perNamespaceRoles=false</code> (ClusterRole) if you need patterns. You cannot have <em>no ClusterRole</em> <strong>and</strong> <em>pattern matching</em>.</li>
 <li><strong>Each listed namespace must already exist</strong> — Helm creates the <code>Role</code>+<code>RoleBinding</code> <em>in</em> each namespace but does not create the namespace.</li>
 </ul>
-<p>What you lose vs. the ClusterRole: only <strong>availability-zone auto-discovery</strong> (the same documented namespace-scope limitation — see "Namespace Scope" above; the operator falls back to best-effort zone spread and emits <code>TopologyZoneDiscoveryDegraded</code>). TLS via <code>ClusterIssuer</code>, external-secrets, backups, and all CR reconciliation work unchanged.</p>
+<p>What you lose vs. the ClusterRole: <strong>availability-zone auto-discovery</strong> and <strong>storage-expansion validation</strong> (the same two namespace-scope limitations — see "Namespace Scope" above), both restorable with <code>rbac.clusterScopedReads: true</code>. TLS via <code>ClusterIssuer</code>, external-secrets, backups, and all CR reconciliation work unchanged.</p>
 <blockquote>
 <p>For a <strong>completely</strong> ClusterRole-free install, also set <code>preInstallChecks.enabled=false</code>. The optional pre-install check runs as a Helm hook that reads cluster-scoped CRDs via a transient ClusterRole (auto-deleted after the hook); the metrics endpoint's <code>metrics-auth</code>/<code>metrics-reader</code> ClusterRoles remain only when <code>metrics.secure=true</code>, because the Kubernetes authn/authz APIs they use are inherently cluster-scoped.</p>
 </blockquote>
