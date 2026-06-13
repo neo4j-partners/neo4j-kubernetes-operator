@@ -1719,8 +1719,18 @@ func (r *Neo4jEnterpriseStandaloneReconciler) createStatefulSet(ctx context.Cont
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
+					// `app: <name>` is the immutable StatefulSet selector key and
+					// must stay. The app.kubernetes.io/* labels are ADDED to the
+					// template only (never the selector) so standard tooling and the
+					// documented `-l app.kubernetes.io/name=neo4j` selector match
+					// standalone pods the way they already match cluster server pods
+					// (getLabelsForEnterpriseServer). Adding template labels triggers a
+					// one-time rolling restart on upgrade. (#268)
 					Labels: map[string]string{
-						"app": standalone.Name,
+						"app":                          standalone.Name,
+						"app.kubernetes.io/name":       "neo4j",
+						"app.kubernetes.io/instance":   standalone.Name,
+						"app.kubernetes.io/managed-by": "neo4j-operator",
 					},
 					Annotations: annotations,
 				},
