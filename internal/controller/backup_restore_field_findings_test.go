@@ -17,6 +17,7 @@ import (
 	"testing"
 
 	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	neo4jv1beta1 "github.com/neo4j-partners/neo4j-kubernetes-operator/api/v1beta1"
@@ -199,4 +200,70 @@ func TestBuildBackupCommand_PVCChainDirFlock(t *testing.T) {
 	if strings.Contains(cmd, "flock") {
 		t.Fatalf("cloud backup must not attempt flock, got %q", cmd)
 	}
+}
+
+// #227 (backup analog of the seed-proxy deadline): a one-shot backup whose
+// pod can never start (missing PVC -> unschedulable, bad image -> pull error)
+// must surface the pod's real condition, not "Backup job is running" forever.
+// backupJobStartupState reports running=false with a diagnosis until a pod
+// actually runs.
+func TestBackupJobStartupState(t *testing.T) {
+	jobName := "bk-backup"
+	mkPod := func(name string, phase corev1.PodPhase, conds []corev1.PodCondition, css []corev1.ContainerStatus) *corev1.Pod {
+		return &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: name, Namespace: "default",
+				Labels: map[string]string{"batch.kubernetes.io/job-name": jobName},
+			},
+			Status: corev1.PodStatus{Phase: phase, Conditions: conds, ContainerStatuses: css},
+		}
+	}
+
+	t.Run("unschedulable pod yields diagnosis, not running", func(t *testing.T) {
+		pod := mkPod("bk-backup-x", corev1.PodPending, []corev1.PodCondition{{
+			Type: corev1.PodScheduled, Status: corev1.ConditionFalse,
+			Message: `persistentvolumeclaim "sharded-backup-pvc" not found`,
+		}}, nil)
+		r := newShardedTestReconciler(t, pod)
+		running, diag := r.backupJobStartupState(context.Background(), "default", jobName)
+		if running {
+			t.Fatal("must not report running while the pod is Pending/unschedulable")
+		}
+		if !strings.Contains(diag, "unschedulable") || !strings.Contains(diag, "not found") {
+			t.Fatalf("diagnosis must name the scheduling failure, got %q", diag)
+		}
+	})
+
+	t.Run("image pull error yields diagnosis", func(t *testing.T) {
+		pod := mkPod("bk-backup-y", corev1.PodPending, nil, []corev1.ContainerStatus{{
+			Name:  "backup",
+			State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "ImagePullBackOff", Message: "Back-off pulling image"}},
+		}})
+		r := newShardedTestReconciler(t, pod)
+		running, diag := r.backupJobStartupState(context.Background(), "default", jobName)
+		if running || !strings.Contains(diag, "ImagePullBackOff") {
+			t.Fatalf("running=%v diag=%q; want running=false naming ImagePullBackOff", running, diag)
+		}
+	})
+
+	t.Run("ContainerCreating is not a stuck diagnosis", func(t *testing.T) {
+		pod := mkPod("bk-backup-z", corev1.PodPending, nil, []corev1.ContainerStatus{{
+			Name:  "backup",
+			State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "ContainerCreating"}},
+		}})
+		r := newShardedTestReconciler(t, pod)
+		running, diag := r.backupJobStartupState(context.Background(), "default", jobName)
+		if running || strings.Contains(diag, "ContainerCreating") {
+			t.Fatalf("ContainerCreating must not be flagged as stuck; got running=%v diag=%q", running, diag)
+		}
+	})
+
+	t.Run("running pod reports running with no diagnosis", func(t *testing.T) {
+		pod := mkPod("bk-backup-r", corev1.PodRunning, nil, nil)
+		r := newShardedTestReconciler(t, pod)
+		running, diag := r.backupJobStartupState(context.Background(), "default", jobName)
+		if !running || diag != "" {
+			t.Fatalf("running pod must report running with empty diag; got running=%v diag=%q", running, diag)
+		}
+	})
 }
