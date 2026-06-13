@@ -605,9 +605,91 @@ func (r *Neo4jBackupReconciler) handleExistingBackupJob(ctx context.Context, bac
 		return ctrl.Result{}, nil
 	}
 
-	// Job is still running (possibly retrying a failed pod attempt).
-	r.updateBackupStatus(ctx, backup, "Running", "Backup job is running")
+	// Job is active. Distinguish a backup legitimately in progress (a pod is
+	// Running) from one wedged before it ever starts — a pod stuck Pending /
+	// ImagePullBackOff (e.g. a missing or unbindable backup PVC) previously
+	// showed "Backup job is running" indefinitely with no diagnosis, the
+	// backup analog of the seed-proxy deadline gap (#227). Surface the pod's
+	// real condition, and bound the startup wait so a pod that can never run
+	// fails with its reason instead of waiting forever.
+	running, diag := r.backupJobStartupState(ctx, backup.Namespace, job.Name)
+	if running {
+		r.updateBackupStatus(ctx, backup, "Running", "Backup job is running")
+		return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
+	}
+
+	var elapsed time.Duration
+	if job.Status.StartTime != nil {
+		elapsed = time.Since(job.Status.StartTime.Time)
+	}
+	if elapsed > backupJobStartupTimeout {
+		msg := fmt.Sprintf("backup pod did not start within %s: %s — fix the cause and re-create the backup", backupJobStartupTimeout, diag)
+		// Delete the wedged Job so its never-scheduled pod doesn't leak (the
+		// CR stays Failed; the terminal guard prevents re-entry, so nothing
+		// recreates it). Best-effort.
+		_ = r.Delete(ctx, job, client.PropagationPolicy(metav1.DeletePropagationBackground))
+		r.updateBackupStatus(ctx, backup, "Failed", msg)
+		r.Recorder.Event(backup, corev1.EventTypeWarning, EventReasonBackupFailed, msg)
+		metrics.NewBackupMetrics(backup.Name, backup.Namespace).RecordBackup(ctx, false, elapsed, 0)
+		return ctrl.Result{}, nil
+	}
+
+	// Within the startup window but not running yet — surface WHY so the user
+	// isn't staring at "Backup job is running" while the pod is unschedulable.
+	msg := "Backup job is running"
+	if diag != "" {
+		msg = fmt.Sprintf("Waiting for backup pod to start: %s", diag)
+	}
+	r.updateBackupStatus(ctx, backup, "Running", msg)
 	return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
+}
+
+// backupJobStartupTimeout bounds how long a one-shot backup Job may sit
+// without its pod reaching Running before the backup is marked Failed.
+// Generous enough for a cold-node image pull or cluster-autoscaler
+// scale-up, short enough that a permanently unschedulable pod (missing PVC,
+// unsatisfiable affinity) doesn't hang silently. Only counts time BEFORE a
+// pod runs — a backup legitimately in progress is never bounded by this.
+const backupJobStartupTimeout = 10 * time.Minute
+
+// backupJobStartupState reports whether any pod of the backup Job has reached
+// Running/Succeeded, and — when none has — a human-readable diagnosis of why
+// the pod hasn't started (unschedulable reason, image-pull error). Best-effort
+// and read-only: any list failure or absence of diagnostic conditions yields
+// ("", running=false) so the caller's startup deadline still governs. Mirrors
+// pvcSeedProxyDiagnosis on the restore side.
+func (r *Neo4jBackupReconciler) backupJobStartupState(ctx context.Context, namespace, jobName string) (running bool, diagnosis string) {
+	pods := &corev1.PodList{}
+	if err := r.List(ctx, pods, client.InNamespace(namespace), client.MatchingLabels{
+		"batch.kubernetes.io/job-name": jobName,
+	}); err != nil {
+		return false, ""
+	}
+	var parts []string
+	for i := range pods.Items {
+		pod := &pods.Items[i]
+		if pod.Status.Phase == corev1.PodRunning || pod.Status.Phase == corev1.PodSucceeded {
+			return true, ""
+		}
+		for _, cond := range pod.Status.Conditions {
+			if cond.Type == corev1.PodScheduled && cond.Status != corev1.ConditionTrue && cond.Message != "" {
+				parts = append(parts, fmt.Sprintf("pod %s unschedulable: %s", pod.Name, cond.Message))
+			}
+		}
+		for _, cs := range pod.Status.ContainerStatuses {
+			if w := cs.State.Waiting; w != nil && w.Reason != "" && w.Reason != "ContainerCreating" && w.Reason != "PodInitializing" {
+				m := w.Reason
+				if w.Message != "" {
+					m += ": " + w.Message
+				}
+				parts = append(parts, fmt.Sprintf("pod %s container %s waiting: %s", pod.Name, cs.Name, m))
+			}
+		}
+	}
+	if len(parts) == 0 {
+		return false, "no diagnostic conditions on the backup pod yet — inspect with: kubectl describe pod -l batch.kubernetes.io/job-name=" + jobName + " -n " + namespace
+	}
+	return false, strings.Join(parts, "; ")
 }
 
 // shellQuote single-quotes a string for safe inclusion in a /bin/sh -c
