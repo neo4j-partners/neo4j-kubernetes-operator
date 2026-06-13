@@ -61,8 +61,8 @@
 - **enforcement:** unit test + integration test.
 
 ### id 7 — Validator REJECTS deprecated `spec.config` keys
-- **scope:** `internal/validation/` (config-key validation, shared by cluster + standalone validators)
-- **rule:** Deprecated keys are rejected with `field.Invalid` (a hard error, NOT a warning): `dbms.logs.query.enabled` (use `db.logs.query.enabled`), `dbms.default_database` (use the `dbms.setDefaultDatabase()` procedure), `db.format`, `dbms.integrations.cloud_storage.s3.region`. Always use the `db.*` namespace for 5.x+.
+- **scope:** `internal/validation/config_validator.go` (`ConfigValidator`) — wired into the **cluster** validator only (`cluster_validator.go`); the **standalone** validator has its OWN independent `validateConfig` (`standalone_validator.go`). The two are NOT shared.
+- **rule:** On the **cluster** path, `ConfigValidator` rejects deprecated keys as `field.Invalid`: `dbms.logs.query.enabled` (use `db.logs.query.enabled`), `dbms.default_database` (use the `dbms.setDefaultDatabase()` procedure), and `dbms.integrations.cloud_storage.s3.region`; `db.format` is rejected as `field.Forbidden` (NOT `field.Invalid`). The **standalone** `validateConfig` independently rejects `db.format` (Forbidden), `dbms.mode`, clustering keys, SSL keys, and control chars — but does **not** reject those three deprecated cluster keys. Always use the `db.*` namespace for 5.x+.
 - **why:** These keys silently no-op or fail in 5.26+; rejecting at admission time surfaces the mistake before the pod crash-loops.
 - **pinned-by:** validator unit tests for deprecated-key rejection.
 - **enforcement:** validator (inline) + unit test.
@@ -281,7 +281,7 @@
 - **enforcement:** unit test + code review.
 
 ### id 37 — Metrics JMX + CSV disabled UNCONDITIONALLY
-- **scope:** `internal/resources/cluster.go` (`BuildMonitoringConfig` ~L2015) — both cluster and standalone builders emit `server.metrics.{jmx,csv}.enabled=false` regardless of `monitoring.enabled`
+- **scope:** `internal/resources/cluster.go` — emitted in the main `BuildConfigMapForEnterprise` body (~L1661-1668), deliberately **NOT** inside `BuildMonitoringConfig` (the code comment at ~L1661 says so explicitly); it sits OUTSIDE the `monitoring.enabled` branch (which begins ~L1679), so `server.metrics.{jmx,csv}.enabled=false` is emitted regardless of `monitoring.enabled`
 - **rule:** `server.metrics.jmx.enabled=false` and `server.metrics.csv.enabled=false` are emitted unconditionally, OUTSIDE the `monitoring.enabled` branch. JMX is unauthenticated remote management; CSV writes pod-ephemeral files that fill disk.
 - **why:** These are security/stability kill-switches, not monitoring features — gating them on `monitoring.enabled` would re-enable an unauthenticated JMX management port whenever monitoring is off.
 - **pinned-by:** `TestBuildConfigMapForEnterprise_MetricsHardening` (`internal/resources/cluster_tls_test.go`), `TestBuildMonitoringConfig` (`internal/resources/cluster_test.go`).

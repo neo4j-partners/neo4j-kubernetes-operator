@@ -75,7 +75,7 @@ survive (verified in `api/v1beta1/neo4jenterprisecluster_types.go`) because
 
 ### Rule 55 — `ResolveBackupRef` is the canonical name→StorageLocation resolver
 - **Scope:** `internal/controller/backup_resolver.go` (`ResolveBackupRef`, `ErrBackupNotReady`)
-- **Rule:** All callers (`Neo4jRestore`, `Neo4jShardedDatabase`, `Neo4jDatabase`) delegate to `ResolveBackupRef(ctx, client.Reader, backupRef, namespace)`. It returns a wrapped `ErrBackupNotReady` when the backup exists but has no Succeeded run — callers `errors.Is` to route Pending+requeue. Never duplicate the lookup; never compare error strings.
+- **Rule:** Its callers — `Neo4jRestore` (`neo4jrestore_controller.go`, via the `resolveBackupRef` wrapper and a direct call) and `Neo4jShardedDatabase` (`neo4jshardeddatabase_seed.go`) — delegate to `ResolveBackupRef(ctx, client.Reader, backupRef, namespace)`. (`Neo4jDatabase` does NOT use it: it has no `backupRef` field, only a user-supplied `seedURI` string.) It returns a wrapped `ErrBackupNotReady` when the backup exists but has no Succeeded run — callers `errors.Is` to route Pending+requeue. Never duplicate the lookup; never compare error strings.
 - **Why:** A single resolver keeps the "backup not ready yet" → transient routing consistent. String-matching error messages (the pre-fix approach) misclassified RBAC denials and other API failures as "not found".
 - **Pinned-by:** `internal/controller/neo4jrestore_cloud_test.go:TestResolveRestoreSource_BackupRefNoSucceededRun_IsTransient` + `:TestResolveRestoreSource_BackupRefMissingCR_IsPermanent`
 - **Status:** Enforced — note the canonical sentinel is the exported `ErrBackupNotReady`; the package-internal alias `errBackupNotReady` in `neo4jrestore_controller.go` is kept for backward compat (new code uses `ErrBackupNotReady`).
@@ -227,7 +227,7 @@ survive (verified in `api/v1beta1/neo4jenterprisecluster_types.go`) because
 
 ### Rule 72 — `ResolvedShardedSeed.URI` vs `PerShardURIs` are mutually exclusive
 - **Scope:** `internal/controller/neo4jshardeddatabase_seed.go` (`ResolvedShardedSeed`, `resolveShardedSeed`, `resolvePVCShardedSeed`)
-- **Rule:** Cloud → `URI` (`OPTIONS { seedURI }`); PVC → `PerShardURIs` (`OPTIONS { seedURIs: { … } }`). Wire ONE and clear the OTHER — the validator rejects both populated. `ProxyAvailable=false` → requeue while the proxy rolls out.
+- **Rule:** Cloud → `URI` (`OPTIONS { seedURI: <uri> }`); PVC → `PerShardURIs`, emitted under the **same singular** Cypher key with a map value (`OPTIONS { seedURI: { `shard`: <uri>, … } }`). The emitted Cypher OPTIONS key is `seedURI` (singular) in BOTH cases — even though the CR spec field for the per-shard map is `spec.seedURIs` (plural); see `buildShardedDatabaseOptions` (`neo4jshardeddatabase_controller.go`, ~L639). Wire ONE and clear the OTHER — the validator rejects both populated. `ProxyAvailable=false` → requeue while the proxy rolls out.
 - **Why:** The two seed shapes are different Cypher OPTIONS clauses; populating both is ambiguous.
 - **Pinned-by:** (none dedicated unit test; integration in `property_sharding_minio_restore_test.go`)
 - **Status:** Documented — **NOTE:** the checklist referred to `resolveShardedSeed`/`ResolveShardedSeed` with the signature `(uri, credsSecretName, err)`. The actual function is **lowercase** `resolveShardedSeed` and returns `(*ResolvedShardedSeed, error)` — the `URI`, `PerShardURIs`, `CredsSecretName`, and `ProxyAvailable` are fields on the returned struct, not a multi-value return.
