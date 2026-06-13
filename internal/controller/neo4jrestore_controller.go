@@ -3308,8 +3308,18 @@ func (r *Neo4jRestoreReconciler) latestSucceededArtifactFilename(ctx context.Con
 			if fn := backup.Status.History[i].ArtifactFilename; fn != "" {
 				return fn, nil
 			}
-			// The NEWEST Succeeded run has no captured filename (Pod-log
-			// capture is best-effort, rule 67). Refusing to fall through to
+			// kind:Cluster backups NEVER capture a single ArtifactFilename:
+			// they back up every database, producing one artifact PER
+			// database (e.g. neo4j-<ts>.backup, system-<ts>.backup), so there
+			// is no single file to seed one database from. Structural, not a
+			// flaky capture — say so, instead of the misleading "re-run the
+			// backup" (which can't help). Found in the v1.12.1 release-verify
+			// journey.
+			if backup.Spec.Target.Kind == neo4jv1beta1.BackupTargetKindCluster {
+				return "", fmt.Errorf("Neo4jBackup %q is a kind:Cluster (all-databases) backup — it stores one artifact per database, so there is no single artifact to seed a cluster restore from. To restore a database to a cluster, either reference a kind:Database backup of that database, or use source.type=storage with source.backupPath set to the exact <database>-<timestamp>.backup file under the backup directory", backupRef)
+			}
+			// kind:Database backup with an empty filename: a genuine Pod-log
+			// capture miss (best-effort, rule 67). Refusing to fall through to
 			// an OLDER run — that would silently restore stale data under a
 			// green status (#227 item 3). Fail actionably instead.
 			return "", fmt.Errorf("the most recent Succeeded run %q of Neo4jBackup %q has no captured ArtifactFilename (Pod-log capture is best-effort and can miss) — restoring an older run silently is refused; restore via type=storage with source.backupPath pointing at the exact .backup file, or re-run the backup", backup.Status.History[i].RunID, backupRef)

@@ -390,3 +390,24 @@ func TestValidateRestore_StorageBackupPathActionable(t *testing.T) {
 			"the error must mention the backupRef alternative")
 	}
 }
+
+// Pins the v1.12.1 release-verify finding: a kind:Cluster (all-databases)
+// backup never captures a single ArtifactFilename (one artifact per DB), so a
+// cluster restore referencing it must fail with the STRUCTURAL explanation —
+// not the misleading "Pod-log capture is best-effort, re-run the backup"
+// message, which can't help.
+func TestLatestSucceededArtifactFilename_ClusterKindGivesStructuralError(t *testing.T) {
+	backup := backupCRForRestore("clusterwide", "default", false)
+	backup.Spec.Target.Kind = neo4jv1beta1.BackupTargetKindCluster
+	backup.Status.History = []neo4jv1beta1.BackupRun{
+		{RunID: "clusterwide-backup", Status: "Succeeded", ArtifactFilename: ""}, // kind:Cluster never captures one
+	}
+	r := newResolvedSourceReconciler(t, backup)
+
+	_, err := r.latestSucceededArtifactFilename(context.Background(), "clusterwide", "default")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "kind:Cluster", "error must name the structural cause")
+	assert.Contains(t, err.Error(), "kind:Database", "error must point at the kind:Database remedy")
+	assert.Contains(t, err.Error(), "type=storage", "error must offer the explicit-path escape hatch")
+	assert.NotContains(t, err.Error(), "re-run the backup", "must not suggest re-running (structural, not flaky)")
+}
