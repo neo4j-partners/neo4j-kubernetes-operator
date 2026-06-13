@@ -111,3 +111,6 @@ update-alm-examples
 # gotestsum CI outputs
 unit-tests.json
 unit-junit.xml
+
+# Local-only Claude Code instructions (per-developer, never committed)
+CLAUDE.local.md

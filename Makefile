@@ -941,6 +941,10 @@ demo-fast: demo-setup ## Run fast automated demo (no confirmations)
 	@echo "Starting fast automated demo..."
 	@./scripts/demo.sh --skip-confirmations --speed fast
 
+.PHONY: demo-release
+demo-release: ## Fast demo against the PUBLISHED operator chart (no build); pin with DEMO_VERSION=1.12.1
+	@$(MAKE) demo-fast DEMO_OPERATOR=release$(if $(DEMO_VERSION),:$(DEMO_VERSION),)
+
 .PHONY: demo-only
 demo-only: ## Run fast demo without environment setup (assumes cluster exists)
 	@echo "Running fast demo on existing environment..."

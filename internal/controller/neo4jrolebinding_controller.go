@@ -155,7 +155,15 @@ func (r *Neo4jRoleBindingReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	}
 	r.setNamedCondition(ctx, rb, ConditionTypeUserNotFound, metav1.ConditionFalse, "UserPresent", "")
 
+	// Resolve same-namespace Neo4jRole CR names in spec.roles to their
+	// effective Neo4j role name (#260); literal Neo4j names pass through.
 	desiredRoles := normaliseRoles(rb.Spec.Roles)
+	desiredRoles, resolvedRoles := resolveRoleNames(ctx, r.Client, rb.Namespace, rb.Spec.ClusterRef, desiredRoles)
+	desiredRoles = normaliseRoles(desiredRoles) // dedupe any CR-name/spec.name collisions
+	if len(resolvedRoles) > 0 {
+		r.Recorder.Eventf(rb, corev1.EventTypeNormal, EventReasonRolesResolved,
+			"resolved Neo4jRole CR names to Neo4j role names: %v", resolvedRoles)
+	}
 	currentRoles := normaliseRoles(info.Roles)
 
 	addRoles, dropRoles, missing := r.diffRoles(ctx, rb, desiredRoles, currentRoles)
@@ -371,25 +379,10 @@ func (r *Neo4jRoleBindingReconciler) diffRoles(ctx context.Context, rb *neo4jv1b
 	return add, drop, missing
 }
 
+// roleResourceExists delegates to the shared roleNameExists (role_resolution.go)
+// — same index used by #260 CR-name resolution.
 func (r *Neo4jRoleBindingReconciler) roleResourceExists(ctx context.Context, namespace, clusterRef, roleName string) bool {
-	list := &neo4jv1beta1.Neo4jRoleList{}
-	if err := r.List(ctx, list, client.InNamespace(namespace)); err != nil {
-		return false
-	}
-	for i := range list.Items {
-		role := &list.Items[i]
-		if role.Spec.ClusterRef != clusterRef {
-			continue
-		}
-		name := role.Spec.Name
-		if name == "" {
-			name = role.Name
-		}
-		if name == roleName {
-			return true
-		}
-	}
-	return false
+	return roleNameExists(ctx, r.Client, namespace, clusterRef, roleName)
 }
 
 func (r *Neo4jRoleBindingReconciler) requeueAfter() time.Duration {
@@ -483,6 +476,9 @@ func (r *Neo4jRoleBindingReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			if !ok {
 				return nil
 			}
+			// Match a binding's spec.roles against BOTH the role's effective
+			// Neo4j name AND its CR metadata.name, so a binding that referenced
+			// the role by either form re-reconciles when the role lands (#260).
 			roleName := role.Spec.Name
 			if roleName == "" {
 				roleName = role.Name
@@ -498,7 +494,7 @@ func (r *Neo4jRoleBindingReconciler) SetupWithManager(mgr ctrl.Manager) error {
 					continue
 				}
 				for _, rname := range b.Spec.Roles {
-					if rname == roleName {
+					if rname == roleName || rname == role.Name {
 						reqs = append(reqs, reconcile.Request{NamespacedName: types.NamespacedName{Namespace: b.Namespace, Name: b.Name}})
 						break
 					}

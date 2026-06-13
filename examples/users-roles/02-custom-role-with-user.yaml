@@ -30,8 +30,10 @@ spec:
   clusterRef: prod-cluster
   # Neo4j role names may contain only letters, digits and underscores —
   # hyphens (the Kubernetes naming convention used by metadata.name above)
-  # are NOT valid. Set spec.name to the underscore form explicitly; users
-  # then reference THIS name (not the CR name) in their spec.roles.
+  # are NOT valid, so the Neo4j role name (spec.name) is the underscore form.
+  # Users may reference EITHER this spec.name OR the CR's metadata.name
+  # (analytics-reader) in their spec.roles: the operator resolves a
+  # same-namespace, same-clusterRef Neo4jRole CR name to its spec.name (#260).
   name: analytics_reader
   # Each privilege MUST end with `TO <spec.name>` so the controller can
   # derive the matching REVOKE if the privilege is later removed.
@@ -62,4 +64,7 @@ spec:
   passwordSecretRef:
     name: analytics-reader-creds
   roles:
-    - analytics_reader   # the Neo4j role name (the Neo4jRole's spec.name, NOT its metadata.name)
+    # Reference the Neo4jRole by its CR metadata.name — the operator resolves
+    # it to the role's spec.name (analytics_reader) automatically (#260). The
+    # underscore form (analytics_reader) also works.
+    - analytics-reader

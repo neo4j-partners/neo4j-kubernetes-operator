@@ -97,9 +97,11 @@ type BackupTarget struct {
 	Kind string `json:"kind"`
 
 	// +kubebuilder:validation:Required
-	// Name of the target resource. For Kind=ShardedDatabase, this is the logical
-	// sharded-database name (e.g. "products"); the operator backs up all shards
-	// (products-g000, products-p000, …) in one neo4j-admin invocation via a glob.
+	// Name of the target resource. For Kind=ShardedDatabase, this is the
+	// Neo4jShardedDatabase CR (metadata) name; the operator resolves the logical
+	// sharded-database name from that CR's spec.name and backs up all shards
+	// (e.g. products-g000, products-p000, …) in one neo4j-admin invocation via a
+	// glob. The CR name and spec.name often differ.
 	Name string `json:"name"`
 
 	// ClusterRef is the name of the Neo4jEnterpriseCluster (or Neo4jEnterpriseStandalone)

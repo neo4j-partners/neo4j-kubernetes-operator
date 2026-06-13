@@ -55,6 +55,41 @@ func TestStandalonePodSelector_MatchesStatefulSetPodTemplate(t *testing.T) {
 	}
 }
 
+// #268: standalone pods must carry the standard app.kubernetes.io/* labels so
+// the documented `-l app.kubernetes.io/name=neo4j` selector (which already
+// matches cluster server pods) also matches standalone pods. The labels go on
+// the pod TEMPLATE only — the StatefulSet selector is immutable, so it must
+// stay the original `app: <name>` and never gain these keys.
+func TestStandalonePodTemplate_HasRecommendedLabels(t *testing.T) {
+	standalone := &neo4jv1beta1.Neo4jEnterpriseStandalone{
+		ObjectMeta: metav1.ObjectMeta{Name: "my-standalone", Namespace: "default"},
+		Spec: neo4jv1beta1.Neo4jEnterpriseStandaloneSpec{
+			Image:   neo4jv1beta1.ImageSpec{Repo: "neo4j", Tag: "5.26-enterprise"},
+			Storage: neo4jv1beta1.StorageSpec{ClassName: "standard", Size: "10Gi"},
+		},
+	}
+
+	r := &Neo4jEnterpriseStandaloneReconciler{}
+	sts := r.createStatefulSet(context.Background(), standalone)
+	require.NotNil(t, sts)
+
+	want := map[string]string{
+		"app.kubernetes.io/name":       "neo4j",
+		"app.kubernetes.io/instance":   standalone.Name,
+		"app.kubernetes.io/managed-by": "neo4j-operator",
+	}
+	for k, v := range want {
+		assert.Equal(t, v, sts.Spec.Template.Labels[k], "pod template must carry %q", k)
+	}
+	// The original selector key must remain on the template…
+	assert.Equal(t, standalone.Name, sts.Spec.Template.Labels["app"])
+
+	// …and the immutable selector must stay app-only — adding any
+	// app.kubernetes.io/* key to it would make the STS unupgradable.
+	assert.Equal(t, map[string]string{"app": standalone.Name}, sts.Spec.Selector.MatchLabels,
+		"selector must remain immutable app=<name> only")
+}
+
 // Guards the (now-fixed) cleanupPVCs regression: the standalone PVC cleanup
 // was selecting on "app=<name>", which is a pod label, never a PVC label.
 func TestPVCSelectorByInstance_MatchesStandaloneVolumeClaimTemplate(t *testing.T) {

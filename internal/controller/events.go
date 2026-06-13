@@ -134,6 +134,7 @@ const (
 	EventReasonPasswordRotated     = "PasswordRotated"
 	EventReasonRolesGranted        = "RolesGranted"
 	EventReasonRolesRevoked        = "RolesRevoked"
+	EventReasonRolesResolved       = "RolesResolved"
 	EventReasonRolePending         = "RolePending"
 	EventReasonRoleCreated         = "RoleCreated"
 	EventReasonRoleDeleted         = "RoleDeleted"

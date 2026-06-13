@@ -34,13 +34,51 @@ log_success() {
     echo -e "${GREEN}[SUCCESS]${NC} $1"
 }
 
+# Published Helm repo for release-mode installs (mirrors docs/user_guide/installation.md).
+readonly DEMO_HELM_REPO_URL="https://priyolahiri.github.io/neo4j-kubernetes-operator/charts"
+readonly DEMO_RELEASE_NS="neo4j-operator-system"
+
+# Parse DEMO_OPERATOR=source|release|release:<version> into OPERATOR_MODE +
+# RELEASE_VERSION. Default is source (build + deploy from the working tree).
+OPERATOR_MODE="source"
+RELEASE_VERSION=""
+parse_operator_mode() {
+    local val="${DEMO_OPERATOR:-source}"
+    case "${val}" in
+        source|"")  OPERATOR_MODE="source" ;;
+        release)    OPERATOR_MODE="release" ;;
+        release:*)  OPERATOR_MODE="release"; RELEASE_VERSION="${val#release:}" ;;
+        *)
+            log_info "Unknown DEMO_OPERATOR='${val}'; falling back to source build"
+            OPERATOR_MODE="source"
+            ;;
+    esac
+}
+
+# Install the published operator chart instead of building from source.
+deploy_released_operator() {
+    log_info "Installing the PUBLISHED operator chart${RELEASE_VERSION:+ (version ${RELEASE_VERSION})} — no build, mirrors 'helm install' from the docs"
+    helm repo add neo4j-operator "${DEMO_HELM_REPO_URL}" >/dev/null 2>&1 || true
+    helm repo update >/dev/null 2>&1
+    helm install neo4j-operator neo4j-operator/neo4j-operator \
+        --namespace "${DEMO_RELEASE_NS}" --create-namespace \
+        ${RELEASE_VERSION:+--version "${RELEASE_VERSION}"} \
+        --wait --timeout 300s
+}
+
 main() {
     log_header "Neo4j Kubernetes Operator Demo Setup"
+
+    parse_operator_mode
 
     log_info "This script will set up a complete demo environment including:"
     log_info "  • Fresh Kind development cluster (neo4j-operator-dev)"
     log_info "  • cert-manager with self-signed ClusterIssuer"
-    log_info "  • Neo4j Kubernetes Operator"
+    if [[ "${OPERATOR_MODE}" == "release" ]]; then
+        log_info "  • Neo4j Kubernetes Operator — PUBLISHED chart${RELEASE_VERSION:+ ${RELEASE_VERSION}} (no build)"
+    else
+        log_info "  • Neo4j Kubernetes Operator — built + deployed from the working tree"
+    fi
     log_info "  • All prerequisites for the demo"
     echo
 
@@ -84,10 +122,14 @@ main() {
     log_section "Creating Development Cluster"
     make dev-cluster
 
-    # Step 3: Deploy operator using flexible setup
+    # Step 3: Deploy operator — published chart (release) or build-from-source.
     log_section "Deploying Neo4j Operator"
-    log_info "Using flexible operator setup (auto-detects available clusters)..."
-    make operator-setup
+    if [[ "${OPERATOR_MODE}" == "release" ]]; then
+        deploy_released_operator
+    else
+        log_info "Using flexible operator setup (auto-detects available clusters)..."
+        make operator-setup
+    fi
 
     # Step 4: Verify setup
     log_section "Verifying Setup"
@@ -98,12 +140,16 @@ main() {
     log_info "Checking cert-manager..."
     kubectl get clusterissuer ca-cluster-issuer
 
-    # Detect which namespace the operator was deployed to
+    # Detect which namespace the operator was deployed to. The source build
+    # deploys neo4j-operator-controller-manager; the published Helm chart names
+    # its Deployment neo4j-operator (release name) in neo4j-operator-system.
     local operator_namespace=""
     if kubectl get deployment neo4j-operator-controller-manager -n neo4j-operator-dev >/dev/null 2>&1; then
         operator_namespace="neo4j-operator-dev"
     elif kubectl get deployment neo4j-operator-controller-manager -n neo4j-operator-system >/dev/null 2>&1; then
         operator_namespace="neo4j-operator-system"
+    elif kubectl get deployment neo4j-operator -n "${DEMO_RELEASE_NS}" >/dev/null 2>&1; then
+        operator_namespace="${DEMO_RELEASE_NS}"
     fi
 
     if [[ -n "${operator_namespace}" ]]; then
@@ -121,7 +167,11 @@ main() {
     log_info "Environment details:"
     log_info "  • Cluster: neo4j-operator-dev (Kind)"
     log_info "  • Context: kind-neo4j-operator-dev"
-    log_info "  • Operator: Deployed in ${operator_namespace:-unknown} namespace"
+    if [[ "${OPERATOR_MODE}" == "release" ]]; then
+        log_info "  • Operator: PUBLISHED chart${RELEASE_VERSION:+ ${RELEASE_VERSION}} in ${operator_namespace:-unknown} namespace"
+    else
+        log_info "  • Operator: built from source, deployed in ${operator_namespace:-unknown} namespace"
+    fi
     log_info "  • cert-manager: ClusterIssuer 'ca-cluster-issuer' ready"
     echo
     log_info "Ready to run the demo:"
