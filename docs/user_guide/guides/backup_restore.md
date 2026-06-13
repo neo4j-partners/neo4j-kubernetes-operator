@@ -40,7 +40,12 @@ Backup Jobs run as the auto-created `neo4j-backup-sa` ServiceAccount in the same
 
 There is **no `kind: Standalone`** — a standalone is just an instance. To back one up, use `kind: Cluster` with `name: <standalone-name>` (whole instance), or `kind: Database` with `name: <database>` + `clusterRef: <standalone-name>` (one database). Key gotcha: for `kind: Cluster`, `name` is the **instance** name and `clusterRef` is unused; for `kind: Database`/`ShardedDatabase`, `name` is the **database** and `clusterRef` is the instance that owns it.
 
-**Restore is single-database** even when the backup was cluster-wide: a `kind: Cluster` backup leaves one artifact per database in the chain directory, and you create one `Neo4jRestore` per database you want back (the standalone restore Job's filename glob, and the cluster seedURI, naturally select the requested database's artifact). An all-databases restore mode is tracked in [#222](https://github.com/priyolahiri/neo4j-kubernetes-operator/issues/222).
+**Restore is single-database** even when the backup was cluster-wide: a `kind: Cluster` backup leaves one artifact per database in the chain directory, and you create one `Neo4jRestore` per database you want back. **How you reference it depends on the target:**
+
+- **Standalone target** (Job path): referencing a `kind: Cluster` backup works directly — the restore Job's filename glob (`<database>-*.backup | tail -1`) selects the requested database's artifact from the shared directory.
+- **Cluster target** (Cypher/seedURI path): reference a **`kind: Database`** backup of the database you're restoring. A `kind: Cluster` backup has no single artifact to seed one database from, so the operator rejects it with guidance to use a `kind: Database` backup or `source.type: storage` with `source.backupPath` set to the exact `<database>-<timestamp>.backup` file.
+
+An all-databases restore mode is tracked in [#222](https://github.com/priyolahiri/neo4j-kubernetes-operator/issues/222).
 
 ### Storage Layout
 
