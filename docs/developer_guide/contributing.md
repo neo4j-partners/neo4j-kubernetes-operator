@@ -16,11 +16,12 @@ so the docs don't drift out of sync with the root guide.
 
 ## Before your first PR, also read
 
-- **[AGENT-GUARDRAILS.md](AGENT-GUARDRAILS.md)** — the project invariants (no
-  admission webhooks, Kind only, Enterprise images only, V2_ONLY discovery,
-  server-based architecture with Job-per-CR backups), what breaks if you
-  violate them, and which are machine-enforced (drift gate, guard scripts) vs.
-  prose. Especially important for LLM-assisted contributions.
+- **[../knowledge/invariants.md](../knowledge/invariants.md)** — the project
+  invariants (no admission webhooks, Kind only, Enterprise images only, V2_ONLY
+  discovery, server-based architecture with Job-per-CR backups): rule, why each
+  matters, how it's enforced, and how to recover. **[AGENT-GUARDRAILS.md](AGENT-GUARDRAILS.md)**
+  is the enforcement/gates companion — which checks block a merge vs. are
+  advisory. Especially important for LLM-assisted contributions.
 - **[CLAUDE.md](../../CLAUDE.md)** — the project constitution and index,
   including the `## Generated artifacts` source→artifact map and the
   regression-prevention rules.

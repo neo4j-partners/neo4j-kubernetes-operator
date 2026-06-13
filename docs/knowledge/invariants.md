@@ -2,8 +2,9 @@
 
 > **This is a load-bearing file.** These five invariants are the project's
 > constitution-level constraints. Violating any of them produces a broken or
-> banned architecture. They are summarized in `AGENTS.md` (the front door); this
-> file is the single authoritative, enforcement-tagged source.
+> banned architecture. `AGENTS.md` carries the canonical short list (the front
+> door); **this file is the authoritative detailed source** — rule, why,
+> enforcement status, violation symptom, and **recovery** for each.
 >
 > **Enforcement-status vocabulary:**
 > - **guard-checked (`scripts/check-invariants.sh`)** — the guard script greps the
@@ -31,6 +32,20 @@
 > (`neo4j:5.26.0`, which *is* the community image) is not rejected statically —
 > only the explicit `-community` marker is — so that case relies on the runtime
 > edition backstop, by deliberate choice (see INV-3).
+
+---
+
+## Recovery — how to fix a violation
+
+Quick reference (folded in from the former AGENT-GUARDRAILS table); per-invariant detail follows below.
+
+| Inv | Recovery |
+|---|---|
+| **INV-1** | Move the check into an `internal/validation/*_validator.go` and call it inline from the reconciler. Delete any `*_webhook.go` / webhook config. |
+| **INV-2** | Use `make dev-up` / `make test-integration`. Remove references to other local-K8s tools. |
+| **INV-3** | Pin an `-enterprise` tag. Don't weaken the validators to admit community. |
+| **INV-4** | Keep the version-gated discovery config in the cluster builder (`buildVersionSpecificDiscoveryConfig`); don't hand-roll discovery flags elsewhere. |
+| **INV-5** | Use the existing `{cluster}-server` builder in `internal/resources/cluster.go` and the `Neo4jBackup`/`Neo4jRestore` controllers. Never add a long-running backup pod/sidecar. |
 
 ---
 

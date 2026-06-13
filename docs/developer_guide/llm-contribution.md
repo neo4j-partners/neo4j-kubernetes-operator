@@ -14,19 +14,13 @@ any prose. Then read this guide, then the deep reference in
 
 ## The 5 invariants & working principles
 
-The five hard invariants — restated briefly; the full enforcement-tagged form
-(with `id`, `WHY`, enforcement status, and violation symptom) lives in
-[`docs/knowledge/invariants.md`](../knowledge/invariants.md):
-
-1. **NO admission webhooks** — ALL validation lives in `internal/validation/`,
-   called inline from the reconcilers. No `*_webhook.go`, no
-   `ValidatingWebhookConfiguration`/`MutatingWebhookConfiguration`.
-2. **Kind only** for dev/test/CI — no minikube, k3s, or other distributions.
-3. **Enterprise images only** — `neo4j:<version>-enterprise`. Never community.
-4. **V2_ONLY discovery**, port 6000. Never V1 (5000) or K8s discovery.
-5. **Server-based architecture** — a single `{cluster}-server` StatefulSet with
-   `replicas: N`; never `primary-*`/`secondary-*` pod names. Backups are
-   Job-per-`Neo4jBackup`-CR only — no centralized backup StatefulSet, no sidecar.
+The five hard invariants in one line — **no admission webhooks · Kind-only
+dev/test/CI · Enterprise images only · V2_ONLY discovery (port 6000) ·
+server-based architecture (single `{cluster}-server` STS + Job-per-`Neo4jBackup`-CR)**.
+Read the canonical short list in [`AGENTS.md`](../../AGENTS.md) and the full
+enforcement-tagged form — id, why, enforcement status, violation symptom,
+recovery — in [`docs/knowledge/invariants.md`](../knowledge/invariants.md). Don't
+re-derive them here.
 
 The four **Working principles** from `AGENTS.md` apply to *every* change, on top
 of the invariants:

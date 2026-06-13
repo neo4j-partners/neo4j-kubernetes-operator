@@ -1,6 +1,6 @@
 # AGENTS.md
 
-The front door for every contributor — human or LLM. Read this first. It is the **single source of project invariants**. When in doubt, this file wins.
+The front door for every contributor — human or LLM. Read this first. It states the project invariants in **canonical short form** and routes you to everything else; the detailed, enforcement-tagged version (with recovery steps) is [`docs/knowledge/invariants.md`](docs/knowledge/invariants.md). When in doubt on a hard constraint, the list here is canonical and `invariants.md` is its authoritative detail.
 
 ## Project identity
 
