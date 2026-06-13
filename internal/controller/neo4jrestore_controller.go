@@ -1194,69 +1194,50 @@ func (r *Neo4jRestoreReconciler) ensureRestoreServiceAccount(ctx context.Context
 // seed failure if the warning goes unheeded.
 const seedEndpointEnvVar = "AWS_ENDPOINT_URL_S3"
 
-// reconcileClusterSeedEndpoint ensures a custom S3 endpoint (MinIO etc.)
-// reaches the cluster's server pods for the seed fetch during a cluster
-// Cypher restore. Mirrors the seed-creds projection (#252):
-//   - already reachable (spec.env, or a key in a projected extraEnvFrom
-//     Secret/ConfigMap) and rolled out → returns done=false (proceed).
-//   - reachable via spec.env but the roll hasn't reached the pods → Pending,
-//     done=true.
-//   - not reachable + auto-inherit annotation set → patch spec.env with the
-//     endpoint (+ the path-style JVM opt), Pending while the STS rolls.
-//   - not reachable + no annotation → Failed with an actionable error (add
-//     it yourself or opt in to auto-inherit).
-//
-// done=true means the caller should return (res, err) as-is.
-func (r *Neo4jRestoreReconciler) reconcileClusterSeedEndpoint(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore, cluster *neo4jv1beta1.Neo4jEnterpriseCluster, cloud *neo4jv1beta1.CloudBlock) (ctrl.Result, bool, error) {
-	logger := log.FromContext(ctx)
+// errSeedEndpointNotConfigured is returned by ensureClusterSeedEndpointProjected
+// when a custom S3 endpoint is needed but absent and the cluster hasn't opted
+// in to auto-inherit. The caller has already set status=Failed with the
+// actionable message; it just needs to stop. Detect with errors.Is.
+var errSeedEndpointNotConfigured = fmt.Errorf("cluster seed endpoint not configured")
 
-	inSpecEnv := false
+// clusterSpecEnvHasSeedEndpoint reports whether the cluster's spec.env already
+// carries AWS_ENDPOINT_URL_S3 (set by the user or projected by the operator).
+func clusterSpecEnvHasSeedEndpoint(cluster *neo4jv1beta1.Neo4jEnterpriseCluster) bool {
 	for _, e := range cluster.Spec.Env {
 		if e.Name == seedEndpointEnvVar {
-			inSpecEnv = true
-			break
+			return true
 		}
 	}
+	return false
+}
 
-	if inSpecEnv {
-		// We (or the user) put it in spec.env — wait for the roll to reach
-		// the pods before seeding (same rationale as seed-creds, #190).
-		rolled, err := r.specEnvEndpointRolledOut(ctx, cluster)
-		if err != nil || !rolled {
-			r.updateRestoreStatus(ctx, restore, StatusPending,
-				fmt.Sprintf("Waiting for cluster %q server pods to roll out the S3 endpoint %s", cluster.Name, seedEndpointEnvVar))
-			return ctrl.Result{RequeueAfter: r.RequeueAfter}, true, nil
-		}
-		return ctrl.Result{}, false, nil
+// ensureClusterSeedEndpointProjected makes a custom S3 endpoint (MinIO etc.)
+// reachable by the cluster's server pods for a seedURI fetch, WITHOUT waiting
+// for the rollout (the caller batches this with the seed-creds projection so
+// the cluster rolls ONCE, then gates on both rollouts together). Returns:
+//   - (false, nil)  already reachable (spec.env, or a key in a projected
+//     extraEnvFrom Secret/ConfigMap, or an unreadable source treated as
+//     present) — nothing to do.
+//   - (true, nil)   absent and auto-inherited: patched onto spec.env (+ the
+//     path-style JVM opt). Caller returns Pending while the STS rolls.
+//   - (false, errSeedEndpointNotConfigured)  absent and no auto-inherit
+//     annotation: status set to Failed with an actionable message.
+//   - (false, other err)  transient (e.g. conflict on the patch).
+func (r *Neo4jRestoreReconciler) ensureClusterSeedEndpointProjected(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore, cluster *neo4jv1beta1.Neo4jEnterpriseCluster, cloud *neo4jv1beta1.CloudBlock) (bool, error) {
+	if clusterSpecEnvHasSeedEndpoint(cluster) || r.endpointReachableViaEnvFrom(ctx, cluster) {
+		return false, nil
 	}
-
-	// Not in spec.env. If it rides along in a projected extraEnvFrom
-	// Secret/ConfigMap (the manual MinIO setup), the seed-creds rollout gate
-	// already ensured it reached the pods — proceed. Unreadable sources are
-	// treated as "present" (conservative: don't trigger a spurious restart or
-	// error on an incomplete view).
-	if r.endpointReachableViaEnvFrom(ctx, cluster) {
-		return ctrl.Result{}, false, nil
-	}
-
-	// Genuinely absent. Project it, or tell the user how.
 	if cluster.GetAnnotations()[AutoInheritSeedCredsAnnotation] != "true" {
 		msg := fmt.Sprintf("cluster %q's server pods have no %s, but the backup uses a custom S3 endpoint (%s) — the server JVM fetches the seed and would target s3.amazonaws.com and fail. Add %s=%s (and, for MinIO, JAVA_TOOL_OPTIONS=-Daws.s3.forcePathStyle=true) to the cluster's spec.env or its projected credentials Secret, OR set annotation %s=\"true\" on the cluster to let the operator inject them (triggers a rolling restart).",
 			cluster.Name, seedEndpointEnvVar, cloud.EndpointURL, seedEndpointEnvVar, cloud.EndpointURL, AutoInheritSeedCredsAnnotation)
 		r.updateRestoreStatus(ctx, restore, StatusFailed, msg)
 		r.Recorder.Event(restore, corev1.EventTypeWarning, EventReasonSeedEndpointNotProjected, msg)
-		return ctrl.Result{RequeueAfter: r.RequeueAfter}, true, fmt.Errorf("%s", msg)
+		return false, errSeedEndpointNotConfigured
 	}
-
 	if err := r.projectSeedEndpoint(ctx, cluster, cloud); err != nil {
-		logger.Error(err, "Failed to auto-inherit S3 endpoint onto cluster")
-		r.updateRestoreStatus(ctx, restore, StatusPending,
-			fmt.Sprintf("Retrying projection of the S3 endpoint onto cluster %q: %v", cluster.Name, err))
-		return ctrl.Result{RequeueAfter: r.RequeueAfter}, true, nil
+		return false, err
 	}
-	r.updateRestoreStatus(ctx, restore, StatusPending,
-		fmt.Sprintf("Auto-inherited S3 endpoint %s onto cluster %q; waiting for rolling restart", cloud.EndpointURL, cluster.Name))
-	return ctrl.Result{RequeueAfter: r.RequeueAfter}, true, nil
+	return true, nil
 }
 
 // endpointReachableViaEnvFrom reports whether AWS_ENDPOINT_URL_S3 is exposed
@@ -2771,53 +2752,65 @@ func (r *Neo4jRestoreReconciler) startClusterCypherRestore(
 				return ctrl.Result{}, fmt.Errorf("%s", msg)
 			}
 		}
-		// Project cloud credentials onto cluster pods (envFrom) so the JVM's
-		// SDK default credential chain can authenticate the seed fetch.
-		if storage.Cloud != nil && storage.Cloud.CredentialsSecretRef != "" {
-			autoInherited, credsErr := EnsureClusterHasSeedCreds(ctx, r.Client, cluster, storage.Cloud.CredentialsSecretRef)
+		// The SERVER pods fetch the seed, so they need cloud credentials AND
+		// (for MinIO/S3-compatible) the custom endpoint. Project BOTH in this
+		// single reconcile pass before waiting, so the cluster controller
+		// coalesces them into ONE rolling restart — projecting creds, waiting
+		// for that roll, then projecting the endpoint would restart the
+		// cluster twice (#252). Then gate on the combined rollout: seeding
+		// before the pods carry the config fails the JVM SDK with no retry
+		// (#190).
+		credsSecret := ""
+		if storage.Cloud != nil {
+			credsSecret = storage.Cloud.CredentialsSecretRef
+		}
+		hasCustomEndpoint := storage.Type == "s3" && storage.Cloud != nil && storage.Cloud.EndpointURL != ""
+
+		projected := false
+		if credsSecret != "" {
+			autoInherited, credsErr := EnsureClusterHasSeedCreds(ctx, r.Client, cluster, credsSecret)
 			if credsErr != nil {
 				logger.Error(credsErr, "Cluster missing seed credentials projection")
 				r.updateRestoreStatus(ctx, restore, StatusFailed, credsErr.Error())
 				return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
 			}
-			if autoInherited {
-				logger.Info("Auto-inherited seed credentials onto cluster; waiting for rolling restart",
-					"cluster", cluster.Name)
+			projected = projected || autoInherited
+		}
+		if hasCustomEndpoint {
+			epProjected, epErr := r.ensureClusterSeedEndpointProjected(ctx, restore, cluster, storage.Cloud)
+			if epErr != nil {
+				if stderrors.Is(epErr, errSeedEndpointNotConfigured) {
+					return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil // status already Failed
+				}
 				r.updateRestoreStatus(ctx, restore, StatusPending,
-					fmt.Sprintf("Auto-inherited seed credentials Secret %q onto cluster %q; waiting for rolling restart", storage.Cloud.CredentialsSecretRef, cluster.Name))
+					fmt.Sprintf("Retrying projection of the S3 endpoint onto cluster %q: %v", cluster.Name, epErr))
 				return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
 			}
-			// The creds are in spec.extraEnvFrom, but the cluster controller
-			// rolls the StatefulSet asynchronously to apply them. Issuing the
-			// seedURI restore before that rollout finishes seeds against pods
-			// that still lack the creds — the JVM's AWS/GCP/Azure SDK then
-			// fails ("Unable to load region …"), and the restore terminal-fails
-			// with no retry (#190). Gate on the rollout: stay Pending+requeue
-			// until the STS pod template carries the creds Secret AND every pod
-			// is updated to that template and Ready.
-			rolledOut, rolloutErr := r.seedCredsRolledOut(ctx, cluster, storage.Cloud.CredentialsSecretRef)
-			if rolloutErr != nil {
-				logger.Error(rolloutErr, "Failed to check seed-creds rollout status")
+			projected = projected || epProjected
+		}
+		if projected {
+			logger.Info("Projected seed configuration onto cluster; waiting for a single rolling restart", "cluster", cluster.Name)
+			r.updateRestoreStatus(ctx, restore, StatusPending,
+				fmt.Sprintf("Projected seed configuration (credentials/endpoint) onto cluster %q; waiting for the rolling restart", cluster.Name))
+			return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
+		}
+
+		// Combined rollout gate — both creds (if any) and a spec.env-projected
+		// endpoint (if any) must have reached the pods before we seed.
+		if credsSecret != "" {
+			rolledOut, rolloutErr := r.seedCredsRolledOut(ctx, cluster, credsSecret)
+			if rolloutErr != nil || !rolledOut {
 				r.updateRestoreStatus(ctx, restore, StatusPending,
-					fmt.Sprintf("Waiting to verify seed-credentials rollout on cluster %q: %v", cluster.Name, rolloutErr))
-				return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
-			}
-			if !rolledOut {
-				logger.Info("Waiting for StatefulSet to roll out seed credentials before restoring", "cluster", cluster.Name)
-				r.updateRestoreStatus(ctx, restore, StatusPending,
-					fmt.Sprintf("Waiting for cluster %q server pods to roll out seed credentials Secret %q", cluster.Name, storage.Cloud.CredentialsSecretRef))
+					fmt.Sprintf("Waiting for cluster %q server pods to roll out seed credentials Secret %q", cluster.Name, credsSecret))
 				return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
 			}
 		}
-		// Custom S3 endpoint (MinIO & friends): the SERVER JVM fetches the
-		// seed, and endpointURL only reaches Job pods, not the cluster. Project
-		// it (and the path-style JVM opt) onto the cluster's spec.env — gated
-		// by the same auto-inherit annotation as creds — then wait for the
-		// roll, so the AWS SDK targets the right endpoint instead of
-		// s3.amazonaws.com (#252).
-		if storage.Type == "s3" && storage.Cloud != nil && storage.Cloud.EndpointURL != "" {
-			if res, done, epErr := r.reconcileClusterSeedEndpoint(ctx, restore, cluster, storage.Cloud); done {
-				return res, epErr
+		if hasCustomEndpoint && clusterSpecEnvHasSeedEndpoint(cluster) {
+			rolled, rErr := r.specEnvEndpointRolledOut(ctx, cluster)
+			if rErr != nil || !rolled {
+				r.updateRestoreStatus(ctx, restore, StatusPending,
+					fmt.Sprintf("Waiting for cluster %q server pods to roll out the S3 endpoint %s", cluster.Name, seedEndpointEnvVar))
+				return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
 			}
 		}
 	case "pvc":
