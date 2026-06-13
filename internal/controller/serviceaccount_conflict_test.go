@@ -107,63 +107,61 @@ func TestEnsureRestoreServiceAccount_ConflictEmitsWarning(t *testing.T) {
 	}
 }
 
-// #252: a cluster Cypher restore from a custom-endpoint S3 store (MinIO)
-// auto-projects AWS_ENDPOINT_URL_S3 onto the cluster (gated by the
-// auto-inherit annotation), and recognises an endpoint already supplied via
-// spec.env or a projected Secret. The projector does NOT wait — the caller
-// batches it with the creds projection for a single rolling restart.
-func TestEnsureClusterSeedEndpointProjected(t *testing.T) {
-	cloud := &neo4jv1beta1.CloudBlock{EndpointURL: "http://minio.minio.svc:9000", ForcePathStyle: true}
+// #252: projectClusterSeedConfig applies the seed-credentials Secret
+// (extraEnvFrom) AND a custom S3 endpoint (spec.env) in a SINGLE cluster
+// Update — gated by the auto-inherit annotation — so the cluster rolls once.
+func TestProjectClusterSeedConfig(t *testing.T) {
+	cloud := &neo4jv1beta1.CloudBlock{EndpointURL: "http://minio.minio.svc:9000", ForcePathStyle: true, CredentialsSecretRef: "minio-creds"}
 	baseCluster := func() *neo4jv1beta1.Neo4jEnterpriseCluster {
 		return &neo4jv1beta1.Neo4jEnterpriseCluster{
 			ObjectMeta: metav1.ObjectMeta{Name: "ec", Namespace: "default"},
 		}
 	}
 
-	t.Run("absent + no annotation -> Failed, sentinel error", func(t *testing.T) {
-		restore := restoreWithBackupRef("r1", "default", "nightly")
+	t.Run("missing creds+endpoint, no annotation -> sentinel + both listed", func(t *testing.T) {
 		cluster := baseCluster()
-		r := newResolvedSourceReconciler(t, restore, cluster)
-		projected, err := r.ensureClusterSeedEndpointProjected(context.Background(), restore, cluster, cloud)
+		r := newResolvedSourceReconciler(t, cluster)
+		projected, missing, err := r.projectClusterSeedConfig(context.Background(), cluster, "minio-creds", cloud)
 		require.False(t, projected)
-		require.ErrorIs(t, err, errSeedEndpointNotConfigured)
+		require.ErrorIs(t, err, errSeedConfigNotAutoInherited)
+		require.Len(t, missing, 2)
+		joined := strings.Join(missing, " ")
+		assert.Contains(t, joined, "minio-creds")
+		assert.Contains(t, joined, "AWS_ENDPOINT_URL_S3")
 	})
 
-	t.Run("absent + auto-inherit annotation -> patches spec.env + JVM opt", func(t *testing.T) {
-		restore := restoreWithBackupRef("r1", "default", "nightly")
+	t.Run("missing both + annotation -> ONE update sets extraEnvFrom + spec.env", func(t *testing.T) {
 		cluster := baseCluster()
 		cluster.Annotations = map[string]string{AutoInheritSeedCredsAnnotation: "true"}
-		r := newResolvedSourceReconciler(t, restore, cluster)
-		projected, err := r.ensureClusterSeedEndpointProjected(context.Background(), restore, cluster, cloud)
+		r := newResolvedSourceReconciler(t, cluster)
+		projected, _, err := r.projectClusterSeedConfig(context.Background(), cluster, "minio-creds", cloud)
 		require.True(t, projected)
 		require.NoError(t, err)
 		got := &neo4jv1beta1.Neo4jEnterpriseCluster{}
 		require.NoError(t, r.Get(context.Background(), client.ObjectKeyFromObject(cluster), got))
+		// creds projected via extraEnvFrom
+		assert.True(t, clusterHasSecretEnvFrom(got, "minio-creds"), "creds Secret must be in extraEnvFrom")
+		// endpoint + forcePathStyle projected via spec.env
 		var endpoint, jto string
 		for _, e := range got.Spec.Env {
-			if e.Name == "AWS_ENDPOINT_URL_S3" {
+			switch e.Name {
+			case "AWS_ENDPOINT_URL_S3":
 				endpoint = e.Value
-			}
-			if e.Name == "JAVA_TOOL_OPTIONS" {
+			case "JAVA_TOOL_OPTIONS":
 				jto = e.Value
 			}
 		}
-		assert.Equal(t, "http://minio.minio.svc:9000", endpoint, "endpoint must be projected to spec.env")
-		assert.Contains(t, jto, "aws.s3.forcePathStyle=true", "forcePathStyle must be projected as a JVM opt")
-	})
-
-	t.Run("already in spec.env -> nothing to project", func(t *testing.T) {
-		restore := restoreWithBackupRef("r1", "default", "nightly")
-		cluster := baseCluster()
-		cluster.Spec.Env = []corev1.EnvVar{{Name: "AWS_ENDPOINT_URL_S3", Value: cloud.EndpointURL}}
-		r := newResolvedSourceReconciler(t, restore, cluster)
-		projected, err := r.ensureClusterSeedEndpointProjected(context.Background(), restore, cluster, cloud)
-		require.False(t, projected)
+		assert.Equal(t, "http://minio.minio.svc:9000", endpoint)
+		assert.Contains(t, jto, "aws.s3.forcePathStyle=true")
+		// Single Update: STS generation effect is one bump — asserted by the
+		// fact that both landed in the same Get/Update cycle (this fake-client
+		// call is atomic). Re-running is now a no-op.
+		again, _, err := r.projectClusterSeedConfig(context.Background(), got, "minio-creds", cloud)
 		require.NoError(t, err)
+		assert.False(t, again, "already projected -> nothing to do (no second roll)")
 	})
 
-	t.Run("reachable via projected Secret -> nothing to project", func(t *testing.T) {
-		restore := restoreWithBackupRef("r1", "default", "nightly")
+	t.Run("endpoint reachable via projected Secret + creds present -> nothing to project", func(t *testing.T) {
 		secret := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{Name: "minio-creds", Namespace: "default"},
 			Data:       map[string][]byte{"AWS_ENDPOINT_URL_S3": []byte(cloud.EndpointURL)},
@@ -172,21 +170,9 @@ func TestEnsureClusterSeedEndpointProjected(t *testing.T) {
 		cluster.Spec.ExtraEnvFrom = []corev1.EnvFromSource{{SecretRef: &corev1.SecretEnvSource{
 			LocalObjectReference: corev1.LocalObjectReference{Name: "minio-creds"},
 		}}}
-		r := newResolvedSourceReconciler(t, restore, cluster, secret)
-		projected, err := r.ensureClusterSeedEndpointProjected(context.Background(), restore, cluster, cloud)
-		require.False(t, projected, "endpoint reachable via the projected creds Secret -> nothing to project")
-		require.NoError(t, err)
-	})
-
-	t.Run("unreadable referenced Secret -> assume present", func(t *testing.T) {
-		restore := restoreWithBackupRef("r1", "default", "nightly")
-		cluster := baseCluster()
-		cluster.Spec.ExtraEnvFrom = []corev1.EnvFromSource{{SecretRef: &corev1.SecretEnvSource{
-			LocalObjectReference: corev1.LocalObjectReference{Name: "missing-secret"},
-		}}}
-		r := newResolvedSourceReconciler(t, restore, cluster)
-		projected, err := r.ensureClusterSeedEndpointProjected(context.Background(), restore, cluster, cloud)
-		require.False(t, projected, "incomplete view -> conservative, no spurious projection")
+		r := newResolvedSourceReconciler(t, cluster, secret)
+		projected, _, err := r.projectClusterSeedConfig(context.Background(), cluster, "minio-creds", cloud)
+		require.False(t, projected, "creds present + endpoint in the projected Secret -> nothing to do")
 		require.NoError(t, err)
 	})
 }

@@ -1194,11 +1194,111 @@ func (r *Neo4jRestoreReconciler) ensureRestoreServiceAccount(ctx context.Context
 // seed failure if the warning goes unheeded.
 const seedEndpointEnvVar = "AWS_ENDPOINT_URL_S3"
 
-// errSeedEndpointNotConfigured is returned by ensureClusterSeedEndpointProjected
-// when a custom S3 endpoint is needed but absent and the cluster hasn't opted
-// in to auto-inherit. The caller has already set status=Failed with the
-// actionable message; it just needs to stop. Detect with errors.Is.
-var errSeedEndpointNotConfigured = fmt.Errorf("cluster seed endpoint not configured")
+// errSeedConfigNotAutoInherited is returned by projectClusterSeedConfig when
+// seed config (creds and/or a custom endpoint) is missing from the cluster and
+// the cluster hasn't opted in to auto-inherit. Detect with errors.Is; the
+// caller builds the actionable Failed message from the returned missing list.
+var errSeedConfigNotAutoInherited = fmt.Errorf("cluster seed configuration not auto-inheritable")
+
+// clusterHasSecretEnvFrom reports whether the cluster already projects the
+// named Secret via spec.extraEnvFrom.
+func clusterHasSecretEnvFrom(cluster *neo4jv1beta1.Neo4jEnterpriseCluster, secretName string) bool {
+	for _, ef := range cluster.Spec.ExtraEnvFrom {
+		if ef.SecretRef != nil && ef.SecretRef.Name == secretName {
+			return true
+		}
+	}
+	return false
+}
+
+// projectClusterSeedConfig ensures the cluster's server pods will have BOTH
+// the seed-credentials Secret (spec.extraEnvFrom) and, for MinIO/S3-compatible
+// stores, the custom endpoint + path-style JVM opt (spec.env) needed to fetch
+// a seedURI — applying every missing piece in a SINGLE cluster Update so the
+// cluster controller performs exactly ONE rolling restart (projecting creds
+// and endpoint in separate Updates made the STS roll twice).
+//
+// Returns:
+//   - (false, nil, nil)               nothing missing (already projected, or
+//     reachable via a projected Secret) — proceed to the rollout gate.
+//   - (true, nil, nil)                 patched something — caller returns
+//     Pending while the single roll completes.
+//   - (false, missing, errSeedConfigNotAutoInherited)  missing + not opted in:
+//     caller sets Failed naming `missing`.
+//   - (false, nil, other)              transient (conflict on the patch).
+func (r *Neo4jRestoreReconciler) projectClusterSeedConfig(ctx context.Context, cluster *neo4jv1beta1.Neo4jEnterpriseCluster, credsSecret string, cloud *neo4jv1beta1.CloudBlock) (bool, []string, error) {
+	needCreds := credsSecret != "" && !clusterHasSecretEnvFrom(cluster, credsSecret)
+	customEndpoint := cloud != nil && cloud.EndpointURL != ""
+	needEndpoint := customEndpoint &&
+		!clusterSpecEnvHasSeedEndpoint(cluster) &&
+		!r.endpointReachableViaEnvFrom(ctx, cluster)
+
+	if !needCreds && !needEndpoint {
+		return false, nil, nil
+	}
+
+	if cluster.GetAnnotations()[AutoInheritSeedCredsAnnotation] != "true" {
+		var missing []string
+		if needCreds {
+			missing = append(missing, fmt.Sprintf("credentials Secret %q (project it via spec.extraEnvFrom)", credsSecret))
+		}
+		if needEndpoint {
+			missing = append(missing, fmt.Sprintf("%s=%s (and, for MinIO, JAVA_TOOL_OPTIONS=-Daws.s3.forcePathStyle=true) via spec.env", seedEndpointEnvVar, cloud.EndpointURL))
+		}
+		return false, missing, errSeedConfigNotAutoInherited
+	}
+
+	patched := false
+	err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+		latest := &neo4jv1beta1.Neo4jEnterpriseCluster{}
+		if err := r.Get(ctx, client.ObjectKeyFromObject(cluster), latest); err != nil {
+			return err
+		}
+		changed := false
+		if needCreds && !clusterHasSecretEnvFrom(latest, credsSecret) {
+			latest.Spec.ExtraEnvFrom = append(latest.Spec.ExtraEnvFrom, corev1.EnvFromSource{
+				SecretRef: &corev1.SecretEnvSource{LocalObjectReference: corev1.LocalObjectReference{Name: credsSecret}},
+			})
+			changed = true
+		}
+		if needEndpoint && !clusterSpecEnvHasSeedEndpoint(latest) {
+			env := latest.Spec.Env
+			env = append(env, corev1.EnvVar{Name: seedEndpointEnvVar, Value: cloud.EndpointURL})
+			if cloud.ForcePathStyle {
+				const opt = "-Daws.s3.forcePathStyle=true"
+				found := false
+				for i := range env {
+					if env[i].Name == "JAVA_TOOL_OPTIONS" {
+						if !strings.Contains(env[i].Value, "aws.s3.forcePathStyle") {
+							env[i].Value = strings.TrimSpace(env[i].Value + " " + opt)
+						}
+						found = true
+						break
+					}
+				}
+				if !found {
+					env = append(env, corev1.EnvVar{Name: "JAVA_TOOL_OPTIONS", Value: opt})
+				}
+			}
+			latest.Spec.Env = env
+			changed = true
+		}
+		if !changed {
+			patched = false
+			return nil // another reconcile beat us to it
+		}
+		if latest.Annotations == nil {
+			latest.Annotations = map[string]string{}
+		}
+		latest.Annotations[AutoInheritedFromAnnotation] = "seed-config"
+		patched = true
+		return r.Update(ctx, latest)
+	})
+	if err != nil {
+		return false, nil, err
+	}
+	return patched, nil, nil
+}
 
 // clusterSpecEnvHasSeedEndpoint reports whether the cluster's spec.env already
 // carries AWS_ENDPOINT_URL_S3 (set by the user or projected by the operator).
@@ -1209,35 +1309,6 @@ func clusterSpecEnvHasSeedEndpoint(cluster *neo4jv1beta1.Neo4jEnterpriseCluster)
 		}
 	}
 	return false
-}
-
-// ensureClusterSeedEndpointProjected makes a custom S3 endpoint (MinIO etc.)
-// reachable by the cluster's server pods for a seedURI fetch, WITHOUT waiting
-// for the rollout (the caller batches this with the seed-creds projection so
-// the cluster rolls ONCE, then gates on both rollouts together). Returns:
-//   - (false, nil)  already reachable (spec.env, or a key in a projected
-//     extraEnvFrom Secret/ConfigMap, or an unreadable source treated as
-//     present) — nothing to do.
-//   - (true, nil)   absent and auto-inherited: patched onto spec.env (+ the
-//     path-style JVM opt). Caller returns Pending while the STS rolls.
-//   - (false, errSeedEndpointNotConfigured)  absent and no auto-inherit
-//     annotation: status set to Failed with an actionable message.
-//   - (false, other err)  transient (e.g. conflict on the patch).
-func (r *Neo4jRestoreReconciler) ensureClusterSeedEndpointProjected(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore, cluster *neo4jv1beta1.Neo4jEnterpriseCluster, cloud *neo4jv1beta1.CloudBlock) (bool, error) {
-	if clusterSpecEnvHasSeedEndpoint(cluster) || r.endpointReachableViaEnvFrom(ctx, cluster) {
-		return false, nil
-	}
-	if cluster.GetAnnotations()[AutoInheritSeedCredsAnnotation] != "true" {
-		msg := fmt.Sprintf("cluster %q's server pods have no %s, but the backup uses a custom S3 endpoint (%s) — the server JVM fetches the seed and would target s3.amazonaws.com and fail. Add %s=%s (and, for MinIO, JAVA_TOOL_OPTIONS=-Daws.s3.forcePathStyle=true) to the cluster's spec.env or its projected credentials Secret, OR set annotation %s=\"true\" on the cluster to let the operator inject them (triggers a rolling restart).",
-			cluster.Name, seedEndpointEnvVar, cloud.EndpointURL, seedEndpointEnvVar, cloud.EndpointURL, AutoInheritSeedCredsAnnotation)
-		r.updateRestoreStatus(ctx, restore, StatusFailed, msg)
-		r.Recorder.Event(restore, corev1.EventTypeWarning, EventReasonSeedEndpointNotProjected, msg)
-		return false, errSeedEndpointNotConfigured
-	}
-	if err := r.projectSeedEndpoint(ctx, cluster, cloud); err != nil {
-		return false, err
-	}
-	return true, nil
 }
 
 // endpointReachableViaEnvFrom reports whether AWS_ENDPOINT_URL_S3 is exposed
@@ -1299,58 +1370,6 @@ func (r *Neo4jRestoreReconciler) specEnvEndpointRolledOut(ctx context.Context, c
 	return sts.Status.ObservedGeneration == sts.Generation &&
 		sts.Status.UpdatedReplicas == desired &&
 		sts.Status.ReadyReplicas == desired, nil
-}
-
-// projectSeedEndpoint appends AWS_ENDPOINT_URL_S3 (and, for forcePathStyle,
-// the path-style JVM system property) to the cluster's spec.env via a
-// conflict-retried refetch+update, recording the source on the cluster.
-// forcePathStyle is merged into any existing JAVA_TOOL_OPTIONS rather than
-// clobbering it.
-func (r *Neo4jRestoreReconciler) projectSeedEndpoint(ctx context.Context, cluster *neo4jv1beta1.Neo4jEnterpriseCluster, cloud *neo4jv1beta1.CloudBlock) error {
-	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		latest := &neo4jv1beta1.Neo4jEnterpriseCluster{}
-		if err := r.Get(ctx, client.ObjectKeyFromObject(cluster), latest); err != nil {
-			return err
-		}
-		env := latest.Spec.Env
-		setEnv := func(name, value string) {
-			for i := range env {
-				if env[i].Name == name {
-					env[i].Value = value
-					return
-				}
-			}
-			env = append(env, corev1.EnvVar{Name: name, Value: value})
-		}
-		hasEnv := func(name string) (string, bool) {
-			for _, e := range env {
-				if e.Name == name {
-					return e.Value, true
-				}
-			}
-			return "", false
-		}
-
-		if _, ok := hasEnv(seedEndpointEnvVar); !ok {
-			setEnv(seedEndpointEnvVar, cloud.EndpointURL)
-		}
-		if cloud.ForcePathStyle {
-			const opt = "-Daws.s3.forcePathStyle=true"
-			if cur, ok := hasEnv("JAVA_TOOL_OPTIONS"); ok {
-				if !strings.Contains(cur, "aws.s3.forcePathStyle") {
-					setEnv("JAVA_TOOL_OPTIONS", strings.TrimSpace(cur+" "+opt))
-				}
-			} else {
-				setEnv("JAVA_TOOL_OPTIONS", opt)
-			}
-		}
-		latest.Spec.Env = env
-		if latest.Annotations == nil {
-			latest.Annotations = map[string]string{}
-		}
-		latest.Annotations[AutoInheritedFromAnnotation] = "seed-endpoint:" + cloud.EndpointURL
-		return r.Update(ctx, latest)
-	})
 }
 
 // serviceAccountAnnotationConflicts returns a description per annotation key
@@ -2766,27 +2785,21 @@ func (r *Neo4jRestoreReconciler) startClusterCypherRestore(
 		}
 		hasCustomEndpoint := storage.Type == "s3" && storage.Cloud != nil && storage.Cloud.EndpointURL != ""
 
-		projected := false
-		if credsSecret != "" {
-			autoInherited, credsErr := EnsureClusterHasSeedCreds(ctx, r.Client, cluster, credsSecret)
-			if credsErr != nil {
-				logger.Error(credsErr, "Cluster missing seed credentials projection")
-				r.updateRestoreStatus(ctx, restore, StatusFailed, credsErr.Error())
+		// Project creds + endpoint in ONE cluster Update so the cluster
+		// controller does a single rolling restart.
+		projected, missing, projErr := r.projectClusterSeedConfig(ctx, cluster, credsSecret, storage.Cloud)
+		if projErr != nil {
+			if stderrors.Is(projErr, errSeedConfigNotAutoInherited) {
+				msg := fmt.Sprintf("cluster %q's server pods can't reach the seed source: missing %s. The server JVM fetches the seed itself. Provide these on the cluster CR, or set annotation %s=\"true\" to let the operator inject them (triggers one rolling restart).",
+					cluster.Name, strings.Join(missing, "; "), AutoInheritSeedCredsAnnotation)
+				r.updateRestoreStatus(ctx, restore, StatusFailed, msg)
+				r.Recorder.Event(restore, corev1.EventTypeWarning, EventReasonSeedEndpointNotProjected, msg)
 				return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
 			}
-			projected = projected || autoInherited
-		}
-		if hasCustomEndpoint {
-			epProjected, epErr := r.ensureClusterSeedEndpointProjected(ctx, restore, cluster, storage.Cloud)
-			if epErr != nil {
-				if stderrors.Is(epErr, errSeedEndpointNotConfigured) {
-					return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil // status already Failed
-				}
-				r.updateRestoreStatus(ctx, restore, StatusPending,
-					fmt.Sprintf("Retrying projection of the S3 endpoint onto cluster %q: %v", cluster.Name, epErr))
-				return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
-			}
-			projected = projected || epProjected
+			logger.Error(projErr, "Failed to project seed configuration onto cluster")
+			r.updateRestoreStatus(ctx, restore, StatusPending,
+				fmt.Sprintf("Retrying projection of seed configuration onto cluster %q: %v", cluster.Name, projErr))
+			return ctrl.Result{RequeueAfter: r.RequeueAfter}, nil
 		}
 		if projected {
 			logger.Info("Projected seed configuration onto cluster; waiting for a single rolling restart", "cluster", cluster.Name)
