@@ -82,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#contributing-guide" class="md-skip">
+        <a href="#contributing" class="md-skip">
           Skip to content
         </a>
       
@@ -2234,6 +2234,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -2278,6 +2282,34 @@
 
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../QUICKSTART/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer Quickstart
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
             
               
                 
@@ -2374,564 +2406,35 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#quick-start-for-contributors" class="md-nav__link">
+  <a href="#start-here" class="md-nav__link">
     <span class="md-ellipsis">
       
-        🚀 Quick Start for Contributors
+        Start here
       
     </span>
   </a>
-  
-    <nav class="md-nav" aria-label="🚀 Quick Start for Contributors">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#prerequisites" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Prerequisites
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#1-repository-setup" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        1. Repository Setup
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#2-development-environment-setup" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2. Development Environment Setup
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#3-make-your-changes" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        3. Make Your Changes
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#4-testing-your-changes" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        4. Testing Your Changes
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#5-submit-your-contribution" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        5. Submit Your Contribution
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#development-guidelines" class="md-nav__link">
+  <a href="#before-your-first-pr-also-read" class="md-nav__link">
     <span class="md-ellipsis">
       
-        📝 Development Guidelines
+        Before your first PR, also read
       
     </span>
   </a>
-  
-    <nav class="md-nav" aria-label="📝 Development Guidelines">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#code-organization" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Code Organization
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#current-architecture-august-2025" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Current Architecture (August 2025)
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Current Architecture (August 2025)">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#server-based-architecture" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Server-Based Architecture
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#dual-deployment-support" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Dual Deployment Support
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#code-style-guidelines" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Code Style Guidelines
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Code Style Guidelines">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#go-code-standards" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Go Code Standards
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#best-practices" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Best Practices
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#testing-requirements" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Testing Requirements
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Testing Requirements">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#unit-tests" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Unit Tests
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#integration-tests" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Integration Tests
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#documentation-requirements" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Documentation Requirements
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Documentation Requirements">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#code-documentation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Code Documentation
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#user-documentation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        User Documentation
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#development-workflow" class="md-nav__link">
+  <a href="#other-developer-references" class="md-nav__link">
     <span class="md-ellipsis">
       
-        🔄 Development Workflow
+        Other developer references
       
     </span>
   </a>
-  
-    <nav class="md-nav" aria-label="🔄 Development Workflow">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#branch-strategy" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Branch Strategy
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#pull-request-process" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Pull Request Process
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Pull Request Process">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#before-submitting" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Before Submitting
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#pr-description-template" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        PR Description Template
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#review-process" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Review Process
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#git-commit-messages" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Git Commit Messages
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#bug-reports-and-feature-requests" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        🐛 Bug Reports and Feature Requests
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="🐛 Bug Reports and Feature Requests">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#reporting-bugs" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Reporting Bugs
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#feature-requests" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Feature Requests
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#advanced-development" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        🏗️ Advanced Development
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="🏗️ Advanced Development">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#adding-new-crds" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Adding New CRDs
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#performance-considerations" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Performance Considerations
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#debugging-tips" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Debugging Tips
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Debugging Tips">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#local-debugging" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Local Debugging
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#vs-code-debug-configuration" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        VS Code Debug Configuration
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#community-guidelines" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        🤝 Community Guidelines
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="🤝 Community Guidelines">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#code-of-conduct" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Code of Conduct
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#getting-help" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Getting Help
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#recognition" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Recognition
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#resources" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        📚 Resources
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="📚 Resources">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#learning-resources" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Learning Resources
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#project-resources" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Project Resources
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
@@ -3112,6 +2615,155 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_8_10" id="__nav_8_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AI-Assisted Contribution
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    AI-Assisted Contribution
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../llm-contribution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing with an LLM Agent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../AGENT-GUARDRAILS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent Guardrails
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../knowledge/invariants/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Invariants
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -3146,564 +2798,35 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#quick-start-for-contributors" class="md-nav__link">
+  <a href="#start-here" class="md-nav__link">
     <span class="md-ellipsis">
       
-        🚀 Quick Start for Contributors
+        Start here
       
     </span>
   </a>
-  
-    <nav class="md-nav" aria-label="🚀 Quick Start for Contributors">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#prerequisites" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Prerequisites
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#1-repository-setup" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        1. Repository Setup
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#2-development-environment-setup" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        2. Development Environment Setup
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#3-make-your-changes" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        3. Make Your Changes
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#4-testing-your-changes" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        4. Testing Your Changes
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#5-submit-your-contribution" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        5. Submit Your Contribution
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#development-guidelines" class="md-nav__link">
+  <a href="#before-your-first-pr-also-read" class="md-nav__link">
     <span class="md-ellipsis">
       
-        📝 Development Guidelines
+        Before your first PR, also read
       
     </span>
   </a>
-  
-    <nav class="md-nav" aria-label="📝 Development Guidelines">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#code-organization" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Code Organization
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#current-architecture-august-2025" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Current Architecture (August 2025)
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Current Architecture (August 2025)">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#server-based-architecture" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Server-Based Architecture
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#dual-deployment-support" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Dual Deployment Support
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#code-style-guidelines" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Code Style Guidelines
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Code Style Guidelines">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#go-code-standards" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Go Code Standards
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#best-practices" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Best Practices
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#testing-requirements" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Testing Requirements
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Testing Requirements">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#unit-tests" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Unit Tests
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#integration-tests" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Integration Tests
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#documentation-requirements" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Documentation Requirements
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Documentation Requirements">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#code-documentation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Code Documentation
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#user-documentation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        User Documentation
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#development-workflow" class="md-nav__link">
+  <a href="#other-developer-references" class="md-nav__link">
     <span class="md-ellipsis">
       
-        🔄 Development Workflow
+        Other developer references
       
     </span>
   </a>
-  
-    <nav class="md-nav" aria-label="🔄 Development Workflow">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#branch-strategy" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Branch Strategy
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#pull-request-process" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Pull Request Process
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Pull Request Process">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#before-submitting" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Before Submitting
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#pr-description-template" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        PR Description Template
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#review-process" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Review Process
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#git-commit-messages" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Git Commit Messages
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#bug-reports-and-feature-requests" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        🐛 Bug Reports and Feature Requests
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="🐛 Bug Reports and Feature Requests">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#reporting-bugs" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Reporting Bugs
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#feature-requests" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Feature Requests
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#advanced-development" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        🏗️ Advanced Development
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="🏗️ Advanced Development">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#adding-new-crds" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Adding New CRDs
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#performance-considerations" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Performance Considerations
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#debugging-tips" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Debugging Tips
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Debugging Tips">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#local-debugging" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Local Debugging
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#vs-code-debug-configuration" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        VS Code Debug Configuration
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#community-guidelines" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        🤝 Community Guidelines
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="🤝 Community Guidelines">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#code-of-conduct" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Code of Conduct
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#getting-help" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Getting Help
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#recognition" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Recognition
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#resources" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        📚 Resources
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="📚 Resources">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#learning-resources" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Learning Resources
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#project-resources" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Project Resources
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
@@ -3732,455 +2855,40 @@
   
 
 
-<h1 id="contributing-guide">Contributing Guide<a class="headerlink" href="#contributing-guide" title="Anchor link to this section">&para;</a></h1>
-<p>We welcome contributions to the Neo4j Enterprise Operator! This guide provides comprehensive instructions for contributing code, documentation, and improvements to make the operator better for everyone.</p>
-<h2 id="quick-start-for-contributors">🚀 Quick Start for Contributors<a class="headerlink" href="#quick-start-for-contributors" title="Anchor link to this section">&para;</a></h2>
-<h3 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Anchor link to this section">&para;</a></h3>
+<h1 id="contributing">Contributing<a class="headerlink" href="#contributing" title="Anchor link to this section">&para;</a></h1>
+<p>Contribution guidance lives in two canonical places — this page is a redirect
+so the docs don't drift out of sync with the root guide.</p>
+<h2 id="start-here">Start here<a class="headerlink" href="#start-here" title="Anchor link to this section">&para;</a></h2>
 <ul>
-<li><strong>Go</strong>: Version 1.26+ for development (CI builds against Go 1.26)</li>
-<li><strong>Docker</strong>: Container runtime for building images</li>
-<li><strong>kubectl</strong>: Kubernetes CLI tool</li>
-<li><strong>kind</strong>: Kubernetes in Docker for local clusters</li>
-<li><strong>git</strong>: Version control</li>
+<li><strong><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/CONTRIBUTING.md">CONTRIBUTING.md</a></strong> (repository root) — the single
+  source of truth for the full contribution workflow: prerequisites, dev
+  environment, the inner dev loop (manual / <code>dev-watch</code> / Tilt), testing tiers,
+  code quality, conventional commits, the generated-artifacts sync pipeline,
+  and the PR process.</li>
+<li><strong><a href="../QUICKSTART/">QUICKSTART.md</a></strong> — the Day-1 happy path: clone →
+  <code>make check-prereqs</code> → <code>make dev-up</code> → <code>make test-unit</code> →
+  <code>make deploy-dev-local</code> → iterate.</li>
 </ul>
-<h3 id="1-repository-setup">1. Repository Setup<a class="headerlink" href="#1-repository-setup" title="Anchor link to this section">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Fork the repository on GitHub, then clone your fork</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/&lt;your-username&gt;/neo4j-kubernetes-operator.git
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="nb">cd</span><span class="w"> </span>neo4j-kubernetes-operator
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="c1"># Add upstream remote for pulling updates</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>git<span class="w"> </span>remote<span class="w"> </span>add<span class="w"> </span>upstream<span class="w"> </span>https://github.com/neo4j-partners/neo4j-kubernetes-operator.git
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="c1"># Create a feature branch</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>git<span class="w"> </span>checkout<span class="w"> </span>-b<span class="w"> </span>feature/my-awesome-feature
-</span></code></pre></div>
-<h3 id="2-development-environment-setup">2. Development Environment Setup<a class="headerlink" href="#2-development-environment-setup" title="Anchor link to this section">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Generate CRDs and Go code</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>make<span class="w"> </span>manifests<span class="w"> </span>generate
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1"># Create development Kind cluster (includes cert-manager for TLS features)</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>make<span class="w"> </span>dev-cluster
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="c1"># Deploy the operator to development cluster (REQUIRED - in-cluster only)</span>
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>make<span class="w"> </span>operator-setup
-</span></code></pre></div>
-<p>The operator always runs <strong>in-cluster</strong> — never <code>make dev-run</code> (DNS resolution fails when the operator runs outside the cluster). For a fast inner loop after code changes:</p>
+<h2 id="before-your-first-pr-also-read">Before your first PR, also read<a class="headerlink" href="#before-your-first-pr-also-read" title="Anchor link to this section">&para;</a></h2>
 <ul>
-<li><strong><code>make deploy-dev-local</code></strong>: Rebuild image + redeploy to Kind (~60s).</li>
-<li><strong><code>make dev-watch</code></strong>: Auto-rebuild and redeploy on file changes.</li>
-<li><strong><code>tilt up</code></strong>: Live reload (~5s, requires Tilt).</li>
-<li><strong>Direct logs</strong>: <code>make operator-logs</code> or <code>kubectl logs -n neo4j-operator-dev deployment/neo4j-operator-controller-manager -f</code>.</li>
+<li><strong><a href="../../knowledge/invariants/">../knowledge/invariants.md</a></strong> — the project
+  invariants (no admission webhooks, Kind only, Enterprise images only, V2_ONLY
+  discovery, server-based architecture with Job-per-CR backups): rule, why each
+  matters, how it's enforced, and how to recover. <strong><a href="../AGENT-GUARDRAILS/">AGENT-GUARDRAILS.md</a></strong>
+  is the enforcement/gates companion — which checks block a merge vs. are
+  advisory. Especially important for LLM-assisted contributions.</li>
+<li><strong><a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/CLAUDE.md">CLAUDE.md</a></strong> — the project constitution and index,
+  including the <code>## Generated artifacts</code> source→artifact map and the
+  regression-prevention rules.</li>
 </ul>
-<h3 id="3-make-your-changes">3. Make Your Changes<a class="headerlink" href="#3-make-your-changes" title="Anchor link to this section">&para;</a></h3>
-<p>The operator follows a well-defined architecture. Key areas for contributions:</p>
-<p><strong>Controllers</strong> (<code>internal/controller/</code>):</p>
+<h2 id="other-developer-references">Other developer references<a class="headerlink" href="#other-developer-references" title="Anchor link to this section">&para;</a></h2>
 <ul>
-<li>Neo4jEnterpriseCluster controller for clustered deployments</li>
-<li>Neo4jEnterpriseStandalone controller for single-node deployments</li>
-<li>Database, Plugin, Backup, and Restore controllers</li>
+<li><a href="../QUICKSTART/">QUICKSTART.md</a> — Day-1 setup</li>
+<li><a href="../development/">development.md</a> — deeper dev-environment notes</li>
+<li><a href="../testing/">testing.md</a> — test tiers, labels, and patterns</li>
+<li><a href="../makefile_reference/">makefile_reference.md</a> — every <code>make</code> target</li>
+<li><a href="../architecture/">architecture.md</a> — system design</li>
 </ul>
-<p><strong>Custom Resources</strong> (<code>api/v1beta1/</code>):</p>
-<ul>
-<li>CRD type definitions for all Neo4j resources</li>
-<li>Validation tags and documentation</li>
-</ul>
-<p><strong>Resource Builders</strong> (<code>internal/resources/</code>):</p>
-<ul>
-<li>Kubernetes resource generation logic</li>
-<li>ConfigMap, Service, and StatefulSet builders</li>
-</ul>
-<p><strong>Validation Framework</strong> (<code>internal/validation/</code>):</p>
-<ul>
-<li>Input validation and recommendations</li>
-<li>Error handling and user guidance</li>
-</ul>
-<h3 id="4-testing-your-changes">4. Testing Your Changes<a class="headerlink" href="#4-testing-your-changes" title="Anchor link to this section">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Run unit tests (no cluster required)</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>make<span class="w"> </span>test-unit
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="c1"># Run integration tests (requires test cluster)</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>make<span class="w"> </span>test-integration
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="c1"># Run specific controller tests</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>go<span class="w"> </span><span class="nb">test</span><span class="w"> </span>./internal/controller<span class="w"> </span>-run<span class="w"> </span>TestClusterReconciler<span class="w"> </span>-v
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="c1"># Test with example deployments</span>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>examples/clusters/minimal-cluster.yaml
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>examples/standalone/single-node-standalone.yaml
-</span></code></pre></div>
-<h3 id="5-submit-your-contribution">5. Submit Your Contribution<a class="headerlink" href="#5-submit-your-contribution" title="Anchor link to this section">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Run code quality checks</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>make<span class="w"> </span>fmt<span class="w"> </span>lint<span class="w"> </span>vet
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="c1"># Commit using conventional commits</span>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>git<span class="w"> </span>add<span class="w"> </span>.
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;feat: add server role constraints for topology optimization&quot;</span>
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>
-</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="c1"># Push and create pull request</span>
-</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>feature/my-awesome-feature
-</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="c1"># Create PR via GitHub UI</span>
-</span></code></pre></div>
-<h2 id="development-guidelines">📝 Development Guidelines<a class="headerlink" href="#development-guidelines" title="Anchor link to this section">&para;</a></h2>
-<h3 id="code-organization">Code Organization<a class="headerlink" href="#code-organization" title="Anchor link to this section">&para;</a></h3>
-<p><strong>Follow the established patterns</strong>:</p>
-<ol>
-<li><strong>Controller Pattern</strong>: Use the standard Kubernetes controller pattern with proper reconciliation</li>
-<li><strong>Builder Pattern</strong>: Use resource builders in <code>internal/resources/</code> for clean separation</li>
-<li><strong>Validation Framework</strong>: Add validation in <code>internal/validation/</code> with clear error messages</li>
-<li><strong>Testing Strategy</strong>: Write unit, integration, and manual tests for new features</li>
-</ol>
-<h3 id="current-architecture-august-2025">Current Architecture (August 2025)<a class="headerlink" href="#current-architecture-august-2025" title="Anchor link to this section">&para;</a></h3>
-<p>Understand the current architecture before making changes:</p>
-<h4 id="server-based-architecture">Server-Based Architecture<a class="headerlink" href="#server-based-architecture" title="Anchor link to this section">&para;</a></h4>
-<ul>
-<li><strong>Clusters</strong>: Use <code>{cluster-name}-server</code> StatefulSet with self-organizing servers</li>
-<li><strong>Standalone</strong>: Use <code>{standalone-name}</code> StatefulSet (single replica)</li>
-<li><strong>Backup</strong>: Job-per-<code>Neo4jBackup</code>-CR (no persistent backup pod, no sidecars).</li>
-</ul>
-<h4 id="dual-deployment-support">Dual Deployment Support<a class="headerlink" href="#dual-deployment-support" title="Anchor link to this section">&para;</a></h4>
-<ul>
-<li><strong>Neo4jEnterpriseCluster</strong>: High-availability clustered deployments (2+ servers)</li>
-<li><strong>Neo4jEnterpriseStandalone</strong>: Single-node deployments for development/testing</li>
-<li><strong>Plugin System</strong>: Supports both deployment types with automatic detection</li>
-</ul>
-<h3 id="code-style-guidelines">Code Style Guidelines<a class="headerlink" href="#code-style-guidelines" title="Anchor link to this section">&para;</a></h3>
-<h4 id="go-code-standards">Go Code Standards<a class="headerlink" href="#go-code-standards" title="Anchor link to this section">&para;</a></h4>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Format code</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>make<span class="w"> </span>fmt
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># Run linter (strict mode for contributions)</span>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>make<span class="w"> </span>lint
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="c1"># Run go vet</span>
-</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>make<span class="w"> </span>vet
-</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>
-</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="c1"># Security scan</span>
-</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>make<span class="w"> </span>security
-</span></code></pre></div>
-<h4 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Anchor link to this section">&para;</a></h4>
-<ol>
-<li><strong>Error Handling</strong>: Always handle errors gracefully with proper context</li>
-<li><strong>Logging</strong>: Use structured logging with appropriate log levels</li>
-<li><strong>Resource Management</strong>: Use <code>controllerutil.CreateOrUpdate</code> with retry logic</li>
-<li><strong>Finalizers</strong>: Implement proper cleanup with finalizer handling</li>
-<li><strong>Status Updates</strong>: Update resource status to reflect current state</li>
-<li><strong>Validation</strong>: Add comprehensive validation for user inputs</li>
-</ol>
-<h3 id="testing-requirements">Testing Requirements<a class="headerlink" href="#testing-requirements" title="Anchor link to this section">&para;</a></h3>
-<h4 id="unit-tests">Unit Tests<a class="headerlink" href="#unit-tests" title="Anchor link to this section">&para;</a></h4>
-<ul>
-<li><strong>Location</strong>: Alongside source code (<code>*_test.go</code>)</li>
-<li><strong>Coverage</strong>: Aim for &gt;80% coverage on controller logic</li>
-<li><strong>Patterns</strong>: Use table-driven tests for multiple scenarios</li>
-</ul>
-<div class="language-go highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kd">func</span><span class="w"> </span><span class="nx">TestGetStatefulSetName</span><span class="p">(</span><span class="nx">t</span><span class="w"> </span><span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">    </span><span class="nx">tests</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="p">[]</span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">        </span><span class="nx">name</span><span class="w">       </span><span class="kt">string</span>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">        </span><span class="nx">deployment</span><span class="w"> </span><span class="o">*</span><span class="nx">DeploymentInfo</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">        </span><span class="nx">expected</span><span class="w">   </span><span class="kt">string</span>
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">    </span><span class="p">}{</span>
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">        </span><span class="p">{</span>
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="w">            </span><span class="nx">name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;cluster deployment&quot;</span><span class="p">,</span>
-</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="w">            </span><span class="nx">deployment</span><span class="p">:</span><span class="w"> </span><span class="o">&amp;</span><span class="nx">DeploymentInfo</span><span class="p">{</span>
-</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="w">                </span><span class="nx">Type</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;cluster&quot;</span><span class="p">,</span>
-</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="w">                </span><span class="nx">Name</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;my-cluster&quot;</span><span class="p">,</span>
-</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="w">            </span><span class="p">},</span>
-</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="w">            </span><span class="nx">expected</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;my-cluster-server&quot;</span><span class="p">,</span>
-</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="w">        </span><span class="p">},</span>
-</span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="w">        </span><span class="c1">// Add more test cases...</span>
-</span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="w">    </span><span class="p">}</span>
-</span><span id="__span-5-17"><a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a>
-</span><span id="__span-5-18"><a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="nx">_</span><span class="p">,</span><span class="w"> </span><span class="nx">tt</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="k">range</span><span class="w"> </span><span class="nx">tests</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-5-19"><a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="w">        </span><span class="nx">t</span><span class="p">.</span><span class="nx">Run</span><span class="p">(</span><span class="nx">tt</span><span class="p">.</span><span class="nx">name</span><span class="p">,</span><span class="w"> </span><span class="kd">func</span><span class="p">(</span><span class="nx">t</span><span class="w"> </span><span class="o">*</span><span class="nx">testing</span><span class="p">.</span><span class="nx">T</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-5-20"><a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a><span class="w">            </span><span class="nx">result</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">getStatefulSetName</span><span class="p">(</span><span class="nx">tt</span><span class="p">.</span><span class="nx">deployment</span><span class="p">)</span>
-</span><span id="__span-5-21"><a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a><span class="w">            </span><span class="nx">assert</span><span class="p">.</span><span class="nx">Equal</span><span class="p">(</span><span class="nx">t</span><span class="p">,</span><span class="w"> </span><span class="nx">tt</span><span class="p">.</span><span class="nx">expected</span><span class="p">,</span><span class="w"> </span><span class="nx">result</span><span class="p">)</span>
-</span><span id="__span-5-22"><a id="__codelineno-5-22" name="__codelineno-5-22" href="#__codelineno-5-22"></a><span class="w">        </span><span class="p">})</span>
-</span><span id="__span-5-23"><a id="__codelineno-5-23" name="__codelineno-5-23" href="#__codelineno-5-23"></a><span class="w">    </span><span class="p">}</span>
-</span><span id="__span-5-24"><a id="__codelineno-5-24" name="__codelineno-5-24" href="#__codelineno-5-24"></a><span class="p">}</span>
-</span></code></pre></div>
-<h4 id="integration-tests">Integration Tests<a class="headerlink" href="#integration-tests" title="Anchor link to this section">&para;</a></h4>
-<ul>
-<li><strong>Location</strong>: <code>test/integration/</code></li>
-<li><strong>Framework</strong>: Ginkgo/Gomega BDD-style testing</li>
-<li><strong>Requirements</strong>: Use 5-minute timeout and proper cleanup</li>
-<li><strong>Resources</strong>: Minimal CPU (100m), adequate memory (1.5Gi for Neo4j Enterprise)</li>
-</ul>
-<div class="language-go highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kd">var</span><span class="w"> </span><span class="nx">_</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">Describe</span><span class="p">(</span><span class="s">&quot;Neo4jPlugin Integration Tests&quot;</span><span class="p">,</span><span class="w"> </span><span class="kd">func</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">    </span><span class="kd">const</span><span class="w"> </span><span class="p">(</span>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">        </span><span class="nx">timeout</span><span class="w">  </span><span class="p">=</span><span class="w"> </span><span class="nx">time</span><span class="p">.</span><span class="nx">Second</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">300</span><span class="w">  </span><span class="c1">// 5-minute timeout for CI</span>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">        </span><span class="nx">interval</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">time</span><span class="p">.</span><span class="nx">Second</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">5</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">    </span><span class="p">)</span>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">    </span><span class="nx">Context</span><span class="p">(</span><span class="s">&quot;Plugin Installation&quot;</span><span class="p">,</span><span class="w"> </span><span class="kd">func</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="w">        </span><span class="nx">It</span><span class="p">(</span><span class="s">&quot;Should install APOC plugin on cluster&quot;</span><span class="p">,</span><span class="w"> </span><span class="kd">func</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="w">            </span><span class="c1">// Test implementation with proper cleanup</span>
-</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="w">        </span><span class="p">})</span>
-</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="w">    </span><span class="p">})</span>
-</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="p">})</span>
-</span></code></pre></div>
-<h3 id="documentation-requirements">Documentation Requirements<a class="headerlink" href="#documentation-requirements" title="Anchor link to this section">&para;</a></h3>
-<h4 id="code-documentation">Code Documentation<a class="headerlink" href="#code-documentation" title="Anchor link to this section">&para;</a></h4>
-<ul>
-<li><strong>Public Functions</strong>: Document all exported functions and types</li>
-<li><strong>Complex Logic</strong>: Explain non-obvious code with comments</li>
-<li><strong>API Changes</strong>: Update relevant API documentation</li>
-</ul>
-<h4 id="user-documentation">User Documentation<a class="headerlink" href="#user-documentation" title="Anchor link to this section">&para;</a></h4>
-<p>For user-facing features, update:</p>
-<ul>
-<li><strong>Examples</strong>: Add example configurations in <code>examples/</code></li>
-<li><strong>User Guide</strong>: Update relevant user guide sections</li>
-<li><strong>API Reference</strong>: Update CRD documentation if API changes</li>
-</ul>
-<h2 id="development-workflow">🔄 Development Workflow<a class="headerlink" href="#development-workflow" title="Anchor link to this section">&para;</a></h2>
-<h3 id="branch-strategy">Branch Strategy<a class="headerlink" href="#branch-strategy" title="Anchor link to this section">&para;</a></h3>
-<ol>
-<li><strong>Feature Branches</strong>: Create feature branches from <code>main</code></li>
-<li><strong>Naming Convention</strong>: <code>feature/short-description</code> or <code>fix/issue-description</code></li>
-<li><strong>Single Purpose</strong>: One feature or fix per branch</li>
-<li><strong>Regular Updates</strong>: Keep branches updated with upstream changes</li>
-</ol>
-<h3 id="pull-request-process">Pull Request Process<a class="headerlink" href="#pull-request-process" title="Anchor link to this section">&para;</a></h3>
-<h4 id="before-submitting">Before Submitting<a class="headerlink" href="#before-submitting" title="Anchor link to this section">&para;</a></h4>
-<ol>
-<li><strong>Code Quality</strong>: Run <code>make fmt lint vet</code> locally</li>
-<li><strong>Tests</strong>: Ensure all tests pass with <code>make test</code></li>
-<li><strong>Documentation</strong>: Update relevant documentation</li>
-<li><strong>Examples</strong>: Add or update examples if needed</li>
-</ol>
-<h4 id="pr-description-template">PR Description Template<a class="headerlink" href="#pr-description-template" title="Anchor link to this section">&para;</a></h4>
-<div class="language-markdown highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="gu">## Description</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>Brief description of changes and motivation.
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="gu">## Type of Change</span>
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="k">- [ ]</span> Bug fix (non-breaking change that fixes an issue)
-</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="k">- [ ]</span> New feature (non-breaking change that adds functionality)
-</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="k">- [ ]</span> Breaking change (fix or feature that causes existing functionality to change)
-</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="k">- [ ]</span> Documentation update
-</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>
-</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="gu">## Testing</span>
-</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="k">- [ ]</span> Unit tests added/updated
-</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="k">- [ ]</span> Integration tests added/updated
-</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="k">- [ ]</span> Manual testing completed
-</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="k">- [ ]</span> Examples tested
-</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a>
-</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a><span class="gu">## Checklist</span>
-</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a><span class="k">- [ ]</span> Code follows project style guidelines
-</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="k">- [ ]</span> Self-review completed
-</span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a><span class="k">- [ ]</span> Documentation updated
-</span><span id="__span-7-20"><a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a><span class="k">- [ ]</span> Tests added for new functionality
-</span><span id="__span-7-21"><a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a><span class="k">- [ ]</span> All tests pass
-</span></code></pre></div>
-<h4 id="review-process">Review Process<a class="headerlink" href="#review-process" title="Anchor link to this section">&para;</a></h4>
-<ol>
-<li><strong>Automated Checks</strong>: CI runs <code>check-drift</code> (regenerate + fail on stale artifacts) and <code>test-unit</code> (which includes <code>fmt</code> and <code>vet</code>). <code>golangci-lint</code> is not run in CI — run <code>make lint</code> locally before pushing.</li>
-<li><strong>Code Review</strong>: Maintainers review code for quality and design</li>
-<li><strong>Integration Testing</strong>: Changes tested against integration suite</li>
-<li><strong>Documentation Review</strong>: Documentation changes reviewed for accuracy</li>
-</ol>
-<h3 id="git-commit-messages">Git Commit Messages<a class="headerlink" href="#git-commit-messages" title="Anchor link to this section">&para;</a></h3>
-<p>Follow <a href="https://www.conventionalcommits.org/">Conventional Commits</a> specification:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Feature additions</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;feat: add server role constraints for topology optimization&quot;</span>
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="c1"># Bug fixes</span>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;fix: resolve resource version conflict during cluster formation&quot;</span>
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="c1"># Documentation updates</span>
-</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;docs: update contributing guide with current architecture&quot;</span>
-</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>
-</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="c1"># Breaking changes</span>
-</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;feat!: change topology field structure for server-based architecture&quot;</span>
-</span></code></pre></div>
-<p><strong>Format</strong>: <code>&lt;type&gt;[optional scope]: &lt;description&gt;</code></p>
-<p><strong>Types</strong>:</p>
-<ul>
-<li><code>feat</code>: New features</li>
-<li><code>fix</code>: Bug fixes</li>
-<li><code>docs</code>: Documentation changes</li>
-<li><code>style</code>: Code style changes (no logic changes)</li>
-<li><code>refactor</code>: Code refactoring</li>
-<li><code>test</code>: Test additions or modifications</li>
-<li><code>chore</code>: Maintenance tasks</li>
-</ul>
-<h2 id="bug-reports-and-feature-requests">🐛 Bug Reports and Feature Requests<a class="headerlink" href="#bug-reports-and-feature-requests" title="Anchor link to this section">&para;</a></h2>
-<h3 id="reporting-bugs">Reporting Bugs<a class="headerlink" href="#reporting-bugs" title="Anchor link to this section">&para;</a></h3>
-<p>When reporting bugs, include:</p>
-<ol>
-<li><strong>Environment Information</strong>:</li>
-<li>Kubernetes version</li>
-<li>Neo4j version</li>
-<li>Operator version</li>
-<li>
-<p>Cloud provider (if applicable)</p>
-</li>
-<li>
-<p><strong>Reproduction Steps</strong>:</p>
-</li>
-<li>Minimal example that reproduces the issue</li>
-<li>Expected vs actual behavior</li>
-<li>
-<p>Error messages and logs</p>
-</li>
-<li>
-<p><strong>Relevant Resources</strong>:</p>
-</li>
-<li>YAML configurations (sanitized)</li>
-<li>Operator logs</li>
-<li>Neo4j logs (if applicable)</li>
-</ol>
-<h3 id="feature-requests">Feature Requests<a class="headerlink" href="#feature-requests" title="Anchor link to this section">&para;</a></h3>
-<ol>
-<li><strong>Use Case</strong>: Describe the problem you're trying to solve</li>
-<li><strong>Proposed Solution</strong>: Suggest how the feature might work</li>
-<li><strong>Alternatives</strong>: Consider alternative solutions</li>
-<li><strong>Impact</strong>: Describe who would benefit from this feature</li>
-</ol>
-<h2 id="advanced-development">🏗️ Advanced Development<a class="headerlink" href="#advanced-development" title="Anchor link to this section">&para;</a></h2>
-<h3 id="adding-new-crds">Adding New CRDs<a class="headerlink" href="#adding-new-crds" title="Anchor link to this section">&para;</a></h3>
-<p>When adding new Custom Resource Definitions:</p>
-<ol>
-<li>
-<p><strong>Define Types</strong> (<code>api/v1beta1/</code>):
-   <div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Create new CRD type file</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>touch<span class="w"> </span>api/v1beta1/mynewresource_types.go
-</span></code></pre></div></p>
-</li>
-<li>
-<p><strong>Create Controller</strong> (<code>internal/controller/</code>):
-   <div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Generate controller scaffold</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>kubebuilder<span class="w"> </span>create<span class="w"> </span>api<span class="w"> </span>--group<span class="w"> </span>neo4j<span class="w"> </span>--version<span class="w"> </span>v1beta1<span class="w"> </span>--kind<span class="w"> </span>MyNewResource
-</span></code></pre></div></p>
-</li>
-<li>
-<p><strong>Add Validation</strong> (<code>internal/validation/</code>):</p>
-</li>
-<li>Implement validation logic</li>
-<li>
-<p>Add to validation framework</p>
-</li>
-<li>
-<p><strong>Add RBAC markers</strong> (no manual <code>config/rbac/</code> edits needed):
-   <div class="language-go highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1">//+kubebuilder:rbac:groups=neo4j.neo4j.com,resources=mynewresources,verbs=get;list;watch;create;update;patch;delete</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="c1">//+kubebuilder:rbac:groups=neo4j.neo4j.com,resources=mynewresources/status,verbs=get;update;patch</span>
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="c1">//+kubebuilder:rbac:groups=neo4j.neo4j.com,resources=mynewresources/finalizers,verbs=update</span>
-</span></code></pre></div>
-   These flow through <code>make manifests</code> into <code>config/rbac/role.yaml</code> and from there into the Helm chart's ClusterRole via <code>make helm-sync-rbac</code>.</p>
-</li>
-<li>
-<p><strong>Add a sample manifest</strong> (used by the OperatorHub CSV's <code>alm-examples</code>):
-   <div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># config/samples/neo4j_v1beta1_mynewresource.yaml</span>
-</span></code></pre></div></p>
-</li>
-<li>
-<p><strong>Wire the controller into <code>cmd/main.go</code></strong> (production + development controller maps + cache config).</p>
-</li>
-<li>
-<p><strong>Add a description to the artifacthub-crds map</strong>:
-   Edit <code>scripts/helm-sync-artifacthub-crds.sh</code> and add a <code>case "$kind" in</code> row for your new Kind. The script fails loudly if any CRD lacks a description, so you can't forget.</p>
-</li>
-<li>
-<p><strong>Run the full sync pipeline</strong> (single command):
-   <div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>make<span class="w"> </span>ship-prep
-</span></code></pre></div>
-   This regenerates: CRDs, RBAC, DeepCopy, kustomize lists, editor/viewer roles, the Helm chart's CRDs and ClusterRole, the ArtifactHub annotation, and the OperatorHub bundle. It also lints the Helm chart and verifies CSV coverage.</p>
-</li>
-<li>
-<p><strong>Add documentation</strong>:</p>
-</li>
-<li>API reference: <code>docs/api_reference/&lt;kind&gt;.md</code> (mirror an existing one).</li>
-<li>User guide entry if the resource introduces a new workflow.</li>
-<li>
-<p>Update the CRD list in <code>README.md</code> and <code>docs/README.md</code>.</p>
-</li>
-<li>
-<p><strong>Add tests</strong>:</p>
-<ul>
-<li>Unit tests for validators and any custom logic.</li>
-<li>Integration tests in <code>test/integration/</code> (one Ginkgo file per CRD; mirror <code>test/integration/neo4juser_test.go</code>).</li>
-<li>Add cleanup logic to <code>cleanupCustomResourcesInNamespace</code> in <code>test/integration/integration_suite_test.go</code>.</li>
-</ul>
-</li>
-</ol>
-<p>CI's <code>check-drift</code> job runs <code>make sync-all bundle</code> and fails the PR if anything is out of date — this enforces step 8. To catch drift locally before pushing, run <code>make install-hooks</code> once; the pre-commit <code>check-drift</code> hook fires whenever you stage files under <code>api/</code>, <code>internal/controller/</code>, <code>scripts/</code>, <code>config/</code>, <code>charts/</code>, or <code>bundle/</code>, runs the same gate, and leaves regenerated artifacts in your working tree if anything was stale.</p>
-<h3 id="performance-considerations">Performance Considerations<a class="headerlink" href="#performance-considerations" title="Anchor link to this section">&para;</a></h3>
-<p><strong>Controller Optimization</strong>:</p>
-<ul>
-<li>Use <code>client.Reader</code> for read-only operations</li>
-<li>Implement proper caching strategies</li>
-<li>Minimize API calls with efficient resource queries</li>
-<li>Use <code>controllerutil.CreateOrUpdate</code> for idempotent operations</li>
-</ul>
-<p><strong>Resource Management</strong>:</p>
-<ul>
-<li>Set appropriate resource requests/limits</li>
-<li>Use owner references for automatic cleanup</li>
-<li>Implement proper finalizer handling</li>
-</ul>
-<h3 id="debugging-tips">Debugging Tips<a class="headerlink" href="#debugging-tips" title="Anchor link to this section">&para;</a></h3>
-<h4 id="local-debugging">Local Debugging<a class="headerlink" href="#local-debugging" title="Anchor link to this section">&para;</a></h4>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Deploy operator with debug logging to development cluster</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>make<span class="w"> </span>operator-setup
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="c1"># Check operator logs with debug verbosity</span>
-</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>-n<span class="w"> </span>neo4j-operator-dev<span class="w"> </span>deployment/neo4j-operator-controller-manager<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">  </span>-p<span class="w"> </span><span class="s1">&#39;{&quot;spec&quot;:{&quot;template&quot;:{&quot;spec&quot;:{&quot;containers&quot;:[{&quot;name&quot;:&quot;manager&quot;,&quot;args&quot;:[&quot;--mode=dev&quot;,&quot;--zap-log-level=debug&quot;]}]}}}}&#39;</span>
-</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>
-</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="c1"># Check operator logs</span>
-</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/name<span class="o">=</span>neo4j-operator<span class="w"> </span>-f
-</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a>
-</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="c1"># Examine resource status</span>
-</span><span id="__span-14-11"><a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>neo4jenterprisecluster<span class="w"> </span>my-cluster
-</span></code></pre></div>
-<h4 id="vs-code-debug-configuration">VS Code Debug Configuration<a class="headerlink" href="#vs-code-debug-configuration" title="Anchor link to this section">&para;</a></h4>
-<div class="language-json highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="p">{</span>
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="w">  </span><span class="nt">&quot;version&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;0.2.0&quot;</span><span class="p">,</span>
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="w">  </span><span class="nt">&quot;configurations&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
-</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="w">    </span><span class="p">{</span>
-</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="w">      </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Launch Operator&quot;</span><span class="p">,</span>
-</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="w">      </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;go&quot;</span><span class="p">,</span>
-</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="w">      </span><span class="nt">&quot;request&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;launch&quot;</span><span class="p">,</span>
-</span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="w">      </span><span class="nt">&quot;mode&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;debug&quot;</span><span class="p">,</span>
-</span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a><span class="w">      </span><span class="nt">&quot;program&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;${workspaceFolder}/cmd/main.go&quot;</span><span class="p">,</span>
-</span><span id="__span-15-10"><a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a><span class="w">      </span><span class="nt">&quot;args&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;--zap-log-level=debug&quot;</span><span class="p">],</span>
-</span><span id="__span-15-11"><a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a><span class="w">      </span><span class="nt">&quot;env&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-15-12"><a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a><span class="w">        </span><span class="nt">&quot;KUBECONFIG&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;${env:HOME}/.kube/config&quot;</span>
-</span><span id="__span-15-13"><a id="__codelineno-15-13" name="__codelineno-15-13" href="#__codelineno-15-13"></a><span class="w">      </span><span class="p">}</span>
-</span><span id="__span-15-14"><a id="__codelineno-15-14" name="__codelineno-15-14" href="#__codelineno-15-14"></a><span class="w">    </span><span class="p">}</span>
-</span><span id="__span-15-15"><a id="__codelineno-15-15" name="__codelineno-15-15" href="#__codelineno-15-15"></a><span class="w">  </span><span class="p">]</span>
-</span><span id="__span-15-16"><a id="__codelineno-15-16" name="__codelineno-15-16" href="#__codelineno-15-16"></a><span class="p">}</span>
-</span></code></pre></div>
-<h2 id="community-guidelines">🤝 Community Guidelines<a class="headerlink" href="#community-guidelines" title="Anchor link to this section">&para;</a></h2>
-<h3 id="code-of-conduct">Code of Conduct<a class="headerlink" href="#code-of-conduct" title="Anchor link to this section">&para;</a></h3>
-<p>We follow the <a href="https://www.contributor-covenant.org/">Contributor Covenant Code of Conduct</a>. Please be respectful and inclusive in all interactions.</p>
-<h3 id="getting-help">Getting Help<a class="headerlink" href="#getting-help" title="Anchor link to this section">&para;</a></h3>
-<ul>
-<li><strong>GitHub Discussions</strong>: For questions and community interaction</li>
-<li><strong>GitHub Issues</strong>: For bug reports and feature requests</li>
-<li><strong>Code Review</strong>: Ask questions during the PR review process</li>
-<li><strong>Documentation</strong>: Check existing documentation first</li>
-</ul>
-<h3 id="recognition">Recognition<a class="headerlink" href="#recognition" title="Anchor link to this section">&para;</a></h3>
-<p>Contributors are recognized in:</p>
-<ul>
-<li>Release notes for significant contributions</li>
-<li>GitHub contributors list</li>
-<li>Project documentation acknowledgments</li>
-</ul>
-<h2 id="resources">📚 Resources<a class="headerlink" href="#resources" title="Anchor link to this section">&para;</a></h2>
-<h3 id="learning-resources">Learning Resources<a class="headerlink" href="#learning-resources" title="Anchor link to this section">&para;</a></h3>
-<ul>
-<li><strong><a href="https://book.kubebuilder.io/">Kubebuilder Book</a></strong>: Controller development guide</li>
-<li><strong><a href="https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md">Kubernetes API Conventions</a></strong></li>
-<li><strong><a href="https://neo4j.com/docs/">Neo4j Documentation</a></strong>: Neo4j Enterprise features</li>
-</ul>
-<h3 id="project-resources">Project Resources<a class="headerlink" href="#project-resources" title="Anchor link to this section">&para;</a></h3>
-<ul>
-<li><strong><a href="../architecture/">Architecture Guide</a></strong>: System design and components</li>
-<li><strong><a href="../development/">Development Guide</a></strong>: Local development setup</li>
-<li><strong><a href="../testing/">Testing Guide</a></strong>: Testing strategy and patterns</li>
-<li><strong><a href="../../user_guide/installation/">User Guides</a></strong>: User-facing documentation (start with the Installation Guide)</li>
-</ul>
-<p>Thank you for contributing to the Neo4j Enterprise Operator! Your contributions help make Neo4j deployments easier and more reliable for everyone.</p>
 
 
 

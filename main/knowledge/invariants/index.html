@@ -12,13 +12,11 @@
         <meta name="author" content="Neo4j Partners">
       
       
-        <link rel="canonical" href="https://neo4j-partners.github.io/neo4j-kubernetes-operator/main/api_reference/neo4jrolebinding/">
+        <link rel="canonical" href="https://neo4j-partners.github.io/neo4j-kubernetes-operator/main/knowledge/invariants/">
       
       
-        <link rel="prev" href="../neo4jrole/">
+        <link rel="prev" href="../../developer_guide/AGENT-GUARDRAILS/">
       
-      
-        <link rel="next" href="../neo4jauthrule/">
       
       
         
@@ -29,7 +27,7 @@
     
     
       
-        <title>Neo4jRoleBinding - Neo4j Kubernetes Operator</title>
+        <title>Project Invariants - Neo4j Kubernetes Operator</title>
       
     
     
@@ -82,7 +80,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#neo4jrolebinding-api-reference" class="md-skip">
+        <a href="#hard-invariants" class="md-skip">
           Skip to content
         </a>
       
@@ -122,7 +120,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Neo4jRoleBinding
+              Project Invariants
             
           </span>
         </div>
@@ -1746,8 +1744,6 @@
       
   
   
-    
-  
   
   
     
@@ -1768,11 +1764,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -1800,7 +1796,7 @@
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_7">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1815,10 +1811,8 @@
                 
   
   
-    
   
   
-  
     
     
       
@@ -1850,11 +1844,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_1" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_1" >
         
           
           <label class="md-nav__link" for="__nav_7_1" id="__nav_7_1_label" tabindex="0">
@@ -1875,7 +1869,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_1_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_1_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_7_1">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1893,7 +1887,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../neo4jenterprisecluster/" class="md-nav__link">
+      <a href="../../api_reference/neo4jenterprisecluster/" class="md-nav__link">
         
   
   
@@ -1921,7 +1915,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../neo4jenterprisestandalone/" class="md-nav__link">
+      <a href="../../api_reference/neo4jenterprisestandalone/" class="md-nav__link">
         
   
   
@@ -1949,7 +1943,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../neo4jdatabase/" class="md-nav__link">
+      <a href="../../api_reference/neo4jdatabase/" class="md-nav__link">
         
   
   
@@ -1977,7 +1971,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../neo4jshardeddatabase/" class="md-nav__link">
+      <a href="../../api_reference/neo4jshardeddatabase/" class="md-nav__link">
         
   
   
@@ -2005,7 +1999,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../neo4juser/" class="md-nav__link">
+      <a href="../../api_reference/neo4juser/" class="md-nav__link">
         
   
   
@@ -2033,7 +2027,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../neo4jrole/" class="md-nav__link">
+      <a href="../../api_reference/neo4jrole/" class="md-nav__link">
         
   
   
@@ -2058,37 +2052,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Neo4jRoleBinding
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../api_reference/neo4jrolebinding/" class="md-nav__link">
         
   
   
@@ -2104,192 +2071,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#overview" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Overview
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#when-to-use-this-vs-neo4juser" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        When to use this vs. Neo4jUser
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#related-resources" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Related Resources
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#spec" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Spec
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#status" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Status
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Status">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#conditions" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Conditions
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#validation-rules" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Validation rules
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#lifecycle" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Lifecycle
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#examples" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Examples
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Examples">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#bind-an-sso-user-to-the-editor-role" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Bind an SSO user to the editor role
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#multiple-roles-exclusive-enforcement" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Multiple roles, exclusive enforcement
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#combine-with-a-custom-neo4jrole" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Combine with a custom Neo4jRole
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#troubleshooting" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Troubleshooting
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#see-also" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        See also
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -2302,7 +2083,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../neo4jauthrule/" class="md-nav__link">
+      <a href="../../api_reference/neo4jauthrule/" class="md-nav__link">
         
   
   
@@ -2330,7 +2111,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../neo4jplugin/" class="md-nav__link">
+      <a href="../../api_reference/neo4jplugin/" class="md-nav__link">
         
   
   
@@ -2358,7 +2139,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../neo4jbackup/" class="md-nav__link">
+      <a href="../../api_reference/neo4jbackup/" class="md-nav__link">
         
   
   
@@ -2386,7 +2167,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../neo4jrestore/" class="md-nav__link">
+      <a href="../../api_reference/neo4jrestore/" class="md-nav__link">
         
   
   
@@ -2428,8 +2209,10 @@
       
   
   
+    
   
   
+  
     
     
       
@@ -2462,11 +2245,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
         
           
           <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
@@ -2487,7 +2270,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
@@ -2754,8 +2537,10 @@
                 
   
   
+    
   
   
+  
     
     
       
@@ -2771,11 +2556,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_10" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_10" checked>
         
           
           <label class="md-nav__link" for="__nav_8_10" id="__nav_8_10_label" tabindex="0">
@@ -2796,7 +2581,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_10_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_10_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_8_10">
             <span class="md-nav__icon md-icon"></span>
             
@@ -2867,10 +2652,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../knowledge/invariants/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Invariants
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -2886,6 +2698,92 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#recovery-how-to-fix-a-violation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recovery — how to fix a violation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#inv-1-no-webhooks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        INV-1: NO-WEBHOOKS
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#inv-2-kind-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        INV-2: KIND-ONLY
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#inv-3-enterprise-images" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        INV-3: ENTERPRISE-IMAGES
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#inv-4-v2_only-discovery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        INV-4: V2_ONLY-DISCOVERY
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#inv-5-server-arch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        INV-5: SERVER-ARCH
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -2933,10 +2831,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#overview" class="md-nav__link">
+  <a href="#recovery-how-to-fix-a-violation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Overview
+        Recovery — how to fix a violation
       
     </span>
   </a>
@@ -2944,10 +2842,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#when-to-use-this-vs-neo4juser" class="md-nav__link">
+  <a href="#inv-1-no-webhooks" class="md-nav__link">
     <span class="md-ellipsis">
       
-        When to use this vs. Neo4jUser
+        INV-1: NO-WEBHOOKS
       
     </span>
   </a>
@@ -2955,10 +2853,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#related-resources" class="md-nav__link">
+  <a href="#inv-2-kind-only" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Related Resources
+        INV-2: KIND-ONLY
       
     </span>
   </a>
@@ -2966,10 +2864,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#spec" class="md-nav__link">
+  <a href="#inv-3-enterprise-images" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Spec
+        INV-3: ENTERPRISE-IMAGES
       
     </span>
   </a>
@@ -2977,38 +2875,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#status" class="md-nav__link">
+  <a href="#inv-4-v2_only-discovery" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Status
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Status">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#conditions" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Conditions
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#validation-rules" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Validation rules
+        INV-4: V2_ONLY-DISCOVERY
       
     </span>
   </a>
@@ -3016,82 +2886,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#lifecycle" class="md-nav__link">
+  <a href="#inv-5-server-arch" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Lifecycle
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#examples" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Examples
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Examples">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#bind-an-sso-user-to-the-editor-role" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Bind an SSO user to the editor role
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#multiple-roles-exclusive-enforcement" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Multiple roles, exclusive enforcement
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#combine-with-a-custom-neo4jrole" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Combine with a custom Neo4jRole
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#troubleshooting" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Troubleshooting
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#see-also" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        See also
+        INV-5: SERVER-ARCH
       
     </span>
   </a>
@@ -3115,7 +2913,7 @@
 
 
   
-    <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/edit/main/docs/api_reference/neo4jrolebinding.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+    <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/edit/main/docs/knowledge/invariants.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
     </a>
@@ -3123,266 +2921,236 @@
   
 
 
-<h1 id="neo4jrolebinding-api-reference">Neo4jRoleBinding API Reference<a class="headerlink" href="#neo4jrolebinding-api-reference" title="Anchor link to this section">&para;</a></h1>
-<p>The <code>Neo4jRoleBinding</code> Custom Resource Definition (CRD) declaratively manages role grants for users the operator does NOT own as a <code>Neo4jUser</code>. Use this for SSO/LDAP/OIDC users that are provisioned by Neo4j itself on first login (or by an external pipeline) — the operator keeps their Neo4j role assignments in sync with <code>spec.roles</code> without ever creating, dropping, or otherwise managing the user record.</p>
-<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Anchor link to this section">&para;</a></h2>
+<h1 id="hard-invariants">Hard Invariants<a class="headerlink" href="#hard-invariants" title="Anchor link to this section">&para;</a></h1>
+<blockquote>
+<p><strong>This is a load-bearing file.</strong> These five invariants are the project's
+constitution-level constraints. Violating any of them produces a broken or
+banned architecture. <code>AGENTS.md</code> carries the canonical short list (the front
+door); <strong>this file is the authoritative detailed source</strong> — rule, why,
+enforcement status, violation symptom, and <strong>recovery</strong> for each.</p>
+<p><strong>Enforcement-status vocabulary:</strong>
+- <strong>guard-checked (<code>scripts/check-invariants.sh</code>)</strong> — the guard script greps the
+  tree and flags a violation. Run three ways: <code>make check-invariants</code> locally,
+  the agent skills under <code>.claude/skills/</code>, and an <strong>advisory, non-blocking</strong> CI
+  job (<code>Invariant Guards</code> in <code>ci.yml</code>). It surfaces violations; it does <strong>not</strong>
+  gate merge — so a contributor who isn't using an agent is never blocked by it.
+- <strong>test-pinned (<code>&lt;test&gt;</code>)</strong> — a Go test asserts the behavior; <code>make test-unit</code>
+  fails when violated. This <strong>is</strong> a blocking CI gate (the <code>unit-tests</code> job).
+- <strong>runtime-enforced</strong> — a validator in <code>internal/validation/</code> rejects the bad CR
+  inline during reconcile (a <code>Failed</code>/<code>Invalid</code> status), and/or the running
+  operator refuses at boot. The CR never takes effect.
+- <strong>PROSE-ONLY — at risk</strong> — enforced only by convention and the <em>absence</em> of
+  the forbidden construct; nothing actively rejects a violation.</p>
+<p><strong>Honesty note:</strong> the <code>scripts/check-invariants.sh</code> guard now <strong>exists</strong> and
+covers INV-1, INV-2, INV-4, and INV-5 (grep) plus a static config/sample check
+for INV-3. It is <strong>advisory</strong> (non-blocking CI + skills + <code>make check-invariants</code>),
+NOT a required merge gate — the blocking CI gates are <code>check-drift</code> (generated
+artifacts) and <code>unit-tests</code>. INV-3 additionally gained a <strong>runtime</strong> check
+(<code>image_validator.go</code> rejects <code>-community</code> tags, pinned by
+<code>image_validator_test.go</code> under the blocking <code>unit-tests</code> job) plus the
+<code>CALL dbms.components()</code> backstop. INV-4 and the INV-5 pod-naming half are
+<strong>test-pinned</strong> (blocking). <strong>Highest residual risk:</strong> a bare Docker Hub tag
+(<code>neo4j:5.26.0</code>, which <em>is</em> the community image) is not rejected statically —
+only the explicit <code>-community</code> marker is — so that case relies on the runtime
+edition backstop, by deliberate choice (see INV-3).</p>
+</blockquote>
+<hr />
+<h2 id="recovery-how-to-fix-a-violation">Recovery — how to fix a violation<a class="headerlink" href="#recovery-how-to-fix-a-violation" title="Anchor link to this section">&para;</a></h2>
+<p>Quick reference (folded in from the former AGENT-GUARDRAILS table); per-invariant detail follows below.</p>
+<table>
+<thead>
+<tr>
+<th>Inv</th>
+<th>Recovery</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>INV-1</strong></td>
+<td>Move the check into an <code>internal/validation/*_validator.go</code> and call it inline from the reconciler. Delete any <code>*_webhook.go</code> / webhook config.</td>
+</tr>
+<tr>
+<td><strong>INV-2</strong></td>
+<td>Use <code>make dev-up</code> / <code>make test-integration</code>. Remove references to other local-K8s tools.</td>
+</tr>
+<tr>
+<td><strong>INV-3</strong></td>
+<td>Pin an <code>-enterprise</code> tag. Don't weaken the validators to admit community.</td>
+</tr>
+<tr>
+<td><strong>INV-4</strong></td>
+<td>Keep the version-gated discovery config in the cluster builder (<code>buildVersionSpecificDiscoveryConfig</code>); don't hand-roll discovery flags elsewhere.</td>
+</tr>
+<tr>
+<td><strong>INV-5</strong></td>
+<td>Use the existing <code>{cluster}-server</code> builder in <code>internal/resources/cluster.go</code> and the <code>Neo4jBackup</code>/<code>Neo4jRestore</code> controllers. Never add a long-running backup pod/sidecar.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="inv-1-no-webhooks">INV-1: NO-WEBHOOKS<a class="headerlink" href="#inv-1-no-webhooks" title="Anchor link to this section">&para;</a></h2>
 <ul>
-<li><strong>API Version</strong>: <code>neo4j.neo4j.com/v1beta1</code></li>
-<li><strong>Kind</strong>: <code>Neo4jRoleBinding</code></li>
-<li><strong>Scope</strong>: Namespaced</li>
-<li><strong>Short names</strong>: <code>n4jrb</code>, <code>n4jrolebindings</code></li>
-<li><strong>Categories</strong>: <code>neo4j</code></li>
-<li><strong>Supported Neo4j Versions</strong>: 5.26 LTS and any CalVer release (2025.x, 2026.x, and onward) — Enterprise edition</li>
-<li><strong>Reconciliation</strong>: Role grants/revokes via <code>GRANT/REVOKE ROLE</code>, with optional exclusive enforcement of the user's full role set</li>
+<li><strong>id:</strong> <code>NO-WEBHOOKS</code></li>
+<li><strong>rule:</strong> The operator MUST NOT use admission webhooks. No
+  <code>ValidatingWebhookConfiguration</code> or <code>MutatingWebhookConfiguration</code> manifests,
+  no <code>*_webhook.go</code> files, no webhook server wiring in <code>cmd/main.go</code>. <strong>All</strong>
+  validation lives in <code>internal/validation/</code> (e.g. <code>cluster_validator.go</code>,
+  <code>image_validator.go</code>, <code>plugin_validator.go</code>, …) and is called <strong>inline</strong> from
+  the reconcilers.</li>
+<li><strong>WHY:</strong> Webhooks add a TLS-served admission endpoint that must be reachable by
+  the API server, fail closed on cert/network problems, and create a
+  bootstrapping dependency the project deliberately avoids. Controller-side
+  validation runs in the reconcile loop where the operator already has full
+  context, degrades gracefully (a bad CR goes to a <code>Failed</code>/<code>Invalid</code> status
+  instead of blocking the whole API group), and needs no cert plumbing. This was
+  a foundational design decision, not an accident.</li>
+<li><strong>enforcement status:</strong> guard-checked (<code>scripts/check-invariants.sh</code>) — greps
+  for <code>*_webhook.go</code> / <code>config/webhook/</code> paths and
+  <code>Validating</code>/<code>MutatingWebhookConfiguration</code> references in non-test Go.
+  Advisory (non-blocking CI + agent skills + <code>make check-invariants</code>), not a
+  merge gate. No test or runtime check rejects a webhook, so the guard is the
+  only automated signal — if it is bypassed nothing else complains until the
+  webhook plumbing breaks at install time.</li>
+<li><strong>violation symptom:</strong> Kubebuilder's <code>create webhook</code> scaffolding, or hand-added
+  webhook code, compiles and passes all current tests — there is no failing
+  signal. The damage shows up later: cert-manager/CA dependency at install time,
+  CRs silently rejected at admission when the webhook pod is down, and a
+  <code>config/webhook/</code> directory that <code>make manifests</code> starts regenerating. An agent
+  "adding validation" via a webhook will think it succeeded.</li>
 </ul>
-<h2 id="when-to-use-this-vs-neo4juser">When to use this vs. Neo4jUser<a class="headerlink" href="#when-to-use-this-vs-neo4juser" title="Anchor link to this section">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>You want to manage…</th>
-<th>Use</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Identity, password, status, home DB, role grants for a user the operator owns</td>
-<td><code>Neo4jUser</code></td>
-</tr>
-<tr>
-<td>Role grants for a user that already exists in Neo4j (created by SSO/LDAP first-login or by another tool)</td>
-<td><code>Neo4jRoleBinding</code></td>
-</tr>
-</tbody>
-</table>
-<p>The validator rejects a <code>Neo4jRoleBinding</code> whose <code>spec.username</code> overlaps with a <code>Neo4jUser</code> in the same namespace targeting the same <code>clusterRef</code>. Pick one.</p>
-<h2 id="related-resources">Related Resources<a class="headerlink" href="#related-resources" title="Anchor link to this section">&para;</a></h2>
+<hr />
+<h2 id="inv-2-kind-only">INV-2: KIND-ONLY<a class="headerlink" href="#inv-2-kind-only" title="Anchor link to this section">&para;</a></h2>
 <ul>
-<li><a href="../neo4juser/"><code>Neo4jUser</code></a> — Manages users + their role grants</li>
-<li><a href="../neo4jrole/"><code>Neo4jRole</code></a> — Manages roles + their privileges</li>
-<li><a href="../../user_guide/user_role_management/">User &amp; Role Management Guide</a></li>
+<li><strong>id:</strong> <code>KIND-ONLY</code></li>
+<li><strong>rule:</strong> Kind is the <strong>only</strong> supported Kubernetes distribution for
+  development, test, and CI. Never minikube, k3s, k3d, Docker Desktop K8s, or a
+  real cloud cluster in any dev/test/CI path. Clusters: dev =
+  <code>neo4j-operator-dev</code>, test = <code>neo4j-operator-test</code>. Use the <code>make</code> targets
+  (<code>dev-up</code>, <code>test-integration</code>, <code>operator-setup</code>); never hand-roll a different
+  provisioner.</li>
+<li><strong>WHY:</strong> Every Makefile target, the CI workflows, the resource-shrinking logic
+  (<code>getCIAppropriateResourceRequirements()</code> / <code>applyCIOptimizations()</code>), and the
+  cert-manager <code>ca-cluster-issuer</code> setup assume Kind's networking, image-load
+  semantics (<code>kind load</code>), and node layout. Another distro silently changes pod
+  DNS, storage classes, and load-balancer behavior, producing flaky failures that
+  look like operator bugs but are environment drift.</li>
+<li><strong>enforcement status:</strong> guard-checked (<code>scripts/check-invariants.sh</code>) — greps
+  the Makefile, <code>hack/</code>, <code>scripts/</code>, and <code>.github/workflows/</code> (the operational
+  paths that provision clusters) for <code>minikube</code>/<code>k3s</code>/<code>k3d</code>. Advisory
+  (non-blocking). Prose mentions in docs/CONTRIBUTING and per-distro
+  storageClass hints in <code>examples/</code> are intentionally not scanned — they are not
+  provisioners.</li>
+<li><strong>violation symptom:</strong> An agent adds a <code>minikube start</code> / <code>k3d cluster create</code>
+  path to a script or workflow and it "works on my machine" but the operator
+  can't load its image, discovery RBAC behaves differently, or integration tests
+  time out on image pulls. No existing test or script complains — the new path
+  just exists alongside the Kind path and rots.</li>
 </ul>
-<h2 id="spec">Spec<a class="headerlink" href="#spec" title="Anchor link to this section">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Type</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>clusterRef</code></td>
-<td><code>string</code></td>
-<td><strong>Required</strong>. Name of the <code>Neo4jEnterpriseCluster</code> or <code>Neo4jEnterpriseStandalone</code> in the same namespace.</td>
-</tr>
-<tr>
-<td><code>username</code></td>
-<td><code>string</code></td>
-<td><strong>Required</strong>. Username in Neo4j to manage role grants for. Must already exist when the binding reconciles (it enters <code>UserNotFound</code> and waits otherwise). Pattern <code>^[a-zA-Z][a-zA-Z0-9_.@\-]*$</code>, max 65 chars.</td>
-</tr>
-<tr>
-<td><code>roles</code></td>
-<td><code>[]string</code></td>
-<td><strong>Required</strong>, MinItems=1. Role names to grant. Mix built-ins and custom names (the latter must correspond to existing <code>Neo4jRole</code> CRs or roles created out-of-band). PUBLIC is implicit.</td>
-</tr>
-<tr>
-<td><code>enforceExclusive</code></td>
-<td><code>boolean</code></td>
-<td>Default <code>false</code>. When true, <code>.spec.roles</code> is authoritative for the user's full role set: roles granted out-of-band and not listed here are revoked on every reconcile. When false, the binding only adds and removes the roles it knows about; extra grants from other sources are tolerated.</td>
-</tr>
-<tr>
-<td><code>deletionPolicy</code></td>
-<td><code>string</code></td>
-<td>One of <code>Revoke</code> (default) or <code>Retain</code>. With <code>Revoke</code>, deleting the CR revokes every role this binding granted. With <code>Retain</code>, the finalizer is released without revoking.</td>
-</tr>
-</tbody>
-</table>
-<h2 id="status">Status<a class="headerlink" href="#status" title="Anchor link to this section">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Type</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>phase</code></td>
-<td><code>string</code></td>
-<td>One of <code>Pending</code>, <code>Ready</code>, <code>Failed</code>.</td>
-</tr>
-<tr>
-<td><code>message</code></td>
-<td><code>string</code></td>
-<td>Short summary of the current phase.</td>
-</tr>
-<tr>
-<td><code>observedGeneration</code></td>
-<td><code>int64</code></td>
-<td><code>metadata.generation</code> last reconciled.</td>
-</tr>
-<tr>
-<td><code>grantedRoles</code></td>
-<td><code>[]string</code></td>
-<td>Subset of <code>.spec.roles</code> actually granted (and observed via <code>SHOW USERS YIELD roles</code>). On CR deletion this list dictates what to revoke (so we never strip grants we did not add, except when <code>enforceExclusive: true</code>).</td>
-</tr>
-<tr>
-<td><code>conditions</code></td>
-<td><code>[]Condition</code></td>
-<td>See <a href="#conditions">Conditions</a>.</td>
-</tr>
-</tbody>
-</table>
-<h3 id="conditions">Conditions<a class="headerlink" href="#conditions" title="Anchor link to this section">&para;</a></h3>
-<table>
-<thead>
-<tr>
-<th>Type</th>
-<th>Reasons</th>
-<th>Meaning</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>Ready</code></td>
-<td><code>BindingReady</code>, <code>RolesPending</code>, <code>UserNotFound</code>, <code>ClusterNotReady</code>, <code>ConnectionFailed</code>, <code>BindingFailed</code>, <code>ValidationFailed</code></td>
-<td>True when the user exists and all desired roles are granted.</td>
-</tr>
-<tr>
-<td><code>RolesSynced</code></td>
-<td><code>RolesMatch</code>, <code>RolesPending</code></td>
-<td>True when <code>grantedRoles</code> covers <code>.spec.roles</code>.</td>
-</tr>
-<tr>
-<td><code>PendingDependencies</code></td>
-<td><code>RolesPending</code>, <code>AllDependenciesPresent</code></td>
-<td>True when one or more <code>.spec.roles</code> correspond to a Neo4jRole CR that does not yet exist.</td>
-</tr>
-<tr>
-<td><code>UserNotFound</code></td>
-<td><code>UserNotFound</code>, <code>UserPresent</code></td>
-<td>True when the user named by <code>.spec.username</code> is absent from Neo4j.</td>
-</tr>
-<tr>
-<td><code>ClusterNotReady</code></td>
-<td><code>ClusterNotReady</code>, <code>ClusterReady</code></td>
-<td>Mirrors the readiness of the referenced cluster.</td>
-</tr>
-</tbody>
-</table>
-<h2 id="validation-rules">Validation rules<a class="headerlink" href="#validation-rules" title="Anchor link to this section">&para;</a></h2>
+<hr />
+<h2 id="inv-3-enterprise-images">INV-3: ENTERPRISE-IMAGES<a class="headerlink" href="#inv-3-enterprise-images" title="Anchor link to this section">&para;</a></h2>
 <ul>
-<li><code>clusterRef</code> must resolve to a cluster or standalone in the same namespace.</li>
-<li><code>username</code> matches <code>^[a-zA-Z][a-zA-Z0-9_.@\-]*$</code>, max 65 characters; reserved names rejected.</li>
-<li><code>roles</code> must be non-empty (kubebuilder MinItems=1) and contain no empty strings.</li>
-<li>A <code>Neo4jUser</code> in the same namespace targeting the same <code>clusterRef</code> and <code>username</code> is rejected at validate-time. (Manage role grants there instead.)</li>
+<li><strong>id:</strong> <code>ENTERPRISE-IMAGES</code></li>
+<li><strong>rule:</strong> Only Neo4j <strong>Enterprise</strong> images may be used:
+  <code>neo4j:5.26-enterprise</code>, <code>neo4j:2025.01.0-enterprise</code>, etc. Never a community
+  image. The operator assumes Enterprise features (clustering, RBAC, online
+  backup) unconditionally; there is no <code>edition</code> field in any CRD.</li>
+<li><strong>WHY:</strong> The operator emits Enterprise-only Cypher and config (clustering
+  topology, <code>SHOW SERVERS</code>, role/privilege management, <code>neo4j-admin database
+  backup</code>). Against a community image these silently fail or the pod won't form a
+  cluster at all. The product is an <em>Enterprise</em> operator by definition.</li>
+<li><strong>enforcement status:</strong> runtime-enforced + guard-checked.
+  <code>internal/validation/image_validator.go</code> rejects any image whose tag
+  explicitly marks it community (<code>isCommunityTag</code> — matches <code>community</code>
+  case-insensitively, e.g. <code>5.26.0-community</code>), returning a clean
+  <code>spec.image.tag</code> validation error; pinned by <code>image_validator_test.go</code> under
+  the blocking <code>unit-tests</code> job. <code>scripts/check-invariants.sh</code> adds a static
+  check that no CRD/manifest in <code>config/</code>+<code>api/</code> pins a <code>…-community</code> image
+  (advisory). The running operator's <code>CALL dbms.components()</code> check remains the
+  backstop. The numeric <strong>version</strong> is still validated via <code>neo4j.ParseVersion</code>
+  / <code>version.IsSupported()</code> (5.26.x or 2025.x+). <code>edition_validator.go</code> remains
+  an intentional no-op (the edition field was removed). <strong>Known gap (by
+  design):</strong> the validator rejects only the explicit <code>-community</code> marker — it
+  does NOT require an <code>-enterprise</code> suffix — so a bare <code>neo4j:5.26.0</code> (the
+  <em>community</em> image on Docker Hub) passes static/inline validation and is caught
+  only by the runtime edition backstop. This avoids false-rejecting legitimately
+  retagged Enterprise images in a private registry.</li>
+<li><strong>violation symptom:</strong> A CR with <code>image: { repo: neo4j, tag: 5.26-community }</code>
+  is now rejected up front by <code>image_validator.go</code> with a clear <code>spec.image.tag</code>
+  error. The remaining trap is a <em>bare</em> tag — <code>image: { repo: neo4j, tag: 5.26.0 }</code>
+  — which on Docker Hub is the community image yet passes inline validation; it
+  is caught only later when the running operator's <code>CALL dbms.components()</code>
+  reports <code>community</code>, surfacing as a degraded status rather than a clean
+  up-front rejection.</li>
 </ul>
-<h2 id="lifecycle">Lifecycle<a class="headerlink" href="#lifecycle" title="Anchor link to this section">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>CR Event</th>
-<th>Cypher Issued</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Create</td>
-<td><code>GRANT ROLE r TO username</code> for each role in <code>.spec.roles</code> (skipping built-ins not yet listed in current grants is fine; PUBLIC is always skipped)</td>
-</tr>
-<tr>
-<td>Update (<code>.spec.roles</code> changes)</td>
-<td><code>GRANT</code> for additions; <code>REVOKE</code> for removals from <code>.spec.roles</code> <em>and</em> roles previously listed in <code>status.grantedRoles</code></td>
-</tr>
-<tr>
-<td>Update (<code>enforceExclusive: true</code>)</td>
-<td>Same as above + revoke any extra roles on the user that are not in <code>.spec.roles</code></td>
-</tr>
-<tr>
-<td>Delete (<code>Revoke</code> policy)</td>
-<td><code>REVOKE ROLE r FROM username</code> for each role in <code>status.grantedRoles</code>, then remove finalizer</td>
-</tr>
-<tr>
-<td>Delete (<code>Retain</code> policy)</td>
-<td>Remove finalizer only</td>
-</tr>
-<tr>
-<td>User absent</td>
-<td>No-op; <code>UserNotFound</code> condition; reconcile every 30s until the user appears</td>
-</tr>
-<tr>
-<td>Cluster not Ready</td>
-<td>No-op; <code>ClusterNotReady</code> condition; reconcile every 30s</td>
-</tr>
-<tr>
-<td>Missing custom role</td>
-<td>Skip the grant for that role; <code>PendingDependencies</code> condition; the binding controller watches <code>Neo4jRole</code> and re-reconciles when the role lands</td>
-</tr>
-</tbody>
-</table>
-<h2 id="examples">Examples<a class="headerlink" href="#examples" title="Anchor link to this section">&para;</a></h2>
-<h3 id="bind-an-sso-user-to-the-editor-role">Bind an SSO user to the editor role<a class="headerlink" href="#bind-an-sso-user-to-the-editor-role" title="Anchor link to this section">&para;</a></h3>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1beta1</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Neo4jRoleBinding</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="nt">metadata</span><span class="p">:</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">alice-editor</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prod</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">  </span><span class="nt">clusterRef</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prod-cluster</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">  </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">alice@example.com</span><span class="w">   </span><span class="c1"># provisioned by Neo4j on first OIDC login</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">  </span><span class="nt">roles</span><span class="p">:</span>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">editor</span>
-</span></code></pre></div>
-<h3 id="multiple-roles-exclusive-enforcement">Multiple roles, exclusive enforcement<a class="headerlink" href="#multiple-roles-exclusive-enforcement" title="Anchor link to this section">&para;</a></h3>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1beta1</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Neo4jRoleBinding</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="nt">metadata</span><span class="p">:</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">alice-baseline</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prod</span>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">  </span><span class="nt">clusterRef</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prod-cluster</span>
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">  </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">alice@example.com</span>
-</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">  </span><span class="nt">enforceExclusive</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">       </span><span class="c1"># revoke any role not listed below</span>
-</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">  </span><span class="nt">roles</span><span class="p">:</span>
-</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">editor</span>
-</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">analytics_reader</span>
-</span></code></pre></div>
-<p>With <code>enforceExclusive: true</code>, if someone grants <code>admin</code> to <code>alice</code> directly via Cypher, the next reconcile will revoke it.</p>
-<h3 id="combine-with-a-custom-neo4jrole">Combine with a custom Neo4jRole<a class="headerlink" href="#combine-with-a-custom-neo4jrole" title="Anchor link to this section">&para;</a></h3>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1beta1</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Neo4jRole</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="nt">metadata</span><span class="p">:</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">analytics-reader</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prod</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">  </span><span class="nt">clusterRef</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prod-cluster</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">  </span><span class="nt">privileges</span><span class="p">:</span>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;GRANT</span><span class="nv"> </span><span class="s">ACCESS</span><span class="nv"> </span><span class="s">ON</span><span class="nv"> </span><span class="s">DATABASE</span><span class="nv"> </span><span class="s">analytics</span><span class="nv"> </span><span class="s">TO</span><span class="nv"> </span><span class="s">analytics-reader&quot;</span>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;GRANT</span><span class="nv"> </span><span class="s">MATCH</span><span class="nv"> </span><span class="s">{*}</span><span class="nv"> </span><span class="s">ON</span><span class="nv"> </span><span class="s">GRAPH</span><span class="nv"> </span><span class="s">analytics</span><span class="nv"> </span><span class="s">NODES</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">TO</span><span class="nv"> </span><span class="s">analytics-reader&quot;</span>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="nn">---</span>
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1beta1</span>
-</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Neo4jRoleBinding</span>
-</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="nt">metadata</span><span class="p">:</span>
-</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">alice-analytics</span>
-</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prod</span>
-</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="w">  </span><span class="nt">clusterRef</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prod-cluster</span>
-</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="w">  </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">alice@example.com</span>
-</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="w">  </span><span class="nt">roles</span><span class="p">:</span>
-</span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">analytics-reader</span>
-</span></code></pre></div>
-<p>Apply order doesn't matter — the binding waits in <code>PendingDependencies</code> until the role lands.</p>
-<h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Anchor link to this section">&para;</a></h2>
-<p><strong><code>UserNotFound=True</code></strong>: the named user doesn't exist in Neo4j yet. With external auth providers (LDAP/OIDC), users are typically provisioned on first login. Either wait for the user to log in, or pre-create them via Neo4j Cypher / a <code>Neo4jUser</code> CR (in which case use <code>Neo4jUser</code> for the role grants).</p>
-<p><strong>Bound roles are revoked unexpectedly</strong>: check whether <code>enforceExclusive: true</code> is set. With exclusive mode, any role not in <code>.spec.roles</code> is revoked on every reconcile, even if added by a different process.</p>
-<p><strong>Cannot delete the CR — finalizer hangs</strong>: the controller is trying to revoke roles but cannot reach the cluster. Check the cluster's Ready phase; if the cluster is permanently gone, edit the CR to set <code>deletionPolicy: Retain</code> (or remove the finalizer manually only as a last resort).</p>
-<h2 id="see-also">See also<a class="headerlink" href="#see-also" title="Anchor link to this section">&para;</a></h2>
+<hr />
+<h2 id="inv-4-v2_only-discovery">INV-4: V2_ONLY-DISCOVERY<a class="headerlink" href="#inv-4-v2_only-discovery" title="Anchor link to this section">&para;</a></h2>
 <ul>
-<li><a href="../../user_guide/user_role_management/">User &amp; Role Management Guide</a></li>
-<li><a href="../neo4juser/"><code>Neo4jUser</code></a></li>
-<li><a href="../neo4jrole/"><code>Neo4jRole</code></a></li>
+<li><strong>id:</strong> <code>V2_ONLY-DISCOVERY</code></li>
+<li><strong>rule:</strong> Cluster discovery uses the V2 protocol exclusively (LIST resolver,
+  static pod FQDNs, port <strong>6000</strong>). For SemVer 5.26.x the operator MUST emit
+  <code>dbms.cluster.discovery.version=V2_ONLY</code> explicitly; for CalVer 2025.x+
+  (including 2026.x+) the flag is omitted because V2 is the only protocol — the
+  CalVer key is <code>dbms.cluster.endpoints</code> instead of <code>dbms.cluster.discovery.v2.endpoints</code>.
+  Never use the deprecated V1 protocol (port 5000) or any 4.x
+  <code>causal_clustering.*</code> discovery config.</li>
+<li><strong>WHY:</strong> V1 discovery is deprecated and removed in the supported versions; the
+  static-FQDN LIST resolver is the only reliable mechanism in Kind where pod IPs
+  are ephemeral. Emitting <code>V2_ONLY</code> on 5.26 but <em>omitting</em> it on CalVer is
+  load-bearing: CalVer rejects the flag, and 5.26 won't reliably pick V2 without
+  it.</li>
+<li><strong>enforcement status:</strong> test-pinned (<code>TestListDiscoveryConfiguration</code> in
+  <code>internal/resources/cluster_startup_test.go</code>; blocking <code>unit-tests</code> job) and
+  additionally guard-checked — <code>scripts/check-invariants.sh</code> greps non-test Go
+  for an emitted <code>discovery.version=V1</code>/<code>V1_ONLY</code> (advisory). The
+  version-specific block is built by <code>buildVersionSpecificDiscoveryConfig()</code>
+  (<code>internal/resources/cluster.go</code>), which branches on <code>isCalverImage(tag)</code>; the
+  test asserts 5.26 emits <code>dbms.cluster.discovery.version=V2_ONLY</code> and CalVer
+  does not.</li>
+<li><strong>violation symptom:</strong> Changing the discovery block so 5.26 drops the <code>V2_ONLY</code>
+  flag, or so CalVer adds it, fails <code>TestListDiscoveryConfiguration</code> under
+  <code>make test-unit</code>. If the test were bypassed, the live symptom is clusters that
+  never form — pods log discovery errors and <code>SHOW SERVERS</code> shows isolated
+  single-member views (see split-brain detection).</li>
+</ul>
+<hr />
+<h2 id="inv-5-server-arch">INV-5: SERVER-ARCH<a class="headerlink" href="#inv-5-server-arch" title="Anchor link to this section">&para;</a></h2>
+<ul>
+<li><strong>id:</strong> <code>SERVER-ARCH</code></li>
+<li><strong>rule:</strong> A cluster is a <strong>single</strong> StatefulSet named <code>{cluster}-server</code> with
+  <code>replicas: N</code>; pods are <code>{cluster}-server-0 … {cluster}-server-N-1</code>. Servers
+  self-organize into primary/secondary roles — <strong>never</strong> name pods or
+  StatefulSets <code>primary-*</code> / <code>secondary-*</code>. Backups are <strong>Job-per-<code>Neo4jBackup</code>-CR
+  exclusively</strong>: there is NO centralized <code>{cluster}-backup</code> StatefulSet, NO
+  long-running backup pod or sidecar, NO <code>spec.backups</code> field, and NO
+  <code>BuildBackupStatefulSet</code> / <code>BackupsSpec</code> / <code>buildBackupSidecarContainer</code>
+  symbols (CLAUDE.md rule 79 — all REMOVED, never reintroduce).</li>
+<li><strong>WHY:</strong> The server-based model lets Neo4j's own cluster machinery assign
+  primary/secondary roles dynamically; pinning roles to pod names re-creates the
+  banned 4.x <code>core/read-replica</code> topology and breaks server
+  mode-constraint hints. The centralized backup StatefulSet was a long-running
+  pod that held a lease on backup storage and a sidecar that bloated every Neo4j
+  pod; both were deliberately deleted in favor of ephemeral Jobs that run, write
+  one artifact, and exit. Reintroducing either resurrects retired, conflicting
+  code paths.</li>
+<li><strong>enforcement status:</strong> test-pinned for the naming half
+  (<code>TestBuildStatefulSetForEnterprise_WithFeatures</code> in
+  <code>internal/resources/cluster_test.go</code> asserts the StatefulSet name is
+  <code>{cluster}-server-0</code> and pod FQDNs follow <code>{cluster}-server-N</code>;
+  <code>TestListDiscoveryConfiguration</code> exercises the same naming via discovery
+  endpoints — both under the blocking <code>unit-tests</code> job) AND guard-checked for
+  the removed-backup half — <code>scripts/check-invariants.sh</code> now greps for
+  <code>BuildBackupStatefulSet</code>, a <code>backups:</code>/<code>spec.backups</code> field in the CRD surface
+  (<code>config/</code>+<code>api/</code>), and <code>-primary-</code>/<code>-secondary-</code> pod-name construction in
+  <code>internal/resources/</code> (advisory). (Previously the removed-backup symbols were
+  kept gone by file/symbol absence only.)</li>
+<li><strong>violation symptom:</strong> Renaming the StatefulSet or introducing <code>primary-*</code> /
+  <code>secondary-*</code> pods fails the naming assertions in
+  <code>TestBuildStatefulSetForEnterprise_WithFeatures</code> under <code>make test-unit</code>.
+  Re-adding a <code>spec.backups</code> field or a <code>BuildBackupStatefulSet</code> builder,
+  however, <strong>compiles and passes all current tests</strong> — the live symptom is a
+  resurrected long-running backup pod competing with the Neo4jBackup Job path for
+  the same storage, and <code>make manifests</code> regenerating CRD fields that were
+  intentionally deleted.</li>
 </ul>
 
 
@@ -3421,7 +3189,7 @@
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../neo4jrole/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Neo4jRole">
+          <a href="../../developer_guide/AGENT-GUARDRAILS/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Agent Guardrails">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -3431,27 +3199,11 @@
                 Previous
               </span>
               <div class="md-ellipsis">
-                Neo4jRole
+                Agent Guardrails
               </div>
             </div>
           </a>
         
-        
-          
-          <a href="../neo4jauthrule/" class="md-footer__link md-footer__link--next" aria-label="Next: Neo4jAuthRule">
-            <div class="md-footer__title">
-              <span class="md-footer__direction">
-                Next
-              </span>
-              <div class="md-ellipsis">
-                Neo4jAuthRule
-              </div>
-            </div>
-            <div class="md-footer__button md-icon">
-              
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
-            </div>
-          </a>
         
       </nav>
     

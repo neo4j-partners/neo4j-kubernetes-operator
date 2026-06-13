@@ -12,13 +12,13 @@
         <meta name="author" content="Neo4j Partners">
       
       
-        <link rel="canonical" href="https://neo4j-partners.github.io/neo4j-kubernetes-operator/main/api_reference/neo4jrolebinding/">
+        <link rel="canonical" href="https://neo4j-partners.github.io/neo4j-kubernetes-operator/main/developer_guide/AGENT-GUARDRAILS/">
       
       
-        <link rel="prev" href="../neo4jrole/">
+        <link rel="prev" href="../llm-contribution/">
       
       
-        <link rel="next" href="../neo4jauthrule/">
+        <link rel="next" href="../../knowledge/invariants/">
       
       
         
@@ -29,7 +29,7 @@
     
     
       
-        <title>Neo4jRoleBinding - Neo4j Kubernetes Operator</title>
+        <title>Agent Guardrails - Neo4j Kubernetes Operator</title>
       
     
     
@@ -82,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#neo4jrolebinding-api-reference" class="md-skip">
+        <a href="#agent-guardrails-enforcement-gates" class="md-skip">
           Skip to content
         </a>
       
@@ -122,7 +122,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Neo4jRoleBinding
+              Agent Guardrails
             
           </span>
         </div>
@@ -1746,8 +1746,6 @@
       
   
   
-    
-  
   
   
     
@@ -1768,11 +1766,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -1800,7 +1798,7 @@
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_7">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1815,10 +1813,8 @@
                 
   
   
-    
   
   
-  
     
     
       
@@ -1850,11 +1846,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_1" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_1" >
         
           
           <label class="md-nav__link" for="__nav_7_1" id="__nav_7_1_label" tabindex="0">
@@ -1875,7 +1871,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_1_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_1_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_7_1">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1893,7 +1889,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../neo4jenterprisecluster/" class="md-nav__link">
+      <a href="../../api_reference/neo4jenterprisecluster/" class="md-nav__link">
         
   
   
@@ -1921,7 +1917,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../neo4jenterprisestandalone/" class="md-nav__link">
+      <a href="../../api_reference/neo4jenterprisestandalone/" class="md-nav__link">
         
   
   
@@ -1949,7 +1945,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../neo4jdatabase/" class="md-nav__link">
+      <a href="../../api_reference/neo4jdatabase/" class="md-nav__link">
         
   
   
@@ -1977,7 +1973,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../neo4jshardeddatabase/" class="md-nav__link">
+      <a href="../../api_reference/neo4jshardeddatabase/" class="md-nav__link">
         
   
   
@@ -2005,7 +2001,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../neo4juser/" class="md-nav__link">
+      <a href="../../api_reference/neo4juser/" class="md-nav__link">
         
   
   
@@ -2033,7 +2029,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../neo4jrole/" class="md-nav__link">
+      <a href="../../api_reference/neo4jrole/" class="md-nav__link">
         
   
   
@@ -2058,37 +2054,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Neo4jRoleBinding
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../api_reference/neo4jrolebinding/" class="md-nav__link">
         
   
   
@@ -2104,192 +2073,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#overview" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Overview
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#when-to-use-this-vs-neo4juser" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        When to use this vs. Neo4jUser
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#related-resources" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Related Resources
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#spec" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Spec
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#status" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Status
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Status">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#conditions" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Conditions
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#validation-rules" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Validation rules
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#lifecycle" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Lifecycle
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#examples" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Examples
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Examples">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#bind-an-sso-user-to-the-editor-role" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Bind an SSO user to the editor role
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#multiple-roles-exclusive-enforcement" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Multiple roles, exclusive enforcement
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#combine-with-a-custom-neo4jrole" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Combine with a custom Neo4jRole
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#troubleshooting" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Troubleshooting
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#see-also" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        See also
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -2302,7 +2085,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../neo4jauthrule/" class="md-nav__link">
+      <a href="../../api_reference/neo4jauthrule/" class="md-nav__link">
         
   
   
@@ -2330,7 +2113,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../neo4jplugin/" class="md-nav__link">
+      <a href="../../api_reference/neo4jplugin/" class="md-nav__link">
         
   
   
@@ -2358,7 +2141,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../neo4jbackup/" class="md-nav__link">
+      <a href="../../api_reference/neo4jbackup/" class="md-nav__link">
         
   
   
@@ -2386,7 +2169,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../neo4jrestore/" class="md-nav__link">
+      <a href="../../api_reference/neo4jrestore/" class="md-nav__link">
         
   
   
@@ -2428,8 +2211,10 @@
       
   
   
+    
   
   
+  
     
     
       
@@ -2462,11 +2247,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
         
           
           <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
@@ -2487,7 +2272,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
@@ -2505,7 +2290,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../developer_guide/QUICKSTART/" class="md-nav__link">
+      <a href="../QUICKSTART/" class="md-nav__link">
         
   
   
@@ -2533,7 +2318,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../developer_guide/development/" class="md-nav__link">
+      <a href="../development/" class="md-nav__link">
         
   
   
@@ -2561,7 +2346,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../developer_guide/contributing/" class="md-nav__link">
+      <a href="../contributing/" class="md-nav__link">
         
   
   
@@ -2589,7 +2374,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../developer_guide/collaboration/" class="md-nav__link">
+      <a href="../collaboration/" class="md-nav__link">
         
   
   
@@ -2617,7 +2402,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../developer_guide/ci_and_workflows/" class="md-nav__link">
+      <a href="../ci_and_workflows/" class="md-nav__link">
         
   
   
@@ -2645,7 +2430,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../developer_guide/architecture/" class="md-nav__link">
+      <a href="../architecture/" class="md-nav__link">
         
   
   
@@ -2673,7 +2458,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../developer_guide/testing/" class="md-nav__link">
+      <a href="../testing/" class="md-nav__link">
         
   
   
@@ -2701,7 +2486,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../developer_guide/makefile_reference/" class="md-nav__link">
+      <a href="../makefile_reference/" class="md-nav__link">
         
   
   
@@ -2729,7 +2514,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../developer_guide/openshift_olm/" class="md-nav__link">
+      <a href="../openshift_olm/" class="md-nav__link">
         
   
   
@@ -2754,8 +2539,10 @@
                 
   
   
+    
   
   
+  
     
     
       
@@ -2771,11 +2558,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_10" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_10" checked>
         
           
           <label class="md-nav__link" for="__nav_8_10" id="__nav_8_10_label" tabindex="0">
@@ -2796,7 +2583,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_10_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_10_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_8_10">
             <span class="md-nav__icon md-icon"></span>
             
@@ -2814,7 +2601,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../developer_guide/llm-contribution/" class="md-nav__link">
+      <a href="../llm-contribution/" class="md-nav__link">
         
   
   
@@ -2839,10 +2626,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../developer_guide/AGENT-GUARDRAILS/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent Guardrails
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -2858,6 +2672,59 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#two-tiers-what-actually-stops-you" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Two tiers — what actually stops you
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#generic-gates-apply-to-every-change" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Generic gates (apply to every change)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-do-not-trust-a-stale-guide-matters-here" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why "DO NOT trust a stale guide" matters here
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -2933,10 +2800,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#overview" class="md-nav__link">
+  <a href="#two-tiers-what-actually-stops-you" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Overview
+        Two tiers — what actually stops you
       
     </span>
   </a>
@@ -2944,10 +2811,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#when-to-use-this-vs-neo4juser" class="md-nav__link">
+  <a href="#generic-gates-apply-to-every-change" class="md-nav__link">
     <span class="md-ellipsis">
       
-        When to use this vs. Neo4jUser
+        Generic gates (apply to every change)
       
     </span>
   </a>
@@ -2955,143 +2822,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#related-resources" class="md-nav__link">
+  <a href="#why-do-not-trust-a-stale-guide-matters-here" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Related Resources
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#spec" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Spec
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#status" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Status
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Status">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#conditions" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Conditions
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#validation-rules" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Validation rules
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#lifecycle" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Lifecycle
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#examples" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Examples
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Examples">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#bind-an-sso-user-to-the-editor-role" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Bind an SSO user to the editor role
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#multiple-roles-exclusive-enforcement" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Multiple roles, exclusive enforcement
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#combine-with-a-custom-neo4jrole" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Combine with a custom Neo4jRole
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#troubleshooting" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Troubleshooting
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#see-also" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        See also
+        Why "DO NOT trust a stale guide" matters here
       
     </span>
   </a>
@@ -3115,7 +2849,7 @@
 
 
   
-    <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/edit/main/docs/api_reference/neo4jrolebinding.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+    <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/edit/main/docs/developer_guide/AGENT-GUARDRAILS.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
     </a>
@@ -3123,267 +2857,63 @@
   
 
 
-<h1 id="neo4jrolebinding-api-reference">Neo4jRoleBinding API Reference<a class="headerlink" href="#neo4jrolebinding-api-reference" title="Anchor link to this section">&para;</a></h1>
-<p>The <code>Neo4jRoleBinding</code> Custom Resource Definition (CRD) declaratively manages role grants for users the operator does NOT own as a <code>Neo4jUser</code>. Use this for SSO/LDAP/OIDC users that are provisioned by Neo4j itself on first login (or by an external pipeline) — the operator keeps their Neo4j role assignments in sync with <code>spec.roles</code> without ever creating, dropping, or otherwise managing the user record.</p>
-<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Anchor link to this section">&para;</a></h2>
+<h1 id="agent-guardrails-enforcement-gates">Agent Guardrails — enforcement &amp; gates<a class="headerlink" href="#agent-guardrails-enforcement-gates" title="Anchor link to this section">&para;</a></h1>
+<p>The five hard invariants themselves — rule, why, enforcement status, violation
+symptom, and <strong>recovery</strong> — live in
+<strong><a href="../../knowledge/invariants/"><code>docs/knowledge/invariants.md</code></a></strong> (the single
+detailed home; <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/AGENTS.md"><code>AGENTS.md</code></a> has the canonical short list). This
+page is the <em>enforcement</em> companion: which checks block a merge, which are
+advisory, and the generic gates that apply to every change.</p>
+<h2 id="two-tiers-what-actually-stops-you">Two tiers — what actually stops you<a class="headerlink" href="#two-tiers-what-actually-stops-you" title="Anchor link to this section">&para;</a></h2>
+<p>If you are an LLM agent, treat enforcement as two tiers:</p>
 <ul>
-<li><strong>API Version</strong>: <code>neo4j.neo4j.com/v1beta1</code></li>
-<li><strong>Kind</strong>: <code>Neo4jRoleBinding</code></li>
-<li><strong>Scope</strong>: Namespaced</li>
-<li><strong>Short names</strong>: <code>n4jrb</code>, <code>n4jrolebindings</code></li>
-<li><strong>Categories</strong>: <code>neo4j</code></li>
-<li><strong>Supported Neo4j Versions</strong>: 5.26 LTS and any CalVer release (2025.x, 2026.x, and onward) — Enterprise edition</li>
-<li><strong>Reconciliation</strong>: Role grants/revokes via <code>GRANT/REVOKE ROLE</code>, with optional exclusive enforcement of the user's full role set</li>
+<li><strong>Blocking</strong> — <code>make check-drift</code> (generated artifacts) and the <code>unit-tests</code>
+  job reject a violating change mechanically; there is no arguing past review.</li>
+<li><strong>Advisory</strong> — <code>make check-invariants</code> and <code>make check-knowledge-drift</code> (run by
+  the agent skills and a non-blocking <code>Invariant Guards</code> CI job) surface a
+  violation without gating merge. A flag there means you have broken the product
+  contract, not tripped a lint nit. Fix the change, never the guard.</li>
 </ul>
-<h2 id="when-to-use-this-vs-neo4juser">When to use this vs. Neo4jUser<a class="headerlink" href="#when-to-use-this-vs-neo4juser" title="Anchor link to this section">&para;</a></h2>
+<p>INV-3 additionally has <strong>runtime</strong> teeth (<code>internal/validation/image_validator.go</code>
+rejects <code>-community</code>, pinned by <code>image_validator_test.go</code>); INV-4 and the INV-5
+pod-naming half are <strong>test-pinned</strong> (blocking). The per-invariant enforcement
+status is in <a href="../../knowledge/invariants/"><code>invariants.md</code></a>.</p>
+<h2 id="generic-gates-apply-to-every-change">Generic gates (apply to every change)<a class="headerlink" href="#generic-gates-apply-to-every-change" title="Anchor link to this section">&para;</a></h2>
 <table>
 <thead>
 <tr>
-<th>You want to manage…</th>
-<th>Use</th>
+<th>Gate</th>
+<th>What happens if violated</th>
+<th>Enforced by</th>
+<th>Recovery</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>Identity, password, status, home DB, role grants for a user the operator owns</td>
-<td><code>Neo4jUser</code></td>
+<td><strong>Generated-artifact drift gate.</strong> Any edit to <code>api/v1beta1/*_types.go</code>, a <code>+kubebuilder:rbac:</code> marker, or <code>config/crd/bases/*.yaml</code> must be followed by regeneration (CRDs, RBAC, kustomize lists, Helm chart, OperatorHub bundle).</td>
+<td>PR is blocked; CRDs/RBAC/chart/bundle ship out of sync, producing a broken install.</td>
+<td><strong>CI gate</strong> — <code>make check-drift</code> (<code>sync-all</code> + <code>bundle</code> + <code>git diff --exit-code</code>), run by the <code>Generated Artifacts In Sync</code> job in <code>.github/workflows/ci.yml</code>. Same check available locally as a pre-commit hook via <code>make install-hooks</code>.</td>
+<td>Run <code>make sync-all</code> (or <code>make ship-prep</code> before a release) and commit the regenerated files. Adding a new CRD also needs a description row in <code>scripts/helm-sync-artifacthub-crds.sh</code>.</td>
 </tr>
 <tr>
-<td>Role grants for a user that already exists in Neo4j (created by SSO/LDAP first-login or by another tool)</td>
-<td><code>Neo4jRoleBinding</code></td>
+<td><strong>Lint.</strong> <code>golangci-lint</code> must be clean.</td>
+<td>Style/lint regressions land unnoticed.</td>
+<td><strong>Local only</strong> — <code>make lint</code>. <strong>NOTE: lint is <em>not</em> run in CI</strong> (only <code>check-drift</code> and <code>test-unit</code>, which itself runs <code>fmt</code> + <code>vet</code>). Run <code>make lint</code> yourself before pushing.</td>
+<td>Fix the reported issues; re-run <code>make lint</code>.</td>
 </tr>
 </tbody>
 </table>
-<p>The validator rejects a <code>Neo4jRoleBinding</code> whose <code>spec.username</code> overlaps with a <code>Neo4jUser</code> in the same namespace targeting the same <code>clusterRef</code>. Pick one.</p>
-<h2 id="related-resources">Related Resources<a class="headerlink" href="#related-resources" title="Anchor link to this section">&para;</a></h2>
-<ul>
-<li><a href="../neo4juser/"><code>Neo4jUser</code></a> — Manages users + their role grants</li>
-<li><a href="../neo4jrole/"><code>Neo4jRole</code></a> — Manages roles + their privileges</li>
-<li><a href="../../user_guide/user_role_management/">User &amp; Role Management Guide</a></li>
-</ul>
-<h2 id="spec">Spec<a class="headerlink" href="#spec" title="Anchor link to this section">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Type</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>clusterRef</code></td>
-<td><code>string</code></td>
-<td><strong>Required</strong>. Name of the <code>Neo4jEnterpriseCluster</code> or <code>Neo4jEnterpriseStandalone</code> in the same namespace.</td>
-</tr>
-<tr>
-<td><code>username</code></td>
-<td><code>string</code></td>
-<td><strong>Required</strong>. Username in Neo4j to manage role grants for. Must already exist when the binding reconciles (it enters <code>UserNotFound</code> and waits otherwise). Pattern <code>^[a-zA-Z][a-zA-Z0-9_.@\-]*$</code>, max 65 chars.</td>
-</tr>
-<tr>
-<td><code>roles</code></td>
-<td><code>[]string</code></td>
-<td><strong>Required</strong>, MinItems=1. Role names to grant. Mix built-ins and custom names (the latter must correspond to existing <code>Neo4jRole</code> CRs or roles created out-of-band). PUBLIC is implicit.</td>
-</tr>
-<tr>
-<td><code>enforceExclusive</code></td>
-<td><code>boolean</code></td>
-<td>Default <code>false</code>. When true, <code>.spec.roles</code> is authoritative for the user's full role set: roles granted out-of-band and not listed here are revoked on every reconcile. When false, the binding only adds and removes the roles it knows about; extra grants from other sources are tolerated.</td>
-</tr>
-<tr>
-<td><code>deletionPolicy</code></td>
-<td><code>string</code></td>
-<td>One of <code>Revoke</code> (default) or <code>Retain</code>. With <code>Revoke</code>, deleting the CR revokes every role this binding granted. With <code>Retain</code>, the finalizer is released without revoking.</td>
-</tr>
-</tbody>
-</table>
-<h2 id="status">Status<a class="headerlink" href="#status" title="Anchor link to this section">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Type</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>phase</code></td>
-<td><code>string</code></td>
-<td>One of <code>Pending</code>, <code>Ready</code>, <code>Failed</code>.</td>
-</tr>
-<tr>
-<td><code>message</code></td>
-<td><code>string</code></td>
-<td>Short summary of the current phase.</td>
-</tr>
-<tr>
-<td><code>observedGeneration</code></td>
-<td><code>int64</code></td>
-<td><code>metadata.generation</code> last reconciled.</td>
-</tr>
-<tr>
-<td><code>grantedRoles</code></td>
-<td><code>[]string</code></td>
-<td>Subset of <code>.spec.roles</code> actually granted (and observed via <code>SHOW USERS YIELD roles</code>). On CR deletion this list dictates what to revoke (so we never strip grants we did not add, except when <code>enforceExclusive: true</code>).</td>
-</tr>
-<tr>
-<td><code>conditions</code></td>
-<td><code>[]Condition</code></td>
-<td>See <a href="#conditions">Conditions</a>.</td>
-</tr>
-</tbody>
-</table>
-<h3 id="conditions">Conditions<a class="headerlink" href="#conditions" title="Anchor link to this section">&para;</a></h3>
-<table>
-<thead>
-<tr>
-<th>Type</th>
-<th>Reasons</th>
-<th>Meaning</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>Ready</code></td>
-<td><code>BindingReady</code>, <code>RolesPending</code>, <code>UserNotFound</code>, <code>ClusterNotReady</code>, <code>ConnectionFailed</code>, <code>BindingFailed</code>, <code>ValidationFailed</code></td>
-<td>True when the user exists and all desired roles are granted.</td>
-</tr>
-<tr>
-<td><code>RolesSynced</code></td>
-<td><code>RolesMatch</code>, <code>RolesPending</code></td>
-<td>True when <code>grantedRoles</code> covers <code>.spec.roles</code>.</td>
-</tr>
-<tr>
-<td><code>PendingDependencies</code></td>
-<td><code>RolesPending</code>, <code>AllDependenciesPresent</code></td>
-<td>True when one or more <code>.spec.roles</code> correspond to a Neo4jRole CR that does not yet exist.</td>
-</tr>
-<tr>
-<td><code>UserNotFound</code></td>
-<td><code>UserNotFound</code>, <code>UserPresent</code></td>
-<td>True when the user named by <code>.spec.username</code> is absent from Neo4j.</td>
-</tr>
-<tr>
-<td><code>ClusterNotReady</code></td>
-<td><code>ClusterNotReady</code>, <code>ClusterReady</code></td>
-<td>Mirrors the readiness of the referenced cluster.</td>
-</tr>
-</tbody>
-</table>
-<h2 id="validation-rules">Validation rules<a class="headerlink" href="#validation-rules" title="Anchor link to this section">&para;</a></h2>
-<ul>
-<li><code>clusterRef</code> must resolve to a cluster or standalone in the same namespace.</li>
-<li><code>username</code> matches <code>^[a-zA-Z][a-zA-Z0-9_.@\-]*$</code>, max 65 characters; reserved names rejected.</li>
-<li><code>roles</code> must be non-empty (kubebuilder MinItems=1) and contain no empty strings.</li>
-<li>A <code>Neo4jUser</code> in the same namespace targeting the same <code>clusterRef</code> and <code>username</code> is rejected at validate-time. (Manage role grants there instead.)</li>
-</ul>
-<h2 id="lifecycle">Lifecycle<a class="headerlink" href="#lifecycle" title="Anchor link to this section">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>CR Event</th>
-<th>Cypher Issued</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Create</td>
-<td><code>GRANT ROLE r TO username</code> for each role in <code>.spec.roles</code> (skipping built-ins not yet listed in current grants is fine; PUBLIC is always skipped)</td>
-</tr>
-<tr>
-<td>Update (<code>.spec.roles</code> changes)</td>
-<td><code>GRANT</code> for additions; <code>REVOKE</code> for removals from <code>.spec.roles</code> <em>and</em> roles previously listed in <code>status.grantedRoles</code></td>
-</tr>
-<tr>
-<td>Update (<code>enforceExclusive: true</code>)</td>
-<td>Same as above + revoke any extra roles on the user that are not in <code>.spec.roles</code></td>
-</tr>
-<tr>
-<td>Delete (<code>Revoke</code> policy)</td>
-<td><code>REVOKE ROLE r FROM username</code> for each role in <code>status.grantedRoles</code>, then remove finalizer</td>
-</tr>
-<tr>
-<td>Delete (<code>Retain</code> policy)</td>
-<td>Remove finalizer only</td>
-</tr>
-<tr>
-<td>User absent</td>
-<td>No-op; <code>UserNotFound</code> condition; reconcile every 30s until the user appears</td>
-</tr>
-<tr>
-<td>Cluster not Ready</td>
-<td>No-op; <code>ClusterNotReady</code> condition; reconcile every 30s</td>
-</tr>
-<tr>
-<td>Missing custom role</td>
-<td>Skip the grant for that role; <code>PendingDependencies</code> condition; the binding controller watches <code>Neo4jRole</code> and re-reconciles when the role lands</td>
-</tr>
-</tbody>
-</table>
-<h2 id="examples">Examples<a class="headerlink" href="#examples" title="Anchor link to this section">&para;</a></h2>
-<h3 id="bind-an-sso-user-to-the-editor-role">Bind an SSO user to the editor role<a class="headerlink" href="#bind-an-sso-user-to-the-editor-role" title="Anchor link to this section">&para;</a></h3>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1beta1</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Neo4jRoleBinding</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="nt">metadata</span><span class="p">:</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">alice-editor</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prod</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">  </span><span class="nt">clusterRef</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prod-cluster</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">  </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">alice@example.com</span><span class="w">   </span><span class="c1"># provisioned by Neo4j on first OIDC login</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">  </span><span class="nt">roles</span><span class="p">:</span>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">editor</span>
-</span></code></pre></div>
-<h3 id="multiple-roles-exclusive-enforcement">Multiple roles, exclusive enforcement<a class="headerlink" href="#multiple-roles-exclusive-enforcement" title="Anchor link to this section">&para;</a></h3>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1beta1</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Neo4jRoleBinding</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="nt">metadata</span><span class="p">:</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">alice-baseline</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prod</span>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">  </span><span class="nt">clusterRef</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prod-cluster</span>
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">  </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">alice@example.com</span>
-</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">  </span><span class="nt">enforceExclusive</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">       </span><span class="c1"># revoke any role not listed below</span>
-</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">  </span><span class="nt">roles</span><span class="p">:</span>
-</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">editor</span>
-</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">analytics_reader</span>
-</span></code></pre></div>
-<p>With <code>enforceExclusive: true</code>, if someone grants <code>admin</code> to <code>alice</code> directly via Cypher, the next reconcile will revoke it.</p>
-<h3 id="combine-with-a-custom-neo4jrole">Combine with a custom Neo4jRole<a class="headerlink" href="#combine-with-a-custom-neo4jrole" title="Anchor link to this section">&para;</a></h3>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1beta1</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Neo4jRole</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="nt">metadata</span><span class="p">:</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">analytics-reader</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prod</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">  </span><span class="nt">clusterRef</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prod-cluster</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">  </span><span class="nt">privileges</span><span class="p">:</span>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;GRANT</span><span class="nv"> </span><span class="s">ACCESS</span><span class="nv"> </span><span class="s">ON</span><span class="nv"> </span><span class="s">DATABASE</span><span class="nv"> </span><span class="s">analytics</span><span class="nv"> </span><span class="s">TO</span><span class="nv"> </span><span class="s">analytics-reader&quot;</span>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;GRANT</span><span class="nv"> </span><span class="s">MATCH</span><span class="nv"> </span><span class="s">{*}</span><span class="nv"> </span><span class="s">ON</span><span class="nv"> </span><span class="s">GRAPH</span><span class="nv"> </span><span class="s">analytics</span><span class="nv"> </span><span class="s">NODES</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">TO</span><span class="nv"> </span><span class="s">analytics-reader&quot;</span>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="nn">---</span>
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1beta1</span>
-</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Neo4jRoleBinding</span>
-</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="nt">metadata</span><span class="p">:</span>
-</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">alice-analytics</span>
-</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prod</span>
-</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="w">  </span><span class="nt">clusterRef</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prod-cluster</span>
-</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="w">  </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">alice@example.com</span>
-</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="w">  </span><span class="nt">roles</span><span class="p">:</span>
-</span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">analytics-reader</span>
-</span></code></pre></div>
-<p>Apply order doesn't matter — the binding waits in <code>PendingDependencies</code> until the role lands.</p>
-<h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Anchor link to this section">&para;</a></h2>
-<p><strong><code>UserNotFound=True</code></strong>: the named user doesn't exist in Neo4j yet. With external auth providers (LDAP/OIDC), users are typically provisioned on first login. Either wait for the user to log in, or pre-create them via Neo4j Cypher / a <code>Neo4jUser</code> CR (in which case use <code>Neo4jUser</code> for the role grants).</p>
-<p><strong>Bound roles are revoked unexpectedly</strong>: check whether <code>enforceExclusive: true</code> is set. With exclusive mode, any role not in <code>.spec.roles</code> is revoked on every reconcile, even if added by a different process.</p>
-<p><strong>Cannot delete the CR — finalizer hangs</strong>: the controller is trying to revoke roles but cannot reach the cluster. Check the cluster's Ready phase; if the cluster is permanently gone, edit the CR to set <code>deletionPolicy: Retain</code> (or remove the finalizer manually only as a last resort).</p>
-<h2 id="see-also">See also<a class="headerlink" href="#see-also" title="Anchor link to this section">&para;</a></h2>
-<ul>
-<li><a href="../../user_guide/user_role_management/">User &amp; Role Management Guide</a></li>
-<li><a href="../neo4juser/"><code>Neo4jUser</code></a></li>
-<li><a href="../neo4jrole/"><code>Neo4jRole</code></a></li>
-</ul>
+<h2 id="why-do-not-trust-a-stale-guide-matters-here">Why "DO NOT trust a stale guide" matters here<a class="headerlink" href="#why-do-not-trust-a-stale-guide-matters-here" title="Anchor link to this section">&para;</a></h2>
+<p>This guardrails system exists because a prior <code>AGENTS.md</code> drifted into instructing
+agents to <em>preserve</em> a centralized backup StatefulSet and <em>wire webhooks</em> — both
+banned and long since removed from the code. <strong>When a doc and the code
+disagree, the code wins.</strong> Before citing any symbol (file, function, test,
+field) in a change or a doc, grep the tree to confirm it still exists. The five
+invariants are verified against the current <code>main</code>. Two guards keep the docs from
+silently rotting again: <code>make check-invariants</code> (the architectural constructs)
+and <code>make check-knowledge-drift</code> (every test/file citation in <code>docs/knowledge/</code>
+must resolve) — and the <code>fix-knowledge-drift</code> skill repairs the latter when a
+rename breaks a citation.</p>
 
 
 
@@ -3421,7 +2951,7 @@
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../neo4jrole/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Neo4jRole">
+          <a href="../llm-contribution/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Contributing with an LLM Agent">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -3431,20 +2961,20 @@
                 Previous
               </span>
               <div class="md-ellipsis">
-                Neo4jRole
+                Contributing with an LLM Agent
               </div>
             </div>
           </a>
         
         
           
-          <a href="../neo4jauthrule/" class="md-footer__link md-footer__link--next" aria-label="Next: Neo4jAuthRule">
+          <a href="../../knowledge/invariants/" class="md-footer__link md-footer__link--next" aria-label="Next: Project Invariants">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Neo4jAuthRule
+                Project Invariants
               </div>
             </div>
             <div class="md-footer__button md-icon">
