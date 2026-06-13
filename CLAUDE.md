@@ -2,19 +2,39 @@
 
 Guidance to Claude Code (claude.ai/code) when working in this repository.
 
+Last updated: 2026-06-13
+
+This file is the **constitution + domain reference + index**. It holds the small set of
+non-negotiable invariants, the domain-knowledge sections an agent needs to make a change,
+and pointers to where the detailed, enforcement-tagged regression rules live. It is **not**
+the rule dump — the 79-rule regression checklist now lives in `docs/knowledge/` (single home;
+see [Regression rules](#regression-rules)). Do not re-add the inline numbered list here.
+
+## INVARIANTS (NEVER violate)
+
+These five are the hard project invariants. They are machine-checked by CI guard scripts and
+mirrored verbatim in `docs/knowledge/invariants.md`. Any change that contradicts one of these
+is wrong by definition — fix the change, not the invariant.
+
+1. **NO WEBHOOKS**: no `ValidatingWebhookConfiguration` / `MutatingWebhookConfiguration` /
+   `_webhook.go`. All validation lives in `internal/validation/`, called inline from the reconciler.
+2. **KIND ONLY** for dev/test/CI. No minikube, k3s, etc.
+3. **ENTERPRISE IMAGES ONLY**: `neo4j:5.26-enterprise` / `neo4j:2025.01.0-enterprise`. Never community.
+4. **Discovery**: V2_ONLY mode exclusively.
+5. **Server-based architecture**: single `{cluster-name}-server` StatefulSet with `replicas: N`;
+   pods are `{cluster-name}-server-0…N-1`. Never use `primary-*` / `secondary-*` pod names.
+   Backups are **Job-per-`Neo4jBackup`-CR ONLY**: no centralized `{cluster-name}-backup`
+   StatefulSet, no `spec.backups` field, no `BuildBackupStatefulSet`, no standalone backup
+   sidecar. The legacy backup pod/sidecar was **removed** — never reintroduce a long-running
+   backup pod.
+
 ## Project Overview
 
-Neo4j Enterprise Operator for Kubernetes — manages Neo4j Enterprise deployments (v5.26+) using the Kubebuilder framework.
+Neo4j Enterprise Operator for Kubernetes — manages Neo4j Enterprise deployments (v5.26+) using the Kubebuilder framework. Built on controller-runtime, Go 1.26.
 
 **Supported Neo4j versions**: 5.26.x (last semver LTS) and 2025.x.x+ (CalVer). No 5.27+ semver — Neo4j switched to CalVer after 5.26.
 
 **Support policy** (see `docs/user_guide/version_support.md`): the operator supports **the current LTS line + the current CalVer feature line** (today: 5.26 + 2025.x/2026.x). A new LTS is *added* at its GA; the previous LTS is *dropped only at its Neo4j EOL* — never the moment a new LTS ships — so the operator is never stricter than the database. Steady state = 2 CI anchors; a vendor-overlap window may run 3. **CalVer = validated vs. best-effort**: each release pins ONE anchor CalVer in CI (e.g. 2026.04) and stands behind it; newer CalVers are *allowed* (forward-compatible via `IsCalver`) but best-effort — a CalVer shipped after an operator release can break it (operator emits strictly-validated config/Cypher), fixed in the next release. We don't claim to support every CalVer in a window; Neo4j itself supports only the latest.
-
-**Hard constraints (NEVER violate):**
-- **KIND ONLY** for dev/test/CI. No minikube, k3s, etc.
-- **ENTERPRISE IMAGES ONLY**: `neo4j:5.26-enterprise` / `neo4j:2025.01.0-enterprise`. Never community.
-- **NO WEBHOOKS**: no `ValidatingWebhookConfiguration` / `MutatingWebhookConfiguration` / `_webhook.go`. All validation lives in `internal/validation/`, called inline from the reconciler.
-- **Discovery**: V2_ONLY mode exclusively.
 
 **Deployment types:**
 - **Neo4jEnterpriseCluster**: HA clusters (min 2 servers; self-organize into primary/secondary).
@@ -26,7 +46,7 @@ Neo4j Enterprise Operator for Kubernetes — manages Neo4j Enterprise deployment
 - Controllers: cluster & standalone controllers with controller-side validation. Neo4j client: Bolt protocol.
 - **Directories:** `api/v1beta1/` (CRD types), `internal/controller/`, `internal/resources/` (K8s builders), `test/` (unit/integration/e2e).
 
-**Server-based architecture**: single `{cluster-name}-server` StatefulSet with `replicas: N`. Pods are `{cluster-name}-server-0…N-1`. Never use `primary-*` / `secondary-*` pod names. Backups are Job-per-`Neo4jBackup`-CR exclusively (no persistent backup pod, no sidecars, no `spec.backups` field). The legacy `{cluster-name}-backup-0` StatefulSet and standalone backup sidecar were removed — never reintroduce a long-running backup pod.
+**Server-based architecture**: single `{cluster-name}-server` StatefulSet with `replicas: N`. Pods are `{cluster-name}-server-0…N-1`. Never use `primary-*` / `secondary-*` pod names. Backups are Job-per-`Neo4jBackup`-CR exclusively (no persistent backup pod, no sidecars, no `spec.backups` field). The legacy `{cluster-name}-backup-0` StatefulSet and standalone backup sidecar were removed — never reintroduce a long-running backup pod. (Invariant 5.)
 
 **Server role hints** (`initial.server.mode_constraint`):
 ```yaml
@@ -238,97 +258,16 @@ Three CRDs, one design rule: **privileges live on `Neo4jRole`, not `Neo4jUser` o
 - **Edition field removed**: no `edition: enterprise` in CRDs. Operator always assumes enterprise; client checks actual edition via `CALL dbms.components()`.
 - **Structured Events**: constants from `internal/controller/events.go`. Use `corev1.EventTypeNormal` / `corev1.EventTypeWarning`, never raw strings.
 
-## Regression Prevention Checklist
+## Regression rules
 
-Numbered rules are not duplicated elsewhere — read in full.
+Regression rules now live in `docs/knowledge/` as structured, enforcement-tagged entries — see
+`docs/knowledge/invariants.md` (hard constraints), `docs/knowledge/backup-restore.md`, and
+`docs/knowledge/operations.md`. **Do not re-add the inline numbered list here (single home).**
 
-**Standalone-specific:**
-1. **`status.phase="Ready"`** required before database ops.
-2. **Backup `--to-path`** syntax for Neo4j 5.26+.
-3. **`ObservedGeneration`**: set `status.observedGeneration = latest.Generation` on every status update (both controllers).
-4. **Name length validation**: cluster ≤ 56 chars (DNS label 63 minus `-server`); standalone ≤ 63; database ≤ 65 and must match `^[a-zA-Z][a-zA-Z0-9.\-]*$`.
-5. **Standalone `UpgradeStrategy`**: pre-upgrade health check via `VerifyConnectivity`; `autoPauseOnFailure` blocks upgrade on failure; STS update strategy from spec.
-6. **Standalone health probes**: readiness/liveness/startup via `/conf/health.sh` (process + HTTP 7474). ConfigMap includes `health.sh` alongside `neo4j.conf` with `DefaultMode: 0755`.
-7. **Deprecated config keys**: validator *rejects* (`field.Invalid`, not a warning) deprecated `spec.config` keys — `dbms.logs.query.enabled` (use `db.logs.query.enabled`), `dbms.default_database`, `db.format`, `dbms.integrations.cloud_storage.s3.region`. Always use `db.*` namespace for 5.x+.
-8. **Storage expansion**: orphan-delete STS (not regular delete); compare spec vs actual PVC sizes (not old vs new spec); `retry.RetryOnConflict` on PVC patches; validate `allowVolumeExpansion` before patching; never shrink PVCs.
-
-**TLS / Bolt client:**
-9. **TLS CA auto-discovery**: `buildTLSConfig()` in `internal/neo4j/client.go` loads CA from cert-manager Secret (`{name}-tls-secret`) automatically. `TrustedCASecret` is an override; `InsecureSkipVerify` is fallback only.
-10. **All client functions must handle TLS**: `NewClientForEnterprise`, `NewClientForEnterpriseStandalone`, AND `NewClientForPod` all call `buildTLSConfig()`. Split-brain detector uses dynamic `bolt+s://` scheme.
-11. **Operator's outbound Bolt URI uses the routing scheme** (`neo4j://` / `neo4j+s://`), never `bolt://`. Go driver only honors `AccessModeWrite` under routing; `bolt://` silently lands wherever the ClusterIP steered → `Neo.ClientError.Cluster.NotALeader`. Only legitimate `bolt://` user is `splitbrain_detector.go`. Pinned by `internal/neo4j/uri_test.go`.
-12. **Tight Bolt driver timeouts**: `ConnectionAcquisitionTimeout=10s`, `SocketConnectTimeout=5s`, `MaxTransactionRetryTime=15s`. Under routing these gate routing-table fetch retries against an unreachable cluster; bumping to 30s+ stalls the reconcile queue.
-13. **TLS Secret volume `DefaultMode=0440`** (owner+group read). Neo4j runs UID/GID 7474 with `FSGroup=7474`. Pinned by `TestBuildStatefulSet_TLSVolumeDefaultMode0440`.
-
-**Users / Roles / Privileges:**
-14. **`GetUserRoles` is buggy** — queries `SHOW USER PRIVILEGES YIELD role`, returns one row per privilege. Use `Client.ListUserRoles` or `Client.ShowUser`.
-15. **Password rotation via Secret hash**: `Neo4jUser.status.passwordSecretHash` stores SHA-256 of the Secret value; rotation detected on hash change. Password never persisted in CR fields. Skip `SET PASSWORD` when only `externalAuth` is configured.
-16. **`ALTER USER` clause ordering**: REMOVE clauses MUST precede SET clauses on a single statement. Use the `AlterUserOptions` builder — never hand-roll ALTER USER strings.
-17. **Missing custom roles**: do NOT fail reconcile. Set `PendingDependencies` condition and requeue; the user controller watches `Neo4jRole` and re-reconciles when the role lands.
-18. **Same-namespace `clusterRef`** for users/roles — cross-namespace refs not supported in v1. Multi-tenant patterns go through an opt-in `Neo4jClusterAccessGrant` CR.
-19. **Identifier quoting in Cypher**: role/user names go through `escapeBackticks()`. Never `fmt.Sprintf` user-controlled names into Cypher; passwords / provider IDs go through driver parameters.
-20. **Privilege drift via `SHOW ROLE PRIVILEGES AS COMMANDS`**: source of truth is `Neo4jRole.spec.privileges`. Controller canonicalises both sides (`CanonicalisePrivilegeStatement`), diffs as sets, derives REVOKEs (`DerivePrivilegeRevoke`). Immutable rows excluded from revokes; surfaced via `status.privilegeDrift`.
-21. **Privilege statement validation**: entries in `Neo4jRole.spec.privileges` MUST start with `GRANT` or `DENY` (REVOKE rejected — operator derives) and end with `TO <spec.name>`.
-22. **`Neo4jRoleBinding` never creates or drops users** — only manages role grants for externally-provisioned users (SSO/LDAP first-login). Absent user → `UserNotFound` and waits.
-23. **`Neo4jRoleBinding` overlap with `Neo4jUser`** rejected by validator when `clusterRef`+`username` match an existing user in the same ns.
-24. **`Neo4jRoleBinding.spec.enforceExclusive`** defaults to false (manages only `.spec.roles` + `status.grantedRoles`). `true` revokes any role on the user not in `.spec.roles`. Never flip the default.
-25. **Diagnostics user/role lists bounded** by `maxDiagnosticUsers` / `maxDiagnosticRoles`; full count in `UserCount` / `RoleCount`. Never remove caps without a pruning strategy.
-
-**TrustStore / volumes:**
-26. **Truststore init container seeds from JDK cacerts**: `BuildTrustStoreInitContainer` MUST copy `$JAVA_HOME/lib/security/cacerts` to `/truststore/truststore.jks` before importing user CAs — otherwise public CAs break. Seed makes `spec.trustedCASecrets` purely additive.
-27. **`spec.trustedCASecrets` Secret-name = keytool alias** — must be unique in the JKS; validator rejects duplicate Secret names. Keep alias derivation spec-statically-derivable.
-28. **Legacy `spec.auth.trustStore` folds into `spec.trustedCASecrets`** via `CollectTrustedCASecrets`. Never wire legacy directly — both paths produce duplicate volumes/init containers and the JKS build fails with duplicate-alias.
-29. **`spec.extraVolumeMounts` reserved paths**: validator rejects mounts at `/data`, `/logs`, `/conf`, `/ssl`, `/plugins`, `/truststore`, `/truststore-ca`, `/var/lib/neo4j` and its standard subdirectories.
-
-**Auth / authrule / OIDC:**
-30. **AUTH RULE Cypher requires `CYPHER 25` prefix** — every statement in `internal/neo4j/auth_rules.go` prepends `cypher25Prefix`. 2026.x system DB defaults to Cypher 5; without it: `42I06: Invalid input 'AUTH'`. Keep even when default flips.
-31. **`oidc-`-prefixed provider name in ABAC config** — `dbms.security.abac.authorization_providers` values must match `dbms.security.authorization_providers` form (`oidc-<name>` for OIDC).
-32. **Authrule controller in `--controllers` default list** — `cmd/main.go` dev-mode default MUST include `authrule`. Production (`setupProductionControllers`) wires unconditionally.
-33. **LDAP `useStartTLS` defaults to true for plain `ldap://` hosts**: nil + `ldap://` → `dbms.security.ldap.use_starttls=true`. `ldaps://` skips. Explicit `false` honored. Pinned by `TestBuildAuthConfig_LDAP_UseStartTLSDefault` (6 cases).
-
-**Network / metrics / audit:**
-34. **NetworkPolicy peer-rule ports** mirror cluster pod ContainerPorts: `BuildNetworkPolicyForEnterprise` peer rule covers `6000/7000/7688/7689`. Adding intra-cluster ports to STS without updating here silently breaks pod-to-pod on enforcing CNIs. Pinned by `TestBuildNetworkPolicyForEnterprise_PeerPortsRestrictedToCluster`.
-35. **NetworkPolicy public rule MUST include port 2004 (Prometheus)** — once any rule selects a pod it's isolated. Pinned by `TestBuildNetworkPolicyForEnterprise_PublicPortsOpen`.
-36. **`BuildNetworkPolicy*` returns nil when disabled** — reconcilers short-circuit. Standalone also uses `reflect.DeepEqual` to skip resourceVersion churn.
-37. **Metrics JMX + CSV disabled unconditionally** — `server.metrics.{jmx,csv}.enabled=false` emitted by both builders regardless of `monitoring.enabled` (JMX is unauthenticated management; CSV writes pod-ephemeral files). Kill-switches MUST be outside the monitoring branch. Pinned by `TestBuildConfigMapForEnterprise_MetricsHardening` + `TestBuildMonitoringConfig`.
-38. **`spec.audit` emission order**: `BuildAuditConfig` runs AFTER `BuildMonitoringConfig`; both touch `db.logs.query.obfuscate_literals` and last-write-wins gives audit priority. User `spec.config` appends last and wins over both. Pinned by `TestBuildAuditConfig_PrecedenceOverMonitoring`. No `dbms.security.audit.*` keys (4.x; removed) — use `security.log` / `query.log`.
-39. **`spec.audit.Enabled` is a hint, not a stomping default** — `Enabled=true` + `ObfuscateQueryLiterals` nil → emit `obfuscate_literals=true`. Explicit values (true OR false) win. Exactly ONE `obfuscate_literals` line emitted. Pinned by `TestBuildAuditConfig_ExplicitObfuscateFalseDespiteEnabled`.
-
-**Backup / restore:**
-40. **All runs of one Neo4jBackup CR share one `--to-path = <base>/<chain-root>/`** (NOT per-run subfolders) — required for `--type=DIFF` chaining. Per-run identity via ISO-8601 timestamp in each `.backup` filename, captured to `BackupRun.ArtifactFilename` (standard) / `ShardArtifacts.Filename` (sharded). `BACKUP_RUN_ID` env var stays on the Pod (downward API → Job name) for log correlation; one-shot Job name = `<backup>-backup`; CronJob child = `<cronjob>-<unix-seconds>`. Never re-introduce the `${BACKUP_RUN_ID}` subfolder under `--to-path`. Pinned by `TestBackupRunIDEnvVar` + `TestJobToBackupRun`.
-41. **CronJob backup defaults are load-bearing**: `ConcurrencyPolicy=Forbid`, `StartingDeadlineSeconds=60`, `TTLSecondsAfterFinished=1800`, `SuccessfulJobsHistoryLimit=10`, `FailedJobsHistoryLimit=3` — give `reconcileScheduledHistory` a 30-min window before K8s GCs the Jobs. Don't relax without cause.
-42. **`source.type: backup` resolved upstream via `resolveRestoreSource`** — swaps `Spec.Source` on a shallow restore copy, threads through every builder. `buildRestoreCommand`'s `case "backup":` is dead-code with defensive `internal:` error.
-43. **`errBackupNotReady` → Pending, not Failed**: `ResolveBackupRef` wraps `errBackupNotReady` via `fmt.Errorf %w` when history has no Succeeded run; `startRestore` `errors.Is` and routes Pending+requeue (Pending NOT in the "previously failed" guard set). Missing-CR errors stay terminal Failed. Pinned by `TestResolveRestoreSource_BackupRefNoSucceededRun_IsTransient` + `_BackupRefMissingCR_IsPermanent`.
-44. **Standalone restore `--from-path` is a FILE via shell substitution; `tail -1` picks the LATEST in the shared dir** (rule 40): `buildLocalRestoreFilePath` emits `$(ls '<backupPath>'/'<dbname>'-*.backup | tail -1)`. **BOTH path AND database name MUST go through `shellQuote()`** — unquoted user-controlled `spec.source.backupPath` / `spec.databaseName` would escape the `ls` and execute arbitrary commands in the restore Pod (mounts `/data` RW, carries `NEO4J_ADMIN_PASSWORD`). Pinned by `TestResolveLocalPVCFromPath_BackupPathShellInjectionGuard` + `_NestedCommandSubstitutionGuard` + `_EmbeddedSingleQuoteGuard`. Cloud URIs skip. Never pass the directory; never substitute the timestamp in Go; never drop quoting; never revert to `head -1`.
-45. **Restore `--temp-path=/tmp/restore-tmp` default for PVC sources** — backup PVC mounted ReadOnly, so neo4j-admin can't extract in-place. Emits `--temp-path` + `rm -rf && mkdir -p` prelude (needs empty dir). Explicit `Options.TempStorage` / `Options.TempPath` win. Without it: `FileSystemException: Read-only file system`.
-46. **Restore reconcile race tolerance**: Job creation treats `AlreadyExists` as "another reconcile got there first" and re-fetches; `startCluster` treats missing `neo4j.neo4j.com/original-replicas` annotation as "first reconcile already deleted it" and returns nil. Two reconciles race during the 10s stopCluster scale-down. Reverting either re-flips successful restores to terminal `Failed`.
-47. **Legacy post-restore re-seed via `dbms.[cluster.]recreateDatabase`** (Job-based standalone path only; rule 75's Cypher path doesn't need it). `recreateRestoredDatabaseOnCluster` uses server-0 as seed (matched by `cluster.Name + "-server-0"` against `SHOW SERVERS YIELD address` — `name` column unreliable). Procedure from `version.RecreateDatabaseProcedure()`: `dbms.cluster.recreateDatabase` (5.24–2025.03) → `dbms.recreateDatabase` (2025.04+). Skipped for standalone, `Topology.Servers < 2`, pre-5.24 SemVer / pre-2025.02 CalVer. Non-fatal — failure emits Warning `DatabaseCreateFailed`.
-48. **Sharded backup uses `{name}*` glob + always-quoted db arg**: one `neo4j-admin database backup "{name}*"` captures every shard consistently. `GetBackupCommand` ALWAYS double-quotes so the shell can't pre-expand. `shardedPreflightGlobSafety` rejects any DB matching `{name}*` outside `^{name}-(g|p)\d{3}$` (terminal Failed). `shardedPreflightStatic` routes missing-Ready to Pending. Pinned by `TestGetBackupCommandQuotesShardedGlob` + `TestGetBackupCommandQuotesPlainName`.
-49. **`--remote-address-resolution` is `*bool` with sharded-aware defaulting**: `effectiveRemoteAddressResolution` defaults `true` ONLY when `kind=ShardedDatabase` AND Neo4j ≥ 2025.09 AND user didn't set it. Explicit values win. Never re-introduce a `bool` zero-value default. Pinned by `TestEffectiveRemoteAddressResolution`.
-50. **`IsClusterShardingReady`** (`internal/validation/sharding.go`) is the canonical sharding-precondition helper — returns nil only when `cluster.spec.propertySharding.enabled=true` AND `IsNeo4jVersion202512OrHigher(image.tag)`. Used by cluster validator + backup reconciler preflight; never inline at new callers.
-51. **Sharded DB Ready signal is `Status.ShardingReady` (bool pointer)**, not the generic Ready condition (which is coarser and would let backups run before shards exist).
-52. **`Neo4jShardedDatabase.status.lastBackup` reverse-lookup is non-fatal observability**: populated by `updateShardedDBLastBackup` from both one-shot (`recordOneShotBackupRun`) and CronJob (`reconcileScheduledHistory`) paths. Only Succeeded runs update; Failed runs don't overwrite. CR-not-found logged and swallowed. Source of truth remains `Neo4jBackup.status.history`.
-53. **`BackupRun.ShardArtifacts.ShardName` is derived from `Neo4jShardedDatabase.spec`** (`expectedShardArtifactsForBackup` reads `propertySharding.propertyShards`, emits `{name}-g000` + `{name}-p000…p{N-1}`). Filename/Size populated by Pod-log parsing (rule 67). The audit question ("did all shards back up?") is answered by `ShardName` alone, so parse-derived fields stay informational.
-55. **`ResolveBackupRef` is the canonical Neo4jBackup-name → StorageLocation resolver** (`internal/controller/backup_resolver.go`, free function taking `client.Reader`). All callers delegate. Returns wrapped `ErrBackupNotReady` when the backup exists but has no Succeeded run — callers `errors.Is` to route Pending+requeue. Never duplicate the lookup; never compare error strings.
-56. **`spec.seedBackupRef` supports cloud (CloudSeedProvider) and PVC (HTTP proxy + URLConnectionSeedProvider — rule 71)**. Other storage types rejected.
-57. **`spec.seedBackupRef` mutex with `seedURI` / `seedURIs`**: validator rejects combinations. seedBackupRef materialises into seedURI at reconcile time on a shallow in-memory copy — the original spec is not persisted with the resolved URI.
-58. **`Neo4jShardedDatabase` phase "Pending" is reserved for `seedBackupRef` waits**: when `resolveShardedSeed` returns `errors.Is(err, ErrBackupNotReady)`, set `status.phase=Pending` and requeue. Don't route other transient conditions through Pending without explicit design.
-59. **Seed-creds projection — `spec.extraEnvFrom` on cluster + standalone**: `CREATE DATABASE … OPTIONS { seedURI }` runs on the Neo4j server pods, so cloud creds must be in their env or the JVM's SDK default chain can't authenticate. Both CRs' `spec.extraEnvFrom` wire onto the neo4j container's `envFrom`. Generic (cloud creds, plugin tokens, any Secret-projected env). Empty `credsSecretName` is a no-op (user on IRSA / Workload Identity).
-60. **`SeedCredsTarget` interface + `EnsureSeedCredsProjected`** in `internal/controller/cluster_seed_creds.go` are the canonical projection check. Both CRs implement it via `api/v1beta1/seed_creds_target.go`. `ResolveShardedSeed` returns `(uri, credsSecretName, err)`; `credsSecretName` from the resolved backup's `Spec.Cloud.CredentialsSecretRef` (empty for workload-identity). Called from `Neo4jShardedDatabaseReconciler`, `Neo4jDatabaseReconciler`, `Neo4jRestoreReconciler`. New callers go through the interface.
-61. **Auto-inherit seed creds is annotation-gated and triggers a rolling restart**: without `neo4j.com/auto-inherit-seed-creds=true`, missing-projection emits an actionable error (copy-pasteable snippet). With it, operator patches `spec.extraEnvFrom`, records source in `neo4j.com/seed-creds-auto-inherited-from`, rolls out the STS, DB controller routes to Pending+requeue. Never auto-inherit without the annotation.
-63. **`spec.replaceExisting` + `spec.force` on `Neo4jShardedDatabase` = destructive restore**: both true → `CYPHER 25 DROP DATABASE {name} IF EXISTS DESTROY DATA WAIT` before the standard CREATE. Validator: `replaceExisting=true` requires `force=true`; mutex with `ifNotExists=true`; requires a seed source. DROP is idempotent across requeues.
-64. **`Status.LastDestructiveRestoreGeneration` gates replaceExisting**: destructive branch fires only when `LastDestructiveRestoreGeneration < Generation`; stamps `= Generation` on success. Re-trigger by mutating spec (bumps generation) — typically editing `seedBackupRef`.
-65. **Sharded DDL (CREATE / DROP) requires `CYPHER 25` prefix**: 2026.x system DB defaults to Cypher 5; without it the sharded syntax fails to parse. Same invariant as AUTH RULE (rule 30).
-66. **`Neo4jShardedDatabase.spec.IfNotExists` is `*bool`**: kubebuilder `+default=true` on `bool omitempty` silently re-applies the default when the user sets `false`. Pointer preserves explicit-false. Callers MUST use `Spec.IfNotExistsEffective()`, not dereference. Pinned by Phase 2c replaceExisting integration test.
-67. **Backup-Pod log parsing is opportunistic, not load-bearing**: `Neo4jBackupReconciler.Clientset` enables Pod-log fetches that populate `BackupRun.ShardArtifacts.Filename/Size`, `BackupRun.ArtifactFilename`, `BackupRun.Validation`. All best-effort: log-fetch failures, format drift, or `Clientset == nil` (unit tests) leave fields empty without failing reconcile. ShardName / RunID / Status are load-bearing — never gate reconcile state on parsed filename/size.
-70. **`BackupOptions.Validate` is `*bool` opt-in**: when `*true`, appends `&& (neo4j-admin backup validate --from-path=… --database="…" || true)` (validate failures don't fail the Job). Operator parses Pod log into `BackupRun.Validation`: all rows OK → OK; any Ahead/Behind → Degraded; no parseable rows → Unknown + truncated `RawOutput` (capped 2 KiB). For sharded, dbArg is the literal name (validate auto-discovers shards).
-71. **PVC seed proxy + `URLConnectionSeedProvider`**: PVC-backed `seedBackupRef` (sharded) and PVC-backed cluster Neo4jRestore both spawn a `backup-seed-proxy-<owner>` Deployment + Service via generic `ensurePVCSeedProxyResources` (`internal/controller/pvc_seed_proxy.go`) — backup PVC mounted RO, busybox httpd on `:8080`, owner-ref'd to the consuming CR. URLs target the exact `.backup` filename; `URLConnectionSeedProvider` only supports single-file URIs. Hard-gated on F3 filename capture — empty filename → validator rejects.
-72. **ResolvedShardedSeed.URI vs PerShardURIs is mutually exclusive**: cloud → URI (`OPTIONS { seedURI }`); PVC → PerShardURIs (`OPTIONS { seedURIs: { … } }`). Wire ONE and clear the OTHER — validator rejects both. `ProxyAvailable=false` → requeue while proxy rolls out.
-74. **`dbms.databases.seed_from_uri_providers` is version-gated** via `SeedFromURIProvidersConfigValue(imageTag)`. Base: `CloudSeedProvider,FileSeedProvider,URLConnectionSeedProvider`; `ServerSeedProvider` appended only on `IsNeo4jVersion202604OrHigher`. Both builders call the helper — never inline. **Deprecated `S3SeedProvider` excluded across all versions** — `CloudSeedProvider` handles `s3://` via the SDK default credential chain (rule 59). Pinned by `TestSeedFromURIProvidersConfigValue` + `TestIsNeo4jVersion202604OrHigher`.
-75. **Cluster `Neo4jRestore` uses Cypher, NOT a Job** (neo4j-admin restore is unsafe on clusters). `startRestore` branches via `isRestoreTargetTrueCluster`: cluster + standard DB → `startClusterCypherRestore` (`DatabaseExists` → `RecreateDatabaseWithSeedURI` if exists, `CreateDatabaseWithSeedURIOptions` if not — both block until online; no `stopCluster`); standalone → Job + `neo4j-admin restore`; sharded → rejected by `validateRestore` pointing at rule 63. Never re-introduce the cluster-target Job path.
-76. **seedURI for cluster restore = the exact `.backup` FILE, never a directory**: Neo4j's seed providers seed a single DB from one backup file; a directory URI fails (`Can't open seed file: …/<chain-root>`). Both paths point at `BackupRun.ArtifactFilename` (latest Succeeded run): cloud → `buildSeedURIFromBackupStorage` builds the dir then `startClusterCypherRestore` appends the filename via `latestSucceededArtifactFilename`; PVC → `resolveClusterPVCRestoreURI` spawns the seed proxy (rule 71) at the filename. A single DIFF-file URI suffices — Neo4j resolves the FULL parent chain from the same dir. Standalone Job uses `tail -1` (rule 44). **After `dbms.recreateDatabase` (async), the operator MUST `WaitForDatabaseOnline` before marking Completed** — the procedure returns before the seed finishes, so a bare return is false-success. `CREATE DATABASE … OPTIONS{seedURI} WAIT` already blocks; recreate does not.
-77. **`RecreateDatabaseWithSeedURI` vs `RecreateDatabase` (seedingServers)**: `RecreateDatabaseWithSeedURI` is the cluster-native restore primitive — every server pulls from the URI in parallel, no Job. `RecreateDatabase` (seedingServerIDs) is a post-`neo4j-admin restore` consistency fix picking server-0 as seed — legacy/standalone only. Never use seedingServers where seedURI works.
-78. **`spec.chainFromBackup` composes mixed-cadence FULL+DIFF**: daily FULL + hourly DIFF CR with `chainFromBackup: daily` share `<base>/<chain-root>/` so `--type=DIFF` finds the prior FULL. `chainRoot(backup)` returns `spec.chainFromBackup` if set, else `backup.Name` — used by `buildToPath`, `BackupRun.BackupsPath`, `app.kubernetes.io/part-of` Job label. Validator rejects self-reference; reconciler's `validateChainParent` enforces parent existence + matching target + matching storage. `waitForChainConcurrencyClear` refuses to start while any Job with same `part-of` is `status.active>0`; routes `errChainBusy` to Pending+requeue. Pinned by `backup_chain_test.go`.
-79. **`spec.backups` and all centralized-backup plumbing are REMOVED**: no `spec.backups` / `spec.storage.backupStorage` fields, no `BackupsSpec` / `BackupStorageSpec` types, no `BuildBackupStatefulSet` / `buildCentralizedBackup*` builders, no standalone `buildBackupSidecarContainer`, no `cloud_validator.go`. The Neo4jBackup CRD (Job-per-CR) is the only backup path. `StorageLocation` / `CloudBlock` / `CloudIdentity` / `AutoCreateSpec` types survive because Neo4jBackup/Neo4jRestore use them. Never reintroduce a `spec.backups` field or a long-running backup pod/sidecar.
+The previous CLAUDE.md carried these as an inline "Regression Prevention Checklist" (numbered
+rules 1–79). They have been migrated; CLAUDE.md keeps only the invariants above and the domain
+reference. When you discover a new invariant or regression, add it to the appropriate
+`docs/knowledge/` file (with an enforcement tag), not back into this file.
 
 ## Generated artifacts
 

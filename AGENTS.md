@@ -1,106 +1,88 @@
 # AGENTS.md
 
-## Quick Mission
-- Neo4j Enterprise Operator (Kubebuilder/controller-runtime 0.21, Go 1.24) automates Neo4j Enterprise 5.26.x (last semver LTS) and 2025.x.x+ (CalVer) on Kubernetes.
-- Status: **alpha**; expect churn. Follow `docs/` plus historical reports in `reports/`.
-- Platform assumptions: Kubernetes ≥1.21, cert-manager ≥1.18 for TLS, and **Kind-only** for any cluster work.
+The front door for every contributor — human or LLM. Read this first. It is the **single source of project invariants**. When in doubt, this file wins.
 
-## Non-Negotiables (read with `CLAUDE.md`)
-1. **Kind only**: use `make dev-cluster`, `test-cluster`, `operator-setup`; never minikube/k3s.
-2. **Enterprise images only** (`neo4j:<version>-enterprise`). Discovery uses LIST resolver with static pod FQDNs (port 6000); 5.26.x requires explicit `V2_ONLY`, CalVer 2025.x+ (including 2026.x+) omits the flag — handled in `buildVersionSpecificDiscoveryConfig()` via `isCalverImage()` / `ParseVersion`.
-3. **Operator must run in-cluster**: never `make dev-run`/`hack/dev-run.sh` or host-mode runs.
-4. **Server-based design**: single `{cluster}-server` StatefulSet with `topology.servers`; preserve `topology.serverModeConstraint/serverRoles` hints and centralized `{cluster}-backup` StatefulSet.
-5. **Conflict-safe writes**: wrap creates/updates in `retry.RetryOnConflict`; when checking existing resources use UID (not ResourceVersion) for template comparison.
-6. **Edition removed**: API assumes Enterprise; do not reintroduce the field or allow community images.
-7. **Safety hooks**: keep split-brain detector (`internal/controller/splitbrain_detector.go`) wiring and event reason `SplitBrainDetected`; status `.phase` drives readiness checks.
-8. **Plugin rules**: APOC via env vars; Bloom/GDS/GenAI and similar via ConfigMap with automatic security defaults and dependency resolution; respect cluster vs standalone naming/labeling in `plugin_controller`.
-9. **Property sharding**: `Neo4jShardedDatabase` + related tests stay opt-in; requires ≥5 servers with 4–8Gi each—guard resource gates.
-10. **Database & TLS**: `Neo4jDatabase` must work for cluster and standalone (ensure `NEO4J_AUTH` for standalone), respect seedURI/seedConfig, TLS automation for `spec.tls.mode=cert-manager`. Discovery settings differ by version — always go through `buildVersionSpecificDiscoveryConfig()`, never hard-code K8S or V1 discovery settings.
-11. **CRD scope separation**: Cluster/Standalone manage infra/config; Database manages database lifecycle only—no cross-CRD overrides.
+## Project identity
 
-## Architecture Anchors
-- **CRDs (`api/v1beta1`)**: Neo4jEnterpriseCluster, Neo4jEnterpriseStandalone, Neo4jDatabase, Neo4jPlugin, Neo4jBackup, Neo4jRestore, Neo4jShardedDatabase.
-- **Controllers (`internal/controller/`)**:
-  - Cluster/Standalone reconcilers build ConfigMaps/Services/StatefulSets, manage status phases, TLS, auth, placement, and cache/configmap managers.
-  - Database controller auto-detects cluster vs standalone, uses appropriate Bolt client, and supports wait/ifNotExists/topology/seed flows.
-  - Plugin controller manages env-vs-config installs, dependencies, and pod readiness per deployment type.
-  - Backup controller runs centralized `{cluster}-backup` pods with request file drop; Restore controller handles PIT restores.
-  - Sharded database controller enforces property-sharding readiness; Topology scheduler adds AZ spread/anti-affinity; Rolling upgrade orchestrator handles leader-aware upgrades and metrics.
-  - Split-brain detector restarts orphans after multi-pod view comparison.
-- **Validation (`internal/validation/`)**: auth, backup, cluster, database (cluster+standalone), image, memory, plugin, resource, security, shardeddatabase, storage, TLS, topology, upgrade validators; edition validator stubbed out.
-- **Resources/Clients**: `internal/resources` builds Kubernetes objects (TLS policies, discovery ports, memory sizing); `internal/neo4j` wraps Bolt, version parsing (5.x vs 2025.x), and upgrade safety checks.
+Neo4j Enterprise Operator for Kubernetes — manages Neo4j Enterprise (5.26.x LTS + 2025.x/2026.x CalVer) via the Kubebuilder framework. Go 1.26, `sigs.k8s.io/controller-runtime` v0.24.1, `k8s.io/*` v0.36.1, `neo4j-go-driver/v5` (Bolt). Two deployment CRDs: `Neo4jEnterpriseCluster` (HA, min 2 servers) and `Neo4jEnterpriseStandalone` (single-node).
 
-## Repository Atlas
-| Area | Purpose |
-| --- | --- |
-| `cmd/main.go` | Manager entrypoint wiring controllers/webhooks. |
-| `api/v1beta1/` | CRD schemas listed above. |
-| `internal/controller/` | Reconcilers, split-brain detector, topology scheduler, rolling upgrade, cache/configmap managers. |
-| `internal/resources/` | Builders for StatefulSets/Services/ConfigMaps, memory sizing, TLS/discovery helpers. |
-| `internal/neo4j/` | Bolt client + version helpers used by controllers/tests. |
-| `internal/validation/` | Validation/recommendation logic per CRD. |
-| `charts/neo4j-operator/` | Helm chart (README quick start). |
-| `config/` | Kubebuilder manifests (CRDs, RBAC, samples, overlays). |
-| `docs/` | User/developer guides, deployment/seed-URI/split-brain guides, quick reference, API reference. |
-| `examples/` | Standalone, clusters, backup/restore, plugins, property sharding, E2E scenarios. |
-| `test/` | Ginkgo integration suites, fixtures, helpers. |
-| `scripts/` | Automation (`test-env.sh`, setup/cleanup, demos, RBAC helpers, verification). |
-| `reports/` | Design history and implementation analyses. |
+## The 5 hard invariants — NEVER violate
 
-## Development Workflow
-1. Prereqs: Go 1.24+, Docker, kubectl, Kind, make, git; verify `kind version`.
-2. Dev cluster: `make dev-cluster` (Kind `neo4j-operator-dev`, installs cert-manager issuer). Test cluster via `make test-cluster`.
-3. Codegen/hygiene: `make manifests generate`; then `make fmt vet lint` (use `rg`/`goimports`; ASCII only).
-4. Build & load image: `make docker-build IMG=neo4j-operator:dev` then `kind load docker-image neo4j-operator:dev --name neo4j-operator-dev` (or test cluster). Never run operator out-of-cluster.
-5. Deploy: `make deploy-dev`/`deploy-prod` (or `*-registry` for registry images); Helm chart under `charts/` if needed.
-6. Utilities: `make operator-setup`, `operator-status`, `operator-logs`; cleanup via `make dev-cluster-clean`, `dev-cluster-reset`, `dev-destroy` (similar `test-*` targets). Demos via `make demo`, `demo-fast`, `demo-setup`.
+These are non-negotiable. They are checked by `make check-invariants` (run by the agent skills and an **advisory, non-blocking** CI job) and — where `docs/knowledge/invariants.md` marks them so — by **blocking** unit tests and by **runtime** validators that reject a bad CR. Do not "fix" a guard by relaxing it; fix the change.
 
-## Testing Strategy
-- **Unit**: `make test-unit` (envtest; skips integration dirs).
-- **Integration** (`test/integration`, Ginkgo v2): `make test-integration` builds local image, loads into Kind `neo4j-operator-test`, deploys operator, runs suite (timeouts ~5m, CI extends to 10–20m). CI-friendly subsets: `make test-integration-ci`, heavy `*-ci-full`, full workflow `make test-ci-local` (logs in `logs/`).
-- **Operator mode during integration tests** — ALL paths now deploy in production mode:
-  - `make test-integration` uses `config/overlays/integration-test/kustomization.yaml` → deploys to `neo4j-operator-system` **without `--mode=dev`**. Suite finds the operator and waits for readiness before running specs.
-  - `.github/workflows/integration-tests.yml` (on-demand) does the same via its own `ci-temp` overlay.
-  - `make deploy-dev` is for manual debugging only (`neo4j-operator-dev`, `--mode=dev`); never use it as the pre-test deployment step.
-- **Cleanup rule**: every spec must `AfterEach` delete CRs, drop finalizers, and call `cleanupCustomResourcesInNamespace()`—do not rely on suite cleanup.
-- **Property sharding**: opt-in only (`test/integration/property_sharding_test.go`), requires ≥5 servers and 4–8Gi memory each.
-- **Plugin tests**: clusters expect env var config, standalone expects ConfigMap content; keep sources consistent.
-- **Scripts**: `scripts/test-env.sh` manages Kind clusters; `scripts/run-tests-clean.sh` wraps go test.
+1. **NO admission webhooks.** No `ValidatingWebhookConfiguration` / `MutatingWebhookConfiguration`, no `*_webhook.go`. ALL validation lives in `internal/validation/` and is called inline from the reconcilers.
+2. **KIND ONLY** for dev/test/CI. No minikube, k3s, or any other distribution.
+3. **ENTERPRISE IMAGES ONLY** — `neo4j:<version>-enterprise` (e.g. `neo4j:5.26-enterprise`, `neo4j:2025.01.0-enterprise`). Never community images.
+4. **V2_ONLY discovery** exclusively. Port 6000 (V2). Never V1 (port 5000) or K8s discovery.
+5. **Server-based architecture.** A single `{cluster}-server` StatefulSet with `replicas: N`; pods are `{cluster}-server-0…N-1`. NEVER `primary-*` / `secondary-*` pod names. Backups are **Job-per-`Neo4jBackup`-CR ONLY** — no centralized `{cluster}-backup` StatefulSet, no `spec.backups` field, no `BuildBackupStatefulSet`, no standalone backup sidecar. These were removed; never reintroduce a long-running backup pod.
 
-## Documentation & Examples
-- User docs: `docs/user_guide` (install/config, external access, topology placement, property sharding, backup/restore, security, performance, monitoring, upgrades, troubleshooting).
-- Developer docs: `docs/developer_guide/` (architecture, development setup, testing instructions, Makefile reference).
-- References: `docs/quick-reference/operator-modes-cheat-sheet.md`, `docs/api_reference/` for CRDs, `docs/user_guide/deployment.md`, `docs/user_guide/guides/seed-uri.md`, `docs/user_guide/troubleshooting/split-brain.md`.
-- Examples: `examples/` for standalone/cluster mins, plugins, backup/restore, property sharding, E2E blueprints.
+## Repository map
 
-## Observability & Troubleshooting
-- **Logs**: `kubectl logs -n neo4j-operator deployment/neo4j-operator-controller-manager -f` or `make operator-logs`
-- **Events**: All material state transitions emit structured Kubernetes events using constants from `internal/controller/events.go`. Monitor by reason:
-  - `kubectl get events --field-selector reason=SplitBrainDetected -A`
-  - `kubectl get events --field-selector reason=BackupFailed`
-  - `kubectl get events --field-selector reason=ClusterFormationFailed`
-- **Live Diagnostics**: When `spec.monitoring.enabled=true` and cluster is `Ready`, the operator collects `SHOW SERVERS`/`SHOW DATABASES` results into `status.diagnostics`. Two conditions — `ServersHealthy` and `DatabasesHealthy` — surface cluster health without `kubectl exec`.
-- **Prometheus Metrics**: Custom metrics exported under `neo4j_operator_*` prefix:
-  - `neo4j_operator_cluster_healthy` / `neo4j_operator_cluster_phase` / `neo4j_operator_cluster_replicas_total`
-  - `neo4j_operator_server_health{server_name, server_address}` — per-server health from diagnostics
-  - `neo4j_operator_backup_total` / `neo4j_operator_reconcile_duration_seconds`
-  - `neo4j_operator_split_brain_detected_total`
-- **Inspect**: `kubectl explain neo4jenterprisecluster.spec`, `kubectl describe neo4jenterprisecluster/<name>`; use `cypher-shell` in pods for cluster state.
-- **GitOps**: ArgoCD health check scripts for all 7 CRDs in `docs/gitops/argocd-health-checks.yaml`. Flux uses the standard `Ready` condition automatically.
-- **Status Conditions**: All CRDs emit standardized conditions using helpers from `internal/controller/conditions.go`: `SetReadyCondition` (for `Ready`), `SetNamedCondition` (for `ServersHealthy`/`DatabasesHealthy`).
-- **Debug aids**: see `CLAUDE.md` for enabling debug logging, OOM checks, and port-forward guidance.
+| Path | What lives here |
+|---|---|
+| `api/v1beta1/` | CRD Go types + kubebuilder markers (source for generated CRDs & deepcopy). |
+| `internal/controller/` | Reconcilers (cluster, standalone, database, plugin, backup, restore, user/role/binding, authrule, sharded), split-brain detector, events. |
+| `internal/validation/` | Inline validators (one per concern: cluster, database, image, memory, plugin, tls, topology, backup, …). The ONLY validation layer — see invariant 1. |
+| `internal/resources/` | Kubernetes object builders (StatefulSet via `BuildServerStatefulSetForEnterprise`, Services, ConfigMaps, NetworkPolicy, TLS/discovery helpers). |
+| `internal/neo4j/` | Bolt client + Cypher helpers + version parsing (`ParseVersion`, `IsCalver`). |
+| `test/` | Ginkgo/Gomega suites in tiers: `unit`, `integration`, `e2e`. Every integration spec carries `Label("core")` or `Label("extended")`. |
+| `config/` + `charts/` | GENERATED manifests (CRDs, RBAC, kustomize, Helm chart, OperatorHub bundle). Never hand-edit files carrying the GENERATED header. |
+| `cmd/main.go` | Manager entrypoint — wires controllers (no webhooks). |
 
-## Contribution Expectations
-- Follow `CONTRIBUTING.md`; run `make fmt lint test-unit` (plus integration when relevant) before PRs; Kind required.
-- Keep CRDs regenerated with `make manifests`; run `make generate` if API types change.
-- Prefer Makefile/scripts over ad-hoc commands; do not reintroduce edition field or community images.
-- Maintain docs/examples/API references when behavior changes; add design reports under `reports/` for architectural shifts.
-- Preserve AfterEach cleanup in integration tests; respect usage of `retry.RetryOnConflict` and server-based topology helpers.
-- Default to ASCII text; prefer `rg` for search. Avoid creating new docs unless explicitly requested.
+## Working principles (how to make changes here)
 
-## Where to Start
-1. `README.md` for requirements and quick start.
-2. `docs/developer_guide/architecture.md` for design (server architecture, centralized backup, controllers).
-3. `internal/controller/neo4jenterprisecluster_controller.go`, `splitbrain_detector.go`, `rolling_upgrade.go`, `topology_scheduler.go` for reconciliation/safety flows.
-4. `test/integration/integration_suite_test.go` for harness assumptions and cleanup expectations.
-5. `CLAUDE.md` (and this file) for agent-specific guardrails before making changes.
+Behavioral house rules — they apply to *every* change, on top of the invariants
+above. Adapted for this repo from the MIT-licensed "Karpathy guidelines"
+(github.com/multica-ai/andrej-karpathy-skills). Each maps to a scar this project
+actually has:
+
+1. **Think before coding.** Surface assumptions and tradeoffs; don't pick
+   silently. When the request is ambiguous or a doc disagrees with the code,
+   *say so and ask* — see invariant 1's "the code wins" rule. (We chose to
+   reject only `-community` image tags, not require `-enterprise`, precisely by
+   surfacing that tradeoff rather than guessing.)
+2. **Simplicity first.** The minimum code that solves the problem — nothing
+   speculative. No unrequested fields, abstractions, or flexibility. This *is*
+   the separation-of-concerns invariant (e.g. `Neo4jDatabase` must not override
+   cluster-level settings) and the "never reintroduce removed plumbing" family.
+3. **Surgical changes.** Touch only what the task requires; preserve adjacent
+   code and style; remove only what *your* change orphaned. This is why the
+   env-var path is a subset-merge (`envVarsEqual` / `mergeEnvVars`), never a
+   wholesale replace — foreign keys survive.
+4. **Goal-driven execution.** Turn the task into verifiable success criteria and
+   loop until they pass. Unit tests prove code against itself; **live-verify**
+   in a real DB / Kind cluster (`verify-journey`) and run the guards
+   (`make check-knowledge`) before declaring done.
+
+## Ground Neo4j behavior in the version-correct manual
+
+Your training memory skews to deprecated Neo4j **4.x**. This operator supports
+**only 5.26.x LTS and CalVer (2025.x/2026.x)** — no 4.x, no 5.27+ semver. When you
+build or verify ANY Neo4j-specific behavior — config settings, Cypher, procedures,
+topology, property sharding, end-to-end processes — read the official operations
+manual for the **target version**, not memory:
+- **CalVer** (2025.x / 2026.x): https://neo4j.com/docs/operations-manual/current/
+- **LTS** (5.26.x): https://neo4j.com/docs/operations-manual/5/
+
+This is the external counterpart to "grep before you cite," and it has repeatedly
+caught 4.x ghosts (`dbms.mode=SINGLE`, `causal_clustering.*`,
+`CALL dbms.cluster.role`, `CREATE DATABASE … OPTIONS {primaries}`) that compile and
+pass unit tests but fail against a live modern database. Procedure + the full
+4.x→modern mapping: the `check-neo4j-docs` skill.
+
+## Before you commit
+
+1. `make fmt && make lint && make test-unit` — formatting, lint, and unit tests (no cluster needed).
+2. Touched `api/v1beta1/*` types or `+kubebuilder:` markers? Run `make manifests && make generate` to regenerate CRDs/RBAC/deepcopy, then `make sync-all`. **Never hand-edit generated files.**
+3. `make check-drift` — the CI gate: regenerates everything and fails if anything is stale. Run it before pushing.
+4. `pre-commit` runs on commit (config in `.pre-commit-config.yaml`); install with `pre-commit install`.
+5. Integration work: KIND only — `make dev-up` / `make test-integration`. Never `make dev-run` (in-cluster only; out-of-cluster DNS fails).
+
+## Pointers
+
+- **Invariants & regression rules** (the full enforcement-tagged checklist): `docs/knowledge/`.
+- **Procedures** (invokable skills): `.claude/skills/` — catalog + when-to-use in [`.claude/skills/README.md`](.claude/skills/README.md). Includes `check-neo4j-docs` (version-correct grounding), `add-crd-field` / `add-controller` / `add-inline-validator` / `regen-artifacts` (building features), `verify-journey` / `fix-knowledge-drift` / `run-extended-suite` (verify), `add-regression-rule` / `issue-hygiene` (process), `cut-release` / `retract-release` (release).
+- **Detailed domain reference** (deep architecture, Cypher syntax, plugin/TLS/backup specifics): `CLAUDE.md`.
+- **Contributor workflow**: `CONTRIBUTING.md` and `docs/developer_guide/`.
+
+AGENTS.md is the front door; CLAUDE.md is the deep reference. If they ever conflict, AGENTS.md's invariants win — and fix the drift.

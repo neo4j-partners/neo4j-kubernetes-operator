@@ -441,6 +441,18 @@ check-drift: sync-all bundle ## CI gate: regenerate everything and fail if anyth
 	fi
 	@echo "All generated artifacts are in sync."
 
+.PHONY: check-invariants
+check-invariants: ## Verify the 5 hard architectural invariants hold (grep guard; runtime image check lives in image_validator.go).
+	@./scripts/check-invariants.sh
+
+.PHONY: check-knowledge-drift
+check-knowledge-drift: ## Verify every 'pinned-by:'/file reference in docs/knowledge/ still resolves to a real path.
+	@./scripts/check-knowledge-drift.sh
+
+.PHONY: check-knowledge
+check-knowledge: check-invariants check-knowledge-drift ## Run both LLM-readiness guards (invariants + knowledge-base drift). Advisory; run by the agent skills and a non-blocking CI job.
+	@echo "Knowledge guards passed: invariants hold and docs/knowledge/ references resolve."
+
 .PHONY: helm-lint
 helm-lint: ## Lint the Helm chart
 	helm lint charts/neo4j-operator

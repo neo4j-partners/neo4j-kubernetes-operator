@@ -8,6 +8,12 @@ bin/*
 main
 Dockerfile.cross
 
+# Claude Code: ship shared agent assets (.claude/skills/, .claude/settings.json),
+# but never per-user scratch — local overrides, agent worktrees, scheduler lock.
+.claude/settings.local.json
+.claude/worktrees/
+.claude/scheduled_tasks.lock
+
 # Test binary, built with `go test -c`
 *.test
 e2e.test

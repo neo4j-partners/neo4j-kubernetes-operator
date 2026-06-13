@@ -153,6 +153,50 @@ func TestImageValidator_Validate(t *testing.T) {
 			},
 			expectedErrs: 1,
 		},
+		{
+			// Invariant 3: an explicitly community-tagged image is rejected.
+			name: "community image rejected (semver)",
+			cluster: &neo4jv1beta1.Neo4jEnterpriseCluster{
+				Spec: neo4jv1beta1.Neo4jEnterpriseClusterSpec{
+					Image: neo4jv1beta1.ImageSpec{
+						Repo:       "neo4j",
+						Tag:        "5.26.0-community",
+						PullPolicy: "IfNotPresent",
+					},
+				},
+			},
+			expectedErrs:  1,
+			expectedError: "community images are not supported",
+		},
+		{
+			name: "community image rejected (calver, case-insensitive)",
+			cluster: &neo4jv1beta1.Neo4jEnterpriseCluster{
+				Spec: neo4jv1beta1.Neo4jEnterpriseClusterSpec{
+					Image: neo4jv1beta1.ImageSpec{
+						Repo:       "neo4j",
+						Tag:        "2025.01.0-Community",
+						PullPolicy: "IfNotPresent",
+					},
+				},
+			},
+			expectedErrs:  1,
+			expectedError: "community images are not supported",
+		},
+		{
+			// We reject ONLY the explicit community marker — a bare/retagged
+			// Enterprise tag with no edition suffix must still pass cleanly.
+			name: "bare retagged enterprise tag passes (no false rejection)",
+			cluster: &neo4jv1beta1.Neo4jEnterpriseCluster{
+				Spec: neo4jv1beta1.Neo4jEnterpriseClusterSpec{
+					Image: neo4jv1beta1.ImageSpec{
+						Repo:       "myco.example.com/neo4j",
+						Tag:        "5.26.0",
+						PullPolicy: "IfNotPresent",
+					},
+				},
+			},
+			expectedErrs: 0,
+		},
 	}
 
 	for _, tt := range tests {

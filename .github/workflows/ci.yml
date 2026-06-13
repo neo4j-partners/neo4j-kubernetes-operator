@@ -117,3 +117,45 @@ jobs:
           unit-tests.json
           unit-junit.xml
         if-no-files-found: warn
+
+  invariant-guards:
+    # ADVISORY / NON-BLOCKING. Surfaces architectural-invariant and
+    # knowledge-base-drift violations for LLM-assisted contributors WITHOUT
+    # gating merge. Contributors who don't use an agent are never blocked by
+    # this job — the only blocking CI gates remain `check-drift` and
+    # `unit-tests`. The same guards run locally via `make check-knowledge` and
+    # are invoked by the agent skills under `.claude/skills/`. Every guard step
+    # is `continue-on-error: true`, so the job stays green even on a violation;
+    # the result is reported in the run summary for a human to review.
+    name: Invariant Guards (advisory)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v6
+
+    - name: Architectural invariants (advisory)
+      id: invariants
+      continue-on-error: true
+      run: ./scripts/check-invariants.sh
+
+    - name: Knowledge-base drift (advisory)
+      id: knowledge
+      continue-on-error: true
+      run: ./scripts/check-knowledge-drift.sh
+
+    - name: Summarize (non-blocking)
+      if: always()
+      run: |
+        inv='${{ steps.invariants.outcome }}'
+        kn='${{ steps.knowledge.outcome }}'
+        echo "## Invariant guards (advisory — does not block merge)" >> "$GITHUB_STEP_SUMMARY"
+        echo "" >> "$GITHUB_STEP_SUMMARY"
+        echo "- Architectural invariants (\`scripts/check-invariants.sh\`): $inv" >> "$GITHUB_STEP_SUMMARY"
+        echo "- Knowledge-base drift (\`scripts/check-knowledge-drift.sh\`): $kn" >> "$GITHUB_STEP_SUMMARY"
+        if [ "$inv" != "success" ] || [ "$kn" != "success" ]; then
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "⚠️ A guard reported a violation. This job is **advisory and does not block merge**, but please review the failed step log — see \`AGENTS.md\` / \`docs/knowledge/\`. Reproduce locally with \`make check-knowledge\`." >> "$GITHUB_STEP_SUMMARY"
+        fi

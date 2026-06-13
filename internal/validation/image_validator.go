@@ -17,6 +17,8 @@ limitations under the License.
 package validation
 
 import (
+	"strings"
+
 	"k8s.io/apimachinery/pkg/util/validation/field"
 
 	neo4jv1beta1 "github.com/neo4j-partners/neo4j-kubernetes-operator/api/v1beta1"
@@ -47,6 +49,22 @@ func (v *ImageValidator) Validate(cluster *neo4jv1beta1.Neo4jEnterpriseCluster) 
 		allErrs = append(allErrs, field.Required(
 			imagePath.Child("tag"),
 			"image tag must be specified",
+		))
+	}
+
+	// Invariant 3 (ENTERPRISE-IMAGES, docs/knowledge/invariants.md): reject an
+	// image whose tag explicitly marks it community. We reject only the
+	// unambiguous `-community` signal — we do NOT require a literal
+	// `-enterprise` suffix — so a legitimately retagged Enterprise image in a
+	// private registry (e.g. myco/neo4j:5.26.0) still passes. The running
+	// operator's `CALL dbms.components()` edition check remains the backstop
+	// for a bare or mislabeled tag that turns out to be community.
+	if isCommunityTag(cluster.Spec.Image.Tag) {
+		allErrs = append(allErrs, field.Invalid(
+			imagePath.Child("tag"),
+			cluster.Spec.Image.Tag,
+			"community images are not supported — use a Neo4j Enterprise image (e.g. neo4j:5.26-enterprise). "+
+				"The operator emits Enterprise-only config and Cypher (clustering, SHOW SERVERS, role/privilege management, online backup) that fails on community.",
 		))
 	}
 
@@ -82,6 +100,16 @@ func (v *ImageValidator) Validate(cluster *neo4jv1beta1.Neo4jEnterpriseCluster) 
 	}
 
 	return allErrs
+}
+
+// isCommunityTag reports whether an image tag explicitly marks a Neo4j
+// community build. Matches `community` anywhere in the tag (case-insensitive)
+// so `5.26.0-community`, `5.26-community`, and `2025.01.0-community` are all
+// caught. A bare tag with no edition marker (e.g. `5.26.0`) is NOT treated as
+// community here — see the Validate comment for why and for the runtime
+// backstop.
+func isCommunityTag(tag string) bool {
+	return strings.Contains(strings.ToLower(tag), "community")
 }
 
 func (v *ImageValidator) isVersionSupported(version string) bool {
