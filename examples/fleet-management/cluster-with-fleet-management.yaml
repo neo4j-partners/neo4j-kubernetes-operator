@@ -24,7 +24,7 @@ metadata:
 spec:
   image:
     repo: neo4j
-    tag: "2025.12.0-enterprise"
+    tag: "2026.04-enterprise"
     pullPolicy: IfNotPresent
 
   topology:
