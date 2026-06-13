@@ -824,6 +824,14 @@ func (r *Neo4jRestoreReconciler) validateRestore(ctx context.Context, restore *n
 	if restore.Spec.DatabaseName == "" {
 		return fmt.Errorf("databaseName is required")
 	}
+	// The `system` database holds cluster topology, users, roles, and
+	// privileges — it is owned by Neo4j itself and is never a user-restorable
+	// database. Restoring over it would corrupt the deployment's identity and
+	// membership. neo4j-admin restore of `system` is unsupported here and the
+	// in-place Cypher path can't drop/recreate it; reject up front. (#269)
+	if strings.EqualFold(restore.Spec.DatabaseName, "system") {
+		return fmt.Errorf("databaseName %q is not restorable: the system database is managed by Neo4j and holds cluster topology, users, and roles — restoring it via Neo4jRestore is unsupported", restore.Spec.DatabaseName)
+	}
 	// The database name is interpolated into the restore Job's shell command
 	// and Cypher; restrict it to the Neo4j database-name grammar (no shell or
 	// Cypher metacharacters) so it can't inject either. Defense-in-depth on top

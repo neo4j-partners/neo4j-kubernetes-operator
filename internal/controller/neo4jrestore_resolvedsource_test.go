@@ -208,6 +208,28 @@ func TestValidateRestore_PinnedSnapshotSurvivesMissingCR(t *testing.T) {
 	require.NoError(t, err)
 }
 
+// #269: the system database holds cluster topology, users, and roles and is
+// owned by Neo4j — restoring over it is unsupported and must be rejected up
+// front (case-insensitively), regardless of source. A pinned snapshot lets
+// validateRestore get past source resolution to the databaseName check.
+func TestValidateRestore_RejectsSystemDatabase(t *testing.T) {
+	for _, name := range []string{"system", "System", "SYSTEM"} {
+		r := restoreWithBackupRef("simple-restore", "default", "deleted-backup")
+		r.Spec.DatabaseName = name
+		r.Status.ResolvedSource = &neo4jv1beta1.ResolvedRestoreSource{
+			BackupRef:  "deleted-backup",
+			Storage:    pvcStorage("backup-storage"),
+			BackupPath: "deleted-backup/",
+		}
+		rec := newResolvedSourceReconciler(t, r)
+
+		err := rec.validateRestore(context.Background(), r)
+		require.Error(t, err, "databaseName %q must be rejected", name)
+		assert.Contains(t, err.Error(), "system database",
+			"the error must explain why system is not restorable")
+	}
+}
+
 func TestValidateRestore_MissingCRWithoutSnapshotPointsAtStorage(t *testing.T) {
 	r := restoreWithBackupRef("simple-restore", "default", "deleted-backup")
 	rec := newResolvedSourceReconciler(t, r) // backup CR absent, no snapshot
