@@ -84,6 +84,7 @@ spec:
   target:
     kind: ShardedDatabase
     name: backed-up-sharded-db
+    clusterRef: backup-sharding-cluster   # required for ShardedDatabase targets
 
   schedule: "0 3 * * *"   # daily at 03:00
 

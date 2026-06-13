@@ -119,7 +119,7 @@ func (r *Neo4jBackupReconciler) shardedPreflightGlobSafety(ctx context.Context, 
 		return fmt.Errorf("failed to list databases for glob-safety check: %v: %w", err, errBackupTransient)
 	}
 
-	logical := backup.Spec.Target.Name
+	logical := r.shardedLogicalNameForBackup(ctx, backup)
 	shardPattern := shardedShardNamePattern(logical)
 	prefix := logical
 	var poisoning []string
@@ -192,7 +192,12 @@ func (r *Neo4jBackupReconciler) expectedShardArtifactsForBackup(ctx context.Cont
 		return nil
 	}
 
-	logical := backup.Spec.Target.Name
+	// Artifact names carry the LOGICAL database name (what neo4j-admin
+	// actually writes), not the CR name.
+	logical := shardedDB.Spec.Name
+	if logical == "" {
+		logical = backup.Spec.Target.Name
+	}
 	count := int(shardedDB.Spec.PropertySharding.PropertyShards)
 	if count < 0 {
 		count = 0
@@ -281,4 +286,25 @@ func (r *Neo4jBackupReconciler) applyShardedPreflight(ctx context.Context, backu
 		return true, ctrl.Result{}, nil
 	}
 	return false, ctrl.Result{}, nil
+}
+
+// shardedLogicalNameForBackup resolves the LOGICAL sharded-database name for
+// a ShardedDatabase backup target. target.name references the
+// Neo4jShardedDatabase CR (Kubernetes-style, consistent with how preflight
+// resolves it); the neo4j-admin glob, the glob-safety pattern, and the
+// shard-artifact prefixes all need the LOGICAL name from that CR's
+// spec.name. The two often differ — building the glob from the CR name
+// produced a Job that matched zero databases while preflight passed
+// (fresh-eyes journey, v1.12.1). Falls back to the CR name when the CR is
+// gone or spec.name is empty (where the two were always equal anyway).
+func (r *Neo4jBackupReconciler) shardedLogicalNameForBackup(ctx context.Context, backup *neo4jv1beta1.Neo4jBackup) string {
+	ns := backup.Spec.Target.Namespace
+	if ns == "" {
+		ns = backup.Namespace
+	}
+	shardedDB := &neo4jv1beta1.Neo4jShardedDatabase{}
+	if err := r.Get(ctx, types.NamespacedName{Name: backup.Spec.Target.Name, Namespace: ns}, shardedDB); err != nil || shardedDB.Spec.Name == "" {
+		return backup.Spec.Target.Name
+	}
+	return shardedDB.Spec.Name
 }

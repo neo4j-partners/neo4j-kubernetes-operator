@@ -453,9 +453,11 @@ kubectl exec property-sharding-cluster-server-0 -- \
 
 Note: There is no `backupConfig` on `Neo4jShardedDatabase`. Use an explicit `Neo4jBackup`
 resource with `spec.target.kind: ShardedDatabase` and `spec.target.name` set to the
-logical sharded-database name (e.g. `products`). A single backup captures every shard
-consistently in one `neo4j-admin database backup` invocation via a `{name}*` glob — you
-do **not** list the individual shard databases (`products-g000`, `products-p000`, …).
+**`Neo4jShardedDatabase` resource name** (e.g. `products-sharded-db`) — the operator
+resolves the logical database name (`spec.name`, e.g. `products`) from that resource.
+A single backup captures every shard consistently in one `neo4j-admin database backup`
+invocation via a `{logical-name}*` glob — you do **not** list the individual shard
+databases (`products-g000`, `products-p000`, …).
 
 ```yaml
 apiVersion: neo4j.neo4j.com/v1beta1
@@ -466,7 +468,7 @@ metadata:
 spec:
   target:
     kind: ShardedDatabase          # backs up all shards in one invocation
-    name: products                 # logical sharded-database name
+    name: products-sharded-db      # the Neo4jShardedDatabase RESOURCE name
     clusterRef: property-sharding-cluster
 
   storage:

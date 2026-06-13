@@ -549,3 +549,63 @@ func TestShardedPreflightStatic(t *testing.T) {
 		})
 	}
 }
+
+// Pins the CR-name vs logical-name contract (fresh-eyes journey, v1.12.1):
+// target.name references the Neo4jShardedDatabase CR; the neo4j-admin glob,
+// the glob-safety pattern, and the artifact prefixes use the LOGICAL name
+// from that CR's spec.name. A glob built from the CR name matched zero
+// databases while preflight passed — the Job then failed at neo4j-admin.
+func TestShardedLogicalNameForBackup_ResolvesSpecName(t *testing.T) {
+	shardedDB := &neo4jv1beta1.Neo4jShardedDatabase{
+		ObjectMeta: metav1.ObjectMeta{Name: "basic-sharded-db", Namespace: "default"},
+		Spec: neo4jv1beta1.Neo4jShardedDatabaseSpec{
+			ClusterRef: "ec",
+			Name:       "products", // logical name differs from the CR name
+			PropertySharding: neo4jv1beta1.PropertyShardingConfiguration{
+				PropertyShards: 2,
+			},
+		},
+	}
+	backup := &neo4jv1beta1.Neo4jBackup{
+		ObjectMeta: metav1.ObjectMeta{Name: "bk", Namespace: "default"},
+		Spec: neo4jv1beta1.Neo4jBackupSpec{
+			Target: neo4jv1beta1.BackupTarget{
+				Kind:       neo4jv1beta1.BackupTargetKindShardedDatabase,
+				Name:       "basic-sharded-db",
+				ClusterRef: "ec",
+			},
+			Storage: neo4jv1beta1.StorageLocation{Type: "pvc", PVC: &neo4jv1beta1.PVCSpec{Name: "p"}},
+		},
+	}
+	r := newShardedTestReconciler(t, shardedDB, backup)
+	ctx := context.Background()
+
+	if got := r.shardedLogicalNameForBackup(ctx, backup); got != "products" {
+		t.Fatalf("logical name = %q, want products (the CR's spec.name)", got)
+	}
+
+	// The backup command must glob the LOGICAL name.
+	cmd, err := r.buildBackupCommand(ctx, backup, fieldFindingsCluster("2026.04-enterprise"))
+	if err != nil {
+		t.Fatalf("buildBackupCommand: %v", err)
+	}
+	if !strings.Contains(cmd, `"products*"`) {
+		t.Fatalf("backup command must glob the logical name, got %q", cmd)
+	}
+	if strings.Contains(cmd, "basic-sharded-db*") {
+		t.Fatalf("backup command must NOT glob the CR name, got %q", cmd)
+	}
+
+	// Artifact stubs carry the logical prefix.
+	arts := r.expectedShardArtifactsForBackup(ctx, backup)
+	if len(arts) != 3 || arts[0].ShardName != "products-g000" || arts[2].ShardName != "products-p001" {
+		t.Fatalf("artifacts must use the logical prefix, got %+v", arts)
+	}
+
+	// CR missing: fall back to target.name (the historical equal-names case).
+	orphan := backup.DeepCopy()
+	orphan.Spec.Target.Name = "gone"
+	if got := r.shardedLogicalNameForBackup(ctx, orphan); got != "gone" {
+		t.Fatalf("missing CR fallback = %q, want gone", got)
+	}
+}

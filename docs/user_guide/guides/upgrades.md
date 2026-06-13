@@ -69,6 +69,19 @@ each server's `SHOW SERVERS` version against the image tag, normalizing
 Neo4j's kernel alias (the `2025.01.x` CalVer releases report kernel `5.27.x` —
 both are accepted as the same version).
 
+**Image changes while the cluster is not Ready are deferred.** Changing
+`spec.image` while the cluster is `Forming`, mid-restore, or otherwise not
+`Ready` does not roll pods immediately: the operator holds the change (you'll
+see an `UpgradeDeferred` event on the cluster) and the rolling-upgrade state
+machine performs it once the cluster reaches `Ready` — a version change must
+never sneak in as an ungated restart while quorum is still forming.
+
+One deliberate exception: if **no server pod has ever become ready** — the
+typical case being a first deploy stuck in `ImagePullBackOff` on a mistyped
+tag — there is no formed quorum to protect, so a corrected `spec.image`
+applies immediately. Fix the tag and the pods re-pull; you do not need to
+delete and recreate the cluster.
+
 ### First upgrade after operator deployment
 
 If `status.version` is not yet set on the cluster resource (e.g. immediately after the operator is first deployed against an existing cluster), the version-compatibility check is skipped and the upgrade proceeds. Downgrade protection is applied on all subsequent upgrades.

@@ -1234,8 +1234,12 @@ func (r *Neo4jBackupReconciler) buildBackupCommand(ctx context.Context, backup *
 		// Property-sharded DBs are backed up as a glob across all shards:
 		// {name}-g000 (graph) + {name}-p000…p{N-1} (property shards). The
 		// argument is wrapped in single quotes by GetBackupCommand so the
-		// shell doesn't expand "*" before reaching neo4j-admin.
-		dbName = backup.Spec.Target.Name + "*"
+		// shell doesn't expand "*" before reaching neo4j-admin. The glob
+		// prefix is the LOGICAL database name resolved from the referenced
+		// Neo4jShardedDatabase CR — target.name is the CR reference, and a
+		// glob built from the CR name matches zero databases whenever the
+		// two differ.
+		dbName = r.shardedLogicalNameForBackup(ctx, backup) + "*"
 	}
 
 	cmd := neo4j.GetBackupCommand(version, dbName, toPath, allDatabases, fromAddresses)
