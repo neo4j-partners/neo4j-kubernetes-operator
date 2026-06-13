@@ -20,6 +20,6 @@ spec:
   clusterRef: prod-cluster
   username: alice   # RoleBinding usernames must match ^[a-zA-Z][a-zA-Z0-9_.\-]*$ (no @)
   roles:
-    - editor
-    - analytics_reader          # the Neo4j role name (a Neo4jRole's spec.name); pending until it exists
+    - editor                    # a built-in Neo4j role
+    - analytics-reader          # a Neo4jRole CR name — resolved to its spec.name (#260); pending until it exists
   # enforceExclusive: true      # uncomment to revoke any role not in .spec.roles

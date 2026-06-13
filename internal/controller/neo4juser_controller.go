@@ -211,8 +211,16 @@ func (r *Neo4jUserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 	}
 
-	// Role binding diff
+	// Role binding diff. Resolve same-namespace Neo4jRole CR names in
+	// spec.roles to their effective Neo4j role name first (#260) — literal
+	// Neo4j names (built-ins, externally-created roles) pass through unchanged.
 	desiredRoles := normaliseRoles(user.Spec.Roles)
+	desiredRoles, resolvedRoles := resolveRoleNames(ctx, r.Client, user.Namespace, user.Spec.ClusterRef, desiredRoles)
+	desiredRoles = normaliseRoles(desiredRoles) // dedupe any CR-name/spec.name collisions
+	if len(resolvedRoles) > 0 {
+		r.Recorder.Eventf(user, corev1.EventTypeNormal, EventReasonRolesResolved,
+			"resolved Neo4jRole CR names to Neo4j role names: %v", resolvedRoles)
+	}
 	currentRoles := normaliseRoles(info.Roles) // Note: may be slightly stale after CREATE; re-read just below.
 	// info is non-nil here: the create branch above re-reads it (and bails if
 	// still nil) and the else branch only runs when it was already non-nil.
@@ -475,26 +483,11 @@ func (r *Neo4jUserReconciler) diffRoles(ctx context.Context, user *neo4jv1beta1.
 
 // roleResourceExists reports whether a Neo4jRole CR with .spec.name (or
 // metadata.name when spec.name is empty) equals roleName, in the same
-// namespace and pointing at the same clusterRef.
+// namespace and pointing at the same clusterRef. Delegates to the shared
+// roleNameExists (see role_resolution.go) — same index used by #260
+// CR-name resolution.
 func (r *Neo4jUserReconciler) roleResourceExists(ctx context.Context, namespace, clusterRef, roleName string) bool {
-	list := &neo4jv1beta1.Neo4jRoleList{}
-	if err := r.List(ctx, list, client.InNamespace(namespace)); err != nil {
-		return false
-	}
-	for i := range list.Items {
-		role := &list.Items[i]
-		if role.Spec.ClusterRef != clusterRef {
-			continue
-		}
-		name := role.Spec.Name
-		if name == "" {
-			name = role.Name
-		}
-		if name == roleName {
-			return true
-		}
-	}
-	return false
+	return roleNameExists(ctx, r.Client, namespace, clusterRef, roleName)
 }
 
 func (r *Neo4jUserReconciler) readPasswordSecret(ctx context.Context, user *neo4jv1beta1.Neo4jUser) (string, error) {
@@ -617,6 +610,9 @@ func (r *Neo4jUserReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			if !ok {
 				return nil
 			}
+			// Match a user's spec.roles against BOTH the role's effective Neo4j
+			// name AND its CR metadata.name, so a user that referenced the role
+			// by either form re-reconciles when the role lands (#260).
 			roleName := role.Spec.Name
 			if roleName == "" {
 				roleName = role.Name
@@ -632,7 +628,7 @@ func (r *Neo4jUserReconciler) SetupWithManager(mgr ctrl.Manager) error {
 					continue
 				}
 				for _, rname := range u.Spec.Roles {
-					if rname == roleName {
+					if rname == roleName || rname == role.Name {
 						reqs = append(reqs, reconcile.Request{NamespacedName: types.NamespacedName{Namespace: u.Namespace, Name: u.Name}})
 						break
 					}
