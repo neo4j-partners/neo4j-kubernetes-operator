@@ -4647,6 +4647,11 @@ cluster reaches <code>Ready</code> — see <a href="../neo4jrestore/"><code>Neo4
 <td><code>[]corev1.EnvFromSource</code></td>
 <td>Standard Kubernetes pass-through. Projects entire Secrets or ConfigMaps as environment variables onto the Neo4j container. Intended for credential bundles (e.g. cloud seed credentials for <code>seedURI</code>-based restores).</td>
 </tr>
+<tr>
+<td><code>podServiceAccountAnnotations</code></td>
+<td><code>map[string]string</code></td>
+<td>Annotations stamped onto the operator-managed ServiceAccount the Neo4j <strong>server pods</strong> run under. Use for cloud <strong>Workload Identity</strong> so the JVM can assume a cloud role when it fetches a seed URI (cluster restore, <code>Neo4jDatabase</code>/<code>Neo4jShardedDatabase</code> seeding) — e.g. <code>eks.amazonaws.com/role-arn</code> (AWS IRSA), <code>iam.gke.io/gcp-service-account</code> (GKE WI), or the Azure WI labels. Merged additively (operator owns only the keys you list; out-of-band annotations preserved). Set this <strong>before</strong> the pods start (or roll the StatefulSet after adding it) so the identity webhook injects the token at pod admission.</td>
+</tr>
 </tbody>
 </table>
 <h2 id="type-definitions">Type Definitions<a class="headerlink" href="#type-definitions" title="Anchor link to this section">&para;</a></h2>
