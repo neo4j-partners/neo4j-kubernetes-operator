@@ -3878,9 +3878,11 @@ Solution: Ensure <code>propertySharding.enabled: true</code> on the referenced c
 <h2 id="backup-and-recovery">Backup and Recovery<a class="headerlink" href="#backup-and-recovery" title="Anchor link to this section">&para;</a></h2>
 <p>Note: There is no <code>backupConfig</code> on <code>Neo4jShardedDatabase</code>. Use an explicit <code>Neo4jBackup</code>
 resource with <code>spec.target.kind: ShardedDatabase</code> and <code>spec.target.name</code> set to the
-logical sharded-database name (e.g. <code>products</code>). A single backup captures every shard
-consistently in one <code>neo4j-admin database backup</code> invocation via a <code>{name}*</code> glob — you
-do <strong>not</strong> list the individual shard databases (<code>products-g000</code>, <code>products-p000</code>, …).</p>
+<strong><code>Neo4jShardedDatabase</code> resource name</strong> (e.g. <code>products-sharded-db</code>) — the operator
+resolves the logical database name (<code>spec.name</code>, e.g. <code>products</code>) from that resource.
+A single backup captures every shard consistently in one <code>neo4j-admin database backup</code>
+invocation via a <code>{logical-name}*</code> glob — you do <strong>not</strong> list the individual shard
+databases (<code>products-g000</code>, <code>products-p000</code>, …).</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1beta1</span>
 </span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Neo4jBackup</span>
 </span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a><span class="nt">metadata</span><span class="p">:</span>
@@ -3889,7 +3891,7 @@ do <strong>not</strong> list the individual shard databases (<code>products-g000
 </span><span id="__span-25-6"><a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a><span class="nt">spec</span><span class="p">:</span>
 </span><span id="__span-25-7"><a id="__codelineno-25-7" name="__codelineno-25-7" href="#__codelineno-25-7"></a><span class="w">  </span><span class="nt">target</span><span class="p">:</span>
 </span><span id="__span-25-8"><a id="__codelineno-25-8" name="__codelineno-25-8" href="#__codelineno-25-8"></a><span class="w">    </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ShardedDatabase</span><span class="w">          </span><span class="c1"># backs up all shards in one invocation</span>
-</span><span id="__span-25-9"><a id="__codelineno-25-9" name="__codelineno-25-9" href="#__codelineno-25-9"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">products</span><span class="w">                 </span><span class="c1"># logical sharded-database name</span>
+</span><span id="__span-25-9"><a id="__codelineno-25-9" name="__codelineno-25-9" href="#__codelineno-25-9"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">products-sharded-db</span><span class="w">      </span><span class="c1"># the Neo4jShardedDatabase RESOURCE name</span>
 </span><span id="__span-25-10"><a id="__codelineno-25-10" name="__codelineno-25-10" href="#__codelineno-25-10"></a><span class="w">    </span><span class="nt">clusterRef</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">property-sharding-cluster</span>
 </span><span id="__span-25-11"><a id="__codelineno-25-11" name="__codelineno-25-11" href="#__codelineno-25-11"></a>
 </span><span id="__span-25-12"><a id="__codelineno-25-12" name="__codelineno-25-12" href="#__codelineno-25-12"></a><span class="w">  </span><span class="nt">storage</span><span class="p">:</span>
