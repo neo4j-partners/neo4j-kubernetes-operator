@@ -230,6 +230,7 @@ spec:
   target:
     kind: Database
     name: tenant_a_prod
+    clusterRef: multi-tenant-cluster   # required for kind: Database
     namespace: neo4j-multi-tenant
 
   schedule: "0 1 * * *"  # Daily at 1 AM
@@ -257,6 +258,7 @@ spec:
   target:
     kind: Database
     name: tenant_b_social
+    clusterRef: multi-tenant-cluster   # required for kind: Database
     namespace: neo4j-multi-tenant
 
   schedule: "0 * * * *"  # Hourly
@@ -269,7 +271,7 @@ spec:
       credentialsSecretRef: tenant-b-s3-credentials
 
   options:
-    backupType: "DIFF"  # Differential for frequent backups
+    backupType: "AUTO"  # FULL on the first run, DIFF thereafter (self-bootstrapping; a bare DIFF fails until a FULL exists)
     compress: true
 
   retention:
@@ -288,6 +290,7 @@ spec:
   target:
     kind: Database
     name: tenant_c_analytics
+    clusterRef: multi-tenant-cluster   # required for kind: Database
     namespace: neo4j-multi-tenant
 
   schedule: "0 3 * * 0"  # Weekly on Sunday at 3 AM

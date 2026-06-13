@@ -107,7 +107,13 @@ spec:
     kind: Cluster
     name: my-cluster
 
-  # Run a differential backup every hour; full backup every Sunday at midnight
+  # Hourly backup. backupType AUTO self-bootstraps: the FIRST run on an empty
+  # directory is a FULL, every subsequent run is a DIFF off it — so the
+  # schedule works from the very first fire. (A standalone backupType: DIFF
+  # would fail every run until a FULL exists in the same directory: "No
+  # existing backup found here".) For a true "weekly FULL + hourly DIFF"
+  # cadence, run TWO Neo4jBackup CRs and chain them with spec.chainFromBackup
+  # — see the mixed-cadence section of the Backup & Restore guide.
   schedule: "0 * * * *"
 
   storage:
@@ -121,11 +127,12 @@ spec:
       forcePathStyle: true
 
   options:
-    backupType: DIFF
+    backupType: AUTO   # FULL on the first run, DIFF thereafter (self-bootstrapping)
     compress: true
-    # preferDiffAsParent chains diff backups without needing a new FULL each
-    # time. Requires Neo4j CalVer 2025.04+ — uncomment it there; on 5.26.x it
-    # is rejected (the operator fails the backup rather than silently ignore it).
+    # preferDiffAsParent chains diff backups off the latest DIFF instead of
+    # the latest FULL. Requires Neo4j CalVer 2025.04+ — uncomment it there;
+    # on 5.26.x it is rejected (the operator fails the backup rather than
+    # silently ignore it).
     # preferDiffAsParent: true
 
   retention:
