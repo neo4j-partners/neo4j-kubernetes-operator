@@ -187,6 +187,13 @@ set `networkPolicy.egress` explicitly or the operator cannot reach the API.
 | `tolerations` | Pod tolerations | `[]` |
 | `affinity` | Pod affinity | `{}` |
 | `priorityClassName` | Priority class name | `""` |
+| `podAnnotations` | Extra annotations on the operator pod | `{}` |
+| `env` | Extra environment variables for the operator container (list of `{name,value}`) | `[]` |
+| `envFrom` | Extra `envFrom` sources (ConfigMap/Secret) for the operator container | `[]` |
+| `volumes` | Extra volumes on the operator pod | `[]` |
+| `volumeMounts` | Extra volume mounts on the operator container | `[]` |
+| `livenessProbe` | Operator liveness probe (httpGet `/healthz:8081`) | see `values.yaml` |
+| `readinessProbe` | Operator readiness probe (httpGet `/readyz:8081`) | see `values.yaml` |
 | `extraManifests` | Extra Kubernetes manifests to deploy with the release (templated with `tpl`) | `[]` |
 | `pluginInitContainer.image` | Image for `Neo4jPlugin` `installMode: VerifiedDownload` init containers; point at an internal mirror for air-gapped clusters | `""` (operator default `curlimages/curl:8.5.0`) |
 | `preInstallChecks.enabled` | Run pre-install hook validating prerequisites | `true` |
@@ -271,6 +278,14 @@ patches:
 > mandatory.** Helm installs the chart's `crds/` directory only on first
 > install and never upgrades it. Without this refresh, fields added by the
 > new release are silently pruned from your manifests by the API server.
+>
+> **Use `--server-side`.** The largest CRDs (`neo4jenterpriseclusters`,
+> `neo4jenterprisestandalones`) exceed the 256 KiB
+> `kubectl.kubernetes.io/last-applied-configuration` annotation that
+> client-side `kubectl apply` writes, so a plain client-side apply fails
+> with `metadata.annotations: Too long`. Server-side apply has no such limit.
+> (Helm's own CRD install on first `helm install` is unaffected — it does not
+> use that annotation.)
 
 ```bash
 kubectl apply --server-side -f https://github.com/priyolahiri/neo4j-kubernetes-operator/releases/download/<version>/neo4j-kubernetes-operator.yaml
@@ -299,6 +314,7 @@ helm upgrade neo4j-operator ./charts/neo4j-operator \
 
 - **`webhook.*`** — removed. This project does not use admission webhooks (all validation is inline in the controllers); the old block rendered a `--webhook-port` flag the binary doesn't define.
 - **`leaderElection.namespace`** — removed. The leader-election lease always lives in the release namespace; a configurable namespace would move the RBAC away from where the lease actually is.
+- **`backup.*`** and **`tls.*`** — removed. No template consumed them, so setting e.g. `tls.enabled: true` did nothing. Backups are configured per-CR via `Neo4jBackup`; metrics TLS via `metrics.secure`; Neo4j instance TLS via `spec.tls` on the cluster/standalone CR.
 
 The chart now also fails fast at render time on an invalid `operatorMode` and on `rbac.perNamespaceRoles=true` outside `operatorMode: namespaces`, and `extraManifests` entries are now actually rendered (previously the value was accepted but ignored).
 

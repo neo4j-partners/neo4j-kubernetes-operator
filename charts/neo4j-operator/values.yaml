@@ -295,21 +295,12 @@ neo4j:
   # Default storage class (leave empty to use cluster default)
   defaultStorageClass: ""
 
-# Backup configuration defaults
-backup:
-  # Default backup schedule (cron format)
-  defaultSchedule: "0 2 * * *"
-  # Default retention policy
-  defaultRetention: 7
-  # Default backup storage
-  defaultStorageSize: "50Gi"
-
-# TLS configuration
-tls:
-  # Enable TLS for operator metrics endpoint
-  enabled: false
-  # Secret containing TLS certificates
-  secretName: ""
+# NOTE: there is intentionally no operator-level `backup:` or `tls:` block.
+# Backups are configured per-CR via Neo4jBackup; metrics TLS is controlled by
+# `metrics.secure` (above); Neo4j instance TLS is configured per-CR via
+# spec.tls on Neo4jEnterpriseCluster/Standalone. Earlier chart versions shipped
+# dead `backup:`/`tls:` values that no template consumed — removed so they
+# can't be set with no effect.
 
 # Extra manifests to deploy
 extraManifests: []
