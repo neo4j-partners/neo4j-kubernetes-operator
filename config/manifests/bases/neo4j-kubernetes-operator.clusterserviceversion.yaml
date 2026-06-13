@@ -134,7 +134,7 @@ spec:
     - TLS encryption via cert-manager with automatic certificate rotation, plus a JVM truststore (`spec.trustedCASecrets`) for self-signed enterprise CAs (LDAP / OIDC providers behind internal PKI)
     - Authentication providers — Native, LDAP, and OIDC/SSO are wired through typed `spec.auth` fields. JWT is covered via OIDC ID tokens. Kerberos can be configured via direct `spec.config` keys plus a keytab mounted from `spec.extraVolumes`.
     - Plugin management via the `Neo4jPlugin` CRD — APOC, Graph Data Science, Bloom, GenAI, n10s, GraphQL, and custom plugins, with automatic security configuration and rolling restarts
-    - Scheduled backups to S3, GCS, Azure Blob Storage, or PVC with encryption and retention
+    - Scheduled backups to S3, GCS, Azure Blob Storage, or PVC — with Workload Identity (cloud IAM) and custom S3-compatible endpoints (e.g. MinIO), encryption, and retention
     - Point-in-time restore and cross-cloud disaster recovery
     - Database lifecycle management via Neo4jDatabase CRD
     - Declarative user, role, and privilege management via Neo4jUser, Neo4jRole, and Neo4jRoleBinding CRDs
