@@ -2647,6 +2647,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -2691,6 +2695,34 @@
 
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../developer_guide/QUICKSTART/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer Quickstart
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
             
               
                 
@@ -2911,6 +2943,155 @@
   
 
       </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_8_10" id="__nav_8_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AI-Assisted Contribution
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    AI-Assisted Contribution
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../developer_guide/llm-contribution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing with an LLM Agent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../developer_guide/AGENT-GUARDRAILS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent Guardrails
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../knowledge/invariants/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Invariants
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
     </li>
   
 
@@ -3517,7 +3698,7 @@
 <ul>
 <li><code>AWS_SESSION_TOKEN</code> (for temporary credentials)</li>
 <li><code>AWS_REGION</code></li>
-<li><code>AWS_ENDPOINT_URL_S3</code> — required for <strong>MinIO / S3-compatible</strong> stores. The <code>endpointURL</code>/<code>forcePathStyle</code> fields on <code>Neo4jBackup</code>/<code>Neo4jRestore</code> only affect their <strong>Job pods</strong>; the server pods doing seedURI fetches read the SDK's standard env vars, so put the endpoint in the Secret you project via <code>spec.extraEnvFrom</code>.</li>
+<li><code>AWS_ENDPOINT_URL_S3</code> — required for <strong>MinIO / S3-compatible</strong> stores. The <code>endpointURL</code>/<code>forcePathStyle</code> fields on <code>Neo4jBackup</code>/<code>Neo4jRestore</code> only affect their <strong>Job pods</strong>; the server pods doing seedURI fetches read the SDK's standard env vars, so put the endpoint in the Secret you project via <code>spec.extraEnvFrom</code>. (Cluster restores that resolve to a custom-endpoint backup emit a <code>SeedEndpointNotProjected</code> Warning event when the operator can verify the endpoint is missing from the server pods.)</li>
 </ul>
 <h3 id="google-cloud-storage">Google Cloud Storage<a class="headerlink" href="#google-cloud-storage" title="Anchor link to this section">&para;</a></h3>
 <p><strong>Required:</strong></p>

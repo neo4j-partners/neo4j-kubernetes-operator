@@ -12,13 +12,13 @@
         <meta name="author" content="Neo4j Partners">
       
       
-        <link rel="canonical" href="https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.12/developer_guide/ci_and_workflows/">
+        <link rel="canonical" href="https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.12/developer_guide/AGENT-GUARDRAILS/">
       
       
-        <link rel="prev" href="../collaboration/">
+        <link rel="prev" href="../llm-contribution/">
       
       
-        <link rel="next" href="../architecture/">
+        <link rel="next" href="../../knowledge/invariants/">
       
       
         
@@ -29,7 +29,7 @@
     
     
       
-        <title>CI/CD & Workflows - Neo4j Kubernetes Operator</title>
+        <title>Agent Guardrails - Neo4j Kubernetes Operator</title>
       
     
     
@@ -82,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#cicd-workflows" class="md-skip">
+        <a href="#agent-guardrails-enforcement-gates" class="md-skip">
           Skip to content
         </a>
       
@@ -122,7 +122,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              CI/CD & Workflows
+              Agent Guardrails
             
           </span>
         </div>
@@ -2399,37 +2399,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    CI/CD & Workflows
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../ci_and_workflows/" class="md-nav__link">
         
   
   
@@ -2445,203 +2418,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#ci" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        CI
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#caching" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Caching
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#branch-protection" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Branch protection
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#test-tiers-core-vs-extended" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Test tiers: core vs extended
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#integration-tests" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Integration Tests
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#extended-integration-tests" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Extended Integration Tests
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#install-confidence" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Install Confidence
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#release" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Release
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Release">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#cutting-a-release-runbook" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Cutting a release (runbook)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#retracting-a-release" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Retracting a release
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#publishing-to-github-pages" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Publishing to GitHub Pages
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Publishing to GitHub Pages">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#pages-docs" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Pages — Docs
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#pages-helm-repo" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Pages — Helm Repo
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#openshift-olm" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        OpenShift / OLM
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#secrets-permissions" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Secrets &amp; permissions
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -2763,8 +2539,10 @@
                 
   
   
+    
   
   
+  
     
     
       
@@ -2780,11 +2558,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_10" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_10" checked>
         
           
           <label class="md-nav__link" for="__nav_8_10" id="__nav_8_10_label" tabindex="0">
@@ -2805,7 +2583,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_10_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_10_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_8_10">
             <span class="md-nav__icon md-icon"></span>
             
@@ -2848,10 +2626,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../AGENT-GUARDRAILS/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent Guardrails
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -2867,6 +2672,59 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#two-tiers-what-actually-stops-you" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Two tiers — what actually stops you
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#generic-gates-apply-to-every-change" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Generic gates (apply to every change)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-do-not-trust-a-stale-guide-matters-here" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why "DO NOT trust a stale guide" matters here
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -2942,10 +2800,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#ci" class="md-nav__link">
+  <a href="#two-tiers-what-actually-stops-you" class="md-nav__link">
     <span class="md-ellipsis">
       
-        CI
+        Two tiers — what actually stops you
       
     </span>
   </a>
@@ -2953,10 +2811,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#caching" class="md-nav__link">
+  <a href="#generic-gates-apply-to-every-change" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Caching
+        Generic gates (apply to every change)
       
     </span>
   </a>
@@ -2964,154 +2822,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#branch-protection" class="md-nav__link">
+  <a href="#why-do-not-trust-a-stale-guide-matters-here" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Branch protection
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#test-tiers-core-vs-extended" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Test tiers: core vs extended
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#integration-tests" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Integration Tests
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#extended-integration-tests" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Extended Integration Tests
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#install-confidence" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Install Confidence
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#release" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Release
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Release">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#cutting-a-release-runbook" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Cutting a release (runbook)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#retracting-a-release" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Retracting a release
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#publishing-to-github-pages" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Publishing to GitHub Pages
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Publishing to GitHub Pages">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#pages-docs" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Pages — Docs
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#pages-helm-repo" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Pages — Helm Repo
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#openshift-olm" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        OpenShift / OLM
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#secrets-permissions" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Secrets &amp; permissions
+        Why "DO NOT trust a stale guide" matters here
       
     </span>
   </a>
@@ -3135,7 +2849,7 @@
 
 
   
-    <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/edit/main/docs/developer_guide/ci_and_workflows.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+    <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/edit/main/docs/developer_guide/AGENT-GUARDRAILS.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
     </a>
@@ -3143,384 +2857,63 @@
   
 
 
-<h1 id="cicd-workflows">CI/CD &amp; Workflows<a class="headerlink" href="#cicd-workflows" title="Anchor link to this section">&para;</a></h1>
-<p>All automation lives in <code>.github/workflows/</code>. This page is the source of truth
-for what each workflow does, when it runs, and how to invoke it manually. The
-in-repo <code>.github/workflows/README.md</code> is a short pointer back here.</p>
+<h1 id="agent-guardrails-enforcement-gates">Agent Guardrails — enforcement &amp; gates<a class="headerlink" href="#agent-guardrails-enforcement-gates" title="Anchor link to this section">&para;</a></h1>
+<p>The five hard invariants themselves — rule, why, enforcement status, violation
+symptom, and <strong>recovery</strong> — live in
+<strong><a href="../../knowledge/invariants/"><code>docs/knowledge/invariants.md</code></a></strong> (the single
+detailed home; <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/AGENTS.md"><code>AGENTS.md</code></a> has the canonical short list). This
+page is the <em>enforcement</em> companion: which checks block a merge, which are
+advisory, and the generic gates that apply to every change.</p>
+<h2 id="two-tiers-what-actually-stops-you">Two tiers — what actually stops you<a class="headerlink" href="#two-tiers-what-actually-stops-you" title="Anchor link to this section">&para;</a></h2>
+<p>If you are an LLM agent, treat enforcement as two tiers:</p>
+<ul>
+<li><strong>Blocking</strong> — <code>make check-drift</code> (generated artifacts) and the <code>unit-tests</code>
+  job reject a violating change mechanically; there is no arguing past review.</li>
+<li><strong>Advisory</strong> — <code>make check-invariants</code> and <code>make check-knowledge-drift</code> (run by
+  the agent skills and a non-blocking <code>Invariant Guards</code> CI job) surface a
+  violation without gating merge. A flag there means you have broken the product
+  contract, not tripped a lint nit. Fix the change, never the guard.</li>
+</ul>
+<p>INV-3 additionally has <strong>runtime</strong> teeth (<code>internal/validation/image_validator.go</code>
+rejects <code>-community</code>, pinned by <code>image_validator_test.go</code>); INV-4 and the INV-5
+pod-naming half are <strong>test-pinned</strong> (blocking). The per-invariant enforcement
+status is in <a href="../../knowledge/invariants/"><code>invariants.md</code></a>.</p>
+<h2 id="generic-gates-apply-to-every-change">Generic gates (apply to every change)<a class="headerlink" href="#generic-gates-apply-to-every-change" title="Anchor link to this section">&para;</a></h2>
 <table>
 <thead>
 <tr>
-<th>Workflow</th>
-<th>File</th>
-<th>Triggers</th>
+<th>Gate</th>
+<th>What happens if violated</th>
+<th>Enforced by</th>
+<th>Recovery</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><a href="#ci">CI</a></td>
-<td><code>ci.yml</code></td>
-<td>push/PR to <code>main</code>/<code>develop</code>, manual dispatch</td>
+<td><strong>Generated-artifact drift gate.</strong> Any edit to <code>api/v1beta1/*_types.go</code>, a <code>+kubebuilder:rbac:</code> marker, or <code>config/crd/bases/*.yaml</code> must be followed by regeneration (CRDs, RBAC, kustomize lists, Helm chart, OperatorHub bundle).</td>
+<td>PR is blocked; CRDs/RBAC/chart/bundle ship out of sync, producing a broken install.</td>
+<td><strong>CI gate</strong> — <code>make check-drift</code> (<code>sync-all</code> + <code>bundle</code> + <code>git diff --exit-code</code>), run by the <code>Generated Artifacts In Sync</code> job in <code>.github/workflows/ci.yml</code>. Same check available locally as a pre-commit hook via <code>make install-hooks</code>.</td>
+<td>Run <code>make sync-all</code> (or <code>make ship-prep</code> before a release) and commit the regenerated files. Adding a new CRD also needs a description row in <code>scripts/helm-sync-artifacthub-crds.sh</code>.</td>
 </tr>
 <tr>
-<td><a href="#integration-tests">Integration Tests</a></td>
-<td><code>integration.yml</code></td>
-<td>PR + push to <code>main</code> on runtime paths</td>
-</tr>
-<tr>
-<td><a href="#extended-integration-tests">Extended Integration Tests</a></td>
-<td><code>integration-tests.yml</code></td>
-<td>nightly (full); <code>run-extended</code> label on a PR (extended-only); manual dispatch (full)</td>
-</tr>
-<tr>
-<td><a href="#release">Release</a></td>
-<td><code>release.yml</code></td>
-<td>push of a <code>vX.Y.Z</code> tag, manual dispatch</td>
-</tr>
-<tr>
-<td><a href="#pages-docs">Pages — Docs</a></td>
-<td><code>pages-docs.yml</code></td>
-<td>push to <code>main</code>, push of a <code>v*</code> tag, manual dispatch</td>
-</tr>
-<tr>
-<td><a href="#pages-helm-repo">Pages — Helm Repo</a></td>
-<td><code>pages-helm.yml</code></td>
-<td>push of a <code>v*</code> tag, manual dispatch</td>
+<td><strong>Lint.</strong> <code>golangci-lint</code> must be clean.</td>
+<td>Style/lint regressions land unnoticed.</td>
+<td><strong>Local only</strong> — <code>make lint</code>. <strong>NOTE: lint is <em>not</em> run in CI</strong> (only <code>check-drift</code> and <code>test-unit</code>, which itself runs <code>fmt</code> + <code>vet</code>). Run <code>make lint</code> yourself before pushing.</td>
+<td>Fix the reported issues; re-run <code>make lint</code>.</td>
 </tr>
 </tbody>
 </table>
-<p>Shared Go setup/caching lives in the composite action <code>.github/actions/setup-go</code>.</p>
-<h2 id="ci">CI<a class="headerlink" href="#ci" title="Anchor link to this section">&para;</a></h2>
-<p><strong><code>ci.yml</code> — runs on every push and PR to <code>main</code>/<code>develop</code>.</strong> Fast feedback; the
-gate that blocks merge. Jobs:</p>
-<ol>
-<li><strong>Generated Artifacts In Sync (<code>check-drift</code>)</strong> — runs <code>make check-drift</code>
-   (<code>sync-all</code> + <code>bundle</code>, then <code>git diff --exit-code</code>). Fails if any committed
-   CRD, RBAC, deepcopy, Helm CRD, or OLM bundle file is stale (untracked
-   generated files fail it too). Fix locally with <code>make sync-all</code> and commit
-   the result. The same job then runs <code>make helm-lint</code> and
-   <code>make check-csv-coverage</code> — both used to be ship-prep-only, which let a
-   chart template error or a CSV missing a new CRD hide until release time.
-   Static and seconds-fast; the failure summary distinguishes drift failures
-   from lint/coverage failures.</li>
-<li><strong>Unit Tests</strong> — <code>make test-unit</code> (race-enabled, envtest-backed controller
-   suite + plain unit tests). No external cluster required. The job runs the
-   suite through <a href="../makefile_reference/#make-gotestsum">gotestsum</a>
-   (<code>make test-unit GO_TEST_CMD="./bin/gotestsum …"</code>), which emits a JUnit XML +
-   test2json report; a summary step (<code>scripts/gotest-summary.sh</code>) writes the
-   failed and slowest tests to the GitHub step summary.</li>
-</ol>
-<p>Integration coverage lives in its own workflows, not in <code>ci.yml</code>: the fast
-contributor lane is <a href="#integration-tests">Integration Tests</a>; the full matrix is
-<a href="#extended-integration-tests">Extended Integration Tests</a>.</p>
-<h2 id="caching">Caching<a class="headerlink" href="#caching" title="Anchor link to this section">&para;</a></h2>
-<p>The workflows cache the expensive, slowly-changing inputs so reruns stay fast:</p>
-<ul>
-<li><strong><code>./bin</code> tools + envtest assets</strong> — cached by the <code>.github/actions/setup-go</code>
-  composite action, keyed on <code>hashFiles('Makefile')</code> (the tool versions are
-  pinned there), so <code>kustomize</code>/<code>controller-gen</code>/<code>ginkgo</code>/<code>setup-envtest</code> aren't
-  re-downloaded every run.</li>
-<li><strong>Go build/module cache (<code>GOCACHE</code>)</strong> — restored via <code>actions/setup-go</code>'s
-  built-in caching, keyed on <code>go.sum</code>.</li>
-<li><strong>Operator image layers</strong> — the integration lanes build with Buildx and a
-  GitHub Actions layer cache (<code>cache-from/to: type=gha</code>), so unchanged build
-  stages are reused.</li>
-<li><strong>Neo4j image tarball</strong> — the pulled <code>neo4j:&lt;tag&gt;-enterprise</code> image is saved to
-  <code>/tmp/neo4j-image.tar</code> and restored with <code>actions/cache</code>, avoiding a Docker Hub
-  pull on every integration run.</li>
-</ul>
-<h2 id="branch-protection">Branch protection<a class="headerlink" href="#branch-protection" title="Anchor link to this section">&para;</a></h2>
-<p><code>main</code> is a protected branch. The rules enforce the gates above:</p>
-<ul>
-<li><strong>No direct pushes</strong> — all changes land via pull request.</li>
-<li><strong>1 approval, from a <a href="../collaboration/#code-owners-and-review">CODEOWNER</a></strong>;
-  stale approvals are dismissed on new commits; review threads must be resolved.</li>
-<li><strong>Required status checks</strong> (strict / branch must be up to date), matching the
-  CI job display names exactly:</li>
-<li><code>Generated Artifacts In Sync</code></li>
-<li><code>Unit Tests</code></li>
-<li><strong>Linear history</strong> (squash/rebase merges); force-pushes and deletion blocked.</li>
-</ul>
-<p>Two things to know:</p>
-<ul>
-<li><strong>The integration checks are intentionally <em>not</em> required.</strong> Both the
-  Integration Tests lane and the Extended Integration Tests workflow are
-  path-filtered, so they don't run on every PR (e.g. a docs-only change); a
-  required check that doesn't run on a given PR would leave it stuck at
-  "Expected — waiting for status." Reviewers gate on them manually for code
-  changes.</li>
-<li><strong><code>enforce_admins</code> is currently off</strong> so the maintainer can merge during the
-  solo→team transition (GitHub forbids approving your own PR, and the sole
-  CODEOWNER would otherwise be unable to merge anything). Turn it on once a
-  second reviewer is onboarded:
-  <div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>gh<span class="w"> </span>api<span class="w"> </span>-X<span class="w"> </span>PUT<span class="w"> </span>repos/neo4j-partners/neo4j-kubernetes-operator/branches/main/protection/enforce_admins
-</span></code></pre></div></li>
-</ul>
-<p>If you rename a required CI job in <code>ci.yml</code>, update the protection contexts to
-match or every merge will block.</p>
-<h2 id="test-tiers-core-vs-extended">Test tiers: <code>core</code> vs <code>extended</code><a class="headerlink" href="#test-tiers-core-vs-extended" title="Anchor link to this section">&para;</a></h2>
-<p>Every integration spec carries a Ginkgo label on its top-level <code>Describe</code>:</p>
-<ul>
-<li><strong><code>core</code></strong> — reconcile contracts a routine change is most likely to break:
-  standalone → Ready, cluster formation, <code>Neo4jDatabase</code>/<code>Neo4jUser</code>/<code>Neo4jRole</code>/
-  <code>Neo4jRoleBinding</code> CRUD, config rendering, plugin install, basic TLS. Small,
-  fast, deterministic on both tracks.</li>
-<li><strong><code>extended</code></strong> — multi-node scaling, split-brain, rolling upgrade, the full
-  backup/restore matrix, property sharding, MinIO/cloud, MCP, ABAC/OIDC. Slow,
-  resource-heavy, or version-gated; high value before a release, low marginal
-  value per PR.</li>
-</ul>
-<p>The two workflows below select by label. Run a tier locally with
-<code>ginkgo run --label-filter='core' ./test/integration/...</code> (or <code>'extended'</code>, or
-<code>'core || extended'</code> for everything). When you add a spec file, <strong>label its
-<code>Describe</code></strong> or it runs in neither lane.</p>
-<h2 id="integration-tests">Integration Tests<a class="headerlink" href="#integration-tests" title="Anchor link to this section">&para;</a></h2>
-<p><strong><code>integration.yml</code> — the fast contributor lane.</strong> Runs the <strong><code>core</code></strong> subset
-against <strong>both supported Neo4j tracks in parallel</strong>:</p>
-<ul>
-<li><code>5.26-enterprise</code> — the last SemVer LTS; exercises the SemVer-only operator
-  paths (V2_ONLY discovery, <code>system_bootstrapping_strategy</code>).</li>
-<li>the pinned CalVer tag (currently <code>2026.04-enterprise</code>) — the track new users
-  deploy; catches strict-mode fatals (duplicate conf keys, Cypher-25 defaults)
-  that 5.26 tolerates.</li>
-</ul>
-<p>Because it's the core subset and the two cells run in parallel, wall-clock ≈ the
-slower (CalVer) cell, not the sum. Triggers on <code>pull_request</code> + <code>push</code> to <code>main</code>
-when <strong>runtime paths</strong> change (<code>internal/**</code>, <code>api/**</code>, <code>cmd/**</code>,
-<code>test/integration/**</code>, <code>Makefile</code>, <code>go.{mod,sum}</code>, the workflow itself) — never
-on docs-only changes.</p>
-<p>This is the lane that should give a contributor a fast, legible yes/no on the
-contracts they touched, on the versions users actually run.</p>
-<blockquote>
-<p><strong>Caveat — a new push cancels the in-flight run.</strong> Each integration lane uses a
-per-PR <a href="https://docs.github.com/actions/using-jobs/using-concurrency">concurrency group</a>
-with <code>cancel-in-progress: true</code>, keyed on the PR number (<code>integration-core-${{
-github.event.pull_request.number || github.run_id }}</code> and the Extended
-equivalent). Pushing a new commit while a run is still going <strong>terminates that
-run</strong> and starts a fresh one on the new head — even a docs-only or trivial
-push (on <code>pull_request</code> the path filter is evaluated against the cumulative
-base→head diff, so any push re-fires the lane if the PR has <em>ever</em> touched a
-runtime path). The cancelled run shows up as red/"cancelled", not a failure.
-If you're waiting on a green integration result, <strong>let it finish before pushing
-again</strong>, or batch your changes into one push.</p>
-</blockquote>
-<h2 id="extended-integration-tests">Extended Integration Tests<a class="headerlink" href="#extended-integration-tests" title="Anchor link to this section">&para;</a></h2>
-<p><strong><code>integration-tests.yml</code> — the full suite (<code>core</code> + <code>extended</code>, ≈90–150 min)
-against a real Kind cluster, on the pinned CalVer track.</strong> This is the
-release-readiness and deep-coverage run.</p>
-<p><strong>Extended does NOT auto-run on PRs</strong> — by design, the default PR signal is the
-fast core lane, keeping the dev cycle short. Extended runs:</p>
-<ul>
-<li><strong>Nightly</strong> (<code>cron: 0 3 * * *</code>) on <code>main</code>, <strong>full suite</strong> — keeps <code>main</code>
-  continuously known-good on the CalVer track, so a regression is caught the day
-  it merges and a release tag ships a commit whose CalVer health is already
-  established (the tag is the release trigger — too late to be the gate itself).
-  This is also the only <em>scheduled</em> check, so it must exercise everything,
-  including <code>core</code>.</li>
-<li><strong>Per-PR opt-in</strong> — apply the <strong><code>run-extended</code></strong> label to a PR to run it against
-  that PR. On the PR event it runs <strong><code>extended</code>-only</strong> (the core lane already
-  covers <code>core</code> on that PR, so re-running it would be redundant). Labels are
-  maintainer-only, which also keeps fork PRs from triggering it. Use this for
-  backup/restore/sharding/coordination changes that the <code>core</code> subset doesn't
-  exercise.</li>
-<li><strong>Manual dispatch</strong> (Actions tab), <strong>full suite</strong>, with inputs:</li>
-<li><code>neo4j-version</code> — image tag (default the pinned CalVer; pass <code>5.26-enterprise</code>
-    to verify the LTS floor, or <code>2025.12-enterprise+</code> for the property-sharding
-    paths). Dispatch against your branch to run the full suite before merging.</li>
-<li><code>timeout-minutes</code> — default <code>150</code> (CalVer is ~2× slower per spec).</li>
-</ul>
-<p>It builds and deploys the operator, runs the selected scope, uploads
-logs/cluster-state artifacts, and tears the cluster down.</p>
-<blockquote>
-<p><strong>Not everything labelled <code>extended</code> runs in this lane.</strong> The tier label only
-selects the lane; a runtime <code>Skip</code> can still exclude a spec there. The
-resource-heavy property-sharding suites self-skip in CI (they need the
-production 4Gi/server floor) and are <strong>local-only</strong> — only the minimal
-<code>property_sharding_ci_smoke</code> runs here. See
-<a href="../testing/#what-runs-where-coverage-map">Testing → What runs where</a> for the
-full map and how to run the local-only suites.</p>
-</blockquote>
-<p><strong>Bumping the CalVer pin:</strong> the version is pinned (not floating) for
-deterministic CI, in <strong>two</strong> places that must move together (GitHub allows
-neither an <code>env</code> var in a matrix nor an expression in a dispatch-input default,
-so there's no single shared variable):</p>
-<ol>
-<li>the <code>neo4j-version</code> <strong>matrix list</strong> in <code>integration.yml</code> (the core lane), and</li>
-<li>the <code>neo4j-version</code> input <strong>default</strong> in <code>integration-tests.yml</code> (the Extended
-   lane).</li>
-</ol>
-<p>Bump both in the same PR — the bump is itself a tested change.</p>
-<h2 id="install-confidence">Install Confidence<a class="headerlink" href="#install-confidence" title="Anchor link to this section">&para;</a></h2>
-<p><strong><code>scripts/install-confidence.sh</code> — the install/upgrade/uninstall matrix on a
-throwaway Kind cluster.</strong> Run locally with <code>make install-confidence</code> (~10–15
-min; needs kind, helm, kubectl, docker), or dispatch
-<strong><code>install-confidence.yml</code></strong> manually. It builds the operator image from the
-working tree, loads it into a fresh Kind cluster, and walks five legs:</p>
-<ol>
-<li><strong>Helm install, cluster mode</strong> — default values, then a smoke
-   <code>Neo4jEnterpriseStandalone</code> CR proving the operator actually reconciles
-   (StatefulSet appears).</li>
-<li><strong>Helm install, namespaces mode + <code>rbac.perNamespaceRoles</code></strong> — asserts the
-   manager permissions land as a namespaced <code>Role</code> in the watched namespace and
-   NO manager ClusterRole is created.</li>
-<li><strong>Helm upgrade from the previously published chart</strong> — installs the latest
-   released chart, applies the new CRDs with
-   <code>kubectl apply --server-side -f config/crd/bases/</code> (the step real users must
-   run — Helm never upgrades <code>crds/</code>), upgrades to the working-tree chart, and
-   probes a new-in-this-release CRD field to prove the refresh took.
-   <code>PREV_CHART_VERSION=&lt;x.y.z&gt;</code> pins the starting chart (empty = latest
-   published).</li>
-<li><strong>Documented-order uninstall with a live CR</strong> — CRs first (finalizers need
-   the running operator), then <code>helm uninstall</code>, then CRDs; asserts nothing
-   wedges.</li>
-<li><strong>kubectl server-side apply path</strong> — install, re-apply (idempotence), and
-   ordered teardown of the non-Helm manifests.</li>
-</ol>
-<p>The same matrix runs as a <strong>blocking job in <code>release.yml</code></strong> — a release tag
-cannot publish an image or chart if any leg fails. Use the local run (or the
-dispatch workflow) to catch problems before tagging instead of failing the tag.</p>
-<p><strong>Output contract</strong> (#247): every sub-step prints a <code>[HH:MM:SS +elapsed]</code>
-prefix and waits pre-announce their timeout (helm <code>--wait</code> 180s/300s,
-rollout 180s, smoke poll 60s) — so a watcher can always tell <em>slow</em> from
-<em>stuck</em>. The docker build logs to <code>/tmp/ic-build.log</code> (tailed on failure).
-On any failure the script dumps cluster diagnostics — pods, the operator
-Deployment + its logs, recent events, helm releases — before exiting, and in
-Actions a verdict table (every passed check + the failing one) lands in the
-step summary on both pass and fail.</p>
-<h2 id="release">Release<a class="headerlink" href="#release" title="Anchor link to this section">&para;</a></h2>
-<p><strong><code>release.yml</code> — tag-driven release pipeline.</strong> Push a <code>vX.Y.Z</code> tag (or dispatch
-with a tag input). Jobs:</p>
-<ol>
-<li><strong>determine-tag / validate-release</strong> — resolve the tag and run build/test
-   validation, including <code>make check-drift</code> (a tag on a commit that bypassed
-   per-PR CI must not ship stale generated artifacts).</li>
-<li><strong>install-confidence</strong> — the full <a href="#install-confidence">install/upgrade/uninstall
-   matrix</a> on Kind, in parallel with validate-release.
-   <strong>Blocking</strong>: <code>build-and-push</code> depends on it, so a broken install path
-   fails the release before anything is published.</li>
-<li><strong>build-and-push</strong> — multi-arch (<code>linux/amd64,linux/arm64</code>) image to
-   <code>ghcr.io/neo4j-partners/neo4j-kubernetes-operator</code>, <strong>signed with Sigstore
-   Cosign keyless</strong> (<code>id-token: write</code> OIDC — no long-lived secrets).</li>
-<li><strong>create-release</strong> — assembles the kubectl-applyable bundles
-   (<code>neo4j-kubernetes-operator-complete.yaml</code>, <code>…operator.yaml</code>), stamps the OLM
-   CSV via <code>make bundle-release</code> (with a guard that refuses to publish if
-   <code>createdAt:</code> is still the dev placeholder), renders the release body from
-   <code>.github/release-notes-template.md</code>, and publishes the GitHub release.</li>
-</ol>
-<p>Pushing the tag also fires <strong>Pages — Docs</strong> and <strong>Pages — Helm Repo</strong> (below),
-so a single tag publishes images, the release, the docs version, and the chart.</p>
-<h3 id="cutting-a-release-runbook">Cutting a release (runbook)<a class="headerlink" href="#cutting-a-release-runbook" title="Anchor link to this section">&para;</a></h3>
-<p>Releases are tag-driven. <strong>Do not bump <code>Chart.yaml</code></strong> — <code>version</code>/<code>appVersion</code>
-are the <code>0.0.1</code> placeholder in the repo and the workflows stamp the real value
-from the tag.</p>
-<p><strong>Before tagging</strong> (on an up-to-date, green <code>main</code>):</p>
-<ol>
-<li><code>make ship-prep</code> — regenerates everything, builds the bundle, and runs
-   <code>helm-lint</code> + <code>check-csv-coverage</code>. Review <code>git status</code> and commit anything
-   regenerated.</li>
-<li>(Recommended) <code>make install-confidence</code> — the same install/upgrade/uninstall
-   matrix the release workflow runs as a blocking gate. Running it locally
-   first means a failure costs you minutes, not a dead tag.
-2b. <strong>Dispatch the extended suite on the final main</strong> and wait for green:
-   <code>gh workflow run integration-tests.yml --ref main</code>. The extended lane runs
-   nightly, not per-PR — a PR that only core lanes validated can carry a stale
-   extended-lane expectation (or a real regression) that would otherwise
-   surface AFTER the release. Tag the exact commit the suite validated.</li>
-<li>If there are breaking changes or notable upgrade steps, add/extend the
-   <code>Upgrading from vX to vY</code> section in
-   <a href="../../user_guide/migration_guide/"><code>migration_guide.md</code></a>.</li>
-<li>Draft the <strong>What's Changed</strong> notes — <code>git log &lt;last-tag&gt;..HEAD --pretty=oneline</code>
-   is a good starting point. (The release workflow renders only the
-   boilerplate from <code>.github/release-notes-template.md</code>; the changelog is
-   hand-written.)</li>
-</ol>
-<p><strong>Tag and push</strong> from <code>main</code>:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>git<span class="w"> </span>tag<span class="w"> </span>v1.12.0<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>v1.12.0
-</span></code></pre></div>
-<p>This fires <strong>Release</strong> only. The versioned docs (<code>/vX.Y/</code> + <code>/latest/</code>) and
-the classic Helm repo (<code>/charts/</code>) are published by the Release workflow's
-final jobs <strong>after every gate and artifact exists</strong> — a failed release
-publishes nothing (#245). Push-to-main docs (<code>/main/</code>) are unaffected. Any
-job failure auto-files an incident issue with the failed jobs and run link.</p>
-<p><strong>After the workflows finish:</strong></p>
-<ol>
-<li>Paste the <strong>What's Changed</strong> section into the GitHub release body (above the
-   generated boilerplate).</li>
-<li>Verify:</li>
-<li><code>gh run list</code> — Release, Pages — Docs, Pages — Helm Repo all green.</li>
-<li><code>gh release view v1.12.0</code> — has <code>…-complete.yaml</code> and <code>…operator.yaml</code> assets.</li>
-<li><code>helm repo update &amp;&amp; helm search repo neo4j-operator/neo4j-operator --versions</code> — new version listed.</li>
-<li>Docs <code>/latest/</code> and <code>/v1.12/</code> load and the version dropdown shows the release.</li>
-<li><code>cosign verify ghcr.io/neo4j-partners/neo4j-kubernetes-operator:v1.12.0 …</code> succeeds.</li>
-<li>The release run's <strong>Install Confidence Gate</strong> job is green (it ran
-     automatically — no manual fresh-Kind <code>helm install</code> needed).</li>
-<li>The <strong>submit-operatorhub</strong> job opened a PR on
-     k8s-operatorhub/community-operators (check the fork's branches if not).</li>
-<li>Comment on every issue the release fixes that was reported by someone else,
-   naming the released version and asking the reporter to re-verify against it
-   — reporter-filed issues stay open until verified on a pinned release.</li>
-</ol>
-<h3 id="retracting-a-release">Retracting a release<a class="headerlink" href="#retracting-a-release" title="Anchor link to this section">&para;</a></h3>
-<p><code>release-retract.yml</code> (manual dispatch, #246) safely unpublishes a dire
-release. Doctrine: <strong>retract and supersede — never reuse a version</strong> (registry
-layers, Helm caches, OLM catalogs and Rekor cache immutably). <strong>Always run
-with <code>dry-run: true</code> first</strong>: the dry-run doubles as the grace-window probe,
-printing either "window OPEN" (tag delete-and-re-cut still safe — nothing
-published) or "window CLOSED at <surface>" (retract + ship vX.Y.Z+1).
-Execution repoints the moving image tags at <code>previous-good-tag</code>, banners the
-GitHub release as RETRACTED, removes the chart from both channels, republishes
-docs from the previous good tag, and files a retraction-record issue with the
-manual follow-ups (notably: a MERGED OperatorHub PR can only be superseded,
-never yanked). Deleting the pinned image or the git tag are explicit opt-in
-flags, default off.</p>
-<h2 id="publishing-to-github-pages">Publishing to GitHub Pages<a class="headerlink" href="#publishing-to-github-pages" title="Anchor link to this section">&para;</a></h2>
-<p>Both Pages workflows write to the <strong><code>gh-pages</code></strong> branch and share a <code>gh-pages</code>
-<a href="https://docs.github.com/actions/using-jobs/using-concurrency">concurrency group</a>
-so their pushes serialize instead of racing. Both authenticate with the
-built-in <code>GITHUB_TOKEN</code> — no extra secrets.</p>
-<h3 id="pages-docs">Pages — Docs<a class="headerlink" href="#pages-docs" title="Anchor link to this section">&para;</a></h3>
-<p><strong><code>pages-docs.yml</code></strong> publishes the MkDocs (Material) site as <strong>versioned</strong> docs
-using <a href="https://github.com/jimporter/mike"><code>mike</code></a>. It first runs
-<code>mkdocs build --strict</code>, so a broken internal link or a nav entry pointing at a
-missing page <strong>fails the publish</strong> — treat it as a docs gate on <code>main</code> and tags.</p>
-<p>What gets published where:</p>
-<ul>
-<li><strong>Push to <code>main</code></strong> → the <code>/main/</code> alias, a rolling preview of unreleased docs.
-  Does not touch <code>latest</code>.</li>
-<li><strong>Push of a <code>vX.Y.Z</code> tag</strong> → published as <code>/vX.Y/</code> (the patch is dropped, so a
-  later <code>vX.Y.Z+1</code> overwrites the same <code>/vX.Y/</code>), and <code>/latest/</code> is moved to it.
-  <code>mike set-default latest</code> also points the site <strong>root</strong> at <code>/latest/</code>.</li>
-<li><strong>Manual dispatch</strong> → publish under an arbitrary <code>version-alias</code>, optionally
-  updating <code>latest</code>.</li>
-</ul>
-<p>For readers: the site <strong>root redirects to <code>/latest/</code></strong> (newest release), and the
-<strong>version dropdown</strong> at the top of every page (<code>extra.version.provider: mike</code> in
-<code>mkdocs.yml</code>) switches between <code>latest</code>, each released <code>/vX.Y/</code>, and the <code>/main/</code>
-preview. A page added on <code>main</code> appears under <code>/main/</code> immediately and lands in
-<code>/vX.Y/</code> + <code>/latest/</code> automatically on the next release tag — no manual step.</p>
-<p>(The rolling-preview alias was historically called <code>dev</code>; it is now <code>main</code>.)</p>
-<h3 id="pages-helm-repo">Pages — Helm Repo<a class="headerlink" href="#pages-helm-repo" title="Anchor link to this section">&para;</a></h3>
-<p><strong><code>pages-helm.yml</code></strong> packages the chart in <code>charts/neo4j-operator</code> and appends it
-to the Helm repository index under <code>/charts/</code> on <code>gh-pages</code>, so:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>helm<span class="w"> </span>repo<span class="w"> </span>add<span class="w"> </span>neo4j-operator<span class="w"> </span>https://neo4j-partners.github.io/neo4j-kubernetes-operator/charts
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>helm<span class="w"> </span>repo<span class="w"> </span>update
-</span></code></pre></div>
-<ul>
-<li><strong>Push of a <code>v*</code> tag</strong> → packages and publishes that version.</li>
-<li><strong>Manual dispatch</strong> → package a specific existing tag.</li>
-</ul>
-<h2 id="openshift-olm">OpenShift / OLM<a class="headerlink" href="#openshift-olm" title="Anchor link to this section">&para;</a></h2>
-<p>OLM/OperatorHub is a <strong>supported manual install path</strong> but is <strong>not</strong> covered by
-CI — a smoke test needs an OpenShift cluster, which standard GitHub runners can't
-provide. Build and validate the bundle locally per
-<a href="../openshift_olm/">OpenShift OLM</a>.</p>
-<h2 id="secrets-permissions">Secrets &amp; permissions<a class="headerlink" href="#secrets-permissions" title="Anchor link to this section">&para;</a></h2>
-<ul>
-<li><strong>CI / Extended Integration Tests:</strong> none beyond the default <code>GITHUB_TOKEN</code>.</li>
-<li><strong>Release:</strong> <code>id-token: write</code> (Cosign keyless OIDC) and <code>packages: write</code>
-  (push to GHCR). No stored signing keys.</li>
-<li><strong>Pages (Docs + Helm):</strong> <code>contents: write</code> to push to <code>gh-pages</code>; the built-in
-  <code>GITHUB_TOKEN</code>.</li>
-</ul>
+<h2 id="why-do-not-trust-a-stale-guide-matters-here">Why "DO NOT trust a stale guide" matters here<a class="headerlink" href="#why-do-not-trust-a-stale-guide-matters-here" title="Anchor link to this section">&para;</a></h2>
+<p>This guardrails system exists because a prior <code>AGENTS.md</code> drifted into instructing
+agents to <em>preserve</em> a centralized backup StatefulSet and <em>wire webhooks</em> — both
+banned and long since removed from the code. <strong>When a doc and the code
+disagree, the code wins.</strong> Before citing any symbol (file, function, test,
+field) in a change or a doc, grep the tree to confirm it still exists. The five
+invariants are verified against the current <code>main</code>. Two guards keep the docs from
+silently rotting again: <code>make check-invariants</code> (the architectural constructs)
+and <code>make check-knowledge-drift</code> (every test/file citation in <code>docs/knowledge/</code>
+must resolve) — and the <code>fix-knowledge-drift</code> skill repairs the latter when a
+rename breaks a citation.</p>
 
 
 
@@ -3558,7 +2951,7 @@ provide. Build and validate the bundle locally per
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../collaboration/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Collaboration">
+          <a href="../llm-contribution/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Contributing with an LLM Agent">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -3568,20 +2961,20 @@ provide. Build and validate the bundle locally per
                 Previous
               </span>
               <div class="md-ellipsis">
-                Collaboration
+                Contributing with an LLM Agent
               </div>
             </div>
           </a>
         
         
           
-          <a href="../architecture/" class="md-footer__link md-footer__link--next" aria-label="Next: Architecture">
+          <a href="../../knowledge/invariants/" class="md-footer__link md-footer__link--next" aria-label="Next: Project Invariants">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Architecture
+                Project Invariants
               </div>
             </div>
             <div class="md-footer__button md-icon">

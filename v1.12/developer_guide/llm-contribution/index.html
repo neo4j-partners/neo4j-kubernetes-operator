@@ -12,13 +12,13 @@
         <meta name="author" content="Neo4j Partners">
       
       
-        <link rel="canonical" href="https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.12/api_reference/neo4jauthrule/">
+        <link rel="canonical" href="https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.12/developer_guide/llm-contribution/">
       
       
-        <link rel="prev" href="../neo4jrolebinding/">
+        <link rel="prev" href="../openshift_olm/">
       
       
-        <link rel="next" href="../neo4jplugin/">
+        <link rel="next" href="../AGENT-GUARDRAILS/">
       
       
         
@@ -29,7 +29,7 @@
     
     
       
-        <title>Neo4jAuthRule - Neo4j Kubernetes Operator</title>
+        <title>Contributing with an LLM Agent - Neo4j Kubernetes Operator</title>
       
     
     
@@ -82,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#neo4jauthrule" class="md-skip">
+        <a href="#contributing-with-an-llm-agent" class="md-skip">
           Skip to content
         </a>
       
@@ -122,7 +122,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Neo4jAuthRule
+              Contributing with an LLM Agent
             
           </span>
         </div>
@@ -1746,8 +1746,6 @@
       
   
   
-    
-  
   
   
     
@@ -1768,11 +1766,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -1800,7 +1798,7 @@
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_7">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1815,10 +1813,8 @@
                 
   
   
-    
   
   
-  
     
     
       
@@ -1850,11 +1846,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_1" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_1" >
         
           
           <label class="md-nav__link" for="__nav_7_1" id="__nav_7_1_label" tabindex="0">
@@ -1875,7 +1871,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_1_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_1_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_7_1">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1893,7 +1889,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../neo4jenterprisecluster/" class="md-nav__link">
+      <a href="../../api_reference/neo4jenterprisecluster/" class="md-nav__link">
         
   
   
@@ -1921,7 +1917,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../neo4jenterprisestandalone/" class="md-nav__link">
+      <a href="../../api_reference/neo4jenterprisestandalone/" class="md-nav__link">
         
   
   
@@ -1949,7 +1945,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../neo4jdatabase/" class="md-nav__link">
+      <a href="../../api_reference/neo4jdatabase/" class="md-nav__link">
         
   
   
@@ -1977,7 +1973,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../neo4jshardeddatabase/" class="md-nav__link">
+      <a href="../../api_reference/neo4jshardeddatabase/" class="md-nav__link">
         
   
   
@@ -2005,7 +2001,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../neo4juser/" class="md-nav__link">
+      <a href="../../api_reference/neo4juser/" class="md-nav__link">
         
   
   
@@ -2033,7 +2029,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../neo4jrole/" class="md-nav__link">
+      <a href="../../api_reference/neo4jrole/" class="md-nav__link">
         
   
   
@@ -2061,7 +2057,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../neo4jrolebinding/" class="md-nav__link">
+      <a href="../../api_reference/neo4jrolebinding/" class="md-nav__link">
         
   
   
@@ -2086,37 +2082,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Neo4jAuthRule
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../api_reference/neo4jauthrule/" class="md-nav__link">
         
   
   
@@ -2132,242 +2101,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#overview" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Overview
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#prerequisites" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Prerequisites
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#spec" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Spec
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#status" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Status
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Status">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#conditions" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Conditions
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#cypher-condition-syntax" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Cypher condition syntax
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#examples" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Examples
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Examples">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#simple-attribute-matching" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Simple attribute matching
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#multiple-conditions-and" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Multiple conditions (AND)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#list-membership" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        List membership
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#time-bounded-role-grants" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Time-bounded role grants
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#drift-reconciliation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Drift reconciliation
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#lifecycle" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Lifecycle
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#limitations" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Limitations
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#troubleshooting" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Troubleshooting
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Troubleshooting">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#status-conditions" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Status conditions
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#errors-in-speccondition" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Errors in spec.condition
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#see-also" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        See also
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -2380,7 +2113,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../neo4jplugin/" class="md-nav__link">
+      <a href="../../api_reference/neo4jplugin/" class="md-nav__link">
         
   
   
@@ -2408,7 +2141,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../neo4jbackup/" class="md-nav__link">
+      <a href="../../api_reference/neo4jbackup/" class="md-nav__link">
         
   
   
@@ -2436,7 +2169,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../neo4jrestore/" class="md-nav__link">
+      <a href="../../api_reference/neo4jrestore/" class="md-nav__link">
         
   
   
@@ -2478,8 +2211,10 @@
       
   
   
+    
   
   
+  
     
     
       
@@ -2512,11 +2247,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
         
           
           <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
@@ -2537,7 +2272,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
@@ -2555,7 +2290,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../developer_guide/QUICKSTART/" class="md-nav__link">
+      <a href="../QUICKSTART/" class="md-nav__link">
         
   
   
@@ -2583,7 +2318,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../developer_guide/development/" class="md-nav__link">
+      <a href="../development/" class="md-nav__link">
         
   
   
@@ -2611,7 +2346,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../developer_guide/contributing/" class="md-nav__link">
+      <a href="../contributing/" class="md-nav__link">
         
   
   
@@ -2639,7 +2374,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../developer_guide/collaboration/" class="md-nav__link">
+      <a href="../collaboration/" class="md-nav__link">
         
   
   
@@ -2667,7 +2402,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../developer_guide/ci_and_workflows/" class="md-nav__link">
+      <a href="../ci_and_workflows/" class="md-nav__link">
         
   
   
@@ -2695,7 +2430,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../developer_guide/architecture/" class="md-nav__link">
+      <a href="../architecture/" class="md-nav__link">
         
   
   
@@ -2723,7 +2458,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../developer_guide/testing/" class="md-nav__link">
+      <a href="../testing/" class="md-nav__link">
         
   
   
@@ -2751,7 +2486,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../developer_guide/makefile_reference/" class="md-nav__link">
+      <a href="../makefile_reference/" class="md-nav__link">
         
   
   
@@ -2779,7 +2514,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../developer_guide/openshift_olm/" class="md-nav__link">
+      <a href="../openshift_olm/" class="md-nav__link">
         
   
   
@@ -2804,8 +2539,10 @@
                 
   
   
+    
   
   
+  
     
     
       
@@ -2821,11 +2558,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_10" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_10" checked>
         
           
           <label class="md-nav__link" for="__nav_8_10" id="__nav_8_10_label" tabindex="0">
@@ -2846,7 +2583,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_10_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_10_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_8_10">
             <span class="md-nav__icon md-icon"></span>
             
@@ -2861,10 +2598,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../developer_guide/llm-contribution/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing with an LLM Agent
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -2880,6 +2644,92 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#start-here" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Start here
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-5-invariants-working-principles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The 5 invariants &amp; working principles
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#guards-vs-gates-what-will-actually-stop-you" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Guards vs gates (what will actually stop you)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-skills-catalog" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The skills catalog
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-verify-before-done-loop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The verify-before-done loop
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#generated-artifacts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Generated artifacts
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -2892,7 +2742,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../developer_guide/AGENT-GUARDRAILS/" class="md-nav__link">
+      <a href="../AGENT-GUARDRAILS/" class="md-nav__link">
         
   
   
@@ -2983,10 +2833,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#overview" class="md-nav__link">
+  <a href="#start-here" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Overview
+        Start here
       
     </span>
   </a>
@@ -2994,10 +2844,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#prerequisites" class="md-nav__link">
+  <a href="#the-5-invariants-working-principles" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Prerequisites
+        The 5 invariants &amp; working principles
       
     </span>
   </a>
@@ -3005,10 +2855,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#spec" class="md-nav__link">
+  <a href="#guards-vs-gates-what-will-actually-stop-you" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Spec
+        Guards vs gates (what will actually stop you)
       
     </span>
   </a>
@@ -3016,38 +2866,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#status" class="md-nav__link">
+  <a href="#the-skills-catalog" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Status
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Status">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#conditions" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Conditions
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#cypher-condition-syntax" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Cypher condition syntax
+        The skills catalog
       
     </span>
   </a>
@@ -3055,71 +2877,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#examples" class="md-nav__link">
+  <a href="#the-verify-before-done-loop" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Examples
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Examples">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#simple-attribute-matching" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Simple attribute matching
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#multiple-conditions-and" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Multiple conditions (AND)
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#list-membership" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        List membership
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#time-bounded-role-grants" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Time-bounded role grants
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#drift-reconciliation" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Drift reconciliation
+        The verify-before-done loop
       
     </span>
   </a>
@@ -3127,71 +2888,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#lifecycle" class="md-nav__link">
+  <a href="#generated-artifacts" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Lifecycle
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#limitations" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Limitations
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#troubleshooting" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Troubleshooting
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Troubleshooting">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#status-conditions" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Status conditions
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#errors-in-speccondition" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Errors in spec.condition
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#see-also" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        See also
+        Generated artifacts
       
     </span>
   </a>
@@ -3215,7 +2915,7 @@
 
 
   
-    <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/edit/main/docs/api_reference/neo4jauthrule.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+    <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/edit/main/docs/developer_guide/llm-contribution.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
     </a>
@@ -3223,355 +2923,169 @@
   
 
 
-<h1 id="neo4jauthrule">Neo4jAuthRule<a class="headerlink" href="#neo4jauthrule" title="Anchor link to this section">&para;</a></h1>
-<p>Declarative attribute-based access control (ABAC) for the Neo4j Kubernetes Operator. A <code>Neo4jAuthRule</code> represents a Neo4j <code>AUTH RULE</code> that conditionally grants one or more roles when the user's OIDC token claims satisfy a Cypher condition expression.</p>
-<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Anchor link to this section">&para;</a></h2>
+<h1 id="contributing-with-an-llm-agent">Contributing with an LLM agent<a class="headerlink" href="#contributing-with-an-llm-agent" title="Anchor link to this section">&para;</a></h1>
+<p>This is the on-ramp for an LLM agent (Claude Code, Cursor, or an agent-assisted
+human) contributing to this repo. It tells you where to read, what will actually
+stop you, and which procedures to invoke.</p>
+<h2 id="start-here">Start here<a class="headerlink" href="#start-here" title="Anchor link to this section">&para;</a></h2>
+<p>Read <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/AGENTS.md"><code>AGENTS.md</code></a> <strong>FIRST</strong> — it is the front door: the
+<strong>canonical short list of invariants</strong> and the home of the <strong>Working principles</strong>.
+(The detailed, enforcement-tagged invariants — with recovery — live in
+<a href="../../knowledge/invariants/"><code>docs/knowledge/invariants.md</code></a>.) When prose
+conflicts, the invariants win, and you trust the code and tests over any prose.
+Then read this guide, then the deep reference in <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/CLAUDE.md"><code>CLAUDE.md</code></a>.</p>
+<h2 id="the-5-invariants-working-principles">The 5 invariants &amp; working principles<a class="headerlink" href="#the-5-invariants-working-principles" title="Anchor link to this section">&para;</a></h2>
+<p>The five hard invariants in one line — <strong>no admission webhooks · Kind-only
+dev/test/CI · Enterprise images only · V2_ONLY discovery (port 6000) ·
+server-based architecture (single <code>{cluster}-server</code> STS + Job-per-<code>Neo4jBackup</code>-CR)</strong>.
+Read the canonical short list in <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/AGENTS.md"><code>AGENTS.md</code></a> and the full
+enforcement-tagged form — id, why, enforcement status, violation symptom,
+recovery — in <a href="../../knowledge/invariants/"><code>docs/knowledge/invariants.md</code></a>. Don't
+re-derive them here.</p>
+<p>The four <strong>Working principles</strong> from <code>AGENTS.md</code> apply to <em>every</em> change, on top
+of the invariants:</p>
 <ul>
-<li><strong>API version</strong>: <code>neo4j.neo4j.com/v1beta1</code></li>
-<li><strong>Kind</strong>: <code>Neo4jAuthRule</code></li>
-<li><strong>Scope</strong>: Namespaced</li>
-<li><strong>Short names</strong>: <code>n4jauthrule</code>, <code>n4jauthrules</code></li>
-<li><strong>Categories</strong>: <code>neo4j</code></li>
-<li><strong>Supported Neo4j Versions</strong>: 2026.03 and later (CalVer; ABAC is unavailable on 5.26 LTS or any earlier CalVer release)</li>
-<li><strong>Reconciliation</strong>: Auth rule existence, condition, enabled flag, and granted-roles drift via <code>SHOW AUTH RULES</code></li>
+<li><strong>Think before coding</strong> — surface assumptions and tradeoffs; when a doc
+  disagrees with the code, say so and ask.</li>
+<li><strong>Simplicity first</strong> — the minimum code that solves the problem; nothing
+  speculative; respect separation of concerns.</li>
+<li><strong>Surgical changes</strong> — touch only what the task requires; preserve adjacent
+  code and style (e.g. the env-var path is a subset-merge, never a wholesale
+  replace).</li>
+<li><strong>Goal-driven execution</strong> — turn the task into verifiable success criteria and
+  loop until they pass.</li>
 </ul>
-<p>ABAC complements role-based access control (RBAC). RBAC determines <em>what</em> a role can do; ABAC determines <em>who gets the role</em> — the binding from external identity (OIDC claims) to internal roles is expressed declaratively rather than per-user.</p>
-<p>See the upstream Neo4j docs for the full feature: <a href="https://neo4j.com/docs/operations-manual/current/authentication-authorization/attribute-based-access-control/">https://neo4j.com/docs/operations-manual/current/authentication-authorization/attribute-based-access-control/</a>.</p>
-<h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Anchor link to this section">&para;</a></h2>
-<p>Before applying a <code>Neo4jAuthRule</code>:</p>
+<h2 id="guards-vs-gates-what-will-actually-stop-you">Guards vs gates (what will actually stop you)<a class="headerlink" href="#guards-vs-gates-what-will-actually-stop-you" title="Anchor link to this section">&para;</a></h2>
+<p>Be precise about enforcement — only two CI gates block merge:</p>
+<table>
+<thead>
+<tr>
+<th>Mechanism</th>
+<th>Type</th>
+<th>Blocks merge?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>make check-drift</code> (CI job <em>Generated Artifacts In Sync</em>)</td>
+<td>BLOCKING CI gate</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td><code>make test-unit</code> (CI job <em>Unit Tests</em>)</td>
+<td>BLOCKING CI gate</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td><code>make check-invariants</code> (CI job <em>Invariant Guards (advisory)</em>)</td>
+<td>ADVISORY guard</td>
+<td>No</td>
+</tr>
+<tr>
+<td><code>make check-knowledge-drift</code> (same advisory job)</td>
+<td>ADVISORY guard</td>
+<td>No</td>
+</tr>
+<tr>
+<td>Runtime validators in <code>internal/validation/</code></td>
+<td>Reject a bad CR at apply</td>
+<td>n/a (runtime)</td>
+</tr>
+</tbody>
+</table>
+<p><code>make check-knowledge</code> runs both advisory guards together. They are advisory and
+also run by the agent skills — but a bad CR is still rejected at runtime by the
+inline validators, and a forbidden file/symbol reappearing will fail
+<code>scripts/check-invariants.sh</code> in the advisory job (still worth fixing).</p>
+<h2 id="the-skills-catalog">The skills catalog<a class="headerlink" href="#the-skills-catalog" title="Anchor link to this section">&para;</a></h2>
+<p>Invokable, step-by-step procedures live in <code>.claude/skills/</code>. Each is a
+<code>SKILL.md</code> following the open <code>AGENTS.md</code>/<code>SKILL.md</code> convention, so any agent
+(Claude Code or otherwise) can load it. Invoke one when you need to <em>perform</em> the
+procedure rather than reason about it.</p>
+<p>See <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/.claude/skills/README.md"><code>.claude/skills/README.md</code></a> for the grouped
+catalog. The full set:</p>
+<table>
+<thead>
+<tr>
+<th>Skill</th>
+<th>Use when you need to…</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>add-crd-field</code></td>
+<td>Add a field to an existing CRD end-to-end (struct + markers + regen + INLINE validation + test).</td>
+</tr>
+<tr>
+<td><code>add-controller</code></td>
+<td>Add a whole new controller/reconciler the project way (RBAC, finalizer, retry, inline validation, wired into <code>cmd/main.go</code>).</td>
+</tr>
+<tr>
+<td><code>add-inline-validator</code></td>
+<td>Add a spec validator inline in <code>internal/validation/</code> — NEVER an admission webhook (invariant 1).</td>
+</tr>
+<tr>
+<td><code>add-regression-rule</code></td>
+<td>Add a new invariant/regression rule to <code>docs/knowledge/</code> in the enforcement-tagged format.</td>
+</tr>
+<tr>
+<td><code>check-neo4j-docs</code></td>
+<td>Ground Neo4j config/Cypher/procedures in the version-correct manual (CalVer → <code>/current/</code>, LTS → <code>/5/</code>) instead of drifting to 4.x.</td>
+</tr>
+<tr>
+<td><code>cut-release</code></td>
+<td>Cut a tagged <code>vX.Y.Z</code> release through the gated pipeline (with a human go/no-go).</td>
+</tr>
+<tr>
+<td><code>fix-knowledge-drift</code></td>
+<td>Repair a stale <code>docs/knowledge/</code> reference (a cited test/path that no longer resolves).</td>
+</tr>
+<tr>
+<td><code>issue-hygiene</code></td>
+<td>Dedupe before filing, link PRs to issues, and close on the right trigger.</td>
+</tr>
+<tr>
+<td><code>regen-artifacts</code></td>
+<td>Regenerate generated artifacts after touching CRD types, <code>+kubebuilder:</code>, or RBAC markers.</td>
+</tr>
+<tr>
+<td><code>retract-release</code></td>
+<td>Safely retract a bad release via the gated retract workflow.</td>
+</tr>
+<tr>
+<td><code>run-extended-suite</code></td>
+<td>Run the extended integration tier (backup/restore, sharding, multi-node, MinIO).</td>
+</tr>
+<tr>
+<td><code>verify-journey</code></td>
+<td>Fresh-eyes verification — build from main, install per the published docs on a clean Kind cluster, walk the real user scenarios.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="the-verify-before-done-loop">The verify-before-done loop<a class="headerlink" href="#the-verify-before-done-loop" title="Anchor link to this section">&para;</a></h2>
+<p>Unit tests prove the code against <em>itself</em> — necessary but not sufficient. Before
+declaring done:</p>
 <ol>
-<li>The referenced cluster must run Neo4j <strong>2026.03 or later</strong>. The reconciler refuses to operate against older clusters and surfaces <code>AuthRuleVersionTooOld=True</code> on the rule's status.</li>
-<li>The cluster's <code>spec.config</code> must set <code>dbms.security.abac.authorization_providers</code> to the name of at least one configured OIDC provider. Without it, every rule sits in <code>OIDCProviderConfigured=False</code>. The operator does <strong>not</strong> auto-set this key — it's the cluster owner's decision which provider(s) to wire up.</li>
-<li>Each role listed in <code>spec.grantedRoles</code> must exist (as a <code>Neo4jRole</code> in the same namespace, or directly in Neo4j). Rules referencing a missing role enter <code>PendingDependencies=True</code> and reconcile automatically once the role lands.</li>
+<li><strong>Live-verify</strong> in Kind or against a real DB — use the <code>verify-journey</code> skill
+   to build from current main and walk the real scenarios.</li>
+<li>Run <code>make check-knowledge</code> (the two advisory guards) so docs and code don't
+   silently drift.</li>
+<li><strong>Grep before you cite.</strong> Anti-hallucination is non-negotiable: before
+   referencing any file path, Go symbol, test name, or make target, confirm it
+   exists in the tree (<code>grep</code>/read). A fabricated citation is the worst failure.</li>
+<li><strong>Read the manual before you assert Neo4j behavior.</strong> Training memory skews to
+   deprecated 4.x. For any config setting, Cypher, procedure, or topology, check
+   the version-correct operations manual — CalVer → <code>/current/</code>, LTS 5.26 → <code>/5/</code>
+   — not memory. The external sibling of "grep before you cite"; see the
+   <code>check-neo4j-docs</code> skill.</li>
 </ol>
-<h2 id="spec">Spec<a class="headerlink" href="#spec" title="Anchor link to this section">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Type</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>clusterRef</code></td>
-<td><code>string</code></td>
-<td><strong>Required.</strong> Name of the <code>Neo4jEnterpriseCluster</code> or <code>Neo4jEnterpriseStandalone</code> in the same namespace.</td>
-</tr>
-<tr>
-<td><code>name</code></td>
-<td><code>string</code></td>
-<td>Auth rule name as it appears in <code>SHOW AUTH RULES</code>. Defaults to <code>metadata.name</code>. Must match <code>^[a-zA-Z][a-zA-Z0-9_-]*$</code> and be ≤ 65 characters.</td>
-</tr>
-<tr>
-<td><code>condition</code></td>
-<td><code>string</code></td>
-<td><strong>Required.</strong> Cypher expression evaluated against the user's OIDC token at authentication time. Must be a pure expression — DDL keywords (<code>CREATE</code>, <code>DROP</code>, <code>ALTER</code>, <code>GRANT</code>, <code>DENY</code>, <code>REVOKE</code>, <code>SHOW</code>, <code>RENAME</code>) and statement separators (<code>;</code>) are rejected by the validator.</td>
-</tr>
-<tr>
-<td><code>enabled</code></td>
-<td><code>boolean</code></td>
-<td>Whether the rule actively grants roles. Defaults to <code>true</code>. Setting <code>false</code> preserves the rule but disables it.</td>
-</tr>
-<tr>
-<td><code>grantedRoles</code></td>
-<td><code>[]string</code></td>
-<td><strong>Required.</strong> Roles to grant when the condition evaluates true. Must contain at least one role.</td>
-</tr>
-<tr>
-<td><code>enforceRoles</code></td>
-<td><code>boolean</code></td>
-<td>Reconcile drift on the rule's role list. Defaults to <code>true</code>. When <code>false</code>, the controller adds missing roles but never revokes anything attached out-of-band.</td>
-</tr>
-<tr>
-<td><code>deletionPolicy</code></td>
-<td><code>string</code></td>
-<td><code>Drop</code> (default) executes <code>DROP AUTH RULE</code> on CR deletion; <code>Retain</code> leaves the rule in Neo4j and only releases the finalizer.</td>
-</tr>
-</tbody>
-</table>
-<h2 id="status">Status<a class="headerlink" href="#status" title="Anchor link to this section">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Type</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>phase</code></td>
-<td><code>string</code></td>
-<td><code>Pending</code>, <code>Ready</code>, <code>Failed</code>, or <code>PendingDependencies</code>.</td>
-</tr>
-<tr>
-<td><code>message</code></td>
-<td><code>string</code></td>
-<td>Short human-readable explanation of <code>phase</code>.</td>
-</tr>
-<tr>
-<td><code>observedGeneration</code></td>
-<td><code>int64</code></td>
-<td><code>metadata.generation</code> observed at the last successful reconcile.</td>
-</tr>
-<tr>
-<td><code>appliedRoles</code></td>
-<td><code>[]string</code></td>
-<td>Roles last observed as granted via <code>SHOW AUTH RULES</code>. Sorted ascending.</td>
-</tr>
-<tr>
-<td><code>appliedEnabled</code></td>
-<td><code>boolean</code></td>
-<td>Enabled flag observed on the rule.</td>
-</tr>
-<tr>
-<td><code>conditions[]</code></td>
-<td><code>metav1.Condition</code></td>
-<td>See below.</td>
-</tr>
-</tbody>
-</table>
-<h3 id="conditions">Conditions<a class="headerlink" href="#conditions" title="Anchor link to this section">&para;</a></h3>
-<table>
-<thead>
-<tr>
-<th>Type</th>
-<th>Meaning</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>Ready</code></td>
-<td>Rule exists with the desired condition, enabled flag, and granted roles.</td>
-</tr>
-<tr>
-<td><code>RolesSynced</code></td>
-<td>Granted roles match <code>spec.grantedRoles</code>.</td>
-</tr>
-<tr>
-<td><code>OIDCProviderConfigured</code></td>
-<td>Cluster has <code>dbms.security.abac.authorization_providers</code> set.</td>
-</tr>
-<tr>
-<td><code>AuthRuleVersionTooOld</code></td>
-<td>Cluster version is below 2026.03; reconcile is paused.</td>
-</tr>
-<tr>
-<td><code>ClusterNotReady</code></td>
-<td>Cluster has not reached its <code>Ready</code> phase.</td>
-</tr>
-<tr>
-<td><code>PendingDependencies</code></td>
-<td>One or more <code>grantedRoles</code> do not yet exist.</td>
-</tr>
-</tbody>
-</table>
-<h2 id="cypher-condition-syntax">Cypher condition syntax<a class="headerlink" href="#cypher-condition-syntax" title="Anchor link to this section">&para;</a></h2>
-<p>Conditions are arbitrary Cypher expressions that resolve to a boolean. The most useful primitive is:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>abac.oidc.user_attribute(&#39;&lt;claim_key&gt;&#39;)
-</span></code></pre></div>
-<p>This returns the value of the named claim from the user's OIDC token. Conditions can combine claim lookups with operators (<code>=</code>, <code>IN</code>, <code>&lt;</code>, <code>&gt;</code>, <code>&lt;=</code>, <code>&gt;=</code>, <code>&lt;&gt;</code>, <code>IS NULL</code>), boolean connectives (<code>AND</code>, <code>OR</code>, <code>NOT</code>), and a curated set of Cypher functions:</p>
-<ul>
-<li><strong>Predicates</strong>: <code>all</code>, <code>any</code>, <code>none</code>, <code>single</code>, <code>isEmpty</code></li>
-<li><strong>String</strong>: <code>split</code>, <code>substring</code>, <code>trim</code>, <code>upper</code>, <code>lower</code>, <code>replace</code></li>
-<li><strong>Numeric</strong>: <code>abs</code>, <code>ceil</code>, <code>floor</code>, <code>round</code>, <code>sign</code>, <code>isNaN</code></li>
-<li><strong>Lists</strong>: <code>range</code>, <code>reduce</code>, <code>reverse</code>, <code>tail</code>, <code>toBooleanList</code>, <code>toFloatList</code>, <code>toIntegerList</code>, <code>toStringList</code></li>
-<li><strong>Temporal</strong>: <code>date</code>, <code>time</code>, <code>datetime</code> and their <code>*.transaction()</code> variants for server-side time</li>
-<li><strong>Scalar</strong>: <code>coalesce</code>, <code>size</code>, <code>toBoolean</code>, <code>toInteger</code>, <code>toFloat</code>, <code>toString</code></li>
-</ul>
-<p>Conditions cannot contain DDL — the operator rejects them defensively before sending to Neo4j.</p>
-<h2 id="examples">Examples<a class="headerlink" href="#examples" title="Anchor link to this section">&para;</a></h2>
-<h3 id="simple-attribute-matching">Simple attribute matching<a class="headerlink" href="#simple-attribute-matching" title="Anchor link to this section">&para;</a></h3>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1beta1</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Neo4jAuthRule</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="nt">metadata</span><span class="p">:</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sales-team</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">  </span><span class="nt">clusterRef</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">production</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sales_team</span>
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">  </span><span class="nt">condition</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">abac.oidc.user_attribute(&#39;department&#39;) = &#39;sales&#39;</span>
-</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">  </span><span class="nt">grantedRoles</span><span class="p">:</span>
-</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">reader</span>
-</span></code></pre></div>
-<h3 id="multiple-conditions-and">Multiple conditions (AND)<a class="headerlink" href="#multiple-conditions-and" title="Anchor link to this section">&para;</a></h3>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1beta1</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Neo4jAuthRule</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="nt">metadata</span><span class="p">:</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">engineering-uk</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">  </span><span class="nt">clusterRef</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">production</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">engineering_uk</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">  </span><span class="nt">condition</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">    </span><span class="no">abac.oidc.user_attribute(&#39;department&#39;) = &#39;engineering&#39;</span>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">    </span><span class="no">AND abac.oidc.user_attribute(&#39;location&#39;) = &#39;UK&#39;</span>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="w">  </span><span class="nt">grantedRoles</span><span class="p">:</span>
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">editor</span>
-</span></code></pre></div>
-<h3 id="list-membership">List membership<a class="headerlink" href="#list-membership" title="Anchor link to this section">&para;</a></h3>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1beta1</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Neo4jAuthRule</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="nt">metadata</span><span class="p">:</span>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">country-access</span>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">  </span><span class="nt">clusterRef</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">production</span>
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">country_access</span>
-</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">  </span><span class="nt">condition</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
-</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">    </span><span class="no">any(country IN abac.oidc.user_attribute(&#39;citizenshipCountries&#39;)</span>
-</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="w">        </span><span class="no">WHERE country IN [&#39;US&#39;, &#39;GB&#39;, &#39;DE&#39;])</span>
-</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="w">  </span><span class="nt">grantedRoles</span><span class="p">:</span>
-</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">reader</span>
-</span></code></pre></div>
-<h3 id="time-bounded-role-grants">Time-bounded role grants<a class="headerlink" href="#time-bounded-role-grants" title="Anchor link to this section">&para;</a></h3>
-<p>Combine claim matching with <code>time.transaction('UTC')</code> to grant a role only during business hours:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1beta1</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Neo4jAuthRule</span>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="nt">metadata</span><span class="p">:</span>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">emea-business-hours</span>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="nt">spec</span><span class="p">:</span>
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">  </span><span class="nt">clusterRef</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">production</span>
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">emea_business_hours</span>
-</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">  </span><span class="nt">condition</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
-</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="w">    </span><span class="no">abac.oidc.user_attribute(&#39;region&#39;) = &#39;EMEA&#39;</span>
-</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="w">      </span><span class="no">AND time.transaction(&#39;UTC&#39;).hour &gt;= 6</span>
-</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="w">      </span><span class="no">AND time.transaction(&#39;UTC&#39;).hour &lt; 18</span>
-</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="w">  </span><span class="nt">grantedRoles</span><span class="p">:</span>
-</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">reader</span>
-</span></code></pre></div>
-<h2 id="drift-reconciliation">Drift reconciliation<a class="headerlink" href="#drift-reconciliation" title="Anchor link to this section">&para;</a></h2>
-<p>The reconciler reads <code>SHOW AUTH RULES</code> on every loop and converges any drift:</p>
-<ul>
-<li><strong>Condition or enabled flag changed in Neo4j</strong> → <code>CREATE OR REPLACE AUTH RULE …</code> re-applies the spec. (CREATE OR REPLACE clears existing role grants, so the controller re-grants the spec list immediately afterwards.)</li>
-<li><strong>Role attached out-of-band</strong> with <code>enforceRoles: true</code> → revoked.</li>
-<li><strong>Role missing from Neo4j</strong> → granted.</li>
-<li><strong>Rule disabled out-of-band</strong> with <code>spec.enabled: true</code> → re-enabled.</li>
-</ul>
-<p>Set <code>enforceRoles: false</code> to disable the revoke step (additions still happen) — useful when layering manual grants on top.</p>
-<h2 id="lifecycle">Lifecycle<a class="headerlink" href="#lifecycle" title="Anchor link to this section">&para;</a></h2>
-<ul>
-<li><strong>Create</strong>: the controller adds the <code>neo4j.com/authrule-finalizer</code>, runs <code>CREATE OR REPLACE AUTH RULE</code>, then grants <code>spec.grantedRoles</code>.</li>
-<li><strong>Update</strong>: edits to <code>spec</code> trigger drift reconciliation as described above.</li>
-<li><strong>Delete (<code>Drop</code>, default)</strong>: <code>DROP AUTH RULE … IF EXISTS</code> on the cluster, finalizer released. If the cluster is gone or downgraded below 2026.03, the finalizer is released without remote action.</li>
-<li><strong>Delete (<code>Retain</code>)</strong>: finalizer released; rule left in Neo4j.</li>
-</ul>
-<h2 id="limitations">Limitations<a class="headerlink" href="#limitations" title="Anchor link to this section">&para;</a></h2>
-<ul>
-<li><strong>OIDC only.</strong> Neo4j's <code>abac.oidc.user_attribute()</code> reads from OIDC tokens; LDAP and Kerberos providers are not supported by the upstream feature.</li>
-<li><strong>Cluster-side OIDC config is the user's responsibility.</strong> The operator detects whether <code>dbms.security.abac.authorization_providers</code> is set but does not edit the cluster's <code>spec.config</code>. Wire up the cluster's OIDC provider in <code>Neo4jEnterpriseCluster.spec.config</code> before applying any <code>Neo4jAuthRule</code>.</li>
-<li><strong>Roles with DENY privileges cannot be granted.</strong> Neo4j refuses to attach deny-bearing roles to auth rules to prevent privilege escalation if a rule unexpectedly fails. The operator surfaces the resulting cypher error on the rule's <code>Failed</code> status; verify the granted role's privileges contain only <code>GRANT</code> statements.</li>
-<li><strong>Existing sessions don't pick up rule changes.</strong> Newly-applied rules take effect at the next OIDC authentication for each user; running sessions retain the role set evaluated at their original login.</li>
-<li><strong>PUBLIC role.</strong> Neo4j auto-grants PUBLIC; the operator does not list it in <code>appliedRoles</code> and ignores it during diff.</li>
-</ul>
-<h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Anchor link to this section">&para;</a></h2>
-<h3 id="status-conditions">Status conditions<a class="headerlink" href="#status-conditions" title="Anchor link to this section">&para;</a></h3>
-<p><strong><code>AuthRuleVersionTooOld=True</code></strong>: the cluster runs a Neo4j version older than 2026.03. Either upgrade the cluster image or remove the <code>Neo4jAuthRule</code> resource.</p>
-<p><strong><code>OIDCProviderConfigured=False</code></strong>: the cluster's <code>spec.config</code> does not set <code>dbms.security.abac.authorization_providers</code>. Edit the <code>Neo4jEnterpriseCluster</code> to add the key with the configured OIDC provider name as its value.</p>
-<p><strong><code>PendingDependencies=True</code></strong>: one or more <code>grantedRoles</code> don't exist. Either create them as <code>Neo4jRole</code> resources in the same namespace, or remove them from <code>spec.grantedRoles</code>. The rule reconciles automatically when the missing roles land.</p>
-<h3 id="errors-in-speccondition">Errors in <code>spec.condition</code><a class="headerlink" href="#errors-in-speccondition" title="Anchor link to this section">&para;</a></h3>
-<p>Cypher errors fall into three categories, surfaced differently:</p>
-<p><strong>1. Validator-rejected (status <code>Failed</code>, no Cypher run)</strong></p>
-<p>The validator rejects conditions containing DDL keywords (<code>CREATE</code>, <code>DROP</code>, <code>ALTER</code>, <code>GRANT</code>, <code>DENY</code>, <code>REVOKE</code>, <code>SHOW</code>, <code>RENAME</code>) or statement separators (<code>;</code>). Surfaces as:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>neo4jauthrule<span class="w"> </span>emea-business-hours
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="c1"># Status:</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="c1">#   Phase:    Failed</span>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1">#   Message:  validation failed: spec.condition: Invalid value: &quot;...&quot;: condition must be a pure expression; &quot;CREATE&quot; is not allowed (auth rule conditions cannot contain DDL or multiple statements)</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="c1"># Events:</span>
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="c1">#   Warning  ValidationFailed  ...</span>
-</span></code></pre></div>
-<p>Fix: rewrite the condition as a pure expression that resolves to a boolean. The supported Cypher function set is documented <a href="https://neo4j.com/docs/operations-manual/current/authentication-authorization/attribute-based-access-control/">upstream</a>.</p>
-<p><strong>2. Neo4j-rejected (status <code>Failed</code>, Cypher attempted)</strong></p>
-<p>Conditions that pass the validator but fail Neo4j's parser — typos, unbalanced parentheses, type mismatches, calls to functions outside the allowed set — surface when the controller runs <code>CREATE OR REPLACE AUTH RULE</code>:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>neo4jauthrule<span class="w"> </span>emea-business-hours
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="c1"># Status:</span>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="c1">#   Phase:    Failed</span>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="c1">#   Message:  CREATE OR REPLACE AUTH RULE failed: failed to create or replace auth rule emea_business_hours: Neo.ClientError.Statement.SyntaxError: Invalid input &#39;=&#39;: expected ...</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="c1"># Events:</span>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="c1">#   Warning  AuthRuleFailed  CREATE OR REPLACE AUTH RULE failed: ...</span>
-</span></code></pre></div>
-<p>The full Neo4j error appears in both <code>status.message</code> and the <code>AuthRuleFailed</code> event. Common causes:</p>
-<ul>
-<li>Missing quotes around string literals: <code>abac.oidc.user_attribute(department)</code> instead of <code>abac.oidc.user_attribute('department')</code>.</li>
-<li>Comparing a list claim with <code>=</code> instead of using <code>IN</code> or <code>any()</code>.</li>
-<li>Calling functions outside the supported set (most useful are <code>any</code>, <code>all</code>, <code>none</code>, <code>single</code>, <code>coalesce</code>, <code>size</code>, <code>time.transaction()</code>, <code>date()</code>).</li>
-</ul>
-<p>The controller will retry the failing CREATE every 30 seconds until you fix the spec. If you need to silence the retries while diagnosing, set <code>spec.enabled: false</code> (which preserves the rule but disables it) — but in the failing case the rule may not exist at all yet, so editing or deleting the CR is usually the right move.</p>
-<p><strong>3. Runtime evaluation errors (rule <code>Ready</code>, but auth fails)</strong></p>
-<p>A condition can be syntactically valid yet fail at evaluation time — for example, calling <code>.hour</code> on a claim that's <code>NULL</code> for some users, or <code>IN</code> against a non-list. The rule's <code>status.phase</code> stays <code>Ready</code> because the rule is correctly <em>installed</em>; the symptom is that <em>some</em> users fail to authenticate.</p>
-<p>These errors are not visible to the operator. To diagnose:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Neo4j&#39;s security log captures auth failures with the rule that triggered them.</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>&lt;neo4j-server-pod&gt;<span class="w"> </span>-c<span class="w"> </span>neo4j<span class="w"> </span>--<span class="w"> </span>tail<span class="w"> </span>-50<span class="w"> </span>/logs/security.log
-</span></code></pre></div>
-<p>Mitigate runtime errors with defensive Cypher:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Use coalesce() to default missing claims:</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="nt">condition</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">coalesce(abac.oidc.user_attribute(&#39;region&#39;), &#39;&#39;) = &#39;EMEA&#39;</span>
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="c1"># Check list-ness before iterating:</span>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="nt">condition</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="w">  </span><span class="no">abac.oidc.user_attribute(&#39;countries&#39;) IS NOT NULL</span>
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="w">  </span><span class="no">AND any(c IN abac.oidc.user_attribute(&#39;countries&#39;) WHERE c = &#39;US&#39;)</span>
-</span></code></pre></div>
-<p><strong>4. <code>42I06: Invalid input 'AUTH'</code> running queries by hand</strong></p>
-<p>Neo4j 2026.x parses AUTH RULE syntax only under Cypher 25, but the system
-database defaults to Cypher 5. The operator prefixes its own AUTH RULE
-statements with <code>CYPHER 25</code> automatically; ad-hoc diagnostics via
-<code>cypher-shell</code> need the same prefix:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Wrong — fails with 42I06</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>mycluster-server-0<span class="w"> </span>--<span class="w"> </span>cypher-shell<span class="w"> </span>-u<span class="w"> </span>neo4j<span class="w"> </span>-p<span class="w"> </span><span class="nv">$PASS</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">  </span><span class="s2">&quot;SHOW AUTH RULES&quot;</span>
-</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>
-</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="c1"># Right</span>
-</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>mycluster-server-0<span class="w"> </span>--<span class="w"> </span>cypher-shell<span class="w"> </span>--format<span class="w"> </span>plain<span class="w"> </span>-u<span class="w"> </span>neo4j<span class="w"> </span>-p<span class="w"> </span><span class="nv">$PASS</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="w">  </span><span class="s2">&quot;CYPHER 25 SHOW AUTH RULES YIELD name, condition, enabled, roles</span>
-</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="s2">   RETURN name, condition, enabled, roles&quot;</span>
-</span></code></pre></div>
-<p>Alternatively, set the system database's default language permanently:
-<code>ALTER DATABASE system SET DEFAULT LANGUAGE CYPHER 25</code>. This makes the
-prefix unnecessary for both manual queries and the operator.</p>
-<p><strong>5. <code>entries must be a valid OIDC authorization provider</code> / <code>entries must exist in dbms.security.authorization_providers</code></strong></p>
-<p>The cluster has not finished wiring the OIDC provider into the right config
-maps. ABAC requires <em>four</em> coordinated touchpoints — see the
-<a href="../../user_guide/security/#oidc-and-abac-setup-checklist">OIDC and ABAC setup checklist</a>
-in the security guide. Each missing step surfaces as a different error:</p>
-<table>
-<thead>
-<tr>
-<th>Missing step</th>
-<th>Error</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>dbms.security.oidc.&lt;name&gt;.*</code> block</td>
-<td><code>entries must be a valid OIDC authorization provider. Invalid values: &lt;name&gt;</code></td>
-</tr>
-<tr>
-<td><code>oidc-&lt;name&gt;</code> not in <code>authorizationProviders</code></td>
-<td><code>entries must exist in dbms.security.authorization_providers. Invalid values: oidc-&lt;name&gt;</code></td>
-</tr>
-<tr>
-<td><code>dbms.security.abac.authorization_providers</code> value missing the <code>oidc-</code> prefix</td>
-<td>Boot-time validation rejects the bare provider name</td>
-</tr>
-</tbody>
-</table>
-<p>In all cases the cluster's pods CrashLoopBackOff at startup with the error in
-<code>kubectl logs &lt;pod&gt; --previous</code>; the rule itself never reaches <code>Ready</code>
-because the controller cannot connect to a cluster that won't boot.</p>
-<p><strong>6. <code>does not have required scheme 'https'</code></strong></p>
-<p>Neo4j 2026.x rejects <code>http://</code> for every <code>dbms.security.oidc.&lt;name&gt;.*</code> URI
-at config-parse time. There is no insecure-mode override. Self-hosted IDPs
-without TLS need a TLS-terminating proxy plus the proxy's CA in
-<a href="../../user_guide/security/#jvm-truststore-for-internal-cas"><code>spec.trustedCASecrets</code></a>
-so Neo4j trusts the issued certificate. The integration test in
-<a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/test/integration/neo4jauthrule_test.go"><code>test/integration/neo4jauthrule_test.go</code></a>
-shows this end-to-end with cert-manager + nginx + mock-oauth2-server.</p>
-<h2 id="see-also">See also<a class="headerlink" href="#see-also" title="Anchor link to this section">&para;</a></h2>
-<ul>
-<li><a href="../../user_guide/user_role_management/">User &amp; Role Management Guide</a> — end-to-end walkthrough for <code>Neo4jUser</code>, <code>Neo4jRole</code>, <code>Neo4jRoleBinding</code>, and <code>Neo4jAuthRule</code>.</li>
-<li><a href="../neo4jrole/"><code>Neo4jRole</code></a> — the role being granted.</li>
-<li><a href="https://neo4j.com/docs/operations-manual/current/authentication-authorization/attribute-based-access-control/">Upstream ABAC reference</a></li>
-</ul>
+<h2 id="generated-artifacts">Generated artifacts<a class="headerlink" href="#generated-artifacts" title="Anchor link to this section">&para;</a></h2>
+<p>Large parts of <code>config/</code>, <code>charts/</code>, and <code>api/v1beta1/zz_generated.deepcopy.go</code>
+are generated — each carries a <code># This file is GENERATED. DO NOT EDIT.</code> header.
+<strong>Never hand-edit them.</strong> When you touch CRD types or <code>+kubebuilder:</code> markers,
+regenerate everything with <code>make sync-all</code> (the <code>regen-artifacts</code> skill walks the
+full sequence). <code>make check-drift</code> is the blocking gate: it reruns the generators
+and fails on any diff.</p>
 
 
 
@@ -3609,7 +3123,7 @@ shows this end-to-end with cert-manager + nginx + mock-oauth2-server.</p>
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../neo4jrolebinding/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Neo4jRoleBinding">
+          <a href="../openshift_olm/" class="md-footer__link md-footer__link--prev" aria-label="Previous: OpenShift OLM">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -3619,20 +3133,20 @@ shows this end-to-end with cert-manager + nginx + mock-oauth2-server.</p>
                 Previous
               </span>
               <div class="md-ellipsis">
-                Neo4jRoleBinding
+                OpenShift OLM
               </div>
             </div>
           </a>
         
         
           
-          <a href="../neo4jplugin/" class="md-footer__link md-footer__link--next" aria-label="Next: Neo4jPlugin">
+          <a href="../AGENT-GUARDRAILS/" class="md-footer__link md-footer__link--next" aria-label="Next: Agent Guardrails">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Neo4jPlugin
+                Agent Guardrails
               </div>
             </div>
             <div class="md-footer__button md-icon">

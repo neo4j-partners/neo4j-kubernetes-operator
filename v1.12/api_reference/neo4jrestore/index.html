@@ -2786,6 +2786,10 @@
       
         
       
+        
+      
+        
+      
     
     
     
@@ -2830,6 +2834,34 @@
 
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer_guide/QUICKSTART/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer Quickstart
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
             
               
                 
@@ -3050,6 +3082,155 @@
   
 
       </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_8_10" id="__nav_8_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AI-Assisted Contribution
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    AI-Assisted Contribution
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer_guide/llm-contribution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing with an LLM Agent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer_guide/AGENT-GUARDRAILS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent Guardrails
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../knowledge/invariants/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Invariants
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
     </li>
   
 
@@ -3705,7 +3886,7 @@
 <td><code>timeout</code></td>
 <td><code>string</code></td>
 <td>❌</td>
-<td>Go duration (e.g. <code>"30m"</code>, <code>"2h"</code>). For <strong>cluster</strong> targets this bounds the online-convergence wait after <code>dbms.recreateDatabase</code> is issued (default <strong>5m</strong> when unset) — raise it for multi-GB stores seeded from object storage.</td>
+<td>Go duration (e.g. <code>"30m"</code>, <code>"2h"</code>). For <strong>cluster</strong> targets this bounds the online-convergence wait after <code>dbms.recreateDatabase</code> is issued (default <strong>5m</strong> when unset) — raise it for multi-GB stores seeded from object storage. For <strong>PVC-backed cluster restores</strong> it also bounds the wait for the backup-seed-proxy Deployment to become Ready (default <strong>3m</strong> when unset); on expiry the restore fails with the proxy pod's condition (e.g. an RWO backup PVC still attached elsewhere).</td>
 </tr>
 </tbody>
 </table>
