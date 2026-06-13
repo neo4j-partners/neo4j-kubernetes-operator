@@ -4938,29 +4938,31 @@ fails.</p>
 </span></code></pre></div>
 <p><strong>Best for:</strong> Development, testing, getting started, air-gapped environments.</p>
 <h4 id="pvc-ownership-auto-provision-vs-bring-your-own">PVC ownership: auto-provision vs bring-your-own<a class="headerlink" href="#pvc-ownership-auto-provision-vs-bring-your-own" title="Anchor link to this section">&para;</a></h4>
-<p><code>storage.pvc.size</code> is the switch:</p>
+<p><code>storage.pvc.size</code> is the switch for <strong>who creates the PVC</strong> — but <strong>either way the PVC (and your backups) survive <code>kubectl delete neo4jbackup</code></strong>:</p>
 <table>
 <thead>
 <tr>
 <th>Pattern</th>
 <th>YAML</th>
-<th>Lifecycle</th>
+<th>Behavior</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td><strong>Operator auto-provisions</strong></td>
 <td>Set <code>name</code> + <code>size</code> (+ optional <code>storageClassName</code>)</td>
-<td>PVC is owner-ref'd to the Neo4jBackup CR. Deleted when the CR is deleted (backups go with it).</td>
+<td>Operator creates the PVC if it doesn't exist. It is <strong>not</strong> owner-ref'd to the CR — backups are durable; reclaim the storage with an explicit <code>kubectl delete pvc &lt;name&gt;</code>.</td>
 </tr>
 <tr>
 <td><strong>Bring your own PVC</strong></td>
 <td>Set <code>name</code> only; omit <code>size</code></td>
-<td>Operator just mounts the existing PVC. Survives CR deletion. Pre-create it however you like (kubectl, Helm, Velero, static binding, NFS, etc.).</td>
+<td>Operator just mounts the existing PVC. Pre-create it however you like (kubectl, Helm, Velero, static binding, NFS, etc.). If a <code>name</code>-only PVC doesn't exist, the backup Job can't schedule — the operator surfaces the reason in <code>status</code> and fails after a short deadline rather than hanging.</td>
 </tr>
 </tbody>
 </table>
-<p>Use bring-your-own when you want backups to survive <code>kubectl delete neo4jbackup</code>, or to share one PVC across multiple Neo4jBackup CRs (e.g. one daily + one weekly schedule writing to the same volume).</p>
+<blockquote>
+<p><strong>Backups are never deleted by deleting the <code>Neo4jBackup</code> CR</strong> (this changed in v1.12.1 — earlier versions cascade-deleted an operator-created PVC). Reclaim backup storage explicitly with <code>kubectl delete pvc</code>. One PVC can be shared across multiple Neo4jBackup CRs (e.g. a daily + a weekly schedule writing to the same volume).</p>
+</blockquote>
 <h4 id="cluster-backup-to-s3-with-explicit-credentials">Cluster Backup to S3 with Explicit Credentials<a class="headerlink" href="#cluster-backup-to-s3-with-explicit-credentials" title="Anchor link to this section">&para;</a></h4>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">neo4j.neo4j.com/v1beta1</span>
 </span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Neo4jBackup</span>
