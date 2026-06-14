@@ -177,6 +177,7 @@ nav:
       - CI/CD & Workflows: developer_guide/ci_and_workflows.md
       - Architecture: developer_guide/architecture.md
       - Testing: developer_guide/testing.md
+      - Release Verification: developer_guide/release_verification.md
       - Makefile Reference: developer_guide/makefile_reference.md
       - OpenShift OLM: developer_guide/openshift_olm.md
       - AI-Assisted Contribution:

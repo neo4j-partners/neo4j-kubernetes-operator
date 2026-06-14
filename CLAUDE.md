@@ -101,6 +101,8 @@ Ginkgo/Gomega, Kind only, **300-second timeouts** for all integration tests.
 
 **Property sharding tests**: CI-runnable smoke test (`property_sharding_ci_smoke_test.go`) runs only when the integration-tests workflow is dispatched with `neo4j-version: 2025.12-enterprise+` — gated by `isPropertyShardingCompatible()`. Uses `NEO4J_SHARDING_RELAX_MEMORY_MIN=true` (set only via `config/overlays/integration-test/`) to bypass the 4Gi/1-core floor on a 2×1.5Gi/500m cluster. Richer sharded tests (F3/F4/F5, Phase 2a/2c, multi-property-shard) stay local-only — they need the production 4Gi/server floor.
 
+**Pre-release verification journey** (manual + LLM, complements the automated suites): `docs/developer_guide/release_verification.md` is the canonical matrix — what we verify, on standalone vs. cluster(3) vs. sharding(2026.04), at what size, and why. Run it from `main` before cutting a release via the `verify-journey` skill (`.claude/skills/verify-journey/`). Two durable rules: **one Enterprise deployment in the cluster at a time** (sequential phases, teardown between — concurrent JVMs wedge Bolt on a laptop) and **restore is walked on BOTH standalone (neo4j-admin path) and cluster (in-place Cypher path)**. When you add/change a capability, add its scenario to that doc in the same PR.
+
 **Troubleshooting**: timeout → image-pull delays. OOMKilled → Enterprise needs ≥ 1.5Gi. DB-create hangs → use `TOPOLOGY` not `OPTIONS`. Cluster won't form → check discovery RBAC.
 
 **MANDATORY AfterEach cleanup** (always remove finalizers before deletion; never rely on suite cleanup):

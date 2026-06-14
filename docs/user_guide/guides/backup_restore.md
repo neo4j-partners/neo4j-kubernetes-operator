@@ -171,9 +171,9 @@ Backup Jobs run as the auto-created `neo4j-backup-sa` ServiceAccount in the same
 |---|---|---|---|
 | `Cluster` | the **instance** name — a `Neo4jEnterpriseCluster` **or** `Neo4jEnterpriseStandalone` (auto-detected) | *(unused — leave unset)* | every database on the instance (`neo4j-admin database backup "*"` — one `.backup` artifact per database) |
 | `Database` | the **database** name (e.g. `neo4j`) | the owning instance name | a single database |
-| `ShardedDatabase` | the logical sharded-DB name (e.g. `products`) | the owning cluster | all shards in one `neo4j-admin` run |
+| `ShardedDatabase` | the **`Neo4jShardedDatabase` CR (metadata) name** — the operator resolves the logical DB name from that CR's `spec.name` | the owning cluster | all shards in one `neo4j-admin` run |
 
-There is **no `kind: Standalone`** — a standalone is just an instance. To back one up, use `kind: Cluster` with `name: <standalone-name>` (whole instance), or `kind: Database` with `name: <database>` + `clusterRef: <standalone-name>` (one database). Key gotcha: for `kind: Cluster`, `name` is the **instance** name and `clusterRef` is unused; for `kind: Database`/`ShardedDatabase`, `name` is the **database** and `clusterRef` is the instance that owns it.
+There is **no `kind: Standalone`** — a standalone is just an instance. To back one up, use `kind: Cluster` with `name: <standalone-name>` (whole instance), or `kind: Database` with `name: <database>` + `clusterRef: <standalone-name>` (one database). Key gotcha: for `kind: Cluster`, `name` is the **instance** name and `clusterRef` is unused; for `kind: Database`, `name` is the **database** and `clusterRef` is the instance that owns it; for `kind: ShardedDatabase`, `name` is the **`Neo4jShardedDatabase` CR name** (the operator resolves the logical DB name from its `spec.name` — the two often differ) and `clusterRef` is the owning cluster.
 
 **Restore is single-database** even when the backup was cluster-wide: a `kind: Cluster` backup leaves one artifact per database in the chain directory, and you create one `Neo4jRestore` per database you want back. **How you reference it depends on the target:**
 

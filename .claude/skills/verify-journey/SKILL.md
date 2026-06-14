@@ -1,96 +1,88 @@
 ---
 name: verify-journey
-description: Fresh-eyes verification — build the operator from current main, install it per the published docs on a clean Kind cluster, and walk the real user scenarios end to end.
+description: Fresh-eyes pre-release verification — build the operator from current main, install it on a clean Kind cluster, and walk the documented standalone → cluster → sharding phase plan end to end, following docs/developer_guide/release_verification.md.
 ---
 
 # Verify the user journey (fresh eyes)
 
-Pretend you are a new user who only has the published docs. Build from the
-current tree, follow the docs **verbatim**, and report every place reality
-diverges from the docs. This pass has historically caught a dead image tag, a
-`kind: Cluster` restore gap, and a tutorial ordering bug — bugs that unit/
-integration tests did not surface because they don't read the docs.
+Pretend you are a new user who only has the published docs. Build from current
+`main`, follow the docs **verbatim**, and report every place reality diverges
+from the docs. Automated tests validate the code against itself; this validates
+the *published instructions* against a clean machine — the only check that
+catches docs that lie. Past passes caught a dead image tag, a `kind: Cluster`
+restore gap, a tutorial ordering bug, and a sharded CR-name/logical-name backup
+mismatch.
 
-## Ground rules
+## What to test — follow the canonical matrix
 
-- **KIND ONLY.** Never minikube/k3s. **Enterprise images only**
-  (`neo4j:*-enterprise`), never community.
-- **Follow the docs literally.** If a step is wrong or out of order, that IS the
-  finding — do not silently "fix" it in your head. Note the exact doc location
-  and what actually had to happen.
-- Treat `docs/user_guide/` as read-only reference here (you verify against it;
-  you do not edit it).
+**The phase plan, the capability routing (which scenario runs on standalone vs.
+cluster vs. sharding), the sizes, and the per-scenario in-DB checks live in
+[`docs/developer_guide/release_verification.md`](../../../docs/developer_guide/release_verification.md).**
+Read it and follow it verbatim — it is the single source of truth and is kept
+current as the product evolves. This SKILL holds only the *mechanics* below.
 
-## Procedure
+Non-negotiables from that doc (repeated here because they bite hardest):
 
-1. **Wipe the slate.**
-   ```bash
-   kind delete clusters --all
-   ```
+- **KIND only. Enterprise images only** (`neo4j:*-enterprise`).
+- **One Enterprise deployment in the cluster at a time** — phases run
+  sequentially with **full teardown between them**. Concurrent standalone +
+  cluster + sharding JVMs wedge Bolt on a laptop VM (HTTP probe says `Ready`,
+  ports 7687/6362 time out).
+- **Follow the published docs literally** for Phases 1–2; a wrong/out-of-order
+  step *is* a finding — record the exact doc location, don't silently fix it.
+- Treat `docs/user_guide/` as read-only here.
 
-2. **Build the operator image from the current `main`.**
+## Build & install (once, before Phase 1)
+
+1. **Wipe the slate.** `kind delete clusters --all`
+
+2. **Bring up a Kind cluster + operator built from current `main`.** The
+   reliable path is the project's own bootstrap, which also installs
+   cert-manager + the `ca-cluster-issuer` the TLS scenarios need:
+
    ```bash
    git switch main && git pull --ff-only
-   docker build -t neo4j-operator:journey .
+   make dev-up        # creates the neo4j-operator-dev Kind cluster, installs
+                      # cert-manager + CRDs, builds & deploys the main operator
    ```
 
-3. **Create a Kind cluster and load the image — RETRY the load.** Kind/
-   containerd restarts inside the node right after the cluster reports Ready,
-   so the first `kind load` often fails with
-   `containerd.sock: connection refused` (or `content digest not found`). Retry
-   up to 3x with a settle sleep — the same pattern `scripts/install-confidence.sh`
-   uses:
-   ```bash
-   kind create cluster --name neo4j-journey --wait 120s
-   for attempt in 1 2 3; do
-     kind load docker-image neo4j-operator:journey --name neo4j-journey && break
-     [ "$attempt" = 3 ] && { echo "kind load failed after 3 attempts"; exit 1; }
-     echo "load attempt $attempt failed (containerd settling); retrying in 10s"; sleep 10
-   done
-   ```
+   We test `main`, so the operator is built from the working tree (the published
+   Helm chart is the *previous* release). If you instead follow
+   `installation.md` Helm steps verbatim, point them at the locally built image
+   — a dead/typo'd tag in those docs is still a real finding.
 
-4. **Install the operator following `docs/user_guide/installation.md` verbatim.**
-   Use the Helm path the docs lead with. Wait for the operator Deployment to be
-   Ready before proceeding. If the docs reference an image tag, use exactly
-   what they say (a dead/typo'd tag here is a real finding).
+   !!! note "Kind image-load race (manual `kind load` path)"
+       If you load an image manually rather than via `make dev-up`, containerd
+       restarts inside the node right after the cluster reports Ready, so the
+       first `kind load` often fails (`containerd.sock: connection refused` /
+       `content digest not found`). Retry up to 3× with a settle sleep — the
+       pattern `scripts/install-confidence.sh` uses.
 
-5. **Walk the common scenarios, each to `Ready`, following the published docs
-   in order.** Deploy and confirm each reconciles to Ready, then verify
-   *inside the database* (not just the CR status):
-   - **Standalone** (`Neo4jEnterpriseStandalone`) → Ready.
-   - **Cluster** (`Neo4jEnterpriseCluster`, ≥2 servers) → Ready; pods are
-     `{cluster}-server-0..N-1`.
-   - **Database** (`Neo4jDatabase`) → Ready; confirm via
-     `cypher-shell ... 'SHOW DATABASES'`.
-   - **Users / roles** (`Neo4jUser` / `Neo4jRole` / `Neo4jRoleBinding`) →
-     confirm via `SHOW USERS` / `SHOW ROLES`.
-   - **Plugin** (`Neo4jPlugin`, e.g. APOC) → confirm via
-     `RETURN apoc.version()`.
-   - **Backup → restore** following the published backup/restore tutorial
-     steps exactly. This is where ordering/gap bugs hide — note the exact step
-     where anything had to deviate.
+3. Confirm the operator Deployment is `Ready` and the `ca-cluster-issuer` is
+   `True` before starting Phase 1.
 
-   Useful in-DB check pattern (per CLAUDE.md):
-   ```bash
-   kubectl exec <pod> -c neo4j -- cypher-shell -u neo4j -p <password> "SHOW DATABASES"
-   ```
+## Phase 3 prerequisite (sharding)
 
-6. **Report findings as your final message** (not a file): for each scenario,
-   PASS/FAIL, and for every divergence the exact doc location + observed vs.
-   documented behavior. Flag dead image tags, missing/incorrect steps, wrong
-   ordering, and any scenario the docs imply works but doesn't (e.g. a
-   `kind: Cluster` restore path the docs don't actually cover).
+Before Phase 3, patch the operator to relax the sharding memory floor (DEV/TEST
+only) so it fits a laptop, per the matrix doc:
 
-7. **Tear down.**
-   ```bash
-   kind delete cluster --name neo4j-journey
-   ```
+```bash
+kubectl -n <operator-ns> set env deployment/<operator-deploy> NEO4J_SHARDING_RELAX_MEMORY_MIN=true
+kubectl -n <operator-ns> rollout status deployment/<operator-deploy>
+```
+
+## Report & tear down
+
+- **Report findings as your final message** (not a file): per phase/scenario
+  PASS/FAIL, and for every divergence the exact doc location + observed vs.
+  documented behavior.
+- Add a row to the **Verification log** table in the matrix doc for this run.
+- Final teardown: `make dev-down` (or `kind delete cluster --name <name>`).
 
 ## Why this exists / provenance
 
-Distilled from a real fresh-eyes verification pass that caught a dead image
-tag, a `kind: Cluster` restore gap, and a tutorial ordering bug. Automated
-tests validate the code against itself; this skill validates the *published
-instructions* against a clean machine — the only check that catches docs that
-lie. The 3x kind-load retry is not optional: it is a deterministic
-containerd-restart race reproduced on recent Docker + kind.
+Distilled from real fresh-eyes passes. The standalone → cluster(3) →
+sharding(2026.04) phase plan and the one-deployment-at-a-time anti-wedge rule
+were settled after a pass where concurrent standalone + cluster JVMs wedged Bolt
+on the laptop VM. The full, evolving catalog is the matrix doc linked above —
+update *that* (not just this SKILL) when the product grows.
