@@ -3307,6 +3307,8 @@
       
         
       
+        
+      
     
     
     
@@ -3555,6 +3557,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../../developer_guide/release_verification/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Verification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../../developer_guide/makefile_reference/" class="md-nav__link">
         
   
@@ -3629,10 +3659,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_10" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_11" >
         
           
-          <label class="md-nav__link" for="__nav_8_10" id="__nav_8_10_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_8_11" id="__nav_8_11_label" tabindex="0">
             
   
   
@@ -3650,8 +3680,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_10_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_8_10">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8_11">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -4984,13 +5014,13 @@ seeds it from the backup over Cypher — online, no downtime, and your original
 </tr>
 <tr>
 <td><code>ShardedDatabase</code></td>
-<td>the logical sharded-DB name (e.g. <code>products</code>)</td>
+<td>the <strong><code>Neo4jShardedDatabase</code> CR (metadata) name</strong> — the operator resolves the logical DB name from that CR's <code>spec.name</code></td>
 <td>the owning cluster</td>
 <td>all shards in one <code>neo4j-admin</code> run</td>
 </tr>
 </tbody>
 </table>
-<p>There is <strong>no <code>kind: Standalone</code></strong> — a standalone is just an instance. To back one up, use <code>kind: Cluster</code> with <code>name: &lt;standalone-name&gt;</code> (whole instance), or <code>kind: Database</code> with <code>name: &lt;database&gt;</code> + <code>clusterRef: &lt;standalone-name&gt;</code> (one database). Key gotcha: for <code>kind: Cluster</code>, <code>name</code> is the <strong>instance</strong> name and <code>clusterRef</code> is unused; for <code>kind: Database</code>/<code>ShardedDatabase</code>, <code>name</code> is the <strong>database</strong> and <code>clusterRef</code> is the instance that owns it.</p>
+<p>There is <strong>no <code>kind: Standalone</code></strong> — a standalone is just an instance. To back one up, use <code>kind: Cluster</code> with <code>name: &lt;standalone-name&gt;</code> (whole instance), or <code>kind: Database</code> with <code>name: &lt;database&gt;</code> + <code>clusterRef: &lt;standalone-name&gt;</code> (one database). Key gotcha: for <code>kind: Cluster</code>, <code>name</code> is the <strong>instance</strong> name and <code>clusterRef</code> is unused; for <code>kind: Database</code>, <code>name</code> is the <strong>database</strong> and <code>clusterRef</code> is the instance that owns it; for <code>kind: ShardedDatabase</code>, <code>name</code> is the <strong><code>Neo4jShardedDatabase</code> CR name</strong> (the operator resolves the logical DB name from its <code>spec.name</code> — the two often differ) and <code>clusterRef</code> is the owning cluster.</p>
 <p><strong>Restore is single-database</strong> even when the backup was cluster-wide: a <code>kind: Cluster</code> backup leaves one artifact per database in the chain directory, and you create one <code>Neo4jRestore</code> per database you want back. <strong>How you reference it depends on the target:</strong></p>
 <ul>
 <li><strong>Standalone target</strong> (Job path): referencing a <code>kind: Cluster</code> backup works directly — the restore Job's filename glob (<code>&lt;database&gt;-*.backup | tail -1</code>) selects the requested database's artifact from the shared directory.</li>

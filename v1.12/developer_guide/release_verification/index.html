@@ -12,13 +12,13 @@
         <meta name="author" content="Neo4j Partners">
       
       
-        <link rel="canonical" href="https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.12/developer_guide/openshift_olm/">
+        <link rel="canonical" href="https://neo4j-partners.github.io/neo4j-kubernetes-operator/v1.12/developer_guide/release_verification/">
       
       
-        <link rel="prev" href="../makefile_reference/">
+        <link rel="prev" href="../testing/">
       
       
-        <link rel="next" href="../llm-contribution/">
+        <link rel="next" href="../makefile_reference/">
       
       
         
@@ -29,7 +29,7 @@
     
     
       
-        <title>OpenShift OLM - Neo4j Kubernetes Operator</title>
+        <title>Release Verification - Neo4j Kubernetes Operator</title>
       
     
     
@@ -82,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#openshift-olm-packaging" class="md-skip">
+        <a href="#release-verification" class="md-skip">
           Skip to content
         </a>
       
@@ -122,7 +122,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              OpenShift OLM
+              Release Verification
             
           </span>
         </div>
@@ -2485,10 +2485,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../release_verification/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release Verification
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -2504,6 +2531,142 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#ground-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ground rules
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#capability-routing-why-each-lands-where-it-does" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Capability routing — why each lands where it does
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-phase-plan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The phase plan
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The phase plan">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#phase-1-standalone-1-pod-2gi" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1 — Standalone (1 pod, ~2Gi)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-2-cluster-3-servers-6gi" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 2 — Cluster, 3 servers (~6Gi)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-3-property-sharding-cluster-202604-enterprise-3-2gi" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3 — Property sharding (cluster, 2026.04-enterprise, 3 × 2Gi)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#coverage-at-a-glance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Coverage at a glance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#keeping-this-current" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Keeping this current
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#verification-log" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verification log
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See also
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -2541,37 +2704,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    OpenShift OLM
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../openshift_olm/" class="md-nav__link">
         
   
   
@@ -2587,70 +2723,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#build-the-bundle" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Build the bundle
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#buildpush-catalog-index" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Build/push catalog index
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#install-via-olm-on-openshift" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Install via OLM on OpenShift
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#openshift-smoke-testing-manual" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        OpenShift smoke testing (manual)
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -2839,10 +2911,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#build-the-bundle" class="md-nav__link">
+  <a href="#ground-rules" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Build the bundle
+        Ground rules
       
     </span>
   </a>
@@ -2850,10 +2922,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#buildpush-catalog-index" class="md-nav__link">
+  <a href="#capability-routing-why-each-lands-where-it-does" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Build/push catalog index
+        Capability routing — why each lands where it does
       
     </span>
   </a>
@@ -2861,10 +2933,60 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#install-via-olm-on-openshift" class="md-nav__link">
+  <a href="#the-phase-plan" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Install via OLM on OpenShift
+        The phase plan
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The phase plan">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#phase-1-standalone-1-pod-2gi" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1 — Standalone (1 pod, ~2Gi)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-2-cluster-3-servers-6gi" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 2 — Cluster, 3 servers (~6Gi)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-3-property-sharding-cluster-202604-enterprise-3-2gi" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3 — Property sharding (cluster, 2026.04-enterprise, 3 × 2Gi)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#coverage-at-a-glance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Coverage at a glance
       
     </span>
   </a>
@@ -2872,10 +2994,32 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#openshift-smoke-testing-manual" class="md-nav__link">
+  <a href="#keeping-this-current" class="md-nav__link">
     <span class="md-ellipsis">
       
-        OpenShift smoke testing (manual)
+        Keeping this current
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#verification-log" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verification log
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See also
       
     </span>
   </a>
@@ -2899,7 +3043,7 @@
 
 
   
-    <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/edit/main/docs/developer_guide/openshift_olm.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+    <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/edit/main/docs/developer_guide/release_verification.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
     </a>
@@ -2907,54 +3051,285 @@
   
 
 
-<h1 id="openshift-olm-packaging">OpenShift OLM Packaging<a class="headerlink" href="#openshift-olm-packaging" title="Anchor link to this section">&para;</a></h1>
-<p>This project includes make targets for building an Operator Lifecycle Manager (OLM) bundle and catalog for OpenShift. Use these steps on a workstation with Docker/Podman and operator-sdk/opm available (Makefile will download pinned versions).</p>
-<h2 id="build-the-bundle">Build the bundle<a class="headerlink" href="#build-the-bundle" title="Anchor link to this section">&para;</a></h2>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Generate bundle manifests from the current workspace.</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1"># `make bundle` pins the CSV&#39;s createdAt: annotation to a stable placeholder</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1"># (2020-01-01T00:00:00Z) so concurrent PRs don&#39;t conflict on the timestamp</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1"># and `make check-drift` stays deterministic. Use this target for local</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="c1"># development, drift checks, and CI.</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>make<span class="w"> </span>bundle<span class="w"> </span><span class="nv">VERSION</span><span class="o">=</span><span class="m">0</span>.0.1<span class="w"> </span><span class="nv">IMG</span><span class="o">=</span>ghcr.io/neo4j-partners/neo4j-kubernetes-operator:latest
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="c1"># Build and push bundle image</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="c1"># (the Makefile default tag is v$(VERSION), e.g. v0.0.1 — keep the `v` prefix)</span>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>make<span class="w"> </span>bundle-build<span class="w"> </span><span class="nv">BUNDLE_IMG</span><span class="o">=</span>quay.io/your-org/neo4j-operator-bundle:v0.0.1
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>make<span class="w"> </span>bundle-push<span class="w"> </span><span class="nv">BUNDLE_IMG</span><span class="o">=</span>quay.io/your-org/neo4j-operator-bundle:v0.0.1
+<h1 id="release-verification">Release Verification<a class="headerlink" href="#release-verification" title="Anchor link to this section">&para;</a></h1>
+<p>The <strong>pre-release verification journey</strong>: a manual + LLM-driven walk of the real
+user scenarios on a clean cluster, run from <code>main</code> before cutting any release.
+It is the canonical source of truth for <strong>what we verify, on which deployment,
+at what size, and why</strong> — keep it current as the product grows.</p>
+<div class="admonition info">
+<p class="admonition-title">Why this exists alongside the automated suites</p>
+<p>Unit and integration tests (<a href="../testing/">Testing</a>) validate the <strong>code
+against itself</strong>. This journey validates the <strong>published instructions and
+end-to-end behaviour against a clean machine</strong> — the only check that catches
+a doc that lies, a dead image tag, a tutorial ordering bug, or a
+CR-name/logical-name mismatch. Real passes have caught all of these
+(most recently the sharded <code>target.name</code> doc bug, a <code>#270</code> follow-up).</p>
+</div>
+<p>The <a href="https://github.com/neo4j-partners/neo4j-kubernetes-operator/blob/main/.claude/skills/verify-journey/SKILL.md"><code>verify-journey</code> skill</a>
+executes this document. <strong>LLM agents and developers should follow the matrix
+below verbatim</strong>; the skill holds only the mechanics (build, kind-load retry,
+teardown, reporting) and defers to this page for <em>what</em> to test.</p>
+<h2 id="ground-rules">Ground rules<a class="headerlink" href="#ground-rules" title="Anchor link to this section">&para;</a></h2>
+<ul>
+<li><strong>KIND only. Enterprise images only</strong> (<code>neo4j:*-enterprise</code>) — the project
+  <a href="../../knowledge/invariants/">invariants</a>.</li>
+<li><strong>Follow the published docs literally</strong> for Phases 1–2. A wrong/out-of-order
+  step <em>is</em> a finding — record the exact doc location, don't silently fix it.</li>
+<li><strong>One Enterprise deployment in the cluster at a time</strong> (the <em>anti-wedge</em>
+  rule). Running standalone + cluster + sharding JVMs concurrently on a laptop
+  VM wedges Bolt (the HTTP probe reports <code>Ready</code> but ports 7687/6362 time out).
+  Phases run <strong>sequentially with full teardown between them</strong>; the Kind cluster,
+  operator, and cert-manager stay up across phases.</li>
+<li><strong>Restore must be walked on BOTH standalone and cluster</strong> — the mechanism
+  differs (see the routing table) and one never covers the other.</li>
+</ul>
+<h2 id="capability-routing-why-each-lands-where-it-does">Capability routing — why each lands where it does<a class="headerlink" href="#capability-routing-why-each-lands-where-it-does" title="Anchor link to this section">&para;</a></h2>
+<p>Each capability is verified on the <strong>minimum deployment that actually exercises
+its code path</strong>. Standalone is the cheap workhorse; a capability moves to the
+cluster only when it <em>needs</em> clustering.</p>
+<table>
+<thead>
+<tr>
+<th>Capability</th>
+<th>Where</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Database lifecycle (create/show/drop)</td>
+<td>Standalone</td>
+<td>Same <code>CREATE DATABASE</code> Cypher everywhere</td>
+</tr>
+<tr>
+<td>Database <strong>topology</strong> (<code>n PRIMARIES m SECONDARIES</code>)</td>
+<td>Cluster</td>
+<td>Meaningless on standalone (validator only warns)</td>
+</tr>
+<tr>
+<td>Users / Roles / RoleBindings</td>
+<td>Standalone</td>
+<td>Auth model is deployment-independent</td>
+</tr>
+<tr>
+<td>Plugins (APOC, …)</td>
+<td>Standalone (ConfigMap path)</td>
+<td>Cluster uses the <strong>env-var</strong> path; ConfigMap path is the cheaper of the two to smoke</td>
+</tr>
+<tr>
+<td><strong>Backup → restore</strong></td>
+<td><strong>Both</strong></td>
+<td>Standalone restores via the <code>neo4j-admin</code> path (supports PITR <code>--restore-until</code>); cluster restores via the in-place <strong>Cypher</strong> path (PITR is <em>rejected</em> on clusters). Separate code paths.</td>
+</tr>
+<tr>
+<td>Property sharding</td>
+<td>Cluster (CalVer)</td>
+<td>Cluster-only by nature; needs a CalVer image and is memory-heavy</td>
+</tr>
+</tbody>
+</table>
+<h2 id="the-phase-plan">The phase plan<a class="headerlink" href="#the-phase-plan" title="Anchor link to this section">&para;</a></h2>
+<p>Run <strong>all three phases every time</strong> (Phase 3 included — sharding regularly
+surfaces issues the lighter phases miss).</p>
+<h3 id="phase-1-standalone-1-pod-2gi">Phase 1 — Standalone (1 pod, ~2Gi)<a class="headerlink" href="#phase-1-standalone-1-pod-2gi" title="Anchor link to this section">&para;</a></h3>
+<p><code>Neo4jEnterpriseStandalone</code> → <code>Ready</code>, then on it:</p>
+<table>
+<thead>
+<tr>
+<th>Scenario</th>
+<th>Verify</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Standalone reconciles</td>
+<td><code>status.phase=Ready</code>, pod <code>1/1</code></td>
+</tr>
+<tr>
+<td>Database lifecycle</td>
+<td><code>Neo4jDatabase</code> Ready; <code>SHOW DATABASES</code> shows it <code>online</code></td>
+</tr>
+<tr>
+<td>Users / Roles / RoleBinding</td>
+<td><code>Neo4jUser</code>/<code>Role</code>/<code>RoleBinding</code> Ready; <code>SHOW USERS</code>/<code>SHOW ROLES</code>. <strong>Reference at least one role by its hyphenated CR <code>metadata.name</code></strong> (not <code>spec.name</code>) and confirm the grant lands (no <code>RolesPending</code>) and a <code>RolesResolved</code> event fires.</td>
+</tr>
+<tr>
+<td>Plugin (APOC)</td>
+<td><code>Neo4jPlugin</code> Ready; <code>RETURN apoc.version()</code> returns a version (standalone <strong>ConfigMap</strong> path)</td>
+</tr>
+<tr>
+<td>Backup → restore</td>
+<td><code>neo4j-admin</code> path with <code>stopCluster: true</code>: add a marker node → back up → delete the marker → restore → confirm the marker returns</td>
+</tr>
+<tr>
+<td>Standalone recommended labels</td>
+<td><code>kubectl get pods -l app.kubernetes.io/name=neo4j</code> returns the standalone pod (it carries <code>app.kubernetes.io/{name,instance,managed-by}</code>)</td>
+</tr>
+<tr>
+<td><code>system</code> is not restorable</td>
+<td>a <code>Neo4jRestore</code> with <code>databaseName: system</code> → <code>Failed</code> with an actionable message</td>
+</tr>
+</tbody>
+</table>
+<p>→ <strong>Tear down the standalone fully</strong> before Phase 2.</p>
+<h3 id="phase-2-cluster-3-servers-6gi">Phase 2 — Cluster, 3 servers (~6Gi)<a class="headerlink" href="#phase-2-cluster-3-servers-6gi" title="Anchor link to this section">&para;</a></h3>
+<p><code>Neo4jEnterpriseCluster</code> with <code>servers: 3</code> → <code>Ready</code>; pods
+<code>{cluster}-server-0..2</code>; <code>SHOW SERVERS</code> lists 3 <code>Enabled</code>/<code>Available</code>. Then:</p>
+<table>
+<thead>
+<tr>
+<th>Scenario</th>
+<th>Verify</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Cluster forms</td>
+<td>3 members <code>Enabled</code>/<code>Available</code>; server-based pod names</td>
+</tr>
+<tr>
+<td>Database <strong>with topology</strong></td>
+<td>e.g. <code>3 PRIMARIES</code>; <code>SHOW DATABASE &lt;db&gt;</code> shows the primaries <code>online</code></td>
+</tr>
+<tr>
+<td>Backup → restore (cluster)</td>
+<td>in-place <strong>Cypher</strong> path: back up one DB (<code>kind: Database</code>), restore into a <strong>new</strong> database, confirm the data round-trips</td>
+</tr>
+</tbody>
+</table>
+<p>3 servers (not 2) keeps split-brain / 3-primary quorum behaviour in the routine
+walk. → <strong>Tear down the cluster fully</strong> before Phase 3.</p>
+<h3 id="phase-3-property-sharding-cluster-202604-enterprise-3-2gi">Phase 3 — Property sharding (cluster, <code>2026.04-enterprise</code>, 3 × 2Gi)<a class="headerlink" href="#phase-3-property-sharding-cluster-202604-enterprise-3-2gi" title="Anchor link to this section">&para;</a></h3>
+<p>Sharding's documented floor is <strong>4Gi + 1 core per server</strong>. To fit a laptop we
+deliberately relax it — <strong>this phase is operator-mechanics verification, not
+doc-following</strong>. The relax is operator-side and DEV/TEST only:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Downgrades the 4Gi/1-core hard rejects to warnings.</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>&lt;operator-ns&gt;<span class="w"> </span><span class="nb">set</span><span class="w"> </span>env<span class="w"> </span>deployment/&lt;operator-deploy&gt;<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="nv">NEO4J_SHARDING_RELAX_MEMORY_MIN</span><span class="o">=</span><span class="nb">true</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>&lt;operator-ns&gt;<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deployment/&lt;operator-deploy&gt;
 </span></code></pre></div>
-<blockquote>
-<p><strong>Release flow:</strong> when publishing to OperatorHub, run <code>make bundle-release</code>
-instead of <code>make bundle</code>. That target stamps the real <code>createdAt:</code>
-timestamp before image build; it's invoked by the release workflow in
-<code>.github/workflows/release.yml</code> and should not be run on PR branches
-(it would dirty the working tree and fail the drift gate).</p>
-</blockquote>
-<h2 id="buildpush-catalog-index">Build/push catalog index<a class="headerlink" href="#buildpush-catalog-index" title="Anchor link to this section">&para;</a></h2>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Build catalog index containing the bundle</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>make<span class="w"> </span>catalog-build<span class="w"> </span><span class="nv">BUNDLE_IMGS</span><span class="o">=</span>quay.io/your-org/neo4j-operator-bundle:v0.0.1<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span><span class="nv">CATALOG_IMG</span><span class="o">=</span>quay.io/your-org/neo4j-operator-catalog:v0.0.1
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>make<span class="w"> </span>catalog-push<span class="w"> </span><span class="nv">CATALOG_IMG</span><span class="o">=</span>quay.io/your-org/neo4j-operator-catalog:v0.0.1
-</span></code></pre></div>
-<h2 id="install-via-olm-on-openshift">Install via OLM on OpenShift<a class="headerlink" href="#install-via-olm-on-openshift" title="Anchor link to this section">&para;</a></h2>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Create CatalogSource in openshift-marketplace (edit image)</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>oc<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>config/samples/olm/catalogsource.yaml
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="c1"># Create operator namespace if not present</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>oc<span class="w"> </span>new-project<span class="w"> </span>neo4j-operator-system<span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="nb">true</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="c1"># Create Subscription (edit channel/name if you changed defaults)</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>oc<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>config/samples/olm/subscription.yaml
-</span></code></pre></div>
-<p>Default bundle channels can be set via <code>CHANNELS</code>/<code>DEFAULT_CHANNEL</code> when running <code>make bundle</code>.</p>
-<h2 id="openshift-smoke-testing-manual">OpenShift smoke testing (manual)<a class="headerlink" href="#openshift-smoke-testing-manual" title="Anchor link to this section">&para;</a></h2>
-<p>OLM/OperatorHub is a supported <strong>manual</strong> install path; it is not exercised in
-CI (a smoke test needs an OpenShift cluster, which standard GitHub runners can't
-provide). To validate the bundle on OpenShift, build and push the bundle and
-catalog (<code>make bundle bundle-build bundle-push catalog-build catalog-push</code>),
-then install via the sample <code>CatalogSource</code>/<code>Subscription</code> under
-<code>config/samples/olm/</code>. OpenShift Local (CRC) works for a local check on a
-virtualization-capable host; a remote OpenShift cluster works equally well.</p>
+<p>Use <strong><code>2026.04-enterprise</code></strong> (the pinned CI anchor) so local sharding matches
+what the <a href="../ci_and_workflows/">extended suite</a> validates. On a <code>servers: 3</code>
+cluster (~2Gi each):</p>
+<table>
+<thead>
+<tr>
+<th>Scenario</th>
+<th>Verify</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Sharding cluster</td>
+<td><code>CALL dbms.components()</code> → <code>2026.04.x</code> enterprise; <code>status.propertyShardingReady=true</code></td>
+</tr>
+<tr>
+<td>Sharded database</td>
+<td><code>Neo4jShardedDatabase</code> whose <strong><code>metadata.name</code> differs from <code>spec.name</code></strong> (e.g. CR <code>products-sharded</code> / <code>spec.name: products</code>) → Ready; <code>SHOW DATABASES WHERE name STARTS WITH '&lt;logical&gt;'</code> lists the graph + property shards <code>online</code></td>
+</tr>
+<tr>
+<td>Sharded backup <strong>by CR name</strong></td>
+<td><code>Neo4jBackup</code> <code>kind=ShardedDatabase</code> with <code>target.name</code> = the <strong>CR metadata name</strong> → <code>Succeeded</code>; <code>status.history[].shardArtifacts</code> lists every shard. (Using the <em>logical</em> name fails preflight — the operator resolves the logical name from the CR's <code>spec.name</code>.)</td>
+</tr>
+</tbody>
+</table>
+<p>→ <strong>Tear down</strong>, then delete the Kind cluster.</p>
+<h2 id="coverage-at-a-glance">Coverage at a glance<a class="headerlink" href="#coverage-at-a-glance" title="Anchor link to this section">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th></th>
+<th style="text-align: center;">Standalone</th>
+<th style="text-align: center;">Cluster (3)</th>
+<th style="text-align: center;">Sharding (2026.04)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Reconcile → Ready</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;">✅</td>
+</tr>
+<tr>
+<td>Database lifecycle</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+</tr>
+<tr>
+<td>Database topology</td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;"></td>
+</tr>
+<tr>
+<td>Users / Roles / Bindings</td>
+<td style="text-align: center;">✅</td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+</tr>
+<tr>
+<td>Plugins (APOC)</td>
+<td style="text-align: center;">✅ (ConfigMap)</td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+</tr>
+<tr>
+<td>Backup → restore</td>
+<td style="text-align: center;">✅ (neo4j-admin)</td>
+<td style="text-align: center;">✅ (Cypher)</td>
+<td style="text-align: center;">✅ (sharded)</td>
+</tr>
+<tr>
+<td>Property sharding</td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;">✅</td>
+</tr>
+</tbody>
+</table>
+<h2 id="keeping-this-current">Keeping this current<a class="headerlink" href="#keeping-this-current" title="Anchor link to this section">&para;</a></h2>
+<p>When you <strong>add or change a capability</strong>, update this page in the same PR:</p>
+<ol>
+<li>Add a row to the <strong>routing table</strong> (which deployment, and <em>why</em> there).</li>
+<li>Add the scenario + its in-DB check to the relevant <strong>phase</strong>.</li>
+<li>Tick the <strong>coverage</strong> matrix.</li>
+<li>If it changes the operator install or sizing, update the phase headers.</li>
+</ol>
+<p>When a release fixes a specific bug, add a one-line scenario that would have
+caught it (the v1.12.2 pass added the standalone-label, <code>system</code>-reject,
+role-CR-name, and sharded-backup-by-CR-name checks). Record each run below.</p>
+<h2 id="verification-log">Verification log<a class="headerlink" href="#verification-log" title="Anchor link to this section">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Release</th>
+<th>Date</th>
+<th>Result</th>
+<th>Findings</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>v1.12.2</td>
+<td>2026-06-14</td>
+<td>✅ all phases pass</td>
+<td>Doc bug: <code>backup_restore.md</code> sharded <code>target.name</code> said <em>logical name</em>, must be <em>CR name</em> (fixed, <code>#270</code> follow-up). v1.12.2 surfaces (#260/#268/#269/#270) verified live.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="see-also">See also<a class="headerlink" href="#see-also" title="Anchor link to this section">&para;</a></h2>
+<ul>
+<li><a href="../testing/">Testing</a> — the automated unit/integration suites and the
+  core/extended label split.</li>
+<li><a href="../ci_and_workflows/">CI/CD &amp; Workflows</a> — what runs per-PR vs. nightly/extended.</li>
+<li><a href="../../user_guide/guides/backup_restore/">Backup &amp; Restore</a>,
+  <a href="../../user_guide/property_sharding/">Property Sharding</a> — the user docs this
+  journey follows.</li>
+<li><a href="../../knowledge/invariants/">Project Invariants</a> — the hard constraints
+  (KIND-only, Enterprise-only, etc.) every phase respects.</li>
+</ul>
 
 
 
@@ -2992,7 +3367,7 @@ virtualization-capable host; a remote OpenShift cluster works equally well.</p>
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../makefile_reference/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Makefile Reference">
+          <a href="../testing/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Testing">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -3002,20 +3377,20 @@ virtualization-capable host; a remote OpenShift cluster works equally well.</p>
                 Previous
               </span>
               <div class="md-ellipsis">
-                Makefile Reference
+                Testing
               </div>
             </div>
           </a>
         
         
           
-          <a href="../llm-contribution/" class="md-footer__link md-footer__link--next" aria-label="Next: Contributing with an LLM Agent">
+          <a href="../makefile_reference/" class="md-footer__link md-footer__link--next" aria-label="Next: Makefile Reference">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Contributing with an LLM Agent
+                Makefile Reference
               </div>
             </div>
             <div class="md-footer__button md-icon">
