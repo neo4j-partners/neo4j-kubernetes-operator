@@ -1359,7 +1359,7 @@ kubectl get events --field-selector involvedObject.name=restore-operation
 
 ## Operational Notes
 
-- Enable `validate: true` to run `neo4j-admin backup validate` after each backup, so recoverability issues are surfaced at backup time (on `status.history[].validation`) rather than discovered at restore time.
+- Enable `validate: true` to run `neo4j-admin backup validate` after each backup, so recoverability issues are surfaced at backup time (on `status.history[].validation`) rather than discovered at restore time. **Requires a CalVer (2025.x+) Neo4j image** — the `neo4j-admin backup validate` subcommand does not exist on 5.26, so on a 5.26 target the option has no effect (`status.history[].validation` stays empty) and the operator emits a one-time `BackupValidateUnsupported` warning event. The backup itself still succeeds either way.
 - For cloud destinations, set `tempStorage` (PVC for staging) on large databases — without it `neo4j-admin` buffers in the Pod's filesystem.
 - The operator doesn't manage cloud object expiry — configure bucket lifecycle rules to delete old backups.
 - Restore is non-trivial post-incident; rehearse it against a staging cluster at least once.
@@ -1442,6 +1442,8 @@ options:
   # Validate backup recoverability after creation by running
   # `neo4j-admin backup validate`. Failures are recorded on
   # status.history[].validation but do NOT fail the Job.
+  # Requires a CalVer (2025.x+) image — no effect on 5.26 (subcommand
+  # does not exist); the operator emits a BackupValidateUnsupported warning.
   validate: true
 
   # Operator-managed staging PVC for cloud operations (recommended for large databases)
