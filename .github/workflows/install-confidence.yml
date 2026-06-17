@@ -27,7 +27,7 @@ jobs:
         # install this gate exists to certify (v1.12.0 first-tag failure).
         run: go install sigs.k8s.io/kind@v0.27.0
       - name: Install helm
-        uses: azure/setup-helm@v4
+        uses: azure/setup-helm@v5
         with:
           version: v3.16.0
       - name: Run install-confidence matrix
