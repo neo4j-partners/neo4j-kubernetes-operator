@@ -55,8 +55,8 @@ Numbering follows the production flow: **requirements → architecture → speci
 | File | Purpose |
 |------|---------|
 | **`00-vision.md`** | Problem statement, personas, goals / non-goals, V1 / V2 phasing, and **adoption stoppers** (operational risk, support model, Helm differentiation, migration, PS vs Product ownership). Anchors all downstream decisions. |
-| **`01-functional_requirements.csv`** | **117 rows** sorted by depth (level in `ID`). **`Requires IDs`** = children via `Parent ID` + composed capabilities for Neo4j outcomes. |
-| **`02-acceptance_criteria_library.csv`** | 116 reusable acceptance criteria grouped by domain (`AC-OP-*`, `AC-NEO-*`). Linked to FRs via the `Applies To` column. |
+| **`01-functional_requirements.csv`** | **116 rows** sorted by depth (level in `ID`). **`Requires IDs`** = children via `Parent ID` + composed capabilities for Neo4j outcomes. |
+| **`02-acceptance_criteria_library.csv`** | 117 acceptance criteria. **`Applies To`** references the most specific FR ID (level 3 config when applicable, else level 2 capability or level 1 outcome). |
 | **`03-variant_matrix.csv`** | 91 configuration variants — each row maps to a level-**3** (or level-**2** for Operator) `Configuration FR ID` in `01`. |
 
 #### FR drill-down — ID encoding (`01`)
@@ -76,13 +76,10 @@ Storage drill-down example:
 
 ```
 NEO-1-001  Deploy standalone
-  └─ NEO-2-006  Configure persistent volumes          ← composition
+  └─ NEO-2-006  Configure persistent volumes
        ├─ NEO-3-006-PVC-01  Default StorageClass
-       ├─ NEO-3-006-PVC-02  Existing StorageClass
-       └─ NEO-3-006-VOL-01  Data volume role
-  └─ NEO-2-019  Cloud object storage access           ← optional
-       ├─ NEO-3-019-CLD-01  With Workload Identity
-       └─ NEO-3-019-CLD-02  Without Workload Identity
+       ├─ NEO-3-006-CLD-01  With Workload Identity
+       └─ NEO-3-006-CLD-02  Without Workload Identity
 ```
 
 Group codes: `PVC` · `VOL` · `CLD` · `SVC` · `PKG` · … (see `03-variant_matrix.csv`).
@@ -90,7 +87,7 @@ Group codes: `PVC` · `VOL` · `CLD` · `SVC` · `PKG` · … (see `03-variant_m
 
 | File | Purpose |
 |------|---------|
-| **`04-test_catalog.csv`** | 209 tests in two layers: **91 scenario tests** (1 per configuration FR) + **117 AC-level tests** (1 per AC). Includes **`Configuration FR ID`** (Level 2 link to `01`). **No effort columns** — cost lives in `19`. |
+| **`04-test_catalog.csv`** | 208 tests in two layers: **91 scenario tests** (1 per configuration FR) + **117 AC-level tests** (1 per AC). Includes **`Configuration FR ID`** (Level 2 link to `01`). **No effort columns** — cost lives in `19`. |
 | **`05-test_catalog_summary.csv`** | Test **coverage** rollup by controller / domain module (counts only). Source of truth for catalog breadth, not delivery cost. |
 
 ### Phase 3 — Architecture (`06`–`08`)
@@ -159,7 +156,7 @@ Group codes: `PVC` · `VOL` · `CLD` · `SVC` · `PKG` · … (see `03-variant_m
 
 Figures below come from [`19-delivery-estimate.csv`](19-delivery-estimate.csv) ([readable view](19-delivery-estimate.md)). Calculation rules and assumptions → [`18-effort-model.md`](18-effort-model.md).
 
-Effort is split by **delivery phase**, not by test row. The catalog (`04`) defines *what* to validate (209 tests); `19` defines *what it costs to deliver* with harness amortization and deduplicated dev.
+Effort is split by **delivery phase**, not by test row. The catalog (`04`) defines *what* to validate (208 tests); `19` defines *what it costs to deliver* with harness amortization and deduplicated dev.
 
 ### V1 delivery by phase
 

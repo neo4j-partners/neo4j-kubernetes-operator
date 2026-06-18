@@ -20,8 +20,8 @@ neo4j:
   # Existing secret to use for initial database password
   passwordFromSecret: ""
 
-  # Neo4j Edition to use (community|enterprise)
-  edition: "community"
+  # Neo4j Edition (V1 operator scope: enterprise only)
+  edition: "enterprise"
 
   # Minimum number of machines initially required to form a clustered database. The StatefulSet will not reach the ready state
   # until at least this many members have discovered each other. The default is 1 (standalone)

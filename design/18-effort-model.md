@@ -34,7 +34,7 @@ Building `Neo4jDatabase` reconciler logic is paid **once** per domain module (`E
 | Layer | Cost model | Example |
 |-------|------------|---------|
 | Founder scenario (per variant **group**) | ~2 d each | First standalone, first cluster, first TLS mode |
-| Parametrized variant (same group) | ~0.3–0.5 d each | Edition Community vs Enterprise on same harness |
+| Parametrized variant (same group) | ~0.3–0.5 d each | License Mode accepted vs evaluation on same harness |
 | AC spot check | Sampled, not 1:1 | 77 V1 AC rows → ~18 d of direct AC automation |
 
 ### 4. Catalog width ≠ delivery cost

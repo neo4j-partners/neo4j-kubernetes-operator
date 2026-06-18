@@ -290,7 +290,6 @@ Options **A** and **B** are **rejected** — ambiguous for primary + secondary (
 | `cores.members` even and > 0 | Error | Core count must be odd for quorum |
 | `cores.members: 1` + `readReplicas ≥ 1` | Warning | Non-HA topology — not for production writes |
 | `cores.members < 3` (no production label) | Warning | For HA production use `cores.members ≥ 3` |
-| `readReplicas.members > 0` + Community edition | Error | Read replicas require Enterprise |
 | Scale-in below formed cluster | Error | Unsupported scale-in — explicit procedure required |
 
 Warnings → **`status.conditions`** (`Type: TopologyWarning`, `Reason: NonHA`).

@@ -1,29 +1,29 @@
 AC Group,Acceptance Criterion ID,Acceptance Criterion,Applies To
-AC-OP-INSTALL,AC-OP-INSTALL-001,Operator CRDs are installed and available through the Kubernetes API.,OP-1-001
-AC-OP-INSTALL,AC-OP-INSTALL-002,Operator deployment is created in the target namespace.,OP-1-001
-AC-OP-INSTALL,AC-OP-INSTALL-003,Operator pod reaches Running and Ready state.,OP-1-001
-AC-OP-INSTALL,AC-OP-INSTALL-004,Operator status reports Success / Installed.,OP-1-001
-AC-PACKAGING-HELM,AC-PACKAGING-HELM-001,Helm install succeeds with default values.,OP-1-001
-AC-PACKAGING-HELM,AC-PACKAGING-HELM-002,Helm upgrade preserves existing configuration and running workloads.,OP-1-004
-AC-OP-SCOPE-SINGLE,AC-OP-SCOPE-SINGLE-001,Operator watches only its own namespace.,OP-1-001; OP-1-002; OP-1-006
-AC-OP-SCOPE-SINGLE,AC-OP-SCOPE-SINGLE-002,Operator reconciles Neo4j CRs created in its namespace.,OP-1-002
-AC-OP-SCOPE-SINGLE,AC-OP-SCOPE-SINGLE-003,Operator does not reconcile Neo4j CRs created in another namespace.,OP-1-002
-AC-OP-SCOPE-SINGLE,AC-OP-SCOPE-SINGLE-004,RBAC is namespace-scoped and does not require cluster-wide permissions except CRD access.,OP-1-006
-AC-OP-SCOPE-MULTI,AC-OP-SCOPE-MULTI-001,Operator watches only the configured namespaces.,OP-1-001; OP-1-002
-AC-OP-SCOPE-MULTI,AC-OP-SCOPE-MULTI-002,Operator reconciles Neo4j CRs in each configured namespace.,OP-1-002
-AC-OP-SCOPE-MULTI,AC-OP-SCOPE-MULTI-003,Operator ignores non-configured namespaces.,OP-1-002
-AC-OP-SCOPE-MULTI,AC-OP-SCOPE-MULTI-004,RBAC grants access only to configured namespaces.,OP-1-006
-AC-OP-SCOPE-CLUSTER,AC-OP-SCOPE-CLUSTER-001,Operator watches Neo4j CRs across all namespaces.,OP-1-001; OP-1-002
-AC-OP-SCOPE-CLUSTER,AC-OP-SCOPE-CLUSTER-002,Operator reconciles Neo4j CRs across the cluster.,OP-1-002
-AC-OP-SCOPE-CLUSTER,AC-OP-SCOPE-CLUSTER-003,ClusterRole and ClusterRoleBinding are created and validated.,OP-1-006
+AC-OP-INSTALL,AC-OP-INSTALL-001,Operator CRDs are installed and available through the Kubernetes API.,OP-1-001; OP-2-001-PKG-01
+AC-OP-INSTALL,AC-OP-INSTALL-002,Operator deployment is created in the target namespace.,OP-1-001; OP-2-001-PKG-01
+AC-OP-INSTALL,AC-OP-INSTALL-003,Operator pod reaches Running and Ready state.,OP-1-001; OP-2-001-PKG-01
+AC-OP-INSTALL,AC-OP-INSTALL-004,Operator status reports Success / Installed.,OP-1-001; OP-2-001-PKG-01
+AC-PACKAGING-HELM,AC-PACKAGING-HELM-001,Helm install succeeds with default values.,OP-2-001-PKG-02
+AC-PACKAGING-HELM,AC-PACKAGING-HELM-002,Helm upgrade preserves existing configuration and running workloads.,OP-2-001-PKG-02; OP-1-004
+AC-OP-SCOPE-SINGLE,AC-OP-SCOPE-SINGLE-001,Operator watches only its own namespace.,OP-2-001-SCOPE-01
+AC-OP-SCOPE-SINGLE,AC-OP-SCOPE-SINGLE-002,Operator reconciles Neo4j CRs created in its namespace.,OP-2-001-SCOPE-01; OP-1-002
+AC-OP-SCOPE-SINGLE,AC-OP-SCOPE-SINGLE-003,Operator does not reconcile Neo4j CRs created in another namespace.,OP-2-001-SCOPE-01; OP-1-002
+AC-OP-SCOPE-SINGLE,AC-OP-SCOPE-SINGLE-004,RBAC is namespace-scoped and does not require cluster-wide permissions except CRD access.,OP-2-001-SCOPE-01; OP-1-006
+AC-OP-SCOPE-MULTI,AC-OP-SCOPE-MULTI-001,Operator watches only the configured namespaces.,OP-2-001-SCOPE-02
+AC-OP-SCOPE-MULTI,AC-OP-SCOPE-MULTI-002,Operator reconciles Neo4j CRs in each configured namespace.,OP-2-001-SCOPE-02; OP-1-002
+AC-OP-SCOPE-MULTI,AC-OP-SCOPE-MULTI-003,Operator ignores non-configured namespaces.,OP-2-001-SCOPE-02; OP-1-002
+AC-OP-SCOPE-MULTI,AC-OP-SCOPE-MULTI-004,RBAC grants access only to configured namespaces.,OP-2-001-SCOPE-02; OP-1-006
+AC-OP-SCOPE-CLUSTER,AC-OP-SCOPE-CLUSTER-001,Operator watches Neo4j CRs across all namespaces.,OP-2-001-SCOPE-03
+AC-OP-SCOPE-CLUSTER,AC-OP-SCOPE-CLUSTER-002,Operator reconciles Neo4j CRs across the cluster.,OP-2-001-SCOPE-03; OP-1-002
+AC-OP-SCOPE-CLUSTER,AC-OP-SCOPE-CLUSTER-003,ClusterRole and ClusterRoleBinding are created and validated.,OP-2-001-SCOPE-03; OP-1-006
 AC-OP-RECONCILE,AC-OP-RECONCILE-001,"Operator creates, updates, and deletes child resources to match the CR desired state.",OP-1-002
 AC-OP-RECONCILE,AC-OP-RECONCILE-002,Manual drift on managed resources is detected and corrected.,OP-1-002
-AC-OP-STATUS,AC-OP-STATUS-001,"CR status exposes Ready, Reconciling, Error, and reason/message fields.",OP-1-003
-AC-OP-STATUS,AC-OP-STATUS-002,Errors are surfaced in CR conditions without requiring log inspection.,OP-1-003
-AC-OP-STATUS-DETAIL,AC-OP-STATUS-DETAIL-001,"CR status exposes operation phase for install, upgrade, backup, restore, and maintenance.",OP-1-003
-AC-OP-UPGRADE,AC-OP-UPGRADE-001,Operator upgrade completes without deleting managed Neo4j workloads.,OP-1-004
-AC-OP-UPGRADE,AC-OP-UPGRADE-002,Existing CRs continue to reconcile after operator upgrade.,OP-1-004
-AC-OP-CRD-CONVERSION,AC-OP-CRD-CONVERSION-001,CRD version conversion preserves existing spec and status fields.,OP-1-004
+AC-OP-STATUS,AC-OP-STATUS-001,"CR status exposes Ready, Reconciling, Error, and reason/message fields.",OP-2-003-STATUS-01
+AC-OP-STATUS,AC-OP-STATUS-002,Errors are surfaced in CR conditions without requiring log inspection.,OP-2-003-STATUS-01
+AC-OP-STATUS-DETAIL,AC-OP-STATUS-DETAIL-001,"CR status exposes operation phase for install, upgrade, backup, restore, and maintenance.",OP-2-003-STATUS-02
+AC-OP-UPGRADE,AC-OP-UPGRADE-001,Operator upgrade completes without deleting managed Neo4j workloads.,OP-2-004-UPG-01
+AC-OP-UPGRADE,AC-OP-UPGRADE-002,Existing CRs continue to reconcile after operator upgrade.,OP-2-004-UPG-01
+AC-OP-CRD-CONVERSION,AC-OP-CRD-CONVERSION-001,CRD version conversion preserves existing spec and status fields.,OP-2-004-UPG-02
 AC-OP-UNINSTALL,AC-OP-UNINSTALL-001,Operator components are deleted.,OP-1-005
 AC-OP-UNINSTALL,AC-OP-UNINSTALL-002,Managed Neo4j data is preserved by default.,OP-1-005
 AC-OP-RBAC,AC-OP-RBAC-001,RBAC permissions match selected operator scope.,OP-1-006
@@ -33,86 +33,86 @@ AC-NEO-INSTALL,AC-NEO-INSTALL-001,Neo4j workload resources are created from the 
 AC-NEO-INSTALL,AC-NEO-INSTALL-002,Neo4j pod(s) reach Running and Ready state.,NEO-1-001; NEO-1-002
 AC-NEO-INSTALL,AC-NEO-INSTALL-003,Neo4j responds to driver connectivity on Bolt.,NEO-1-001; NEO-1-002
 AC-NEO-INSTALL,AC-NEO-INSTALL-004,CR status reports Neo4j deployment as Ready.,NEO-1-001; NEO-1-002
-AC-NEO-STANDALONE,AC-NEO-STANDALONE-001,Exactly one Neo4j server is deployed.,NEO-1-001
-AC-NEO-STANDALONE,AC-NEO-STANDALONE-002,Standalone Neo4j accepts authenticated read/write queries.,NEO-1-001
-AC-NEO-CLUSTER,AC-NEO-CLUSTER-001,Expected number of Neo4j members are created.,NEO-1-002
-AC-NEO-CLUSTER,AC-NEO-CLUSTER-002,Cluster forms and reaches expected minimum cluster size.,NEO-1-002
-AC-NEO-CLUSTER,AC-NEO-CLUSTER-003,Cluster roles and routing are validated through the Neo4j driver.,NEO-1-002
-AC-NEO-LICENSE,AC-NEO-LICENSE-001,Enterprise deployment requires explicit license acceptance or evaluation mode.,NEO-1-001; NEO-1-002
-AC-NEO-LICENSE,AC-NEO-LICENSE-002,Deployment fails with a clear error if Enterprise license is missing.,NEO-1-001; NEO-1-002
+AC-NEO-STANDALONE,AC-NEO-STANDALONE-001,Exactly one Neo4j server is deployed.,NEO-2-001-MODE-01; NEO-1-001
+AC-NEO-STANDALONE,AC-NEO-STANDALONE-002,Standalone Neo4j accepts authenticated read/write queries.,NEO-2-001-MODE-01; NEO-1-001
+AC-NEO-CLUSTER,AC-NEO-CLUSTER-001,Expected number of Neo4j members are created.,NEO-2-002-MODE-01; NEO-2-002-CSZ-01; NEO-1-002
+AC-NEO-CLUSTER,AC-NEO-CLUSTER-002,Cluster forms and reaches expected minimum cluster size.,NEO-2-002-MODE-01; NEO-2-002-CSZ-01; NEO-1-002
+AC-NEO-CLUSTER,AC-NEO-CLUSTER-003,Cluster roles and routing are validated through the Neo4j driver.,NEO-2-002-MODE-01; NEO-1-002
+AC-NEO-LICENSE,AC-NEO-LICENSE-001,Enterprise deployment requires explicit license acceptance or evaluation mode.,NEO-2-001-EDT-01; NEO-2-001-LIC-01; NEO-2-001-LIC-02
+AC-NEO-LICENSE,AC-NEO-LICENSE-002,Deployment fails with a clear error if Enterprise license is missing.,NEO-2-001-EDT-01; NEO-1-001; NEO-1-002
 AC-NEO-CONFIG,AC-NEO-CONFIG-001,Neo4j configuration values from the CR are rendered into the workload.,NEO-2-003
 AC-NEO-CONFIG,AC-NEO-CONFIG-002,Invalid configuration is rejected or surfaced with a clear status error.,NEO-2-003
-AC-NEO-APOC,AC-NEO-APOC-001,APOC configuration values are applied to Neo4j.,NEO-2-003
-AC-NEO-APOC-CREDS,AC-NEO-APOC-CREDS-001,APOC credential secrets are mounted at the configured path.,NEO-2-003; NEO-2-004
-AC-NEO-SECRETS,AC-NEO-SECRETS-001,Neo4j initial password is generated or read from the configured Secret.,NEO-2-004
-AC-NEO-SECRETS,AC-NEO-SECRETS-002,Secret mounts are available inside the Neo4j pod at the configured path.,NEO-2-004
-AC-NEO-LDAP,AC-NEO-LDAP-001,LDAP password secret is mounted and referenced by Neo4j configuration.,NEO-2-004
-AC-NEO-IMAGE,AC-NEO-IMAGE-001,"Neo4j image registry, repository, tag, and pull policy are applied.",NEO-2-004
-AC-NEO-IMAGE,AC-NEO-IMAGE-002,Image pull secrets are referenced by the Neo4j pod.,NEO-2-004
+AC-NEO-APOC,AC-NEO-APOC-001,APOC configuration values are applied to Neo4j.,NEO-3-003-APOC-01
+AC-NEO-APOC-CREDS,AC-NEO-APOC-CREDS-001,APOC credential secrets are mounted at the configured path.,NEO-3-003-APOC-02
+AC-NEO-SECRETS,AC-NEO-SECRETS-001,Neo4j initial password is generated or read from the configured Secret.,NEO-3-004-CRED-01
+AC-NEO-SECRETS,AC-NEO-SECRETS-002,Secret mounts are available inside the Neo4j pod at the configured path.,NEO-3-004-CRED-01
+AC-NEO-LDAP,AC-NEO-LDAP-001,LDAP password secret is mounted and referenced by Neo4j configuration.,NEO-3-004-SEC-02
+AC-NEO-IMAGE,AC-NEO-IMAGE-001,"Neo4j image registry, repository, tag, and pull policy are applied.",NEO-3-004-IMG-01
+AC-NEO-IMAGE,AC-NEO-IMAGE-002,Image pull secrets are referenced by the Neo4j pod.,NEO-3-004-IMG-01
 AC-NEO-TLS,AC-NEO-TLS-001,TLS secrets are mounted for configured connectors.,NEO-2-005
 AC-NEO-TLS,AC-NEO-TLS-002,Bolt and HTTPS endpoints use the configured TLS policy.,NEO-2-005
-AC-NEO-TLS,AC-NEO-TLS-003,Cluster communication uses configured TLS when enabled.,NEO-2-005; NEO-1-002
-AC-NEO-TLS-RELOAD,AC-NEO-TLS-RELOAD-001,TLS certificate reload is enabled when configured.,NEO-2-005
-AC-NEO-STORAGE,AC-NEO-STORAGE-001,Data PVC is created or bound according to the selected storage variant.,NEO-2-006
-AC-NEO-STORAGE,AC-NEO-STORAGE-002,Neo4j data persists across pod restart.,NEO-2-006
-AC-NEO-STORAGE-DEFAULT,AC-NEO-STORAGE-DEFAULT-001,PVC uses the default StorageClass when default storage is selected.,NEO-2-006
-AC-NEO-STORAGE-DYNAMIC,AC-NEO-STORAGE-DYNAMIC-001,PVC uses the named StorageClass when dynamic storage is selected.,NEO-2-006
-AC-NEO-STORAGE-EXISTING,AC-NEO-STORAGE-EXISTING-001,Neo4j binds to the configured existing PVC.,NEO-2-006
-AC-NEO-STORAGE-SELECTOR,AC-NEO-STORAGE-SELECTOR-001,Neo4j binds to a volume matching the configured selector.,NEO-2-006
-AC-NEO-STORAGE-VCT,AC-NEO-STORAGE-VCT-001,PVC is created from the configured volumeClaimTemplate.,NEO-2-006
-AC-NEO-CLOUDSTORAGE-MI,AC-NEO-CLOUDSTORAGE-MI-001,Cloud object storage access uses platform workload identity (e.g. GKE Workload Identity or AKS Workload Identity).,NEO-2-019
-AC-NEO-CLOUDSTORAGE,AC-NEO-CLOUDSTORAGE-001,Cloud object storage access uses mounted credentials or Kubernetes Secrets without workload identity.,NEO-2-019
-AC-NEO-NETWORKING,AC-NEO-NETWORKING-001,Service is created with the selected service type and targets Neo4j pods.,NEO-1-001; NEO-2-007
-AC-NEO-NETWORKING,AC-NEO-NETWORKING-002,"Only the configured connectors (HTTP, HTTPS, Bolt) are exposed; disabled connectors are not published on the service.",NEO-1-001; NEO-2-007
-AC-NEO-NETWORKING,AC-NEO-NETWORKING-003,Service ports match the configured connector port numbers.,NEO-1-001; NEO-2-007
-AC-NEO-NETWORKING-CLUSTERIP,AC-NEO-NETWORKING-CLUSTERIP-001,ClusterIP service is created and reachable only from within the cluster.,NEO-1-001; NEO-2-007
-AC-NEO-NETWORKING-CLUSTERIP,AC-NEO-NETWORKING-CLUSTERIP-002,Service is not assigned an external IP or NodePort.,NEO-1-001; NEO-2-007
-AC-NEO-NETWORKING-LB,AC-NEO-NETWORKING-LB-001,LoadBalancer service is created when requested.,NEO-1-001; NEO-2-007
-AC-NEO-NETWORKING-LB,AC-NEO-NETWORKING-LB-002,External IP or hostname is assigned and routes traffic to Neo4j on configured ports.,NEO-1-001; NEO-2-007
-AC-NEO-NETWORKING-NODEPORT,AC-NEO-NETWORKING-NODEPORT-001,NodePort service is created when requested.,NEO-1-001; NEO-2-007
-AC-NEO-NETWORKING-NODEPORT,AC-NEO-NETWORKING-NODEPORT-002,Each enabled connector is reachable via a stable node IP and assigned NodePort.,NEO-1-001; NEO-2-007
-AC-NEO-NETWORKING-PORTS-BOLT,AC-NEO-NETWORKING-PORTS-BOLT-001,Bolt port is exposed on the service and accepts authenticated driver connections.,NEO-1-001; NEO-2-007
-AC-NEO-NETWORKING-PORTS-BOLT,AC-NEO-NETWORKING-PORTS-BOLT-002,HTTP and HTTPS ports are not exposed when Bolt-only profile is selected.,NEO-1-001; NEO-2-007
-AC-NEO-NETWORKING-PORTS-HTTP,AC-NEO-NETWORKING-PORTS-HTTP-001,HTTP port is exposed and Neo4j Browser responds over HTTP.,NEO-1-001; NEO-2-007
-AC-NEO-NETWORKING-PORTS-HTTPS,AC-NEO-NETWORKING-PORTS-HTTPS-001,HTTPS port is exposed and Neo4j Browser responds over HTTPS.,NEO-1-001; NEO-2-007
-AC-NEO-NETWORKING-PORTS-HTTPS,AC-NEO-NETWORKING-PORTS-HTTPS-002,Bolt and HTTP ports are not exposed when HTTPS-only profile is selected.,NEO-1-001; NEO-2-007
-AC-NEO-NETWORKING-PORTS-HTTP-BOLT,AC-NEO-NETWORKING-PORTS-HTTP-BOLT-001,Both HTTP and Bolt ports are exposed and reachable.,NEO-1-001; NEO-2-007
-AC-NEO-NETWORKING-PORTS-HTTP-BOLT,AC-NEO-NETWORKING-PORTS-HTTP-BOLT-002,HTTPS port is not exposed when HTTP + Bolt profile is selected.,NEO-1-001; NEO-2-007
-AC-NEO-NETWORKING-PORTS-HTTPS-BOLT,AC-NEO-NETWORKING-PORTS-HTTPS-BOLT-001,Both HTTPS and Bolt ports are exposed and reachable.,NEO-1-001; NEO-2-007
-AC-NEO-NETWORKING-PORTS-HTTPS-BOLT,AC-NEO-NETWORKING-PORTS-HTTPS-BOLT-002,HTTP port is not exposed when HTTPS + Bolt profile is selected.,NEO-1-001; NEO-2-007
-AC-NEO-NETWORKING-PORTS-FULL,AC-NEO-NETWORKING-PORTS-FULL-001,"HTTP, HTTPS, and Bolt ports are all exposed on the service.",NEO-1-001; NEO-2-007
-AC-NEO-NETWORKING-PORTS-FULL,AC-NEO-NETWORKING-PORTS-FULL-002,Each exposed connector accepts connections according to its protocol.,NEO-1-001; NEO-2-007
-AC-NEO-NETWORKING-PORTS-HTTP-HTTPS,AC-NEO-NETWORKING-PORTS-HTTP-HTTPS-001,HTTP and HTTPS ports are exposed; Bolt port is not exposed.,NEO-1-001; NEO-2-007
-AC-NEO-NETWORKING-PORTS-HTTP-HTTPS,AC-NEO-NETWORKING-PORTS-HTTP-HTTPS-002,Browser access works over both HTTP and HTTPS.,NEO-1-001; NEO-2-007
-AC-NEO-MULTICLUSTER,AC-NEO-MULTICLUSTER-001,Internal ports/configuration required for multi-cluster communication are enabled.,NEO-2-007
+AC-NEO-TLS,AC-NEO-TLS-003,Cluster communication uses configured TLS when enabled.,NEO-3-005-TLS-03; NEO-1-002
+AC-NEO-TLS-RELOAD,AC-NEO-TLS-RELOAD-001,TLS certificate reload is enabled when configured.,NEO-3-005-TLS-04
+AC-NEO-STORAGE,AC-NEO-STORAGE-001,Data PVC is created or bound according to the selected storage variant.,NEO-3-006-VOL-01
+AC-NEO-STORAGE,AC-NEO-STORAGE-002,Neo4j data persists across pod restart.,NEO-3-006-VOL-01
+AC-NEO-STORAGE-DEFAULT,AC-NEO-STORAGE-DEFAULT-001,PVC uses the default StorageClass when default storage is selected.,NEO-3-006-PVC-01
+AC-NEO-STORAGE-DYNAMIC,AC-NEO-STORAGE-DYNAMIC-001,PVC uses the named StorageClass when dynamic storage is selected.,NEO-3-006-PVC-02
+AC-NEO-STORAGE-EXISTING,AC-NEO-STORAGE-EXISTING-001,Neo4j binds to the configured existing PVC.,NEO-3-006-PVC-03
+AC-NEO-STORAGE-SELECTOR,AC-NEO-STORAGE-SELECTOR-001,Neo4j binds to a volume matching the configured selector.,NEO-3-006-PVC-04
+AC-NEO-STORAGE-VCT,AC-NEO-STORAGE-VCT-001,PVC is created from the configured volumeClaimTemplate.,NEO-3-006-PVC-05
+AC-NEO-CLOUDSTORAGE-MI,AC-NEO-CLOUDSTORAGE-MI-001,Cloud object storage access uses platform workload identity (e.g. GKE Workload Identity or AKS Workload Identity).,NEO-3-006-CLD-01
+AC-NEO-CLOUDSTORAGE,AC-NEO-CLOUDSTORAGE-001,Cloud object storage access uses mounted credentials or Kubernetes Secrets without workload identity.,NEO-3-006-CLD-02
+AC-NEO-NETWORKING,AC-NEO-NETWORKING-001,Service is created with the selected service type and targets Neo4j pods.,NEO-2-007
+AC-NEO-NETWORKING,AC-NEO-NETWORKING-002,"Only the configured connectors (HTTP, HTTPS, Bolt) are exposed; disabled connectors are not published on the service.",NEO-2-007
+AC-NEO-NETWORKING,AC-NEO-NETWORKING-003,Service ports match the configured connector port numbers.,NEO-2-007
+AC-NEO-NETWORKING-CLUSTERIP,AC-NEO-NETWORKING-CLUSTERIP-001,ClusterIP service is created and reachable only from within the cluster.,NEO-3-007-SVC-01
+AC-NEO-NETWORKING-CLUSTERIP,AC-NEO-NETWORKING-CLUSTERIP-002,Service is not assigned an external IP or NodePort.,NEO-3-007-SVC-01
+AC-NEO-NETWORKING-LB,AC-NEO-NETWORKING-LB-001,LoadBalancer service is created when requested.,NEO-3-007-SVC-03
+AC-NEO-NETWORKING-LB,AC-NEO-NETWORKING-LB-002,External IP or hostname is assigned and routes traffic to Neo4j on configured ports.,NEO-3-007-SVC-03
+AC-NEO-NETWORKING-NODEPORT,AC-NEO-NETWORKING-NODEPORT-001,NodePort service is created when requested.,NEO-3-007-SVC-02
+AC-NEO-NETWORKING-NODEPORT,AC-NEO-NETWORKING-NODEPORT-002,Each enabled connector is reachable via a stable node IP and assigned NodePort.,NEO-3-007-SVC-02
+AC-NEO-NETWORKING-PORTS-BOLT,AC-NEO-NETWORKING-PORTS-BOLT-001,Bolt port is exposed on the service and accepts authenticated driver connections.,NEO-3-007-PCMB-01
+AC-NEO-NETWORKING-PORTS-BOLT,AC-NEO-NETWORKING-PORTS-BOLT-002,HTTP and HTTPS ports are not exposed when Bolt-only profile is selected.,NEO-3-007-PCMB-01
+AC-NEO-NETWORKING-PORTS-HTTP,AC-NEO-NETWORKING-PORTS-HTTP-001,HTTP port is exposed and Neo4j Browser responds over HTTP.,NEO-3-007-PRT-01
+AC-NEO-NETWORKING-PORTS-HTTPS,AC-NEO-NETWORKING-PORTS-HTTPS-001,HTTPS port is exposed and Neo4j Browser responds over HTTPS.,NEO-3-007-PCMB-02
+AC-NEO-NETWORKING-PORTS-HTTPS,AC-NEO-NETWORKING-PORTS-HTTPS-002,Bolt and HTTP ports are not exposed when HTTPS-only profile is selected.,NEO-3-007-PCMB-02
+AC-NEO-NETWORKING-PORTS-HTTP-BOLT,AC-NEO-NETWORKING-PORTS-HTTP-BOLT-001,Both HTTP and Bolt ports are exposed and reachable.,NEO-3-007-PCMB-03
+AC-NEO-NETWORKING-PORTS-HTTP-BOLT,AC-NEO-NETWORKING-PORTS-HTTP-BOLT-002,HTTPS port is not exposed when HTTP + Bolt profile is selected.,NEO-3-007-PCMB-03
+AC-NEO-NETWORKING-PORTS-HTTPS-BOLT,AC-NEO-NETWORKING-PORTS-HTTPS-BOLT-001,Both HTTPS and Bolt ports are exposed and reachable.,NEO-3-007-PCMB-04
+AC-NEO-NETWORKING-PORTS-HTTPS-BOLT,AC-NEO-NETWORKING-PORTS-HTTPS-BOLT-002,HTTP port is not exposed when HTTPS + Bolt profile is selected.,NEO-3-007-PCMB-04
+AC-NEO-NETWORKING-PORTS-FULL,AC-NEO-NETWORKING-PORTS-FULL-001,"HTTP, HTTPS, and Bolt ports are all exposed on the service.",NEO-3-007-PCMB-05
+AC-NEO-NETWORKING-PORTS-FULL,AC-NEO-NETWORKING-PORTS-FULL-002,Each exposed connector accepts connections according to its protocol.,NEO-3-007-PCMB-05
+AC-NEO-NETWORKING-PORTS-HTTP-HTTPS,AC-NEO-NETWORKING-PORTS-HTTP-HTTPS-001,HTTP and HTTPS ports are exposed; Bolt port is not exposed.,NEO-3-007-PCMB-06
+AC-NEO-NETWORKING-PORTS-HTTP-HTTPS,AC-NEO-NETWORKING-PORTS-HTTP-HTTPS-002,Browser access works over both HTTP and HTTPS.,NEO-3-007-PCMB-06
+AC-NEO-MULTICLUSTER,AC-NEO-MULTICLUSTER-001,Internal ports/configuration required for multi-cluster communication are enabled.,NEO-3-007-MULTI-02
 AC-NEO-SCHEDULING,AC-NEO-SCHEDULING-001,"Node selectors, affinity, tolerations, and topology spread constraints are applied to Neo4j pods.",NEO-2-008
 AC-NEO-SCHEDULING,AC-NEO-SCHEDULING-002,Termination grace period and service account are applied when configured.,NEO-2-008
-AC-NEO-PROBES,AC-NEO-PROBES-001,"Startup, readiness, and liveness probes are configured on Neo4j pods.",NEO-2-009
-AC-NEO-PROBES,AC-NEO-PROBES-002,Neo4j is not marked ready before Bolt is available.,NEO-2-009
-AC-NEO-CONFIG-CHANGE,AC-NEO-CONFIG-CHANGE-001,Configuration change is detected by the operator.,NEO-2-010
-AC-NEO-CONFIG-CHANGE,AC-NEO-CONFIG-CHANGE-002,Required restart or rolling restart is executed safely.,NEO-2-010
-AC-NEO-SCALE,AC-NEO-SCALE-001,Cluster scale-out creates additional members.,NEO-2-011
-AC-NEO-SCALE,AC-NEO-SCALE-002,New server is enabled and joins the cluster when required.,NEO-2-011
-AC-NEO-SCALE,AC-NEO-SCALE-003,Cluster scale-in removes members safely without data loss under supported conditions.,NEO-2-011
-AC-NEO-UPGRADE,AC-NEO-UPGRADE-001,Preflight validation checks cluster health before upgrade.,NEO-2-012
-AC-NEO-UPGRADE,AC-NEO-UPGRADE-002,Neo4j version/image is upgraded successfully.,NEO-2-012
-AC-NEO-UPGRADE,AC-NEO-UPGRADE-003,Neo4j remains available according to the selected deployment mode during upgrade.,NEO-2-012
+AC-NEO-PROBES,AC-NEO-PROBES-001,"Startup, readiness, and liveness probes are configured on Neo4j pods.",NEO-3-009-PROBE-01
+AC-NEO-PROBES,AC-NEO-PROBES-002,Neo4j is not marked ready before Bolt is available.,NEO-3-009-PROBE-02
+AC-NEO-CONFIG-CHANGE,AC-NEO-CONFIG-CHANGE-001,Configuration change is detected by the operator.,NEO-3-010-RSTR-01
+AC-NEO-CONFIG-CHANGE,AC-NEO-CONFIG-CHANGE-002,Required restart or rolling restart is executed safely.,NEO-3-010-RSTR-02
+AC-NEO-SCALE,AC-NEO-SCALE-001,Cluster scale-out creates additional members.,NEO-3-011-CSZ-01
+AC-NEO-SCALE,AC-NEO-SCALE-002,New server is enabled and joins the cluster when required.,NEO-3-011-SRV-01
+AC-NEO-SCALE,AC-NEO-SCALE-003,Cluster scale-in removes members safely without data loss under supported conditions.,NEO-3-011-CSZ-01
+AC-NEO-UPGRADE,AC-NEO-UPGRADE-001,Preflight validation checks cluster health before upgrade.,NEO-3-012-UPG-02
+AC-NEO-UPGRADE,AC-NEO-UPGRADE-002,Neo4j version/image is upgraded successfully.,NEO-3-012-UPG-01
+AC-NEO-UPGRADE,AC-NEO-UPGRADE-003,Neo4j remains available according to the selected deployment mode during upgrade.,NEO-2-012; NEO-1-002
 AC-NEO-BACKUP,AC-NEO-BACKUP-001,Backup storage is created or mounted.,NEO-2-013
 AC-NEO-BACKUP,AC-NEO-BACKUP-002,Backup job completes successfully and produces backup artifacts.,NEO-2-013
-AC-NEO-BACKUP-ONDEMAND,AC-NEO-BACKUP-ONDEMAND-001,User can trigger an on-demand backup.,NEO-2-013
-AC-NEO-BACKUP-SCHEDULED,AC-NEO-BACKUP-SCHEDULED-001,Scheduled backups run according to the configured schedule.,NEO-2-013
-AC-NEO-BACKUP-CLOUD,AC-NEO-BACKUP-CLOUD-001,Cloud credentials are mounted or workload identity is used for backup/restore.,NEO-2-013; NEO-2-014
-AC-NEO-RESTORE,AC-NEO-RESTORE-001,Restore job completes successfully from configured backup source.,NEO-2-014
-AC-NEO-RESTORE,AC-NEO-RESTORE-002,Restored Neo4j instance starts and accepts queries.,NEO-2-014
-AC-NEO-RESTORE-SEEDURI,AC-NEO-RESTORE-SEEDURI-001,Neo4j can restore from configured seed URI.,NEO-2-014
-AC-NEO-MONITORING,AC-NEO-MONITORING-001,Neo4j metrics endpoint is available when enabled.,NEO-2-015
-AC-NEO-MONITORING-SERVICEMONITOR,AC-NEO-MONITORING-SERVICEMONITOR-001,ServiceMonitor is created when enabled and CRD exists.,NEO-2-015
-AC-NEO-LOGGING,AC-NEO-LOGGING-001,Neo4j logs are written to the configured location.,NEO-2-016
-AC-NEO-LOGGING,AC-NEO-LOGGING-002,Custom logging XML is applied when configured.,NEO-2-016
-AC-NEO-MAINTENANCE-OFFLINE,AC-NEO-MAINTENANCE-OFFLINE-001,Offline maintenance mode restarts workload without running Neo4j process.,NEO-2-017
+AC-NEO-BACKUP-ONDEMAND,AC-NEO-BACKUP-ONDEMAND-001,User can trigger an on-demand backup.,NEO-3-013-BKMD-01
+AC-NEO-BACKUP-SCHEDULED,AC-NEO-BACKUP-SCHEDULED-001,Scheduled backups run according to the configured schedule.,NEO-3-013-BKMD-02
+AC-NEO-BACKUP-CLOUD,AC-NEO-BACKUP-CLOUD-001,Cloud credentials are mounted or workload identity is used for backup/restore.,NEO-3-013-BKST-03; NEO-3-006-CLD-01; NEO-3-006-CLD-02
+AC-NEO-RESTORE,AC-NEO-RESTORE-001,Restore job completes successfully from configured backup source.,NEO-3-014-RSTM-01
+AC-NEO-RESTORE,AC-NEO-RESTORE-002,Restored Neo4j instance starts and accepts queries.,NEO-3-014-RSTM-01
+AC-NEO-RESTORE-SEEDURI,AC-NEO-RESTORE-SEEDURI-001,Neo4j can restore from configured seed URI.,NEO-3-014-RSTM-02
+AC-NEO-MONITORING,AC-NEO-MONITORING-001,Neo4j metrics endpoint is available when enabled.,NEO-3-015-MON-01
+AC-NEO-MONITORING-SERVICEMONITOR,AC-NEO-MONITORING-SERVICEMONITOR-001,ServiceMonitor is created when enabled and CRD exists.,NEO-3-015-MON-02
+AC-NEO-LOGGING,AC-NEO-LOGGING-001,Neo4j logs are written to the configured location.,NEO-3-016-LOG-01; NEO-3-006-VOL-03
+AC-NEO-LOGGING,AC-NEO-LOGGING-002,Custom logging XML is applied when configured.,NEO-3-016-LOG-02
+AC-NEO-MAINTENANCE-OFFLINE,AC-NEO-MAINTENANCE-OFFLINE-001,Offline maintenance mode restarts workload without running Neo4j process.,NEO-3-017-MNT-01
 AC-NEO-MAINTENANCE-JOBS,AC-NEO-MAINTENANCE-JOBS-001,Maintenance job is created and completes successfully.,NEO-2-017
 AC-NEO-MAINTENANCE-JOBS,AC-NEO-MAINTENANCE-JOBS-002,Maintenance job result is exposed in CR status.,NEO-2-017
 AC-NEO-UNINSTALL,AC-NEO-UNINSTALL-001,Neo4j workload resources are deleted.,NEO-2-018
 AC-NEO-UNINSTALL,AC-NEO-UNINSTALL-002,PVCs are preserved by default.,NEO-2-018
-AC-NEO-UNINSTALL-PRESERVE,AC-NEO-UNINSTALL-PRESERVE-001,Data PVCs remain after CR deletion when preservation is selected.,NEO-2-018
-AC-NEO-UNINSTALL-DELETE,AC-NEO-UNINSTALL-DELETE-001,PVCs are deleted only when explicit delete-data policy is selected.,NEO-2-018
+AC-NEO-UNINSTALL-PRESERVE,AC-NEO-UNINSTALL-PRESERVE-001,Data PVCs remain after CR deletion when preservation is selected.,OP-2-005-UNINST-01
+AC-NEO-UNINSTALL-DELETE,AC-NEO-UNINSTALL-DELETE-001,PVCs are deleted only when explicit delete-data policy is selected.,OP-2-005-UNINST-02
