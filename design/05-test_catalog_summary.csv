@@ -1,0 +1,18 @@
+Operator Controller,Test Count,V1 Test Count,Automation Effort Total (person-days),Operator Dev Incremental Max (person-days),Operator Dev Realistic One-time (person-days),Notes
+OperatorBootstrap,13,7,26.8,4.0,10,Install YAML/Helm; CRD registration; namespace scope bootstrap
+OperatorReconciler,7,2,16.5,5.0,8,Core reconcile loop; child resource lifecycle; drift correction
+OperatorStatus,5,3,5.9,2.0,4,Conditions Ready/Reconciling/Error; optional detailed phases
+OperatorUpgrade,6,3,15.7,5.0,7,In-place controller upgrade; CRD version migration
+OperatorUninstall,4,1,5.9,2.0,3,Operator removal; preserve managed workloads by default
+OperatorRBAC,4,1,9.0,4.0,5,Single/multi/cluster-wide RBAC generation
+OperatorObservability,2,0,3.0,2.5,4,Structured logs; Prometheus metrics for reconcile
+Neo4jDatabase,80,64,202.3,12.0,35,"StatefulSet; standalone; cluster; scale; upgrade; scheduling; probes; uninstall"
+Neo4jPersistence,18,9,32.1,5.0,10,Storage modes; volume roles (data/backups/logs/metrics/import/licenses)
+Neo4jConnectivity,8,5,16.3,3.0,9,Service types; port combinations; admin/internals; ServiceMonitor
+Neo4jTrust,19,16,41.8,6.0,14,Credentials; TLS bolt/https/cluster; secret mounts; cert reload
+Neo4jServerConfig,19,14,29.7,2.0,12,"Neo4j config; JVM; APOC; logging; safe config-change restart"
+Neo4jBackup,10,8,41.4,12.0,14,On-demand and scheduled backups; local/PVC storage
+Neo4jRestore,5,5,21.5,10.0,12,Restore from PVC and seed URI
+Neo4jMaintenance,7,0,17.8,8.0,10,Offline maintenance mode; dump/load; consistency check jobs
+SHARED SCAFFOLD,0,0,0,0,18,"Shared API types; kubebuilder scaffold; CI/CD; e2e test harness"
+TOTAL,207,138,485.7,,175,V1 automation subset: 344 person-days. Operator realistic ≈ 175 person-days (~35 weeks with 1 FTE dev).
