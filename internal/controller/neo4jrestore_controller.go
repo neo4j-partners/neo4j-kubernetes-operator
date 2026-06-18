@@ -260,7 +260,13 @@ func (r *Neo4jRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	}
 
 	// Check if restore is running
-	if restore.Status.Phase == StatusRunning {
+	// checkRestoreProgress drives the SINGLE-database restore (Job / single
+	// seedURI). An all-databases restore owns all of its requeue passes via
+	// startAllDatabasesRestore (its own per-database state machine in
+	// status.databaseResults), so it must NOT be routed here when Running —
+	// otherwise the single-DB progress checker hijacks it and fails resolving a
+	// single artifact from a kind:Cluster backup.
+	if restore.Status.Phase == StatusRunning && !restore.Spec.AllDatabases {
 		return r.checkRestoreProgress(ctx, restore, targetCluster)
 	}
 
@@ -855,24 +861,30 @@ func (r *Neo4jRestoreReconciler) validateRestore(ctx context.Context, restore *n
 		return fmt.Errorf("invalid source type %q: must be one of: backup, storage, s3, gcs, azure, pitr", restore.Spec.Source.Type)
 	}
 
-	if !restore.Spec.AllDatabases && restore.Spec.DatabaseName == "" {
-		return fmt.Errorf("spec.database (or the deprecated spec.databaseName) is required")
-	}
-	// The `system` database holds cluster topology, users, roles, and
-	// privileges — it is owned by Neo4j itself and is never a user-restorable
-	// database. Restoring over it would corrupt the deployment's identity and
-	// membership. neo4j-admin restore of `system` is unsupported here and the
-	// in-place Cypher path can't drop/recreate it; reject up front. (#269)
-	if strings.EqualFold(restore.Spec.DatabaseName, "system") {
-		return fmt.Errorf("databaseName %q is not restorable: the system database is managed by Neo4j and holds cluster topology, users, and roles — restoring it via Neo4jRestore is unsupported", restore.Spec.DatabaseName)
-	}
-	// The database name is interpolated into the restore Job's shell command
-	// and Cypher; restrict it to the Neo4j database-name grammar (no shell or
-	// Cypher metacharacters) so it can't inject either. Defense-in-depth on top
-	// of the CRD Pattern marker.
-	if !validation.IsValidDatabaseName(restore.Spec.DatabaseName) {
-		return fmt.Errorf("databaseName %q is invalid: must start with a letter, contain only letters, digits, dots or dashes, and be at most %d characters",
-			restore.Spec.DatabaseName, validation.MaxDatabaseNameLength)
+	// Single-database name validation. Skipped for spec.allDatabases, where there
+	// is no spec.databaseName — the per-database names come from the resolved
+	// backup's artifact map (real, already-backed-up databases; system is
+	// excluded by the orchestrator).
+	if !restore.Spec.AllDatabases {
+		if restore.Spec.DatabaseName == "" {
+			return fmt.Errorf("spec.database (or the deprecated spec.databaseName) is required")
+		}
+		// The `system` database holds cluster topology, users, roles, and
+		// privileges — it is owned by Neo4j itself and is never a user-restorable
+		// database. Restoring over it would corrupt the deployment's identity and
+		// membership. neo4j-admin restore of `system` is unsupported here and the
+		// in-place Cypher path can't drop/recreate it; reject up front. (#269)
+		if strings.EqualFold(restore.Spec.DatabaseName, "system") {
+			return fmt.Errorf("databaseName %q is not restorable: the system database is managed by Neo4j and holds cluster topology, users, and roles — restoring it via Neo4jRestore is unsupported", restore.Spec.DatabaseName)
+		}
+		// The database name is interpolated into the restore Job's shell command
+		// and Cypher; restrict it to the Neo4j database-name grammar (no shell or
+		// Cypher metacharacters) so it can't inject either. Defense-in-depth on top
+		// of the CRD Pattern marker.
+		if !validation.IsValidDatabaseName(restore.Spec.DatabaseName) {
+			return fmt.Errorf("databaseName %q is invalid: must start with a letter, contain only letters, digits, dots or dashes, and be at most %d characters",
+				restore.Spec.DatabaseName, validation.MaxDatabaseNameLength)
+		}
 	}
 
 	// spec.timeout must parse as a positive Go duration — silently falling

@@ -2117,6 +2117,9 @@ func (r *Neo4jBackupReconciler) recordOneShotBackupRun(ctx context.Context, back
 	if isStandardDB && logContent != "" {
 		run.ArtifactFilename = parseStandardArtifactFromLog(logContent, backup.Spec.Target.Name)
 	}
+	if isAllDatabases && logContent != "" {
+		run.DatabaseArtifacts = parseAllDatabaseArtifactsFromLog(logContent)
+	}
 	if logContent != "" {
 		if validation := parseValidationFromLog(logContent); validation != nil {
 			run.Validation = validation
