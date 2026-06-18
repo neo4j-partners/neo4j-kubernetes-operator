@@ -13,12 +13,12 @@ The package index at the repository root ([`readme.md`](../readme.md)) expands e
 ```
 design/
 ├── readme.md                         ← this file
-├── 00-vision.md                       [ ]  scope, personas, goals / non-goals
+├── 00-vision.md                       [~]  scope, personas, goals; adoption risks captured
 ├── 01-functional_requirements.csv     [x]  functional requirements (FR)
 ├── 02-acceptance_criteria_library.csv [x]  reusable acceptance criteria (AC)
 ├── 03-variant_matrix.csv              [x]  configuration variants per FR
 ├── 04-test_catalog.csv                [x]  detailed test catalog (1 row = 1 test)
-├── 05-test_catalog_summary.csv        [x]  effort rollup by controller
+├── 05-test_catalog_summary.csv        [x]  test coverage rollup by controller
 ├── 06-flow.md                         [x]  4-layer reconcile pipeline
 ├── 07-layer.md                        [x]  render / domain / controller rule
 ├── 08-file_structure.md               [x]  target kubebuilder repository tree
@@ -36,7 +36,9 @@ design/
 ├── 15-test-strategy.md                [ ]  unit / integration / E2E pyramid
 ├── 16-security.md                     [ ]  RBAC model and threat model
 ├── 17-roadmap.md                      [ ]  P0 — controller sequence and milestones
-├── 18-effort-model.md                 [ ]  manual vs AI-assisted assumptions
+├── 18-effort-model.md                 [x]  effort assumptions and calculation rules
+├── 19-delivery-estimate.csv           [x]  delivery cost by phase / workstream (data)
+├── 19-delivery-estimate.md            [x]  delivery cost — human-readable view
 ├── adr/                               [ ]  architecture decision records
 ├── samples/                           [ ]  YAML manifests per V1 scenario
 └── diagrams/                          [ ]  sequence and dependency diagrams
@@ -52,7 +54,7 @@ Numbering follows the production flow: **requirements → architecture → speci
 
 | File | Purpose |
 |------|---------|
-| **`00-vision.md`** | Problem statement, personas, goals / non-goals, and V1 / V2 phasing narrative. Anchors all downstream decisions. |
+| **`00-vision.md`** | Problem statement, personas, goals / non-goals, V1 / V2 phasing, and **adoption stoppers** (operational risk, support model, Helm differentiation, migration, PS vs Product ownership). Anchors all downstream decisions. |
 | **`01-functional_requirements.csv`** | 25 functional requirements: 7 operator (`OP-*`) + 18 Neo4j (`NEO-*`). Each row defines scope, variant groups, AC groups, and V1 inclusion. |
 | **`02-acceptance_criteria_library.csv`** | 114 reusable acceptance criteria grouped by domain (`AC-OP-*`, `AC-NEO-*`). Linked to FRs via the `Applies To` column. |
 | **`03-variant_matrix.csv`** | 92 configuration variants (packaging, topology, storage, networking, TLS, etc.). Drives scenario test coverage and combinatorial scope. |
@@ -61,8 +63,8 @@ Numbering follows the production flow: **requirements → architecture → speci
 
 | File | Purpose |
 |------|---------|
-| **`04-test_catalog.csv`** | 207 tests in two layers: **92 scenario tests** (1 per variant) + **115 AC-level tests** (1 per AC). Columns include steps, preconditions, expected results, priority, V1 flag, and per-test effort. |
-| **`05-test_catalog_summary.csv`** | Rollup by operator controller / domain module. Source of truth for **directional effort projections** (see § Estimation below). |
+| **`04-test_catalog.csv`** | 207 tests in two layers: **92 scenario tests** (1 per variant) + **115 AC-level tests** (1 per AC). Columns include steps, preconditions, expected results, priority, and V1 flag. **No effort columns** — cost lives in `19`. |
+| **`05-test_catalog_summary.csv`** | Test **coverage** rollup by controller / domain module (counts only). Source of truth for catalog breadth, not delivery cost. |
 
 ### Phase 3 — Architecture (`06`–`08`)
 
@@ -90,12 +92,14 @@ Numbering follows the production flow: **requirements → architecture → speci
 | **`15-test-strategy.md`** | Test pyramid, frameworks (envtest, kind), CI gates, and environment matrix. |
 | **`16-security.md`** | Operator RBAC scopes, workload identity, threat model, Pod Security Standards, network policies. |
 
-### Phase 6 — Planning (`17`–`18`)
+### Phase 6 — Planning & estimation (`17`–`19`)
 
 | File | Purpose |
 |------|---------|
 | **`17-roadmap.md`** | Controller implementation sequence, milestones, risks, and mitigations. Required for a reliable V1 date commitment. |
-| **`18-effort-model.md`** | Formal assumptions for manual vs AI-assisted delivery, overhead not captured in the test catalog, and velocity calibration method. |
+| **`18-effort-model.md`** | Calculation rules: deduplicated dev, harness amortization, test pyramid, manual vs AI-assisted assumptions, overhead, calibration method. |
+| **`19-delivery-estimate.csv`** | Person-day estimates by **phase** (Conception / Dev / Testing) and **workstream**. One row = one deliverable, not one test. Machine-readable source of truth. |
+| **`19-delivery-estimate.md`** | Same estimates in readable form — rollup, tables per phase, dependency graph. Edit the CSV first; keep both in sync. |
 
 ### Supporting folders
 
@@ -115,7 +119,9 @@ Numbering follows the production flow: **requirements → architecture → speci
   └──►  02 AC  ──────────►  04 AC tests (TST-AC-*)
                                     │
                                     ▼
-                            05 effort summary
+                            05 coverage summary (counts)
+                                    │
+              19 delivery estimate ◄── 18 effort model (rules)
                                     │
                     13 DoD V1 ◄─────┴─────► 17 roadmap
 ```
@@ -124,77 +130,55 @@ Numbering follows the production flow: **requirements → architecture → speci
 
 ## Estimation projections
 
-Figures below come from `05-test_catalog_summary.csv`. They are **directional** — derived from test granularity, not from a completed implementation. Add explicit overhead for documentation, code review, and production hardening before committing a release date.
+Figures below come from [`19-delivery-estimate.csv`](19-delivery-estimate.csv) ([readable view](19-delivery-estimate.md)). Calculation rules and assumptions → [`18-effort-model.md`](18-effort-model.md).
 
-### Manual delivery (baseline)
+Effort is split by **delivery phase**, not by test row. The catalog (`04`) defines *what* to validate (207 tests); `19` defines *what it costs to deliver* with harness amortization and deduplicated dev.
 
-| Metric | Full scope | V1 subset |
-|--------|------------|-----------|
-| Tests | 207 | 138 |
-| Test automation effort | **~486 person-days** | **~344 person-days** |
-| Operator development (realistic) | **~175 person-days** | — |
-| Shared scaffold (API types, CI, e2e harness) | **~18 person-days** | — |
-| **Combined dev + V1 tests** | — | **~520 person-days** |
+### V1 delivery by phase
 
-**Calendar hint (1 FTE developer)**: ~175 dev days ≈ **35 weeks** of implementation, before test automation is counted. With a dedicated QA/automation engineer, V1 test automation adds roughly **69 weeks** at 1 FTE — typically run in parallel with development.
+| Phase | Manual | AI-assisted | Key workstreams |
+|-------|--------|-------------|-----------------|
+| **Conception** | 50 d | 35.5 d | CRD spec, runtime contract, scope lock |
+| **Dev** | 187 d | 70 d | Scaffold, operator core, 7 domain modules, packaging |
+| **Testing** | 198 d | 97.5 d | Harness (one-time), pyramid, E2E parametrization, CI matrix |
+| **Total V1** | **435 d** | **203 d** | |
 
-### Effort by controller / domain
+**Catalog coverage (not cost)**: 138 V1 tests — 61 scenario + 77 AC (`05-test_catalog_summary.csv`).
 
-> **Why does test automation exceed development in this table?**
->
-> The two effort columns measure **different things** and must not be compared as if they were the same unit of work.
->
-> | Column | What it measures | How it is computed |
-> |--------|------------------|--------------------|
-> | **Dev (realistic one-time)** | Cost to **implement** a controller or domain module **once** | Deduplicated estimate — building `Neo4jDatabase` reconciler logic is paid once, not per test |
-> | **Test automation (all)** | Cost to **automate every test** in the catalog for that area | **Cumulative** sum across all tests (207 total, mostly E2E) |
->
-> Example — `Neo4jDatabase`: **35 d** to write the workload reconciler, but **80 tests** to automate at ~2.5 d each on average → **202 d** of test automation. You implement once; you validate across many variants (standalone, cluster, scale, upgrade, probes…).
->
-> If you naively summed the per-test `Operator Dev Effort` column in `04-test_catalog.csv`, you would get **~791 person-days** — that number **double-counts** implementation work (each test row carries a slice of dev effort as if the feature were rebuilt from scratch). The **175 d** realistic total avoids that inflation.
->
-> This pattern is **normal for Kubernetes operators**: E2E tests are expensive (cluster provisioning, Neo4j startup, cluster formation, TLS, flakiness debugging) while the reconcile logic itself is written once and reused. A healthy project still aims for a **unit / integration pyramid** (`15-test-strategy.md`) so that most coverage does not require full E2E.
+**Calendar hint (2 FTE, dev + QA in parallel)**: V1 ≈ **22–26 weeks** manual, **11–13 weeks** AI-assisted — after P0 spec is locked. Conception (~50 d) runs first and is mostly sequential; **low AI leverage on Conception** (25–35 % — see `18-effort-model.md`).
 
-| Controller / domain | V1 tests | Dev (one-time) | Test automation (all) | Auto : Dev |
-|---------------------|----------|----------------|----------------------|------------|
-| Shared scaffold | — | 18 d | — | — |
-| OperatorBootstrap | 7 | 10 d | 27 d | 2.7× |
-| OperatorReconciler | 2 | 8 d | 17 d | 2.1× |
-| OperatorStatus | 3 | 4 d | 6 d | 1.5× |
-| OperatorUpgrade | 3 | 7 d | 16 d | 2.3× |
-| OperatorUninstall | 1 | 3 d | 6 d | 2.0× |
-| OperatorRBAC | 1 | 5 d | 9 d | 1.8× |
-| OperatorObservability | 0 | 4 d | 3 d | 0.8× |
-| Neo4jDatabase (workload) | 64 | 35 d | 202 d | 5.8× |
-| Neo4jPersistence | 9 | 10 d | 32 d | 3.2× |
-| Neo4jConnectivity | 5 | 9 d | 16 d | 1.8× |
-| Neo4jTrust | 16 | 14 d | 42 d | 3.0× |
-| Neo4jServerConfig | 14 | 12 d | 30 d | 2.5× |
-| Neo4jBackup | 8 | 14 d | 41 d | 2.9× |
-| Neo4jRestore | 5 | 12 d | 22 d | 1.8× |
-| Neo4jMaintenance | 0 | 10 d | 18 d | 1.8× |
-| **Total** | **138** | **~175 d** | **~486 d** | **~2.8×** |
+### Testing cost model (why it is not `N tests × fixed cost`)
 
-### AI-assisted delivery (projected)
+| Workstream | V1 effort | Role |
+|------------|-----------|------|
+| Harness & fixtures (`EST-TST-010`) | 30 d | One-time — install, wait Ready, driver assertions |
+| CI matrix (`EST-TST-020`) | 10 d | Same tests across GKE / EKS / AKS / OpenShift |
+| Unit + integration (`EST-TST-030/040`) | 55 d | Pyramid base — no real Neo4j cluster |
+| E2E founders + variants (`EST-TST-050/060`) | 63 d | ~18 founder scenarios + parametrized YAML variants |
+| Stabilisation + DoD run (`EST-TST-080/090`) | 18 d | Flakiness buffer and release gate |
 
-When using AI for code generation, test scaffolding, CRDs, and boilerplate — with a human reviewing, integrating, and debugging:
+A large variant matrix is the **return on** harness investment — not a linear multiplier on delivery cost.
 
-| Metric | Manual | AI-assisted | Reduction |
-|--------|--------|-------------|-----------|
-| Operator development | ~175 d | **~65 d** | ~63 % |
-| Test automation (V1) | ~344 d | **~220 d** | ~36 % |
-| **Combined V1** | ~520 d | **~285 d** | ~45 % |
+### Full scope (post-V1)
 
-Highest AI leverage: kubebuilder scaffold, CRDs, RBAC, table-driven unit tests (−60 to 70 %).  
-Lowest AI leverage: E2E with real clusters, Neo4j HA, backup/restore, TLS (−25 to 45 %).
+| Phase | Manual | AI-assisted |
+|-------|--------|-------------|
+| Conception | 50 d | 35.5 d |
+| Dev | 197 d | 74 d |
+| Testing | 245 d | 125.5 d |
+| **Total** | **492 d** | **235 d** |
 
-Full assumptions and calibration method → `18-effort-model.md` (to be written).
+Post-V1 rows cover maintenance domain (`EST-DEV-080`) and remaining catalog automation (`EST-TST-100`–`120`).
+
+### Overhead not in `19`
+
+Add before committing a release date: user documentation (10–15 d), release engineering (5–8 d), security review (5–10 d), field feedback buffer (10–20 d). See `18-effort-model.md`.
 
 ### When estimates become reliable
 
 | Stage | Artifacts | Accuracy | Use for |
 |-------|-----------|----------|---------|
-| **Now** | `05` (+ V1 filter on `04`) | ±40–50 % | Go/no-go, budget envelope, team sizing |
+| **Now** | `19` directional + `04` catalog | ±40–50 % | Go/no-go, budget envelope, team sizing |
 | **After P0 spec** | `09`–`12` locked | ±25 % | Release planning, milestone dates |
 | **After scope lock** | `13` + `17` frozen | ±15 % | V1 commitment date |
 | **After velocity spike** | Scaffold + one domain module shipped | ±10 % | Sprint-level planning |
@@ -209,7 +193,7 @@ Full assumptions and calibration method → `18-effort-model.md` (to be written)
 4. **`09` → `12`** — lock the API and runtime contract *(P0 — blocking)*
 5. **`13` + `17`** — freeze V1 and sequence work → **reliable estimate**
 6. **`04` (V1 / P0 filter)** + **`15`** — drive test execution during implementation
-7. **`18`** — refine projections after the first domain module is delivered
+7. **`18` + `19`** — delivery estimates; refine after the first domain module is shipped
 
 ---
 
