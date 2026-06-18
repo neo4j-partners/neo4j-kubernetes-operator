@@ -41,10 +41,12 @@ import (
 // pass and requeues — never blocking the worker on the asynchronous seed (the
 // same non-blocking contract the single-database cluster path holds, #218/#227).
 //
-// Supports CLUSTER targets with either cloud (s3/gcs/azure) or PVC-backed
-// backups (the PVC path uses the in-cluster seed proxy). Standalone
-// all-databases restore is rejected with an actionable message (tracked in
-// #288); restore standalone databases individually with spec.database.
+// This path drives CLUSTER targets only (cloud s3/gcs/azure or PVC-backed
+// backups; the PVC path uses the in-cluster seed proxy). STANDALONE
+// all-databases restore (#288) takes the offline Job path instead — the
+// dispatch in startRestore gates this function on isTrueCluster, so a
+// standalone never reaches here. The isTrueCluster guard below is therefore
+// defensive (a direct call would still be rejected with an actionable message).
 func (r *Neo4jRestoreReconciler) startAllDatabasesRestore(
 	ctx context.Context,
 	restore *neo4jv1beta1.Neo4jRestore,
@@ -313,6 +315,96 @@ func (r *Neo4jRestoreReconciler) ensurePVCSeedProxyReady(
 		logger.V(1).Info("Failed to clear seed-proxy wait anchor (non-fatal)", "error", err.Error())
 	}
 	return ctrl.Result{}, true, nil
+}
+
+// buildAllDatabasesRestoreCommand builds the offline `neo4j-admin database
+// restore` command for a STANDALONE all-databases restore: one restore
+// invocation per user database (system excluded), each from its exact .backup
+// file in the resolved source, sharing one writable temp dir reset between
+// databases. The instance is scaled to 0 while this Job runs (the standalone
+// Job machinery, reused via createRestoreJob → buildRestoreCommand).
+func (r *Neo4jRestoreReconciler) buildAllDatabasesRestoreCommand(restore *neo4jv1beta1.Neo4jRestore, cluster *neo4jv1beta1.Neo4jEnterpriseCluster) (string, error) {
+	snap := resolvedBackupSnapshot(restore)
+	if snap == nil || snap.Storage == nil {
+		return "", fmt.Errorf("all-databases restore: resolved backup source not available")
+	}
+	dbs := userDatabasesFromArtifacts(snap.DatabaseArtifacts)
+	if len(dbs) == 0 {
+		return "", fmt.Errorf("all-databases restore: the resolved backup recorded no per-database artifacts")
+	}
+
+	imageTag := fmt.Sprintf("%s:%s", cluster.Spec.Image.Repo, cluster.Spec.Image.Tag)
+	version, err := neo4j.GetImageVersion(imageTag)
+	if err != nil {
+		version = &neo4j.Version{Major: 5, Minor: 26, Patch: 0}
+	}
+
+	// dir is the chain-root directory (cloud URI like s3://.../<chain-root>, or
+	// the local PVC mount /backup/<chain-root>). resolveRestoreSource has
+	// normalized Source to type=storage before buildRestoreCommand runs, so
+	// buildRestoreFromPath yields that directory; the exact per-database file is
+	// dir + "/" + <filename> (we have the precise filename from the artifact map,
+	// so no `ls` glob is needed).
+	dir := strings.TrimRight(r.buildRestoreFromPath(restore), "/")
+	overwrite := restoreOverwriteConfirmed(restore)
+
+	var b strings.Builder
+	b.WriteString("set -e; ")
+	for _, db := range dbs {
+		fname := filenameForDB(snap.DatabaseArtifacts, db)
+		if fname == "" {
+			return "", fmt.Errorf("all-databases restore: no artifact filename recorded for database %q", db)
+		}
+		// Reset the writable temp dir per database (neo4j-admin requires it
+		// empty; the backup mount is ReadOnly), then restore that database.
+		b.WriteString("rm -rf /tmp/restore-tmp && mkdir -p /tmp/restore-tmp && ")
+		b.WriteString(neo4j.GetRestoreCommand(version, db, shellQuote(dir+"/"+fname)))
+		if overwrite {
+			b.WriteString(" --overwrite-destination=true")
+		}
+		b.WriteString(" --temp-path=/tmp/restore-tmp; ")
+	}
+	return b.String(), nil
+}
+
+// registerAllDatabasesAfterRestore brings every restored user database online
+// after a standalone all-databases restore Job completes (the offline restore
+// writes store files; the database must be CREATE'd/START'ed to be served), and
+// records per-database results in status.databaseResults.
+func (r *Neo4jRestoreReconciler) registerAllDatabasesAfterRestore(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore) error {
+	snap := resolvedBackupSnapshot(restore)
+	if snap == nil {
+		return fmt.Errorf("all-databases restore: resolved source missing during registration")
+	}
+	dbs := userDatabasesFromArtifacts(snap.DatabaseArtifacts)
+	r.ensureDatabaseResults(restore, dbs)
+
+	neo4jClient, err := r.newStandaloneRestoreClient(ctx, restore)
+	if err != nil {
+		return fmt.Errorf("failed to create Neo4j client: %w", err)
+	}
+	defer func() { _ = neo4jClient.Close() }()
+
+	var firstErr error
+	for _, db := range dbs {
+		exists, exErr := neo4jClient.DatabaseExists(ctx, db)
+		if exErr == nil {
+			if exists {
+				exErr = neo4jClient.StartDatabase(ctx, db, false)
+			} else {
+				exErr = neo4jClient.CreateDatabase(ctx, db, nil, false, false)
+			}
+		}
+		if exErr != nil {
+			if firstErr == nil {
+				firstErr = exErr
+			}
+			r.markDatabaseResult(ctx, restore, db, StatusFailed, fmt.Sprintf("register after restore: %v", exErr))
+			continue
+		}
+		r.markDatabaseResult(ctx, restore, db, StatusCompleted, "restored and online")
+	}
+	return firstErr
 }
 
 // userDatabasesFromArtifacts returns the restorable user-database names from a

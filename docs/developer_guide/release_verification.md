@@ -63,6 +63,7 @@ surfaces issues the lighter phases miss).
 | Users / Roles / RoleBinding | `Neo4jUser`/`Role`/`RoleBinding` Ready; `SHOW USERS`/`SHOW ROLES`. **Reference at least one role by its hyphenated CR `metadata.name`** (not `spec.name`) and confirm the grant lands (no `RolesPending`) and a `RolesResolved` event fires. |
 | Plugin (APOC) | `Neo4jPlugin` Ready; `RETURN apoc.version()` returns a version (standalone **ConfigMap** path) |
 | Backup → restore | `neo4j-admin` path with `stopCluster: true`: add a marker node → back up → delete the marker → restore → confirm the marker returns |
+| All-databases restore (standalone) | two user DBs → `Neo4jBackup` `allDatabases: true` → mutate both → `Neo4jRestore` `allDatabases: true` (`stopCluster: true`, `force: true`); confirm both round-trip via the single offline Job and `status.databaseResults` are all `Completed` (`system` excluded) (#288) |
 | Standalone recommended labels | `kubectl get pods -l app.kubernetes.io/name=neo4j` returns the standalone pod (it carries `app.kubernetes.io/{name,instance,managed-by}`) |
 | `system` is not restorable | a `Neo4jRestore` with `databaseName: system` → `Failed` with an actionable message |
 

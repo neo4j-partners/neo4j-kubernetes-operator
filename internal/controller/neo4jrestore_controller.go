@@ -259,15 +259,28 @@ func (r *Neo4jRestoreReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, nil
 	}
 
-	// Check if restore is running
-	// checkRestoreProgress drives the SINGLE-database restore (Job / single
-	// seedURI). An all-databases restore owns all of its requeue passes via
-	// startAllDatabasesRestore (its own per-database state machine in
-	// status.databaseResults), so it must NOT be routed here when Running —
-	// otherwise the single-DB progress checker hijacks it and fails resolving a
-	// single artifact from a kind:Cluster backup.
-	if restore.Status.Phase == StatusRunning && !restore.Spec.AllDatabases {
-		return r.checkRestoreProgress(ctx, restore, targetCluster)
+	// Check if restore is running.
+	// checkRestoreProgress drives Job-based and single-seedURI restores. The
+	// routing here forks all-databases by topology:
+	//   - CLUSTER all-databases owns all of its requeue passes via
+	//     startAllDatabasesRestore (its own per-database state machine in
+	//     status.databaseResults), so it must NOT be routed here — the single-DB
+	//     progress checker would hijack it and fail resolving a single artifact
+	//     from a kind:Cluster backup. It falls through to startRestore, which
+	//     re-enters startAllDatabasesRestore.
+	//   - STANDALONE all-databases uses the offline Job machinery (#288), so its
+	//     Running passes DO poll here, exactly like a single-database standalone
+	//     restore.
+	if restore.Status.Phase == StatusRunning {
+		routeToProgress := !restore.Spec.AllDatabases
+		if restore.Spec.AllDatabases {
+			if isCluster, _, terr := r.isRestoreTargetTrueCluster(ctx, restore); terr == nil && !isCluster {
+				routeToProgress = true
+			}
+		}
+		if routeToProgress {
+			return r.checkRestoreProgress(ctx, restore, targetCluster)
+		}
 	}
 
 	// A previously failed restore for the same spec generation must not silently retry.
@@ -389,10 +402,14 @@ func (r *Neo4jRestoreReconciler) startRestore(ctx context.Context, restore *neo4
 		r.updateRestoreStatus(ctx, restore, StatusFailed, fmt.Sprintf("Target lookup failed: %v", lookupErr))
 		return ctrl.Result{RequeueAfter: r.RequeueAfter}, lookupErr
 	}
-	// All-databases restore (#222) drives one per-database restore per pass via
-	// the resolved per-database artifact map; it does its own cluster/standalone
-	// handling.
-	if restore.Spec.AllDatabases {
+	// All-databases restore (#222/#288). CLUSTER targets drive one per-database
+	// in-place Cypher restore per pass via the resolved per-database artifact map
+	// (its own requeue-driven state machine in status.databaseResults). STANDALONE
+	// targets fall through to the offline Job path below — buildRestoreCommand
+	// branches to a multi-database `neo4j-admin database restore` command, and
+	// handleRestoreSuccess brings every database online via
+	// registerAllDatabasesAfterRestore.
+	if restore.Spec.AllDatabases && isTrueCluster {
 		return r.startAllDatabasesRestore(ctx, restore, cluster, isTrueCluster)
 	}
 
@@ -404,8 +421,10 @@ func (r *Neo4jRestoreReconciler) startRestore(ctx context.Context, restore *neo4
 	// restore already stopped the instance on a previous reconcile (re-entry
 	// via a Pending route, #218): the Bolt connection would fail against the
 	// scaled-to-0 instance and pin a terminal Failed — and the check already
-	// passed before the stop.
-	if !restore.Spec.Force && !r.restoreAlreadyStoppedInstance(ctx, restore, cluster) {
+	// passed before the stop. Also skipped for an all-databases restore: there
+	// is no single spec.database to check; per-database overwrite is gated by
+	// spec.force via `--overwrite-destination` in the multi-database command.
+	if !restore.Spec.Force && !restore.Spec.AllDatabases && !r.restoreAlreadyStoppedInstance(ctx, restore, cluster) {
 		if err := r.checkDatabaseExists(ctx, restore, cluster); err != nil {
 			logger.Error(err, "Database existence check failed")
 			r.updateRestoreStatus(ctx, restore, StatusFailed, fmt.Sprintf("Database check failed: %v", err))
@@ -633,8 +652,17 @@ func (r *Neo4jRestoreReconciler) handleRestoreSuccess(ctx context.Context, resto
 		}
 	}
 
-	// Register the restored database with Neo4j so it becomes accessible
-	if err := r.createOrStartDatabase(ctx, restore, cluster); err != nil {
+	// Register the restored database(s) with Neo4j so they become accessible.
+	// All-databases standalone restore brings every user database online and
+	// records per-database outcomes in status.databaseResults (#288); a
+	// single-database restore registers just spec.database.
+	if restore.Spec.AllDatabases {
+		if err := r.registerAllDatabasesAfterRestore(ctx, restore); err != nil {
+			logger.Error(err, "Failed to bring restored databases online after all-databases restore")
+			r.Recorder.Event(restore, corev1.EventTypeWarning, EventReasonDatabaseCreateFailed,
+				fmt.Sprintf("All-databases restore: one or more databases failed to come online: %v", err))
+		}
+	} else if err := r.createOrStartDatabase(ctx, restore, cluster); err != nil {
 		logger.Error(err, "Failed to create/start database after restore")
 		r.Recorder.Event(restore, corev1.EventTypeWarning, EventReasonDatabaseCreateFailed,
 			fmt.Sprintf("Restore succeeded but failed to create database %q: %v", restore.Spec.DatabaseName, err))
@@ -661,11 +689,16 @@ func (r *Neo4jRestoreReconciler) handleRestoreSuccess(ctx context.Context, resto
 	// versions that don't expose the recreate procedure (pre-5.24
 	// SemVer or pre-2025.02 CalVer). Non-fatal — if recreate fails the
 	// restore still completes; the operator events surface the issue.
-	if err := r.recreateRestoredDatabaseOnCluster(ctx, restore, cluster); err != nil {
-		logger.Error(err, "Failed to recreate restored database from seed server")
-		r.Recorder.Event(restore, corev1.EventTypeWarning, EventReasonDatabaseCreateFailed,
-			fmt.Sprintf("Restore succeeded but recreate-from-seed failed for %q: %v",
-				restore.Spec.DatabaseName, err))
+	// Skipped for all-databases restore: that path is standalone-only here
+	// (clusters drive their own per-database Cypher recreate in
+	// startAllDatabasesRestore), and a standalone has nothing to re-seed.
+	if !restore.Spec.AllDatabases {
+		if err := r.recreateRestoredDatabaseOnCluster(ctx, restore, cluster); err != nil {
+			logger.Error(err, "Failed to recreate restored database from seed server")
+			r.Recorder.Event(restore, corev1.EventTypeWarning, EventReasonDatabaseCreateFailed,
+				fmt.Sprintf("Restore succeeded but recreate-from-seed failed for %q: %v",
+					restore.Spec.DatabaseName, err))
+		}
 	}
 
 	// Restore completed successfully
@@ -1804,6 +1837,15 @@ func isPVCBackupPath(backupPath string) bool {
 }
 
 func (r *Neo4jRestoreReconciler) buildRestoreCommand(ctx context.Context, restore *neo4jv1beta1.Neo4jRestore, cluster *neo4jv1beta1.Neo4jEnterpriseCluster) (string, error) {
+	// All-databases restore on a STANDALONE target: one offline `neo4j-admin
+	// database restore` per user database, each from its exact .backup file in
+	// the resolved per-database artifact map (no single-DB glob). Clusters never
+	// reach the Job path (rule 75) — they restore via Cypher in
+	// startAllDatabasesRestore — so this branch is standalone-only.
+	if restore.Spec.AllDatabases {
+		return r.buildAllDatabasesRestoreCommand(restore, cluster)
+	}
+
 	var backupPath string
 
 	// Determine backup path based on source type. source.type=backup is
