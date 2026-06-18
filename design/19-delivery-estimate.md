@@ -16,9 +16,10 @@ Each row below is a **deliverable**, not a test case. Effort is in **person-days
 | Phase | Manual | AI-assisted |
 |-------|--------|-------------|
 | Conception | 50 | 35.5 |
-| Dev | 187 | 70 |
+| Dev | 185 | 69 |
 | Testing | 198 | 97.5 |
-| **Total V1** | **435** | **203** |
+| Documentation | 27 | 14 |
+| **Total V1** | **460** | **216** |
 
 **Catalog coverage**: 138 V1 tests (61 scenario + 77 AC) — see `05`.
 
@@ -29,9 +30,10 @@ Each row below is a **deliverable**, not a test case. Effort is in **person-days
 | Phase | Manual | AI-assisted |
 |-------|--------|-------------|
 | Conception | 50 | 35.5 |
-| Dev | 197 | 74 |
+| Dev | 195 | 73 |
 | Testing | 245 | 125.5 |
-| **Total** | **492** | **235** |
+| Documentation | 31 | 16 |
+| **Total** | **521** | **250** |
 
 Post-V1 rows: maintenance domain (`EST-DEV-080`) and remaining catalog automation (`EST-TST-100`–`120`).
 
@@ -47,7 +49,7 @@ Post-V1 rows: maintenance domain (`EST-DEV-080`) and remaining catalog automatio
 | EST-CON-004 | Runtime contract | `10-status-model`, `11-helm-mapping`, `12-reconciliation` | Yes | 12 | 8.5 | EST-CON-003 |
 | EST-CON-005 | Architecture & ADR | `06`–`08` and P0 ADRs | Yes | 6 | 4.5 | EST-CON-002 |
 | EST-CON-006 | Security & dependencies | `14-dependencies`, `16-security` | Yes | 5 | 3.5 | EST-CON-004 |
-| EST-CON-007 | Scope lock & roadmap | `13-dod-v1`, `17-roadmap` | Yes | 5 | 4 | EST-CON-003, EST-CON-004 |
+| EST-CON-007 | Scope lock & roadmap | `13-v1-scope-lock`, `17-roadmap` | Yes | 5 | 4 | EST-CON-003, EST-CON-004 |
 
 **Subtotal**: 50 d manual · 35.5 d AI-assisted
 
@@ -71,10 +73,10 @@ P0 blocking items: EST-CON-003 (CRD spec) and EST-CON-004 (runtime contract) bef
 | EST-DEV-080 | Domain maintenance | Neo4jMaintenance — offline mode, dump/load | **No** | 10 | 4 | EST-DEV-020 |
 | EST-DEV-090 | Observability | Structured logs, Prometheus metrics | Yes | 4 | 2 | EST-DEV-010 |
 | EST-DEV-100 | Packaging | Helm chart, install manifests, release artifacts | Yes | 7 | 3 | EST-DEV-010 |
-| EST-DEV-110 | Hardening & review | Production readiness, code review, ops documentation | Yes | 12 | 5 | EST-DEV-020..070 |
+| EST-DEV-110 | Hardening & review | Production readiness, code review | Yes | 10 | 4 | EST-DEV-020..070 |
 
-**Subtotal V1**: 187 d manual · 70 d AI-assisted  
-**Subtotal full**: 197 d manual · 74 d AI-assisted
+**Subtotal V1**: 185 d manual · 69 d AI-assisted  
+**Subtotal full**: 195 d manual · 73 d AI-assisted
 
 Dev effort is **deduplicated** — one row per domain module, not per test in `04`.
 
@@ -93,7 +95,7 @@ Dev effort is **deduplicated** — one row per domain module, not per test in `0
 | EST-TST-060 | E2E parametrized variants | Remaining V1 scenarios via YAML fixtures | Yes | 28 | 16 | EST-TST-050 |
 | EST-TST-070 | AC spot checks | P0 AC tests not covered by scenario tests | Yes | 18 | 10 | EST-TST-030, EST-TST-040 |
 | EST-TST-080 | Stabilisation | Flakiness budget — HA, TLS, backup/restore debug | Yes | 12 | 8 | EST-TST-050 |
-| EST-TST-090 | DoD V1 validation | Execute P0 catalog, sign-off report | Yes | 6 | 4.5 | EST-TST-050..070 |
+| EST-TST-090 | V1 release validation | Execute P0 catalog, sign-off report | Yes | 6 | 4.5 | EST-TST-050..070 |
 | EST-TST-100 | E2E non-V1 scenarios | Remaining scenario tests beyond V1 DoD | No | 20 | 12 | EST-TST-060 |
 | EST-TST-110 | AC non-V1 coverage | Remaining AC tests beyond V1 DoD | No | 15 | 9 | EST-TST-070 |
 | EST-TST-120 | Maintenance E2E | Neo4jMaintenance scenario automation | No | 12 | 7 | EST-DEV-080, EST-TST-010 |
@@ -120,6 +122,27 @@ A large variant matrix in `04` is the **return on** harness investment — same 
 
 ---
 
+## Phase 4 — Documentation
+
+Customer-facing docs, migration guides, and PS enablement. Runs **in parallel** with late Dev and Testing once P0 spec (`09`–`12`) is stable.
+
+| ID | Workstream | Deliverable | V1 | Manual | AI | Depends on |
+|----|------------|-------------|----|--------|----|------------|
+| EST-DOC-001 | Getting started | Install, upgrade, uninstall quickstart | Yes | 4 | 2 | EST-DEV-100 |
+| EST-DOC-002 | Helm migration | Helm values → CRD spec; migration paths | Yes | 6 | 3 | EST-CON-004, EST-DEV-100 |
+| EST-DOC-003 | CRD reference | Field reference + topology guide (BDR-002) | Yes | 5 | 2.5 | EST-CON-003, EST-CON-005 |
+| EST-DOC-004 | Operations runbook | Backup, restore, upgrade, troubleshooting, status | Yes | 5 | 2.5 | EST-DEV-070, EST-TST-090 |
+| EST-DOC-005 | Samples & scenarios | `samples/` walkthroughs per V1 variant groups | Yes | 4 | 2 | EST-TST-050 |
+| EST-DOC-006 | PS enablement | Internal handoff and consultant runbook | Yes | 3 | 2 | EST-DEV-110 |
+| EST-DOC-007 | V2 & maintenance docs | Neo4jMaintenance and deferred variants | **No** | 4 | 2 | EST-DEV-080 |
+
+**Subtotal V1**: 27 d manual · 14 d AI-assisted  
+**Subtotal full**: 31 d manual · 16 d AI-assisted
+
+Documentation is **not** overhead — it is scoped explicitly because migration and support model are adoption stoppers (`00-vision.md`).
+
+---
+
 ## Dependency graph (simplified)
 
 ```
@@ -135,6 +158,10 @@ EST-DEV-001 → EST-DEV-002 → EST-DEV-010 → EST-DEV-020..070
                     └── EST-TST-050 → EST-TST-060 → EST-TST-090
                               │
                     EST-TST-030/040 (parallel with E2E)
+
+EST-DOC-002..005  (Documentation — parallel once 09–12 stable)
+        ▲
+EST-CON-004, EST-DEV-100, EST-TST-050
 ```
 
 Harness work (`EST-TST-010`) can start once scaffold exists (`EST-DEV-001`), in parallel with operator core development.
@@ -143,14 +170,15 @@ Harness work (`EST-TST-010`) can start once scaffold exists (`EST-DEV-001`), in 
 
 ## Overhead not included
 
-Add explicitly before a release date commitment — see `18-effort-model.md`:
+Still add before a GA date commitment — see `18-effort-model.md`:
 
 | Item | Range |
 |------|-------|
-| User-facing documentation | 10–15 d |
 | Release engineering | 5–8 d |
 | Security review | 5–10 d |
 | Field feedback buffer | 10–20 d |
+
+User-facing documentation is in **Phase 4 — Documentation** (`EST-DOC-*`).
 
 ---
 

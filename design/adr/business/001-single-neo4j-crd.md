@@ -23,7 +23,7 @@ We must expose this in the Kubernetes API. Four structural options are on the ta
 2. **Single workload CRD** — one `Neo4j` `kind`, topology selected via `spec.topology.mode` (Option A)
 3. **Parent + child infra CRDs** — `Neo4j` plus `Neo4jPersistence`, `Neo4jConnectivity`, … (Option C)
 4. **Cluster + instance hierarchy** — `Neo4jInstance` and `Neo4jCluster` at the top; cluster creates child `Neo4jInstance` CRs (Option D)
-5. **Cluster-only API** — no standalone mode; single-node = cluster of 1 member (Option E)
+5. **Cluster-only API** — no standalone mode; single-node = cluster of 1 member (Option E) — *likely aligned with Neo4j **Aura** product modelling; worth reviewing internal Product design before dismissing*
 
 The existing Helm chart already treats both modes as the same release with different values (`neo4j.standalone` vs cluster sizing). Users think in terms of **one Neo4j deployment**, not two different resource kinds.
 
@@ -170,6 +170,18 @@ spec:
 
 **No standalone mode.** The API always deploys Neo4j in **cluster topology**. A former "standalone" deployment is a **cluster of one member** (`spec.members: 1`). HA production remains `spec.members: 3` (or more).
 
+#### Aura / Product alignment
+
+Neo4j **Aura** (managed product) likely follows a similar philosophy: there is no separate “standalone product” vs “cluster product” at the control-plane level — topology is expressed as **member count and roles** on a unified deployment model. The Product engineering group may already have solved standalone-vs-cluster unification, validation rules, and upgrade paths under that assumption.
+
+**It would be prudent to review Aura’s internal API and lifecycle design** (or engage Product architecture) before treating Option E as rejected:
+
+- How single-node vs HA is represented without a `Standalone` mode
+- Whether formation / discovery overhead for `members: 1` is acceptable in practice
+- Shared reconciler patterns PS can reuse rather than reinvent
+
+This does **not** commit PS to Option E — but ignoring Product’s direction risks building an operator API that diverges from Neo4j’s long-term platform model. Outcome of that review should feed [BDR-002](002-neo4j-crd-topology.md) and `00-vision.md` (Product sponsorship).
+
 ```yaml
 kind: Neo4j
 spec:
@@ -212,6 +224,8 @@ Option C trades API granularity for **operational and GitOps complexity** withou
 Option D offers genuine **per-server observability** and maps well to Neo4j's mental model of servers in a cluster, but introduces **hierarchy complexity**, **GitOps ownership tension** on operator-created children, and **two top-level kinds** — without the simplicity win of Option A. Per-member concerns are better handled via **pod labels**, **StatefulSet ordinals**, and **aggregated status on a single `Neo4j` CR** than by proliferating Instance CRs.
 
 Option E maximises **implementation uniformity** (one code path) at the cost of **product and UX fidelity**. Neo4j standalone and cluster are distinct operational profiles in the Helm chart and in customer language (`NEO-001` vs `NEO-002`). Forcing single-node through cluster topology adds formation overhead and blurs the production HA contract (`members: 1` ≠ HA). Option A keeps an explicit `mode` so the operator can take the **lightweight standalone path** when appropriate while sharing most of the `spec`.
+
+**However**, Option E deserves a **formal Product / Aura review** — if Aura already unifies on cluster-only topology, aligning the self-managed operator may reduce long-term divergence and strengthen the case for Product Engineering ownership (see `00-vision.md`). Until that review completes, Option A remains the default recommendation for Helm parity and explicit `NEO-001` / `NEO-002` semantics.
 
 ---
 
@@ -262,3 +276,9 @@ Infra concerns (persistence, connectivity, trust, server config) remain **`spec`
 - Test catalog keeps separate scenario variants for standalone vs cluster (`03-variant_matrix.csv`) — validation surface unchanged, only the API shape is unified.
 
 ---
+
+## Open actions
+
+| Action | Owner | Feeds |
+|--------|-------|-------|
+| Review Aura / Product topology model vs Option E (cluster-only, unified deployment) | PS + Product Engineering | BDR-002, `09-crd-spec/neo4j/`, Product sponsorship in `00-vision.md` |

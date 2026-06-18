@@ -12,7 +12,6 @@ Uninstall Policy,Preserve data,OP-005; NEO-018,Delete control plane/workload res
 Uninstall Policy,Delete data,OP-005; NEO-018,Delete PVCs and data for ephemeral environments.,Specific uninstall AC,AC-NEO-UNINSTALL-DELETE,No
 Neo4j Deployment Mode,Standalone,NEO-001,Deploy one Neo4j server.,Specific deployment AC,AC-NEO-STANDALONE,Yes
 Neo4j Deployment Mode,Cluster,NEO-002; NEO-011,Deploy a clustered Neo4j topology.,Specific deployment AC,AC-NEO-CLUSTER,Yes
-Edition,Community,NEO-001; NEO-003,Deploy Neo4j Community edition.,Shared install AC,AC-NEO-INSTALL,No
 Edition,Enterprise,NEO-001; NEO-002; NEO-003,Deploy Neo4j Enterprise edition.,Shared install AC + license AC,AC-NEO-LICENSE,Yes
 License Mode,Accepted license,NEO-001; NEO-002,User confirms enterprise license agreement.,Specific license AC,AC-NEO-LICENSE,Yes
 License Mode,Evaluation license,NEO-001; NEO-002,User deploys Enterprise in eval mode.,Specific license AC,AC-NEO-LICENSE,No
@@ -24,8 +23,8 @@ Storage,Existing StorageClass,NEO-006,Use an existing named StorageClass to dyna
 Storage,Existing PVC,NEO-006,Bind Neo4j to an existing PVC or explicit volume.,Storage-specific AC,AC-NEO-STORAGE-EXISTING,No
 Storage,Selector,NEO-006,Bind to existing volumes matching selectors.,Storage-specific AC,AC-NEO-STORAGE-SELECTOR,No
 Storage,VolumeClaimTemplate,NEO-006,Use a provided volumeClaimTemplate.,Storage-specific AC,AC-NEO-STORAGE-VCT,No
-Cloud Storage,With Workload Identity,NEO-018,Use a managed identity attached to a storage account,Storage-specific AC,AC-NEO-CLOUDSTORAGE-MI,Yes
-Cloud Storage,Without Workload Identity,NEO-018,A storage account without managed identity,Storage-specific AC,AC-NEO-CLOUDSTORAGE,Yes
+Cloud Storage,With Workload Identity,NEO-001; NEO-002; NEO-013; NEO-014,Access cloud object storage using platform workload identity (GKE WI / AKS WI / EKS IRSA).,Cloud storage AC,AC-NEO-CLOUDSTORAGE-MI,Yes
+Cloud Storage,Without Workload Identity,NEO-001; NEO-002; NEO-013; NEO-014,Access cloud object storage using mounted credentials or Secrets.,Cloud storage AC,AC-NEO-CLOUDSTORAGE,Yes
 Volume Role,Data,NEO-006,Persistent storage for database data.,Storage-specific AC,AC-NEO-STORAGE,Yes
 Volume Role,Backups,NEO-006; NEO-013,Volume for backup files.,Backup/storage AC,AC-NEO-BACKUP,Yes
 Volume Role,Logs,NEO-006; NEO-016,Volume for logs.,Logging/storage AC,AC-NEO-LOGGING,Yes
@@ -80,7 +79,7 @@ Backup Mode,On-demand,NEO-013,Create backup by user request.,Backup AC,AC-NEO-BA
 Backup Mode,Scheduled,NEO-013,Create backups on a defined schedule.,Backup AC,AC-NEO-BACKUP-SCHEDULED,Yes
 Backup Storage,Shared local volume,NEO-013,Write backups to shared volume.,Backup AC,AC-NEO-BACKUP,Yes
 Backup Storage,Dedicated PVC,NEO-013,Write backups to a dedicated PVC.,Backup/storage AC,AC-NEO-BACKUP,Yes
-Backup Storage,Cloud object storage,NEO-013; NEO-014,Use S3/GCS/Azure via mounted credentials or workload identity.,Backup/restore AC,AC-NEO-BACKUP-CLOUD,No
+Backup Storage,Cloud object storage,NEO-013; NEO-014,Use S3/GCS/Azure via mounted credentials or workload identity.,Backup/cloud storage AC,AC-NEO-BACKUP-CLOUD; AC-NEO-CLOUDSTORAGE-MI; AC-NEO-CLOUDSTORAGE,No
 Restore Mode,Restore from backup volume,NEO-014,Restore from local/PVC backup location.,Restore AC,AC-NEO-RESTORE,Yes
 Restore Mode,Restore from seed URI,NEO-014,"Restore from seed URI, including private bucket credentials.",Restore AC,AC-NEO-RESTORE-SEEDURI,Yes
 Monitoring Mode,Disabled,NEO-015,Deploy without ServiceMonitor.,Monitoring AC,AC-NEO-MONITORING,Yes

@@ -60,6 +60,8 @@ AC-NEO-STORAGE-DYNAMIC,AC-NEO-STORAGE-DYNAMIC-001,PVC uses the named StorageClas
 AC-NEO-STORAGE-EXISTING,AC-NEO-STORAGE-EXISTING-001,Neo4j binds to the configured existing PVC.,NEO-006
 AC-NEO-STORAGE-SELECTOR,AC-NEO-STORAGE-SELECTOR-001,Neo4j binds to a volume matching the configured selector.,NEO-006
 AC-NEO-STORAGE-VCT,AC-NEO-STORAGE-VCT-001,PVC is created from the configured volumeClaimTemplate.,NEO-006
+AC-NEO-CLOUDSTORAGE-MI,AC-NEO-CLOUDSTORAGE-MI-001,Cloud object storage access uses platform workload identity (e.g. GKE Workload Identity or AKS Workload Identity).,NEO-001; NEO-002; NEO-013; NEO-014
+AC-NEO-CLOUDSTORAGE,AC-NEO-CLOUDSTORAGE-001,Cloud object storage access uses mounted credentials or Kubernetes Secrets without workload identity.,NEO-001; NEO-002; NEO-013; NEO-014
 AC-NEO-NETWORKING,AC-NEO-NETWORKING-001,Service is created with the selected service type and targets Neo4j pods.,NEO-001; NEO-007
 AC-NEO-NETWORKING,AC-NEO-NETWORKING-002,"Only the configured connectors (HTTP, HTTPS, Bolt) are exposed; disabled connectors are not published on the service.",NEO-001; NEO-007
 AC-NEO-NETWORKING,AC-NEO-NETWORKING-003,Service ports match the configured connector port numbers.,NEO-001; NEO-007

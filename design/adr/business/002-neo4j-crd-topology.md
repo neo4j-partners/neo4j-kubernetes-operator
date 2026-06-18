@@ -303,7 +303,7 @@ Warnings → **`status.conditions`** (`Type: TopologyWarning`, `Reason: NonHA`).
 | `mode: Cluster`, `cores.members` (1 or 3+) | Separate `analytics` **role** distinct from `readReplica` |
 | `readReplicas.members: 0` in P0 tests | Multi-zone `multiCluster` networking variant |
 | Validation errors + HA warnings | Auto-correction from guessed user intent |
-| Spec design for `cores: 1` + `readReplicas: 1` | Full E2E for analytics topology (prioritise in `13-dod-v1.md`) |
+| Spec design for `cores: 1` + `readReplicas: 1` | Full E2E for analytics topology (prioritise in `13-v1-scope-lock.md`) |
 
 ---
 

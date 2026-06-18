@@ -67,7 +67,6 @@ neo4j-operator/
 │   │   │   ├── rbac.go
 │   │   │   └── watches.go
 │   │   ├── neo4jdatabase/
-│   │   ├── neo4jshardeddatabase/
 │   │   ├── neo4jbackup/
 │   │   ├── neo4jrestore/
 │   │   ├── neo4jplugin/

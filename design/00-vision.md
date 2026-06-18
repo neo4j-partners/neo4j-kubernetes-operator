@@ -14,7 +14,7 @@ Problem statement, personas, goals / non-goals, and V1 / V2 phasing. Anchors all
 
 ## Goals / non-goals
 
-*(To be completed — link to V1 scope in `01-functional_requirements.csv` and `13-dod-v1.md`.)*
+*(To be completed — link to V1 scope in `01-functional_requirements.csv` and `13-v1-scope-lock.md`.)*
 
 ---
 

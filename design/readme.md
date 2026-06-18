@@ -31,8 +31,8 @@ design/
 ├── 10-status-model.md                 [ ]  P0 — conditions and phases per CRD
 ├── 11-helm-mapping.md                 [ ]  P0 — Helm values.yaml → CRD spec
 ├── 12-reconciliation.md               [ ]  P0 — reconcile loop and ordering
-├── 13-dod-v1.md                       [ ]  V1 definition of done (AC subset)
-├── 14-dependencies.md                 [ ]  inter-CRD and external dependencies
+├── 13-v1-scope-lock.md                [ ]  frozen V1 scope — AC + tests + exclusions
+├── 14-dependencies.md                 [~]  external prereqs + platform constraint matrix
 ├── 15-test-strategy.md                [ ]  unit / integration / E2E pyramid
 ├── 16-security.md                     [ ]  RBAC model and threat model
 ├── 17-roadmap.md                      [ ]  P0 — controller sequence and milestones
@@ -56,14 +56,14 @@ Numbering follows the production flow: **requirements → architecture → speci
 |------|---------|
 | **`00-vision.md`** | Problem statement, personas, goals / non-goals, V1 / V2 phasing, and **adoption stoppers** (operational risk, support model, Helm differentiation, migration, PS vs Product ownership). Anchors all downstream decisions. |
 | **`01-functional_requirements.csv`** | 25 functional requirements: 7 operator (`OP-*`) + 18 Neo4j (`NEO-*`). Each row defines scope, variant groups, AC groups, and V1 inclusion. |
-| **`02-acceptance_criteria_library.csv`** | 114 reusable acceptance criteria grouped by domain (`AC-OP-*`, `AC-NEO-*`). Linked to FRs via the `Applies To` column. |
+| **`02-acceptance_criteria_library.csv`** | 116 reusable acceptance criteria grouped by domain (`AC-OP-*`, `AC-NEO-*`). Linked to FRs via the `Applies To` column. |
 | **`03-variant_matrix.csv`** | 92 configuration variants (packaging, topology, storage, networking, TLS, etc.). Drives scenario test coverage and combinatorial scope. |
 
 ### Phase 2 — Validation catalog (`04`–`05`)
 
 | File | Purpose |
 |------|---------|
-| **`04-test_catalog.csv`** | 207 tests in two layers: **92 scenario tests** (1 per variant) + **115 AC-level tests** (1 per AC). Columns include steps, preconditions, expected results, priority, and V1 flag. **No effort columns** — cost lives in `19`. |
+| **`04-test_catalog.csv`** | 209 tests in two layers: **92 scenario tests** (1 per variant) + **117 AC-level tests** (1 per AC). Columns include steps, preconditions, expected results, priority, and V1 flag. **No effort columns** — cost lives in `19`. |
 | **`05-test_catalog_summary.csv`** | Test **coverage** rollup by controller / domain module (counts only). Source of truth for catalog breadth, not delivery cost. |
 
 ### Phase 3 — Architecture (`06`–`08`)
@@ -87,8 +87,8 @@ Numbering follows the production flow: **requirements → architecture → speci
 
 | File | Purpose |
 |------|---------|
-| **`13-dod-v1.md`** | Frozen list of ACs and tests required for V1 release. Derived from `02` + `04` (filter `V1=Yes`, `Priority=P0`). |
-| **`14-dependencies.md`** | Inter-CRD readiness chain, external prerequisites (StorageClass, Prometheus, cert-manager), Neo4j runtime ordering. |
+| **`13-v1-scope-lock.md`** | **Frozen V1 scope** — which FRs, ACs, and tests are in V1 (and what is explicitly out). Derived from `02` + `04` (`V1=Yes`, `Priority=P0`). Commitment document for release planning — not a generic “definition of done”. |
+| **`14-dependencies.md`** | Inter-CRD readiness chain, external prerequisites (StorageClass, Prometheus, cert-manager), Neo4j runtime ordering, and **platform constraint matrix** (Local, AKS, GKE, EKS, OpenShift). |
 | **`15-test-strategy.md`** | Test pyramid, frameworks (envtest, kind), CI gates, and environment matrix. |
 | **`16-security.md`** | Operator RBAC scopes, workload identity, threat model, Pod Security Standards, network policies. |
 
@@ -98,7 +98,7 @@ Numbering follows the production flow: **requirements → architecture → speci
 |------|---------|
 | **`17-roadmap.md`** | Controller implementation sequence, milestones, risks, and mitigations. Required for a reliable V1 date commitment. |
 | **`18-effort-model.md`** | Calculation rules: deduplicated dev, harness amortization, test pyramid, manual vs AI-assisted assumptions, overhead, calibration method. |
-| **`19-delivery-estimate.csv`** | Person-day estimates by **phase** (Conception / Dev / Testing) and **workstream**. One row = one deliverable, not one test. Machine-readable source of truth. |
+| **`19-delivery-estimate.csv`** | Person-day estimates by **phase** (Conception / Dev / Testing / **Documentation**) and **workstream**. One row = one deliverable, not one test. Machine-readable source of truth. |
 | **`19-delivery-estimate.md`** | Same estimates in readable form — rollup, tables per phase, dependency graph. Edit the CSV first; keep both in sync. |
 
 ### Supporting folders
@@ -123,7 +123,7 @@ Numbering follows the production flow: **requirements → architecture → speci
                                     │
               19 delivery estimate ◄── 18 effort model (rules)
                                     │
-                    13 DoD V1 ◄─────┴─────► 17 roadmap
+                    13 V1 scope lock ◄─────┴─────► 17 roadmap
 ```
 
 ---
@@ -132,16 +132,17 @@ Numbering follows the production flow: **requirements → architecture → speci
 
 Figures below come from [`19-delivery-estimate.csv`](19-delivery-estimate.csv) ([readable view](19-delivery-estimate.md)). Calculation rules and assumptions → [`18-effort-model.md`](18-effort-model.md).
 
-Effort is split by **delivery phase**, not by test row. The catalog (`04`) defines *what* to validate (207 tests); `19` defines *what it costs to deliver* with harness amortization and deduplicated dev.
+Effort is split by **delivery phase**, not by test row. The catalog (`04`) defines *what* to validate (209 tests); `19` defines *what it costs to deliver* with harness amortization and deduplicated dev.
 
 ### V1 delivery by phase
 
 | Phase | Manual | AI-assisted | Key workstreams |
 |-------|--------|-------------|-----------------|
 | **Conception** | 50 d | 35.5 d | CRD spec, runtime contract, scope lock |
-| **Dev** | 187 d | 70 d | Scaffold, operator core, 7 domain modules, packaging |
-| **Testing** | 198 d | 97.5 d | Harness (one-time), pyramid, E2E parametrization, CI matrix |
-| **Total V1** | **435 d** | **203 d** | |
+| **Dev** | 185 d | 69 d | Scaffold, operator core, domain modules, packaging |
+| **Testing** | 198 d | 97.5 d | Harness, pyramid, E2E parametrization, CI matrix |
+| **Documentation** | 27 d | 14 d | Quickstart, Helm migration, CRD ref, runbooks, samples |
+| **Total V1** | **460 d** | **216 d** | |
 
 **Catalog coverage (not cost)**: 138 V1 tests — 61 scenario + 77 AC (`05-test_catalog_summary.csv`).
 
@@ -159,20 +160,32 @@ Effort is split by **delivery phase**, not by test row. The catalog (`04`) defin
 
 A large variant matrix is the **return on** harness investment — not a linear multiplier on delivery cost.
 
+### Documentation (Phase 4)
+
+| Workstream | V1 effort | Role |
+|------------|-----------|------|
+| Helm migration (`EST-DOC-002`) | 6 d | Adoption stopper — `11-helm-mapping` as user guide |
+| CRD reference + topology (`EST-DOC-003`) | 5 d | BDR-002 decision tree for primary + analytics |
+| Operations runbook (`EST-DOC-004`) | 5 d | Support / PS field playbook |
+| Getting started + samples (`EST-DOC-001/005`) | 8 d | Install path and `samples/` walkthroughs |
+
+Runs in parallel with late Dev / Testing once P0 spec is stable.
+
 ### Full scope (post-V1)
 
 | Phase | Manual | AI-assisted |
 |-------|--------|-------------|
 | Conception | 50 d | 35.5 d |
-| Dev | 197 d | 74 d |
+| Dev | 195 d | 73 d |
 | Testing | 245 d | 125.5 d |
-| **Total** | **492 d** | **235 d** |
+| Documentation | 31 d | 16 d |
+| **Total** | **521 d** | **250 d** |
 
 Post-V1 rows cover maintenance domain (`EST-DEV-080`) and remaining catalog automation (`EST-TST-100`–`120`).
 
 ### Overhead not in `19`
 
-Add before committing a release date: user documentation (10–15 d), release engineering (5–8 d), security review (5–10 d), field feedback buffer (10–20 d). See `18-effort-model.md`.
+Add before GA commitment: release engineering (5–8 d), security review (5–10 d), field feedback buffer (10–20 d). **Documentation** is in Phase 4 (`EST-DOC-*`). See `18-effort-model.md`.
 
 ### When estimates become reliable
 

@@ -6,13 +6,14 @@ The test catalog ([`04-test_catalog.csv`](04-test_catalog.csv)) answers *what* t
 
 ---
 
-## Three delivery phases
+## Four delivery phases
 
 | Phase | Question it answers | Primary artifacts |
 |-------|---------------------|-------------------|
 | **Conception** | What are we building and under which contract? | `00`, `09`–`12`, `13`, `17`, ADRs |
 | **Dev** | How do we implement it once? | Controllers, domain modules, packaging |
 | **Testing** | How do we prove it works repeatably? | Pyramid, harness, CI matrix, E2E parametrization |
+| **Documentation** | How do users and PS install, migrate, and operate it? | Quickstart, Helm migration guide, CRD ref, runbooks, `samples/` |
 
 Each row in `19-delivery-estimate.csv` is a **deliverable**, not a test case.
 
@@ -42,7 +43,7 @@ Building `Neo4jDatabase` reconciler logic is paid **once** per domain module (`E
 |--------|--------|---------|
 | 207 tests | `04-test_catalog.csv` | Validation **coverage** breadth |
 | ~138 V1 tests | `04` filtered `V1=Yes` | DoD scope |
-| ~435 person-days V1 manual | `19` sum `V1=Yes` | **Delivery** estimate |
+| ~460 person-days V1 manual | `19` sum `V1=Yes` | **Delivery** estimate |
 
 A large test matrix is the **benefit** of automation (cross-platform, iso runs), not a linear `N tests × fixed cost` multiplier.
 
@@ -62,7 +63,7 @@ Most ACs should be covered indirectly by scenario tests or lower layers; direct 
 
 Reduction = `(manual − AI-assisted) / manual`. Bands are applied per row in `19`; **Conception** uses the lower end — AI lacks product, Neo4j, and migration context unless heavily prompted.
 
-Ordered to match [`19-delivery-estimate.csv`](19-delivery-estimate.csv) (Conception → Dev → Testing).
+Ordered to match [`19-delivery-estimate.csv`](19-delivery-estimate.csv) (Conception → Dev → Testing → Documentation).
 
 ### Conception
 
@@ -103,20 +104,33 @@ Ordered to match [`19-delivery-estimate.csv`](19-delivery-estimate.csv) (Concept
 | DoD validation run | 25–30 % | QA execution and sign-off — not authoring | EST-TST-090 |
 | Post-V1 catalog completion | 35–45 % | Same bands as V1 E2E/AC rows | EST-TST-100..120 |
 
+### Documentation
+
+| Workstream | Reduction | Rationale | EST IDs |
+|------------|-----------|-----------|---------|
+| Getting started / quickstart | 45–50 % | Install steps scaffold well; review for accuracy | EST-DOC-001 |
+| Helm migration guide | 40–45 % | Mapping tables from `11`; narrative and edge cases need human lock | EST-DOC-002 |
+| CRD reference | 45–50 % | OpenAPI / spec generation; topology guide needs product judgment | EST-DOC-003 |
+| Operations runbook | 35–40 % | Troubleshooting and support scenarios — empirical | EST-DOC-004 |
+| Samples & walkthroughs | 50–55 % | YAML from E2E fixtures; prose alignment manual | EST-DOC-005 |
+| PS enablement | 30–35 % | Internal context — low AI leverage | EST-DOC-006 |
+| V2 / maintenance docs | 45–50 % | Post-V1 — same bands as V1 doc rows | EST-DOC-007 |
+
 AI-assisted totals in `19` apply these bands per row. Recalibrate after the first domain module is shipped (velocity spike).
 
 ---
 
 ## Overhead not in `19`
 
-Add explicitly before committing a release date:
+Add explicitly before committing a GA date:
 
 | Item | Typical range |
 |------|---------------|
-| User-facing documentation (install, migrate, troubleshoot) | 10–15 d |
 | Release engineering (signing, registry, changelog) | 5–8 d |
 | Security review / penetration test coordination | 5–10 d |
 | Field feedback buffer (first GA customers) | 10–20 d |
+
+**Documentation** (install, migration, CRD ref, runbooks, samples) is in **`19`** — Phase 4, `EST-DOC-*` (27 d V1 manual).
 
 ---
 
@@ -143,7 +157,7 @@ Add explicitly before committing a release date:
                                     │
                     19 delivery estimate ◄── 18 effort model (rules)
                                     │
-                    13 DoD V1 ◄─────┴─────► 17 roadmap
+                    13 V1 scope lock ◄─────┴─────► 17 roadmap
 ```
 
 ---

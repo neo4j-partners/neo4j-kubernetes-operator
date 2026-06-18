@@ -5,7 +5,7 @@ EST-CON-003,Conception,CRD & API spec,09-crd-spec for Neo4j Neo4jDatabase Neo4jB
 EST-CON-004,Conception,Runtime contract,10-status-model 11-helm-mapping 12-reconciliation,Yes,12,8.5,EST-CON-003,10;11;12,P0 blocking — reconcile loop and status semantics
 EST-CON-005,Conception,Architecture & ADR,06-flow 07-layer 08-file_structure and P0 ADRs,Yes,6,4.5,EST-CON-002,06;07;08;adr/,Implementation boundaries and decisions
 EST-CON-006,Conception,Security & dependencies,14-dependencies 16-security RBAC and threat model,Yes,5,3.5,EST-CON-004,14;16,External prerequisites and operator permissions
-EST-CON-007,Conception,Scope lock & roadmap,13-dod-v1 17-roadmap frozen V1 commitment inputs,Yes,5,4,EST-CON-003;EST-CON-004,13;17,Derived from 02+04 V1/P0 filter
+EST-CON-007,Conception,Scope lock & roadmap,13-v1-scope-lock 17-roadmap frozen V1 commitment inputs,Yes,5,4,EST-CON-003;EST-CON-004,13;17,Derived from 02+04 V1/P0 filter
 EST-DEV-001,Dev,Scaffold & tooling,kubebuilder repository CI lint container image build,Yes,12,4,EST-CON-005,08-file_structure.md,Shared foundation for all controllers
 EST-DEV-002,Dev,API types & validation,api/v1beta1 types webhooks defaults and CEL rules,Yes,9,3,EST-DEV-001;EST-CON-003,09-crd-spec/,Generated scaffold plus custom validation
 EST-DEV-010,Dev,Operator core,OperatorBootstrap OperatorReconciler OperatorStatus OperatorUpgrade OperatorUninstall OperatorRBAC,Yes,37,14,EST-DEV-002,01 OP-001..OP-006,One-time per controller — not per test
@@ -18,7 +18,7 @@ EST-DEV-070,Dev,Domain backup & restore,Neo4jBackup and Neo4jRestore jobs and st
 EST-DEV-080,Dev,Domain maintenance,Neo4jMaintenance offline mode dump load consistency check,No,10,4,EST-DEV-020,01 NEO-017,V2 — deferred from V1 DoD
 EST-DEV-090,Dev,Observability,OperatorObservability structured logs Prometheus metrics,Yes,4,2,EST-DEV-010,01 OP-007,Production troubleshooting
 EST-DEV-100,Dev,Packaging,Helm chart install manifests and release artifacts,Yes,7,3,EST-DEV-010,11-helm-mapping,Migration path from current Helm chart
-EST-DEV-110,Dev,Hardening & review,Production readiness code review operational documentation,Yes,12,5,EST-DEV-020..070,13-dod-v1,Not captured in test catalog
+EST-DEV-110,Dev,Hardening & review,Production readiness and code review,Yes,10,4,EST-DEV-020..070,13-v1-scope-lock,Customer-facing docs → EST-DOC-*
 EST-TST-001,Testing,Test strategy,15-test-strategy.md pyramid CI gates and coverage model,Yes,4,3,EST-CON-007,15-test-strategy.md,Defines unit integration E2E split
 EST-TST-010,Testing,Harness & fixtures,E2E harness kind fixtures install helper wait Ready driver assertions artifact capture,Yes,30,12,EST-DEV-001,04-test_catalog.csv (207 tests),One-time investment — amortized across all scenario variants
 EST-TST-020,Testing,CI matrix,Multi-platform pipeline parametrized test runs GKE EKS AKS OpenShift,Yes,10,4,EST-TST-010,03-variant_matrix.csv,Platform matrix runs same tests with different cluster targets
@@ -28,7 +28,14 @@ EST-TST-050,Testing,E2E founder scenarios,One full E2E scenario per variant grou
 EST-TST-060,Testing,E2E parametrized variants,Remaining V1 scenario variants via YAML fixtures and shared harness,Yes,28,16,EST-TST-050,04 TST-SCN-*,Marginal cost ~0.4 d per variant once harness exists
 EST-TST-070,Testing,AC spot checks,P0 AC-level tests not covered indirectly by scenario tests,Yes,18,10,EST-TST-030;EST-TST-040,04 TST-AC-* (77 V1 AC tests),Sampled AC validation — not 1:1 automation of every AC row
 EST-TST-080,Testing,Stabilisation,Flakiness budget HA cluster TLS backup restore debug,Yes,12,8,EST-TST-050,04 High-complexity E2E rows,Explicit buffer for operator E2E realities
-EST-TST-090,Testing,DoD V1 validation,Execute P0 catalog sign-off report and release gate,Yes,6,4.5,EST-TST-050..070,13-dod-v1,QA execution — not test authoring
+EST-TST-090,Testing,V1 release validation,Execute P0 catalog sign-off report and release gate,Yes,6,4.5,EST-TST-050..070,13-v1-scope-lock,QA execution — not test authoring
 EST-TST-100,Testing,E2E non-V1 scenarios,Automate remaining scenario tests beyond V1 DoD,No,20,12,EST-TST-060,04 TST-SCN-* (31 non-V1),Post-V1 catalog completion
 EST-TST-110,Testing,AC non-V1 coverage,Automate remaining AC-level tests beyond V1 DoD,No,15,9,EST-TST-070,04 TST-AC-* (38 non-V1),Post-V1 catalog completion
 EST-TST-120,Testing,Maintenance E2E,Neo4jMaintenance scenario and AC automation,No,12,7,EST-DEV-080;EST-TST-010,04 Neo4jMaintenance rows,Blocked on EST-DEV-080
+EST-DOC-001,Documentation,Getting started,Install upgrade uninstall quickstart for V1,Yes,4,2,EST-DEV-100,13-v1-scope-lock,Customer-facing — docs site or repo TBD
+EST-DOC-002,Documentation,Helm migration,User guide from Helm values to CRD spec and migration paths,Yes,6,3,EST-CON-004;EST-DEV-100,11-helm-mapping;00-vision.md,Adoption stopper — first-class deliverable
+EST-DOC-003,Documentation,CRD reference,Field reference topology decision guide from 09-crd-spec and BDR-002,Yes,5,2.5,EST-CON-003;EST-CON-005,09-crd-spec/;adr/business/002,Partly generated from OpenAPI + ADRs
+EST-DOC-004,Documentation,Operations runbook,Backup restore upgrade troubleshooting status conditions,Yes,5,2.5,EST-DEV-070;EST-TST-090,10-status-model.md,Support and PS field playbook
+EST-DOC-005,Documentation,Samples & scenarios,samples/ YAML walkthroughs per V1 variant groups,Yes,4,2,EST-TST-050,samples/,Aligned with E2E founder scenarios
+EST-DOC-006,Documentation,PS enablement,Internal handoff notes and consultant runbook,Yes,3,2,EST-DEV-110,00-vision.md,Not customer-facing — PS/Product handoff
+EST-DOC-007,Documentation,V2 & maintenance docs,Neo4jMaintenance and deferred variant documentation,No,4,2,EST-DEV-080,04 non-V1 rows,Post-V1 catalog completion
