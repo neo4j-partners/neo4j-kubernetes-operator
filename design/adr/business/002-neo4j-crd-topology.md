@@ -6,151 +6,136 @@
 | **Date** | 2026-06-18 |
 | **Reviewers** | Charles Boudry |
 | **Depends on** | [BDR-001](001-single-neo4j-crd.md) — single `Neo4j` CRD (accepted) |
-| **Constraints** | `NEO-001`, `NEO-002`, `NEO-011`; Helm `neo4j.minimumClusterSize`, `neo4j.operations.enableServer` |
+| **Constraints** | `NEO-001`, `NEO-002`, `NEO-011`; Helm parity — [`helm_neo4j_values.yaml`](../../analysis/helm_neo4j_values.yaml) |
 
 ---
 
 ## Context
 
-[BDR-001](001-single-neo4j-crd.md) chose **one `Neo4j` CRD** with `spec.topology.mode: Standalone | Cluster`. That resolves the *kind* question but not the full **topology composition** question.
+[BDR-001](001-single-neo4j-crd.md) chose **one `Neo4j` CRD**. That resolves the *kind* question. This BDR resolves the **topology composition** question: how users express single-node, HA cluster, and **primary + secondary** layouts (read scaling or analytics) in one API.
 
-Real deployments include cases that are neither pure standalone nor a symmetric HA cluster:
+### The problem — primary + secondary
 
-| User intent | Example | Why `mode` + `members` alone fails |
-|-------------|---------|-------------------------------------|
-| Dev / single node | 1 server | Maps to `Standalone` — OK |
-| Production HA | 3 core members | Maps to `Cluster`, `members: 3` — OK |
-| **Primary + analytics** | 1 core + 1 read/analytics secondary | **Not** standalone; **not** `members: 2` symmetric HA |
-| Read scaling | 3 cores + N read replicas | Needs **role** distinction, not one counter |
-| Scale out after install | Add member via enable-server | Needs `minimumClusterSize` vs current size semantics (Helm parity) |
+Not every deployment is “one server” or “symmetric N-member HA”. Common real-world intents:
 
-The Helm chart expresses this via `neo4j.minimumClusterSize` (default 1 = standalone), StatefulSet replica count, and `neo4j.operations.enableServer` for members added outside the initial size — not via separate CRDs ([`helm_neo4j_values.yaml`](../../analysis/helm_neo4j_values.yaml) lines 26–39).
+| User intent | Example | What the API must express |
+|-------------|---------|---------------------------|
+| Dev / CI | 1 server | Single writer, no cluster |
+| Production HA (writes) | 3 core members | Quorum, odd core count, fault tolerance |
+| **Primary + analytics** | 1 writer + 1 analytics/read secondary | **Two roles** — not “2 equal cluster members” |
+| Read scaling | 3 cores + N read replicas | Core count **and** replica count |
+| Scale out after install | Add member post-deploy | Initial formation size vs current size (`enableServer`) |
 
-Customers need **guided choices** (use case → valid spec), not just raw fields.
+The Helm chart today handles this through **several mechanisms at once**, not a single `mode` field:
+
+| Helm mechanism | Purpose |
+|----------------|---------|
+| `neo4j.minimumClusterSize` | `1` = standalone formation; `≥3` = clustered formation |
+| StatefulSet replica count | Current number of pods (may exceed minimum) |
+| `neo4j.operations.enableServer` | Enable a server added **outside** initial minimum size |
+| `analytics.enabled` + `analytics.type.name: primary \| secondary` | **1 primary + n secondary** multi-instance scenario (ports + config) |
+| **One Helm release per cluster member** (chart note L732–735) | Each member = separate release, single-replica StatefulSet |
+
+The operator will **not** replicate “one release per member”. It uses **one `Neo4j` CR → one StatefulSet → N replicas**. Topology fields must therefore express intent clearly in that unified model.
+
+Customers need **guided choices** (use case → valid spec), not ambiguous counters.
 
 ---
 
-## Analysis
+## Options under review
 
-### Axis 1 only — `mode` + flat `members`
+Five structural options. Each includes a sketch, advantages, and disadvantages.
+
+---
+
+### Option A — Flat server count only (`servers: 1` or `servers: N`)
+
+No `mode`, no roles — only a single integer.
 
 ```yaml
 spec:
   topology:
+    servers: 1          # dev
+    # servers: 3        # production HA
+    # servers: 2        # primary + secondary? symmetric cluster? unclear
+```
+
+| Advantages | Disadvantages |
+|------------|---------------|
+| Minimal API surface — one field to learn | **`servers: 2` is ambiguous** — invalid HA quorum, or 1+1 analytics? |
+| Easy code path — one StatefulSet, `replicas: servers` | Cannot express **core vs read replica** — Neo4j roles collapsed |
+| Similar mental model to `spec.replicas` on a Deployment | No validation hook for “odd cores ≥ 3 for production HA” |
+| | **Misleading for primary + analytics** — looks like a 2-node HA cluster |
+| | Hides `minimumClusterSize` vs current size (scale / enable-server) |
+| | Poor fit for Enterprise read replicas (different config and routing) |
+| | Docs must overload prose (“when servers=2, you probably meant…”) |
+
+**Helm parity**: partial — maps to replica count only; loses `analytics.type`, `minimumClusterSize`, and enable-server semantics.
+
+---
+
+### Option B — `mode: Standalone | Cluster` + flat `members`
+
+Explicit deployment mode; member count without role split.
+
+```yaml
+spec:
+  topology:
+    mode: Standalone       # single server — members implied or absent
+    # --- or ---
     mode: Cluster
-    members: 2    # primary + analytics?
+    members: 3             # symmetric HA cluster
+    # members: 2           # primary + analytics? 2-node quorum? unclear
+    minimumMembers: 3      # optional — initial formation size
 ```
 
 | Advantages | Disadvantages |
 |------------|---------------|
-| Minimal API | Cannot express **roles** (core vs read replica vs analytics) |
-| Easy to document | `members: 2` implies symmetric cluster — **misleading** for 1+1 analytics |
-| | Cannot enforce Neo4j quorum rules (cores must be odd, ≥3 for HA) |
-| | Hides production vs dev intent |
+| Clear dev path — `Standalone` = no cluster formation | **`members: 2` is ambiguous** — same problem as Option A |
+| Separates “cluster vs not” in the API | Conflates **cores** and **read replicas** into one counter |
+| Matches BDR-001 initial sketch (`mode` field) | Cannot validate Neo4j quorum rules without overloading `members` |
+| Simpler OpenAPI than role blocks | **Primary + analytics** needs undocumented convention or labels |
+| | Scale-out (`minimumMembers` vs `members`) adds a second counter anyway |
+| | Does not answer “mode **or** role?” — mode alone is insufficient for secondary servers |
+
+**Helm parity**: partial — `mode` maps loosely to `minimumClusterSize`; loses `analytics.type` and read-replica semantics.
 
 ---
 
-### Axis 1 + role composition — `cores` + `readReplicas` (recommended)
+### Option C — Stay close to the Helm chart
+
+Mirror Helm field names and semantics on the CR.
 
 ```yaml
 spec:
   topology:
-    mode: Cluster
-    cores:
-      members: 1
-    readReplicas:
-      members: 1    # analytics / read scaling
+    minimumClusterSize: 1       # neo4j.minimumClusterSize
+    replicas: 2                   # StatefulSet size
+  operations:
+    enableServer: true            # neo4j.operations.enableServer
+  analytics:
+    enabled: true
+    type: primary                 # analytics.type.name — primary | secondary
 ```
+
+**Important**: In Helm, **primary + secondary is often two separate releases** (each with `analytics.type` and `minimumClusterSize: 1`). The operator uses **one CR → one StatefulSet → N replicas** — not a literal multi-release copy.
 
 | Advantages | Disadvantages |
 |------------|---------------|
-| Matches Neo4j causal cluster model (cores + optional read replicas) | Slightly more complex than flat `members` |
-| Makes **1+1 analytics** explicit and validatable | Requires Enterprise for read replicas |
-| Enables HA warnings (`cores.members < 3`) without blocking dev | Two counters to explain in docs |
-| Aligns with scale-out (`NEO-011`) and `enableServer` semantics | Analytics-specific tuning may need `spec.config` in addition |
+| **Lowest migration friction** for Helm users — familiar names | Helm **multi-release** model does not map 1:1 to one CR |
+| Direct mapping in `11-helm-mapping.md` | `analytics.type: primary/secondary` ≠ Neo4j **read replica** terminology |
+| Preserves `minimumClusterSize` + `enableServer` semantics | `replicas` on CR duplicates StatefulSet spec — drift risk |
+| Field-level docs can reference existing chart docs | Does not encode **cores vs read replicas** unless `analytics` is overloaded |
+| | Three knobs (`minimumClusterSize`, `replicas`, `analytics`) for one concept |
+| | Weak domain language for support and Enterprise causal cluster docs |
+
+**Helm parity**: strongest naming parity; weakest long-term API clarity.
 
 ---
 
-### Named profiles — `topology.profile` or `topologyProfileRef`
+### Option D — `mode` + role composition (`cores` + `readReplicas`) — **proposed**
 
-```yaml
-spec:
-  topology:
-    profile: primary-plus-analytics
-```
-
-| Advantages | Disadvantages |
-|------------|---------------|
-| Lowest friction for beginners | Indirection — advanced users must read profile definitions |
-| Encodes validated combinations | Profile catalog must be maintained |
-| Good for docs and `samples/` | Duplicates fields if profile and raw counts both exist |
-
-**Recommendation**: profiles as **optional shortcuts** that expand to `cores` / `readReplicas` — not a replacement for explicit fields.
-
----
-
-### `spec.intent` enum — `dev` | `production` | `analytics`
-
-| Advantages | Disadvantages |
-|------------|---------------|
-| User declares goal; operator suggests/fixes topology | Overlaps with `mode` + roles — third mental model |
-| Good for admission warnings | Easy to disagree with operator suggestions |
-
-**Recommendation**: use **`status` warnings**, not a required `intent` field. Optional `metadata.labels` for platform teams if needed.
-
----
-
-### User decision guide (by use case)
-
-```
-What do you need?
-│
-├─ Single server (dev, test, CI)
-│    spec.topology.mode: Standalone
-│
-├─ Production fault tolerance (writes)
-│    spec.topology.mode: Cluster
-│    spec.topology.cores.members: 3   # odd, ≥3
-│    spec.topology.readReplicas.members: 0
-│
-├─ Primary + analytics / read secondary (NOT production HA)
-│    spec.topology.mode: Cluster
-│    spec.topology.cores.members: 1
-│    spec.topology.readReplicas.members: 1
-│    ⚠ status warns: not HA — cores < 3
-│
-└─ HA writes + read scaling
-     spec.topology.mode: Cluster
-     spec.topology.cores.members: 3
-     spec.topology.readReplicas.members: N
-```
-
----
-
-### Helm chart mapping (reference)
-
-| Helm value | Operator `spec.topology` |
-|------------|--------------------------|
-| `minimumClusterSize: 1` (default) | `mode: Standalone` **or** `Cluster` with `cores.members: 1`, `readReplicas: 0` |
-| `minimumClusterSize: 3` | `mode: Cluster`, `cores.members: 3` |
-| StatefulSet replicas > minimumClusterSize | `cores.members` + scale / `enableServer` flow (`NEO-011`) |
-| `operations.enableServer: true` | Operator enables servers added outside initial core count |
-| Per-member Helm release (chart note L732–735) | **Not** replicated — operator uses **one** `Neo4j` CR + one StatefulSet with N replicas |
-
----
-
-## Decision
-
-We will model Neo4j topology on **two axes** inside the single `Neo4j` CRD:
-
-### Axis 1 — deployment mode
-
-| `spec.topology.mode` | Meaning |
-|----------------------|---------|
-| `Standalone` | Single Neo4j server; no cluster formation |
-| `Cluster` | Causal cluster; requires `cores` (and optionally `readReplicas`) |
-
-### Axis 2 — role composition (when `mode: Cluster`)
+Domain-aligned model: deployment mode **and** Neo4j role counts. Helm mapped **into** this shape via `11-helm-mapping.md`, not as CR field names.
 
 ```yaml
 apiVersion: neo4j.com/v1beta1
@@ -162,59 +147,163 @@ spec:
   topology:
     mode: Cluster
     cores:
-      members: 1              # primary / quorum voters
+      members: 1
     readReplicas:
-      members: 1              # analytics or read scaling
-    minimumMembers: 1         # maps Helm minimumClusterSize — initial formation size
-  persistence: { ... }
-  connectivity: { ... }
-  trust: { ... }
-  config: { ... }
+      members: 1              # analytics / read scaling
+    minimumMembers: 1         # Helm minimumClusterSize — formation gate
 ```
 
-**Standalone** shorthand (no role block):
+**Standalone** shorthand:
 
 ```yaml
 spec:
   topology:
     mode: Standalone
-  # cores / readReplicas must be absent or ignored
 ```
+
+**Production HA**:
+
+```yaml
+spec:
+  topology:
+    mode: Cluster
+    cores:
+      members: 3
+    readReplicas:
+      members: 0
+    minimumMembers: 3
+```
+
+| Advantages | Disadvantages |
+|------------|---------------|
+| **Primary + analytics explicit** — `cores: 1`, `readReplicas: 1` | More fields than Options A and B |
+| **`mode` + roles** — answers both “cluster formation?” and “primary vs secondary?” | Users must learn cores vs read replicas (support runbook) |
+| Validates Neo4j rules (odd cores, Enterprise for read replicas) | `Standalone` vs `Cluster` with `cores: 1` — need clear validation rules |
+| HA warnings without blocking dev (`cores < 3` → status warning) | New vocabulary for Helm-only users (migration guide required) |
+| Matches Neo4j causal cluster model | `neo4j/spec.md` + validation are the hardest part of V1 |
+| Single coherent model for one CR + one StatefulSet | Differs from “one Helm release per member” mental model |
+
+**Helm mapping** (translation table in `11-helm-mapping.md`):
+
+| Helm | Operator `spec.topology` |
+|------|--------------------------|
+| `minimumClusterSize: 1`, no analytics | `mode: Standalone` |
+| analytics primary + N secondaries (N Helm releases → 1 CR) | `mode: Cluster`, `cores: 1`, `readReplicas: N` |
+| `minimumClusterSize: 3` | `mode: Cluster`, `cores: 3`, `minimumMembers: 3` |
+| SS replicas > minimumClusterSize | scale / `enableServer` flow (`NEO-011`) |
+| `operations.enableServer: true` | Operator enable-server job |
+
+---
+
+### Option E — Named topology profiles (presets only)
+
+User selects a validated preset; operator expands to concrete topology — raw counts optional or absent.
+
+```yaml
+spec:
+  topology:
+    profile: primary-plus-analytics
+    # profile: production-ha
+    # profile: standalone-dev
+    # profile: ha-with-read-replicas
+```
+
+| Preset | Expands to (conceptually) |
+|--------|---------------------------|
+| `standalone-dev` | 1 server, no cluster |
+| `production-ha` | 3 cores, 0 read replicas |
+| `primary-plus-analytics` | 1 core, 1 read replica |
+| `ha-with-read-replicas` | 3 cores, N read replicas (N in sub-field?) |
+
+| Advantages | Disadvantages |
+|------------|---------------|
+| **Lowest friction for beginners** — use case → one enum | **Indirection** — GitOps users must read preset definitions |
+| Encodes validated combinations (including primary + analytics) | Profile catalog must be **maintained** across Neo4j versions |
+| Good for docs, wizards, and `samples/` | Advanced / custom topologies need escape hatch (counts or new profiles) |
+| Reduces invalid specs at admission time | Duplication if both `profile` and raw counts exist |
+| | Hides actual topology in `kubectl get -o yaml` unless status echoes expansion |
+| | “Profile vs counts” — third mental model if combined with Option D fields |
+
+**Helm parity**: indirect — presets documented as expansion rules in `11-helm-mapping.md`.
+
+---
+
+## Comparison matrix
+
+| Criterion | A — `servers: N` | B — mode + members | C — Helm-like | D — mode + roles | E — profiles |
+|-----------|------------------|--------------------|-----------------|------------------|--------------|
+| Primary + analytics explicit | ❌ | ❌ | ⚠️ via `analytics.type` | ✅ | ✅ (if preset exists) |
+| Production HA (3 cores) | ⚠️ | ✅ | ✅ | ✅ | ✅ (if preset exists) |
+| Simple dev / standalone | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Neo4j quorum validation | ❌ | ⚠️ | ⚠️ | ✅ | ✅ (baked into presets) |
+| Helm migration clarity | ❌ | ⚠️ | ✅ | ⚠️ (mapping doc) | ❌ |
+| Domain / support clarity | ❌ | ⚠️ | ❌ | ✅ | ⚠️ |
+| GitOps / explicit counts | ✅ | ✅ | ✅ | ✅ | ❌ |
+| API minimalism | ✅ | ✅ | ❌ | ⚠️ | ✅ |
+| One CR + one StatefulSet | ✅ | ✅ | ⚠️ | ✅ | ✅ |
+
+---
+
+## User decision guide (Option D)
+
+```
+What do you need?
+│
+├─ Single server (dev, test, CI)
+│    spec.topology.mode: Standalone
+│
+├─ Production fault tolerance (writes)
+│    spec.topology.mode: Cluster
+│    spec.topology.cores.members: 3        # odd, ≥ 3
+│    spec.topology.readReplicas.members: 0
+│
+├─ Primary + analytics / read secondary (NOT production HA for writes)
+│    spec.topology.mode: Cluster
+│    spec.topology.cores.members: 1
+│    spec.topology.readReplicas.members: 1
+│    ⚠ status warns: NonHA — cores < 3
+│
+└─ HA writes + read scaling
+     spec.topology.mode: Cluster
+     spec.topology.cores.members: 3
+     spec.topology.readReplicas.members: N
+```
+
+Optional **documentation profiles** (samples / `00-vision.md`) may mirror Option E presets; CRD `profile` field deferred to V1.1+.
+
+---
+
+## Decision
+
+**We will adopt Option D** — `mode: Standalone | Cluster` plus **`cores.members`** and **`readReplicas.members`** in cluster mode.
+
+- **Option C** informs **`11-helm-mapping.md`** (translation table), not CR field names.
+- **Option E** may appear later as **optional shortcuts** that expand to Option D counts — not a replacement for explicit GitOps specs in V1.
+
+Options **A** and **B** are **rejected** — ambiguous for primary + secondary (`servers: 2` / `members: 2`). Option **E alone** is **rejected** for V1 — too opaque for production GitOps.
 
 ### Validation and guidance rules
 
 | Rule | Severity | Message (example) |
 |------|----------|-------------------|
 | `mode: Standalone` → no `readReplicas` | Error | Read replicas require `mode: Cluster` |
-| `cores.members` even and > 0 | Error | Core count should be odd for quorum |
+| `cores.members` even and > 0 | Error | Core count must be odd for quorum |
 | `cores.members: 1` + `readReplicas ≥ 1` | Warning | Non-HA topology — not for production writes |
-| `cores.members < 3` and production label absent | Warning | For HA production use `cores.members ≥ 3` |
-| `readReplicas.members > 0` + `edition: community` | Error | Read replicas require Enterprise |
-| `cores.members` decreased below formed cluster | Error | Scale-in must be explicit / supported path |
+| `cores.members < 3` (no production label) | Warning | For HA production use `cores.members ≥ 3` |
+| `readReplicas.members > 0` + Community edition | Error | Read replicas require Enterprise |
+| Scale-in below formed cluster | Error | Unsupported scale-in — explicit procedure required |
 
-Warnings surface in **`status.conditions`** (`Type: TopologyWarning`, `Reason: NonHA`) — visible without reading operator logs.
-
-### Optional profiles (V1 docs + samples; CRD field V1.1+)
-
-Document named presets in `samples/` and `00-vision.md`; optional future field:
-
-```yaml
-spec:
-  topology:
-    profile: production-ha          # expands to cores: 3, readReplicas: 0
-    # profile: primary-plus-analytics  # cores: 1, readReplicas: 1
-```
+Warnings → **`status.conditions`** (`Type: TopologyWarning`, `Reason: NonHA`).
 
 ### V1 scope
 
 | In V1 | Deferred |
 |-------|----------|
-| `mode: Standalone` | `topology.profile` CRD field (docs-only presets first) |
-| `mode: Cluster`, `cores.members` (1 or 3+) | Dedicated `analytics` server role separate from `readReplica` |
-| `readReplicas.members: 0` in V1 tests | Multi-zone `multiCluster` networking variant |
-| Validation errors + HA warnings | Auto-correction based on `intent` |
-
-Read replicas with `cores: 1` + `readReplicas: 1` are **in scope for spec design** in V1; **test coverage** may land V1.1 depending on `13-dod-v1.md` prioritisation.
+| `mode: Standalone` | **Option E** — `topology.profile` CRD enum (docs-only presets in samples first) |
+| `mode: Cluster`, `cores.members` (1 or 3+) | Separate `analytics` **role** distinct from `readReplica` |
+| `readReplicas.members: 0` in P0 tests | Multi-zone `multiCluster` networking variant |
+| Validation errors + HA warnings | Auto-correction from guessed user intent |
+| Spec design for `cores: 1` + `readReplicas: 1` | Full E2E for analytics topology (prioritise in `13-dod-v1.md`) |
 
 ---
 
@@ -222,41 +311,18 @@ Read replicas with `cores: 1` + `readReplicas: 1` are **in scope for spec design
 
 ### Positive
 
-- **Primary + analytics** is a first-class, documented pattern — not a misuse of `members: 2`.
-- Customers get **actionable guidance** via validation errors and status warnings.
-- Helm `minimumClusterSize` and `enableServer` map cleanly to operator fields.
-- BDR-001 unchanged — still one CRD, one `neo4jRef` for day-2 resources.
+- **Primary + analytics** is explicit — not a misuse of `members: 2`.
+- Actionable guidance via validation and status warnings.
+- Helm `minimumClusterSize`, `analytics`, and `enableServer` map through one translation table.
+- BDR-001 unchanged — one CRD, one `neo4jRef`.
 
 ### Negative
 
-- `neo4j/spec.md` and `neo4j/validation.md` grow — topology section is the most sensitive part.
-- Support must understand **cores vs read replicas** — requires runbook and decision tree in docs.
-- Differs from Helm's "one release per cluster member" mental model — migration docs must explain unified CR.
+- Topology is the most sensitive section of `neo4j/spec.md` and `neo4j/validation.md`.
+- Support must understand cores vs read replicas (runbook + decision tree).
+- Migration docs must explain unified CR vs multi-release Helm.
 
 ### Neutral
 
-- `03-variant_matrix.csv` needs new variants: `Read replica`, `Primary + analytics`, `Core size 1/3/N`.
-- `domain/workload` branches on `mode`; `domain/formation` handles core vs replica reconciliation paths.
-- [BDR-001](001-single-neo4j-crd.md) Option E (cluster-only) remains rejected — explicit `Standalone` kept for lightweight dev path.
-
----
-
-## Alternatives considered
-
-| Alternative | Why rejected |
-|-------------|--------------|
-| Flat `members` only | Cannot guide 1+1 analytics; conflates roles |
-| Separate CRD per role (Option D variant) | GitOps and hierarchy complexity — see BDR-001 |
-| Required `spec.intent` field | Redundant with mode + roles + warnings |
-| Profiles only (no explicit counts) | Too opaque for production GitOps |
-
----
-
-## References
-
-- [BDR-001](001-single-neo4j-crd.md) — single `Neo4j` CRD
-- FR: `NEO-001`, `NEO-002`, `NEO-011` — `01-functional_requirements.csv`
-- Helm: [`design/analysis/helm_neo4j_values.yaml`](../../analysis/helm_neo4j_values.yaml) — `minimumClusterSize`, `operations.enableServer`
-- CRD spec: [`09-crd-spec/neo4j/`](../../09-crd-spec/neo4j/)
-- Validation: [`09-crd-spec/neo4j/validation.md`](../../09-crd-spec/neo4j/validation.md)
-- Samples: `samples/standalone.yaml`, `samples/cluster-ha-3.yaml`, `samples/primary-plus-analytics.yaml` *(to create)*
+- `03-variant_matrix.csv` — add variants: read replica, primary + analytics, core sizes 1/3/N.
+- `domain/workload` branches on `mode`; `domain/formation` handles core vs replica paths.
