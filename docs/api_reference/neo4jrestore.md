@@ -12,7 +12,7 @@ For practical examples and usage guidance, see the [Backup and Restore Guide](..
 
 ## How it works
 
-The operator picks the restore method based on the target kind referenced by `clusterRef`. The Neo4j docs flag `neo4j-admin database restore` as **unsafe on clusters**, so the two paths diverge:
+The operator picks the restore method based on the target kind referenced by `instanceRef` (or the deprecated `clusterRef`). The Neo4j docs flag `neo4j-admin database restore` as **unsafe on clusters**, so the two paths diverge:
 
 **`Neo4jEnterpriseCluster` target** — Cypher over Bolt, no Job:
 
@@ -52,9 +52,12 @@ kubectl exec <instance>-server-0 -c neo4j -- bash -c \
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `clusterRef` | `string` | ✅ | Name of the `Neo4jEnterpriseCluster` or `Neo4jEnterpriseStandalone` to restore into. The controller detects the type automatically. |
+| `instanceRef` | `string` | ✅ (or `clusterRef`) | **(v1.13)** The Neo4j deployment to restore into — a `Neo4jEnterpriseCluster` or `Neo4jEnterpriseStandalone` (topology-agnostic; the operator picks the restore engine). Preferred alias of `clusterRef`. |
+| `clusterRef` | `string` | ⚠️ deprecated | **DEPRECATED (v1.13, removed v1.14)** — use `instanceRef`. |
 | `source` | [`RestoreSource`](#restoresource) | ✅ | Source of the backup data to restore |
-| `databaseName` | `string` | ✅ | Name of the Neo4j database to restore |
+| `database` | `string` | ✅ (or `allDatabases`) | **(v1.13)** Name of the database to restore. Preferred alias of `databaseName`. |
+| `allDatabases` | `bool` | ❌ | **(v1.13)** Restore **every** user database recorded in the source backup (the `system` database is excluded) — the restore counterpart of an all-databases backup ([#222](https://github.com/priyolahiri/neo4j-kubernetes-operator/issues/222)). Requires `source.type=backup`; mutually exclusive with `database`/`databaseName`. Restores one database per reconcile pass; per-database progress in `status.databaseResults`. **Supported for cloud-backed cluster targets**; standalone and PVC-backed cluster all-databases restore are tracked in [#288](https://github.com/priyolahiri/neo4j-kubernetes-operator/issues/288). |
+| `databaseName` | `string` | ⚠️ deprecated | **DEPRECATED (v1.13, removed v1.14)** — use `database`. |
 | `options` | [`RestoreOptionsSpec`](#restoreoptionsspec) | ❌ | Additional restore configuration options |
 | `force` | `bool` | ❌ | Confirm restoring **over an existing database** (default: `false`). Standalone targets: passes `--overwrite-destination` to `neo4j-admin`. Cluster targets: required (or `options.replaceExisting: true`) before the operator issues the destructive `dbms.recreateDatabase` against an existing database. |
 | `stopCluster` | `bool` | ❌ | **Standalone targets only** (cluster targets restore via Cypher and ignore it). `true` scales the instance down before the restore Job (mounting `data-{name}-server-0` directly) and scales it back up after. With `false`, the operator **refuses** to run the Job while any server pod is running — it never writes into a live data volume. |
@@ -265,6 +268,7 @@ Storage backend configuration (shared with `Neo4jBackup`).
 | `stats` | [`RestoreStats`](#restorestats) | Restore operation statistics |
 | `backupInfo` | [`RestoreBackupInfo`](#restorebackupinfo) | Information about the backup that was restored |
 | `resolvedSource` | [`ResolvedRestoreSource`](#resolvedrestoresource) | The concrete backup location this restore pinned the first time it resolved `source.backupRef`. From then on the restore reads this snapshot, so deleting the `Neo4jBackup` CR mid-restore doesn't break it. Cleared automatically if `spec.source.backupRef` changes (the new reference is re-resolved). |
+| `databaseResults` | `[]DatabaseRestoreResult` | **(v1.13)** Per-database progress for an all-databases restore (`spec.allDatabases`): one entry per user database with `database`, `phase` (`Pending`/`Running`/`Completed`/`Failed`), `message`, and `completionTime`. Empty for single-database restores. |
 | `observedGeneration` | `int64` | Generation of the most recently observed `Neo4jRestore` spec |
 
 ### ResolvedRestoreSource
@@ -275,6 +279,7 @@ Storage backend configuration (shared with `Neo4jBackup`).
 | `storage` | [`StorageLocation`](#storagelocation) | Concrete storage location (PVC or cloud, credentials reference folded in) of the resolved backup |
 | `backupPath` | `string` | The per-CR shared chain directory of the resolved most-recent Succeeded run |
 | `artifactFilename` | `string` | Exact `.backup` filename of the resolved run — required by the cluster Cypher paths (cloud seedURI + PVC proxy), which seed from a single file |
+| `databaseArtifacts` | `[]DatabaseArtifact` | **(v1.13)** Per-database `.backup` map pinned from the resolved backup's latest Succeeded run, driving an all-databases restore (`spec.allDatabases`). Empty for single-database restores. |
 | `resolvedAt` | `*metav1.Time` | When the `backupRef` was first dereferenced |
 
 ### RestoreStats

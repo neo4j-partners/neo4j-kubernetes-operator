@@ -22,7 +22,8 @@ Key implementation details:
 - For PVC storage, `--to-path` uses the local path within the mounted PVC.
 - RBAC: Only a `neo4j-backup-sa` ServiceAccount is created. No Role or RoleBinding is created because the backup Job requires no Kubernetes API access.
 - Retention: cloud storage (S3/GCS/Azure) is pruned by **your bucket's lifecycle rules**, not the operator. For PVC storage, the operator runs a cleanup Job **only when the Neo4jBackup CR is deleted** — see [RetentionPolicy](#retentionpolicy).
-- `target.kind: Cluster` backs up **every database** on the instance in one `neo4j-admin database backup "*"` invocation — one `.backup` artifact per database lands in the chain directory. Restore is per-database: create one `Neo4jRestore` per database you want back (an all-databases restore mode is tracked in [#222](https://github.com/priyolahiri/neo4j-kubernetes-operator/issues/222)).
+- **Scope (v1.13):** set `spec.instanceRef` (the deployment — a cluster **or** a standalone) plus exactly one of `spec.database` (a single database) or `spec.allDatabases: true` (every user database; the `system` database is excluded). The operator resolves cluster-vs-standalone itself — topology is no longer part of the API. `spec.allDatabases` produces one `.backup` artifact per database (recorded in `status.history[].databaseArtifacts`) and is restorable cluster-wide via `Neo4jRestore.spec.allDatabases` (closes [#222](https://github.com/priyolahiri/neo4j-kubernetes-operator/issues/222)).
+- The legacy `spec.target` block (`kind`/`name`/`clusterRef`) is **deprecated as of v1.13** (emits a `BackupAPIDeprecated` event) and is **removed in v1.14** — see [BackupTarget](#backuptarget).
 
 ## Spec
 
@@ -30,7 +31,10 @@ The `Neo4jBackupSpec` defines the desired state of a Neo4j backup configuration.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `target` | [`BackupTarget`](#backuptarget) | ✅ | What to back up |
+| `instanceRef` | `string` | ✅ (or `target`) | **(v1.13)** The Neo4j deployment to back up — a `Neo4jEnterpriseCluster` or `Neo4jEnterpriseStandalone`. Topology-agnostic. Pair with exactly one of `database` / `allDatabases`. |
+| `database` | `string` | ❌ | **(v1.13)** Single-database scope: back up exactly this database. Mutually exclusive with `allDatabases`. |
+| `allDatabases` | `bool` | ❌ | **(v1.13)** Instance-wide scope: back up every user database (the `system` database is excluded). Mutually exclusive with `database`. |
+| `target` | [`BackupTarget`](#backuptarget) | ⚠️ deprecated | **DEPRECATED (v1.13, removed v1.14)** — use `instanceRef` + `database`/`allDatabases`. Ignored when `instanceRef` is set. |
 | `storage` | [`StorageLocation`](#storagelocation) | ✅ | Where to store the backup |
 | `schedule` | `string` | ❌ | Cron expression for automated backups (e.g., `"0 2 * * *"`). Plain 5-field UTC syntax only — `TZ=`/`CRON_TZ=` prefixes are **rejected** (Kubernetes refuses timezone-embedded CronJob schedules). Scheduled backup names are limited to **40 characters** (the generated `<name>-backup-cron` CronJob must fit Kubernetes' 52-char CronJob-name limit). Removing `schedule` from an existing CR **deletes the CronJob** (the CR becomes a one-shot backup). |
 | `cloud` | [`*CloudBlock`](#cloudblock) | ❌ | Top-level cloud provider configuration (used for workload identity) |
@@ -42,6 +46,8 @@ The `Neo4jBackupSpec` defines the desired state of a Neo4j backup configuration.
 ## Type Definitions
 
 ### BackupTarget
+
+> **DEPRECATED (v1.13, removed in v1.14).** Use `spec.instanceRef` + `spec.database`/`spec.allDatabases` instead — the scope (single vs all databases) is what matters; cluster-vs-standalone is an implementation detail the operator resolves. This block is honored for one release behind a `BackupAPIDeprecated` warning event and is ignored when `spec.instanceRef` is set.
 
 Defines what to back up. The `kind` field controls how `name` and `clusterRef` are interpreted.
 
@@ -299,6 +305,7 @@ Represents a single backup Job execution.
 | `backupsPath` | `string` | The shared per-CR directory under `spec.storage.path` where this run wrote its `.backup` artifact. **Same value for every run of one CR** — all runs accumulate in this directory so `neo4j-admin` can chain differential backups off the prior full. Value is the Neo4jBackup CR name (or the `chainFromBackup` chain-root name when set). Use the `runID` field (Job name) for per-run identity. |
 | `artifactFilename` | `string` | Filename of the `.backup` artifact produced by this standard-DB run (e.g. `"neo4j-2026-06-08T01-18-06.backup"`). Populated by parsing the Job's Pod log after completion; empty when logs couldn't be fetched or the pattern didn't match. Used by the cluster PVC-restore path to build a per-restore seed URL. |
 | `shardArtifacts` | [`[]ShardArtifact`](#shardartifact) | Per-shard `.backup` files produced by a sharded backup run (`target.kind=ShardedDatabase`). Empty for non-sharded runs. |
+| `databaseArtifacts` | `[]DatabaseArtifact` | Per-database `.backup` files produced by an all-databases backup (`spec.allDatabases` / legacy `target.kind=Cluster`): one entry (`database`, `filename`, `size`) per user database (shard physical databases excluded). Consumed by an all-databases restore (`Neo4jRestore.spec.allDatabases`). Empty for single-database and sharded runs. |
 | `validation` | [`*BackupValidationResult`](#backupvalidationresult) | Per-shard outcome of the optional `neo4j-admin backup validate` step (only when `options.validate=true` and the operator could parse the output). |
 
 ### ShardArtifact

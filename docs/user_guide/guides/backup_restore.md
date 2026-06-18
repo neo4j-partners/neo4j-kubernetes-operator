@@ -159,6 +159,44 @@ That's a full backup and restore. From here:
 
 The legacy `spec.backups` field (and its centralized `{cluster}-backup-0` StatefulSet), and the standalone backup sidecar, have been **removed** — `spec.backups` no longer exists in the CRD schema. Use one or more `Neo4jBackup` CRs instead. The Neo4jBackup CRD covers every legacy capability plus more — one-shot or scheduled (`spec.schedule`) backups, native CronJob retention/suspend, `status.history`, sharded-DB targets, mixed-cadence FULL+DIFF chains via `spec.chainFromBackup`, and per-Job pod resource control (`spec.options.resources`). See the [Migration Guide](../migration_guide.md#6-specbackups-and-the-backup-sidecar-are-removed) for upgrade steps.
 
+## Backup & Restore API (v1.13) — scope, not topology
+
+As of v1.13 you describe **what** to back up/restore (scope) and **which deployment** (a topology-agnostic reference); the operator resolves cluster-vs-standalone itself.
+
+**Back up one database**
+```yaml
+apiVersion: neo4j.neo4j.com/v1beta1
+kind: Neo4jBackup
+metadata: { name: customers-backup }
+spec:
+  instanceRef: my-neo4j        # a cluster OR a standalone — the operator resolves it
+  database: customers
+  storage: { type: s3, bucket: backups }
+```
+
+**Back up every database (instance-wide; `system` excluded)**
+```yaml
+spec:
+  instanceRef: my-neo4j
+  allDatabases: true
+  storage: { type: s3, bucket: backups }
+```
+
+**Restore — symmetric**
+```yaml
+kind: Neo4jRestore
+spec:
+  instanceRef: my-neo4j
+  database: customers          # or:  allDatabases: true
+  source: { type: backup, backupRef: customers-backup }
+```
+
+**Cross-topology restore.** A backup is database-scoped, not topology-scoped — a database backed up from a **standalone** can be restored into a **cluster** (and vice-versa); the operator picks the engine from the *target*. Caveats: the target Neo4j version must be ≥ the source; the `system` database is never restored across topologies (`allDatabases` excludes it — carry users/roles via `options.includeMetadata` on the backup).
+
+**All-databases restore ([#222](https://github.com/priyolahiri/neo4j-kubernetes-operator/issues/222)).** `Neo4jRestore.spec.allDatabases: true` restores every user database recorded in the source backup, one per reconcile pass, with per-database progress in `status.databaseResults`. Requires `source.type=backup`. Supported today for **cloud-backed cluster** targets; standalone and PVC-backed cluster all-databases restore are tracked in [#288](https://github.com/priyolahiri/neo4j-kubernetes-operator/issues/288).
+
+**Deprecation.** The legacy `spec.target` (backup) and `spec.clusterRef`/`spec.databaseName` (restore) fields still work in v1.13 behind a deprecation warning event and are **removed in v1.14**. Migrate to `instanceRef` + `database`/`allDatabases`.
+
 ## Backup Architecture
 
 The operator spawns a Kubernetes Job that runs `neo4j-admin database backup` from the same Neo4j Enterprise image as the cluster (no sidecar containers). The Job connects to each `{cluster}-server-N` Pod on port 6362 (`server.backup.listen_address=0.0.0.0:6362`, configured automatically). For cloud destinations, `neo4j-admin` streams directly to the bucket — set `tempStorage` for large databases that need a PVC for staging.

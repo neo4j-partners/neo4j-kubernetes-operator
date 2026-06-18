@@ -77,7 +77,9 @@ surfaces issues the lighter phases miss).
 |---|---|
 | Cluster forms | 3 members `Enabled`/`Available`; server-based pod names |
 | Database **with topology** | e.g. `3 PRIMARIES`; `SHOW DATABASE <db>` shows the primaries `online` |
-| Backup → restore (cluster) | in-place **Cypher** path: back up one DB (`kind: Database`), restore into a **new** database, confirm the data round-trips |
+| Backup → restore (cluster) | in-place **Cypher** path: back up one DB (`instanceRef` + `database`), restore into a **new** database, confirm the data round-trips |
+| All-databases restore (cluster) | `Neo4jBackup` `allDatabases: true` → `Neo4jRestore` `allDatabases: true` (cloud-backed); confirm every user DB round-trips and `status.databaseResults` are all `Completed` (#222) |
+| Cross-topology restore | back up a DB from the **standalone** (Phase 1), restore it into the **cluster** via `instanceRef`; confirm the data round-trips |
 
 3 servers (not 2) keeps split-brain / 3-primary quorum behaviour in the routine
 walk. → **Tear down the cluster fully** before Phase 3.
