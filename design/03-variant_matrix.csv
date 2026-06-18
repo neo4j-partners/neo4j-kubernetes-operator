@@ -1,92 +1,92 @@
-Variant Group,Variant,Applies To Requirement IDs,Description,Test Impact,Acceptance Criteria Group,V1
-Packaging,YAML,OP-001; OP-004; OP-005,"Install, upgrade, and uninstall operator using Kubernetes manifests.",Shared installation AC,AC-OP-INSTALL,Yes
-Packaging,Helm,OP-001; OP-004; OP-005,"Install, upgrade, and uninstall operator using Helm chart.",Shared installation AC + Helm packaging checks,AC-OP-INSTALL; AC-PACKAGING-HELM,No
-Operator Scope,Single namespace,OP-001; OP-002; OP-006,Operator watches and reconciles resources only in its own namespace.,Specific topology AC,AC-OP-SCOPE-SINGLE,Yes
-Operator Scope,Multiple namespaces,OP-001; OP-002; OP-006,Operator watches a configured list of namespaces.,Specific topology AC,AC-OP-SCOPE-MULTI,No
-Operator Scope,Cluster-wide,OP-001; OP-002; OP-006,Operator watches resources across all namespaces.,Specific topology AC,AC-OP-SCOPE-CLUSTER,No
-Status Model,Basic conditions,OP-003,"Expose Ready, Reconciling, Error, Installed conditions.",Specific status AC,AC-OP-STATUS,Yes
-Status Model,Detailed phase/status,OP-003,"Expose detailed phases for install, upgrade, backup, restore, and errors.",Specific status AC,AC-OP-STATUS-DETAIL,No
-Upgrade Strategy,In-place controller upgrade,OP-004,Upgrade operator deployment without changing CRD versions.,Specific upgrade AC,AC-OP-UPGRADE,Yes
-Upgrade Strategy,CRD conversion webhook,OP-004,Support API version conversion for CRDs.,Specific upgrade AC,AC-OP-CRD-CONVERSION,No
-Uninstall Policy,Preserve data,OP-005; NEO-018,Delete control plane/workload resources while preserving PVCs.,Specific uninstall AC,AC-NEO-UNINSTALL-PRESERVE,Yes
-Uninstall Policy,Delete data,OP-005; NEO-018,Delete PVCs and data for ephemeral environments.,Specific uninstall AC,AC-NEO-UNINSTALL-DELETE,No
-Neo4j Deployment Mode,Standalone,NEO-001,Deploy one Neo4j server.,Specific deployment AC,AC-NEO-STANDALONE,Yes
-Neo4j Deployment Mode,Cluster,NEO-002; NEO-011,Deploy a clustered Neo4j topology.,Specific deployment AC,AC-NEO-CLUSTER,Yes
-Edition,Enterprise,NEO-001; NEO-002; NEO-003,Deploy Neo4j Enterprise edition.,Shared install AC + license AC,AC-NEO-LICENSE,Yes
-License Mode,Accepted license,NEO-001; NEO-002,User confirms enterprise license agreement.,Specific license AC,AC-NEO-LICENSE,Yes
-License Mode,Evaluation license,NEO-001; NEO-002,User deploys Enterprise in eval mode.,Specific license AC,AC-NEO-LICENSE,No
-Cluster Size,Minimum cluster size,NEO-002,Configure initial minimum number of members required for cluster formation.,Cluster-specific AC,AC-NEO-CLUSTER,Yes
-Cluster Size,Scale out/in,NEO-011,Change cluster size after initial deployment.,Scale-specific AC,AC-NEO-SCALE,Yes
-Server Enablement,Automatic enable server,NEO-011,Enable servers added outside initial cluster size using operations job or operator logic.,Scale-specific AC,AC-NEO-SCALE,Yes
-Storage,Default StorageClass,NEO-006,Use Kubernetes default StorageClass to provision PVC.,Storage-specific AC,AC-NEO-STORAGE-DEFAULT,Yes
-Storage,Existing StorageClass,NEO-006,Use an existing named StorageClass to dynamically provision PVC.,Storage-specific AC,AC-NEO-STORAGE-DYNAMIC,Yes
-Storage,Existing PVC,NEO-006,Bind Neo4j to an existing PVC or explicit volume.,Storage-specific AC,AC-NEO-STORAGE-EXISTING,No
-Storage,Selector,NEO-006,Bind to existing volumes matching selectors.,Storage-specific AC,AC-NEO-STORAGE-SELECTOR,No
-Storage,VolumeClaimTemplate,NEO-006,Use a provided volumeClaimTemplate.,Storage-specific AC,AC-NEO-STORAGE-VCT,No
-Cloud Storage,With Workload Identity,NEO-001; NEO-002; NEO-013; NEO-014,Access cloud object storage using platform workload identity (GKE WI / AKS WI / EKS IRSA).,Cloud storage AC,AC-NEO-CLOUDSTORAGE-MI,Yes
-Cloud Storage,Without Workload Identity,NEO-001; NEO-002; NEO-013; NEO-014,Access cloud object storage using mounted credentials or Secrets.,Cloud storage AC,AC-NEO-CLOUDSTORAGE,Yes
-Volume Role,Data,NEO-006,Persistent storage for database data.,Storage-specific AC,AC-NEO-STORAGE,Yes
-Volume Role,Backups,NEO-006; NEO-013,Volume for backup files.,Backup/storage AC,AC-NEO-BACKUP,Yes
-Volume Role,Logs,NEO-006; NEO-016,Volume for logs.,Logging/storage AC,AC-NEO-LOGGING,Yes
-Volume Role,Metrics,NEO-006; NEO-015,Volume for CSV metrics.,Monitoring/storage AC,AC-NEO-MONITORING,No
-Volume Role,Import,NEO-006,Volume mounted to /import.,Storage AC,AC-NEO-STORAGE,No
-Volume Role,Licenses,NEO-006,Volume mounted to /licenses.,License/storage AC,AC-NEO-LICENSE,No
-Service Type,ClusterIP,NEO-001; NEO-007,Expose Neo4j via internal ClusterIP service (in-cluster access only).,Networking AC,AC-NEO-NETWORKING; AC-NEO-NETWORKING-CLUSTERIP,Yes
-Service Type,NodePort,NEO-001; NEO-007,Expose Neo4j externally via fixed node ports.,Networking AC,AC-NEO-NETWORKING; AC-NEO-NETWORKING-NODEPORT,No
-Service Type,LoadBalancer,NEO-001; NEO-007,Expose Neo4j externally via cloud LoadBalancer.,Networking AC,AC-NEO-NETWORKING; AC-NEO-NETWORKING-LB,Yes
-Port Combination,Bolt only,NEO-001; NEO-007,Expose Bolt (7687) only; HTTP and HTTPS disabled.,Networking AC,AC-NEO-NETWORKING-PORTS-BOLT,No
-Port Combination,HTTPS only,NEO-001; NEO-007,Expose HTTPS (7473) only; Bolt and HTTP disabled.,Networking AC,AC-NEO-NETWORKING-PORTS-HTTPS,No
-Port Combination,HTTP + Bolt,NEO-001; NEO-007,Expose HTTP and Bolt; HTTPS disabled.,Networking AC,AC-NEO-NETWORKING-PORTS-HTTP-BOLT,Yes
-Port Combination,HTTPS + Bolt,NEO-001; NEO-007,Expose HTTPS and Bolt; HTTP disabled.,Networking AC,AC-NEO-NETWORKING-PORTS-HTTPS-BOLT,Yes
-Port Combination,HTTP + HTTPS + Bolt,NEO-001; NEO-007,Expose all three connectors (default full exposure).,Networking AC,AC-NEO-NETWORKING-PORTS-FULL,Yes
-Port Combination,HTTP + HTTPS,NEO-001; NEO-007,Expose HTTP and HTTPS; Bolt disabled (browser-only access).,Networking AC,AC-NEO-NETWORKING-PORTS-HTTP-HTTPS,No
-Ports,HTTP,NEO-001; NEO-007,Enable HTTP connector (7474).,Networking AC,AC-NEO-NETWORKING-PORTS-HTTP,Yes
-Ports,HTTPS,NEO-001; NEO-007; NEO-005,Enable HTTPS connector (7473).,Networking/TLS AC,AC-NEO-NETWORKING-PORTS-HTTPS; AC-NEO-TLS,Yes
-Ports,Bolt,NEO-001; NEO-007; NEO-005,Enable Bolt connector (7687).,Networking/TLS AC,AC-NEO-NETWORKING-PORTS-BOLT,Yes
-Ports,Backup,NEO-007; NEO-013,Expose backup port for backup operations.,Backup/networking AC,AC-NEO-BACKUP,No
-Multi Cluster,Disabled,NEO-007,Single Kubernetes cluster deployment.,Networking AC,AC-NEO-NETWORKING,Yes
-Multi Cluster,Enabled,NEO-007,Open internal ports/config required for multi-zone/multi-region cluster scenario.,Specific multi-cluster AC,AC-NEO-MULTICLUSTER,No
-Neo4j Config,Core config,NEO-003,Apply server config values.,Config AC,AC-NEO-CONFIG,Yes
-Neo4j Config,Strict validation toggle,NEO-003,Support strict config validation setting.,Config AC,AC-NEO-CONFIG,Yes
-Neo4j Config,SPeeDy feature flag,NEO-003,Support sharded property database feature flag.,Config AC,AC-NEO-CONFIG,No
-APOC,APOC config,NEO-003,Apply APOC configuration.,APOC AC,AC-NEO-APOC,No
-APOC,APOC credentials,NEO-003; NEO-004,Mount APOC credentials from secrets.,APOC/secrets AC,AC-NEO-APOC-CREDS,No
-JVM,Default arguments,NEO-003,Use Neo4j default JVM arguments.,Config AC,AC-NEO-CONFIG,Yes
-JVM,Additional arguments,NEO-003,Append custom JVM arguments.,Config AC,AC-NEO-CONFIG,Yes
-Credentials,Generated password,NEO-004,Generate password when not provided.,Secret AC,AC-NEO-SECRETS,Yes
-Credentials,Password from Secret,NEO-004,Use existing Kubernetes Secret for initial Neo4j password.,Secret AC,AC-NEO-SECRETS,Yes
-Secrets,Secret mounts,NEO-004; NEO-014,Mount arbitrary Kubernetes Secrets into Neo4j pod.,Secret AC,AC-NEO-SECRETS,Yes
-Secrets,LDAP password secret,NEO-004,Mount LDAP system account password from Secret.,Secret AC,AC-NEO-LDAP,No
-Image Pull Secrets,Existing pull secret,NEO-004,Use existing image pull secret.,Image AC,AC-NEO-IMAGE,Yes
-Image Pull Secrets,Create image credential secret,NEO-004,Create docker-registry secret from provided credentials.,Image AC,AC-NEO-IMAGE,No
-TLS Mode,Bolt TLS,NEO-005,Configure TLS material for Bolt.,TLS AC,AC-NEO-TLS,Yes
-TLS Mode,HTTPS TLS,NEO-005,Configure TLS material for HTTPS.,TLS AC,AC-NEO-TLS,Yes
-TLS Mode,Cluster TLS,NEO-005,Configure TLS material for cluster communication.,TLS/cluster AC,AC-NEO-TLS; AC-NEO-CLUSTER,Yes
-TLS Mode,TLS reload,NEO-005,Enable automatic TLS certificate reload.,TLS AC,AC-NEO-TLS-RELOAD,Yes
-Scheduling,Node selector,NEO-008,Constrain pods to selected nodes.,Scheduling AC,AC-NEO-SCHEDULING,Yes
-Scheduling,Affinity / anti-affinity,NEO-008,Configure node affinity and pod anti-affinity.,Scheduling AC,AC-NEO-SCHEDULING,Yes
-Scheduling,Tolerations,NEO-008,Allow scheduling on tainted nodes.,Scheduling AC,AC-NEO-SCHEDULING,Yes
-Scheduling,Topology spread,NEO-008,Distribute pods across topology domains.,Scheduling AC,AC-NEO-SCHEDULING,Yes
-Scheduling,Priority class,NEO-008,Set pod priority class.,Scheduling AC,AC-NEO-SCHEDULING,No
-Scheduling,Service account,NEO-008; NEO-014,Set pod service account for workload identity/cloud access.,Scheduling/secrets AC,AC-NEO-SCHEDULING,Yes
-Probe Profile,Default Neo4j probes,NEO-009,Use default startup/readiness/liveness probes.,Probe AC,AC-NEO-PROBES,Yes
-Probe Profile,Custom probes,NEO-009,Allow users to customize probe thresholds/timeouts.,Probe AC,AC-NEO-PROBES,Yes
-Restart Strategy,Controlled restart,NEO-010,Restart Neo4j workload when config requires it.,Config change AC,AC-NEO-CONFIG-CHANGE,Yes
-Restart Strategy,Rolling restart,NEO-010; NEO-002,Restart cluster members safely one by one.,Config change/cluster AC,AC-NEO-CONFIG-CHANGE; AC-NEO-CLUSTER,Yes
-Upgrade Strategy,Neo4j image upgrade,NEO-012,Change Neo4j image tag/repository/version.,Upgrade AC,AC-NEO-UPGRADE,Yes
-Upgrade Strategy,Preflight validation,NEO-012,"Validate health, storage, version, and cluster state before upgrade.",Upgrade AC,AC-NEO-UPGRADE,Yes
-Backup Mode,On-demand,NEO-013,Create backup by user request.,Backup AC,AC-NEO-BACKUP-ONDEMAND,Yes
-Backup Mode,Scheduled,NEO-013,Create backups on a defined schedule.,Backup AC,AC-NEO-BACKUP-SCHEDULED,Yes
-Backup Storage,Shared local volume,NEO-013,Write backups to shared volume.,Backup AC,AC-NEO-BACKUP,Yes
-Backup Storage,Dedicated PVC,NEO-013,Write backups to a dedicated PVC.,Backup/storage AC,AC-NEO-BACKUP,Yes
-Backup Storage,Cloud object storage,NEO-013; NEO-014,Use S3/GCS/Azure via mounted credentials or workload identity.,Backup/cloud storage AC,AC-NEO-BACKUP-CLOUD; AC-NEO-CLOUDSTORAGE-MI; AC-NEO-CLOUDSTORAGE,No
-Restore Mode,Restore from backup volume,NEO-014,Restore from local/PVC backup location.,Restore AC,AC-NEO-RESTORE,Yes
-Restore Mode,Restore from seed URI,NEO-014,"Restore from seed URI, including private bucket credentials.",Restore AC,AC-NEO-RESTORE-SEEDURI,Yes
-Monitoring Mode,Disabled,NEO-015,Deploy without ServiceMonitor.,Monitoring AC,AC-NEO-MONITORING,Yes
-Monitoring Mode,ServiceMonitor,NEO-015,Create ServiceMonitor when CRD exists.,Monitoring AC,AC-NEO-MONITORING-SERVICEMONITOR,Yes
-Logging Mode,Default logs,NEO-016,Use default Neo4j logging configuration.,Logging AC,AC-NEO-LOGGING,Yes
-Logging Mode,Custom log config,NEO-016,Apply custom serverLogsXml and userLogsXml.,Logging AC,AC-NEO-LOGGING,Yes
-Maintenance Mode,Offline maintenance,NEO-017,Restart StatefulSet without Neo4j process running.,Maintenance AC,AC-NEO-MAINTENANCE-OFFLINE,No
-Job Type,Dump/load,NEO-017,Run neo4j-admin dump/load jobs.,Maintenance AC,AC-NEO-MAINTENANCE-JOBS,No
-Job Type,Consistency check,NEO-017,Run consistency check jobs.,Maintenance AC,AC-NEO-MAINTENANCE-JOBS,No
-Job Type,Backup verification,NEO-017,Verify backup integrity.,Maintenance AC,AC-NEO-MAINTENANCE-JOBS,No
+Variant Group,Variant,Applies To Requirement IDs,Configuration FR ID,Description,Test Impact,Acceptance Criteria Group,V1
+Packaging,YAML,OP-1-001; OP-1-004; OP-1-005,OP-2-001-PKG-01,"Install, upgrade, and uninstall operator using Kubernetes manifests.",Shared installation AC,AC-OP-INSTALL,Yes
+Packaging,Helm,OP-1-001; OP-1-004; OP-1-005,OP-2-001-PKG-02,"Install, upgrade, and uninstall operator using Helm chart.",Shared installation AC + Helm packaging checks,AC-OP-INSTALL; AC-PACKAGING-HELM,No
+Operator Scope,Single namespace,OP-1-001; OP-1-002; OP-1-006,OP-2-001-SCOPE-01,Operator watches and reconciles resources only in its own namespace.,Specific topology AC,AC-OP-SCOPE-SINGLE,Yes
+Operator Scope,Multiple namespaces,OP-1-001; OP-1-002; OP-1-006,OP-2-001-SCOPE-02,Operator watches a configured list of namespaces.,Specific topology AC,AC-OP-SCOPE-MULTI,No
+Operator Scope,Cluster-wide,OP-1-001; OP-1-002; OP-1-006,OP-2-001-SCOPE-03,Operator watches resources across all namespaces.,Specific topology AC,AC-OP-SCOPE-CLUSTER,No
+Status Model,Basic conditions,OP-1-003,OP-2-003-STATUS-01,"Expose Ready, Reconciling, Error, Installed conditions.",Specific status AC,AC-OP-STATUS,Yes
+Status Model,Detailed phase/status,OP-1-003,OP-2-003-STATUS-02,"Expose detailed phases for install, upgrade, backup, restore, and errors.",Specific status AC,AC-OP-STATUS-DETAIL,No
+Upgrade Strategy,In-place controller upgrade,OP-1-004,OP-2-004-UPG-01,Upgrade operator deployment without changing CRD versions.,Specific upgrade AC,AC-OP-UPGRADE,Yes
+Upgrade Strategy,CRD conversion webhook,OP-1-004,OP-2-004-UPG-02,Support API version conversion for CRDs.,Specific upgrade AC,AC-OP-CRD-CONVERSION,No
+Uninstall Policy,Preserve data,OP-1-005; NEO-2-018,OP-2-005-UNINST-01,Delete control plane/workload resources while preserving PVCs.,Specific uninstall AC,AC-NEO-UNINSTALL-PRESERVE,Yes
+Uninstall Policy,Delete data,OP-1-005; NEO-2-018,OP-2-005-UNINST-02,Delete PVCs and data for ephemeral environments.,Specific uninstall AC,AC-NEO-UNINSTALL-DELETE,No
+Neo4j Deployment Mode,Standalone,NEO-1-001,NEO-2-001-MODE-01,Deploy one Neo4j server.,Specific deployment AC,AC-NEO-STANDALONE,Yes
+Neo4j Deployment Mode,Cluster,NEO-1-002; NEO-2-011,NEO-2-002-MODE-01,Deploy a clustered Neo4j topology.,Specific deployment AC,AC-NEO-CLUSTER,Yes
+Edition,Enterprise,NEO-1-001; NEO-1-002; NEO-2-003,NEO-2-001-EDT-01,Deploy Neo4j Enterprise edition.,Shared install AC + license AC,AC-NEO-LICENSE,Yes
+License Mode,Accepted license,NEO-1-001; NEO-1-002,NEO-2-001-LIC-01,User confirms enterprise license agreement.,Specific license AC,AC-NEO-LICENSE,Yes
+License Mode,Evaluation license,NEO-1-001; NEO-1-002,NEO-2-001-LIC-02,User deploys Enterprise in eval mode.,Specific license AC,AC-NEO-LICENSE,No
+Cluster Size,Minimum cluster size,NEO-1-002,NEO-2-002-CSZ-01,Configure initial minimum number of members required for cluster formation.,Cluster-specific AC,AC-NEO-CLUSTER,Yes
+Cluster Size,Scale out/in,NEO-2-011,NEO-3-011-CSZ-01,Change cluster size after initial deployment.,Scale-specific AC,AC-NEO-SCALE,Yes
+Server Enablement,Automatic enable server,NEO-2-011,NEO-3-011-SRV-01,Enable servers added outside initial cluster size using operations job or operator logic.,Scale-specific AC,AC-NEO-SCALE,Yes
+PVC Provisioning Mode,Default StorageClass,NEO-2-006,NEO-3-006-PVC-01,Use Kubernetes default StorageClass to provision PVC.,Storage-specific AC,AC-NEO-STORAGE-DEFAULT,Yes
+PVC Provisioning Mode,Existing StorageClass,NEO-2-006,NEO-3-006-PVC-02,Use an existing named StorageClass to dynamically provision PVC.,Storage-specific AC,AC-NEO-STORAGE-DYNAMIC,Yes
+PVC Provisioning Mode,Existing PVC,NEO-2-006,NEO-3-006-PVC-03,Bind Neo4j to an existing PVC or explicit volume.,Storage-specific AC,AC-NEO-STORAGE-EXISTING,No
+PVC Provisioning Mode,Selector,NEO-2-006,NEO-3-006-PVC-04,Bind to existing volumes matching selectors.,Storage-specific AC,AC-NEO-STORAGE-SELECTOR,No
+PVC Provisioning Mode,VolumeClaimTemplate,NEO-2-006,NEO-3-006-PVC-05,Use a provided volumeClaimTemplate.,Storage-specific AC,AC-NEO-STORAGE-VCT,No
+Cloud Storage,With Workload Identity,NEO-2-019,NEO-3-019-CLD-01,Access cloud object storage using platform workload identity (GKE WI / AKS WI / EKS IRSA).,Cloud storage AC,AC-NEO-CLOUDSTORAGE-MI,Yes
+Cloud Storage,Without Workload Identity,NEO-2-019,NEO-3-019-CLD-02,Access cloud object storage using mounted credentials or Secrets.,Cloud storage AC,AC-NEO-CLOUDSTORAGE,Yes
+Volume Role,Data,NEO-2-006,NEO-3-006-VOL-01,Persistent storage for database data.,Storage-specific AC,AC-NEO-STORAGE,Yes
+Volume Role,Backups,NEO-2-006; NEO-2-013,NEO-3-006-VOL-02,Volume for backup files.,Backup/storage AC,AC-NEO-BACKUP,Yes
+Volume Role,Logs,NEO-2-006; NEO-2-016,NEO-3-006-VOL-03,Volume for logs.,Logging/storage AC,AC-NEO-LOGGING,Yes
+Volume Role,Metrics,NEO-2-006; NEO-2-015,NEO-3-006-VOL-04,Volume for CSV metrics.,Monitoring/storage AC,AC-NEO-MONITORING,No
+Volume Role,Import,NEO-2-006,NEO-3-006-VOL-05,Volume mounted to /import.,Storage AC,AC-NEO-STORAGE,No
+Volume Role,Licenses,NEO-2-006,NEO-3-006-VOL-06,Volume mounted to /licenses.,License/storage AC,AC-NEO-LICENSE,No
+Service Type,ClusterIP,NEO-2-007,NEO-3-007-SVC-01,Expose Neo4j via internal ClusterIP service (in-cluster access only).,Networking AC,AC-NEO-NETWORKING; AC-NEO-NETWORKING-CLUSTERIP,Yes
+Service Type,NodePort,NEO-2-007,NEO-3-007-SVC-02,Expose Neo4j externally via fixed node ports.,Networking AC,AC-NEO-NETWORKING; AC-NEO-NETWORKING-NODEPORT,No
+Service Type,LoadBalancer,NEO-2-007,NEO-3-007-SVC-03,Expose Neo4j externally via cloud LoadBalancer.,Networking AC,AC-NEO-NETWORKING; AC-NEO-NETWORKING-LB,Yes
+Port Combination,Bolt only,NEO-2-007,NEO-3-007-PCMB-01,Expose Bolt (7687) only; HTTP and HTTPS disabled.,Networking AC,AC-NEO-NETWORKING-PORTS-BOLT,No
+Port Combination,HTTPS only,NEO-2-007,NEO-3-007-PCMB-02,Expose HTTPS (7473) only; Bolt and HTTP disabled.,Networking AC,AC-NEO-NETWORKING-PORTS-HTTPS,No
+Port Combination,HTTP + Bolt,NEO-2-007,NEO-3-007-PCMB-03,Expose HTTP and Bolt; HTTPS disabled.,Networking AC,AC-NEO-NETWORKING-PORTS-HTTP-BOLT,Yes
+Port Combination,HTTPS + Bolt,NEO-2-007,NEO-3-007-PCMB-04,Expose HTTPS and Bolt; HTTP disabled.,Networking AC,AC-NEO-NETWORKING-PORTS-HTTPS-BOLT,Yes
+Port Combination,HTTP + HTTPS + Bolt,NEO-2-007,NEO-3-007-PCMB-05,Expose all three connectors (default full exposure).,Networking AC,AC-NEO-NETWORKING-PORTS-FULL,Yes
+Port Combination,HTTP + HTTPS,NEO-2-007,NEO-3-007-PCMB-06,Expose HTTP and HTTPS; Bolt disabled (browser-only access).,Networking AC,AC-NEO-NETWORKING-PORTS-HTTP-HTTPS,No
+Ports,HTTP,NEO-2-007,NEO-3-007-PRT-01,Enable HTTP connector (7474).,Networking AC,AC-NEO-NETWORKING-PORTS-HTTP,Yes
+Ports,HTTPS,NEO-2-007; NEO-2-005,NEO-3-007-PRT-02,Enable HTTPS connector (7473).,Networking/TLS AC,AC-NEO-NETWORKING-PORTS-HTTPS; AC-NEO-TLS,Yes
+Ports,Bolt,NEO-2-007; NEO-2-005,NEO-3-007-PRT-03,Enable Bolt connector (7687).,Networking/TLS AC,AC-NEO-NETWORKING-PORTS-BOLT,Yes
+Ports,Backup,NEO-2-007; NEO-2-013,NEO-3-007-PRT-04,Expose backup port for backup operations.,Backup/networking AC,AC-NEO-BACKUP,No
+Multi Cluster,Disabled,NEO-2-007,NEO-3-007-MULTI-01,Single Kubernetes cluster deployment.,Networking AC,AC-NEO-NETWORKING,Yes
+Multi Cluster,Enabled,NEO-2-007,NEO-3-007-MULTI-02,Open internal ports/config required for multi-zone/multi-region cluster scenario.,Specific multi-cluster AC,AC-NEO-MULTICLUSTER,No
+Neo4j Config,Core config,NEO-2-003,NEO-3-003-CFG-01,Apply server config values.,Config AC,AC-NEO-CONFIG,Yes
+Neo4j Config,Strict validation toggle,NEO-2-003,NEO-3-003-CFG-02,Support strict config validation setting.,Config AC,AC-NEO-CONFIG,Yes
+Neo4j Config,SPeeDy feature flag,NEO-2-003,NEO-3-003-CFG-03,Support sharded property database feature flag.,Config AC,AC-NEO-CONFIG,No
+APOC,APOC config,NEO-2-003,NEO-3-003-APOC-01,Apply APOC configuration.,APOC AC,AC-NEO-APOC,No
+APOC,APOC credentials,NEO-2-003; NEO-2-004,NEO-3-003-APOC-02,Mount APOC credentials from secrets.,APOC/secrets AC,AC-NEO-APOC-CREDS,No
+JVM,Default arguments,NEO-2-003,NEO-3-003-JVM-01,Use Neo4j default JVM arguments.,Config AC,AC-NEO-CONFIG,Yes
+JVM,Additional arguments,NEO-2-003,NEO-3-003-JVM-02,Append custom JVM arguments.,Config AC,AC-NEO-CONFIG,Yes
+Credentials,Generated password,NEO-2-004,NEO-3-004-CRED-01,Generate password when not provided.,Secret AC,AC-NEO-SECRETS,Yes
+Credentials,Password from Secret,NEO-2-004,NEO-3-004-CRED-02,Use existing Kubernetes Secret for initial Neo4j password.,Secret AC,AC-NEO-SECRETS,Yes
+Secrets,Secret mounts,NEO-2-004; NEO-2-014,NEO-3-004-SEC-01,Mount arbitrary Kubernetes Secrets into Neo4j pod.,Secret AC,AC-NEO-SECRETS,Yes
+Secrets,LDAP password secret,NEO-2-004,NEO-3-004-SEC-02,Mount LDAP system account password from Secret.,Secret AC,AC-NEO-LDAP,No
+Image Pull Secrets,Existing pull secret,NEO-2-004,NEO-3-004-IMG-01,Use existing image pull secret.,Image AC,AC-NEO-IMAGE,Yes
+Image Pull Secrets,Create image credential secret,NEO-2-004,NEO-3-004-IMG-02,Create docker-registry secret from provided credentials.,Image AC,AC-NEO-IMAGE,No
+TLS Mode,Bolt TLS,NEO-2-005,NEO-3-005-TLS-01,Configure TLS material for Bolt.,TLS AC,AC-NEO-TLS,Yes
+TLS Mode,HTTPS TLS,NEO-2-005,NEO-3-005-TLS-02,Configure TLS material for HTTPS.,TLS AC,AC-NEO-TLS,Yes
+TLS Mode,Cluster TLS,NEO-2-005,NEO-3-005-TLS-03,Configure TLS material for cluster communication.,TLS/cluster AC,AC-NEO-TLS; AC-NEO-CLUSTER,Yes
+TLS Mode,TLS reload,NEO-2-005,NEO-3-005-TLS-04,Enable automatic TLS certificate reload.,TLS AC,AC-NEO-TLS-RELOAD,Yes
+Scheduling,Node selector,NEO-2-008,NEO-3-008-SCH-01,Constrain pods to selected nodes.,Scheduling AC,AC-NEO-SCHEDULING,Yes
+Scheduling,Affinity / anti-affinity,NEO-2-008,NEO-3-008-SCH-02,Configure node affinity and pod anti-affinity.,Scheduling AC,AC-NEO-SCHEDULING,Yes
+Scheduling,Tolerations,NEO-2-008,NEO-3-008-SCH-03,Allow scheduling on tainted nodes.,Scheduling AC,AC-NEO-SCHEDULING,Yes
+Scheduling,Topology spread,NEO-2-008,NEO-3-008-SCH-04,Distribute pods across topology domains.,Scheduling AC,AC-NEO-SCHEDULING,Yes
+Scheduling,Priority class,NEO-2-008,NEO-3-008-SCH-05,Set pod priority class.,Scheduling AC,AC-NEO-SCHEDULING,No
+Scheduling,Service account,NEO-2-008; NEO-2-014,NEO-3-008-SCH-06,Set pod service account for workload identity/cloud access.,Scheduling/secrets AC,AC-NEO-SCHEDULING,Yes
+Probe Profile,Default Neo4j probes,NEO-2-009,NEO-3-009-PROBE-01,Use default startup/readiness/liveness probes.,Probe AC,AC-NEO-PROBES,Yes
+Probe Profile,Custom probes,NEO-2-009,NEO-3-009-PROBE-02,Allow users to customize probe thresholds/timeouts.,Probe AC,AC-NEO-PROBES,Yes
+Restart Strategy,Controlled restart,NEO-2-010,NEO-3-010-RSTR-01,Restart Neo4j workload when config requires it.,Config change AC,AC-NEO-CONFIG-CHANGE,Yes
+Restart Strategy,Rolling restart,NEO-2-010; NEO-1-002,NEO-3-010-RSTR-02,Restart cluster members safely one by one.,Config change/cluster AC,AC-NEO-CONFIG-CHANGE; AC-NEO-CLUSTER,Yes
+Upgrade Strategy,Neo4j image upgrade,NEO-2-012,NEO-3-012-UPG-01,Change Neo4j image tag/repository/version.,Upgrade AC,AC-NEO-UPGRADE,Yes
+Upgrade Strategy,Preflight validation,NEO-2-012,NEO-3-012-UPG-02,"Validate health, storage, version, and cluster state before upgrade.",Upgrade AC,AC-NEO-UPGRADE,Yes
+Backup Mode,On-demand,NEO-2-013,NEO-3-013-BKMD-01,Create backup by user request.,Backup AC,AC-NEO-BACKUP-ONDEMAND,Yes
+Backup Mode,Scheduled,NEO-2-013,NEO-3-013-BKMD-02,Create backups on a defined schedule.,Backup AC,AC-NEO-BACKUP-SCHEDULED,Yes
+Backup Storage,Shared local volume,NEO-2-013,NEO-3-013-BKST-01,Write backups to shared volume.,Backup AC,AC-NEO-BACKUP,Yes
+Backup Storage,Dedicated PVC,NEO-2-013,NEO-3-013-BKST-02,Write backups to a dedicated PVC.,Backup/storage AC,AC-NEO-BACKUP,Yes
+Backup Storage,Cloud object storage,NEO-2-013; NEO-2-014; NEO-2-019,NEO-3-013-BKST-03,Use S3/GCS/Azure via mounted credentials or workload identity.,Backup/cloud storage AC,AC-NEO-BACKUP-CLOUD; AC-NEO-CLOUDSTORAGE-MI; AC-NEO-CLOUDSTORAGE,No
+Restore Mode,Restore from backup volume,NEO-2-014,NEO-3-014-RSTM-01,Restore from local/PVC backup location.,Restore AC,AC-NEO-RESTORE,Yes
+Restore Mode,Restore from seed URI,NEO-2-014,NEO-3-014-RSTM-02,"Restore from seed URI, including private bucket credentials.",Restore AC,AC-NEO-RESTORE-SEEDURI,Yes
+Monitoring Mode,Disabled,NEO-2-015,NEO-3-015-MON-01,Deploy without ServiceMonitor.,Monitoring AC,AC-NEO-MONITORING,Yes
+Monitoring Mode,ServiceMonitor,NEO-2-015,NEO-3-015-MON-02,Create ServiceMonitor when CRD exists.,Monitoring AC,AC-NEO-MONITORING-SERVICEMONITOR,Yes
+Logging Mode,Default logs,NEO-2-016,NEO-3-016-LOG-01,Use default Neo4j logging configuration.,Logging AC,AC-NEO-LOGGING,Yes
+Logging Mode,Custom log config,NEO-2-016,NEO-3-016-LOG-02,Apply custom serverLogsXml and userLogsXml.,Logging AC,AC-NEO-LOGGING,Yes
+Maintenance Mode,Offline maintenance,NEO-2-017,NEO-3-017-MNT-01,Restart StatefulSet without Neo4j process running.,Maintenance AC,AC-NEO-MAINTENANCE-OFFLINE,No
+Job Type,Dump/load,NEO-2-017,NEO-3-017-JOB-01,Run neo4j-admin dump/load jobs.,Maintenance AC,AC-NEO-MAINTENANCE-JOBS,No
+Job Type,Consistency check,NEO-2-017,NEO-3-017-JOB-02,Run consistency check jobs.,Maintenance AC,AC-NEO-MAINTENANCE-JOBS,No
+Job Type,Backup verification,NEO-2-017,NEO-3-017-JOB-03,Verify backup integrity.,Maintenance AC,AC-NEO-MAINTENANCE-JOBS,No

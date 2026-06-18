@@ -8,15 +8,15 @@ EST-CON-006,Conception,Security & dependencies,14-dependencies 16-security RBAC 
 EST-CON-007,Conception,Scope lock & roadmap,13-v1-scope-lock 17-roadmap frozen V1 commitment inputs,Yes,5,4,EST-CON-003;EST-CON-004,13;17,Derived from 02+04 V1/P0 filter
 EST-DEV-001,Dev,Scaffold & tooling,kubebuilder repository CI lint container image build,Yes,12,4,EST-CON-005,08-file_structure.md,Shared foundation for all controllers
 EST-DEV-002,Dev,API types & validation,api/v1beta1 types webhooks defaults and CEL rules,Yes,9,3,EST-DEV-001;EST-CON-003,09-crd-spec/,Generated scaffold plus custom validation
-EST-DEV-010,Dev,Operator core,OperatorBootstrap OperatorReconciler OperatorStatus OperatorUpgrade OperatorUninstall OperatorRBAC,Yes,37,14,EST-DEV-002,01 OP-001..OP-006,One-time per controller — not per test
-EST-DEV-020,Dev,Domain workload,Neo4jDatabase reconciler standalone cluster scale upgrade scheduling probes,Yes,35,13,EST-DEV-010,01 NEO-001;NEO-002;NEO-011,Branches on topology.mode
-EST-DEV-030,Dev,Domain persistence,Neo4jPersistence storage modes and volume roles,Yes,10,4,EST-DEV-020,01 NEO-006,Shared domain package — no separate CRD
-EST-DEV-040,Dev,Domain connectivity,Neo4jConnectivity services ports ServiceMonitor,Yes,9,3,EST-DEV-020,01 NEO-007,Networking and exposure
-EST-DEV-050,Dev,Domain trust,Neo4jTrust credentials TLS secret mounts cert reload,Yes,14,5,EST-DEV-020,01 NEO-004;NEO-005,Security domain module
-EST-DEV-060,Dev,Domain server config,Neo4jServerConfig neo4j.conf JVM APOC logging restart policy,Yes,12,4,EST-DEV-020,01 NEO-003,Configuration and safe restarts
+EST-DEV-010,Dev,Operator core,OperatorBootstrap OperatorReconciler OperatorStatus OperatorUpgrade OperatorUninstall OperatorRBAC,Yes,37,14,EST-DEV-002,01 OP-1-001..OP-1-006,One-time per controller — not per test
+EST-DEV-020,Dev,Domain workload,Neo4jDatabase reconciler standalone cluster scale upgrade scheduling probes,Yes,35,13,EST-DEV-010,01 NEO-1-001;NEO-1-002;NEO-2-011,Branches on topology.mode
+EST-DEV-030,Dev,Domain persistence,Neo4jPersistence storage modes and volume roles,Yes,10,4,EST-DEV-020,01 NEO-2-006,Shared domain package — no separate CRD
+EST-DEV-040,Dev,Domain connectivity,Neo4jConnectivity services ports ServiceMonitor,Yes,9,3,EST-DEV-020,01 NEO-2-007,Networking and exposure
+EST-DEV-050,Dev,Domain trust,Neo4jTrust credentials TLS secret mounts cert reload,Yes,14,5,EST-DEV-020,01 NEO-2-004;NEO-2-005,Security domain module
+EST-DEV-060,Dev,Domain server config,Neo4jServerConfig neo4j.conf JVM APOC logging restart policy,Yes,12,4,EST-DEV-020,01 NEO-2-003,Configuration and safe restarts
 EST-DEV-070,Dev,Domain backup & restore,Neo4jBackup and Neo4jRestore jobs and storage,Yes,26,10,EST-DEV-020,01 NEO-013;NEO-014,Day-2 CRDs
 EST-DEV-080,Dev,Domain maintenance,Neo4jMaintenance offline mode dump load consistency check,No,10,4,EST-DEV-020,01 NEO-017,V2 — deferred from V1 DoD
-EST-DEV-090,Dev,Observability,OperatorObservability structured logs Prometheus metrics,Yes,4,2,EST-DEV-010,01 OP-007,Production troubleshooting
+EST-DEV-090,Dev,Observability,OperatorObservability structured logs Prometheus metrics,Yes,4,2,EST-DEV-010,01 OP-1-007,Production troubleshooting
 EST-DEV-100,Dev,Packaging,Helm chart install manifests and release artifacts,Yes,7,3,EST-DEV-010,11-helm-mapping,Migration path from current Helm chart
 EST-DEV-110,Dev,Hardening & review,Production readiness and code review,Yes,10,4,EST-DEV-020..070,13-v1-scope-lock,Customer-facing docs → EST-DOC-*
 EST-TST-001,Testing,Test strategy,15-test-strategy.md pyramid CI gates and coverage model,Yes,4,3,EST-CON-007,15-test-strategy.md,Defines unit integration E2E split

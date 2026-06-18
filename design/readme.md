@@ -14,7 +14,7 @@ The package index at the repository root ([`readme.md`](../readme.md)) expands e
 design/
 ├── readme.md                         ← this file
 ├── 00-vision.md                       [~]  scope, personas, goals; adoption risks captured
-├── 01-functional_requirements.csv     [x]  functional requirements (FR)
+├── 01-functional_requirements.csv     [x]  functional requirements — hierarchical IDs + Requires IDs
 ├── 02-acceptance_criteria_library.csv [x]  reusable acceptance criteria (AC)
 ├── 03-variant_matrix.csv              [x]  configuration variants per FR
 ├── 04-test_catalog.csv                [x]  detailed test catalog (1 row = 1 test)
@@ -55,15 +55,42 @@ Numbering follows the production flow: **requirements → architecture → speci
 | File | Purpose |
 |------|---------|
 | **`00-vision.md`** | Problem statement, personas, goals / non-goals, V1 / V2 phasing, and **adoption stoppers** (operational risk, support model, Helm differentiation, migration, PS vs Product ownership). Anchors all downstream decisions. |
-| **`01-functional_requirements.csv`** | 25 functional requirements: 7 operator (`OP-*`) + 18 Neo4j (`NEO-*`). Each row defines scope, variant groups, AC groups, and V1 inclusion. |
+| **`01-functional_requirements.csv`** | **117 rows** sorted by depth (level in `ID`). **`Requires IDs`** = children via `Parent ID` + composed capabilities for Neo4j outcomes. |
 | **`02-acceptance_criteria_library.csv`** | 116 reusable acceptance criteria grouped by domain (`AC-OP-*`, `AC-NEO-*`). Linked to FRs via the `Applies To` column. |
-| **`03-variant_matrix.csv`** | 92 configuration variants (packaging, topology, storage, networking, TLS, etc.). Drives scenario test coverage and combinatorial scope. |
+| **`03-variant_matrix.csv`** | 91 configuration variants — each row maps to a level-**3** (or level-**2** for Operator) `Configuration FR ID` in `01`. |
 
-### Phase 2 — Validation catalog (`04`–`05`)
+#### FR drill-down — ID encoding (`01`)
+
+**Level = 2nd segment of `ID`** (`{PREFIX}-{level}-…`). File is sorted: all level **1**, then **2**, then **3**. Depth is open-ended (level 4+ reserved).
+
+| Level | Role | ID pattern | Example |
+|------:|------|------------|---------|
+| **1** | Root requirement (Neo4j outcome or Operator top-level FR) | `{PREFIX}-1-{nnn}` | `NEO-1-001` Deploy standalone · `OP-1-001` Install operator |
+| **2** | Capability, or configuration directly under a level-1 root | `{PREFIX}-2-{nnn}` or `{PREFIX}-2-{parent}-{Group}-{nn}` | `NEO-2-006` Storage · `NEO-2-001-MODE-01` Standalone mode · `OP-2-001-PKG-01` YAML packaging |
+| **3** | Configuration under a level-2 capability | `{PREFIX}-3-{parent}-{Group}-{nn}` | `NEO-3-006-PVC-01` Default StorageClass |
+
+- **`Requires IDs`** — what this requirement needs: **direct children** (rows whose `Parent ID` points here) and, for `NEO-1-001` / `NEO-1-002`, the shared level-2 capabilities.
+- **`Parent ID`** — upward link in the drill-down tree.
+
+Storage drill-down example:
+
+```
+NEO-1-001  Deploy standalone
+  └─ NEO-2-006  Configure persistent volumes          ← composition
+       ├─ NEO-3-006-PVC-01  Default StorageClass
+       ├─ NEO-3-006-PVC-02  Existing StorageClass
+       └─ NEO-3-006-VOL-01  Data volume role
+  └─ NEO-2-019  Cloud object storage access           ← optional
+       ├─ NEO-3-019-CLD-01  With Workload Identity
+       └─ NEO-3-019-CLD-02  Without Workload Identity
+```
+
+Group codes: `PVC` · `VOL` · `CLD` · `SVC` · `PKG` · … (see `03-variant_matrix.csv`).
+
 
 | File | Purpose |
 |------|---------|
-| **`04-test_catalog.csv`** | 209 tests in two layers: **92 scenario tests** (1 per variant) + **117 AC-level tests** (1 per AC). Columns include steps, preconditions, expected results, priority, and V1 flag. **No effort columns** — cost lives in `19`. |
+| **`04-test_catalog.csv`** | 209 tests in two layers: **91 scenario tests** (1 per configuration FR) + **117 AC-level tests** (1 per AC). Includes **`Configuration FR ID`** (Level 2 link to `01`). **No effort columns** — cost lives in `19`. |
 | **`05-test_catalog_summary.csv`** | Test **coverage** rollup by controller / domain module (counts only). Source of truth for catalog breadth, not delivery cost. |
 
 ### Phase 3 — Architecture (`06`–`08`)

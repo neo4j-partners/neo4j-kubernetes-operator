@@ -49,7 +49,7 @@ Full V1 scenario manifests (multi-resource, edge cases) → [`../samples/`](../s
 
 | Folder | `kind`(s) | FR | Reconciler |
 |--------|-----------|-----|------------|
-| [`neo4j/`](neo4j/) | `Neo4j` | NEO-001…016, 018 | `Neo4jReconciler` |
+| [`neo4j/`](neo4j/) | `Neo4j` | NEO-1-001…NEO-2-016, NEO-2-018 | `Neo4jReconciler` |
 | [`neo4jdatabase/`](neo4jdatabase/) | `Neo4jDatabase` | *(logical DB — TBD in FR)* | `Neo4jDatabaseReconciler` |
 | [`neo4jbackup/`](neo4jbackup/) | `Neo4jBackup`, `Neo4jBackupSchedule` | NEO-013 | `Neo4jBackupReconciler` |
 | [`neo4jrestore/`](neo4jrestore/) | `Neo4jRestore` | NEO-014 | `Neo4jRestoreReconciler` |

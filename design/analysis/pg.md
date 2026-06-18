@@ -1,0 +1,1 @@
+https://github.com/neo-technology/neo4j-cloud/blob/master/architecture/current-architecture.dot.png
