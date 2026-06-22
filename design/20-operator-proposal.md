@@ -1127,34 +1127,136 @@ The operator should **not rewrite everything**. Reuse proven pieces from the [he
 
 ## 9. Recommended implementation order
 
-### Phase 1 — Foundation (weeks 1–4)
+> **Timeline note (2026-06-22):** The original week ranges below matched **manual** delivery (~460 person-days, 2 FTE ≈ 24 weeks). For **fully vibe-coded** delivery (AI generates most code; one primary builder reviews, integrates, and runs tests), see the revised calendar in [§9.1](#91-vibe-coded-calendar). Authoritative effort numbers → [`18-effort-model.md`](18-effort-model.md) · [`19-delivery-estimate.md`](19-delivery-estimate.md).
+
+### What vibe coding changes (and what it does not)
+
+| Workstream | Manual → AI-assisted (from `18`) | Fully vibe-coded reality |
+|---|---|---|
+| **Conception / P0 spec** | −25–35 % | **Barely faster.** Field semantics, Helm parity, and status contracts still need human lock. Much of this is already in `design/` — treat as **2–3 weeks**, not zero. |
+| **Scaffold, CRDs, webhooks** | −60–70 % | **Very fast.** Kubebuilder boilerplate, OpenAPI types, CEL stubs — days, not weeks. |
+| **Domain reconcilers** | −55–65 % | **Fast first draft; slower to trust.** Cluster formation, `ENABLE SERVER`, ordered upgrades — AI writes plausible code; **debugging against real Neo4j** is the bottleneck. |
+| **Unit + envtest** | −45–70 % | **Fast.** Table-driven tests generate well; human still validates assertions match Neo4j behaviour. |
+| **E2E harness + real clusters** | −35–45 % | **Moderate.** kind/GKE setup, `wait Ready`, 1000-failure startup probes, HA flake — **cannot vibe away wall-clock Neo4j startup**. |
+| **Stabilisation** | −25–35 % | **Slow.** HA, TLS, backup/restore edge cases — empirical debugging; lowest AI leverage. |
+| **Documentation** | −45–50 % | **Fast drafts; human accuracy pass required.** |
+
+**Bottom line:** vibe coding compresses **Dev** roughly 3×; **Testing** only ~2×. The long pole shifts from “writing reconcilers” to “proving cluster lifecycle works on real infrastructure.”
+
+---
+
+### 9.1 Vibe-coded calendar
+
+Assumptions: **1 primary builder** (vibe coding) + **0.5 FTE QA/test focus** (can be same person part-time); P0 spec (`09`–`12`) locked or 80 % done; reuse Helm `neo4j-operations` and `neo4j-admin/backup` Go code.
+
+| Milestone | Vibe-coded calendar | Manual equivalent | Person-days (vibe) |
+|---|---|---|---|
+| P0 spec lock | Weeks 1–2 | Weeks 1–4 | ~25 d |
+| **M1 — Standalone works** | Week 3 | Weeks 1–4 | ~8 d dev + ~5 d test |
+| **M2 — Cluster works** | Weeks 4–6 | Weeks 5–8 | ~15 d dev + ~10 d test |
+| **M3 — Production path** (TLS, LB, PDB, monitoring) | Weeks 6–7 | Weeks 9–12 | ~8 d dev + ~5 d test |
+| **M4 — Day-2 ops** (backup, restore, upgrade, scale) | Weeks 8–10 | Weeks 13–20 | ~18 d dev + ~15 d test |
+| **M5 — GA gate** (multi-cloud E2E, docs, packaging) | Weeks 11–13 | Weeks 21–24 | ~10 d test + ~8 d doc |
+| **V1 total** | **~13 weeks** | **~24 weeks** | **~216 d** (matches `19` AI-assisted) |
+
+**Aggressive target (experienced K8s + Neo4j builder, spec pre-locked, defer `Neo4jDatabase` + CLI):** **~9–10 weeks** — but budget **+2–3 weeks stabilisation buffer** for HA/backup flakes.
+
+**Conservative target (first operator, learning Neo4j clustering):** **~16–18 weeks** — vibe coding helps Dev less when every cluster failure is a learning event.
+
+---
+
+### 9.2 Resequenced order (optimised for vibe coding)
+
+Horizontal “all infra then all day-2” phases waste the vibe-coding advantage. Prefer **vertical slices** — each milestone is demoable end-to-end.
+
+#### Slice 0 — Spec & harness (weeks 1–2)
+
+1. Lock `Neo4j` CRD OpenAPI (`09-crd-spec/neo4j/`) — **blocking; do not skip even when vibe coding.**
+2. Kubebuilder scaffold + CI + envtest wiring ([`08-file_structure.md`](08-file_structure.md)).
+3. **E2E harness first** (kind install, wait Ready, driver ping) — not deferred to “Phase 6”.
+4. Port Helm validation rules → webhook stubs.
+
+#### Slice 1 — Standalone vertical (week 3) → M1
+
+5. `Neo4j` reconciler: StatefulSet (1 replica), headless + ClusterIP services, auth Secret, ConfigMaps.
+6. Status: `Ready`, endpoints, credentials reference.
+7. **E2E:** apply manifest → pod Ready → Bolt connect.
+
+#### Slice 2 — Cluster vertical (weeks 4–6) → M2
+
+8. Topology: `mode: Cluster`, `cores.members: 3`, K8s discovery config.
+9. Cluster membership manager (port `neo4j/neo4j-operations/`).
+10. Cluster-wide PDB + shared LoadBalancer.
+11. **E2E:** 3-member formation, scale 3→4 (`ENABLE SERVER`), scale 4→3 (decommission).
+
+> **Highest-risk slice.** Budget **2 full weeks** here even with vibe coding. This is where AI-generated code looks correct but fails on real raft/discovery timing.
+
+#### Slice 3 — Production vertical (weeks 6–7) → M3
+
+12. TLS: cert-manager + BYO (`trust` section).
+13. External LB + cloud annotations (`connectivity.external`).
+14. Security contexts, discovery RBAC, opt-in NetworkPolicy.
+15. ServiceMonitor / Prometheus.
+16. **E2E:** TLS Bolt connect, LB reachable, metrics scraped.
+
+#### Slice 4 — Day-2 vertical (weeks 8–10) → M4
+
+17. `Neo4jBackupSchedule` + `Neo4jBackup` CRDs (reuse `neo4j-admin/backup` image).
+18. Cloud IAM for AWS/GCP/Azure backups.
+19. `Neo4jRestore` (basic offline restore + maintenance mode).
+20. Rolling upgrades (ordered restart) — can start in parallel with backup once M2 is stable.
+21. **E2E:** scheduled backup to S3, restore into maintenance mode, version upgrade 2026.05→2026.06.
+
+#### Slice 5 — GA vertical (weeks 11–13) → M5
+
+22. Multi-cloud CI matrix (GKE, EKS, AKS — pick 2 for V1 GA if time-constrained).
+23. Operator Helm chart + install docs.
+24. Helm migration guide ([`11-helm-mapping.md`](11-helm-mapping.md)).
+25. Stabilisation pass (HA + TLS + backup flake budget).
+
+#### Deferred without blocking GA (move out of critical path)
+
+| Item | Original phase | Vibe-coded deferral | Rationale |
+|---|---|---|---|
+| `Neo4jDatabase` reconciler | Phase 5 | **V1.1** (week 14+) | Logical DB management is Enterprise-niche; standalone + cluster must ship first |
+| `kubectl neo4j` CLI plugin | Phase 5 | **V1.1** | Nice-to-have; `kubectl get neo4j` + docs suffice for GA |
+| OLM bundle | Phase 6 | **V1.1** | Helm install is enough for first GA |
+| OpenShift CI variant | Phase 6 | **V1.1** | GKE + EKS covers most cloud validation |
+
+---
+
+### 9.3 Original phase map (manual-equivalent reference)
+
+Kept for traceability to [`17-roadmap.md`](17-roadmap.md). **Do not use these week ranges for vibe-coded planning.**
+
+#### Phase 1 — Foundation (weeks 1–4, manual)
 
 1. Project scaffold (Kubebuilder — see [`08-file_structure.md`](08-file_structure.md)).
 2. `Neo4j` CRD + validating/mutating webhooks.
 3. Standalone deployment (`mode: Standalone`).
 4. Status conditions and events.
 
-### Phase 2 — Clustering (weeks 5–8)
+#### Phase 2 — Clustering (weeks 5–8, manual)
 
 5. Enterprise cluster (`mode: Cluster`, 3+ cores).
 6. K8s service discovery config generation.
 7. Cluster membership manager (port operations Job).
 8. Cluster-wide PDB and shared LoadBalancer.
 
-### Phase 3 — Production hardening (weeks 9–12)
+#### Phase 3 — Production hardening (weeks 9–12, manual)
 
 9. TLS (cert-manager + BYO).
 10. Cloud-aware external exposure (LB annotations).
 11. Security contexts, RBAC, opt-in NetworkPolicy.
 12. Monitoring (ServiceMonitor).
 
-### Phase 4 — Backup & restore (weeks 13–16)
+#### Phase 4 — Backup & restore (weeks 13–16, manual)
 
 13. `Neo4jBackupSchedule` + `Neo4jBackup` CRDs + reconciler.
 14. Cloud IAM for AWS/GCP/Azure backups.
 15. `Neo4jRestore` (basic offline restore).
 
-### Phase 5 — Operations (weeks 17–20)
+#### Phase 5 — Operations (weeks 17–20, manual)
 
 16. Rolling upgrades with ordered restart.
 17. Scale up/down with membership management.
@@ -1162,19 +1264,34 @@ The operator should **not rewrite everything**. Reuse proven pieces from the [he
 19. `Neo4jDatabase` reconciler.
 20. CLI plugin (`kubectl neo4j`).
 
-### Phase 6 — GA (weeks 21–24)
+#### Phase 6 — GA (weeks 21–24, manual)
 
 21. Integration tests on EKS, GKE, AKS.
 22. Helm chart for operator installation.
 23. Documentation, examples, migration guide from Helm.
 24. OLM bundle (optional for GA, recommended).
 
-### Phase 7 — V2 (post-GA)
+#### Phase 7 — V2 (post-GA)
 
 25. Multi-cluster link, Neo4jProxy, Neo4jUser, consistency checks.
 26. Blue/green upgrades, advanced backup/DR.
 
-See [`17-roadmap.md`](17-roadmap.md) and [`19-delivery-estimate.md`](19-delivery-estimate.md) for effort projections.
+---
+
+### 9.4 Vibe-coding risks to plan for
+
+| Risk | Symptom | Mitigation |
+|---|---|---|
+| **Confident wrong reconciler** | Unit tests pass; real cluster never forms | E2E harness in week 1; never merge a slice without a green E2E |
+| **Spec drift** | AI generates against outdated CRD shape | Lock `09-crd-spec/neo4j/spec.md` before Slice 1; pin in prompts |
+| **Copy-paste from Helm templates** | `lookup` calls, per-release assumptions leak in | Code review checklist: single StatefulSet model, no Helm `lookup` |
+| **Test debt spiral** | Fast Dev, no tests → unmaintainable by week 8 | Rule: every slice ships with ≥1 E2E; unit tests for every `render/` builder |
+| **Neo4j-specific bugs** | AI uses generic StatefulSet patterns | Reuse `neo4j-operations` Go code; don't rewrite membership from scratch |
+| **Over-scoped V1** | 13 weeks becomes 20 | Defer `Neo4jDatabase`, CLI, OLM per §9.2 |
+
+**Calibration:** after Slice 2 (cluster E2E green), compare actual elapsed time vs §9.1 table. Adjust M4/M5 dates before committing externally.
+
+See [`17-roadmap.md`](17-roadmap.md) and [`19-delivery-estimate.md`](19-delivery-estimate.md) for person-day breakdowns.
 
 ---
 
