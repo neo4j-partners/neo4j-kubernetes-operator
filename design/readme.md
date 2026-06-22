@@ -39,6 +39,7 @@ design/
 ├── 18-effort-model.md                 [x]  effort assumptions and calculation rules
 ├── 19-delivery-estimate.csv           [x]  delivery cost by phase / workstream (data)
 ├── 19-delivery-estimate.md            [x]  delivery cost — human-readable view
+├── 20-operator-proposal.md            [x]  full operator proposal — CRDs, security, workflows, V1/V2 scope
 ├── adr/                               [ ]  architecture decision records
 ├── samples/                           [ ]  YAML manifests per V1 scenario
 └── diagrams/                          [ ]  sequence and dependency diagrams
@@ -124,6 +125,7 @@ Group codes: `PVC` · `VOL` · `CLD` · `SVC` · `PKG` · … (see `03-variant_m
 | **`18-effort-model.md`** | Calculation rules: deduplicated dev, harness amortization, test pyramid, manual vs AI-assisted assumptions, overhead, calibration method. |
 | **`19-delivery-estimate.csv`** | Person-day estimates by **phase** (Conception / Dev / Testing / **Documentation**) and **workstream**. One row = one deliverable, not one test. Machine-readable source of truth. |
 | **`19-delivery-estimate.md`** | Same estimates in readable form — rollup, tables per phase, dependency graph. Edit the CSV first; keep both in sync. |
+| **`20-operator-proposal.md`** | End-to-end operator proposal derived from Helm chart analysis: vision, architecture, CRD specs (V1/V2), cloud security model, operational workflows, implementation phasing, Helm migration. Aligns with BDR-001/002 and `09-crd-spec/`. |
 
 ### Supporting folders
 
@@ -224,13 +226,14 @@ Add before GA commitment: release engineering (5–8 d), security review (5–10
 
 ## Recommended reading order
 
-1. **`00-vision.md`** — align on scope
-2. **`01` → `03`** — understand what must be built and in which configurations
-3. **`06` → `08`** — understand how the code is organized
-4. **`09` → `12`** — lock the API and runtime contract *(P0 — blocking)*
-5. **`13` + `17`** — freeze V1 and sequence work → **reliable estimate**
-6. **`04` (V1 / P0 filter)** + **`15`** — drive test execution during implementation
-7. **`18` + `19`** — delivery estimates; refine after the first domain module is shipped
+1. **`20-operator-proposal.md`** — full operator blueprint (start here for the big picture)
+2. **`00-vision.md`** — align on scope
+3. **`01` → `03`** — understand what must be built and in which configurations
+4. **`06` → `08`** — understand how the code is organized
+5. **`09` → `12`** — lock the API and runtime contract *(P0 — blocking)*
+6. **`13` + `17`** — freeze V1 and sequence work → **reliable estimate**
+7. **`04` (V1 / P0 filter)** + **`15`** — drive test execution during implementation
+8. **`18` + `19`** — delivery estimates; refine after the first domain module is shipped
 
 ---
 
